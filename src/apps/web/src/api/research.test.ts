@@ -141,7 +141,8 @@ describe("research api", () => {
     expect(lastCall(fetchMock).body).toBe(JSON.stringify(runRequest));
     await continueRun(TOPIC, OP, "key-continue");
     expect(lastCall(fetchMock).headers["Idempotency-Key"]).toBe("key-continue");
-    expect(lastCall(fetchMock).body).toBeUndefined();
+    // The API accepts only JSON writes, so continue sends an empty object (363 acceptance).
+    expect(lastCall(fetchMock).body).toBe("{}");
     await createTopic({ question: "q" });
     expect(lastCall(fetchMock).headers["Idempotency-Key"]).toBeUndefined();
   });

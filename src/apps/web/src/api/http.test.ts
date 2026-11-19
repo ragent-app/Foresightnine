@@ -111,6 +111,23 @@ describe("apiRequest", () => {
     expect(fetchMock.mock.calls[0]?.[1]?.body).toBe('{"a":1}');
   });
 
+  it("sends an empty JSON object for a POST without a body, because the API accepts only JSON writes", async () => {
+    const fetchMock = stubFetch(() => jsonResponse({}));
+    await apiRequest("/v1/x", { method: "POST", idempotencyKey: "key-2" });
+    expect(headersOf(fetchMock)["Content-Type"]).toBe("application/json");
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toBe("{}");
+  });
+
+  it("sends no body or content type for GET and DELETE", async () => {
+    const fetchMock = stubFetch(() => jsonResponse({}));
+    await apiRequest("/v1/x");
+    await apiRequest("/v1/x", { method: "DELETE" });
+    for (const call of fetchMock.mock.calls) {
+      expect(call[1]?.body).toBeUndefined();
+      expect((call[1]?.headers as Record<string, string>)["Content-Type"]).toBeUndefined();
+    }
+  });
+
   it("returns undefined for 204", async () => {
     stubFetch(() => new Response(null, { status: 204 }));
     await expect(apiRequest("/v1/x", { method: "DELETE" })).resolves.toBeUndefined();

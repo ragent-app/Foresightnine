@@ -591,10 +591,32 @@ def _endpoint(base_url: str) -> str:
     return f"{base_url}/chat/completions"
 
 
+# Validated DoH answers per hostname. Behind a fake-IP proxy every model request otherwise
+# makes two extra HTTPS lookups (2-6 s each, and the main source of pre-send failures in
+# the 363 acceptance). Only successful answers are kept, for the record TTL within bounds;
+# callers still check that every cached address is public.
+_DOH_CACHE: dict[str, tuple[float, tuple[str, ...]]] = {}
+_DOH_CACHE_LOCK = Lock()
+_DOH_TTL_MIN_SECONDS = 30.0
+_DOH_TTL_MAX_SECONDS = 300.0
+_DOH_TTL_DEFAULT_SECONDS = 60.0
+
+
+def _clear_doh_cache() -> None:
+    with _DOH_CACHE_LOCK:
+        _DOH_CACHE.clear()
+
+
 def _public_doh_addresses(hostname: str) -> tuple[str, ...]:
-    """Resolve through a fixed public DoH service when local DNS uses fake IPs."""
+    """Resolve through a fixed public DoH service when local DNS uses fake IPs (cached by TTL)."""
     normalized = _normalize_hostname(hostname)
+    now = monotonic()
+    with _DOH_CACHE_LOCK:
+        cached = _DOH_CACHE.get(normalized)
+        if cached is not None and cached[0] > now:
+            return cached[1]
     addresses: set[str] = set()
+    ttls: list[float] = []
     for record_type in ("A", "AAAA"):
         connection = HTTPSConnection(_PUBLIC_DOH_HOST, 443, timeout=5.0, context=ssl.create_default_context())
         try:
@@ -616,6 +638,9 @@ def _public_doh_addresses(hostname: str) -> tuple[str, ...]:
                 value = answer.get("data")
                 if not isinstance(value, str):
                     raise _TransportFailure()
+                ttl = answer.get("TTL")
+                if type(ttl) is int and ttl >= 0:
+                    ttls.append(float(ttl))
                 try:
                     addresses.add(str(ipaddress.ip_address(value)))
                 except ValueError as error:
@@ -626,7 +651,12 @@ def _public_doh_addresses(hostname: str) -> tuple[str, ...]:
             connection.close()
     if not addresses:
         raise _TransportFailure()
-    return tuple(sorted(addresses))
+    result = tuple(sorted(addresses))
+    ttl = min(ttls) if ttls else _DOH_TTL_DEFAULT_SECONDS
+    ttl = min(_DOH_TTL_MAX_SECONDS, max(_DOH_TTL_MIN_SECONDS, ttl))
+    with _DOH_CACHE_LOCK:
+        _DOH_CACHE[normalized] = (monotonic() + ttl, result)
+    return result
 
 
 def _is_fake_dns_proxy_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:

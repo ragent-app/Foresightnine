@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .model_protocol import (ModelToolDefinition, ModelToolResult, ModelAssistantContinuation, ModelTurnExchange, ModelTurnInput)
 from .chat_research_adapter import ChatResearchAdapter
-from .research_calculations import CalculationRequest, calculate
+from .research_calculations import CalculationRequest, calculate, calculation_input_status
 from .research_analysis import _quoted_numbers
 from .phase3 import ProviderFailure
 from .research_discovery import RedirectLead, normalize_search_lead, search_lead_url
@@ -757,6 +757,9 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                             'first': {k: first[k] for k in keys}, 'second': {k: second[k] for k in keys},
                             'decimal_places': calculation.decimal_places})
                         row = {'calculation_id': 'calc-' + uuid4().hex, **calculate(request)}
+                        # Same consistency check as user-created calculations, so agent rows do not
+                        # wait for a later user save to show their input status (363 acceptance).
+                        row['input_status'] = calculation_input_status(row, list(facts.values()))
                         rows.append(row)
                     state['calculations'].extend(rows)
                     result = {'calculations': rows}

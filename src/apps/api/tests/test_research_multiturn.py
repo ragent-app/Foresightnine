@@ -138,6 +138,8 @@ def test_two_turns_accumulate_and_second_turn_calculates_from_prior_fact_ids(env
     assert turn2['fact_ids'] == [] and turn2['claim_ids'] == []
     assert turn1['fact_ids'] == [fact['fact_id'] for fact in content['facts']]
     assert content['calculations'][0]['inputs'][0]['fact_id'] == content['facts'][0]['fact_id']
+    # Agent calculations carry their input check when saved, not only after a later user save.
+    assert content['calculations'][0]['input_status'] == 'matched'
     assert content['claims'][0]['turn_id'] == turn1['turn_id'] == first['content']['claims'][0]['turn_id']
     assert content['claims'] == first['content']['claims']
     assert turn2['report'] == 'Revenue grew 25.00%.' and turn2['status'] == 'completed'

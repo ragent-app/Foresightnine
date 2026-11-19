@@ -2393,6 +2393,12 @@ export function createServer({ tickMs = 1500 } = {}) {
       }
       const match = resolve(req.method ?? "GET", segments);
       if (!match) throw notFound("Route");
+      // Backend security.py boundary: POST, PUT and PATCH must be JSON (415 before auth); main.py
+      // only adds the JSON type for the body-less model probe. The UI sends {} for body-less writes.
+      if (["POST", "PUT", "PATCH"].includes(req.method) && url.pathname !== "/v1/account/model-config/test") {
+        const type = String(req.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
+        if (type !== "application/json") throw new HttpError(415, "unsupported_media_type", "JSON requests are required.");
+      }
       let auth = null;
       if (match.route.auth) {
         auth = bearer(req);

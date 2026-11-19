@@ -127,19 +127,23 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   }
 
   const session = readSession();
+  const method = options.method ?? "GET";
+  // The API boundary accepts only JSON for POST and PUT (security.py, 415 otherwise), so a
+  // write without a body still sends an empty JSON object (363 acceptance: continue, recover, logout).
+  const body = options.body === undefined && (method === "POST" || method === "PUT") ? {} : options.body;
   const headers: Record<string, string> = { Accept: options.accept ?? "application/json" };
-  if (options.body !== undefined) headers["Content-Type"] = "application/json";
+  if (body !== undefined) headers["Content-Type"] = "application/json";
   if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
   if (session) headers.Authorization = `Bearer ${session.access_token}`;
 
   const init: RequestInit = {
-    method: options.method ?? "GET",
+    method,
     headers,
     credentials: "omit",
     redirect: "error",
     cache: "no-store",
   };
-  if (options.body !== undefined) init.body = JSON.stringify(options.body);
+  if (body !== undefined) init.body = JSON.stringify(body);
   if (options.signal) init.signal = options.signal;
 
   let response: Response;

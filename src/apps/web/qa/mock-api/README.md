@@ -81,3 +81,5 @@ Magic values: an `api_key` of `storage-unavailable-key` (model config, or any pr
 
 - `GET /v2/research/capabilities` mirrors the backend capability list. SEC is reported available because the mock implements the SEC endpoints; start with `MOCK_SEC_AVAILABLE=0` to see the UI's SEC gate.
 - `GET /v1/account` also returns `research_model` (the model platform research runs on), as the backend does.
+
+- Like the backend boundary, POST/PUT/PATCH without `Content-Type: application/json` get 415 (except the body-less `/v1/account/model-config/test` probe); the UI sends `{}` for body-less writes.

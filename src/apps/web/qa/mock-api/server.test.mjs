@@ -21,12 +21,14 @@ after(async () => {
   await new Promise((resolve) => server.close(resolve));
 });
 
-async function call(method, path, { body, headers = {}, auth = true } = {}) {
+async function call(method, path, { body, headers = {}, auth = true, rawWrite = false } = {}) {
   const init = { method, headers: { ...headers } };
   if (auth && token) init.headers.Authorization = `Bearer ${token}`;
-  if (body !== undefined) {
+  // Like the UI client: writes are always JSON, an absent body is sent as {}.
+  const payload = body === undefined && (method === "POST" || method === "PUT") && !rawWrite ? {} : body;
+  if (payload !== undefined) {
     init.headers["Content-Type"] = "application/json";
-    init.body = JSON.stringify(body);
+    init.body = JSON.stringify(payload);
   }
   const response = await fetch(base + path, init);
   const text = await response.text();
@@ -1450,4 +1452,21 @@ describe("account, model and market-data settings", () => {
       assert.equal((await call("POST", `${MARKET_URL}/test`, { body })).status, 422, JSON.stringify(body));
     }
   });
+});
+
+
+test("writes without a JSON content type are rejected like the backend boundary", async () => {
+  const server2 = (await import("./server.mjs")).createServer({ tickMs: 5 });
+  await new Promise((resolve) => server2.listen(0, "127.0.0.1", resolve));
+  const url = `http://127.0.0.1:${server2.address().port}`;
+  try {
+    const bare = await fetch(`${url}/v2/research/topics/t/runs/op/continue`, { method: "POST" });
+    assert.equal(bare.status, 415);
+    assert.equal((await bare.json()).error_code, "unsupported_media_type");
+    const probe = await fetch(`${url}/v1/account/model-config/test`, { method: "POST" });
+    assert.equal(probe.status, 401); // exempt from the JSON check, then authenticated as usual
+  } finally {
+    server2.closeAllConnections?.();
+    await new Promise((resolve) => server2.close(resolve));
+  }
 });
