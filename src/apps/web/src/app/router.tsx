@@ -10,6 +10,8 @@ import { RootRedirect } from "./RootRedirect";
 
 export const routes: RouteObject[] = [
   { path: "/", element: <RootRedirect /> },
+  // Deployed OAuth return URI (and Android App Link); the callback handler checks the exact path.
+  { path: "/oauth/complete", element: <RootRedirect /> },
   { path: "/login", element: <RedirectIfSignedIn><LoginPage /></RedirectIfSignedIn> },
   {
     element: <RequireSession><AppLayout><Outlet /></AppLayout></RequireSession>,

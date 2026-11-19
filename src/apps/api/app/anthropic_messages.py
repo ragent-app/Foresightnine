@@ -4,7 +4,7 @@ import json
 import socket
 from urllib.parse import urlsplit
 from .model_protocol import ModelResponse, ModelToolCall, ModelUsage
-from .openai_compatible import _default_transport, _TransportFailure, _TransportTimeout, _MAX_RESPONSE_BYTES
+from .openai_compatible import _default_transport, _transport_timeout_from_environment, _TransportFailure, _TransportTimeout, _MAX_RESPONSE_BYTES
 from .phase3 import ProviderFailure
 from .transport_diagnostics import TransportDiagnostics
 
@@ -92,7 +92,13 @@ class AnthropicMessagesProvider:
             if timeout <= 0:
                 raise ProviderFailure('provider_budget_exhausted', 'Time budget is exhausted.', retryable=False)
             if self.transport is None:
-                response = _default_transport('POST', _endpoint(self.settings.base_url), headers, body, timeout, allow_private_network=self.settings.allow_private_network, diagnostics=diagnostics, cancel_event=cancel_event, on_submission=on_submission)
+                # Same connect/response limits as the OpenAI-compatible transport; without them the
+                # Messages path fell back to a 5 s connect timeout that slow TLS handshakes behind a
+                # proxy often exceeded (364 acceptance). Pre-send failures are retried, never resent.
+                response = _default_transport('POST', _endpoint(self.settings.base_url), headers, body, timeout, allow_private_network=self.settings.allow_private_network, diagnostics=diagnostics,
+                    connect_timeout_seconds=_transport_timeout_from_environment("FORESIGHTNINE_LLM_CONNECT_TIMEOUT_SECONDS", 15.0),
+                    response_timeout_seconds=_transport_timeout_from_environment("FORESIGHTNINE_LLM_RESPONSE_TIMEOUT_SECONDS", None),
+                    cancel_event=cancel_event, on_submission=on_submission)
             else:
                 if on_submission: on_submission()
                 diagnostics.submission('started_unknown')

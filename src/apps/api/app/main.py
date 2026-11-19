@@ -95,7 +95,7 @@ from .services import (
     validate_probability_semantics,
     validate_worldline_bundle_semantics,
 )
-from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
+from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, _drop_legacy_null_fields, build_repository
 from .research_topics import (AttachSourcesInput, ReadRange, ResearchCalculation, ResearchFact, ResearchFullExport, ResearchInput, ResearchMetadataExport,
     ResearchTopic, ResearchTopics, ResearchTurn, TopicNotFound, TopicVersionConflict, TurnUsage, VersionInput)
 from .research_progress import build_progress
@@ -2330,6 +2330,15 @@ def get_research_source(source_id: str, authorization: str | None = Header(defau
         raise ApiProblem(404, "not_found", "Research source not found.") from error
 
 
+def _stored_form(value: Any) -> Any:
+    """Normalize a value the way the PostgreSQL repository returns it (null fields dropped).
+
+    Saved run inputs come back without null-valued keys, so comparing them with freshly built
+    values must normalize both sides; otherwise every continuation looks changed (363/364).
+    """
+    return _drop_legacy_null_fields(value)
+
+
 def _research_source_fingerprints(sources: list[ResearchSource]) -> list[dict[str, Any]]:
     return [{"source_id": item.source_id, "content_sha256": item.content_sha256,
              "pdf_text_order": item.pdf_text_order, "derived_from_source_id": item.derived_from_source_id,
@@ -2669,9 +2678,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     or original.get('question_sha256') != sha256(effective_question.encode('utf-8')).hexdigest()
                     or original.get('as_of') != (topic.request.as_of.isoformat() if topic.request.as_of else None)
                     or original.get('scope_sha256') != (sha256(topic.request.scope.encode('utf-8')).hexdigest() if topic.request.scope else None)
-                    or snapshot.get('_sources') != _research_source_fingerprints(sources)
-                    or {k: v for k, v in (original.get('runtime_request') or {}).items() if k != 'parent_version_id'} !=
-                       {k: v for k, v in request.model_dump(mode='json').items() if k != 'parent_version_id'}):
+                    or _stored_form(snapshot.get('_sources')) != _stored_form(_research_source_fingerprints(sources))
+                    or _stored_form({k: v for k, v in (original.get('runtime_request') or {}).items() if k != 'parent_version_id'}) !=
+                       _stored_form({k: v for k, v in request.model_dump(mode='json').items() if k != 'parent_version_id'})):
                 raise ApiProblem(409, 'lifecycle_conflict', 'Research inputs or provider configuration changed.')
             admitted_continuation['runtime'] = RecoveryJournal(RESEARCH_RUN_INPUTS, prior_id, account.account_id).claim_runtime_continuation(operation_id)
         policy = getattr(provider, "policy", None)
@@ -2748,7 +2757,7 @@ def get_research_recovery_status(topic_id: str, operation_id: str, http_request:
             sources = [research_sources.get(account.account_id, row['source_id']) for row in checkpoint['_sources']]
             question = saved_request.question_override or topic.request.question or DOCUMENT_OVERVIEW_QUESTION
             if (inputs.get('runtime_binding') != _runtime_provider_binding(provider, http_request)
-                or checkpoint['_sources'] != _research_source_fingerprints(sources)
+                or _stored_form(checkpoint['_sources']) != _stored_form(_research_source_fingerprints(sources))
                 or inputs.get('question_sha256') != sha256(question.encode('utf-8')).hexdigest()
                 or inputs.get('scope_sha256') != (sha256(topic.request.scope.encode('utf-8')).hexdigest() if topic.request.scope else None)
                 or inputs.get('as_of') != (topic.request.as_of.isoformat() if topic.request.as_of else None)

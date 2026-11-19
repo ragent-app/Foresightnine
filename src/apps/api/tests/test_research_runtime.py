@@ -565,3 +565,28 @@ def test_search_redirect_links_are_unwrapped_or_dropped(url, expected):
             normalize_search_lead({'title': 'Lead', 'url': url})
     else:
         assert normalize_search_lead({'title': 'Lead', 'url': url}).url == expected
+
+
+def test_messages_transport_uses_the_configured_connect_timeout(monkeypatch):
+    from app.anthropic_messages import AnthropicMessagesProvider
+    from app.model_protocol import ModelTurnInput
+    from app.openai_compatible import HttpResponse
+    from app.phase3 import ProviderPolicy
+    seen = []
+
+    def transport(method, url, headers, body, timeout, *, diagnostics, **kwargs):
+        seen.append((kwargs.get('connect_timeout_seconds'), kwargs.get('response_timeout_seconds')))
+        diagnostics.submission('response_received')
+        return HttpResponse(200, json.dumps({'role': 'assistant', 'stop_reason': 'end_turn', 'content': [{'type': 'text', 'text': 'ok'}],
+                                             'usage': {'input_tokens': 1, 'output_tokens': 1}}), {})
+
+    monkeypatch.setattr('app.anthropic_messages._default_transport', transport)
+    settings = SimpleNamespace(base_url='https://example.com', model='model', api_key='fixture', allow_private_network=False)
+    provider = AnthropicMessagesProvider(settings, ProviderPolicy(), anthropic_version='2023-06-01', auth_scheme='x-api-key', max_tokens=100)
+    turn = ModelTurnInput('system', 'user', (), ())
+    monkeypatch.delenv('FORESIGHTNINE_LLM_CONNECT_TIMEOUT_SECONDS', raising=False)
+    provider.complete_turn(turn)
+    monkeypatch.setenv('FORESIGHTNINE_LLM_CONNECT_TIMEOUT_SECONDS', '9')
+    monkeypatch.setenv('FORESIGHTNINE_LLM_RESPONSE_TIMEOUT_SECONDS', '60')
+    provider.complete_turn(turn)
+    assert seen == [(15.0, None), (9.0, 60.0)]

@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -26,6 +26,12 @@ describe("routes", () => {
     const { container } = renderAt("/login");
     expect(container.querySelector('[data-page="HomePage"]')).not.toBeNull();
     expect(container.querySelector('[data-layout="app"]')).not.toBeNull();
+  });
+
+  it("handles the OAuth return path instead of showing NotFoundPage", async () => {
+    const { container } = renderAt("/oauth/complete");
+    await waitFor(() => expect(container.querySelector('[data-page="LoginPage"]')).not.toBeNull());
+    expect(container.querySelector('[data-page="NotFoundPage"]')).toBeNull();
   });
 
   it("renders NotFoundPage for unknown paths", () => {
