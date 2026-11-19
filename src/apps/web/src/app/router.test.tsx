@@ -21,10 +21,10 @@ describe("routes", () => {
     expect(container.querySelector('[data-page="LoginPage"]')).not.toBeNull();
   });
 
-  it("redirects authenticated /login to ResearchListPage inside the layout", () => {
+  it("redirects authenticated /login to HomePage inside the layout", () => {
     storeSession();
     const { container } = renderAt("/login");
-    expect(container.querySelector('[data-page="ResearchListPage"]')).not.toBeNull();
+    expect(container.querySelector('[data-page="HomePage"]')).not.toBeNull();
     expect(container.querySelector('[data-layout="app"]')).not.toBeNull();
   });
 

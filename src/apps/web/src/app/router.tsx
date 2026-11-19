@@ -1,8 +1,7 @@
-import { Outlet, createBrowserRouter, type RouteObject } from "react-router-dom";
+import { Navigate, Outlet, createBrowserRouter, type RouteObject } from "react-router-dom";
+import { HomePage } from "../pages/HomePage";
 import { LoginPage } from "../pages/LoginPage";
-import { NewResearchPage } from "../pages/NewResearchPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
-import { ResearchListPage } from "../pages/ResearchListPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { TopicPage } from "../pages/TopicPage";
 import { AppLayout } from "../ui/AppLayout";
@@ -15,8 +14,9 @@ export const routes: RouteObject[] = [
   {
     element: <RequireSession><AppLayout><Outlet /></AppLayout></RequireSession>,
     children: [
-      { path: "/research", element: <ResearchListPage /> },
-      { path: "/research/new", element: <NewResearchPage /> },
+      // The research home doubles as the new-research entry (design spec §4.2).
+      { path: "/research", element: <HomePage /> },
+      { path: "/research/new", element: <Navigate to="/research" replace /> },
       { path: "/research/:topicId", element: <TopicPage /> },
       { path: "/settings", element: <SettingsPage /> },
     ],

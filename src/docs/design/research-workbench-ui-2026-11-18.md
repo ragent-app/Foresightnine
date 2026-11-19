@@ -1,6 +1,6 @@
 # 研究工作台 UI 设计规格
 
-日期为 2026 年 11 月 19 日，版本 v5，状态为**待用户审阅，尚未实施**。本规格对应[Web 研究工作台重建方案](../product/web-research-workbench-plan-2026-11-18.md)，可点击设计稿见 [research-workbench-mockup-2026-11-18.html](research-workbench-mockup-2026-11-18.html)。
+日期为 2026 年 11 月 19 日，版本 v5，2026-11-19 经用户确认，**M1、M2 已实施**（见第 9 节），M3 至 M5 未开始。本规格对应[Web 研究工作台重建方案](../product/web-research-workbench-plan-2026-11-18.md)，可点击设计稿见 [research-workbench-mockup-2026-11-18.html](research-workbench-mockup-2026-11-18.html)。
 
 **v2 的变更**（2026-11-18 用户确认）：
 - 视觉改用 Ragent 风格，取代 2026-08-10 批准的暖象牙色视觉。规范来源是 `/home/lxx/ragent/Ragent_product/DESIGN.md` 和 `static/chat/chat-m3-tokens.css`。
@@ -430,10 +430,17 @@ Challenge、世界线和 FM 不在本规格范围内。
 | Popover、Menu | 引用浮层，“⋯”和“更多”菜单 |
 | SettingsRow | 设置页的行 |
 
-**技术选型**：Radix 无样式组件 + Tailwind，组件代码参考 shadcn/ui，按本规格的令牌重新设定样式。引用浮层、来源列表、步骤列表可以参考 Vercel AI Elements 的组件代码，复制后去掉它对 AI SDK 的依赖。
+**技术选型**（2026-11-19 实施时调整）：
+- **样式**：不引入 Tailwind。设计稿的样式已经完整实现本规格的令牌和组件，直接移植为 `apps/web/src/styles/index.css` 一个普通 CSS 文件，避免重写为工具类。
+- **交互组件**：使用 Radix 无样式组件 `@radix-ui/react-dialog`、`react-popover`、`react-dropdown-menu`（精确版本 1.1.4 / 1.1.4 / 2.1.4），图标用 `lucide-react` 0.468.0。
+- **CSP 限制**：Radix 的滚动锁定（react-remove-scroll）会插入 `<style>` 元素，被部署的 `style-src 'self'` 拦截。只有三处会挂载它：`Dialog.Overlay`、模态的 `DropdownMenu`、模态的 `Popover`。因此：
+  - 面板和底部操作菜单不使用 `Dialog.Overlay`，遮罩由页面自己绘制；页面的 `body` 本身不滚动，不需要滚动锁定。
+  - `DropdownMenu` 固定使用 `modal={false}`；`Popover` 使用默认的非模态。
+  - 组件定位依靠 Radix 通过 `element.style` 写入的样式，这种写法不受 CSP 限制。
+- 引用浮层、来源列表、步骤列表按本规格自行实现，没有引入 Vercel AI Elements。
 
 **动工前要验证两件事**：
-1. 在部署的 CSP（`style-src 'self'`）下，Radix 面板的滚动锁定能否正常工作。
+1. 在部署的 CSP（`style-src 'self'`）下，Radix 面板的滚动锁定能否正常工作。结论见上一条：避开会挂载滚动锁定的三种用法；实测结果见实施记录。
 2. 在 Chrome、Safari、Firefox 中，玻璃表面在长对话里滚动是否流畅。
 
 ## 6. 文案对照表
@@ -594,3 +601,26 @@ B4 已把缺口改为 `{code, message}` 结构，代码表见 `research_runtime.
 | 引用编号 | 前端按主题内引文的首次出现顺序计算，后端不需要新增字段 | 无需改后端 |
 | 报告按 Markdown 渲染 | B6 格式约定 | 未完成；在此之前按纯文本分段渲染 |
 | 资料不允许模型读取时的提示 | 从资料元数据的权限字段计算（`source_processing` 已删除） | 无需改后端 |
+
+## 9. 实施记录
+
+2026-11-19 实施 M1（新研究、第一轮运行、轮询和取消、回答、资料阅读器、恢复与继续）和 M2（多轮对话、追问、建议链接、研究记录面板、实时过程）。
+
+**已实现**：
+- 首页 `/research`（兼作新研究入口），旧的 `/research/new` 重定向到首页。
+- 主题页：大标题、轮次时间、完成 / 部分完成 / 中断三种回答、关键数字、结论与引用编号、缺口提示块、“继续研究 / 交付已有成果 / 重新提问”、运行状态条和取消、深挖引用、导出。
+- 研究记录四个页签、资料阅读器、研究设置面板；登录页；设置页的账户部分。
+
+**尚未实现**（属于后续里程碑，界面上不放无法使用的入口）：
+- 添加资料按钮和资料管理（M3）。
+- 复核与版本面板、编辑结论、新建计算（M4）。
+- 设置页的模型和数据源（M5）。
+
+**部署 CSP 调整**：本地 Inter 字体需要 `font-src 'self'`。原 CSP 没有 `font-src`，回落到 `default-src 'none'`，字体会被拦截。已在 `apps/web/vite.config.ts` 的预览安全头中加入，只允许同源字体。
+
+**验收（模拟后端，离线）**：
+- 方式：`apps/web/qa/mock-api` 提供与后端字段一致的模拟数据（全部为虚构示例）；`vite preview` 带部署 CSP 头运行生产构建；无头 Chrome 按步骤操作并截图。
+- 覆盖 16 个步骤：登录、首页、打开主题、研究记录四个页签、引用浮层、资料阅读器、菜单、追问运行到完成、部分完成后继续、取消、收起侧栏、深色模式、1024 宽覆盖面板、390 宽手机（引用底部面板、操作菜单、底部面板、抽屉）、320 和 430 宽首页、844×390 横屏、设置页。
+- 结果：16 步全部通过，CSP 违规 0 条，控制台错误 0 条。
+- 未做：真实后端和真实模型的受控验收；Safari、Firefox 实测；长对话滚动性能测量；人工可用性评审。
+
