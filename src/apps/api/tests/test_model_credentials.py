@@ -52,6 +52,46 @@ def test_model_credentials_encrypt_mask_and_bind_to_account(monkeypatch) -> None
         service.cipher.decrypt("account_other", ciphertext)
 
 
+def test_switching_to_platform_keeps_the_saved_personal_configuration(monkeypatch) -> None:
+    monkeypatch.setattr(compatible, "_require_public_dns", lambda *_args, **_kwargs: None)
+    repository = InMemoryDocumentRepository()
+    service = AccountModelSettings(repository, ModelCredentialCipher(b"k" * 32))
+    service.update("account_123456", _personal_request(protocol="anthropic_messages"), now=datetime(2026, 11, 19, tzinfo=timezone.utc))
+
+    platform = service.update("account_123456", ModelConfigUpdate(mode="platform"), now=datetime(2026, 11, 19, 1, tzinfo=timezone.utc))
+
+    # Platform mode is active: no personal credentials reach the runtime.
+    assert platform.mode == "platform"
+    assert service.runtime_settings("account_123456") is None
+    # The inactive personal configuration is reported (masked) and kept encrypted.
+    assert platform.model_dump(exclude_none=True) == {
+        "schema_version": "v1", "mode": "platform", "configured": True, "protocol": "anthropic_messages",
+        "base_url": "https://models.example.test/v1", "model": "test-model", "key_hint": "••••1234",
+        "updated_at": datetime(2026, 11, 19, 1, tzinfo=timezone.utc),
+    }
+    assert SYNTHETIC_MODEL_KEY not in repository["account_123456"].model_dump_json()
+
+    # Switching back needs no fields: the saved origin, protocol and key are reused.
+    personal = service.update("account_123456", ModelConfigUpdate(mode="personal"), now=datetime(2026, 11, 19, 2, tzinfo=timezone.utc))
+    assert personal.mode == "personal"
+    assert personal.protocol == "anthropic_messages"
+    assert service.runtime_settings("account_123456").api_key == SYNTHETIC_MODEL_KEY
+
+    # Delete still removes everything.
+    service.delete("account_123456")
+    assert service.snapshot("account_123456").model_dump(exclude_none=True) == {"schema_version": "v1", "mode": "platform", "configured": True}
+
+
+def test_platform_switch_without_saved_configuration_stays_minimal() -> None:
+    service = AccountModelSettings(InMemoryDocumentRepository(), ModelCredentialCipher(b"q" * 32))
+    snapshot = service.update("account_123456", ModelConfigUpdate(mode="platform"), now=datetime(2026, 11, 19, tzinfo=timezone.utc))
+    assert snapshot.model_dump(exclude_none=True) == {
+        "schema_version": "v1", "mode": "platform", "configured": True, "updated_at": datetime(2026, 11, 19, tzinfo=timezone.utc),
+    }
+    with pytest.raises(ModelCredentialError):
+        service.update("account_123456", ModelConfigUpdate(mode="personal"))
+
+
 def test_personal_configuration_rejects_ssrf_and_missing_encryption(monkeypatch) -> None:
     monkeypatch.setattr(compatible, "_require_public_dns", lambda *_args, **_kwargs: None)
     service = AccountModelSettings(InMemoryDocumentRepository(), ModelCredentialCipher(b"n" * 32))

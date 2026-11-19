@@ -3,7 +3,9 @@ import {
   ArrowUp,
   BookOpen,
   Check,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   CircleAlert,
   CircleCheck,
   Database,
@@ -57,6 +59,8 @@ export const Icons = {
   database: Database,
   ok: CircleCheck,
   alert: CircleAlert,
+  up: ChevronUp,
+  down: ChevronDown,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof Icons;

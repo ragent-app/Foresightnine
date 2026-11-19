@@ -2328,12 +2328,15 @@ def _runtime_provider_binding(provider: Any, request: Request) -> str:
     profile = getattr(provider, 'research_capacity', lambda: None)()
     account = getattr(request.state, 'model_account', None)
     config = getattr(request.state, 'resolved_model_config', None) if account else None
-    payload = {'provider': getattr(provider, 'name', None), 'protocol': getattr(config, 'protocol', None) or os.environ.get('FORESIGHTNINE_RESEARCH_MODEL_PROTOCOL', 'openai_chat_completions'), 'endpoint': getattr(settings, 'base_url', None),
+    # A platform-mode record may retain an inactive personal configuration; only
+    # an active personal configuration describes the provider actually bound.
+    personal = config if getattr(config, 'mode', None) == 'personal' else None
+    payload = {'provider': getattr(provider, 'name', None), 'protocol': getattr(personal, 'protocol', None) or os.environ.get('FORESIGHTNINE_RESEARCH_MODEL_PROTOCOL', 'openai_chat_completions'), 'endpoint': getattr(settings, 'base_url', None),
                'model': getattr(settings, 'model', None), 'policy': repr(getattr(provider, 'policy', None)),
                'profile': repr(profile), 'adapter_binding': getattr(provider, 'research_capacity_key', lambda: None)(), 'protocol_version': getattr(provider, 'anthropic_version', None), 'auth_scheme': getattr(provider, 'auth_scheme', None), 'output_limit': getattr(provider, 'max_tokens', None), 'parameters': os.environ.get('FORESIGHTNINE_LLM_GENERATION_PARAMETERS'),
                'account_model_mode': getattr(config, 'mode', None),
                'credential_revision': str(getattr(config, 'updated_at', None)),
-               'credential_hint': getattr(config, 'key_hint', None),
+               'credential_hint': getattr(personal, 'key_hint', None),
                'platform_credential_revision': os.environ.get('FORESIGHTNINE_RESEARCH_LLM_CREDENTIAL_REVISION') if getattr(provider, 'name', None) == 'anthropic_messages' else os.environ.get('FORESIGHTNINE_LLM_CREDENTIAL_REVISION'),
                'historical_prices': os.environ.get('FORESIGHTNINE_RESEARCH_HISTORICAL_PRICES'),
                'system': SYSTEM, 'tools': [asdict(tool) for tool in TOOLS]}

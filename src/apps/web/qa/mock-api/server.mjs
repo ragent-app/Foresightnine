@@ -4,7 +4,14 @@ import http from "node:http";
 import { createHash, randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import {
+  KEYED_MARKET_PROVIDERS,
+  MARKET_PROVIDER_ORDER,
   PARTIAL_GAPS,
+  PLATFORM_AVAILABLE,
+  PLATFORM_MODEL,
+  PROVIDER_LABELS,
+  QUOTA_LIMIT,
+  SEEDED_QUOTA_CONSUMED,
   Q_OPI25,
   Q_OPI26,
   RUN_STEPS,
@@ -52,12 +59,13 @@ const DISCOVERY_CANDIDATES = [
 ];
 
 class HttpError extends Error {
-  constructor(status, code, message, { retryable = false, details = [] } = {}) {
+  constructor(status, code, message, { retryable = false, details = [], headers = {} } = {}) {
     super(message);
     this.status = status;
     this.code = code;
     this.retryable = retryable;
     this.details = details;
+    this.headers = headers;
   }
 }
 
@@ -105,7 +113,7 @@ function sendError(res, error) {
     request_id: "req_mock",
     retryable: error.retryable,
     details: error.details,
-  });
+  }, error.headers);
 }
 
 async function readJson(req) {
@@ -935,6 +943,7 @@ function advance(data, run) {
   const now = new Date();
   if (run.cancel_requested) {
     touch(run, now, "cancelled");
+    settleQuota(data, run);
     return;
   }
   if (run.operation.status === "pending") run.operation.status = "running";
@@ -952,6 +961,7 @@ function advance(data, run) {
   } else {
     touch(run, now);
   }
+  if (["completed", "failed", "cancelled"].includes(run.operation.status)) settleQuota(data, run);
 }
 
 function currentActivity(run) {
@@ -1015,6 +1025,281 @@ function buildProgress(run, after) {
   };
 }
 
+// ---- Account, model and market-data settings (mirrors model_credentials.py / market_credentials.py) ----
+
+const STORAGE_UNAVAILABLE_KEY = "storage-unavailable-key";
+const MODEL_PROTOCOLS = ["openai_chat_completions", "anthropic_messages"];
+const unavailable = (code, message) => new HttpError(503, code, message, { retryable: true, headers: { "Retry-After": "30" } });
+const modelUnavailable = () => unavailable("model_credential_storage_unavailable", "Model credential storage is unavailable.");
+const marketUnavailable = () => unavailable("market_credential_storage_unavailable", "Market credential storage is unavailable.");
+const modelProblem = (message) => new HttpError(422, "validation_error", message);
+
+const codePointLength = (value) => Array.from(value).length;
+
+/** Optional (nullable, default null) bounded string; returns null when absent or null. */
+function readBounded(body, key, min, max, prefix = "body") {
+  const value = body[key];
+  if (value === undefined || value === null) return null;
+  const length = typeof value === "string" ? codePointLength(value) : -1;
+  if (length < min || length > max) throw invalid(`Input should be a string of ${min} to ${max} characters.`, `${prefix}/${key}`);
+  return value;
+}
+
+function readStrictBool(body, key, prefix = "body") {
+  if (body[key] === undefined) return false;
+  if (typeof body[key] !== "boolean") throw invalid("Input should be a valid boolean.", `${prefix}/${key}`);
+  return body[key];
+}
+
+function readEnum(value, allowed, location) {
+  if (typeof value !== "string" || !allowed.includes(value)) throw invalid(`Input should be ${allowed.map((item) => `'${item}'`).join(", ")}.`, location);
+  return value;
+}
+
+/** Mirrors ModelConfigUpdate (strict, extra forbid, plus its after-validator). */
+function readModelConfigUpdate(body) {
+  exactKeys(body, ["mode", "protocol", "base_url", "model", "api_key", "clear_api_key"], "body");
+  if (body.mode === undefined) throw invalid("Field required.", "body/mode");
+  const mode = readEnum(body.mode, ["platform", "personal"], "body/mode");
+  const protocol = body.protocol === undefined || body.protocol === null ? null : readEnum(body.protocol, MODEL_PROTOCOLS, "body/protocol");
+  const request = {
+    mode,
+    protocol,
+    base_url: readBounded(body, "base_url", 1, 2048),
+    model: readBounded(body, "model", 1, 128),
+    api_key: readBounded(body, "api_key", 8, 512),
+    clear_api_key: readStrictBool(body, "clear_api_key"),
+  };
+  if (request.api_key !== null && request.clear_api_key) throw invalid("api_key and clear_api_key are mutually exclusive");
+  if (mode === "platform" && (protocol !== null || request.base_url !== null || request.model !== null || request.api_key !== null || request.clear_api_key)) {
+    throw invalid("platform mode does not accept personal model fields");
+  }
+  for (const key of ["base_url", "model", "api_key"]) {
+    if (request[key] !== null && request[key] !== request[key].trim()) throw invalid(`${key} must not contain surrounding whitespace`, `body/${key}`);
+  }
+  return request;
+}
+
+/** Mirrors `_hint`: last 4 chars when ASCII alphanumeric, else the last 4 hex of the sha256. */
+function keyHint(apiKey) {
+  const suffix = Array.from(apiKey).slice(-4).join("");
+  return `••••${/^[A-Za-z0-9]{4}$/.test(suffix) ? suffix : sha256(apiKey).slice(-4)}`;
+}
+
+function ipv4Blocked(a, b, c) {
+  return a === 0 || a === 10 || a === 127 || a >= 224 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 0 && (c === 0 || c === 2)) ||
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) ||
+    (a === 203 && b === 0 && c === 113);
+}
+
+/** Expands a (bracket-stripped, WHATWG-normalized) IPv6 literal into 8 16-bit groups, or null. */
+function ipv6Groups(text) {
+  const halves = text.split("::");
+  if (halves.length > 2) return null;
+  const parse = (part) => (part ? part.split(":").map((group) => Number.parseInt(group, 16)) : []);
+  const head = parse(halves[0]);
+  const tail = halves.length === 2 ? parse(halves[1]) : [];
+  const fill = halves.length === 2 ? 8 - head.length - tail.length : 0;
+  const groups = [...head, ...Array(Math.max(fill, 0)).fill(0), ...tail];
+  return groups.length === 8 && groups.every((group) => Number.isInteger(group)) ? groups : null;
+}
+
+/** Simulates the public-DNS check: private/loopback/link-local literals and local-only names fail. */
+function hostBlocked(hostname) {
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return true;
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (v4) return ipv4Blocked(Number(v4[1]), Number(v4[2]), Number(v4[3]));
+  if (host.startsWith("[") && host.endsWith("]")) {
+    const g = ipv6Groups(host.slice(1, -1));
+    if (!g) return true;
+    if (g.every((group) => group === 0) || (g.slice(0, 7).every((group) => group === 0) && g[7] === 1)) return true;
+    if ((g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xff00) === 0xff00) return true;
+    if (g.slice(0, 5).every((group) => group === 0) && g[5] === 0xffff) return ipv4Blocked(g[6] >> 8, g[6] & 255, g[7] >> 8);
+  }
+  return false;
+}
+
+/** Mirrors OpenAICompatibleSettings.from_account_values; returns whether the values are acceptable. */
+function personalValuesValid(baseUrl, model) {
+  if (baseUrl.includes("\\") || /[\u0000-\u001f]/.test(model)) return false;
+  let url;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" || !url.hostname || url.username || url.password || url.search || url.hash || baseUrl.includes("?") || baseUrl.includes("#")) return false;
+  if (url.port && url.port !== "443") return false;
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  if (host === "metadata.google.internal" || host === "metadata.azure.internal") return false;
+  return !hostBlocked(host);
+}
+
+const originOf = (baseUrl) => {
+  const url = new URL(baseUrl);
+  return `${url.protocol}|${url.hostname}|${url.port || "443"}`;
+};
+
+/** Mirrors AccountModelSettings.snapshot (response_model_exclude_none). Never includes the key. */
+function modelSnapshot(config) {
+  if (!config) return { schema_version: "v1", mode: "platform", configured: true };
+  if (config.mode === "platform") {
+    // Backend keeps an inactive personal configuration in platform mode and reports it masked.
+    const saved = config.base_url && config.model && config.api_key && config.key_hint;
+    return {
+      schema_version: "v1", mode: "platform", configured: true,
+      ...(saved ? { protocol: config.protocol, base_url: config.base_url, model: config.model, key_hint: config.key_hint } : {}),
+      updated_at: config.updated_at,
+    };
+  }
+  return {
+    schema_version: "v1",
+    mode: "personal",
+    configured: true,
+    protocol: config.protocol,
+    base_url: config.base_url,
+    model: config.model,
+    key_hint: config.key_hint,
+    updated_at: config.updated_at,
+  };
+}
+
+/** Mirrors AccountModelSettings.update. Returns the new stored config; throws HttpError. */
+function applyModelUpdate(existing, request, now) {
+  if (request.mode === "platform") {
+    // Keep the personal configuration (and key) so switching back needs no re-entry; DELETE removes it.
+    const keep = existing ? { protocol: existing.protocol, base_url: existing.base_url, model: existing.model, api_key: existing.api_key, key_hint: existing.key_hint } : {};
+    return { ...keep, mode: "platform", updated_at: iso(now) };
+  }
+  const prior = existing ?? null;
+  const baseUrl = request.base_url ?? prior?.base_url ?? null;
+  const model = request.model ?? prior?.model ?? null;
+  const protocol = request.protocol ?? prior?.protocol ?? "openai_chat_completions";
+  if (prior?.base_url && baseUrl && request.api_key === null) {
+    let changed;
+    try {
+      changed = originOf(prior.base_url) !== originOf(baseUrl);
+    } catch {
+      throw modelProblem("Personal model configuration is invalid.");
+    }
+    if (changed || protocol !== prior.protocol) throw modelProblem("Changing model origin or protocol requires supplying the API key again.");
+  }
+  let apiKey = prior?.api_key ?? null;
+  let hint = prior?.key_hint ?? null;
+  if (request.clear_api_key) {
+    apiKey = null;
+    hint = null;
+  } else if (request.api_key !== null) {
+    if (request.api_key === STORAGE_UNAVAILABLE_KEY) throw modelUnavailable();
+    apiKey = request.api_key;
+    hint = keyHint(request.api_key);
+  }
+  if (!baseUrl || !model || !apiKey || !hint) throw modelProblem("Personal model configuration is incomplete.");
+  if (!personalValuesValid(baseUrl, model)) throw modelProblem("Personal model configuration is invalid.");
+  return { mode: "personal", protocol, base_url: baseUrl, model, api_key: apiKey, key_hint: hint, updated_at: iso(now) };
+}
+
+/** Mirrors MarketDataConfigUpdate (strict, extra forbid, plus its after-validators). */
+function readMarketDataUpdate(body) {
+  exactKeys(body, ["fallback_order", "providers"], "body");
+  const exactlyOnce = (ids, location) => {
+    if (ids.length !== MARKET_PROVIDER_ORDER.length || new Set(ids).size !== ids.length || !ids.every((id) => MARKET_PROVIDER_ORDER.includes(id))) {
+      throw invalid(`${location.split("/").pop()} must contain every supported provider exactly once`, location);
+    }
+  };
+  if (!Array.isArray(body.fallback_order)) throw invalid("Input should be a valid list.", "body/fallback_order");
+  body.fallback_order.forEach((id, i) => readEnum(id, MARKET_PROVIDER_ORDER, `body/fallback_order/${i}`));
+  if (!Array.isArray(body.providers)) throw invalid("Input should be a valid list.", "body/providers");
+  const providers = body.providers.map((raw, i) => {
+    const where = `body/providers/${i}`;
+    exactKeys(raw, ["provider_id", "enabled", "api_key", "clear_api_key"], where);
+    const providerId = readEnum(raw.provider_id, MARKET_PROVIDER_ORDER, `${where}/provider_id`);
+    if (typeof raw.enabled !== "boolean") throw invalid("Input should be a valid boolean.", `${where}/enabled`);
+    const item = {
+      provider_id: providerId,
+      enabled: raw.enabled,
+      api_key: readBounded(raw, "api_key", 8, 512, where),
+      clear_api_key: readStrictBool(raw, "clear_api_key", where),
+    };
+    if (item.api_key !== null && item.clear_api_key) throw invalid("api_key and clear_api_key are mutually exclusive", where);
+    if (!KEYED_MARKET_PROVIDERS.has(providerId) && (item.api_key !== null || item.clear_api_key)) throw invalid("this provider does not accept an API key", where);
+    if (item.api_key !== null && item.api_key !== item.api_key.trim()) throw invalid("api_key must not contain surrounding whitespace", `${where}/api_key`);
+    return item;
+  });
+  exactlyOnce(body.fallback_order, "body/fallback_order");
+  exactlyOnce(providers.map((item) => item.provider_id), "body/providers");
+  return { fallback_order: [...body.fallback_order], providers };
+}
+
+/** Mirrors AccountMarketDataSettings.snapshot: providers in MARKET_PROVIDER_ORDER, null key_hint kept. */
+function marketSnapshot(config) {
+  return {
+    schema_version: "v1",
+    fallback_order: config ? [...config.fallback_order] : [...MARKET_PROVIDER_ORDER],
+    providers: MARKET_PROVIDER_ORDER.map((id) => {
+      const record = config?.providers[id];
+      return {
+        provider_id: id,
+        display_name: PROVIDER_LABELS[id],
+        enabled: record ? record.enabled : true,
+        requires_key: KEYED_MARKET_PROVIDERS.has(id),
+        personal_key_configured: Boolean(record?.api_key),
+        platform_available: PLATFORM_AVAILABLE[id],
+        key_hint: record?.key_hint ?? null,
+      };
+    }),
+    updated_at: config?.updated_at ?? null,
+  };
+}
+
+/** Mirrors AccountMarketDataSettings.update: keys are kept unless set or cleared. */
+function applyMarketUpdate(existing, request, now) {
+  if (request.providers.some((item) => item.api_key === STORAGE_UNAVAILABLE_KEY)) throw marketUnavailable();
+  const providers = {};
+  for (const item of request.providers) {
+    const previous = existing?.providers[item.provider_id];
+    let apiKey = previous?.api_key ?? null;
+    let hint = previous?.key_hint ?? null;
+    if (item.clear_api_key) {
+      apiKey = null;
+      hint = null;
+    } else if (item.api_key !== null) {
+      apiKey = item.api_key;
+      hint = keyHint(item.api_key);
+    }
+    providers[item.provider_id] = { enabled: item.enabled, api_key: apiKey, key_hint: hint };
+  }
+  return { fallback_order: request.fallback_order, providers, updated_at: iso(now) };
+}
+
+/** Simulated provider probe: no network is used. */
+function simulateMarketProbe(config, providerId) {
+  const record = config?.providers[providerId];
+  const enabled = record ? record.enabled : true;
+  const personalKey = record?.api_key ?? null;
+  const usable = !KEYED_MARKET_PROVIDERS.has(providerId) || personalKey !== null || PLATFORM_AVAILABLE[providerId];
+  return enabled && usable && !(personalKey ?? "").includes("bad") ? "ready" : "unavailable";
+}
+
+/** Mirrors the platform quota ledger: only runs that started in platform mode consume tokens. */
+function settleQuota(data, run) {
+  if (run.quotaSettled) return;
+  run.quotaSettled = true;
+  if (!run.platformModel) return;
+  const total = usageFromEvents(run.events).total_tokens;
+  data.billing.consumed += Math.max(0, total - (run.quotaBaseline ?? 0));
+}
+
+function nextMonthStart(now) {
+  return iso(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)));
+}
+
 // ---- Server -----------------------------------------------------------------------
 
 export function createServer({ tickMs = 1500 } = {}) {
@@ -1062,7 +1347,14 @@ export function createServer({ tickMs = 1500 } = {}) {
     const account = accounts.get(accountId);
     if (!account.data) {
       const fresh = seed(new Date());
-      const data = { topics: new Map(), sources: new Map(), runs: new Map() };
+      const data = {
+        topics: new Map(),
+        sources: new Map(),
+        runs: new Map(),
+        modelConfig: null,
+        marketConfig: null,
+        billing: { consumed: SEEDED_QUOTA_CONSUMED },
+      };
       for (const [id, source] of Object.entries(fresh.sources)) data.sources.set(id, { ...source, owner_id: accountId });
       for (const topic of fresh.topics) data.topics.set(topic.topic_id, { ...topic, owner_id: accountId });
       for (const run of fresh.runs) data.runs.set(run.operation.operation_id, run);
@@ -1142,6 +1434,10 @@ export function createServer({ tickMs = 1500 } = {}) {
       bodySourceIds: init.bodySourceIds ?? [],
       resolvedDiscover: init.resolvedDiscover ?? false,
       discoverActive: init.discoverActive ?? false,
+      // Personal models never consume platform quota; the mode is fixed at run start.
+      platformModel: data.modelConfig === null || data.modelConfig.mode === "platform",
+      quotaBaseline: init.quotaBaseline ?? 0,
+      quotaSettled: false,
     };
     run.operation.last_event_id = `${operationId}:${run.events.length}`;
     run.question = init.question;
@@ -1246,6 +1542,7 @@ export function createServer({ tickMs = 1500 } = {}) {
       bodySourceIds: source.bodySourceIds,
       resolvedDiscover: source.resolvedDiscover,
       discoverActive: source.discoverActive,
+      quotaBaseline: usageFromEvents(source.events).total_tokens,
     });
     source.continued_by = run.operation.operation_id;
     idempotency.set(scope, { hash, operationId: run.operation.operation_id });
@@ -1992,6 +2289,63 @@ export function createServer({ tickMs = 1500 } = {}) {
     send(res, 201, topic);
   });
 
+
+  // Account summary, model and market-data settings (bearer auth, `Cache-Control: no-store` via send()).
+  route("GET", "/v1/account", true, ({ res, auth }) => {
+    const data = dataFor(auth.accountId);
+    const account = accounts.get(auth.accountId);
+    const consumed = data.billing.consumed;
+    send(res, 200, {
+      account: { account_id: auth.accountId, email: account.email },
+      plan: "free",
+      entitlement_status: "active",
+      product_id: null,
+      base_plan_id: null,
+      quota_limit: QUOTA_LIMIT,
+      quota_consumed: consumed,
+      quota_reserved: 0,
+      quota_remaining: Math.max(0, QUOTA_LIMIT - consumed),
+      quota_resets_at: nextMonthStart(new Date()),
+      provider_model: PLATFORM_MODEL,
+    });
+  });
+  route("GET", "/v1/account/model-config", true, ({ res, auth }) =>
+    send(res, 200, modelSnapshot(dataFor(auth.accountId).modelConfig)));
+  route("PUT", "/v1/account/model-config", true, ({ res, auth, body }) => {
+    const data = dataFor(auth.accountId);
+    const request = readModelConfigUpdate(body);
+    data.modelConfig = applyModelUpdate(data.modelConfig, request, new Date());
+    send(res, 200, modelSnapshot(data.modelConfig));
+  });
+  route("DELETE", "/v1/account/model-config", true, ({ res, auth }) => {
+    const data = dataFor(auth.accountId);
+    data.modelConfig = null;
+    send(res, 200, modelSnapshot(null));
+  });
+  route("POST", "/v1/account/model-config/test", true, ({ res, auth }) => {
+    const config = dataFor(auth.accountId).modelConfig;
+    let status = "unavailable";
+    if (config?.mode === "personal" && config.protocol === "openai_chat_completions") {
+      // Simulated probe, no network: hosts or models named "down" are unreachable.
+      const down = new URL(config.base_url).hostname.toLowerCase().includes("down") || config.model.toLowerCase().includes("down");
+      status = down ? "unavailable" : "ready";
+    }
+    send(res, 200, { status });
+  });
+  route("GET", "/v1/account/market-data-config", true, ({ res, auth }) =>
+    send(res, 200, marketSnapshot(dataFor(auth.accountId).marketConfig)));
+  route("PUT", "/v1/account/market-data-config", true, ({ res, auth, body }) => {
+    const data = dataFor(auth.accountId);
+    const request = readMarketDataUpdate(body);
+    data.marketConfig = applyMarketUpdate(data.marketConfig, request, new Date());
+    send(res, 200, marketSnapshot(data.marketConfig));
+  });
+  route("POST", "/v1/account/market-data-config/test", true, ({ res, auth, body }) => {
+    exactKeys(body, ["provider_id"], "body");
+    if (body.provider_id === undefined) throw invalid("Field required.", "body/provider_id");
+    const providerId = readEnum(body.provider_id, MARKET_PROVIDER_ORDER, "body/provider_id");
+    send(res, 200, { provider_id: providerId, status: simulateMarketProbe(dataFor(auth.accountId).marketConfig, providerId) });
+  });
 
   function resolve(method, segments) {
     for (const candidate of routes) {

@@ -1,7 +1,7 @@
 // Run from apps/web: node --test qa/mock-api/server.test.mjs
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { after, before, describe, test } from "node:test";
+import { after, afterEach, before, beforeEach, describe, test } from "node:test";
 import { createServer } from "./server.mjs";
 import { S1_ID, S3_ID, S4_ID, S5_ID } from "./fixtures.mjs";
 
@@ -1108,5 +1108,346 @@ describe("mock research API", () => {
       assert.equal(again.json.versions.at(-1).content.calculations[0].value, "17.79");
       assert.equal(again.json.versions.at(-1).content.calculations[0].calculation_id, "C-growth");
     });
+  });
+});
+
+describe("account, model and market-data settings", () => {
+  const MODEL_URL = "/v1/account/model-config";
+  const MARKET_URL = "/v1/account/market-data-config";
+  const PERSONAL = { mode: "personal", protocol: "openai_chat_completions", base_url: "https://llm.example.com/v1", model: "example-model", api_key: "sk-fictional-ABCD1234" };
+  const PROVIDERS = ["market_data", "alpha_vantage", "twelve_data", "finnhub", "yahoo"];
+  const marketBody = (overrides = {}, order = PROVIDERS) => ({
+    fallback_order: order,
+    providers: PROVIDERS.map((id) => ({ provider_id: id, enabled: true, ...(overrides[id] ?? {}) })),
+  });
+
+  let saved;
+  beforeEach(async () => {
+    saved = token;
+    token = (await login()).token;
+  });
+  afterEach(() => {
+    token = saved;
+  });
+
+  test("all endpoints require a bearer token and are never cached", async () => {
+    for (const [method, path, body] of [
+      ["GET", "/v1/account"],
+      ["GET", MODEL_URL],
+      ["PUT", MODEL_URL, { mode: "platform" }],
+      ["DELETE", MODEL_URL],
+      ["POST", `${MODEL_URL}/test`],
+      ["GET", MARKET_URL],
+      ["PUT", MARKET_URL, marketBody()],
+      ["POST", `${MARKET_URL}/test`, { provider_id: "yahoo" }],
+    ]) {
+      const response = await call(method, path, { auth: false, body });
+      assert.equal(response.status, 401, `${method} ${path}`);
+      assert.equal(response.json.error_code, "unauthorized");
+    }
+    for (const path of ["/v1/account", MODEL_URL, MARKET_URL]) {
+      assert.equal((await call("GET", path)).headers.get("cache-control"), "no-store");
+    }
+    assert.equal((await call("PUT", MODEL_URL, { body: PERSONAL })).headers.get("cache-control"), "no-store");
+  });
+
+  test("account summary shape and quota_remaining", async () => {
+    const response = await call("GET", "/v1/account");
+    assert.equal(response.status, 200);
+    const summary = response.json;
+    assert.deepEqual(Object.keys(summary).sort(), ["account", "base_plan_id", "entitlement_status", "plan", "product_id", "provider_model", "quota_consumed", "quota_limit", "quota_remaining", "quota_reserved", "quota_resets_at"]);
+    assert.deepEqual(Object.keys(summary.account).sort(), ["account_id", "email"]);
+    assert.match(summary.account.account_id, /^acct_/);
+    assert.equal(summary.plan, "free");
+    assert.equal(summary.entitlement_status, "active");
+    assert.equal(summary.product_id, null);
+    assert.equal(summary.base_plan_id, null);
+    assert.equal(summary.quota_limit, 200000);
+    assert.equal(summary.quota_consumed, 18500);
+    assert.equal(summary.quota_reserved, 0);
+    assert.equal(summary.quota_remaining, 200000 - 18500);
+    assert.equal(summary.provider_model, "platform-model-example");
+    const now = new Date();
+    assert.equal(summary.quota_resets_at, new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString().replace(".000Z", "Z"));
+  });
+
+  test("platform runs consume quota; personal-model runs do not", async () => {
+    const consumed = async () => (await call("GET", "/v1/account")).json.quota_consumed;
+    const runTopic = async () => {
+      const topic = await newTopic([S1_ID]);
+      const { response } = await startRun(topic.topic_id);
+      assert.equal(response.status, 202);
+      const final = await waitForTerminal(topic.topic_id, response.json.operation.operation_id);
+      assert.equal(final.operation_status, "completed");
+      return final.usage.total_tokens;
+    };
+    const platformTokens = await runTopic();
+    assert.ok(platformTokens > 0);
+    assert.equal(await consumed(), 18500 + platformTokens);
+    assert.equal((await call("GET", "/v1/account")).json.quota_remaining, 200000 - 18500 - platformTokens);
+
+    assert.equal((await call("PUT", MODEL_URL, { body: PERSONAL })).status, 200);
+    await runTopic();
+    assert.equal(await consumed(), 18500 + platformTokens);
+  });
+
+  test("default model config is a platform snapshot without null fields", async () => {
+    const response = await call("GET", MODEL_URL);
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.json, { schema_version: "v1", mode: "platform", configured: true });
+  });
+
+  test("personal save returns a masked snapshot and never the key", async () => {
+    const response = await call("PUT", MODEL_URL, { body: PERSONAL });
+    assert.equal(response.status, 200);
+    const { updated_at: updatedAt, ...rest } = response.json;
+    assert.deepEqual(rest, { schema_version: "v1", mode: "personal", configured: true, protocol: "openai_chat_completions", base_url: PERSONAL.base_url, model: "example-model", key_hint: "••••1234" });
+    assert.ok(!Number.isNaN(Date.parse(updatedAt)));
+    const read = await call("GET", MODEL_URL);
+    assert.deepEqual(read.json, response.json);
+    assert.ok(!JSON.stringify([response.json, read.json]).includes(PERSONAL.api_key));
+    // A non-alphanumeric suffix falls back to the last 4 hex of the sha256.
+    const odd = await call("PUT", MODEL_URL, { body: { ...PERSONAL, api_key: "sk-fictional-ab_!" } });
+    assert.match(odd.json.key_hint, /^••••[0-9a-f]{4}$/);
+  });
+
+  test("personal update merges with the stored values and keeps the key", async () => {
+    await call("PUT", MODEL_URL, { body: PERSONAL });
+    const renamed = await call("PUT", MODEL_URL, { body: { mode: "personal", model: "other-model" } });
+    assert.equal(renamed.status, 200);
+    assert.equal(renamed.json.model, "other-model");
+    assert.equal(renamed.json.key_hint, "••••1234");
+    assert.equal(renamed.json.base_url, PERSONAL.base_url);
+    // Same origin with a different path needs no key.
+    assert.equal((await call("PUT", MODEL_URL, { body: { mode: "personal", base_url: "https://llm.example.com/v2" } })).json.base_url, "https://llm.example.com/v2");
+    // Changing origin or protocol requires the key again; supplying it works.
+    const moved = { mode: "personal", base_url: "https://other.example.org/v1" };
+    const rejected = await call("PUT", MODEL_URL, { body: moved });
+    assert.equal(rejected.status, 422);
+    assert.equal(rejected.json.error_code, "validation_error");
+    assert.equal(rejected.json.message, "Changing model origin or protocol requires supplying the API key again.");
+    assert.equal((await call("PUT", MODEL_URL, { body: { mode: "personal", protocol: "anthropic_messages" } })).json.message, "Changing model origin or protocol requires supplying the API key again.");
+    const withKey = await call("PUT", MODEL_URL, { body: { ...moved, protocol: "anthropic_messages", api_key: "another-key-WXYZ" } });
+    assert.equal(withKey.status, 200);
+    assert.deepEqual([withKey.json.protocol, withKey.json.base_url, withKey.json.key_hint], ["anthropic_messages", moved.base_url, "••••WXYZ"]);
+    // The failed attempts changed nothing; clearing the key leaves the config incomplete.
+    const cleared = await call("PUT", MODEL_URL, { body: { mode: "personal", clear_api_key: true } });
+    assert.equal(cleared.status, 422);
+    assert.equal(cleared.json.message, "Personal model configuration is incomplete.");
+    assert.equal((await call("GET", MODEL_URL)).json.key_hint, "••••WXYZ");
+  });
+
+  test("incomplete or invalid personal configurations are 422", async () => {
+    const incomplete = await call("PUT", MODEL_URL, { body: { mode: "personal", model: "example-model" } });
+    assert.equal(incomplete.status, 422);
+    assert.equal(incomplete.json.error_code, "validation_error");
+    assert.equal(incomplete.json.message, "Personal model configuration is incomplete.");
+    for (const baseUrl of [
+      "http://llm.example.com/v1",
+      "https://localhost/v1",
+      "https://127.0.0.1/v1",
+      "https://10.1.2.3/v1",
+      "https://192.168.0.5/v1",
+      "https://172.20.0.1/v1",
+      "https://169.254.169.254/latest",
+      "https://[::1]/v1",
+      "https://[fe80::1]/v1",
+      "https://metadata.google.internal/v1",
+      "https://metadata.azure.internal/v1",
+      "https://printer.local/v1",
+      "https://svc.corp.internal/v1",
+      "https://llm.example.com:8443/v1",
+      "https://user:secret@llm.example.com/v1",
+      "llm.example.com/v1",
+    ]) {
+      const response = await call("PUT", MODEL_URL, { body: { ...PERSONAL, base_url: baseUrl } });
+      assert.equal(response.status, 422, baseUrl);
+      assert.equal(response.json.message, "Personal model configuration is invalid.", baseUrl);
+    }
+    assert.equal((await call("PUT", MODEL_URL, { body: { ...PERSONAL, base_url: "https://llm.example.com:443/v1" } })).status, 200);
+    assert.equal((await call("GET", MODEL_URL)).json.mode, "personal");
+  });
+
+  test("model-config request validation mirrors the strict pydantic model", async () => {
+    for (const body of [
+      { mode: "platform", model: "x" },
+      { mode: "platform", protocol: "openai_chat_completions" },
+      { mode: "platform", clear_api_key: true },
+      { mode: "platform", api_key: "abcdefgh" },
+      { ...PERSONAL, clear_api_key: true },
+      { ...PERSONAL, clear_api_key: "true" },
+      { ...PERSONAL, api_key: " sk-fictional-ABCD1234" },
+      { ...PERSONAL, model: "example-model " },
+      { ...PERSONAL, base_url: " https://llm.example.com/v1" },
+      { ...PERSONAL, api_key: "short" },
+      { ...PERSONAL, model: "" },
+      { ...PERSONAL, model: "m".repeat(129) },
+      { ...PERSONAL, protocol: "gemini" },
+      { ...PERSONAL, api_key: 12345678 },
+      { ...PERSONAL, extra: 1 },
+      { model: "x" },
+      { mode: "other" },
+      [],
+    ]) {
+      const response = await call("PUT", MODEL_URL, { body });
+      assert.equal(response.status, 422, JSON.stringify(body));
+      assert.equal(response.json.error_code, "validation_error");
+    }
+    assert.deepEqual((await call("GET", MODEL_URL)).json, { schema_version: "v1", mode: "platform", configured: true });
+  });
+
+  test("switching to platform keeps the personal config for switching back; DELETE resets", async () => {
+    const saved = await call("PUT", MODEL_URL, { body: PERSONAL });
+    const platform = await call("PUT", MODEL_URL, { body: { mode: "platform" } });
+    assert.equal(platform.status, 200);
+    assert.equal(platform.json.mode, "platform");
+    // The inactive personal configuration is reported masked; the key itself is never returned.
+    assert.equal(platform.json.base_url, saved.json.base_url);
+    assert.equal(platform.json.key_hint, saved.json.key_hint);
+    assert.ok(!JSON.stringify(platform.json).includes(PERSONAL.api_key));
+    assert.deepEqual((await call("GET", MODEL_URL)).json, platform.json);
+    // The platform test reports unavailable: no personal model is active.
+    assert.equal((await call("POST", `${MODEL_URL}/test`)).json.status, "unavailable");
+    // Switching back needs no fields.
+    const back = await call("PUT", MODEL_URL, { body: { mode: "personal" } });
+    assert.equal(back.status, 200);
+    assert.equal(back.json.mode, "personal");
+    assert.equal(back.json.key_hint, saved.json.key_hint);
+
+    const deleted = await call("DELETE", MODEL_URL);
+    assert.equal(deleted.status, 200);
+    assert.deepEqual(deleted.json, { schema_version: "v1", mode: "platform", configured: true });
+    assert.deepEqual((await call("GET", MODEL_URL)).json, deleted.json);
+    assert.equal((await call("PUT", MODEL_URL, { body: { mode: "personal" } })).json.message, "Personal model configuration is incomplete.");
+  });
+
+  test("model-config storage failure magic key is a retryable 503", async () => {
+    const response = await call("PUT", MODEL_URL, { body: { ...PERSONAL, api_key: "storage-unavailable-key" } });
+    assert.equal(response.status, 503);
+    assert.equal(response.json.error_code, "model_credential_storage_unavailable");
+    assert.equal(response.json.retryable, true);
+    assert.equal(response.headers.get("retry-after"), "30");
+    assert.deepEqual((await call("GET", MODEL_URL)).json, { schema_version: "v1", mode: "platform", configured: true });
+  });
+
+  test("model-config test endpoint is simulated", async () => {
+    const status = async () => {
+      const response = await call("POST", `${MODEL_URL}/test`);
+      assert.equal(response.status, 200);
+      assert.deepEqual(Object.keys(response.json), ["status"]);
+      return response.json.status;
+    };
+    assert.equal(await status(), "unavailable"); // platform mode
+    await call("PUT", MODEL_URL, { body: PERSONAL });
+    assert.equal(await status(), "ready");
+    await call("PUT", MODEL_URL, { body: { ...PERSONAL, base_url: "https://down.example.com/v1" } });
+    assert.equal(await status(), "unavailable");
+    await call("PUT", MODEL_URL, { body: { ...PERSONAL, model: "model-down-1" } });
+    assert.equal(await status(), "unavailable");
+    await call("PUT", MODEL_URL, { body: { ...PERSONAL, protocol: "anthropic_messages" } });
+    assert.equal(await status(), "unavailable");
+    await call("DELETE", MODEL_URL);
+    assert.equal(await status(), "unavailable");
+  });
+
+  test("default market-data snapshot", async () => {
+    const response = await call("GET", MARKET_URL);
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.json, {
+      schema_version: "v1",
+      fallback_order: PROVIDERS,
+      providers: [
+        { provider_id: "market_data", display_name: "Market Data", enabled: true, requires_key: true, personal_key_configured: false, platform_available: false, key_hint: null },
+        { provider_id: "alpha_vantage", display_name: "Alpha Vantage", enabled: true, requires_key: true, personal_key_configured: false, platform_available: true, key_hint: null },
+        { provider_id: "twelve_data", display_name: "Twelve Data", enabled: true, requires_key: true, personal_key_configured: false, platform_available: false, key_hint: null },
+        { provider_id: "finnhub", display_name: "Finnhub", enabled: true, requires_key: true, personal_key_configured: false, platform_available: false, key_hint: null },
+        { provider_id: "yahoo", display_name: "Yahoo Finance", enabled: true, requires_key: false, personal_key_configured: false, platform_available: true, key_hint: null },
+      ],
+      updated_at: null,
+    });
+  });
+
+  test("market-data update reorders, toggles, sets and clears keys", async () => {
+    const order = ["yahoo", "finnhub", "twelve_data", "alpha_vantage", "market_data"];
+    const first = await call("PUT", MARKET_URL, { body: marketBody({ finnhub: { api_key: "fh-fictional-key-9Z9Z" }, alpha_vantage: { enabled: false } }, order) });
+    assert.equal(first.status, 200);
+    assert.deepEqual(first.json.fallback_order, order);
+    // `providers` stays in the fixed provider order, as the backend does.
+    assert.deepEqual(first.json.providers.map((p) => p.provider_id), PROVIDERS);
+    const byId = Object.fromEntries(first.json.providers.map((p) => [p.provider_id, p]));
+    assert.equal(byId.alpha_vantage.enabled, false);
+    assert.equal(byId.finnhub.personal_key_configured, true);
+    assert.equal(byId.finnhub.key_hint, "••••9Z9Z");
+    assert.equal(byId.market_data.key_hint, null);
+    assert.ok(!Number.isNaN(Date.parse(first.json.updated_at)));
+    assert.ok(!JSON.stringify(first.json).includes("fh-fictional-key"));
+    assert.deepEqual((await call("GET", MARKET_URL)).json, first.json);
+
+    // Neither api_key nor clear_api_key keeps the stored key.
+    const kept = await call("PUT", MARKET_URL, { body: marketBody({}, order) });
+    const keptFinnhub = kept.json.providers.find((p) => p.provider_id === "finnhub");
+    assert.deepEqual([keptFinnhub.personal_key_configured, keptFinnhub.key_hint], [true, "••••9Z9Z"]);
+    assert.equal(kept.json.providers.find((p) => p.provider_id === "alpha_vantage").enabled, true);
+
+    const cleared = await call("PUT", MARKET_URL, { body: marketBody({ finnhub: { clear_api_key: true, enabled: false } }, order) });
+    const clearedFinnhub = cleared.json.providers.find((p) => p.provider_id === "finnhub");
+    assert.deepEqual([clearedFinnhub.personal_key_configured, clearedFinnhub.key_hint, clearedFinnhub.enabled], [false, null, false]);
+  });
+
+  test("market-data request validation", async () => {
+    const bodies = [
+      marketBody({ yahoo: { api_key: "yahoo-key-12345" } }),
+      marketBody({ yahoo: { clear_api_key: true } }),
+      marketBody({ finnhub: { api_key: "fh-fictional-key", clear_api_key: true } }),
+      marketBody({ finnhub: { api_key: " fh-fictional-key" } }),
+      marketBody({ finnhub: { api_key: "short" } }),
+      marketBody({ finnhub: { clear_api_key: "yes" } }),
+      marketBody({ finnhub: { enabled: "true" } }),
+      marketBody({}, ["market_data", "alpha_vantage", "twelve_data", "finnhub"]),
+      marketBody({}, ["market_data", "market_data", "twelve_data", "finnhub", "yahoo"]),
+      marketBody({}, [...PROVIDERS, "yahoo"]),
+      marketBody({}, ["market_data", "alpha_vantage", "twelve_data", "finnhub", "bing"]),
+      { ...marketBody(), providers: marketBody().providers.slice(1) },
+      { ...marketBody(), providers: [...marketBody().providers.slice(1), { provider_id: "yahoo", enabled: true }] },
+      { ...marketBody(), providers: marketBody().providers.map(({ enabled: _enabled, ...rest }) => rest) },
+      { ...marketBody(), extra: true },
+      { fallback_order: PROVIDERS },
+    ];
+    for (const body of bodies) {
+      const response = await call("PUT", MARKET_URL, { body });
+      assert.equal(response.status, 422, JSON.stringify(body));
+      assert.equal(response.json.error_code, "validation_error");
+    }
+    assert.equal((await call("GET", MARKET_URL)).json.updated_at, null);
+  });
+
+  test("market-data storage failure magic key is a retryable 503", async () => {
+    const response = await call("PUT", MARKET_URL, { body: marketBody({ twelve_data: { api_key: "storage-unavailable-key" } }) });
+    assert.equal(response.status, 503);
+    assert.equal(response.json.error_code, "market_credential_storage_unavailable");
+    assert.equal(response.json.retryable, true);
+    assert.equal(response.headers.get("retry-after"), "30");
+    assert.equal((await call("GET", MARKET_URL)).json.updated_at, null);
+  });
+
+  test("market-data test endpoint is simulated", async () => {
+    const probe = async (providerId) => {
+      const response = await call("POST", `${MARKET_URL}/test`, { body: { provider_id: providerId } });
+      assert.equal(response.status, 200);
+      assert.equal(response.json.provider_id, providerId);
+      return response.json.status;
+    };
+    assert.equal(await probe("yahoo"), "ready");
+    assert.equal(await probe("alpha_vantage"), "ready"); // simulated deployment key
+    assert.equal(await probe("finnhub"), "unavailable"); // key required, none available
+    await call("PUT", MARKET_URL, { body: marketBody({ finnhub: { api_key: "fh-fictional-key" }, alpha_vantage: { api_key: "av-bad-key-12345" }, yahoo: { enabled: false } }) });
+    assert.equal(await probe("finnhub"), "ready");
+    assert.equal(await probe("alpha_vantage"), "unavailable"); // personal key contains "bad"
+    assert.equal(await probe("yahoo"), "unavailable"); // disabled
+    await call("PUT", MARKET_URL, { body: marketBody({ finnhub: { enabled: false } }) });
+    assert.equal(await probe("finnhub"), "unavailable");
+    for (const body of [{}, { provider_id: "bing" }, { provider_id: "yahoo", extra: 1 }, { provider_id: 3 }]) {
+      assert.equal((await call("POST", `${MARKET_URL}/test`, { body })).status, 422, JSON.stringify(body));
+    }
   });
 });

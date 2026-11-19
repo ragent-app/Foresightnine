@@ -53,6 +53,11 @@ class ModelConfigUpdate(BaseModel):
 
 
 class ModelConfigResponse(BaseModel):
+    """Account model settings.
+
+    In platform mode the personal fields, when present, describe a saved but
+    inactive personal configuration that switching back to personal mode reuses.
+    """
     model_config = ConfigDict(extra="forbid")
 
     schema_version: Literal["v1"] = "v1"
@@ -151,8 +156,14 @@ class AccountModelSettings:
 
     def snapshot(self, account_id: str) -> ModelConfigResponse:
         stored = self._stored(account_id)
-        if stored is None or stored.mode == "platform":
-            return ModelConfigResponse(mode="platform", configured=True, updated_at=stored.updated_at if stored else None)
+        if stored is None:
+            return ModelConfigResponse(mode="platform", configured=True)
+        if stored.mode == "platform":
+            saved = all((stored.base_url, stored.model, stored.encrypted_api_key, stored.key_hint))
+            return ModelConfigResponse(
+                mode="platform", configured=True, updated_at=stored.updated_at,
+                **({"protocol": stored.protocol, "base_url": stored.base_url, "model": stored.model, "key_hint": stored.key_hint} if saved else {}),
+            )
         return ModelConfigResponse(
             mode="personal",
             configured=True,
@@ -170,9 +181,16 @@ class AccountModelSettings:
             with self._lock:
                 existing = self._stored(account_id)
                 if request.mode == "platform":
+                    # Keep a saved personal configuration (key still encrypted) so the
+                    # account can switch back without re-entering it; DELETE removes it.
                     self.repository.put(account_id, StoredModelConfig(
                         account_id=account_id,
                         mode="platform",
+                        protocol=existing.protocol if existing else "openai_chat_completions",
+                        base_url=existing.base_url if existing else None,
+                        model=existing.model if existing else None,
+                        encrypted_api_key=existing.encrypted_api_key if existing else None,
+                        key_hint=existing.key_hint if existing else None,
                         updated_at=current_time,
                     ))
                     return self.snapshot(account_id)

@@ -10,6 +10,22 @@ export const sha256 = (value) => createHash("sha256").update(value).digest("hex"
 /** ISO-8601 with a trailing Z and no zero milliseconds (like the backend's JSON). */
 export const iso = (date) => new Date(date).toISOString().replace(".000Z", "Z");
 
+// ---- Account, billing and credential settings (mirrors billing.snapshot / market_credentials.py) ----
+export const PLATFORM_MODEL = "platform-model-example";
+export const QUOTA_LIMIT = 200000;
+export const SEEDED_QUOTA_CONSUMED = 18500;
+export const MARKET_PROVIDER_ORDER = ["market_data", "alpha_vantage", "twelve_data", "finnhub", "yahoo"];
+export const KEYED_MARKET_PROVIDERS = new Set(["market_data", "alpha_vantage", "twelve_data", "finnhub"]);
+export const PROVIDER_LABELS = {
+  market_data: "Market Data",
+  alpha_vantage: "Alpha Vantage",
+  twelve_data: "Twelve Data",
+  finnhub: "Finnhub",
+  yahoo: "Yahoo Finance",
+};
+// Simulated deployment keys: the backend reports yahoo as always available (no key needed).
+export const PLATFORM_AVAILABLE = { market_data: false, alpha_vantage: true, twelve_data: false, finnhub: false, yahoo: true };
+
 export const S1_ID = "src_northwind_fy26";
 export const S2_ID = "src_harbor_shipments";
 export const S3_ID = "src_atlas_restricted";
