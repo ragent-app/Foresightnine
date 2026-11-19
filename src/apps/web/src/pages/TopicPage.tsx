@@ -302,7 +302,7 @@ export function TopicPage() {
 
   const title = topic ? topicTitle(topic) : "";
   const lastGap = lastTurn?.gaps?.[0];
-  const turnActions = (question: string): TurnActions => ({
+  const turnActions = (question: string, deliverable: boolean): TurnActions => ({
     recovery: recovery.data,
     checking: recovery.isLoading,
     busy: continueTurn.isPending || recoverTurn.isPending,
@@ -313,6 +313,7 @@ export function TopicPage() {
     onAskAgain: () => prefill(question),
     onFillGap: lastGap ? () => prefill(`请继续补充上一轮的缺口：${gapText(lastGap)}`) : null,
     onAddSources: () => setPanel({ kind: "add" }),
+    deliverable,
   });
 
   const live = view?.live ?? null;
@@ -380,7 +381,7 @@ export function TopicPage() {
                 <TurnView
                   key={turn.turn_id}
                   turn={turn}
-                  actions={index === turns.length - 1 && turn.status === "partial" && !orphanRun ? turnActions(turn.question) : null}
+                  actions={index === turns.length - 1 && turn.status === "partial" && !orphanRun ? turnActions(turn.question, turn.reason !== "submitted") : null}
                 />
               ))}
               {orphanRun && !activeRun ? (
@@ -389,7 +390,7 @@ export function TopicPage() {
                   startedAt={orphanRun.created_at}
                   question={(progressMatches(orphanRun.operation_id) ? progress.progress?.turn.question : "") || (turns.length === 0 ? topic!.request.question ?? "" : "")}
                   status={orphanRun.status === "cancelled" ? "cancelled" : "failed"}
-                  actions={turnActions((progressMatches(orphanRun.operation_id) ? progress.progress?.turn.question : "") || topic!.request.question || "")}
+                  actions={turnActions((progressMatches(orphanRun.operation_id) ? progress.progress?.turn.question : "") || topic!.request.question || "", true)}
                 />
               ) : null}
               {showLiveTurn ? (

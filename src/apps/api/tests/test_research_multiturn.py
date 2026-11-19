@@ -183,7 +183,9 @@ def test_counterargument_challenges_a_prior_claim_without_changing_it(env):
     assert claims[1]['citations'][0]['quotation'] == 'Costs were 60 USD.'  # located through prior read ranges
 
 
-def test_failed_second_turn_continues_in_place_without_duplicates(env):
+def test_failed_second_turn_continues_in_place_without_duplicates(env, monkeypatch):
+    # Manual continuation is under test, so automatic pre-send retries are turned off.
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRIES', '0')
     sid = env.source_id
 
     def record_costs(messages, kwargs):

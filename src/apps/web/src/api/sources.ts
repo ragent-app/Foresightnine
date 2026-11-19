@@ -1,6 +1,7 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { apiRequest } from "./http";
-import type { CreatedSource, HtmlUploadRequest, SecIdentitySearchResult } from "./types";
+import { useQuery } from "@tanstack/react-query";
+import type { CreatedSource, HtmlUploadRequest, ResearchCapabilities, SecIdentitySearchResult } from "./types";
 
 // Source creation, attachment and original download. Each function mirrors one
 // route in apps/api/app/main.py (create_research_source … get_research_source_original).
@@ -56,4 +57,18 @@ export async function downloadSourceOriginal(sourceId: string): Promise<{ blob: 
   const disposition = response.headers.get("Content-Disposition") ?? "";
   const match = /filename="([^"]+)"/.exec(disposition);
   return { blob: await response.blob(), filename: match?.[1] ?? "source" };
+}
+
+/** GET /v2/research/capabilities: which source capabilities the deployment has configured. */
+export function getResearchCapabilities(signal?: AbortSignal): Promise<ResearchCapabilities> {
+  return apiRequest<ResearchCapabilities>("/v2/research/capabilities", signal ? { signal } : {});
+}
+
+export function useResearchCapabilities() {
+  return useQuery({ queryKey: ["researchCapabilities"], queryFn: ({ signal }) => getResearchCapabilities(signal), staleTime: 5 * 60 * 1000 });
+}
+
+/** SEC availability; unknown (still loading or failed) is treated as available and the backend decides. */
+export function useSecAvailable(): boolean {
+  return useResearchCapabilities().data?.sec_available ?? true;
 }

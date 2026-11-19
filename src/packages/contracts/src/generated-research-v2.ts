@@ -1,5 +1,5 @@
 /** GENERATED FILE — DO NOT EDIT. Source: openapi/v2/openapi.json
- * SHA-256: cc6d81c608f9b4fa3a28f6d980aff5512549de12f0da0e7e138853c3e6a2ea90
+ * SHA-256: 475bb944c7b80a90eeca029a49a1df1b95c99d58ad3376efb2a7d4006d20ecae
  */
 export type AttachSourcesInput = { readonly "parent_version_id": string; readonly "source_ids": readonly (string)[]; };
 export type CalculationInput = { readonly "currency"?: string | null; readonly "fact_id": string; readonly "period": string; readonly "unit": string; readonly "value": string; };

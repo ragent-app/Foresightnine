@@ -98,4 +98,9 @@ describe("calcChecks", () => {
   it("falls back for unknown values with neutral tone", () => {
     expect(calcChecks({ ...base, result_status: "mismatch" })).toEqual([{ label: "result_status: mismatch", tone: "neutral" }]);
   });
+  it("names model timeouts and dropped connections as stop reasons", () => {
+    expect(turnReasonLabel("provider_timeout")).toBe("模型服务请求超时");
+    expect(turnReasonLabel("provider_transport_error")).toBe("与模型服务的连接中断");
+    expect(turnReasonLabel("provider_weird")).toBe("模型服务返回错误（provider_weird）");
+  });
 });

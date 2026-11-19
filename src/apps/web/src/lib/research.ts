@@ -1,6 +1,6 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
 import type { ProgressEvent } from "../api/types";
-import { gapText, toolLabel, toolReasonLabel, toolStatusLabel } from "./copy";
+import { gapText, MODEL_FAILURE_LABEL, toolLabel, toolReasonLabel, toolStatusLabel } from "./copy";
 import { formatInteger } from "./format";
 
 type ResearchContent = ResearchV2.ResearchContent;
@@ -133,7 +133,7 @@ export function stepRows(events: ProgressEvent[]): StepRow[] {
         return {
           kind: "model",
           index: event.index,
-          text: `模型调用 · 请求没有返回可用结果${event.code ? `（${event.code}）` : ""}`,
+          text: `模型调用失败 · ${event.code ? MODEL_FAILURE_LABEL[event.code] ?? `请求没有返回可用结果（${event.code}）` : "请求没有返回可用结果"}`,
         };
     }
   });

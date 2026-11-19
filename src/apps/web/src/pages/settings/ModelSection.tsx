@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { ApiError } from "../../api/http";
-import { testModelConfig, useAccountSummary, useModelConfig, useSaveModelConfig, type ConnectionStatus, type ModelConfig, type ModelProtocol } from "../../api/settings";
+import { testModelConfig, useAccountSummary, useModelConfig, useSaveModelConfig, type AccountSummary, type ConnectionStatus, type ModelConfig, type ModelProtocol } from "../../api/settings";
 import { apiKeyProblem, baseUrlProblem, canTestProtocol, hasSavedPersonal, keyRequired, modelNameProblem, PROTOCOL_LABEL } from "../../lib/settings";
 import { ConfirmDialog } from "../../ui/ConfirmDialog";
 import { Segmented } from "../../ui/controls";
@@ -9,6 +9,12 @@ import { Panel } from "../../ui/Panel";
 import { describeError } from "../research/errors";
 
 type TestState = ConnectionStatus | "testing" | "error" | null;
+
+/** The model platform research actually runs on; the billing label may name another model. */
+function platformModel(summary: AccountSummary | undefined): string | null {
+  const name = summary?.research_model ?? summary?.provider_model ?? null;
+  return name && name !== "unknown" ? name : null;
+}
 
 function modelErrorText(error: unknown): string {
   if (error instanceof ApiError) {
@@ -152,7 +158,7 @@ export function ModelSection() {
         {config.isError ? <div className="prow"><span className="meta">模型配置暂时无法加载。</span></div> : null}
         {data && !personal ? (
           <div className="prow">
-            <div className="grow"><b>平台模型</b><div className="meta">{account.data?.provider_model ? `${account.data.provider_model} · ` : ""}按本期额度计费</div></div>
+            <div className="grow"><b>平台模型</b><div className="meta">{platformModel(account.data) ? `研究使用 ${platformModel(account.data)} · ` : ""}按本期额度计费</div></div>
             <span className="role light support">使用中</span>
           </div>
         ) : null}

@@ -21,6 +21,7 @@ from app.billing import (
     parse_google_subscription,
     VerifiedGooglePurchase,
     configured_provider_model,
+    configured_research_model,
 )
 from app.local_auth import LocalAccount, LocalSession
 from app.operations import OperationManager
@@ -682,3 +683,19 @@ def test_account_model_uses_explicit_deployment_model() -> None:
 def test_explicit_empty_provider_environment_does_not_inherit_process_model(monkeypatch) -> None:
     monkeypatch.setenv("FORESIGHTNINE_LLM_MODEL", "deployment/model")
     assert configured_provider_model({}) == "unknown"
+
+
+def test_reservation_is_labelled_with_the_model_actually_called(monkeypatch) -> None:
+    monkeypatch.setenv("FORESIGHTNINE_LLM_MODEL", "general-model")
+    ledger = BillingLedger(InMemoryDocumentRepository(), InMemoryDocumentRepository(), InMemoryDocumentRepository())
+    ledger.reserve("account_test_123", "reservation_research", 1_000, provider_model="research-model")
+    ledger.reserve("account_test_123", "reservation_general", 1_000)
+    assert ledger.usage.get("reservation_research").provider_model == "research-model"
+    assert ledger.usage.get("reservation_general").provider_model == "general-model"
+
+
+def test_configured_research_model_follows_the_research_protocol() -> None:
+    assert configured_research_model({"FORESIGHTNINE_LLM_MODEL": "general", "FORESIGHTNINE_RESEARCH_MODEL_PROTOCOL": "anthropic_messages",
+                                      "FORESIGHTNINE_RESEARCH_LLM_MODEL": "research"}) == "research"
+    assert configured_research_model({"FORESIGHTNINE_LLM_MODEL": "general"}) == "general"
+    assert configured_research_model({"FORESIGHTNINE_RESEARCH_MODEL_PROTOCOL": "anthropic_messages"}) == "unknown"

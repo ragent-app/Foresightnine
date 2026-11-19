@@ -2,7 +2,7 @@ import type { ResearchV2 } from "@foresightnine/contracts";
 import { useId, useState } from "react";
 import { ApiError } from "../../api/http";
 import { useCreateCalculation, useRecalculate, useVersionSources } from "../../api/queries";
-import { downloadSourceOriginal } from "../../api/sources";
+import { downloadSourceOriginal, useSecAvailable } from "../../api/sources";
 import type { AvailableVersionSource } from "../../api/types";
 import {
   CALC_NOTE, calcChecks, INVALID_NOTE, LEAD_NOTE, PERMISSION_LABEL, PERMISSION_ORDER, retrievalMethodLabel, SOURCE_KIND_LABEL, toolLabel, VERIFICATION_LABEL,
@@ -224,6 +224,7 @@ function ReextractButton({ source }: { source: AvailableVersionSource }) {
 function SourcesTab() {
   const view = useTopicView();
   const query = useVersionSources(view.topicId, view.version.version_id);
+  const secAvailable = useSecAvailable();
   const asOf = view.topic.request.as_of ?? null;
   const candidates = (view.content.source_candidates ?? []).map((row) => ({
     title: typeof row.title === "string" ? row.title : "未命名线索",
@@ -288,7 +289,7 @@ function SourcesTab() {
                 web = parsed.protocol === "https:" || parsed.protocol === "http:";
               } catch { host = ""; }
               const acquired = known.has(lead.url);
-              const fetchable = !acquired && isFetchableUrl(lead.url);
+              const fetchable = !acquired && isFetchableUrl(lead.url, secAvailable);
               return (
                 <div key={`${lead.url}-${index}`} className="lead">
                   <span>{lead.title}</span>
@@ -308,7 +309,7 @@ function SourcesTab() {
               );
             })}
           </div>
-          <p className="note inset">{LEAD_NOTE}{candidates.some((lead) => !isFetchableUrl(lead.url)) ? " 无法直接获取的网页，可以保存后按文件添加。" : ""}</p>
+          <p className="note inset">{LEAD_NOTE}{candidates.some((lead) => !isFetchableUrl(lead.url, secAvailable)) ? " 无法直接获取的网页，可以保存后按文件添加。" : ""}</p>
         </div>
       ) : null}
     </>

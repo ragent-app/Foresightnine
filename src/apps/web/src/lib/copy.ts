@@ -66,6 +66,14 @@ const TURN_REASON_LABEL: Readonly<Record<string, string>> = {
   settlement_failed: "模型回复已保存，用量结算待核对",
   provider_cancelled: "已取消",
   acquisition_result_unknown: "资料获取结果未知",
+  provider_timeout: "模型服务请求超时",
+  provider_transport_error: "与模型服务的连接中断",
+};
+
+/** Model request failures as shown in the steps list (research_runtime model_failure codes). */
+export const MODEL_FAILURE_LABEL: Readonly<Record<string, string>> = {
+  provider_timeout: "请求超时",
+  provider_transport_error: "连接中断",
 };
 
 export function turnReasonLabel(reason: string, stoppingNote?: string | null): string {

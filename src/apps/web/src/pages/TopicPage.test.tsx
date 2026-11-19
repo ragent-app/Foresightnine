@@ -371,4 +371,39 @@ describe("TopicPage", () => {
       });
     });
   });
+
+  describe("362 acceptance follow-ups", () => {
+    it("does not offer to re-deliver a partial turn the model already submitted", async () => {
+      const partial = turn(1, { status: "partial", reason: "submitted", stopping_note: "资料不足", gaps: [{ code: "no_cited_claims", message: "x" }] });
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([partial]));
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+        if (url.pathname.endsWith("/op_1/recovery-status")) return jsonResponse({ can_continue: false, can_deliver: true, reason: null, checkpoint: "runtime", version_id: "v2" });
+        return undefined;
+      });
+      renderTopic();
+      const region = await screen.findByRole("region", { name: "第 1 轮" });
+      await waitFor(() => expect(within(region).getByRole("button", { name: "重新提问" })).toBeTruthy());
+      expect(within(region).queryByRole("button", { name: "交付已有成果" })).toBeNull();
+    });
+
+    it("offers SEC leads as web links when the deployment cannot fetch SEC filings", async () => {
+      const sec = "https://www.sec.gov/Archives/edgar/data/1000001/000100000126000012/nwex-20260630.htm";
+      const topic = topicWith([turn(1)]);
+      const withLead = { ...topic, versions: [topic.versions[0]!, { ...topic.versions[1]!, content: { ...topic.versions[1]!.content, source_candidates: [{ title: "10-K", url: sec, published_at: null, status: "unverified" }] } }] };
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(withLead);
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+        if (url.pathname === "/v2/research/capabilities") return jsonResponse({ schema_version: "v1", search_available: true, sec_available: false, historical_prices_available: false, sources: [] });
+        return undefined;
+      });
+      renderTopic();
+      await screen.findByRole("region", { name: "第 1 轮" });
+      fireEvent.click(screen.getByRole("button", { name: "研究记录" }));
+      fireEvent.click(await screen.findByRole("tab", { name: "资料" }));
+      expect(await screen.findByText("10-K")).toBeTruthy();
+      await waitFor(() => expect(screen.getByRole("link", { name: /打开网页/ })).toBeTruthy());
+      expect(screen.queryByRole("button", { name: /获取原文/ })).toBeNull();
+    });
+  });
 });

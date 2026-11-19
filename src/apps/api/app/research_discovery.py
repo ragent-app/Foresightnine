@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timezone
 import inspect
 from typing import Any, Callable
+from urllib.parse import parse_qs, urlsplit
 
 from pydantic import ValidationError
 
@@ -28,6 +29,46 @@ class SearchLead:
     independently_reviewable: bool | None
 
 
+class RedirectLead(ValueError):
+    """A search result that is only a search-engine redirect with no recoverable target."""
+
+
+# Search-engine click-through paths and the query parameter that carries the target, if any.
+_REDIRECTORS = {
+    '/url': ('q', 'url'),
+    '/goto': ('url',),
+    '/aclk': ('adurl',),
+    '/l/': ('uddg',),
+}
+
+
+def _is_search_engine(host: str) -> bool:
+    host = host.lower().rstrip('.')
+    labels = host.split('.')
+    return 'google' in labels[:-1] or host in ('duckduckgo.com', 'html.duckduckgo.com', 'lite.duckduckgo.com')
+
+
+def unwrap_redirect_url(url: str) -> str:
+    """Return the target of a search-engine click-through link, or the URL itself.
+
+    A redirector whose target is an opaque token (for example Google `/goto?url=<token>`)
+    cannot be reviewed or acquired; it raises RedirectLead instead of becoming a lead.
+    """
+    parts = urlsplit(url)
+    if not parts.hostname or not _is_search_engine(parts.hostname):
+        return url
+    keys = next((names for path, names in _REDIRECTORS.items() if parts.path.rstrip('/') == path.rstrip('/')), None)
+    if keys is None:
+        return url
+    query = parse_qs(parts.query)
+    for key in keys:
+        for value in query.get(key, ()):
+            target = urlsplit(value)
+            if target.scheme in ('http', 'https') and target.hostname and not _is_search_engine(target.hostname):
+                return value
+    raise RedirectLead('Search result is a search-engine redirect without a usable target URL.')
+
+
 def search_lead_url(raw: object) -> str | None:
     value = raw.get('url') if isinstance(raw, dict) else getattr(raw, 'url', None)
     return value if isinstance(value, str) else None
@@ -39,6 +80,8 @@ def normalize_search_lead(raw: object) -> SearchLead:
         return raw.get(name) if isinstance(raw, dict) else getattr(raw, name, None)
 
     title, url = field('title'), search_lead_url(raw)
+    if isinstance(url, str) and url.strip():
+        url = unwrap_redirect_url(url.strip())
     excerpt, publisher = field('excerpt'), field('publisher')
     published, reviewable = field('published_at'), field('independently_reviewable')
     if not isinstance(title, str) or not title.strip() or not isinstance(url, str) or not url.strip():

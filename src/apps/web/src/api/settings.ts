@@ -16,6 +16,8 @@ export interface AccountSummary {
   quota_remaining: number;
   quota_resets_at: string | null;
   provider_model: string | null;
+  /** The model platform research runs use (may differ from provider_model). */
+  research_model?: string | null;
 }
 
 export type ModelProtocol = "openai_chat_completions" | "anthropic_messages";

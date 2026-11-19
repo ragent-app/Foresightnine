@@ -63,8 +63,13 @@ const SEC_FILING_PATH = /^\/Archives\/edgar\/data\/\d{1,10}\/\d{18}\/[A-Za-z0-9]
 
 export const FETCH_HELP = "支持 SEC EDGAR 申报文件页面，以及美联储（www.federalreserve.gov）和美国经济分析局（www.bea.gov）的 HTTPS 页面。其他网页请保存后按文件添加。";
 
-/** research_fetch.FetchSourceRequest.allow_official_https_only. Returns a user-facing problem or null. */
-export function fetchUrlProblem(raw: string): string | null {
+export const SEC_UNAVAILABLE = "这个环境还没有配置 SEC 联系信息，暂时无法获取 SEC 资料。";
+
+/**
+ * research_fetch.FetchSourceRequest.allow_official_https_only. Returns a user-facing problem or null.
+ * `secAvailable` comes from /v2/research/capabilities; SEC addresses need a configured contact.
+ */
+export function fetchUrlProblem(raw: string, secAvailable = true): string | null {
   const value = raw.trim();
   if (!value) return "请输入网址";
   let url: URL;
@@ -79,11 +84,12 @@ export function fetchUrlProblem(raw: string): string | null {
   if (url.hash) return "网址不能包含 # 后的片段";
   if (!FETCH_HOSTS.has(url.hostname)) return "这个网站目前不能直接获取";
   if (url.hostname === "www.sec.gov" && (url.search || !SEC_FILING_PATH.test(url.pathname))) return "只支持 SEC EDGAR 申报文件的 HTML 页面地址";
+  if (url.hostname === "www.sec.gov" && !secAvailable) return SEC_UNAVAILABLE;
   return null;
 }
 
-export function isFetchableUrl(raw: string): boolean {
-  return fetchUrlProblem(raw) === null;
+export function isFetchableUrl(raw: string, secAvailable = true): boolean {
+  return fetchUrlProblem(raw, secAvailable) === null;
 }
 
 export type UploadKind = "pdf" | "html";

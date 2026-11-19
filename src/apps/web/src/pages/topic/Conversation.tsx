@@ -18,6 +18,11 @@ export interface TurnActions {
   onAskAgain: () => void;
   onFillGap: (() => void) | null;
   onAddSources: () => void;
+  /**
+   * False when the turn already ends with the model's own submission: re-delivering it
+   * republishes the same content (362 acceptance), so it is not offered.
+   */
+  deliverable: boolean;
 }
 
 const FORMULA_LABEL: Record<string, string> = { growth_percent: "增长率", margin_percent: "利润率", difference: "差额" };
@@ -58,7 +63,7 @@ export function AskBubble({ text, focusLabel }: { text: string; focusLabel?: str
 function CalloutActions({ actions }: { actions: TurnActions }) {
   const { recovery } = actions;
   const canContinue = recovery?.can_continue === true;
-  const canDeliver = recovery?.can_deliver === true;
+  const canDeliver = recovery?.can_deliver === true && actions.deliverable;
   const disabled = actions.busy || actions.locked;
   let primary: { label: string; onClick: () => void; disabled: boolean };
   if (actions.checking && !recovery) primary = { label: "继续研究", onClick: () => undefined, disabled: true };

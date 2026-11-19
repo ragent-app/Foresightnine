@@ -1155,7 +1155,7 @@ describe("account, model and market-data settings", () => {
     const response = await call("GET", "/v1/account");
     assert.equal(response.status, 200);
     const summary = response.json;
-    assert.deepEqual(Object.keys(summary).sort(), ["account", "base_plan_id", "entitlement_status", "plan", "product_id", "provider_model", "quota_consumed", "quota_limit", "quota_remaining", "quota_reserved", "quota_resets_at"]);
+    assert.deepEqual(Object.keys(summary).sort(), ["account", "base_plan_id", "entitlement_status", "plan", "product_id", "provider_model", "quota_consumed", "quota_limit", "quota_remaining", "quota_reserved", "quota_resets_at", "research_model"]);
     assert.deepEqual(Object.keys(summary.account).sort(), ["account_id", "email"]);
     assert.match(summary.account.account_id, /^acct_/);
     assert.equal(summary.plan, "free");

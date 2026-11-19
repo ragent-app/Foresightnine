@@ -78,3 +78,6 @@ Mirrors `GET /v1/account` (`billing.snapshot`), `model_credentials.py` and `mark
 Magic values: an `api_key` of `storage-unavailable-key` (model config, or any provider in the market-data update) is 503 `model_credential_storage_unavailable` / `market_credential_storage_unavailable`, `retryable: true`, `Retry-After: 30`, and nothing is stored. Test probes: host or model containing `down` is unavailable (model); a personal key containing `bad` is unavailable (market).
 
 - Tests: `node --test qa/mock-api/server.test.mjs`. Step interval: `createServer({ tickMs })`, default 1500 ms.
+
+- `GET /v2/research/capabilities` mirrors the backend capability list. SEC is reported available because the mock implements the SEC endpoints; start with `MOCK_SEC_AVAILABLE=0` to see the UI's SEC gate.
+- `GET /v1/account` also returns `research_model` (the model platform research runs on), as the backend does.

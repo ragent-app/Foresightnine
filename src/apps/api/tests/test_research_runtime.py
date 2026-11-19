@@ -354,9 +354,14 @@ def test_chat_bridge_preserves_not_started_diagnostics_and_releases_reservation(
 @pytest.mark.parametrize(('failure_stage', 'failures', 'expected_status', 'expected_attempts'), [
     ('dns', 1, 'completed', 3),
     ('dns', 3, 'partial', 4),
+    # A TLS handshake failure is still before any request byte is written (362 acceptance).
+    ('tls', 1, 'completed', 3),
+    ('tls', 2, 'completed', 4),
     ('request_write', 1, 'partial', 2),
 ])
 def test_messages_retries_only_the_unsent_turn(monkeypatch, failure_stage, failures, expected_status, expected_attempts):
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRIES', '2')
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRY_BASE_SECONDS', '0')
     from app.anthropic_messages import AnthropicMessagesProvider
     from app.openai_compatible import HttpResponse, _TransportFailure
     from app.phase3 import ProviderPolicy
@@ -400,7 +405,7 @@ def test_messages_retries_only_the_unsent_turn(monkeypatch, failure_stage, failu
         assert result.report == 'Revenue was 100 USD.'
         assert c.calls == 2
         assert c.usage == 4
-    elif failure_stage == 'dns':
+    elif failure_stage in ('dns', 'tls'):
         assert snapshots[-1]['pending'] is None
         assert c.calls == 1
     else:
@@ -513,3 +518,50 @@ def test_submission_keeps_support_and_counterargument_roles_without_kind():
     assert result.status == 'completed'
     assert [c['role'] for c in result.claims] == ['support', 'counterargument']
     assert all('kind' not in c for c in result.claims)
+
+
+def test_presend_retry_settings_default_and_reject_invalid_values(monkeypatch):
+    from app.research_runtime import presend_retry_settings
+    monkeypatch.delenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRIES', raising=False)
+    monkeypatch.delenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRY_BASE_SECONDS', raising=False)
+    assert presend_retry_settings() == (4, 1.0)
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRIES', '6')
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRY_BASE_SECONDS', '0.5')
+    assert presend_retry_settings() == (6, 0.5)
+    for retries, base in (('-1', '1'), ('9', '1'), ('x', '1'), ('2', 'nan'), ('2', '11')):
+        monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRIES', retries)
+        monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRY_BASE_SECONDS', base)
+        assert presend_retry_settings() == (4, 1.0)
+
+
+def test_invalid_tool_arguments_are_reported_per_field_and_offsets_get_a_location_hint():
+    from pydantic import ValidationError
+    from app.research_runtime import FactsRequest, invalid_reason
+    try:
+        FactsRequest.model_validate({'rationale': 'r', 'facts': [{'label': 'x', 'unit': 'millions', 'period': 'FY',
+                                                                  'source_id': 's', 'quotation': 'q'}]})
+    except ValidationError as error:
+        message = invalid_reason(error)
+    assert message == 'Invalid arguments: facts[0].value: required field is missing.'
+    assert 'pydantic.dev' not in message and 'input_value' not in message
+    schema = FactsRequest.model_json_schema()['$defs']['ProposedFact']['properties']
+    assert 'Omit both offsets' in schema['character_start']['description']
+    assert 'Required' in schema['value']['description']
+
+
+@pytest.mark.parametrize(('url', 'expected'), [
+    ('https://www.google.com/url?q=https://www.sec.gov/Archives/edgar/data/1/000000000000000001/a.htm&sa=U',
+     'https://www.sec.gov/Archives/edgar/data/1/000000000000000001/a.htm'),
+    ('https://duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.bea.gov%2Fnews&rut=1', 'https://www.bea.gov/news'),
+    ('https://www.microsoft.com/en-us/investor', 'https://www.microsoft.com/en-us/investor'),
+    ('https://www.google.com/search?q=revenue', 'https://www.google.com/search?q=revenue'),
+    ('https://www.google.com/goto?url=CAESdwHEIkXX&gsessionid=x', None),
+    ('https://www.google.com/url?q=https://www.google.com/other', None),
+])
+def test_search_redirect_links_are_unwrapped_or_dropped(url, expected):
+    from app.research_discovery import RedirectLead, normalize_search_lead
+    if expected is None:
+        with pytest.raises(RedirectLead):
+            normalize_search_lead({'title': 'Lead', 'url': url})
+    else:
+        assert normalize_search_lead({'title': 'Lead', 'url': url}).url == expected

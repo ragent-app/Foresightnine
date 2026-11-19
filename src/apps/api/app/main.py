@@ -175,6 +175,7 @@ from .local_auth import (
     issue_session as issue_local_session,
 )
 from .billing import (
+    configured_research_model,
     BillingError,
     BillingLedger,
     GooglePlaySubscriptionVerifier,
@@ -590,7 +591,8 @@ def _messages_research_provider(settings: OpenAICompatibleSettings) -> Any:
         raise ApiProblem(503, 'internal_error', 'Messages research configuration is invalid.') from None
 
 
-def _reserve_model_call(request: Request, operation_id: str, *, session_id: str | None = None, token_budget: int | None) -> None:
+def _reserve_model_call(request: Request, operation_id: str, *, session_id: str | None = None, token_budget: int | None,
+                        provider_model: str | None = None) -> None:
     decision = abuse_control.model.reserve(operation_id, _model_subjects(request, session_id))
     if not decision.available:
         raise ApiProblem(
@@ -620,7 +622,7 @@ def _reserve_model_call(request: Request, operation_id: str, *, session_id: str 
         if token_budget is None:
             raise ApiProblem(503, "billing_reservation_unknown", "Unable to bound the account token reservation.", retryable=False)
         try:
-            billing_ledger.reserve(account.account_id, reservation_id, token_budget, now=lifecycle_clock.now())
+            billing_ledger.reserve(account.account_id, reservation_id, token_budget, now=lifecycle_clock.now(), provider_model=provider_model)
         except BillingError as error:
             raise ApiProblem(error.status_code, error.code, error.message, retryable=error.status_code in {502, 503}, retry_after=error.retry_after) from error
         request.state.billing_account_id = account.account_id
@@ -2259,6 +2261,24 @@ def fetch_research_source(request: FetchSourceRequest, http_request: Request) ->
         raise ApiProblem(422, "invalid_request", "Source could not be used in the requested format.") from error
 
 
+@app.get("/v2/research/capabilities", include_in_schema=False)
+def get_research_capabilities(authorization: str | None = Header(default=None)) -> dict:
+    """Which source capabilities this deployment has configured; no configuration values or secrets."""
+    from dataclasses import asdict
+    from .research_historical_prices import configured_historical_prices
+    from .research_source_catalog import source_capabilities
+    _authenticated_account(authorization)
+    try:
+        validate_user_agent(os.environ.get("FORESIGHTNINE_SEC_USER_AGENT") or os.environ.get("SEC_USER_AGENT"))
+        sec_available = True
+    except SecFailure:
+        sec_available = False
+    search_available = bool(getattr(evidence_provider, "supports_project_search", False))
+    return {"schema_version": "v1", "search_available": search_available, "sec_available": sec_available,
+            "historical_prices_available": configured_historical_prices()[0] is not None,
+            "sources": [asdict(item) for item in source_capabilities(search_available=search_available, sec_available=sec_available)]}
+
+
 @app.post("/v2/research/identities/sec-search", include_in_schema=False)
 def search_research_sec_identities(request: SecIdentityRequest, http_request: Request) -> dict:
     _authenticated_account(http_request.headers.get("Authorization"))
@@ -2478,7 +2498,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             budget=budget, cost_limited=request.max_cost_usd is not None,
             ensure_running=lambda: _raise_if_operation_cancelled(operation_id),
             cancel_event=lambda: operations.cancel_event(operation_id),
-            reserve=lambda call_id, tokens: _reserve_model_call(http_request, call_id, token_budget=tokens),
+            reserve=lambda call_id, tokens: _reserve_model_call(http_request, call_id, token_budget=tokens,
+                provider_model=getattr(getattr(provider, 'settings', None), 'model', None)),
             settle=settle_research_call,
             reserve_search=lambda: _reserve_search_call(http_request), entitlement_remaining=remaining_entitlement)
         if continuation_input is not None:
@@ -3076,7 +3097,8 @@ def account_summary(authorization: str | None = Header(default=None, alias="Auth
 
     account = _authenticated_account(authorization)
     return JSONResponse(
-        {"account": {"account_id": account.account_id, "email": account.email}, **billing_ledger.snapshot(account.account_id, now=lifecycle_clock.now())},
+        {"account": {"account_id": account.account_id, "email": account.email}, **billing_ledger.snapshot(account.account_id, now=lifecycle_clock.now()),
+         "research_model": configured_research_model()},
         headers={"Cache-Control": "no-store"},
     )
 

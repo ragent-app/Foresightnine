@@ -69,8 +69,15 @@ describe("stepRows", () => {
     expect(rows[0]).toEqual({ kind: "model", index: 0, text: "模型调用 · 1,000 输入 / 234 输出 Token" });
     expect(rows[1]).toEqual({ kind: "model", index: 1, text: "模型调用 · 1,234 Token" });
     expect(rows[2]).toEqual({ kind: "model", index: 2, text: "模型调用" });
-    expect(rows[3]).toEqual({ kind: "model", index: 3, text: "模型调用 · 请求没有返回可用结果（timeout）" });
-    expect(rows[4]).toEqual({ kind: "model", index: 4, text: "模型调用 · 请求没有返回可用结果" });
+    expect(rows[3]).toEqual({ kind: "model", index: 3, text: "模型调用失败 · 请求没有返回可用结果（timeout）" });
+    expect(rows[4]).toEqual({ kind: "model", index: 4, text: "模型调用失败 · 请求没有返回可用结果" });
+  });
+  it("names timeouts and dropped connections", () => {
+    const failures = stepRows([
+      { index: 0, kind: "model_failure", code: "provider_transport_error" },
+      { index: 1, kind: "model_failure", code: "provider_timeout" },
+    ]);
+    expect(failures.map((row) => row.kind === "model" && row.text)).toEqual(["模型调用失败 · 连接中断", "模型调用失败 · 请求超时"]);
   });
   it("describes tool and submission rows with tones", () => {
     expect(rows[5]).toEqual({

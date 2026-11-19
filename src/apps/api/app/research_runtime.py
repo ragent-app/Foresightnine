@@ -8,6 +8,7 @@ from typing import Literal
 from hashlib import sha256
 import json
 import math
+import os
 from time import sleep
 from typing import Any, Callable
 from uuid import uuid4
@@ -19,8 +20,8 @@ from .model_protocol import (ModelToolDefinition, ModelToolResult, ModelAssistan
 from .chat_research_adapter import ChatResearchAdapter
 from .research_calculations import CalculationRequest, calculate
 from .research_analysis import _quoted_numbers
-from .phase3 import ProviderFailure, ProviderPolicy
-from .research_discovery import normalize_search_lead, search_lead_url
+from .phase3 import ProviderFailure
+from .research_discovery import RedirectLead, normalize_search_lead, search_lead_url
 from .research_source_catalog import canonical_source_url
 from .research_source_policy import is_fred_source, source_eligibility
 from .research_sources import ResearchSource
@@ -59,17 +60,22 @@ class HistoricalPriceRequest(BaseModel):
     rationale: str = Field(min_length=1)
 
 
+_OFFSET_HELP = ('Optional. Omit both offsets to let the system locate the exact quotation within ranges already read; '
+                'if given, they must be the exact span of the quotation.')
+
+
 class ProposedFact(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    label: str = Field(min_length=1)
-    value: Decimal
-    unit: str = Field(min_length=1)
-    currency: str | None = None
-    period: str = Field(min_length=1)
+    label: str = Field(min_length=1, description='What the number measures, for example total revenue.')
+    value: Decimal = Field(description='Required. The number as stated in the quotation, as a plain decimal without '
+                                       'thousands separators, currency symbols or scale words; put the scale in unit.')
+    unit: str = Field(min_length=1, description='Unit or scale as stated, for example millions or percent.')
+    currency: str | None = Field(default=None, description='ISO currency code when the value is monetary.')
+    period: str = Field(min_length=1, description='Period or date the value refers to.')
     source_id: str = Field(min_length=1)
-    quotation: str = Field(min_length=1)
-    character_start: int | None = Field(default=None, ge=0)
-    character_end: int | None = Field(default=None, gt=0)
+    quotation: str = Field(min_length=1, description='Exact text copied from the source that contains the value.')
+    character_start: int | None = Field(default=None, ge=0, description=_OFFSET_HELP)
+    character_end: int | None = Field(default=None, gt=0, description=_OFFSET_HELP)
 
 
 class FactsRequest(BaseModel):
@@ -96,9 +102,9 @@ class Claim(BaseModel):
     model_config = ConfigDict(extra='forbid')
     text: str = Field(min_length=1, max_length=3000)
     source_id: str = Field(min_length=1)
-    quotation: str = Field(min_length=1, max_length=1000)
-    character_start: int | None = Field(default=None, ge=0)
-    character_end: int | None = Field(default=None, gt=0)
+    quotation: str = Field(min_length=1, max_length=1000, description='Exact text copied from the source that supports the claim.')
+    character_start: int | None = Field(default=None, ge=0, description=_OFFSET_HELP)
+    character_end: int | None = Field(default=None, gt=0, description=_OFFSET_HELP)
     role: Literal['support', 'counterargument'] = Field(
         description='support: the quotation supports this finding. counterargument: the quotation is evidence against the main conclusion or against another finding.')
     challenges_claim_ids: list[str] = Field(default_factory=list, max_length=20,
@@ -112,6 +118,40 @@ class SubmitRequest(BaseModel):
     limitations: list[str] = Field(max_length=499)
     stopping_reason: str = Field(min_length=1)
     status: Literal['completed', 'partial'] = 'completed'
+
+
+# Stages that end before any request byte is written: a failure here is known not to have
+# reached the provider, so retrying cannot duplicate a provider call or its charge.
+PRE_SEND_STAGES = ('dns', 'tcp', 'tls')
+
+
+def presend_retry_settings() -> tuple[int, float]:
+    """Retries and base backoff (seconds) for model requests that failed before being sent.
+
+    Configured per deployment; invalid values fall back to the defaults (4 retries, 1 s doubling,
+    each wait capped at 8 s). Requests that may have been sent are never retried automatically.
+    """
+    try:
+        retries = int(os.environ.get('FORESIGHTNINE_RESEARCH_PRESEND_RETRIES', '4'))
+        base = float(os.environ.get('FORESIGHTNINE_RESEARCH_PRESEND_RETRY_BASE_SECONDS', '1'))
+    except ValueError:
+        return 4, 1.0
+    if not 0 <= retries <= 8 or not math.isfinite(base) or not 0 <= base <= 10:
+        return 4, 1.0
+    return retries, base
+
+
+def invalid_reason(error: Exception) -> str:
+    """A compact, field-level explanation the model can act on (no library URLs or input dumps)."""
+    if isinstance(error, ValidationError):
+        parts = []
+        for item in error.errors(include_url=False, include_input=False)[:8]:
+            path = ''.join(f'[{x}]' if isinstance(x, int) else (f'.{x}' if i else str(x)) for i, x in enumerate(item.get('loc', ())))
+            message = 'required field is missing' if item.get('type') == 'missing' else item.get('msg', 'invalid value')
+            parts.append(f'{path or "arguments"}: {message}')
+        more = len(error.errors()) - len(parts)
+        return 'Invalid arguments: ' + '; '.join(parts) + (f'; and {more} more' if more > 0 else '') + '.'
+    return str(error)
 
 
 def _tool(name: str, description: str, model: type[BaseModel]) -> dict:
@@ -321,12 +361,6 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
         return outcome('partial', 'external_result_unknown', gaps=[gap('external_result_unknown')])
     def locate(source: ResearchSource, quotation: str, start: int | None, end: int | None) -> tuple[int, int]:
         ranges = [r for r in [*state['read_ranges'], *state.get('prior_read_ranges', []), *state.get('focus_ranges', [])] if r['source_id'] == source.source_id]
-        if start is not None or end is not None:
-            if start is None or end is None or not any(r['start'] <= start < end <= r['end'] for r in ranges):
-                raise ValueError('Both offsets must lie within a previously read range.')
-            if source.text[start:end] != quotation:
-                raise ValueError('Quotation does not match the specified location.')
-            return start, end
         matches: set[tuple[int, int]] = set()
         for span in ranges:
             offset = span['start']
@@ -336,15 +370,23 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                     break
                 matches.add((offset, offset + len(quotation)))
                 offset += 1
+        if start is not None or end is not None:
+            # Tell the model where the quotation actually is, so one retry can succeed.
+            found = ('The quotation occurs at ' + json.dumps(sorted(matches)) + ' within read ranges; '
+                     if matches else 'The quotation was not found verbatim within read ranges; ')
+            hint = found + 'omit both offsets to let the system locate it.'
+            if start is None or end is None or not any(r['start'] <= start < end <= r['end'] for r in ranges):
+                raise ValueError('Both offsets must lie within a previously read range. ' + hint)
+            if source.text[start:end] != quotation:
+                raise ValueError('Quotation does not match the specified location. ' + hint)
+            return start, end
         if len(matches) != 1:
             raise ValueError('Quotation must match uniquely within read ranges; candidate offsets: ' +
                              json.dumps(sorted(matches)))
         return next(iter(matches))
     if not callable(getattr(model, 'complete_turn', None)) and callable(getattr(model, 'complete', None)):
         model = ChatResearchAdapter(model)
-    retry_policy = getattr(model, 'policy', None)
-    if not isinstance(retry_policy, ProviderPolicy):
-        retry_policy = ProviderPolicy()
+    presend_retries, presend_base = presend_retry_settings()
     submission_retries = 0
 
     def turn_input():
@@ -416,13 +458,14 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                                             'external_state': 'not_started', 'usage': None})
                     state['pending'] = None
                     save()
-                    # Retry connection failures before the request was sent. The prior
-                    # tool results and history stay intact, and accounting is restored.
+                    # Retry connection failures before the request was sent (DNS, TCP or TLS).
+                    # The prior tool results and history stay intact, and accounting is restored.
                     if (error.retryable and error.code in ('provider_transport_error', 'provider_timeout')
-                        and submission_retries < retry_policy.max_attempts - 1
-                        and any(stage['stage'] in ('dns', 'tcp') and stage['result'] in ('error', 'timeout')
-                                for stage in diagnostic.get('stages', ()))):
-                        delay = retry_policy.retry_base_seconds * (2 ** submission_retries)
+                        and submission_retries < presend_retries
+                        and any(stage['stage'] in PRE_SEND_STAGES and stage['result'] in ('error', 'timeout')
+                                for stage in diagnostic.get('stages', ()))
+                        and not any(stage['stage'] not in PRE_SEND_STAGES for stage in diagnostic.get('stages', ()))):
+                        delay = min(presend_base * (2 ** submission_retries), max(presend_base, 8.0))
                         if delay < context.budget.deadline - context.now():
                             submission_retries += 1
                             cancel_event = kwargs['cancel_event']
@@ -564,7 +607,7 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                         else:
                             eligible_leads = []
                             denied_count = 0
-                            denied_reasons = {'source_not_authorized': 0, 'invalid_lead': 0}
+                            denied_reasons = {'source_not_authorized': 0, 'invalid_lead': 0, 'redirect_link': 0}
                             if not isinstance(found, (list, tuple)):
                                 found = [None]
                             for raw in found:
@@ -575,6 +618,11 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                                         denied_reasons['source_not_authorized'] += 1
                                         continue
                                     candidate = normalize_search_lead(raw)
+                                except RedirectLead:
+                                    # Opaque click-through links cannot be reviewed or acquired.
+                                    denied_count += 1
+                                    denied_reasons['redirect_link'] += 1
+                                    continue
                                 except (ValueError, ProviderFailure):
                                     denied_count += 1
                                     denied_reasons['invalid_lead'] += 1
@@ -772,7 +820,7 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                     save()
                     return outcome('partial', 'no_progress', gaps=[gap('no_progress', 'Repeated invalid action with unchanged evidence state.')])
                 invalid_seen.append(invalid_signature)
-                result = {'status': 'invalid', 'reason': str(error)}
+                result = {'status': 'invalid', 'reason': invalid_reason(error)}
             append_result(call.id, result)
             event = {'kind': 'tool', 'tool_call_id': call.id, 'name': call.name,
                      'status': result.get('status', 'completed'), 'rationale': args.get('rationale')}

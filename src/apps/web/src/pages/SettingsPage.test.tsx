@@ -13,6 +13,7 @@ const PERSONAL = {
 const ACCOUNT = {
   account: { account_id: "acc_1", email: "a@example.com" }, plan: "free", entitlement_status: "active", product_id: null, base_plan_id: null,
   quota_limit: 200000, quota_consumed: 50000, quota_reserved: 0, quota_remaining: 150000, quota_resets_at: "2026-12-01T00:00:00Z", provider_model: "platform-model-example",
+  research_model: "research-model-example",
 };
 const provider = (id: string, name: string, extra: Record<string, unknown> = {}) => ({
   provider_id: id, display_name: name, enabled: true, requires_key: id !== "yahoo", personal_key_configured: false, platform_available: id === "yahoo", key_hint: null, ...extra,
@@ -70,7 +71,8 @@ describe("SettingsPage", () => {
       return undefined;
     });
     renderSettings("/settings?tab=model");
-    expect(await screen.findByText(/platform-model-example/)).toBeTruthy();
+    // The research model is shown, not the general billing label (362 acceptance).
+    expect(await screen.findByText(/研究使用 research-model-example/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "我的模型" }));
     fireEvent.change(await screen.findByLabelText("服务地址"), { target: { value: "https://api.example.com/v1" } });
     fireEvent.change(screen.getByLabelText("模型名称"), { target: { value: "example-model" } });

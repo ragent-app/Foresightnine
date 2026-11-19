@@ -2291,6 +2291,21 @@ export function createServer({ tickMs = 1500 } = {}) {
 
 
   // Account summary, model and market-data settings (bearer auth, `Cache-Control: no-store` via send()).
+  // Backend GET /v2/research/capabilities (research_source_catalog.source_capabilities). The mock
+  // implements SEC endpoints, so SEC is reported available; set MOCK_SEC_AVAILABLE=0 to test the gate.
+  route("GET", "/v2/research/capabilities", true, ({ res }) => {
+    const sec = process.env.MOCK_SEC_AVAILABLE !== "0";
+    send(res, 200, {
+      schema_version: "v1", search_available: true, sec_available: sec, historical_prices_available: false,
+      sources: [
+        { name: "project_search", output_type: "leads", permission: "search", configured: true, markets: [], languages: [], historical: false, hosts: [], coverage: "unknown" },
+        { name: "official_html_pdf", output_type: "document", permission: "official_retrieval", configured: true, markets: [], languages: [], historical: false, hosts: ["www.bea.gov", "www.federalreserve.gov"], coverage: "restricted_hosts" },
+        { name: "sec_filing", output_type: "document", permission: "official_retrieval", configured: sec, markets: ["US"], languages: [], historical: false, hosts: ["www.sec.gov"], coverage: "restricted_paths" },
+        { name: "sec_company_concept", output_type: "structured_data", permission: "official_retrieval", configured: sec, markets: ["US"], languages: [], historical: false, hosts: ["data.sec.gov"], coverage: "company_concept_only" },
+      ],
+    });
+  });
+
   route("GET", "/v1/account", true, ({ res, auth }) => {
     const data = dataFor(auth.accountId);
     const account = accounts.get(auth.accountId);
@@ -2307,6 +2322,8 @@ export function createServer({ tickMs = 1500 } = {}) {
       quota_remaining: Math.max(0, QUOTA_LIMIT - consumed),
       quota_resets_at: nextMonthStart(new Date()),
       provider_model: PLATFORM_MODEL,
+      // Backend /v1/account: the model platform research runs on (billing label may differ).
+      research_model: "research-model-example",
     });
   });
   route("GET", "/v1/account/model-config", true, ({ res, auth }) =>

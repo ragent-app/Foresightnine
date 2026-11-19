@@ -2241,6 +2241,55 @@
         "summary": "Calculate Research"
       }
     },
+    "/v2/research/capabilities": {
+      "get": {
+        "description": "Which source capabilities this deployment has configured; no configuration values or secrets.",
+        "operationId": "get_research_capabilities_v2_research_capabilities_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Research Capabilities V2 Research Capabilities Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Research Capabilities"
+      }
+    },
     "/v2/research/identities/sec-search": {
       "post": {
         "operationId": "search_research_sec_identities_v2_research_identities_sec_search_post",

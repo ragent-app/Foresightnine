@@ -40,6 +40,14 @@ def configured_provider_model(environ: Mapping[str, str] | None = None) -> str:
     return environment.get("FORESIGHTNINE_LLM_MODEL", "").strip() or DEFAULT_PROVIDER_MODEL
 
 
+def configured_research_model(environ: Mapping[str, str] | None = None) -> str:
+    """Return the model platform research runs use (research protocol settings), or unknown."""
+    environment = os.environ if environ is None else environ
+    if environment.get("FORESIGHTNINE_RESEARCH_MODEL_PROTOCOL", "openai_chat_completions").strip() == "anthropic_messages":
+        return environment.get("FORESIGHTNINE_RESEARCH_LLM_MODEL", "").strip() or DEFAULT_PROVIDER_MODEL
+    return configured_provider_model(environment)
+
+
 class BillingError(RuntimeError):
     def __init__(self, status_code: int, code: str, message: str, *, retry_after: int | None = None) -> None:
         super().__init__(message)
@@ -364,9 +372,12 @@ class BillingLedger:
         remaining = max(0, state.quota_limit - state.consumed_tokens - state.reserved_tokens)
         return {"plan": state.plan, "entitlement_status": state.entitlement_status, "product_id": state.product_id, "base_plan_id": state.base_plan_id, "quota_limit": state.quota_limit, "quota_consumed": state.consumed_tokens, "quota_reserved": state.reserved_tokens, "quota_remaining": remaining, "quota_resets_at": state.period_end, "provider_model": state.provider_model}
 
-    def reserve(self, account_id: str, reservation_id: str, estimated_tokens: int, *, now: datetime | None = None) -> None:
+    def reserve(self, account_id: str, reservation_id: str, estimated_tokens: int, *, now: datetime | None = None,
+                provider_model: str | None = None) -> None:
+        """Reserve tokens; `provider_model` labels the entry with the model actually called when known."""
         if estimated_tokens < 1:
             raise ValueError("estimated_tokens must be positive")
+        label = provider_model.strip()[:128] if isinstance(provider_model, str) and provider_model.strip() else None
         current = _utc(now or datetime.now(timezone.utc))
         def operation() -> None:
           with self._lock:
@@ -379,7 +390,7 @@ class BillingLedger:
                 raise BillingError(429, "quota_exceeded", "Token quota exceeded.", retry_after=60)
             updated = state.model_copy(update={"reserved_tokens": state.reserved_tokens + estimated_tokens, "updated_at": current})
             self.states.put(account_id, updated)
-            self.usage.put(reservation_id, UsageLedgerEntry(reservation_id=reservation_id, account_id=account_id, provider_model=state.provider_model, estimated_tokens=estimated_tokens, status="reserved", created_at=current))
+            self.usage.put(reservation_id, UsageLedgerEntry(reservation_id=reservation_id, account_id=account_id, provider_model=label or state.provider_model, estimated_tokens=estimated_tokens, status="reserved", created_at=current))
         self._with_lock(f"billing-account:{account_id}", operation)
 
     def settle(self, reservation_id: str, actual_tokens: int, *, now: datetime | None = None) -> None:
@@ -521,7 +532,7 @@ class BillingLedger:
 
 
 __all__ = [
-    "BillingError", "BillingLedger", "BillingState", "DEFAULT_PROVIDER_MODEL", "FREE_GRANT_TOKENS", "configured_provider_model",
+    "BillingError", "BillingLedger", "BillingState", "DEFAULT_PROVIDER_MODEL", "FREE_GRANT_TOKENS", "configured_provider_model", "configured_research_model",
     "GooglePlaySubscriptionVerifier", "MAX_MONTHLY_TOKENS", "MONTHLY_BASE_PLAN_ID", "MAX_PRODUCT_ID",
     "PRO_MONTHLY_TOKENS", "PRO_PRODUCT_ID", "PurchaseRecord", "PurchaseTokenCipher", "UsageLedgerEntry",
     "VerifiedGooglePurchase", "GooglePlayVerifyRequest", "parse_google_subscription", "plan_for_product",

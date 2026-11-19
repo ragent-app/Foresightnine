@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PERMISSIONS, fetchUrlProblem, fileToBase64, ineligibility, isFredUrl, titleFromFilename, uploadKind } from "./sources";
+import { DEFAULT_PERMISSIONS, fetchUrlProblem, fileToBase64, ineligibility, isFetchableUrl, isFredUrl, SEC_UNAVAILABLE, titleFromFilename, uploadKind } from "./sources";
 
 const ALL = DEFAULT_PERMISSIONS;
 const CUTOFF = "2026-06-30T00:00:00Z";
@@ -40,6 +40,13 @@ describe("fetchUrlProblem (mirrors FetchSourceRequest.allow_official_https_only)
     expect(fetchUrlProblem("https://www.federalreserve.gov/newsevents/pressreleases/monetary20260917a.htm")).toBeNull();
     expect(fetchUrlProblem("https://www.bea.gov/news/2026/gdp")).toBeNull();
     expect(fetchUrlProblem("https://www.sec.gov/Archives/edgar/data/1000001/000100000126000012/nwex-20260630.htm")).toBeNull();
+  });
+
+  it("refuses SEC addresses when the deployment has no SEC contact configured", () => {
+    const filing = "https://www.sec.gov/Archives/edgar/data/1000001/000100000126000012/nwex-20260630.htm";
+    expect(fetchUrlProblem(filing, false)).toBe(SEC_UNAVAILABLE);
+    expect(isFetchableUrl(filing, false)).toBe(false);
+    expect(isFetchableUrl("https://www.bea.gov/news/2026/gdp", false)).toBe(true);
   });
 
   it("rejects everything else with a reason", () => {

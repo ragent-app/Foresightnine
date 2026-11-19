@@ -1,12 +1,12 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { useId, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { ApiError } from "../../api/http";
-import { createTextSource, fetchOfficialSource, fetchSecConceptSource, searchSecIdentities, uploadHtmlSource, uploadPdfSource } from "../../api/sources";
+import { createTextSource, fetchOfficialSource, fetchSecConceptSource, searchSecIdentities, uploadHtmlSource, uploadPdfSource, useSecAvailable } from "../../api/sources";
 import type { CreatedSource, SecIdentity, SourcePermissionFlags } from "../../api/types";
 import { PERMISSION_LABEL } from "../../lib/copy";
 import {
   DEFAULT_PERMISSIONS, FETCH_HELP, fetchUrlProblem, fileToBase64, formatBytes, ineligibility, INELIGIBLE_TEXT, MAX_TEXT_CHARACTERS,
-  MAX_UPLOAD_BYTES, titleFromFilename, uploadKind, type UploadKind,
+  MAX_UPLOAD_BYTES, SEC_UNAVAILABLE, titleFromFilename, uploadKind, type UploadKind,
 } from "../../lib/sources";
 import { Disclosure, Segmented } from "../../ui/controls";
 import { Icon } from "../../ui/icons";
@@ -80,6 +80,7 @@ interface Props {
 /** Add-sources panel (M3): file, pasted text, official URL or SEC company data. */
 export function AddSourcesPanel({ asOfIso, onAdded, onClose, initial, locked = false }: Props) {
   const ids = useId();
+  const secAvailable = useSecAvailable();
   const fileInput = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<AddSourceTab>(initial?.tab ?? (initial?.url ? "url" : "file"));
   const [file, setFile] = useState<File | null>(initial?.file ?? null);
@@ -113,7 +114,7 @@ export function AddSourcesPanel({ asOfIso, onAdded, onClose, initial, locked = f
   const kind = file ? uploadKind(file) : null;
   const sec = tab === "sec";
   const datesAllowed = !sec;
-  const urlProblem = tab === "url" ? fetchUrlProblem(url) : null;
+  const urlProblem = tab === "url" ? fetchUrlProblem(url, secAvailable) : null;
   const textUrlProblem = tab === "text" && textUrl.trim() ? (() => { try { const parsed = new URL(textUrl.trim()); return /^https?:$/.test(parsed.protocol) ? null : "只支持 http 或 https 网址"; } catch { return "网址格式不正确"; } })() : null;
   const tagProblem = tag.trim() && !TAG_PATTERN.test(tag.trim()) ? "标签只能包含字母、数字和下划线，并以字母开头" : null;
   const unitProblem = unit.trim() && !UNIT_PATTERN.test(unit.trim()) ? "单位只能包含字母、数字和连字符" : null;
@@ -160,7 +161,7 @@ export function AddSourcesPanel({ asOfIso, onAdded, onClose, initial, locked = f
     if (tab === "file") return file !== null && kind !== null;
     if (tab === "text") return text.trim().length > 0 && !textUrlProblem;
     if (tab === "url") return !urlProblem;
-    return company !== null && tag.trim() !== "" && !tagProblem && !unitProblem;
+    return secAvailable && company !== null && tag.trim() !== "" && !tagProblem && !unitProblem;
   })();
 
   const effectiveUrl = tab === "url" ? url.trim() : tab === "text" ? textUrl.trim() : null;
@@ -316,13 +317,14 @@ export function AddSourcesPanel({ asOfIso, onAdded, onClose, initial, locked = f
 
         {sec ? (
           <>
+            {!secAvailable ? <p className="callout-lite warn" role="note"><Icon name="alert" size={16} />{SEC_UNAVAILABLE}</p> : null}
             <div className="field">
               <label htmlFor={`${ids}-sec-q`}>公司</label>
               <div className="input-row">
                 <input id={`${ids}-sec-q`} value={secQuery} disabled={disabled} placeholder="股票代码、公司名称或 CIK"
                   onChange={(event) => setSecQuery(event.target.value)}
                   onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void runSecSearch(); } }} />
-                <button type="button" className="btn" onClick={() => void runSecSearch()} disabled={disabled || !secQuery.trim() || secSearching}>{secSearching ? "查找中…" : "查找"}</button>
+                <button type="button" className="btn" onClick={() => void runSecSearch()} disabled={disabled || !secAvailable || !secQuery.trim() || secSearching}>{secSearching ? "查找中…" : "查找"}</button>
               </div>
               {secError ? <span className="err" role="alert">{secError}</span> : null}
             </div>

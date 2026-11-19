@@ -106,3 +106,12 @@ export interface SecIdentitySearchResult {
   response_sha256: string;
   limitation: string;
 }
+
+// apps/api/app/main.py get_research_capabilities (research_source_catalog.SourceCapability)
+export interface ResearchCapabilities {
+  schema_version: "v1";
+  search_available: boolean;
+  sec_available: boolean;
+  historical_prices_available: boolean;
+  sources: { name: string; output_type: string; permission: string; configured: boolean; hosts: string[]; coverage: string }[];
+}
