@@ -109,6 +109,7 @@ export interface ApiRequestOptions {
   idempotencyKey?: string;
   signal?: AbortSignal;
   accept?: string;
+  headers?: Record<string, string>;
   raw?: boolean;
 }
 
@@ -131,7 +132,10 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   // The API boundary accepts only JSON for POST and PUT (security.py, 415 otherwise), so a
   // write without a body still sends an empty JSON object (363 acceptance: continue, recover, logout).
   const body = options.body === undefined && (method === "POST" || method === "PUT") ? {} : options.body;
-  const headers: Record<string, string> = { Accept: options.accept ?? "application/json" };
+  const headers: Record<string, string> = {
+    ...(options.headers ?? {}),
+    Accept: options.accept ?? "application/json",
+  };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
   if (session) headers.Authorization = `Bearer ${session.access_token}`;

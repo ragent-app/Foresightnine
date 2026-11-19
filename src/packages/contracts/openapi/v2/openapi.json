@@ -1636,6 +1636,17 @@
             "title": "Parent Version Id",
             "type": "string"
           },
+          "partial_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partial Notes"
+          },
           "question": {
             "title": "Question",
             "type": "string"
@@ -3564,6 +3575,75 @@
           }
         },
         "summary": "Continue Research Run"
+      }
+    },
+    "/v2/research/topics/{topic_id}/runs/{operation_id}/events": {
+      "get": {
+        "description": "Stream sanitized live research progress over Server-Sent Events.",
+        "operationId": "stream_research_run_events_v2_research_topics__topic_id__runs__operation_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "title": "Operation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "After",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stream Research Run Events"
       }
     },
     "/v2/research/topics/{topic_id}/runs/{operation_id}/inputs": {

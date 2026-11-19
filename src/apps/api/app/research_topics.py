@@ -166,6 +166,7 @@ class ResearchTurn(BaseModel):
     status: Literal["completed", "partial"]
     reason: str
     report: str = ""
+    partial_notes: str | None = None
     stopping_note: str | None = None
     claim_ids: list[str] = Field(default_factory=list)
     fact_ids: list[str] = Field(default_factory=list)

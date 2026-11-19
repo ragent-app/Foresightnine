@@ -1,16 +1,31 @@
+import base64
 from datetime import datetime, timezone
 from hashlib import sha256
 from threading import Event
 from types import SimpleNamespace
 
+import pytest
+from fastapi.testclient import TestClient
+
+import app.main as api
+import app.research_fetch as research_fetch
+import app.research_official_retrieval as official_retrieval
+from app.openai_compatible import BinaryHttpResponse
 from app.research_budget import ResearchExecutionBudget
 from app.research_coordinator import ResearchExecutionContext
 from app.research_discovery import collect_source_candidates, execute_source_search
-from app.research_fetch import FetchFailure, FetchedText
+from app.research_fetch import FetchFailure, FetchedDocument, FetchedText
 from app.research_official_retrieval import execute_official_retrieval
 from app.research_runs import ResearchRunRequest
-from app.research_source_catalog import SourceRouteRequest, canonical_source_url, route_source_capabilities
-from app.research_sources import ResearchSource, SourcePermissions
+from app.research_source_catalog import (
+    SourceRouteRequest,
+    canonical_source_url,
+    official_document_capability,
+    route_source_capabilities,
+    source_capabilities,
+)
+from app.research_sources import ResearchSource, ResearchSources, SourcePermissions
+from app.storage import InMemoryDocumentRepository
 
 
 def context():
@@ -142,3 +157,234 @@ def test_structured_timeout_is_unknown_and_invalid_response_returned(monkeypatch
     assert bridge.execute_structured_query(query,**kwargs).external_state == 'unknown'
     monkeypatch.setattr(bridge,'search_sec_identities',fail('source_invalid'))
     assert bridge.execute_structured_query(query,**kwargs).external_state == 'returned'
+
+
+def test_open_public_https_catalog_and_policy_filters(monkeypatch):
+    monkeypatch.delenv('FORESIGHTNINE_FETCH_ALLOWED_HOSTS', raising=False)
+    monkeypatch.delenv('FORESIGHTNINE_FETCH_BLOCKED_HOSTS', raising=False)
+    caps = {item.name: item for item in source_capabilities(search_available=False, sec_available=False)}
+    assert caps['official_html_pdf'].configured is True
+    assert caps['official_html_pdf'].hosts == ()
+    assert caps['official_html_pdf'].coverage == 'open_public_https'
+    assert caps['sec_filing'].hosts == ('www.sec.gov',)
+    assert caps['sec_company_concept'].hosts == ('data.sec.gov',)
+
+    assert official_document_capability('https://ir.nvidia.com/news/release', sec_available=False).name == 'official_html_pdf'
+    assert official_document_capability('https://www.sec.gov/Archives/edgar/data/1/000000000000000001/a.htm', sec_available=False).name == 'sec_filing'
+    assert official_document_capability('https://fred.stlouisfed.org/series/GDP', sec_available=True) is None
+    assert official_document_capability('https://127.0.0.1/admin', sec_available=True) is None
+    assert official_document_capability('http://ir.nvidia.com/news', sec_available=True) is None
+
+    monkeypatch.setenv('FORESIGHTNINE_FETCH_BLOCKED_HOSTS', 'blocked.example.com')
+    assert official_document_capability('https://sub.blocked.example.com/a', sec_available=True) is None
+    monkeypatch.delenv('FORESIGHTNINE_FETCH_BLOCKED_HOSTS', raising=False)
+
+    monkeypatch.setenv('FORESIGHTNINE_FETCH_ALLOWED_HOSTS', 'www.bea.gov,ir.nvidia.com')
+    restricted_caps = {item.name: item for item in source_capabilities(sec_available=True)}
+    assert restricted_caps['official_html_pdf'].coverage == 'restricted_hosts'
+    assert restricted_caps['official_html_pdf'].hosts == ('ir.nvidia.com', 'www.bea.gov')
+    assert official_document_capability('https://ir.nvidia.com/q4', sec_available=True) is not None
+    assert official_document_capability('https://other.example.com/q4', sec_available=True) is None
+
+
+def test_open_web_retrieval_upgrades_http_sets_export_false_and_preserves_official_and_sec_isolation(monkeypatch):
+    monkeypatch.delenv('FORESIGHTNINE_FETCH_ALLOWED_HOSTS', raising=False)
+    monkeypatch.delenv('FORESIGHTNINE_FETCH_BLOCKED_HOSTS', raising=False)
+    store = ResearchSources(InMemoryDocumentRepository())
+    pdf_bytes = b'%PDF-1.4\nfixture'
+    html_bytes = b'<html><p>NVIDIA Q4 revenue 22.1 billion</p></html>'
+
+    def fake_transport(method, url, headers, body, timeout, **kwargs):
+        if url == 'https://ir.nvidia.com/news/q4':
+            return BinaryHttpResponse(200, html_bytes, {'content-type': 'text/html; charset=utf-8'})
+        if url == 'https://ir.nvidia.com/download?id=99':
+            return BinaryHttpResponse(200, b'', {'content-type': 'text/plain'})
+        if url == 'https://www.bea.gov/redirect-out':
+            return BinaryHttpResponse(302, b'', {'location': 'https://cdn.example.org/mirror.html'})
+        if url == 'https://cdn.example.org/mirror.html':
+            return BinaryHttpResponse(200, b'<html><p>Mirrored text</p></html>', {'content-type': 'text/html'})
+        if url == 'https://www.bea.gov/official':
+            return BinaryHttpResponse(200, b'<html><p>Official BEA release</p></html>', {'content-type': 'text/html'})
+        if url == 'https://blocked.example.com/403':
+            return BinaryHttpResponse(403, b'', {})
+        raise AssertionError(f'Unexpected transport URL: {url}')
+
+    # Mock fetch_source_document cleanly for PDF without pdftotext while driving real _default_binary_transport for HTML/redirect/403.
+    real_fetch_doc = research_fetch.fetch_source_document
+
+    def patched_fetch_doc(req, transport=None, *, timeout_seconds=15.0):
+        if str(req.url) == 'https://ir.nvidia.com/download?id=99':
+            return FetchedDocument(
+                text='NVIDIA 10-K summary',
+                response_sha256=sha256(pdf_bytes).hexdigest(),
+                content_type='application/pdf',
+                final_url='https://files.nvidia.com/10k-file',
+                original_pdf_base64=base64.b64encode(pdf_bytes).decode('ascii'),
+                redirect_count=1,
+            )
+        return real_fetch_doc(req, transport=transport, timeout_seconds=timeout_seconds)
+
+    dns_checked = []
+    monkeypatch.setattr(
+        research_fetch,
+        '_validated_addresses',
+        lambda host, port, *, allow_private=False: dns_checked.append((host, port, allow_private)) or ('93.184.216.34',),
+    )
+    monkeypatch.setattr(research_fetch, '_default_binary_transport', fake_transport)
+    monkeypatch.setattr(official_retrieval, 'fetch_source_document', patched_fetch_doc)
+
+    candidates = [
+        {'url': 'https://www.sec.gov/Archives/edgar/data/1045810/000104581024000029/nvda-20240128.htm', 'title': 'SEC 10-K'},
+        {'url': 'http://ir.nvidia.com/news/q4', 'title': 'NVIDIA Q4'},
+        {'url': 'https://ir.nvidia.com/download?id=99', 'title': 'NVIDIA PDF No Suffix'},
+        {'url': 'https://www.bea.gov/official', 'title': 'BEA Official'},
+        {'url': 'https://www.bea.gov/redirect-out', 'title': 'BEA Redirected External'},
+        {'url': 'https://fred.stlouisfed.org/series/GDP', 'title': 'FRED'},
+        {'url': 'https://blocked.example.com/403', 'title': 'WAF 403'},
+    ]
+    result = execute_official_retrieval(
+        request=ResearchRunRequest(parent_version_id='v1', auto_fetch_official=True),
+        question='Compare revenue',
+        as_of=None,
+        available_count=0,
+        candidates=candidates,
+        sources=[],
+        owner_id='owner-1',
+        operation_id='op-open-1',
+        store=store,
+        sec_agent_config=None,
+        reserve_sec=lambda: True,
+        context=context(),
+    )
+    assert dns_checked == [('cdn.example.org', 443, False)]
+    assert result.status == 'partial'
+    assert [row['status'] for row in result.outcomes] == [
+        'unconfigured', 'retrieved', 'retrieved', 'retrieved', 'retrieved', 'restricted', 'failed'
+    ]
+    assert result.outcomes[0]['reason'] == 'sec_contact_unconfigured'
+    assert result.outcomes[5]['reason'] == 'source_blocked_policy'
+    assert result.outcomes[6]['reason'] == 'http_forbidden_or_challenge'
+    assert result.outcomes[6]['external_state'] == 'returned'
+
+    web_html, web_pdf, official_html, redirected_web = [item[0] for item in result.retrieved]
+    assert web_html.url and str(web_html.url) == 'https://ir.nvidia.com/news/q4'
+    assert web_html.kind == 'user_supplied'
+    assert web_html.retrieval_method == 'web_html'
+    assert web_html.permissions == SourcePermissions(store=True, display=True, model_input=True, export=False)
+    assert web_html.provenance['final_url'] == 'https://ir.nvidia.com/news/q4'
+    assert web_html.provenance['web_retrieval']['content_type'] == 'text/html'
+
+    assert web_pdf.kind == 'user_supplied'
+    assert web_pdf.retrieval_method == 'web_pdf'
+    assert web_pdf.permissions == SourcePermissions(store=True, display=True, model_input=True, export=False)
+    assert web_pdf.provenance['final_url'] == 'https://files.nvidia.com/10k-file'
+    assert web_pdf.provenance['web_retrieval']['redirect_count'] == 1
+
+    assert official_html.kind == 'official'
+    assert official_html.retrieval_method == 'official_html'
+    assert official_html.permissions == SourcePermissions(store=True, display=True, model_input=True, export=True)
+
+    # An official host redirecting onto an external third-party domain is downgraded to web_html with export=False.
+    assert redirected_web.kind == 'user_supplied'
+    assert redirected_web.retrieval_method == 'web_html'
+    assert redirected_web.permissions.export is False
+    assert redirected_web.provenance['final_url'] == 'https://cdn.example.org/mirror.html'
+
+
+def test_open_web_export_false_blocks_full_export_and_original_download(monkeypatch):
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    client = TestClient(api.app)
+    reg = client.post('/v1/auth/local/register', json={
+        'email': f'webexport@example.test',
+        'password': 'correct horse battery staple!',
+    }).json()
+    headers = {'Authorization': 'Bearer ' + reg['access_token']}
+    account_id = client.get('/v1/account', headers=headers).json()['account']['account_id']
+
+    raw = b'<html><p>Web revenue 50 billion.</p></html>'
+    monkeypatch.setattr(
+        official_retrieval,
+        'fetch_source_document',
+        lambda req, **kw: FetchedDocument(
+            text='Web revenue 50 billion.',
+            response_sha256=sha256(raw).hexdigest(),
+            content_type='text/html',
+            final_url=str(req.url),
+            original_html_base64=base64.b64encode(raw).decode('ascii'),
+        ),
+    )
+    retrieved = execute_official_retrieval(
+        request=ResearchRunRequest(parent_version_id='v1', auto_fetch_official=True),
+        question='Check web source',
+        as_of=None,
+        available_count=0,
+        candidates=[{'url': 'https://ir.example.com/q4', 'title': 'Web Release'}],
+        sources=[],
+        owner_id=account_id,
+        operation_id='op-export-check',
+        store=api.research_sources,
+        sec_agent_config=None,
+        reserve_sec=lambda: True,
+        context=context(),
+    )
+    assert retrieved.status == 'completed'
+    source_id = retrieved.source.source_id
+    assert client.get(f'/v2/research/sources/{source_id}', headers=headers).status_code == 200
+    assert client.get(f'/v2/research/sources/{source_id}/original', headers=headers).status_code == 403
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Web?', 'source_ids': [source_id]}).json()
+    version_id = topic['versions'][-1]['version_id']
+    assert client.get(f"/v2/research/topics/{topic['topic_id']}/versions/{version_id}/export", headers=headers).status_code == 403
+    assert client.get(f"/v2/research/topics/{topic['topic_id']}/versions/{version_id}/export/metadata", headers=headers).status_code == 200
+
+
+@pytest.mark.parametrize("sec_agent_config,expected_status,expected_reason", [
+    (None, "unconfigured", "sec_contact_unconfigured"),
+    ("Example Research contact@example.test", "restricted", "source_unavailable"),
+])
+def test_non_filing_sec_hosts_fail_closed_without_open_web_fallback(
+    monkeypatch, sec_agent_config, expected_status, expected_reason
+):
+    monkeypatch.delenv('FORESIGHTNINE_FETCH_ALLOWED_HOSTS', raising=False)
+    monkeypatch.delenv('FORESIGHTNINE_FETCH_BLOCKED_HOSTS', raising=False)
+    assert official_document_capability('https://efts.sec.gov/LATEST/search-index', sec_available=True) is None
+    assert official_document_capability('https://sec.gov./Archives/edgar/data/1/000000000000000001/a.htm', sec_available=True) is None
+    assert official_document_capability('https://data.sec.gov/api/xbrl/companyconcept/CIK0000789019/us-gaap/Revenues.json', sec_available=True) is None
+
+    store = ResearchSources(InMemoryDocumentRepository())
+    fetched_urls = []
+    monkeypatch.setattr(
+        official_retrieval,
+        'fetch_source_document',
+        lambda req, **kw: fetched_urls.append(str(req.url)) or FetchedDocument(
+            text='Open web text',
+            response_sha256=sha256(b'Open web text').hexdigest(),
+            content_type='text/html',
+            final_url=str(req.url),
+            original_html_base64=base64.b64encode(b'Open web text').decode('ascii'),
+        ),
+    )
+    candidates = [
+        {'url': 'https://efts.sec.gov/LATEST/search-index', 'title': 'SEC EFTS'},
+        {'url': 'https://sec.gov./Archives/edgar/data/1/000000000000000001/a.htm', 'title': 'SEC Apex'},
+        {'url': 'https://ir.example.com/news/q4', 'title': 'Open Web'},
+    ]
+    result = execute_official_retrieval(
+        request=ResearchRunRequest(parent_version_id='v1', auto_fetch_official=True),
+        question='Check SEC isolation',
+        as_of=None,
+        available_count=0,
+        candidates=candidates,
+        sources=[],
+        owner_id='owner-sec',
+        operation_id='op-sec-isolation',
+        store=store,
+        sec_agent_config=sec_agent_config,
+        reserve_sec=lambda: True,
+        context=context(),
+    )
+    assert result.status == 'completed'
+    assert fetched_urls == ['https://ir.example.com/news/q4']
+    assert [row['status'] for row in result.outcomes[:2]] == [expected_status, expected_status]
+    assert [row['reason'] for row in result.outcomes[:2]] == [expected_reason, expected_reason]
+    assert result.outcomes[2]['status'] == 'retrieved'
+

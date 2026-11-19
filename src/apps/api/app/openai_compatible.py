@@ -8,14 +8,17 @@ used only after a non-empty environment secret has been confirmed.
 """
 from __future__ import annotations
 
+import codecs
 from dataclasses import dataclass, field, replace
 from contextlib import nullcontext
 from .transport_diagnostics import TransportDiagnostics
 from http.client import HTTPConnection, HTTPSConnection, HTTPException
+import inspect
 import ipaddress
 import json
 import math
 import os
+import queue
 import re
 import socket
 import ssl
@@ -46,12 +49,19 @@ _ALLOW_PRIVATE_NETWORK_ENV = "FORESIGHTNINE_LLM_ALLOW_PRIVATE_NETWORK"
 _TIMEOUT_ENV = "FORESIGHTNINE_LLM_TIMEOUT_SECONDS"
 _LOCAL_GATEWAY_HOSTS = frozenset({"host.docker.internal", "host.containers.internal"})
 _MAX_RESPONSE_BYTES = 256 * 1024
+_MAX_STREAM_BYTES = 2_000_000
+_MAX_ERROR_RESPONSE_BYTES = 64 * 1024
 _MAX_DOH_RESPONSE_BYTES = 64 * 1024
 _PUBLIC_DOH_HOST = "cloudflare-dns.com"
 _PUBLIC_DOH_PATH = "/dns-query"
 _FAKE_DNS_PROXY_NETWORKS = (
     ipaddress.ip_network("198.18.0.0/15"),
     ipaddress.ip_network("fdfe:dcba:9876::/48"),
+)
+_NON_PUBLIC_IPV6_NETWORKS = (
+    ipaddress.ip_network("64:ff9b::/96"),
+    ipaddress.ip_network("64:ff9b:1::/48"),
+    ipaddress.ip_network("100::/64"),
 )
 _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 _STRUCTURED_OUTPUT_KEYS = frozenset({
@@ -349,22 +359,22 @@ class OpenAICompatibleSettings:
 
 
 
-def _execute_binary_transport(
+def _open_and_send_connection(
     method: str,
     url: str,
     headers: Mapping[str, str],
     body: bytes,
-    timeout: float,
     *,
     allow_private_network: bool = False,
-    max_response_bytes: int = _MAX_RESPONSE_BYTES,
-    deadline: float, stopped: Event, register_connection: Callable[[HTTPConnection | None], None],
-    diagnostics: TransportDiagnostics | None = None, connect_timeout_seconds: float = 5.0,
-    response_timeout_seconds: float | None = None, begin_submission: Callable[[], bool] | None = None,
-    register_response_deadline: Callable[[float], None] | None = None,
-) -> BinaryHttpResponse:
-    if not 1 <= max_response_bytes <= 5_000_000:
-        raise _TransportFailure("invalid response limit")
+    deadline: float,
+    stopped: Event,
+    register_connection: Callable[[HTTPConnection | None], None],
+    diagnostics: TransportDiagnostics | None = None,
+    connect_timeout_seconds: float = 5.0,
+    initial_io_timeout_seconds: float | None = None,
+    begin_submission: Callable[[], bool] | None = None,
+) -> HTTPConnection:
+    """Validate public DNS, pin TCP/TLS to validated IPs, and submit the HTTP request."""
     parsed = urlsplit(url)
     if not parsed.hostname:
         raise _TransportFailure()
@@ -409,7 +419,7 @@ def _execute_binary_transport(
         if remaining <= 0:
             connection.close()
             raise _TransportTimeout()
-        io_timeout = min(remaining, response_timeout_seconds) if response_timeout_seconds is not None else remaining
+        io_timeout = min(remaining, initial_io_timeout_seconds) if initial_io_timeout_seconds is not None else remaining
         connection.timeout = io_timeout
         if connection.sock is not None:
             connection.sock.settimeout(io_timeout)
@@ -425,6 +435,52 @@ def _execute_binary_transport(
             raise _TransportTimeout()
         with diagnostics.stage("request_write") if diagnostics else nullcontext():
             connection.request(method, path, body=body, headers=dict(headers))
+    except _TransportTimeout:
+        register_connection(None)
+        connection.close()
+        raise
+    except (TimeoutError, socket.timeout) as error:
+        register_connection(None)
+        connection.close()
+        raise _TransportTimeout() from error
+    except (OSError, ssl.SSLError, HTTPException) as error:
+        register_connection(None)
+        connection.close()
+        raise _TransportFailure() from error
+    return connection
+
+
+def _execute_binary_transport(
+    method: str,
+    url: str,
+    headers: Mapping[str, str],
+    body: bytes,
+    timeout: float,
+    *,
+    allow_private_network: bool = False,
+    max_response_bytes: int = _MAX_RESPONSE_BYTES,
+    deadline: float, stopped: Event, register_connection: Callable[[HTTPConnection | None], None],
+    diagnostics: TransportDiagnostics | None = None, connect_timeout_seconds: float = 5.0,
+    response_timeout_seconds: float | None = None, begin_submission: Callable[[], bool] | None = None,
+    register_response_deadline: Callable[[float], None] | None = None,
+) -> BinaryHttpResponse:
+    if not 1 <= max_response_bytes <= 5_000_000:
+        raise _TransportFailure("invalid response limit")
+    connection = _open_and_send_connection(
+        method,
+        url,
+        headers,
+        body,
+        allow_private_network=allow_private_network,
+        deadline=deadline,
+        stopped=stopped,
+        register_connection=register_connection,
+        diagnostics=diagnostics,
+        connect_timeout_seconds=connect_timeout_seconds,
+        initial_io_timeout_seconds=response_timeout_seconds,
+        begin_submission=begin_submission,
+    )
+    try:
         response_deadline = monotonic() + response_timeout_seconds if response_timeout_seconds is not None else deadline
         if register_response_deadline is not None:
             register_response_deadline(response_deadline)
@@ -568,6 +624,16 @@ def _default_binary_transport(
     return result
 
 
+def _shutdown_connection_socket(connection: HTTPConnection | None) -> None:
+    sock = getattr(connection, "sock", None)
+    shutdown = getattr(sock, "shutdown", None)
+    if callable(shutdown):
+        try:
+            shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+
+
 def _default_transport(
     method: str, url: str, headers: Mapping[str, str], body: bytes, timeout: float, *,
     allow_private_network: bool = False, max_response_bytes: int = _MAX_RESPONSE_BYTES,
@@ -583,6 +649,329 @@ def _default_transport(
     except UnicodeDecodeError as error:
         raise _TransportFailure() from error
     return HttpResponse(response.status_code, decoded, response.headers, response.safe_error)
+
+
+class _SseLineParser:
+    """Incremental WHATWG-compatible SSE line and frame parser."""
+
+    def __init__(self) -> None:
+        self._buf: list[str] = []
+        self._pending_cr: bool = False
+        self._event_name: str | None = None
+        self._data_lines: list[str] = []
+
+    def _handle_line(self, line: str, out: list[tuple[str, str, str]]) -> None:
+        if line == "":
+            if self._event_name is not None or self._data_lines:
+                out.append(("frame", self._event_name or "", "\n".join(self._data_lines)))
+                self._event_name = None
+                self._data_lines = []
+            return
+        if line.startswith(":"):
+            out.append(("ping", "", ""))
+            return
+        if ":" in line:
+            field_name, value = line.split(":", 1)
+            if value.startswith(" "):
+                value = value[1:]
+        else:
+            field_name, value = line, ""
+        if field_name == "event":
+            self._event_name = value
+        elif field_name == "data":
+            self._data_lines.append(value)
+
+    def feed_text(self, chunk: str) -> list[tuple[str, str, str]]:
+        out: list[tuple[str, str, str]] = []
+        idx = 0
+        n = len(chunk)
+        if self._pending_cr and idx < n:
+            self._pending_cr = False
+            if chunk[0] == "\n":
+                idx = 1
+        while idx < n:
+            ch = chunk[idx]
+            idx += 1
+            if ch == "\r":
+                self._pending_cr = True
+                line = "".join(self._buf)
+                self._buf.clear()
+                self._handle_line(line, out)
+                if idx < n and chunk[idx] == "\n":
+                    self._pending_cr = False
+                    idx += 1
+            elif ch == "\n":
+                line = "".join(self._buf)
+                self._buf.clear()
+                self._handle_line(line, out)
+            else:
+                self._buf.append(ch)
+        return out
+
+    def finish(self) -> list[tuple[str, str, str]]:
+        out: list[tuple[str, str, str]] = []
+        if self._buf:
+            line = "".join(self._buf)
+            self._buf.clear()
+            self._handle_line(line, out)
+        if self._event_name is not None or self._data_lines:
+            out.append(("frame", self._event_name or "", "\n".join(self._data_lines)))
+            self._event_name = None
+            self._data_lines = []
+        return out
+
+
+def _execute_stream_worker(
+    method: str,
+    url: str,
+    headers: Mapping[str, str],
+    body: bytes,
+    *,
+    allow_private_network: bool,
+    max_response_bytes: int,
+    max_stream_bytes: int,
+    deadline: float,
+    stopped: Event,
+    register_connection: Callable[[HTTPConnection | None], None],
+    diagnostics: TransportDiagnostics | None,
+    connect_timeout_seconds: float,
+    idle_timeout_seconds: float,
+    response_timeout_seconds: float | None,
+    begin_submission: Callable[[], bool],
+    events_q: queue.SimpleQueue[tuple[str, Any]],
+) -> None:
+    initial_wait = response_timeout_seconds if response_timeout_seconds is not None else idle_timeout_seconds
+    connection = _open_and_send_connection(
+        method,
+        url,
+        headers,
+        body,
+        allow_private_network=allow_private_network,
+        deadline=deadline,
+        stopped=stopped,
+        register_connection=register_connection,
+        diagnostics=diagnostics,
+        connect_timeout_seconds=connect_timeout_seconds,
+        initial_io_timeout_seconds=initial_wait,
+        begin_submission=begin_submission,
+    )
+    try:
+        header_limit = min(deadline, monotonic() + initial_wait)
+        def apply_sock_timeout(limit: float) -> None:
+            remaining = limit - monotonic()
+            if remaining <= 0 or stopped.is_set():
+                raise _TransportTimeout()
+            if connection.sock is not None:
+                connection.sock.settimeout(remaining)
+
+        with diagnostics.stage("response_headers") if diagnostics else nullcontext():
+            apply_sock_timeout(header_limit)
+            response = connection.getresponse()
+        if diagnostics:
+            diagnostics.record("response_headers", 0, status_code=response.status)
+        resp_headers = {str(key).lower(): str(value) for key, value in response.headers.items()}
+        if not 200 <= response.status < 300:
+            with diagnostics.stage("response_body") if diagnostics else nullcontext():
+                apply_sock_timeout(min(deadline, monotonic() + idle_timeout_seconds))
+                err_bytes = response.read(_MAX_ERROR_RESPONSE_BYTES + 1)[:_MAX_ERROR_RESPONSE_BYTES]
+            if diagnostics:
+                diagnostics.submission("response_received")
+            from .research_diagnostics import safe_provider_error
+            events_q.put(("response", HttpResponse(response.status, "", resp_headers, safe_provider_error(err_bytes))))
+            return
+
+        media_type = resp_headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        if media_type != "text/event-stream":
+            with diagnostics.stage("response_body") if diagnostics else nullcontext():
+                apply_sock_timeout(min(deadline, monotonic() + idle_timeout_seconds))
+                content = response.read(max_response_bytes + 1)
+            if len(content) > max_response_bytes:
+                raise _TransportFailure("response too large")
+            remaining_length = getattr(response, "length", None)
+            if type(remaining_length) is int and remaining_length > 0:
+                raise _TransportFailure("incomplete response body")
+            try:
+                decoded = content.decode("utf-8")
+            except UnicodeDecodeError as error:
+                raise _TransportFailure() from error
+            if diagnostics:
+                diagnostics.submission("response_received")
+            events_q.put(("response", HttpResponse(response.status, decoded, resp_headers)))
+            return
+
+        if diagnostics:
+            diagnostics.submission("response_received")
+        events_q.put(("headers", resp_headers))
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="strict")
+        parser = _SseLineParser()
+        total_wire_bytes = 0
+        read_chunk = getattr(response, "read1", None) or response.read
+        with diagnostics.stage("response_body") if diagnostics else nullcontext():
+            while True:
+                apply_sock_timeout(min(deadline, monotonic() + idle_timeout_seconds))
+                raw = read_chunk(8192)
+                if not raw:
+                    remaining_length = getattr(response, "length", None)
+                    if type(remaining_length) is int and remaining_length > 0:
+                        raise _TransportFailure("incomplete stream body")
+                    try:
+                        tail = decoder.decode(b"", final=True)
+                    except UnicodeDecodeError as error:
+                        raise _TransportFailure() from error
+                    for item in parser.feed_text(tail):
+                        events_q.put((item[0], (item[1], item[2])))
+                    for item in parser.finish():
+                        events_q.put((item[0], (item[1], item[2])))
+                    events_q.put(("eof", None))
+                    return
+                total_wire_bytes += len(raw)
+                if total_wire_bytes > max_stream_bytes:
+                    raise _TransportFailure("stream too large")
+                try:
+                    text = decoder.decode(raw, final=False)
+                except UnicodeDecodeError as error:
+                    raise _TransportFailure() from error
+                for item in parser.feed_text(text):
+                    events_q.put((item[0], (item[1], item[2])))
+    except _TransportTimeout:
+        raise
+    except (TimeoutError, socket.timeout) as error:
+        raise _TransportTimeout() from error
+    except (OSError, ssl.SSLError, HTTPException) as error:
+        raise _TransportFailure() from error
+    finally:
+        register_connection(None)
+        connection.close()
+
+
+def _default_stream_transport(
+    method: str,
+    url: str,
+    headers: Mapping[str, str],
+    body: bytes,
+    timeout: float,
+    *,
+    on_frame: Callable[[str, str], None],
+    allow_private_network: bool = False,
+    max_response_bytes: int = _MAX_RESPONSE_BYTES,
+    max_stream_bytes: int = _MAX_STREAM_BYTES,
+    diagnostics: TransportDiagnostics | None = None,
+    connect_timeout_seconds: float = 15.0,
+    idle_timeout_seconds: float = 45.0,
+    response_timeout_seconds: float | None = None,
+    cancel_event: Event | None = None,
+    on_submission: Callable[[], None] | None = None,
+) -> HttpResponse | None:
+    """Stream SSE frames safely with SSRF checks, dual byte caps, 3-tier timeouts, and fast cancel."""
+    if not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
+        raise _TransportTimeout()
+    if not isinstance(idle_timeout_seconds, (int, float)) or not math.isfinite(idle_timeout_seconds) or idle_timeout_seconds <= 0:
+        raise ProviderFailure("provider_configuration_invalid", "Stream idle timeout is invalid.", retryable=False)
+    if not 1 <= max_response_bytes <= 5_000_000 or not 1 <= max_stream_bytes <= 10_000_000:
+        raise _TransportFailure("invalid response limit")
+    slots = _TRANSPORT_SLOTS
+    if not slots.acquire(blocking=False):
+        raise _TransportFailure("transport busy")
+    deadline = monotonic() + timeout
+    stopped, guard = Event(), Lock()
+    state: dict[str, object] = {"connection": None}
+    events_q: queue.SimpleQueue[tuple[str, Any]] = queue.SimpleQueue()
+
+    def register(connection: HTTPConnection | None) -> None:
+        with guard:
+            state["connection"] = connection
+
+    def begin_submission() -> bool:
+        with guard:
+            if stopped.is_set():
+                return False
+            if on_submission is not None:
+                on_submission()
+            if diagnostics:
+                diagnostics.submission("started_unknown")
+            return True
+
+    def run() -> None:
+        try:
+            _execute_stream_worker(
+                method,
+                url,
+                headers,
+                body,
+                allow_private_network=allow_private_network,
+                max_response_bytes=max_response_bytes,
+                max_stream_bytes=max_stream_bytes,
+                deadline=deadline,
+                stopped=stopped,
+                register_connection=register,
+                diagnostics=diagnostics,
+                connect_timeout_seconds=connect_timeout_seconds,
+                idle_timeout_seconds=idle_timeout_seconds,
+                response_timeout_seconds=response_timeout_seconds,
+                begin_submission=begin_submission,
+                events_q=events_q,
+            )
+        except Exception as error:
+            events_q.put(("error", error))
+        finally:
+            slots.release()
+
+    try:
+        Thread(target=run, name="foresight-stream-transport", daemon=True).start()
+    except BaseException:
+        slots.release()
+        raise
+
+    def shutdown_active() -> None:
+        with guard:
+            stopped.set()
+            connection = state.get("connection")
+        _shutdown_connection_socket(connection if isinstance(connection, HTTPConnection) or hasattr(connection, "sock") else None)
+
+    got_headers = False
+    header_wait = response_timeout_seconds if response_timeout_seconds is not None else idle_timeout_seconds
+    idle_deadline = min(deadline, monotonic() + header_wait)
+
+    try:
+        while True:
+            now = monotonic()
+            if cancel_event is not None and cancel_event.is_set():
+                if diagnostics:
+                    diagnostics.interrupt("cancelled", (timeout - max(0.0, deadline - now)) * 1000)
+                shutdown_active()
+                raise _TransportTimeout()
+            active_limit = min(deadline, idle_deadline)
+            if now >= active_limit:
+                reason = "deadline" if deadline <= idle_deadline else ("response_body" if got_headers else "response_headers")
+                if diagnostics:
+                    diagnostics.interrupt(reason, (timeout - max(0.0, deadline - now)) * 1000)
+                shutdown_active()
+                raise _TransportTimeout()
+            wait_slice = min(0.05, max(0.001, active_limit - now))
+            try:
+                kind, payload = events_q.get(timeout=wait_slice)
+            except queue.Empty:
+                continue
+            if kind == "headers":
+                got_headers = True
+                idle_deadline = monotonic() + idle_timeout_seconds
+            elif kind == "ping":
+                idle_deadline = monotonic() + idle_timeout_seconds
+            elif kind == "frame":
+                idle_deadline = monotonic() + idle_timeout_seconds
+                ev_name, ev_data = payload
+                on_frame(ev_name, ev_data)
+            elif kind == "response":
+                return payload
+            elif kind == "eof":
+                return None
+            elif kind == "error":
+                if isinstance(payload, _TransportFailure):
+                    raise payload
+                raise _TransportFailure() from payload
+    except BaseException:
+        shutdown_active()
+        raise
 
 
 def _endpoint(base_url: str) -> str:
@@ -663,6 +1052,25 @@ def _is_fake_dns_proxy_address(address: ipaddress.IPv4Address | ipaddress.IPv6Ad
     return any(address.version == network.version and address in network for network in _FAKE_DNS_PROXY_NETWORKS)
 
 
+def is_public_ip_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Return True only when an address is a globally routable public IP."""
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
+    if (
+        not address.is_global
+        or address.is_multicast
+        or address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_reserved
+        or address.is_unspecified
+    ):
+        return False
+    if isinstance(address, ipaddress.IPv6Address) and any(address in network for network in _NON_PUBLIC_IPV6_NETWORKS):
+        return False
+    return True
+
+
 def _validated_addresses(hostname: str, port: int, *, allow_private: bool = False) -> tuple[str, ...]:
     """Return only addresses admitted for the exact connection that follows."""
     try:
@@ -673,14 +1081,18 @@ def _validated_addresses(hostname: str, port: int, *, allow_private: bool = Fals
     if not addresses:
         raise _TransportFailure()
     try:
-        parsed_addresses = tuple(sorted(addresses))
-        parsed_ips = tuple(ipaddress.ip_address(address) for address in parsed_addresses)
+        parsed_pairs = sorted(
+            ((ipaddress.ip_address(address), address) for address in addresses),
+            key=lambda item: (item[0].version, item[1]),
+        )
+        parsed_ips = tuple(item[0] for item in parsed_pairs)
+        parsed_addresses = tuple(item[1] for item in parsed_pairs)
         local_gateway = allow_private and hostname.rstrip(".").lower() in _LOCAL_GATEWAY_HOSTS
-        if not local_gateway and any(not address.is_global for address in parsed_ips):
+        if not local_gateway and any(not is_public_ip_address(address) for address in parsed_ips):
             if not all(_is_fake_dns_proxy_address(address) for address in parsed_ips):
                 raise _TransportFailure()
             public_addresses = tuple(ipaddress.ip_address(address) for address in _public_doh_addresses(hostname))
-            if not public_addresses or any(not address.is_global for address in public_addresses):
+            if not public_addresses or any(not is_public_ip_address(address) for address in public_addresses):
                 raise _TransportFailure()
     except ValueError as error:
         raise _TransportFailure() from error
@@ -690,6 +1102,37 @@ def _validated_addresses(hostname: str, port: int, *, allow_private: bool = Fals
 def _require_public_dns(hostname: str, port: int, *, allow_private: bool = False) -> None:
     """Validate DNS at configuration time; transport pins the validated result."""
     _validated_addresses(hostname, port, allow_private=allow_private)
+
+
+def _invoke_stream_transport(
+    callable_transport: Callable[..., HttpResponse | None],
+    method: str,
+    url: str,
+    headers: Mapping[str, str],
+    body: bytes,
+    timeout: float,
+    *,
+    on_frame: Callable[[str, str], None],
+    cancel_event=None,
+    on_submission=None,
+    diagnostics: TransportDiagnostics | None = None,
+) -> HttpResponse | None:
+    try:
+        params = inspect.signature(callable_transport).parameters
+    except (TypeError, ValueError):
+        params = {}
+    accepts_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
+    kwargs: dict[str, Any] = {}
+    if accepts_kw or "on_frame" in params:
+        kwargs["on_frame"] = on_frame
+    for name, val in (
+        ("cancel_event", cancel_event),
+        ("on_submission", on_submission),
+        ("diagnostics", diagnostics),
+    ):
+        if val is not None and (accepts_kw or name in params):
+            kwargs[name] = val
+    return callable_transport(method, url, headers, body, timeout, **kwargs)
 
 
 class OpenAICompatibleLlmProvider(LlmProvider):
@@ -703,6 +1146,7 @@ class OpenAICompatibleLlmProvider(LlmProvider):
         *,
         policy: ProviderPolicy | None = None,
         transport: OpenAICompatibleTransport | None = None,
+        stream_transport: Callable[..., HttpResponse | None] | None = None,
         sleeper: Callable[[float], None] | None = None,
         configuration_error: ProviderFailure | None = None,
     ) -> None:
@@ -718,7 +1162,8 @@ class OpenAICompatibleLlmProvider(LlmProvider):
             if settings is not None
             else ProviderPolicy()
         )
-        self._default_transport_used = transport is None
+        self._default_transport_used = transport is None and stream_transport is None
+        self.stream_transport = stream_transport
         if transport is not None:
             self.transport = transport
         else:
@@ -1010,8 +1455,20 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                 raise ProviderFailure('provider_configuration_invalid', 'Model generation parameters are invalid.', retryable=False) from None
         return len(json.dumps(wire, ensure_ascii=False, separators=(',', ':')).encode('utf-8')) + 64
 
+    @staticmethod
+    def _usage_from_dict(u: object) -> Any:
+        from .model_protocol import ModelUsage
+        if not isinstance(u, dict):
+            return None
+        def count(key: str) -> int | None:
+            value = u.get(key)
+            return value if type(value) is int and value >= 0 else None
+        return ModelUsage(count('prompt_tokens'), count('completion_tokens'), count('total_tokens'))
+
     def complete(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, cancel_event=None, timeout_seconds: float | None = None,
-                 diagnostic_callback=None, max_output_tokens: int | None = None, on_submission=None) -> ModelResponse:
+                 diagnostic_callback=None, max_output_tokens: int | None = None, on_submission=None,
+                 on_stream_event: Callable[[dict[str, Any]], None] | None = None,
+                 stream_transport: Callable[..., HttpResponse | None] | None = None) -> ModelResponse:
         seen_diagnostic = False
         def record(observation):
             nonlocal seen_diagnostic
@@ -1020,7 +1477,8 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                 diagnostic_callback(observation)
         try:
             return self._complete(messages, tools, cancel_event=cancel_event, timeout_seconds=timeout_seconds,
-                diagnostic_callback=record, max_output_tokens=max_output_tokens, on_submission=on_submission)
+                diagnostic_callback=record, max_output_tokens=max_output_tokens, on_submission=on_submission,
+                on_stream_event=on_stream_event, stream_transport=stream_transport)
         except BaseException:
             if not seen_diagnostic and diagnostic_callback is not None:
                 from .research_diagnostics import report_diagnostic_write_failure
@@ -1031,10 +1489,13 @@ class OpenAICompatibleLlmProvider(LlmProvider):
             raise
 
     def _complete(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, cancel_event=None, timeout_seconds: float | None = None,
-                 diagnostic_callback=None, max_output_tokens: int | None = None, on_submission=None) -> ModelResponse:
+                 diagnostic_callback=None, max_output_tokens: int | None = None, on_submission=None,
+                 on_stream_event: Callable[[dict[str, Any]], None] | None = None,
+                 stream_transport: Callable[..., HttpResponse | None] | None = None) -> ModelResponse:
         """Submit one native chat turn. Ambiguous submissions are never replayed."""
-        from .model_protocol import ModelResponse, ModelToolCall, ModelUsage
+        from .model_protocol import ModelResponse, ModelToolCall
         from .research_diagnostics import report_diagnostic_write_failure, safe_wire_metadata
+        from .research_stream_extract import TopLevelReportExtractor
         if self.configuration_error is not None:
             raise self.configuration_error
         if self.settings is None or not self.settings.api_key:
@@ -1048,14 +1509,14 @@ class OpenAICompatibleLlmProvider(LlmProvider):
             raise ProviderFailure("provider_configuration_invalid", "Native tool capability is not configured.", retryable=False)
         if not isinstance(messages, list) or not isinstance(tools, list):
             raise ProviderFailure("provider_configuration_invalid", "Invalid model messages or tools.", retryable=False)
-        wire = {"model": self.settings.model, "messages": messages}
+        wire: dict[str, Any] = {"model": self.settings.model, "messages": messages}
         # The deployment opts in both to field names and to their values. This
         # permits standard and private protocol extensions without brand tests.
         raw_parameters = os.environ.get('FORESIGHTNINE_LLM_GENERATION_PARAMETERS', '').strip()
         if raw_parameters:
             try:
                 parameters = json.loads(raw_parameters)
-                reserved = {'model', 'messages', 'tools', 'tool_choice', 'stream', 'max_tokens', 'response_format'}
+                reserved = {'model', 'messages', 'tools', 'tool_choice', 'stream', 'stream_options', 'max_tokens', 'response_format'}
                 if not isinstance(parameters, dict) or profile is None or any(
                     not isinstance(k, str) or k in reserved or k not in (profile.generation_parameters or ())
                     for k in parameters
@@ -1072,31 +1533,283 @@ class OpenAICompatibleLlmProvider(LlmProvider):
             wire["max_tokens"] = min(max_output_tokens, self.policy.max_output_tokens) if self.policy.max_output_tokens is not None else max_output_tokens
         elif self.policy.max_output_tokens is not None:
             wire["max_tokens"] = self.policy.max_output_tokens
+        streaming = on_stream_event is not None and profile is not None and profile.stream is True
+        if streaming:
+            wire["stream"] = True
+            if profile.usage is True:
+                wire["stream_options"] = {"include_usage": True}
         body = json.dumps(wire, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
         if self.policy.max_input_tokens is not None and len(body) > self.policy.max_input_tokens:
             raise ProviderFailure("provider_budget_exhausted", "Model input budget exceeded.", retryable=False)
+
         diagnostics = TransportDiagnostics()
-        response = None
-        if not self._default_transport_used:
+        response: HttpResponse | None = None
+        active_stream_transport = stream_transport or self.stream_transport
+        if not self._default_transport_used and active_stream_transport is None:
             diagnostics.submission("unavailable")
+
+        # Stream accumulation state (populated only when upstream streams SSE)
+        saw_choice = False
+        saw_done = False
+        saw_role: str | None = None
+        saw_str_content = False
+        content_parts: list[str] = []
+        reasoning_parts: list[str] = []
+        extra_continuation: dict[str, Any] = {}
+        saw_refusal = False
+        finish_reason: str | None = None
+        last_usage_dict: dict[str, Any] | None = None
+        tool_acc: dict[int, dict[str, Any]] = {}
+        reassembled_bytes = 0
+        allowed_continuation = (
+            set(profile.continuation_fields or ())
+            if profile and profile.continuation is True
+            else set()
+        )
+        for bad_field in allowed_continuation & {'role', 'content', 'tool_calls', 'refusal'}:
+            raise ProviderFailure('provider_configuration_invalid', 'Invalid continuation field configuration.', retryable=False)
+
+        def partial_reported_tokens() -> int | None:
+            usage_obj = self._usage_from_dict(last_usage_dict)
+            return usage_obj.total_tokens if usage_obj is not None else None
+
+        def emit_stream_safe(payload: dict[str, Any]) -> None:
+            if on_stream_event is not None:
+                on_stream_event(payload)
+
+        def handle_sse_frame(event_name: str, data: str) -> None:
+            nonlocal saw_choice, saw_done, saw_role, saw_str_content, saw_refusal
+            nonlocal finish_reason, last_usage_dict, reassembled_bytes
+            diagnostics.submission("response_received")
+            if event_name == "error":
+                raise ProviderFailure("provider_unavailable", "Provider stream returned an error.", retryable=False)
+            stripped = data.strip()
+            if not stripped:
+                return
+            if stripped == "[DONE]":
+                saw_done = True
+                return
+            chunk = json.loads(stripped)
+            if not isinstance(chunk, dict):
+                raise ValueError()
+            if isinstance(chunk.get("error"), dict):
+                raise ProviderFailure("provider_unavailable", "Provider stream returned an error.", retryable=False)
+            if isinstance(chunk.get("usage"), dict):
+                last_usage_dict = chunk["usage"]
+            choices = chunk.get("choices")
+            if choices is None:
+                return
+            if not isinstance(choices, list):
+                raise ValueError()
+            if not choices:
+                return
+            saw_choice = True
+            choice = choices[0]
+            if not isinstance(choice, dict):
+                raise ValueError()
+            fr = choice.get("finish_reason")
+            if isinstance(fr, str) and fr:
+                finish_reason = fr
+            delta = choice.get("delta")
+            if delta is None:
+                return
+            if not isinstance(delta, dict):
+                raise ValueError()
+            if delta.get("role") is not None:
+                if delta["role"] != "assistant":
+                    raise ValueError()
+                saw_role = "assistant"
+            if delta.get("refusal"):
+                saw_refusal = True
+            if "content" in delta and delta["content"] is not None:
+                if not isinstance(delta["content"], str):
+                    raise ValueError()
+                saw_str_content = True
+                c_chunk = delta["content"]
+                if c_chunk:
+                    reassembled_bytes += len(c_chunk.encode("utf-8"))
+                    if reassembled_bytes > _MAX_RESPONSE_BYTES:
+                        raise ValueError()
+                    content_parts.append(c_chunk)
+                    emit_stream_safe({"channel": "text", "delta": c_chunk})
+            if delta.get("reasoning_content") is not None:
+                if not isinstance(delta["reasoning_content"], str):
+                    raise ValueError()
+                r_chunk = delta["reasoning_content"]
+                if r_chunk:
+                    reassembled_bytes += len(r_chunk.encode("utf-8"))
+                    if reassembled_bytes > _MAX_RESPONSE_BYTES:
+                        raise ValueError()
+                    reasoning_parts.append(r_chunk)
+                    emit_stream_safe({"channel": "thinking", "delta": r_chunk})
+            for field_name in allowed_continuation:
+                if field_name == "reasoning_content":
+                    continue
+                if field_name in delta and delta[field_name] is not None:
+                    val = delta[field_name]
+                    if isinstance(val, str):
+                        existing = extra_continuation.get(field_name)
+                        if isinstance(existing, str):
+                            extra_continuation[field_name] = existing + val
+                        elif existing is None:
+                            extra_continuation[field_name] = val
+                    else:
+                        extra_continuation[field_name] = val
+            if delta.get("tool_calls") is not None:
+                if not isinstance(delta["tool_calls"], list):
+                    raise ValueError()
+                for tc in delta["tool_calls"]:
+                    if not isinstance(tc, dict):
+                        raise ValueError()
+                    idx = tc.get("index")
+                    if type(idx) is not int or not 0 <= idx < 64:
+                        raise ValueError()
+                    entry = tool_acc.setdefault(idx, {
+                        "id": None,
+                        "type": None,
+                        "name": "",
+                        "arguments": [],
+                        "status_sent": False,
+                        "extractor": None,
+                    })
+                    if "id" in tc and tc["id"] is not None:
+                        if not isinstance(tc["id"], str):
+                            raise ValueError()
+                        entry["id"] = tc["id"]
+                    if "type" in tc and tc["type"] is not None:
+                        if tc["type"] != "function":
+                            raise ValueError()
+                        entry["type"] = "function"
+                    fn = tc.get("function")
+                    if fn is not None:
+                        if not isinstance(fn, dict):
+                            raise ValueError()
+                        if "name" in fn and fn["name"] is not None:
+                            if not isinstance(fn["name"], str):
+                                raise ValueError()
+                            entry["name"] += fn["name"]
+                        if entry["name"] and not entry["status_sent"]:
+                            entry["status_sent"] = True
+                            status_msg = (
+                                "正在起草研究报告并整理引文，完成后将自动核验原文位置…"
+                                if entry["name"] == "submit_research"
+                                else f"正在准备工具参数：{entry['name']}"
+                            )
+                            emit_stream_safe({"channel": "tool_status", "delta": status_msg})
+                        if "arguments" in fn and fn["arguments"] is not None:
+                            if not isinstance(fn["arguments"], str):
+                                raise ValueError()
+                            arg_chunk = fn["arguments"]
+                            if arg_chunk:
+                                reassembled_bytes += len(arg_chunk.encode("utf-8"))
+                                if reassembled_bytes > _MAX_RESPONSE_BYTES:
+                                    raise ValueError()
+                                entry["arguments"].append(arg_chunk)
+                                if entry["name"] == "submit_research":
+                                    if entry["extractor"] is None:
+                                        entry["extractor"] = TopLevelReportExtractor()
+                                    draft_delta = entry["extractor"].feed(arg_chunk)
+                                    if draft_delta:
+                                        emit_stream_safe({"channel": "draft_report", "delta": draft_delta})
+
+        connect_timeout = _transport_timeout_from_environment("FORESIGHTNINE_LLM_CONNECT_TIMEOUT_SECONDS", 15.0)
+        response_timeout = _transport_timeout_from_environment("FORESIGHTNINE_LLM_RESPONSE_TIMEOUT_SECONDS", None)
+        idle_timeout = (
+            _transport_timeout_from_environment("FORESIGHTNINE_LLM_STREAM_IDLE_TIMEOUT_SECONDS", 45.0)
+            if streaming
+            else 45.0
+        )
+        streamed_sse = False
         try:
             timeout = min(self.policy.timeout_seconds, timeout_seconds) if timeout_seconds is not None else self.policy.timeout_seconds
-            headers = {"Accept":"application/json", "Content-Type":"application/json", "Authorization":f"Bearer {self.settings.api_key}"}
-            if self._default_transport_used:
-                response = _default_transport("POST", _endpoint(self.settings.base_url), headers, body, timeout,
-                    allow_private_network=self.settings.allow_private_network, diagnostics=diagnostics,
-                    connect_timeout_seconds=_transport_timeout_from_environment("FORESIGHTNINE_LLM_CONNECT_TIMEOUT_SECONDS", 15.0),
-                    response_timeout_seconds=_transport_timeout_from_environment("FORESIGHTNINE_LLM_RESPONSE_TIMEOUT_SECONDS", None),
-                    cancel_event=cancel_event, on_submission=on_submission)
+            headers = {
+                "Accept": "text/event-stream" if streaming else "application/json",
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.settings.api_key}",
+            }
+            if streaming:
+                if active_stream_transport is not None:
+                    if on_submission is not None:
+                        on_submission()
+                    diagnostics.submission("started_unknown")
+                    fallback = _invoke_stream_transport(
+                        active_stream_transport,
+                        "POST",
+                        _endpoint(self.settings.base_url),
+                        headers,
+                        body,
+                        timeout,
+                        on_frame=handle_sse_frame,
+                        cancel_event=cancel_event,
+                        on_submission=on_submission,
+                        diagnostics=diagnostics,
+                    )
+                    diagnostics.submission("response_received")
+                    if fallback is not None:
+                        response = fallback
+                    else:
+                        streamed_sse = True
+                elif self._default_transport_used:
+                    fallback = _default_stream_transport(
+                        "POST",
+                        _endpoint(self.settings.base_url),
+                        headers,
+                        body,
+                        timeout,
+                        on_frame=handle_sse_frame,
+                        allow_private_network=self.settings.allow_private_network,
+                        diagnostics=diagnostics,
+                        connect_timeout_seconds=connect_timeout,
+                        idle_timeout_seconds=idle_timeout,
+                        response_timeout_seconds=response_timeout,
+                        cancel_event=cancel_event,
+                        on_submission=on_submission,
+                    )
+                    if fallback is not None:
+                        response = fallback
+                    else:
+                        streamed_sse = True
+                else:
+                    if on_submission is not None:
+                        on_submission()
+                    response = self.transport("POST", _endpoint(self.settings.base_url), headers, body, timeout)
+                    diagnostics.submission("response_received")
+                    ct = str(getattr(response, "headers", {}).get("content-type", "")).split(";", 1)[0].strip().lower()
+                    if 200 <= response.status_code < 300 and ct == "text/event-stream":
+                        parser = _SseLineParser()
+                        for item in [*parser.feed_text(response.body), *parser.finish()]:
+                            if item[0] == "frame":
+                                handle_sse_frame(item[1], item[2])
+                        response = None
+                        streamed_sse = True
             else:
-                if on_submission is not None:
-                    on_submission()
-                response = self.transport("POST", _endpoint(self.settings.base_url), headers, body, timeout)
-                diagnostics.submission("response_received")
+                if self._default_transport_used:
+                    response = _default_transport("POST", _endpoint(self.settings.base_url), headers, body, timeout,
+                        allow_private_network=self.settings.allow_private_network, diagnostics=diagnostics,
+                        connect_timeout_seconds=connect_timeout,
+                        response_timeout_seconds=response_timeout,
+                        cancel_event=cancel_event, on_submission=on_submission)
+                else:
+                    if on_submission is not None:
+                        on_submission()
+                    response = self.transport("POST", _endpoint(self.settings.base_url), headers, body, timeout)
+                    diagnostics.submission("response_received")
+        except ProviderFailure as error:
+            error.provider_response_received = True
+            if error.reported_tokens is None:
+                error.reported_tokens = partial_reported_tokens()
+            raise
         except (_TransportTimeout, TimeoutError, socket.timeout, _TransportFailure) as error:
             code = "provider_cancelled" if cancel_event is not None and cancel_event.is_set() else ("provider_timeout" if isinstance(error, (TimeoutError, socket.timeout, _TransportTimeout)) else "provider_transport_error")
             failure = ProviderFailure(code, "Provider call ended without a usable result; submission may be unknown.", retryable=True)
             failure.provider_response_received = diagnostics.snapshot()['submission_state'] == 'response_received'
+            if failure.provider_response_received:
+                failure.reported_tokens = partial_reported_tokens()
+            raise failure from None
+        except (ValueError, TypeError, KeyError, IndexError, AttributeError):
+            failure = ProviderFailure('invalid_provider_output', 'Provider returned an invalid chat completion.', retryable=False)
+            failure.provider_response_received = True
+            failure.reported_tokens = partial_reported_tokens()
             raise failure from None
         finally:
             if diagnostic_callback is not None:
@@ -1109,6 +1822,65 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                     diagnostic_callback(observation)
                 except Exception as error:
                     report_diagnostic_write_failure(error)
+
+        if streamed_sse:
+            if cancel_event is not None and cancel_event.is_set():
+                failure = ProviderFailure("provider_cancelled", "Provider request was cancelled; result discarded.", retryable=True)
+                failure.provider_response_received = True
+                failure.reported_tokens = partial_reported_tokens()
+                raise failure
+            if not saw_done:
+                failure = ProviderFailure("provider_transport_error", "Provider stream ended before [DONE].", retryable=True)
+                failure.provider_response_received = True
+                failure.reported_tokens = partial_reported_tokens()
+                raise failure
+            try:
+                if not saw_choice:
+                    raise ValueError()
+                if finish_reason == 'length':
+                    raise ProviderFailure('provider_output_truncated', 'Provider output was truncated.', retryable=False)
+                if finish_reason == 'content_filter' or saw_refusal:
+                    raise ProviderFailure('provider_output_refused', 'Provider declined the request.', retryable=False)
+                if saw_role is not None and saw_role != 'assistant':
+                    raise ValueError()
+                calls = []
+                normalized_calls = []
+                for idx in sorted(tool_acc):
+                    entry = tool_acc[idx]
+                    call_id = entry['id']
+                    fn_name = entry['name']
+                    args_str = ''.join(entry['arguments'])
+                    if not isinstance(call_id, str) or not call_id or not isinstance(fn_name, str) or not fn_name:
+                        raise ValueError()
+                    calls.append(ModelToolCall(call_id, fn_name, args_str))
+                    normalized_calls.append({'id': call_id, 'type': 'function', 'function': {'name': fn_name, 'arguments': args_str}})
+                if len({call.id for call in calls}) != len(calls):
+                    raise ValueError()
+                content_val = ''.join(content_parts) if saw_str_content else None
+                message: dict[str, Any] = {'role': 'assistant', 'content': content_val}
+                if profile and profile.continuation is True:
+                    if 'reasoning_content' in allowed_continuation and reasoning_parts:
+                        message['reasoning_content'] = ''.join(reasoning_parts)
+                    for field_name, val in extra_continuation.items():
+                        message[field_name] = val
+                if normalized_calls:
+                    message['tool_calls'] = normalized_calls
+                if len(json.dumps(message, ensure_ascii=False, separators=(',', ':')).encode('utf-8')) > _MAX_RESPONSE_BYTES:
+                    raise ValueError()
+                usage = self._usage_from_dict(last_usage_dict)
+                return ModelResponse(message, tuple(calls), usage, finish_reason if isinstance(finish_reason, str) else None)
+            except ProviderFailure as error:
+                error.provider_response_received = True
+                if error.reported_tokens is None:
+                    error.reported_tokens = partial_reported_tokens()
+                raise
+            except (ValueError, TypeError, KeyError, IndexError, AttributeError):
+                failure = ProviderFailure('invalid_provider_output', 'Provider returned an invalid chat completion.', retryable=False)
+                failure.provider_response_received = True
+                failure.reported_tokens = partial_reported_tokens()
+                raise failure from None
+
+        assert response is not None
         if cancel_event is not None and cancel_event.is_set():
             failure = ProviderFailure("provider_cancelled", "Provider request was cancelled; result discarded.", retryable=True)
             failure.provider_response_received = True
@@ -1152,11 +1924,7 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                     message[field] = raw[field]
             if normalized_calls:
                 message['tool_calls'] = normalized_calls
-            u = envelope.get('usage')
-            def count(key):
-                value = u.get(key) if isinstance(u, dict) else None
-                return value if type(value) is int and value >= 0 else None
-            usage = ModelUsage(count('prompt_tokens'), count('completion_tokens'), count('total_tokens')) if isinstance(u, dict) else None
+            usage = self._usage_from_dict(envelope.get('usage'))
             return ModelResponse(message, tuple(calls), usage, reason if isinstance(reason, str) else None)
         except ProviderFailure as error:
             error.provider_response_received = True

@@ -50,6 +50,29 @@ def research_prompt_fits(prompt: str, system: str, input_limit: int | None) -> b
             and len(prompt.encode('utf-8')) <= research_prompt_budget(input_limit, system))
 
 
+def dual_input_estimate(provider: Any, prompt: str, system: str, contract=None):
+    """Return both conservative UTF-8 byte safety bound and ceil(chars/3) heuristic estimate."""
+    from .provider_capabilities import DualInputEstimate, estimate_heuristic_tokens
+    raw_utf8 = len(prompt.encode('utf-8')) + len(system.encode('utf-8')) + RESEARCH_INPUT_ENVELOPE_BYTES
+    dual_estimator = getattr(provider, 'estimate_research_input_dual', None)
+    if callable(dual_estimator):
+        return dual_estimator(prompt, system, contract)
+    estimator = getattr(provider, 'estimate_research_input', None)
+    utf8_estimate = estimator(prompt, system, contract) if callable(estimator) else raw_utf8
+    if callable(estimator) and utf8_estimate > raw_utf8 + 512:
+        heuristic = max(
+            estimate_heuristic_tokens(prompt, envelope_chars=len(system) + RESEARCH_INPUT_ENVELOPE_BYTES),
+            (utf8_estimate + 2) // 3,
+        )
+    else:
+        heuristic = estimate_heuristic_tokens(prompt, envelope_chars=len(system) + RESEARCH_INPUT_ENVELOPE_BYTES)
+    return DualInputEstimate(
+        utf8_byte_upper_bound=utf8_estimate,
+        heuristic_tokens=heuristic,
+        char_count=len(prompt) + len(system),
+    )
+
+
 @dataclass
 class ResearchExecutionContext:
     """Run-scoped budget and explicit lifecycle capabilities for stages."""
@@ -82,8 +105,9 @@ class ResearchExecutionContext:
         policy = getattr(provider, 'policy', None)
         explicit_input = getattr(policy, 'max_input_tokens', None)
         explicit_output = getattr(policy, 'max_output_tokens', None)
-        estimator = getattr(provider, 'estimate_research_input', None)
-        estimate = estimator(prompt, system, contract) if callable(estimator) else len(prompt.encode('utf-8')) + len(system.encode('utf-8')) + RESEARCH_INPUT_ENVELOPE_BYTES
+        dual = dual_input_estimate(provider, prompt, system, contract)
+        estimate = dual.utf8_byte_upper_bound
+        heuristic_estimate = dual.heuristic_tokens
         if explicit_input is not None and estimate > explicit_input:
             raise ProviderFailure('provider_budget_exhausted', 'Estimated input exceeds the configured per-call budget.', retryable=False)
         capacity = getattr(provider, 'research_capacity', None)
@@ -93,10 +117,13 @@ class ResearchExecutionContext:
         if type(explicit_output) is int and type(profile_output) is int:
             output = min(explicit_output, profile_output)
         context_limit = getattr(profile, 'context_tokens', None)
+        input_counter = getattr(profile, 'input_counter', None)
+        context_estimate = None
         if type(context_limit) is int:
-            if getattr(profile, 'input_counter', None) != 'utf8_byte_upper_bound':
+            if input_counter not in ('utf8_byte_upper_bound', 'chars_div_3'):
                 raise ProviderFailure('provider_budget_unknown', 'Cannot verify context fit without a configured input counter.', retryable=False)
-            context_output = context_limit - estimate
+            context_estimate = heuristic_estimate if input_counter == 'chars_div_3' else estimate
+            context_output = context_limit - context_estimate
             if context_output <= 0:
                 raise ProviderFailure('provider_budget_unknown', 'Cannot verify context fit for this input.', retryable=False)
             output = min(output, context_output) if output is not None else context_output
@@ -115,8 +142,17 @@ class ResearchExecutionContext:
                 raise ProviderFailure('provider_budget_unknown', 'A bounded per-call output limit is required for account admission.', retryable=False)
             if reservation > entitlement:
                 raise ProviderFailure('provider_budget_exhausted', 'The planned call exceeds the available account token quota.', retryable=False)
-        self.pending_reservation = {'method': 'utf8_wire_estimate', 'estimated_input_tokens': estimate,
-                                    'reserved_tokens': reservation, 'output_limit': output}
+        self.pending_reservation = {
+            'method': 'utf8_wire_estimate',
+            'estimated_input_tokens': estimate,
+            'estimated_input_bytes_upper_bound': estimate,
+            'estimated_input_tokens_heuristic': heuristic_estimate,
+            'heuristic_method': dual.heuristic_method,
+            **({'context_input_counter': input_counter, 'context_input_tokens': context_estimate}
+               if type(context_limit) is int and context_estimate is not None else {}),
+            'reserved_tokens': reservation,
+            'output_limit': output,
+        }
         return reservation, output
 
     def output_kwargs(self, generate: Callable, provider: Any, output: int | None) -> dict[str, int]:
@@ -187,7 +223,15 @@ class ResearchExecutionContext:
         receipt = self.model_call_receipts.get(call_id)
         if receipt is None or receipt['provider'] != 'admitted':
             raise ValueError('Model call was not admitted or was already invoked.')
-        from .research_diagnostics import get_finish_reason, set_finish_reason, safe_diagnostic_context, safe_exception_diagnostic
+        from .research_diagnostics import (
+            get_finish_reason,
+            normalize_finish_reason,
+            safe_diagnostic_context,
+            safe_exception_diagnostic,
+            safe_stop_reason,
+            safe_usage_diagnostics,
+            set_finish_reason,
+        )
         metadata = dict(self.diagnostic_context)
         self.diagnostic_context.pop('source_range_fingerprint', None)
         self.diagnostic_context.pop('parent_call_id', None)
@@ -214,6 +258,17 @@ class ResearchExecutionContext:
                 diagnostic['transport'] = sanitize_transport_diagnostic(snapshot)
             if isinstance(snapshot.get('request_metadata'), dict):
                 diagnostic.setdefault('context', {}).update(safe_diagnostic_context(**snapshot['request_metadata']))
+            if type(snapshot.get('wire_bytes')) is int and 0 <= snapshot['wire_bytes'] <= 10**9:
+                diagnostic.setdefault('context', {})['wire_bytes'] = snapshot['wire_bytes']
+            if type(snapshot.get('max_tokens')) is int and 0 < snapshot['max_tokens'] <= 10**9:
+                diagnostic.setdefault('context', {}).setdefault('parameters', {}).setdefault('max_tokens', snapshot['max_tokens'])
+            if 'stop_reason' in snapshot:
+                diagnostic['stop_reason'] = safe_stop_reason(snapshot.get('stop_reason'))
+                diagnostic['finish'] = normalize_finish_reason(snapshot.get('stop_reason'))
+            if 'usage' in snapshot:
+                safe_usage = safe_usage_diagnostics(snapshot.get('usage'))
+                if safe_usage:
+                    diagnostic['usage'] = safe_usage
             if isinstance(snapshot.get('provider_error'), dict):
                 from .research_diagnostics import sanitize_provider_error, safe_messages_error
                 value = snapshot['provider_error']
@@ -221,6 +276,13 @@ class ResearchExecutionContext:
                 diagnostic['provider_error'].update(safe_messages_error(value, value.get('status_code'),
                     {'request-id': value.get('request_id')}))
             self._persist_diagnostic(call_id)
+        def _resolved_finish() -> str:
+            finish_value = get_finish_reason()
+            if finish_value == 'unknown':
+                existing = self.private_diagnostics.get(call_id, {}).get('finish')
+                if isinstance(existing, str) and existing != 'unknown':
+                    return existing
+            return finish_value
         try:
             try:
                 supports_diagnostics = 'diagnostic_callback' in inspect.signature(generate).parameters
@@ -236,15 +298,16 @@ class ResearchExecutionContext:
             receipt['provider'] = ('returned' if getattr(error, 'provider_response_received', False) is True else 'unknown')
             if receipt['provider'] == 'returned':
                 receipt['processing_error'] = 'post_response_processing_failure'
+            finish_value = _resolved_finish()
             if isinstance(error, ProviderFailure) and error.code == 'invalid_provider_output':
                 category = getattr(error, 'diagnostic_category', None)
                 category = category if category in {'response_limit', 'envelope_parse', 'provider_shape', 'content_parse'} else 'provider_parse'
-                self.private_diagnostics.setdefault(call_id, {}).update(category=category, errors=[], finish=get_finish_reason())
+                self.private_diagnostics.setdefault(call_id, {}).update(category=category, errors=[], finish=finish_value)
                 self._persist_diagnostic(call_id)
-            self.private_diagnostics.setdefault(call_id, {}).update(finish=get_finish_reason(), exception=safe_exception_diagnostic(error))
+            self.private_diagnostics.setdefault(call_id, {}).update(finish=finish_value, exception=safe_exception_diagnostic(error))
             self._persist_diagnostic(call_id)
             raise
-        self.private_finish[call_id] = get_finish_reason()
+        self.private_finish[call_id] = _resolved_finish()
         self.private_diagnostics.setdefault(call_id, {})['finish'] = self.private_finish[call_id]
         self._persist_diagnostic(call_id)
         receipt['provider'] = 'returned'

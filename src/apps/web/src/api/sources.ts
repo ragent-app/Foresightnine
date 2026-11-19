@@ -72,3 +72,8 @@ export function useResearchCapabilities() {
 export function useSecAvailable(): boolean {
   return useResearchCapabilities().data?.sec_available ?? true;
 }
+
+/** Open public HTTPS web fetch availability; unknown defaults to enabled and the backend decides. */
+export function useWebFetchAvailable(): boolean {
+  return useResearchCapabilities().data?.web_fetch_enabled ?? true;
+}

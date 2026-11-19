@@ -67,3 +67,90 @@ def test_incomplete_or_refused_no_retry_usage_preserved(monkeypatch,reason,messa
         instance.generate_structured('x',system='s',contract=Contract())
     assert exc.value.code==code and exc.value.reported_tokens==31 and len(calls)==1
     assert 'private' not in str(exc.value)
+
+
+def test_dual_input_estimation_separates_utf8_bound_and_chars_div_3():
+    from app.provider_capabilities import (
+        DualInputEstimate,
+        estimate_dual_input,
+        estimate_heuristic_tokens,
+        estimate_utf8_byte_upper_bound,
+    )
+    assert estimate_heuristic_tokens('') == 0
+    assert estimate_heuristic_tokens('a') == 1
+    assert estimate_heuristic_tokens('abc') == 1
+    assert estimate_heuristic_tokens('abcd') == 2
+    assert estimate_utf8_byte_upper_bound('中文') == 6
+    assert estimate_heuristic_tokens('中文') == 1
+    english = 'a' * 242082
+    dual = estimate_dual_input(english, envelope_bytes=64, envelope_chars=0)
+    assert isinstance(dual, DualInputEstimate)
+    assert dual.utf8_byte_upper_bound == 242146
+    assert dual.heuristic_tokens == 80694
+    assert dual.char_count == 242082
+    assert dual.heuristic_method == 'ceil_chars_div_3'
+
+
+def test_capability_profile_chars_div_3_context_fit_and_dual_reservation(monkeypatch):
+    from types import SimpleNamespace
+    from app.phase3 import ProviderPolicy
+    from app.provider_capabilities import configured_profile
+    from tests.test_research_capacity_unset import context
+
+    endpoint = 'https://custom-endpoint.example.test/v1/messages'
+    monkeypatch.setenv('FORESIGHTNINE_LLM_ENDPOINT_VERSION', 'v1')
+    monkeypatch.setenv('FORESIGHTNINE_LLM_CAPABILITY_PROFILE', json.dumps({
+        'endpoint': endpoint,
+        'model': 'custom-model-v1',
+        'version': 'v1',
+        'mode': 'json_object',
+        'context_tokens': 131072,
+        'output_tokens': 16384,
+        'input_counter': 'chars_div_3',
+    }))
+    loaded = configured_profile(endpoint, 'custom-model-v1')
+    assert loaded is not None and loaded.input_counter == 'chars_div_3'
+
+    monkeypatch.setenv('FORESIGHTNINE_LLM_CAPABILITY_PROFILE', json.dumps({
+        'endpoint': endpoint,
+        'model': 'custom-model-v1',
+        'version': 'v1',
+        'mode': 'json_object',
+        'input_counter': 'unsupported_counter',
+    }))
+    with pytest.raises(ProviderFailure) as invalid_exc:
+        configured_profile(endpoint, 'custom-model-v1')
+    assert invalid_exc.value.code == 'provider_configuration_invalid'
+
+    monkeypatch.delenv('FORESIGHTNINE_LLM_CAPABILITY_PROFILE', raising=False)
+    provider_double = type('P', (), {
+        'policy': ProviderPolicy(max_output_tokens=16384),
+        'research_capacity': lambda self: SimpleNamespace(output_tokens=16384, context_tokens=131072, input_counter='chars_div_3'),
+    })()
+    ctx, _ = context(entitlement=50_000_000)
+    prompt = 'x' * 240_000
+    system = 'sys'
+    reservation, output = ctx.prepare_model_call(provider_double, prompt, system)
+    expected_utf8 = 240_000 + 3 + 192
+    expected_heuristic = (expected_utf8 + 2) // 3
+    assert output == 16384
+    assert reservation == expected_utf8 + 16384
+    assert ctx.pending_reservation['estimated_input_bytes_upper_bound'] == expected_utf8
+    assert ctx.pending_reservation['estimated_input_tokens_heuristic'] == expected_heuristic
+    assert ctx.pending_reservation['context_input_counter'] == 'chars_div_3'
+    assert ctx.pending_reservation['context_input_tokens'] == expected_heuristic
+
+
+def test_research_output_token_overrides_work_without_model_brand_assumptions(monkeypatch):
+    from app.provider_capabilities import configured_research_max_output_tokens, resolve_output_token_limit
+    monkeypatch.delenv('FORESIGHTNINE_RESEARCH_MAX_OUTPUT_TOKENS', raising=False)
+    assert configured_research_max_output_tokens() is None
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_MAX_OUTPUT_TOKENS', '16384')
+    assert configured_research_max_output_tokens() == 16384
+    for bad in ('0', '-10', 'not-an-int'):
+        monkeypatch.setenv('FORESIGHTNINE_RESEARCH_MAX_OUTPUT_TOKENS', bad)
+        with pytest.raises(ProviderFailure) as exc:
+            configured_research_max_output_tokens()
+        assert exc.value.code == 'provider_configuration_invalid'
+    assert resolve_output_token_limit(None, 16384, 8192, None) == 8192
+    assert resolve_output_token_limit(None, None) is None

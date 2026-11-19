@@ -354,6 +354,10 @@ class SecurityBoundaryMiddleware(BaseHTTPMiddleware):
                         return _boundary_error(403, "captcha_required", "Request could not be verified.", request, retry_after=60)
         response = await call_next(request)
         if request.url.path.startswith("/v2/research/"):
-            response.headers["Cache-Control"] = "no-store"
+            content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+            if content_type == "text/event-stream":
+                response.headers.setdefault("Cache-Control", "no-cache, no-transform")
+            else:
+                response.headers["Cache-Control"] = "no-store"
         _set_security_headers(response)
         return response

@@ -108,6 +108,13 @@ M1 正在接入配置化原生工具协议和研究运行时，移除主路径�
 
 M1 完成需要代码真实接通、可复核的取证闭环与上述必要安全恢复证据；M2–M4 各按实际交付和证据单独记录。阶段 B 只有获得独立跨任务、真实资料上的研究质量与失败恢复证据后才能称完成；运行成功、报告长度、模型评分或模拟测试都不够。研究质量与投资效果分开，投资效果须另行设计前向、样本外评估。不设固定工期或自报通过率。未取得证据如实保留，人工验收不作为等待阻塞，发布另需授权及既有许可和安全门槛。
 
+### 9. 2026-11-19 补充规划：开放来源获取与研究闭环改进（待实施）
+
+基于线上主题 `topic_8e91c0299a7b4b25823bc12ab9c7e53a` 排查（`operation:d7ff50a51b5265d7746f5ae0` 成功续跑 18 次模型调用但所有抓取均被拒），确定下一轮将移除 `research_fetch.py` / `research_source_catalog.py` 中“仅允许 `www.bea.gov`、`www.federalreserve.gov`、`www.sec.gov`”的三域名硬编码白名单及 PDF 两域名限制，并按两阶段推进（完整设计见[开放来源获取与研究闭环改进规划](src/docs/product/open-source-retrieval-and-loop-plan-2026-11-19.md)，当前尚未修改代码）：
+
+1. **抓取解耦与合规/安全底线（第一阶段）**：保留公网 HTTPS、私网/DNS Rebinding SSRF 防护、`_UploadedHtmlParser` 防隐藏文本注入及 `FRED` 硬拦截；将下载响应上限从默认 256 KB 提升至 5 MB、支持按响应 `Content-Type`（HTML/纯文本/PDF）及实际字符集解码、支持安全有界 3xx 重定向；通用网页抓取默认保留 `store/display/model_input` 但设 `export=False`，与明确公共领域/授权披露区分权限与标识；并在部署环境配置合规 `FORESIGHTNINE_SEC_USER_AGENT` 启用 SEC 通道。
+2. **闭环效率与可解释性（第二阶段）**：将已有 `research_structured_connector`（SEC CIK 与 XBRL `companyconcept`）暴露为受控 Agent 工具；在 `run_research_agent` 初始载荷中注入可用来源能力并细化 `acquire_sources` 错误码，避免模型空转及自行拼接 URL；在保留 `partial` 不生成未核实正式结论的前提下，拆分独立字段展示模型整理的过程说明与补证建议；排查 `glm_coding_mcp` 大量返回 `redirect_link` 丢弃及容器内 IPv6 `errno: 101` 无路由回退。
+
 ---
 
 

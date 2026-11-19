@@ -10,7 +10,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from threading import Event, Thread
-from time import monotonic
+from time import monotonic, sleep
 from typing import Callable, Literal
 from urllib.parse import urlsplit
 
@@ -287,3 +287,39 @@ def reserve_sec_request(repository, now: datetime | None = None) -> bool:
         repository.put("sec", {"requested_at": current.isoformat()})
         return True
     return repository.with_advisory_lock("source:sec-global", reserve)
+
+
+def pace_sec_request(
+    repository,
+    *,
+    cancel_event: Event | None = None,
+    deadline: float | None = None,
+    now_fn: Callable[[], float] = monotonic,
+    utcnow_fn: Callable[[], datetime] | None = None,
+) -> bool:
+    """Wait up to bounded retries for the global 1-second SEC slot when budget and cancellation allow."""
+    utc_now = utcnow_fn or (lambda: datetime.now(timezone.utc))
+    for attempt in range(4):
+        if cancel_event is not None and cancel_event.is_set():
+            return False
+        current_utc = utc_now()
+        if reserve_sec_request(repository, now=current_utc):
+            return True
+        if attempt == 3:
+            return False
+        delay = 0.25
+        previous = repository.get("sec")
+        if isinstance(previous, dict) and isinstance(previous.get("requested_at"), str):
+            try:
+                last = datetime.fromisoformat(previous["requested_at"])
+                delay = min(1.05, max(0.05, 1.02 - (current_utc - last).total_seconds()))
+            except (TypeError, ValueError):
+                delay = 0.25
+        if deadline is not None and (deadline - now_fn()) < (15.0 + delay):
+            return False
+        if cancel_event is not None:
+            if cancel_event.wait(delay) or cancel_event.is_set():
+                return False
+        else:
+            sleep(delay)
+    return False

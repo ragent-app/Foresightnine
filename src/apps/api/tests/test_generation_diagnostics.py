@@ -36,7 +36,10 @@ def test_diagnostics_drop_untrusted_values():
 
 
 def test_finish_reasons_are_bounded():
-    for raw, expected in [('length', 'provider_length'), ('stop', 'provider_stop'),
+    for raw, expected in [('length', 'provider_length'), ('max_tokens', 'provider_length'),
+                          ('model_context_window_exceeded', 'provider_context_limit'),
+                          ('stop', 'provider_stop'), ('end_turn', 'provider_stop'), ('stop_sequence', 'provider_stop'),
+                          ('tool_use', 'provider_tool_calls'), ('tool_calls', 'provider_tool_calls'),
                           ('refusal', 'provider_refusal'), ('content_filter', 'provider_refusal'),
                           ('private', 'unknown')]:
         set_finish_reason(raw)
@@ -124,7 +127,27 @@ def test_provider_metadata_records_actual_wire_and_safe_error(monkeypatch):
 
 
 def test_unknown_provider_error_values_are_not_saved():
-    from app.research_diagnostics import safe_provider_error
-    assert safe_provider_error('{"error":{"code":"secret","type":"private","message":"secret"}}') == {
-        'shape': 'error_object', 'code': 'unknown', 'category': 'unknown'}
+    from app.research_diagnostics import safe_provider_error, sanitize_provider_error
+    parsed = safe_provider_error('{"error":{"code":"secret","type":"private","message":"secret"}}')
+    assert parsed == {
+        'shape': 'error_object', 'code': 'unknown', 'category': 'unknown',
+        'messages_type': 'unrecognized', 'messages_code': 'unrecognized', 'messages_parameter': 'absent'}
+    assert sanitize_provider_error(parsed) == {'shape': 'error_object', 'code': 'unknown', 'category': 'unknown'}
+    assert 'secret' not in repr(parsed) and 'private' not in repr(parsed)
     assert safe_provider_error('secret') == {'shape': 'non_json', 'code': 'unknown', 'category': 'unknown'}
+
+
+def test_stop_reason_usage_and_wire_metadata_sanitization():
+    from app.model_protocol import ModelUsage
+    from app.research_diagnostics import safe_stop_reason, safe_usage_diagnostics, safe_wire_metadata
+    assert safe_stop_reason('max_tokens') == 'max_tokens'
+    assert safe_stop_reason(None) == 'absent'
+    assert safe_stop_reason('secret-reason') == 'unrecognized'
+    assert safe_usage_diagnostics(ModelUsage(10, 20, 30, 5, None)) == {
+        'input_tokens': 10, 'output_tokens': 20, 'total_tokens': 30, 'cache_creation_input_tokens': 5}
+    assert safe_usage_diagnostics({'input_tokens': True, 'output_tokens': -1, 'total_tokens': 42, 'secret': 'LEAK'}) == {'total_tokens': 42}
+    meta = safe_wire_metadata({'model': 'custom-model', 'max_tokens': 16384, 'stream': True, 'system': 'SECRET'}, wire_bytes=2048)
+    assert meta['wire_bytes'] == 2048
+    assert meta['stream'] is True
+    assert meta['parameters'] == {'max_tokens': 16384}
+    assert 'SECRET' not in repr(meta)

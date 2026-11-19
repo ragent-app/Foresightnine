@@ -152,6 +152,16 @@ class SearchEvidenceProvider(ABC):
     def validate_client_bundle(self, bundle: SearchEvidenceBundle) -> bool: ...
 
 
+_NON_PUBLIC_SUFFIXES = (".localhost", ".local", ".internal", ".test", ".invalid", ".arpa")
+_NON_PUBLIC_IPV6_NETWORKS = (
+    ipaddress.ip_network("64:ff9b::/96"),
+    ipaddress.ip_network("64:ff9b:1::/48"),
+    ipaddress.ip_network("100::/64"),
+)
+_HOST_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+_IPV4_LIKE_LABEL = re.compile(r"^(?:0x[0-9a-f]+|\d+)$")
+
+
 class ClientSearchEvidenceProvider(SearchEvidenceProvider):
     """Validates submitted URLs without ever server-fetching untrusted evidence."""
 
@@ -160,36 +170,85 @@ class ClientSearchEvidenceProvider(SearchEvidenceProvider):
 
     @staticmethod
     def _safe_address(address: str) -> bool:
-        parsed = ipaddress.ip_address(address)
-        if isinstance(parsed, ipaddress.IPv6Address) and parsed.ipv4_mapped is not None:
-            parsed = parsed.ipv4_mapped
-        return not (parsed.is_private or parsed.is_loopback or parsed.is_link_local or parsed.is_multicast or parsed.is_reserved or parsed.is_unspecified)
+        try:
+            parsed = ipaddress.ip_address(address)
+        except ValueError:
+            return False
+        if isinstance(parsed, ipaddress.IPv6Address):
+            if parsed.ipv4_mapped is not None:
+                parsed = parsed.ipv4_mapped
+            elif any(parsed in network for network in _NON_PUBLIC_IPV6_NETWORKS):
+                return False
+        return parsed.is_global and not (
+            parsed.is_private
+            or parsed.is_loopback
+            or parsed.is_link_local
+            or parsed.is_multicast
+            or parsed.is_reserved
+            or parsed.is_unspecified
+        )
 
     @staticmethod
-    def _literal_address(hostname: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    def _parse_ipv4_part(part: str) -> int | None:
+        if re.fullmatch(r"0x[0-9a-f]+", part):
+            return int(part, 16)
+        if len(part) > 1 and part.startswith("0"):
+            return int(part, 8) if re.fullmatch(r"0[0-7]+", part) else None
+        if re.fullmatch(r"\d+", part):
+            return int(part, 10)
+        return None
+
+    @classmethod
+    def _literal_address(cls, hostname: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+        normalized = hostname.lower().rstrip(".")
         try:
-            return ipaddress.ip_address(hostname)
+            return ipaddress.ip_address(normalized)
         except ValueError:
-            # Some URL clients accept legacy decimal/abbreviated IPv4 forms such
-            # as 2130706433 and 127.1. Canonicalise them here before deciding.
-            if not re.fullmatch(r"\d+(?:\.\d+){0,3}", hostname):
+            # Some URL clients accept legacy decimal/hex/octal/abbreviated IPv4 forms
+            # such as 2130706433, 127.1, 0x7f.1, and 0177.0.0.1. Canonicalise them here.
+            raw_parts = normalized.split(".")
+            if not 1 <= len(raw_parts) <= 4:
                 return None
-            parts = [int(part, 10) for part in hostname.split(".")]
-            limits = (0xFFFFFFFF, 0xFFFFFF, 0xFFFF, 0xFF)
-            if not 1 <= len(parts) <= 4 or any(value < 0 or value > limits[index] for index, value in enumerate(parts)):
+            parts = [cls._parse_ipv4_part(part) for part in raw_parts]
+            if any(part is None for part in parts):
                 return None
-            if len(parts) == 1:
-                value = parts[0]
-            elif len(parts) == 2:
-                value = (parts[0] << 24) | parts[1]
-            elif len(parts) == 3:
-                value = (parts[0] << 24) | (parts[1] << 16) | parts[2]
+            int_parts = [part for part in parts if part is not None]
+            last_limit = (0xFFFFFFFF, 0xFFFFFF, 0xFFFF, 0xFF)[len(int_parts) - 1]
+            if any(value < 0 or value > 0xFF for value in int_parts[:-1]) or not 0 <= int_parts[-1] <= last_limit:
+                return None
+            if len(int_parts) == 1:
+                value = int_parts[0]
+            elif len(int_parts) == 2:
+                value = (int_parts[0] << 24) | int_parts[1]
+            elif len(int_parts) == 3:
+                value = (int_parts[0] << 24) | (int_parts[1] << 16) | int_parts[2]
             else:
-                value = (parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]
+                value = (int_parts[0] << 24) | (int_parts[1] << 16) | (int_parts[2] << 8) | int_parts[3]
             return ipaddress.IPv4Address(value)
 
+    @staticmethod
+    def _normalize_hostname(raw_hostname: str) -> tuple[str, ipaddress.IPv6Address | None]:
+        trimmed = raw_hostname.rstrip(".")
+        if not trimmed:
+            raise ProviderFailure("unsafe_evidence_url", "Evidence URL host or port is not permitted.", retryable=False)
+        if ":" in trimmed:
+            try:
+                parsed_ip = ipaddress.ip_address(trimmed)
+            except ValueError as error:
+                raise ProviderFailure("unsafe_evidence_url", "Evidence URL host or port is not permitted.", retryable=False) from error
+            if not isinstance(parsed_ip, ipaddress.IPv6Address):
+                raise ProviderFailure("unsafe_evidence_url", "Evidence URL host or port is not permitted.", retryable=False)
+            return trimmed.lower(), parsed_ip
+        try:
+            normalized = trimmed.encode("idna").decode("ascii").lower().rstrip(".")
+        except UnicodeError as error:
+            raise ProviderFailure("unsafe_evidence_url", "Evidence URL host or port is not permitted.", retryable=False) from error
+        if not normalized or len(normalized) > 253:
+            raise ProviderFailure("unsafe_evidence_url", "Evidence URL host or port is not permitted.", retryable=False)
+        return normalized, None
+
     def validate_url(self, url: str) -> None:
-        if len(url) > self.max_url_length:
+        if not isinstance(url, str) or len(url) > self.max_url_length:
             raise ProviderFailure("unsafe_evidence_url", "Evidence URL exceeds the safety limit.", retryable=False)
         parsed = urlsplit(url)
         if parsed.scheme not in {"https", "http"} or not parsed.hostname or parsed.username or parsed.password:
@@ -198,16 +257,29 @@ class ClientSearchEvidenceProvider(SearchEvidenceProvider):
             port = parsed.port
         except ValueError as error:
             raise ProviderFailure("unsafe_evidence_url", "Evidence URL port is invalid.", retryable=False) from error
-        hostname = parsed.hostname.lower()
-        if len(hostname) > 253 or hostname == "localhost" or hostname.endswith(".local") or port not in {None, 80, 443}:
+        if port not in {None, 80, 443}:
             raise ProviderFailure("unsafe_evidence_url", "Evidence URL host or port is not permitted.", retryable=False)
-        literal = self._literal_address(hostname)
-        if literal is None:
-            # Client evidence is not fetched by this service.  A future fetcher must
-            # call validate_redirect_target for every redirect after DNS resolution.
+        hostname, ipv6_literal = self._normalize_hostname(parsed.hostname)
+        if hostname == "localhost" or hostname.endswith(_NON_PUBLIC_SUFFIXES):
+            raise ProviderFailure("unsafe_evidence_url", "Evidence URL host or port is not permitted.", retryable=False)
+        literal = ipv6_literal if ipv6_literal is not None else self._literal_address(hostname)
+        if literal is not None:
+            if not self._safe_address(str(literal)):
+                raise ProviderFailure("unsafe_evidence_url", "Evidence URL resolves to a private or reserved address.", retryable=False)
+            if isinstance(literal, ipaddress.IPv4Address) and hostname != str(literal):
+                raise ProviderFailure("unsafe_evidence_url", "Evidence URL host or port is not permitted.", retryable=False)
             return
-        if not self._safe_address(str(literal)):
-            raise ProviderFailure("unsafe_evidence_url", "Evidence URL resolves to a private or reserved address.", retryable=False)
+        labels = hostname.split(".")
+        if len(labels) < 2 or any(not _HOST_LABEL.fullmatch(label) for label in labels):
+            raise ProviderFailure("unsafe_evidence_url", "Evidence URL host or port is not permitted.", retryable=False)
+        for label in labels:
+            if label.startswith("xn--"):
+                try:
+                    label.encode("ascii").decode("idna")
+                except UnicodeError as error:
+                    raise ProviderFailure("unsafe_evidence_url", "Evidence URL host or port is not permitted.", retryable=False) from error
+        if _IPV4_LIKE_LABEL.fullmatch(labels[-1]):
+            raise ProviderFailure("unsafe_evidence_url", "Evidence URL host or port is not permitted.", retryable=False)
 
     def validate_redirect_target(self, url: str, resolver: Callable[[str, int | None], list[str]] | None = None) -> None:
         """Validate a redirect target before a future server-side fetch follows it."""

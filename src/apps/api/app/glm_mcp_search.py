@@ -9,15 +9,17 @@ any result becomes challenge evidence or is supplied to an LLM prompt.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 import json
 import os
 import re
 from time import monotonic, sleep
 from typing import Any, Callable, Mapping
+from urllib.parse import urlsplit
 
 from .openai_compatible import HttpResponse, OpenAICompatibleTransport, _TransportFailure, _TransportTimeout, _default_transport
 from .phase3 import ClientSearchEvidenceProvider, ProviderFailure
+from .research_discovery import RedirectLead, unwrap_redirect_url
 
 
 _GLM_CODING_API_KEY_ENV = "FORESIGHTNINE_GLM_CODING_API_KEY"
@@ -39,6 +41,8 @@ _MAX_RESULT_DEPTH = 8
 _MAX_RESULT_NODES = 2048
 _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 _SESSION_VALUE = re.compile(r"^[\x21-\x7e]{1,256}$")
+_URL_FIELDS = ("link", "url", "target_url", "real_url", "origin_url")
+_DATE_FIELDS = ("publish_date", "published_at", "date")
 
 
 @dataclass(frozen=True)
@@ -232,7 +236,7 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
                         return rows
             else:
                 direct_rows = [row for row in current if isinstance(row, dict)]
-                if any("title" in row and ("link" in row or "url" in row) for row in direct_rows):
+                if any("title" in row and any(field in row for field in _URL_FIELDS) for row in direct_rows):
                     return direct_rows
                 for nested in current:
                     rows = visit(nested, depth + 1)
@@ -241,6 +245,66 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
             return []
 
         return visit(value, 0)
+
+    @staticmethod
+    def _parse_publish_date(raw_date: Any) -> date | None:
+        """Parse YYYY-MM-DD strings or ISO-8601 timestamps into a UTC calendar date."""
+        if isinstance(raw_date, datetime):
+            return raw_date.astimezone(timezone.utc).date() if raw_date.tzinfo is not None else raw_date.date()
+        if isinstance(raw_date, date):
+            return raw_date
+        if not isinstance(raw_date, str):
+            return None
+        text = raw_date.strip()
+        if not text:
+            return None
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+            try:
+                return date.fromisoformat(text)
+            except ValueError:
+                return None
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return None
+        return parsed.astimezone(timezone.utc).date() if parsed.tzinfo is not None else parsed.date()
+
+    @classmethod
+    def _extract_publish_date(cls, row: Mapping[str, Any]) -> date | None:
+        for field in _DATE_FIELDS:
+            parsed = cls._parse_publish_date(row.get(field))
+            if parsed is not None:
+                return parsed
+        return None
+
+    def _resolve_row_url(self, row: Mapping[str, Any]) -> tuple[str, bool] | None:
+        """Select a safe direct/unwrapped URL, or retain a safe opaque redirector for runtime classification."""
+        fallback_redirect: str | None = None
+        for field in _URL_FIELDS:
+            raw = row.get(field)
+            if not isinstance(raw, str):
+                continue
+            candidate = raw.strip()
+            if not candidate or len(candidate) > self.max_url_length:
+                continue
+            try:
+                self.validate_url(candidate)
+            except ProviderFailure:
+                if urlsplit(candidate).scheme in {"http", "https"}:
+                    return None
+                continue
+            try:
+                unwrapped = unwrap_redirect_url(candidate)
+                self.validate_url(unwrapped)
+                return unwrapped, False
+            except RedirectLead:
+                if fallback_redirect is None:
+                    fallback_redirect = candidate
+            except ProviderFailure:
+                return None
+        if fallback_redirect is None:
+            return None
+        return fallback_redirect, True
 
     def _candidates(self, result: Mapping[str, Any], limit: int) -> tuple[SearchCandidate, ...]:
         content = result.get("content")
@@ -267,42 +331,40 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
             except json.JSONDecodeError:
                 continue
             rows.extend(self._result_rows(parsed))
-        candidates: list[SearchCandidate] = []
+        usable_candidates: list[SearchCandidate] = []
+        redirect_candidates: list[SearchCandidate] = []
         seen_urls: set[str] = set()
         for row in rows[:_MAX_CANDIDATES]:
             title = row.get("title")
-            url = row.get("link", row.get("url"))
-            excerpt = row.get("content", row.get("snippet", row.get("summary")))
-            publisher = row.get("media", row.get("publisher"))
-            raw_date = row.get("publish_date", row.get("published_at"))
-            if not all(isinstance(value, str) and value.strip() for value in (title, url, excerpt)):
+            excerpt = next((v for k in ("content", "snippet", "summary") if isinstance((v := row.get(k)), str) and v.strip()), None)
+            publisher = next((v.strip() for k in ("media", "publisher") if isinstance((v := row.get(k)), str) and v.strip()), None)
+            if not isinstance(title, str) or not title.strip() or excerpt is None:
                 continue
-            if len(title) > 500 or len(url) > self.max_url_length or len(excerpt) > 10_000:
+            if len(title) > 500 or len(excerpt) > 10_000:
                 continue
-            try:
-                self.validate_url(url)
-            except ProviderFailure:
+            resolved = self._resolve_row_url(row)
+            if resolved is None:
                 continue
-            published_at: date | None = None
-            if isinstance(raw_date, str) and raw_date:
-                try:
-                    published_at = date.fromisoformat(raw_date[:10])
-                except ValueError:
-                    pass
-            normalized_url = url.strip()
+            normalized_url, is_opaque_redirect = resolved
             if normalized_url in seen_urls:
                 continue
             seen_urls.add(normalized_url)
-            candidates.append(SearchCandidate(
+            published_at = self._extract_publish_date(row)
+            candidate = SearchCandidate(
                 title=title.strip(),
                 url=normalized_url,
                 excerpt=excerpt.strip(),
-                publisher=publisher.strip() if isinstance(publisher, str) and publisher.strip() else None,
+                publisher=publisher,
                 published_at=published_at,
                 independently_reviewable=published_at is not None,
-            ))
-            if len(candidates) == limit:
-                break
+            )
+            if is_opaque_redirect:
+                redirect_candidates.append(candidate)
+            else:
+                usable_candidates.append(candidate)
+                if len(usable_candidates) == limit:
+                    break
+        candidates = (usable_candidates + redirect_candidates)[:limit]
         if not candidates:
             raise ProviderFailure("search_response_invalid", "Search provider returned no safely usable source candidates.", retryable=False)
         return tuple(candidates)

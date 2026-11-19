@@ -2,14 +2,17 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 import json
+from threading import Event
+from time import monotonic
 
 import pytest
 from pydantic import ValidationError
 from fastapi.testclient import TestClient
 
 import app.main as api
+import app.research_sec as research_sec
 from app.openai_compatible import HttpResponse
-from app.research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, SecResult, fetch_sec_concept, search_sec_identities, reserve_sec_request
+from app.research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, SecResult, fetch_sec_concept, pace_sec_request, search_sec_identities, reserve_sec_request
 from app.research_analysis import _quoted_numbers
 from app.storage import InMemoryDocumentRepository
 
@@ -148,3 +151,103 @@ def test_sec_identity_endpoint_requires_account_and_returns_unverified_candidate
     assert response.status_code == 200
     assert response.json()["candidates"][0]["exchange"] is None
     assert "test@example.test" not in response.text
+
+
+def test_pace_sec_request_waits_past_one_second_boundary_and_succeeds(monkeypatch):
+    repository = InMemoryDocumentRepository()
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    assert reserve_sec_request(repository, t0)
+
+    clock = [100.0]
+    utc_clock = [t0 + timedelta(milliseconds=200)]
+    waits = []
+
+    def fake_sleep(seconds):
+        waits.append(seconds)
+        clock[0] += seconds
+        utc_clock[0] += timedelta(seconds=seconds)
+
+    monkeypatch.setattr(research_sec, "sleep", fake_sleep)
+    assert pace_sec_request(
+        repository,
+        deadline=clock[0] + 20.0,
+        now_fn=lambda: clock[0],
+        utcnow_fn=lambda: utc_clock[0],
+    )
+    assert len(waits) == 1 and waits[0] == pytest.approx(0.82)
+    assert repository.get("sec")["requested_at"] == utc_clock[0].isoformat()
+
+    # Also verify real Event wait path when < 1s remains before slot reopens.
+    repository.put("sec", {"requested_at": (utc_clock[0] - timedelta(milliseconds=950)).isoformat()})
+    event = Event()
+    real_now = monotonic()
+    assert pace_sec_request(
+        repository,
+        cancel_event=event,
+        deadline=real_now + 20.0,
+        utcnow_fn=lambda: utc_clock[0] + timedelta(seconds=max(0.0, monotonic() - real_now)),
+    )
+
+
+def test_pace_sec_request_aborts_immediately_on_cancel_or_insufficient_deadline(monkeypatch):
+    repository = InMemoryDocumentRepository()
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    assert reserve_sec_request(repository, t0)
+
+    waits = []
+    monkeypatch.setattr(research_sec, "sleep", waits.append)
+
+    # Pre-cancelled event returns False immediately without touching sleep.
+    cancelled = Event()
+    cancelled.set()
+    assert not pace_sec_request(
+        repository,
+        cancel_event=cancelled,
+        deadline=100.0,
+        now_fn=lambda: 0.0,
+        utcnow_fn=lambda: t0 + timedelta(seconds=5),
+    )
+    assert not waits
+
+    # Insufficient deadline margin (< 15.0 + delay) aborts immediately without sleeping.
+    assert not pace_sec_request(
+        repository,
+        deadline=15.5,
+        now_fn=lambda: 0.0,
+        utcnow_fn=lambda: t0 + timedelta(milliseconds=100),
+    )
+    assert not waits
+
+    # Cancellation triggered during wait aborts without retrying.
+    class CancellingEvent:
+        def __init__(self):
+            self.cancelled = False
+            self.waits = []
+        def is_set(self):
+            return self.cancelled
+        def wait(self, timeout):
+            self.waits.append(timeout)
+            self.cancelled = True
+            return True
+
+    cancelling = CancellingEvent()
+    assert not pace_sec_request(
+        repository,
+        cancel_event=cancelling,
+        deadline=50.0,
+        now_fn=lambda: 0.0,
+        utcnow_fn=lambda: t0,
+    )
+    assert len(cancelling.waits) == 1 and cancelling.waits[0] == pytest.approx(1.02)
+
+    # Contention exceeding 4 attempts returns False after 3 waits.
+    monkeypatch.setattr(research_sec, "reserve_sec_request", lambda *_a, **_kw: False)
+    waits.clear()
+    assert not pace_sec_request(
+        repository,
+        deadline=100.0,
+        now_fn=lambda: 0.0,
+        utcnow_fn=lambda: t0,
+    )
+    assert len(waits) == 3
+

@@ -10,6 +10,8 @@ from datetime import datetime
 from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
 
+from .research_fetch import fetch_allowed_hosts, is_host_blocked, is_sec_host, validate_public_https_url
+
 
 @dataclass(frozen=True)
 class SourceRouteRequest:
@@ -36,10 +38,13 @@ class SourceCapability:
 
 
 def source_capabilities(*, search_available: bool = False, sec_available: bool = False) -> tuple[SourceCapability, ...]:
+    allowed_hosts = fetch_allowed_hosts()
+    hosts = tuple(sorted(allowed_hosts)) if allowed_hosts else ()
+    coverage = 'restricted_hosts' if allowed_hosts else 'open_public_https'
     return (
         SourceCapability('project_search', 'leads', 'search', search_available),
         SourceCapability('official_html_pdf', 'document', 'official_retrieval', True,
-                         hosts=('www.bea.gov', 'www.federalreserve.gov'), coverage='restricted_hosts'),
+                         hosts=hosts, coverage=coverage),
         SourceCapability('sec_filing', 'document', 'official_retrieval', sec_available,
                          markets=('US',), hosts=('www.sec.gov',), coverage='restricted_paths'),
         SourceCapability('sec_company_concept', 'structured_data', 'official_retrieval', sec_available,
@@ -66,8 +71,20 @@ def canonical_source_url(url: str) -> str:
 
 
 def official_document_capability(url: str, *, sec_available: bool) -> SourceCapability | None:
-    parts = urlsplit(url)
-    if parts.scheme.lower() != 'https' or parts.username is not None or parts.password is not None or parts.port not in (None, 443):
+    try:
+        hostname = validate_public_https_url(url, allow_fragment=True, check_sec_path=False)
+    except ValueError:
         return None
-    return next((cap for cap in source_capabilities(sec_available=sec_available)
-                 if cap.output_type == 'document' and parts.hostname in cap.hosts), None)
+    if is_host_blocked(hostname):
+        return None
+    caps = source_capabilities(sec_available=sec_available)
+    if is_sec_host(hostname):
+        if hostname != 'www.sec.gov':
+            return None
+        return next((cap for cap in caps if cap.name == 'sec_filing'), None)
+    web_cap = next((cap for cap in caps if cap.name == 'official_html_pdf'), None)
+    if web_cap is None:
+        return None
+    if web_cap.hosts and hostname not in web_cap.hosts:
+        return None
+    return web_cap

@@ -16,6 +16,8 @@ def test_research_schema_is_separate_and_references_resolve():
     assert "/v2/research/topics" in document["paths"]
     assert "/v2/research/topics" not in legacy["paths"]
     assert "ResearchTopic" in document["components"]["schemas"]
+    turn_props = document["components"]["schemas"]["ResearchTurn"]["properties"]
+    assert "partial_notes" in turn_props
 
     def check(value):
         if isinstance(value, dict):

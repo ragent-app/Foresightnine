@@ -30,7 +30,7 @@ class ChatResearchAdapter:
         return len(json.dumps({'messages': messages, 'tools': tools}, ensure_ascii=False).encode()) + 64
 
     def complete_turn(self, turn, *, cancel_event=None, timeout_seconds=None, diagnostic_callback=None,
-                      max_output_tokens=None, on_submission=None):
+                      max_output_tokens=None, on_submission=None, on_stream_event=None):
         messages, tools = self._render(turn)
         kwargs = {'cancel_event': cancel_event}
         if timeout_seconds is not None:
@@ -42,7 +42,8 @@ class ChatResearchAdapter:
         except (TypeError, ValueError):
             parameters = {}
         accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values())
-        for name, value in (('diagnostic_callback', diagnostic_callback), ('on_submission', on_submission)):
+        for name, value in (('diagnostic_callback', diagnostic_callback), ('on_submission', on_submission),
+                            ('on_stream_event', on_stream_event)):
             if value is not None and (accepts_kwargs or name in parameters):
                 kwargs[name] = value
         response = self.provider.complete(messages, tools, **kwargs)

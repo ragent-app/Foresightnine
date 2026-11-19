@@ -590,3 +590,898 @@ def test_messages_transport_uses_the_configured_connect_timeout(monkeypatch):
     monkeypatch.setenv('FORESIGHTNINE_LLM_RESPONSE_TIMEOUT_SECONDS', '60')
     provider.complete_turn(turn)
     assert seen == [(15.0, None), (9.0, 60.0)]
+
+
+def test_available_capabilities_derived_and_overridden_in_initial_prompt():
+    from app.research_runtime import SYSTEM
+    stop = ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')
+
+    m_default = Model([stop])
+    run_research_agent(question='Q', sources=[], model=m_default, context=context())
+    payload_default = json.loads(m_default.inputs[0][1]['content'])
+    assert payload_default['available_historical_price_instruments'] == []
+    assert payload_default['available_capabilities'] == {
+        'search_available': False,
+        'acquire_available': False,
+        'sec_available': False,
+        'historical_prices_available': False,
+    }
+
+    m_derived = Model([stop])
+    run_research_agent(
+        question='Q',
+        sources=[],
+        model=m_derived,
+        context=context(),
+        discover=lambda _: [],
+        acquire=lambda *_: (None, {}),
+        sec_concept=lambda _: None,
+        historical_instruments=('NVDA',),
+    )
+    payload_derived = json.loads(m_derived.inputs[0][1]['content'])
+    assert payload_derived['available_historical_price_instruments'] == ['NVDA']
+    assert payload_derived['available_capabilities'] == {
+        'search_available': True,
+        'acquire_available': True,
+        'sec_available': True,
+        'historical_prices_available': True,
+    }
+
+    m_custom = Model([stop])
+    custom_caps = {'search_available': True, 'web_fetch_enabled': True, 'sec_available': False}
+    run_research_agent(question='Q', sources=[], model=m_custom, context=context(), capabilities=custom_caps)
+    payload_custom = json.loads(m_custom.inputs[0][1]['content'])
+    assert payload_custom['available_capabilities'] == custom_caps
+
+    for token in ('available_capabilities', 'discover_sources', 'acquire_sources', 'sec_company_concept', 'sec_available', 'partial'):
+        assert token in SYSTEM
+
+
+def test_sec_company_concept_success_unconfigured_restricted_and_unknown_recovery():
+    from app.research_structured_connector import StructuredQueryResult
+
+    sec_args = {
+        'entity_query': 'NVDA',
+        'taxonomy': 'us-gaap',
+        'tag': 'Revenues',
+        'unit': 'USD',
+        'period_start': '2024-01-29',
+        'period_end': '2025-01-26',
+        'rationale': 'Get annual revenue from SEC XBRL.',
+    }
+    sec_source = ResearchSource(
+        source_id='source_sec_nvda',
+        owner_id='owner',
+        title='NVDA Revenues (USD)',
+        text='SEC data\n{"val": 130497000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26"}',
+        url='https://data.sec.gov/api/xbrl/companyconcept/CIK0001045810/us-gaap/Revenues.json',
+        kind='official',
+        obtained_at=datetime.now(timezone.utc),
+        content_sha256='sec-hash',
+        retrieval_method='sec_companyconcept',
+        permissions=SourcePermissions(store=True, model_input=True, display=True, export=True),
+    )
+    receipt = {'source_url': 'https://www.sec.gov/files/company_tickers.json', 'match': {'cik': '0001045810', 'ticker': 'NVDA'}}
+
+    # 1. Success path registers source so subsequent read_sources and submit_research succeed.
+    calls = []
+    def sec_ok(req):
+        calls.append(req)
+        return StructuredQueryResult(
+            'completed',
+            source=sec_source,
+            identity_receipt=receipt,
+            semantic_status='not_verified',
+            calls=2,
+            external_state='returned',
+        )
+
+    m_ok = Model([
+        turn('sec_company_concept', sec_args, 'sec1'),
+        turn('read_sources', {'reads': [{'source_id': 'source_sec_nvda'}], 'rationale': 'read XBRL'}, 'read1'),
+        turn('submit_research', {
+            'report': 'NVDA revenue was 130497000000 USD.',
+            'claims': [{
+                'text': 'NVDA revenue was 130497000000 USD.',
+                'source_id': 'source_sec_nvda',
+                'quotation': '{"val": 130497000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26"}',
+                'role': 'support',
+            }],
+            'limitations': [],
+            'stopping_reason': 'answered',
+        }, 'sub1'),
+    ])
+    sources_list = []
+    res_ok = run_research_agent(question='NVDA revenue?', sources=sources_list, model=m_ok, context=context(), sec_concept=sec_ok)
+    assert res_ok.status == 'completed'
+    assert res_ok.source_ids == ['source_sec_nvda']
+    assert len(sources_list) == 1
+    assert calls[0].entity_query == 'NVDA' and calls[0].taxonomy == 'us-gaap'
+    sec_feedback = json.loads(m_ok.inputs[1][-1]['content'])
+    assert sec_feedback == {
+        'status': 'acquired',
+        'source_id': 'source_sec_nvda',
+        'title': 'NVDA Revenues (USD)',
+        'total_characters': len(sec_source.text),
+        'content_sha256': 'sec-hash',
+        'identity_receipt': receipt,
+        'semantic_status': 'not_verified',
+    }
+
+    # 2. Unconfigured (sec_concept=None), historical cutoff (as_of), and non-completed StructuredQueryResult statuses.
+    m_unconf = Model([
+        turn('sec_company_concept', sec_args, 'sec1'),
+        ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
+    ])
+    res_unconf = run_research_agent(question='Q', sources=[], model=m_unconf, context=context(), sec_concept=None)
+    assert res_unconf.status == 'partial'
+    assert json.loads(m_unconf.inputs[1][-1]['content']) == {
+        'status': 'unavailable',
+        'reason': 'sec_contact_unconfigured_or_unavailable',
+    }
+
+    called_on_cutoff = []
+    m_cutoff = Model([
+        turn('sec_company_concept', sec_args, 'sec1'),
+        ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
+    ])
+    run_research_agent(
+        question='Q',
+        sources=[],
+        model=m_cutoff,
+        context=context(),
+        as_of=datetime(2025, 2, 1, tzinfo=timezone.utc),
+        sec_concept=lambda req: called_on_cutoff.append(req),
+    )
+    assert called_on_cutoff == []
+    assert json.loads(m_cutoff.inputs[1][-1]['content']) == {'status': 'restricted', 'reason': 'historical_cutoff'}
+
+    m_miss = Model([
+        turn('sec_company_concept', sec_args, 'sec1'),
+        ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
+    ])
+    run_research_agent(
+        question='Q',
+        sources=[],
+        model=m_miss,
+        context=context(),
+        sec_concept=lambda _: StructuredQueryResult(
+            'unknown',
+            'unit_or_period_not_found_in_returned_records',
+            identity_receipt=receipt,
+            external_state='returned',
+        ),
+    )
+    assert json.loads(m_miss.inputs[1][-1]['content']) == {
+        'status': 'unknown',
+        'reason': 'unit_or_period_not_found_in_returned_records',
+        'identity_receipt': receipt,
+    }
+
+    # 3. Fail-closed external_result_unknown does not replay on checkpoint recovery.
+    saved = []
+    sec_attempts = []
+    def sec_timeout(req):
+        sec_attempts.append(req)
+        return StructuredQueryResult('failed', 'source_timeout', external_state='unknown')
+
+    m_unknown = Model([turn('sec_company_concept', sec_args, 'sec_u')])
+    res_unknown = run_research_agent(
+        question='Q',
+        sources=[],
+        model=m_unknown,
+        context=context(),
+        sec_concept=sec_timeout,
+        checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
+    )
+    assert res_unknown.status == 'partial'
+    assert res_unknown.reason == 'source_timeout'
+    assert [g['code'] for g in res_unknown.gaps] == ['external_result_unknown']
+    assert any(e.get('name') == 'sec_company_concept' and e.get('status') == 'unknown' for e in res_unknown.events)
+    assert saved[-1]['pending']['kind'] == 'sec_company_concept'
+    assert saved[-1]['pending']['call_id'] == 'sec_u'
+    assert saved[-1]['pending']['rationale'] == 'Get annual revenue from SEC XBRL.'
+    assert saved[-1]['pending']['target'] == 'NVDA · us-gaap:Revenues (USD)'
+    assert isinstance(saved[-1]['pending']['started_at'], str)
+
+    m_replay = Model([])
+    res_recovered = run_research_agent(
+        question='Q',
+        sources=[],
+        model=m_replay,
+        context=context(),
+        sec_concept=sec_timeout,
+        initial_state=saved[-1],
+    )
+    assert res_recovered.status == 'partial'
+    assert res_recovered.reason == 'external_result_unknown'
+    assert len(sec_attempts) == 1
+    assert not m_replay.inputs
+
+
+def test_acquire_sources_distinguishes_disabled_undiscovered_and_granular_failures():
+    # 1. acquire=None -> acquisition_not_authorized_or_disabled
+    m_disabled = Model([
+        turn('acquire_sources', {'urls': ['https://example.com/guessed'], 'rationale': 'fetch'}, 'a1'),
+        ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
+    ])
+    run_research_agent(question='Q', sources=[], model=m_disabled, context=context(), acquire=None)
+    fb_disabled = json.loads(m_disabled.inputs[1][-1]['content'])
+    assert fb_disabled['status'] == 'unavailable'
+    assert fb_disabled['reason'] == 'acquisition_not_authorized_or_disabled'
+    assert fb_disabled['results'][0]['reason'] == 'acquisition_not_authorized_or_disabled'
+
+    # 2. Unsearched URL -> lead_not_discovered with hint
+    acquire_calls = []
+    m_unsearched = Model([
+        turn('acquire_sources', {'urls': ['https://example.com/guessed'], 'rationale': 'fetch'}, 'a1'),
+        ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
+    ])
+    res_unsearched = run_research_agent(
+        question='Q',
+        sources=[],
+        model=m_unsearched,
+        context=context(),
+        acquire=lambda u, t: acquire_calls.append((u, t)) or (None, {}),
+    )
+    assert acquire_calls == []
+    fb_unsearched = json.loads(m_unsearched.inputs[1][-1]['content'])
+    assert fb_unsearched['status'] == 'unavailable'
+    assert fb_unsearched['reason'] == 'lead_not_discovered'
+    assert 'discover_sources' in fb_unsearched['hint']
+    assert fb_unsearched['results'][0]['reason'] == 'lead_not_discovered'
+    assert 'search_candidates_not_acquired' not in [g['code'] for g in res_unsearched.gaps]
+
+    # 3. Discovered leads forwarding granular failure reasons (sec_contact_unconfigured, http_forbidden_or_challenge, source_too_large)
+    leads = [
+        {'url': 'https://www.sec.gov/Archives/edgar/data/1/a.htm', 'title': 'SEC'},
+        {'url': 'https://investor.example.com/q4', 'title': 'IR'},
+        {'url': 'https://example.com/huge.pdf', 'title': 'PDF'},
+    ]
+    def acquire_by_url(url, title):
+        if 'sec.gov' in url:
+            return None, {
+                'status': 'sec_contact_unconfigured',
+                'notes': ['SEC access is not configured.'],
+                'outcomes': [{'status': 'unconfigured', 'reason': 'sec_contact_unconfigured', 'external_state': 'not_started'}],
+            }
+        if 'investor.example.com' in url:
+            return None, {
+                'status': 'failed',
+                'notes': ['Blocked by upstream WAF.'],
+                'outcomes': [{'status': 'failed', 'reason': 'http_forbidden_or_challenge', 'external_state': 'returned'}],
+            }
+        return None, {
+            'status': 'failed',
+            'reason': 'source_too_large',
+            'notes': ['Response exceeded 5 MB limit.'],
+            'outcomes': [{'status': 'failed', 'reason': 'source_too_large', 'external_state': 'returned'}],
+        }
+
+    m_multi = Model([
+        turn('discover_sources', {'query': 'NVDA', 'rationale': 'search'}, 'd1'),
+        turn('acquire_sources', {'urls': [leads[0]['url'], leads[1]['url'], leads[2]['url']], 'rationale': 'fetch'}, 'a1'),
+        ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
+    ])
+    res_multi = run_research_agent(
+        question='Q',
+        sources=[],
+        model=m_multi,
+        context=context(),
+        discover=lambda _: leads,
+        acquire=acquire_by_url,
+    )
+    fb_multi = json.loads(m_multi.inputs[2][-1]['content'])
+    assert fb_multi['status'] == 'unavailable'
+    assert fb_multi['reason'] == 'source_cannot_be_acquired'
+    assert fb_multi['failure_reasons'] == ['sec_contact_unconfigured', 'http_forbidden_or_challenge', 'source_too_large']
+    assert [row['reason'] for row in fb_multi['results']] == [
+        'sec_contact_unconfigured',
+        'http_forbidden_or_challenge',
+        'source_too_large',
+    ]
+    assert 'SEC access is not configured.' in fb_multi['notes']
+    assert 'Blocked by upstream WAF.' in fb_multi['notes']
+    assert len(fb_multi['outcomes']) == 3
+    assert 'search_candidates_not_acquired' in [g['code'] for g in res_multi.gaps]
+
+    # Single-URL granular failure surfaces that exact reason at top level too.
+    m_single = Model([
+        turn('discover_sources', {'query': 'NVDA', 'rationale': 'search'}, 'd1'),
+        turn('acquire_sources', {'urls': [leads[1]['url']], 'rationale': 'fetch'}, 'a1'),
+        ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
+    ])
+    run_research_agent(
+        question='Q',
+        sources=[],
+        model=m_single,
+        context=context(),
+        discover=lambda _: [leads[1]],
+        acquire=acquire_by_url,
+    )
+    fb_single = json.loads(m_single.inputs[2][-1]['content'])
+    assert fb_single['reason'] == 'http_forbidden_or_challenge'
+    assert fb_single['failure_reasons'] == ['http_forbidden_or_challenge']
+
+
+def test_partial_submission_keeps_report_empty_and_preserves_partial_notes_across_recovery():
+    notes = 'Checked SEC and web search; SEC was unconfigured and IR returned 403.'
+    m = Model([
+        turn('submit_research', {
+            'report': f'  {notes}  ',
+            'claims': [],
+            'limitations': ['No primary filing could be acquired.'],
+            'stopping_reason': 'all retrieval paths blocked',
+            'status': 'partial',
+        }, 's1'),
+    ])
+    saved = []
+    outcome = run_research_agent(
+        question='Compare revenue?',
+        sources=[],
+        model=m,
+        context=context(),
+        checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
+    )
+    assert outcome.status == 'partial'
+    assert outcome.reason == 'submitted'
+    assert outcome.report == ''
+    assert outcome.partial_notes == notes
+    assert outcome.stopping_note == 'all retrieval paths blocked'
+    assert saved[-1]['submission']['report'] == ''
+    assert saved[-1]['submission']['partial_notes'] == notes
+
+    recovered = run_research_agent(
+        question='Compare revenue?',
+        sources=[],
+        model=Model([]),
+        context=context(),
+        initial_state=saved[-1],
+    )
+    assert recovered.status == 'partial'
+    assert recovered.reason == 'submitted'
+    assert recovered.report == ''
+    assert recovered.partial_notes == notes
+    assert recovered.stopping_note == 'all retrieval paths blocked'
+
+
+def test_web_retrieval_methods_and_turn_partial_notes_schema():
+    from app.research_topics import ResearchTurn, TurnUsage
+
+    for method in ('web_html', 'web_pdf'):
+        src = ResearchSource(
+            source_id=f's_{method}',
+            owner_id='owner',
+            title='Web doc',
+            text='Web body',
+            kind='user_supplied',
+            obtained_at=datetime.now(timezone.utc),
+            content_sha256='h',
+            retrieval_method=method,
+            permissions=SourcePermissions(store=True, model_input=True, display=True, export=False),
+        )
+        assert src.retrieval_method == method
+
+    now = datetime.now(timezone.utc)
+    turn_default = ResearchTurn(
+        turn_id='t1',
+        index=1,
+        question='Q?',
+        question_origin='user',
+        operation_ids=['op1'],
+        parent_version_id='v1',
+        started_at=now,
+        finished_at=now,
+        status='partial',
+        reason='submitted',
+        usage=TurnUsage(model_calls=1, search_calls=0, total_tokens=10),
+        search_status='not_requested',
+        official_fetch_status='not_requested',
+    )
+    assert turn_default.partial_notes is None
+    turn_with_notes = turn_default.model_copy(update={'partial_notes': 'Unverified note'})
+    assert turn_with_notes.partial_notes == 'Unverified note'
+
+
+def test_sec_company_concept_rate_limit_allows_one_retry_and_stops_on_second_repeat():
+    from app.research_structured_connector import StructuredQueryResult
+
+    sec_args = {
+        'entity_query': 'NVDA',
+        'taxonomy': 'us-gaap',
+        'tag': 'Revenues',
+        'unit': 'USD',
+        'period_start': '2024-01-29',
+        'period_end': '2025-01-26',
+        'rationale': 'Get annual revenue from SEC XBRL.',
+    }
+    sec_source = ResearchSource(
+        source_id='source_sec_nvda_retry',
+        owner_id='owner',
+        title='NVDA Revenues (USD)',
+        text='SEC data\n{"val": 130497000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26"}',
+        url='https://data.sec.gov/api/xbrl/companyconcept/CIK0001045810/us-gaap/Revenues.json',
+        kind='official',
+        obtained_at=datetime.now(timezone.utc),
+        content_sha256='sec-retry-hash',
+        retrieval_method='sec_companyconcept',
+        permissions=SourcePermissions(store=True, model_input=True, display=True, export=True),
+    )
+
+    # 1. First call gets source_rate_limited; one retry is allowed and succeeds.
+    attempts_ok = []
+    def sec_flaky(req):
+        attempts_ok.append(req)
+        if len(attempts_ok) == 1:
+            return StructuredQueryResult('failed', 'source_rate_limited', external_state='returned')
+        return StructuredQueryResult('completed', source=sec_source, external_state='returned')
+
+    m_ok = Model([
+        turn('sec_company_concept', sec_args, 'sec_1'),
+        turn('sec_company_concept', {**sec_args, 'rationale': 'Retry after 1s SEC rate limit.'}, 'sec_2'),
+        turn('read_sources', {'reads': [{'source_id': 'source_sec_nvda_retry'}], 'rationale': 'read XBRL'}, 'read_1'),
+        turn('submit_research', {
+            'report': 'NVDA revenue was 130497000000 USD.',
+            'claims': [{
+                'text': 'NVDA revenue was 130497000000 USD.',
+                'source_id': 'source_sec_nvda_retry',
+                'quotation': '{"val": 130497000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26"}',
+                'role': 'support',
+            }],
+            'limitations': [],
+            'stopping_reason': 'answered',
+        }, 'sub_1'),
+    ])
+    saved = []
+    res_ok = run_research_agent(
+        question='NVDA revenue?',
+        sources=[],
+        model=m_ok,
+        context=context(),
+        sec_concept=sec_flaky,
+        checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
+    )
+    assert res_ok.status == 'completed'
+    assert len(attempts_ok) == 2
+    assert len(saved[-1]['rate_limit_retries']) == 1
+
+    # 2. Second consecutive source_rate_limited keeps signature in seen, so repeating again stops with no_progress.
+    attempts_fail = []
+    def sec_always_rate_limited(req):
+        attempts_fail.append(req)
+        return StructuredQueryResult('failed', 'source_rate_limited', external_state='returned')
+
+    m_fail = Model([
+        turn('sec_company_concept', sec_args, 'sec_1'),
+        turn('sec_company_concept', {**sec_args, 'rationale': 'Retry once.'}, 'sec_2'),
+        turn('sec_company_concept', {**sec_args, 'rationale': 'Retry twice.'}, 'sec_3'),
+    ])
+    res_fail = run_research_agent(
+        question='NVDA revenue?',
+        sources=[],
+        model=m_fail,
+        context=context(),
+        sec_concept=sec_always_rate_limited,
+    )
+    assert res_fail.status == 'partial'
+    assert res_fail.reason == 'no_progress'
+    assert [g['code'] for g in res_fail.gaps] == ['no_progress']
+    assert len(attempts_fail) == 2
+
+
+def test_acquire_sources_rate_limit_allows_one_retry_and_blocks_second_repeat():
+    lead = {'url': 'https://www.sec.gov/Archives/edgar/data/1045810/000104581025000023/nvda-20250126.htm', 'title': 'NVDA 10-K'}
+    acquired_src = ResearchSource(
+        source_id='source_acq_nvda',
+        owner_id='owner',
+        title='NVDA 10-K',
+        text='Total revenue was $130,497 million.',
+        url=lead['url'],
+        kind='official',
+        obtained_at=datetime.now(timezone.utc),
+        content_sha256='acq-hash',
+        retrieval_method='sec_filing_html',
+        permissions=SourcePermissions(store=True, model_input=True, display=True, export=True),
+    )
+
+    attempts = []
+    def acquire_flaky(url, title):
+        attempts.append(url)
+        if len(attempts) == 1:
+            return None, {
+                'status': 'failed',
+                'outcomes': [{'status': 'failed', 'reason': 'source_rate_limited', 'external_state': 'returned'}],
+            }
+        return acquired_src, {'status': 'completed', 'outcomes': [{'status': 'retrieved', 'external_state': 'returned'}]}
+
+    m_ok = Model([
+        turn('discover_sources', {'query': 'NVDA 10-K', 'rationale': 'find filing'}, 'd1'),
+        turn('acquire_sources', {'urls': [lead['url']], 'rationale': 'fetch'}, 'a1'),
+        turn('acquire_sources', {'urls': [lead['url']], 'rationale': 'retry after rate limit'}, 'a2'),
+        turn('read_sources', {'reads': [{'source_id': 'source_acq_nvda'}], 'rationale': 'read'}, 'r1'),
+        turn('submit_research', {
+            'report': 'Total revenue was $130,497 million.',
+            'claims': [{
+                'text': 'Total revenue was $130,497 million.',
+                'source_id': 'source_acq_nvda',
+                'quotation': 'Total revenue was $130,497 million.',
+                'role': 'support',
+            }],
+            'limitations': [],
+            'stopping_reason': 'answered',
+        }, 's1'),
+    ])
+    res_ok = run_research_agent(
+        question='NVDA revenue?',
+        sources=[],
+        model=m_ok,
+        context=context(),
+        discover=lambda _: [lead],
+        acquire=acquire_flaky,
+    )
+    assert res_ok.status == 'completed'
+    assert len(attempts) == 2
+
+    always_limited = []
+    def acquire_limited(url, title):
+        always_limited.append(url)
+        return None, {
+            'status': 'failed',
+            'outcomes': [{'status': 'failed', 'reason': 'source_rate_limited', 'external_state': 'returned'}],
+        }
+
+    m_fail = Model([
+        turn('discover_sources', {'query': 'NVDA 10-K', 'rationale': 'find filing'}, 'd1'),
+        turn('acquire_sources', {'urls': [lead['url']], 'rationale': 'fetch'}, 'a1'),
+        turn('acquire_sources', {'urls': [lead['url']], 'rationale': 'retry 1'}, 'a2'),
+        turn('acquire_sources', {'urls': [lead['url']], 'rationale': 'retry 2'}, 'a3'),
+    ])
+    res_fail = run_research_agent(
+        question='NVDA revenue?',
+        sources=[],
+        model=m_fail,
+        context=context(),
+        discover=lambda _: [lead],
+        acquire=acquire_limited,
+    )
+    assert res_fail.status == 'partial'
+    assert res_fail.reason == 'no_progress'
+    assert len(always_limited) == 2
+
+
+def test_tools_and_system_document_outline_search_and_read_limits():
+    from app.research_runtime import (
+        MAX_READ_SOURCE_SPAN_CHARS,
+        MAX_READ_SOURCES_BATCH_CHARS,
+        SYSTEM,
+        TOOLS,
+    )
+
+    assert MAX_READ_SOURCE_SPAN_CHARS == 25_000
+    assert MAX_READ_SOURCES_BATCH_CHARS == 40_000
+    by_name = {tool.name: tool for tool in TOOLS}
+    assert {'outline_source', 'search_source', 'read_sources'} <= set(by_name)
+    assert '25000' in by_name['read_sources'].description
+    assert '40000' in by_name['read_sources'].description
+    assert 'outline_source' in by_name['read_sources'].description
+    assert 'search_source' in by_name['read_sources'].description
+    for token in ('outline_source', 'search_source', 'read_sources', '25000', '40000', '[start, end]'):
+        assert token in SYSTEM
+
+
+def test_outline_source_extracts_boundaries_with_exact_offsets_and_bounds():
+    filler = 'Narrative risk discussion line without section headings.\n' * 1200
+    doc_text = (
+        '# Annual Overview\n'
+        'Intro text.\n'
+        'Setext Section\n'
+        '==============\n'
+        'Table of Contents\n'
+        '| Item 7. Management Discussion | 35 |\n'
+        'PART I\n'
+        'ITEM 1. BUSINESS\n'
+        'Company overview.\n'
+        'ITEM 1A. RISK FACTORS\n'
+        'RISKS RELATED TO OPERATIONS\n'
+        + filler
+        + 'PART II\n'
+        'ITEM 7. MANAGEMENT\'S DISCUSSION AND ANALYSIS\n'
+        'Summary of operations.\n'
+        'ITEM 8. FINANCIAL STATEMENTS AND SUPPLEMENTARY DATA\n'
+        '| [colspan=3] Consolidated Statements of Income |\n'
+        '| Revenue | $ 130,497 | $ 60,922 |\n'
+        'Consolidated Balance Sheets\n'
+        'Note 1 - Organization and Summary of Significant Accounting Policies\n'
+        '合并利润表\n'
+    )
+    big_src = source()
+    big_src.source_id = 's_10k'
+    big_src.title = 'NVDA 10-K'
+    big_src.text = doc_text
+    big_src.content_sha256 = 'hash-10k'
+
+    plain_src = source()
+    plain_src.source_id = 's_plain'
+    plain_src.title = 'Plain'
+    plain_src.text = 'This plain paragraph has no headings at all. Revenue was 100 USD.'
+    plain_src.content_sha256 = 'hash-plain'
+
+    m = Model([
+        turn('outline_source', {'source_id': 's_10k', 'max_entries': 10, 'rationale': 'inspect 10-K outline'}, 'o1'),
+        turn('outline_source', {'source_id': 's_plain'}, 'o2'),
+        ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
+    ])
+    res = run_research_agent(question='Q', sources=[big_src, plain_src], model=m, context=context())
+    assert res.reason == 'no_submission'
+    assert res.source_ids == []  # Navigation never marks ranges as read.
+
+    outline_10k = json.loads(m.inputs[1][-1]['content'])
+    assert outline_10k['status'] == 'completed'
+    assert outline_10k['total_characters'] == len(doc_text)
+    assert len(outline_10k['entries']) <= 10
+    assert outline_10k['entries'] == sorted(outline_10k['entries'], key=lambda item: item['start'])
+    titles = [entry['title'] for entry in outline_10k['entries']]
+    assert 'Consolidated Statements of Income' in titles
+    assert any(t.startswith('ITEM 8.') for t in titles)
+    for entry in outline_10k['entries']:
+        assert entry['line'] >= 1
+        assert doc_text[entry['start']:].startswith(entry['title'])
+        assert '| Revenue |' not in entry['title']
+
+    outline_plain = json.loads(m.inputs[2][-1]['content'])
+    assert outline_plain['status'] == 'completed'
+    assert outline_plain['entries'] == []
+    assert outline_plain['total_characters'] == len(plain_src.text)
+    assert 'search_source' in outline_plain['note']
+
+
+def test_search_source_supports_exact_fallbacks_bounds_and_requires_read_before_cite():
+    filler = 'General disclosure paragraph about products and markets. ' * 20
+    text = (
+        filler
+        + '\nConsolidated\n  Statements\tof Income\n'
+        + '| Total revenue | $ | 130,497 |\n'
+        + '| Operating income | $ | 81,453 |\n'
+        + '| operating income margin | 62.4% |\n'
+        + ''.join(f'repeat marker #{i} in appendix. ' for i in range(15))
+    )
+    src = source()
+    src.source_id = 's_search'
+    src.title = 'NVDA 10-K'
+    src.text = text
+    src.content_sha256 = 'hash-search'
+
+    m = Model([
+        turn('search_source', {'source_id': 's_search', 'query': 'Consolidated Statements of Income'}, 'q_ws'),
+        turn('search_source', {'source_id': 's_search', 'query': 'Total revenue 130,497'}, 'q_tok'),
+        turn('search_source', {'source_id': 's_search', 'query': 'Operating income', 'case_sensitive': True}, 'q_cs'),
+        turn('search_source', {'source_id': 's_search', 'query': 'Operating income', 'case_sensitive': False}, 'q_ci'),
+        turn('search_source', {'source_id': 's_search', 'query': 'repeat marker', 'max_hits': 3}, 'q_cap'),
+        turn('search_source', {'source_id': 's_search', 'query': 'missing phrase xyz'}, 'q_none'),
+        turn('search_source', {'source_id': 's_search', 'query': '   '}, 'q_blank'),
+        turn('search_source', {'source_id': 's_search', 'query': 'Operating', 'max_hits': 25}, 'q_max'),
+        turn('submit_research', {
+            'report': 'Operating income was 81,453.',
+            'claims': [{'text': 'Operating income', 'source_id': 's_search', 'quotation': '| Operating income | $ | 81,453 |', 'role': 'support'}],
+            'limitations': [],
+            'stopping_reason': 'test unread cite rejection',
+        }, 'sub_unread'),
+        ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
+    ])
+    res = run_research_agent(question='Q', sources=[src], model=m, context=context())
+    assert res.reason == 'no_submission'
+    assert res.source_ids == []
+
+    tool_msgs = [json.loads(inp[-1]['content']) for inp in m.inputs[1:]]
+    ws_fb, tok_fb, cs_fb, ci_fb, cap_fb, none_fb, blank_fb, max_fb, unread_fb = tool_msgs
+
+    assert ws_fb['match_mode'] == 'whitespace_normalized'
+    assert ws_fb['total_matches'] == 1
+    assert ws_fb['total_characters'] == len(text)
+    hit_ws = ws_fb['hits'][0]
+    assert text[hit_ws['start']:hit_ws['end']] in hit_ws['snippet']
+    assert len(hit_ws['snippet']) <= 360
+
+    assert tok_fb['match_mode'] == 'token_sequence'
+    assert tok_fb['total_matches'] == 1
+    hit_tok = tok_fb['hits'][0]
+    assert text[hit_tok['start']:hit_tok['end']] == 'Total revenue | $ | 130,497'
+    assert len(hit_tok['snippet']) <= 360
+
+    assert cs_fb['match_mode'] == 'exact' and cs_fb['total_matches'] == 1
+    assert ci_fb['match_mode'] == 'exact' and ci_fb['total_matches'] == 2
+
+    assert cap_fb['total_matches'] == 15
+    assert cap_fb['returned_hits'] == 3
+    assert len(cap_fb['hits']) == 3
+    assert cap_fb['truncated'] is True
+
+    assert none_fb['match_mode'] == 'none'
+    assert none_fb['total_matches'] == 0
+    assert none_fb['hits'] == []
+    assert none_fb['total_characters'] == len(text)
+
+    assert blank_fb['status'] == 'invalid'
+    assert max_fb['status'] == 'invalid'
+    assert unread_fb['status'] == 'invalid'
+    assert 'within read ranges' in unread_fb['reason']
+
+
+def test_search_source_boundary_snippets_and_read_sources_ineligible_non_leakage():
+    edge_text = 'FIRST_KEY ' + ('x' * 600) + ' LAST_KEY'
+    src = source()
+    src.source_id = 's_edge'
+    src.text = edge_text
+
+    hidden = source(allowed=False)
+    hidden.source_id = 's_hidden'
+    hidden.title = 'SECRET'
+    hidden.text = 'SECRET ' * 5000
+
+    m = Model([
+        turn('search_source', {'source_id': 's_edge', 'query': 'FIRST_KEY'}, 'f1'),
+        turn('search_source', {'source_id': 's_edge', 'query': 'LAST_KEY'}, 'f2'),
+        turn('read_sources', {'reads': [{'source_id': 's_hidden', 'start': 0, 'end': 30_000}], 'rationale': 'probe'}, 'r_hidden'),
+        ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
+    ])
+    run_research_agent(question='Q', sources=[src, hidden], model=m, context=context())
+    first_fb, last_fb, hidden_fb = (json.loads(inp[-1]['content']) for inp in m.inputs[1:])
+    assert len(first_fb['hits'][0]['snippet']) == 300
+    assert first_fb['hits'][0]['snippet'].startswith('FIRST_KEY')
+    assert len(last_fb['hits'][0]['snippet']) == 300
+    assert last_fb['hits'][0]['snippet'].endswith('LAST_KEY')
+    assert hidden_fb['results'] == [{'source_id': 's_hidden', 'status': 'denied_or_unavailable'}]
+    assert 'total_characters' not in json.dumps(hidden_fb)
+    assert 'SECRET' not in json.dumps(hidden_fb)
+
+
+def test_outline_and_search_enforce_eligibility_and_as_of_cutoff():
+    cutoff = datetime(2025, 1, 15, tzinfo=timezone.utc)
+    future_src = source()
+    future_src.source_id = 's_future'
+    future_src.title = 'SECRET FUTURE TITLE'
+    future_src.text = '# SECRET HEADING\nSECRET_TOKEN revenue was 999 USD.'
+    future_src.published_at = datetime(2025, 2, 1, tzinfo=timezone.utc)
+
+    fred_src = source('https://fred.stlouisfed.org/series/GDP')
+    fred_src.source_id = 's_fred'
+    fred_src.title = 'SECRET FRED TITLE'
+    fred_src.text = '# SECRET FRED\nSECRET_TOKEN GDP 100'
+    fred_src.published_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
+
+    hidden_src = source(allowed=False)
+    hidden_src.source_id = 's_hidden'
+    hidden_src.title = 'SECRET HIDDEN TITLE'
+    hidden_src.text = '# SECRET HIDDEN\nSECRET_TOKEN hidden 100'
+    hidden_src.published_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
+
+    m = Model([
+        turn('outline_source', {'source_id': 's_future'}, 'o1'),
+        turn('search_source', {'source_id': 's_future', 'query': 'SECRET_TOKEN'}, 's1'),
+        turn('outline_source', {'source_id': 's_fred'}, 'o2'),
+        turn('search_source', {'source_id': 's_fred', 'query': 'SECRET_TOKEN'}, 's2'),
+        turn('outline_source', {'source_id': 's_hidden'}, 'o3'),
+        turn('search_source', {'source_id': 's_missing', 'query': 'anything'}, 's3'),
+        ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
+    ])
+    run_research_agent(
+        question='Q',
+        sources=[future_src, fred_src, hidden_src],
+        model=m,
+        context=context(),
+        as_of=cutoff,
+    )
+    for inp in m.inputs[1:]:
+        raw = inp[-1]['content']
+        assert json.loads(raw)['status'] == 'denied_or_unavailable'
+        assert 'SECRET' not in raw
+        assert 'total_characters' not in raw
+
+
+def test_read_sources_enforces_span_and_batch_caps_while_preserving_small_sources():
+    from app.research_runtime import MAX_READ_SOURCE_SPAN_CHARS, MAX_READ_SOURCES_BATCH_CHARS
+
+    # 1. Exact boundary: 25,000-char source succeeds with start=0, end=None.
+    exact_src = source()
+    exact_src.source_id = 's_exact'
+    exact_src.text = 'A' * MAX_READ_SOURCE_SPAN_CHARS
+    exact_src.content_sha256 = 'hash-exact'
+    m_exact = Model([
+        turn('read_sources', {'reads': [{'source_id': 's_exact'}], 'rationale': 'read exact limit'}, 'r_exact'),
+        ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
+    ])
+    res_exact = run_research_agent(question='Q', sources=[exact_src], model=m_exact, context=context())
+    assert res_exact.source_ids == ['s_exact']
+    fb_exact = json.loads(m_exact.inputs[1][-1]['content'])
+    assert fb_exact['results'][0]['status'] == 'read'
+    assert len(fb_exact['results'][0]['text']) == MAX_READ_SOURCE_SPAN_CHARS
+
+    # 2. Long 60,000-char filing: oversized end=None, oversized slice, oversized batch (>40,000) are rejected
+    #    with explicit status='invalid', total_characters, limits, and search/outline guidance;
+    #    subsequent search_source -> targeted read_sources -> submit_research completes cleanly.
+    prefix = 'ITEM 1A. RISK FACTORS\n' + ('Risk text line. ' * 2000)
+    target_block = (
+        '\nITEM 8. FINANCIAL STATEMENTS\n'
+        'Consolidated Statements of Income\n'
+        'Total revenue was $130,497 million in FY2025.\n'
+    )
+    suffix = 'Additional notes. ' * 1600
+    long_text = prefix + target_block + suffix
+    assert len(long_text) > MAX_READ_SOURCES_BATCH_CHARS
+    long_src = source()
+    long_src.source_id = 's_long'
+    long_src.title = 'NVDA FY2025 10-K'
+    long_src.text = long_text
+    long_src.content_sha256 = 'hash-long'
+
+    def scripted_steps(m_obj):
+        # Yield oversized calls, then inspect via search_source, read targeted window, and submit.
+        yield turn('read_sources', {'reads': [{'source_id': 's_long'}], 'rationale': 'blind full read'}, 'r_none')
+        yield turn('read_sources', {'reads': [{'source_id': 's_long', 'start': 0, 'end': 30_000}], 'rationale': 'blind 30k'}, 'r_30k')
+        yield turn('read_sources', {
+            'reads': [
+                {'source_id': 's_long', 'start': 0, 'end': 22_000},
+                {'source_id': 's_long', 'start': 22_000, 'end': 44_000},
+            ],
+            'rationale': 'blind 44k batch',
+        }, 'r_batch')
+        yield turn('search_source', {'source_id': 's_long', 'query': 'Consolidated Statements of Income'}, 's_income')
+
+    saved = []
+    class GuidedModel:
+        def __init__(self):
+            self.inputs = []
+            self.step = 0
+            self._gen = scripted_steps(self)
+        def complete(self, messages, tools, **kwargs):
+            self.inputs.append(json.loads(json.dumps(messages)))
+            if self.step < 4:
+                self.step += 1
+                return next(self._gen)
+            last = json.loads(messages[-1]['content'])
+            if self.step == 4:
+                self.step += 1
+                hit = last['hits'][0]
+                win_start = max(0, hit['start'] - 100)
+                win_end = min(last['total_characters'], hit['end'] + 400)
+                return turn('read_sources', {'reads': [{'source_id': 's_long', 'start': win_start, 'end': win_end}], 'rationale': 'targeted read'}, 'r_target')
+            return turn('submit_research', {
+                'report': 'Total revenue was $130,497 million in FY2025.',
+                'claims': [{
+                    'text': 'FY2025 total revenue was $130,497 million.',
+                    'source_id': 's_long',
+                    'quotation': 'Total revenue was $130,497 million in FY2025.',
+                    'role': 'support',
+                }],
+                'limitations': [],
+                'stopping_reason': 'answered',
+            }, 'sub_ok')
+
+    gm = GuidedModel()
+    res_long = run_research_agent(
+        question='What was FY2025 revenue?',
+        sources=[long_src],
+        model=gm,
+        context=context(),
+        checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
+    )
+    assert res_long.status == 'completed'
+    assert res_long.source_ids == ['s_long']
+
+    for idx, expected_err in ((1, 'read_span_too_large'), (2, 'read_span_too_large'), (3, 'read_batch_too_large')):
+        msg = gm.inputs[idx][-1]
+        fb = json.loads(msg['content'])
+        assert fb['status'] == 'invalid'
+        assert fb['error'] == expected_err
+        assert fb['total_characters'] == len(long_text)
+        assert fb['max_span_characters'] == MAX_READ_SOURCE_SPAN_CHARS
+        assert fb['max_batch_characters'] == MAX_READ_SOURCES_BATCH_CHARS
+        assert 'outline_source' in fb['reason'] and 'search_source' in fb['reason']
+        assert '[start, end]' in fb['instruction']
+
+    # Verify rejected oversized reads never polluted read_ranges before targeted read.
+    read_events = [ev for ev in res_long.events if ev.get('kind') == 'tool' and ev.get('name') == 'read_sources']
+    assert [ev['status'] for ev in read_events] == ['invalid', 'invalid', 'invalid', 'completed']
+    assert len(saved[-1]['read_ranges']) == 1
+    assert saved[-1]['read_ranges'][0]['end'] - saved[-1]['read_ranges'][0]['start'] <= 600
+

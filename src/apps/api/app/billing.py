@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field
 PlanName = Literal["free", "pro", "max"]
 EntitlementStatus = Literal["active", "pending", "grace_period", "on_hold", "canceled", "expired"]
 
-FREE_GRANT_TOKENS = 200_000
+FREE_GRANT_TOKENS = 1_000_000
 PRO_MONTHLY_TOKENS = 30_000_000
 MAX_MONTHLY_TOKENS = 500_000_000
 PRO_PRODUCT_ID = "foresightnine_pro"

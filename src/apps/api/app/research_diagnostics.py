@@ -15,11 +15,73 @@ _ALLOWED_ERRORS = frozenset({'missing','extra_forbidden','list_type','dict_type'
     'string_too_long','string_too_short','greater_than_equal','less_than_equal','float_type',
     'decimal_parsing','decimal_type','value_error','union_tag_invalid','union_tag_not_found'})
 
+_FINISH_REASON_MAP = {
+    'length': 'provider_length',
+    'max_tokens': 'provider_length',
+    'model_context_window_exceeded': 'provider_context_limit',
+    'content_filter': 'provider_refusal',
+    'refusal': 'provider_refusal',
+    'stop': 'provider_stop',
+    'end_turn': 'provider_stop',
+    'stop_sequence': 'provider_stop',
+    'tool_use': 'provider_tool_calls',
+    'tool_calls': 'provider_tool_calls',
+    'function_call': 'provider_tool_calls',
+}
+_MESSAGES_STOP_REASONS = frozenset({
+    'end_turn',
+    'max_tokens',
+    'stop_sequence',
+    'tool_use',
+    'pause_turn',
+    'refusal',
+    'model_context_window_exceeded',
+    'stop',
+    'length',
+    'tool_calls',
+    'content_filter',
+})
+_USAGE_KEYS = (
+    'input_tokens',
+    'output_tokens',
+    'total_tokens',
+    'cache_creation_input_tokens',
+    'cache_read_input_tokens',
+)
+
+
+def normalize_finish_reason(value: object) -> str:
+    """Map provider finish/stop reasons to bounded canonical diagnostic labels."""
+    return _FINISH_REASON_MAP.get(value, 'unknown') if isinstance(value, str) else 'unknown'
+
+
 def set_finish_reason(value: object) -> None:
-    _finish.set('provider_length' if value == 'length' else 'provider_refusal' if value in ('content_filter', 'refusal') else 'provider_stop' if value == 'stop' else 'unknown')
+    _finish.set(normalize_finish_reason(value))
+
 
 def get_finish_reason() -> str:
     return _finish.get()
+
+
+def safe_stop_reason(value: object) -> str:
+    """Return an allowlisted stop_reason label, never retaining arbitrary provider strings."""
+    if value is None:
+        return 'absent'
+    if isinstance(value, str) and value in _MESSAGES_STOP_REASONS:
+        return value
+    return 'unrecognized'
+
+
+def safe_usage_diagnostics(usage: object) -> dict[str, int]:
+    """Extract bounded non-negative integer token counts from a usage object or dict."""
+    if usage is None:
+        return {}
+    result: dict[str, int] = {}
+    for key in _USAGE_KEYS:
+        value = usage.get(key) if isinstance(usage, dict) else getattr(usage, key, None)
+        if type(value) is int and 0 <= value <= 10**9:
+            result[key] = value
+    return result
 
 def safe_validation_errors(error: ValidationError, schema: type[BaseModel]) -> list[dict[str, Any]]:
     """Only schema-declared property names, array indices and fixed error codes survive."""
@@ -92,6 +154,12 @@ def safe_diagnostic_context(**kwargs: Any) -> dict[str, Any]:
         value = kwargs.get(key)
         if isinstance(value, str) and _HASH.fullmatch(value):
             result[key] = value
+    wire_bytes = kwargs.get('wire_bytes')
+    if type(wire_bytes) is int and 0 <= wire_bytes <= 10**9:
+        result['wire_bytes'] = wire_bytes
+    stream = kwargs.get('stream')
+    if type(stream) is bool:
+        result['stream'] = stream
     parameters = kwargs.get('parameters')
     if isinstance(parameters, dict):
         safe = {}
@@ -209,7 +277,7 @@ def safe_provider_error(body: str | bytes) -> dict[str, str]:
             result[target] = 'unrecognized'
     return result
 
-def safe_wire_metadata(wire: object, *, contract: object = None) -> dict[str, Any]:
+def safe_wire_metadata(wire: object, *, contract: object = None, wire_bytes: int | None = None) -> dict[str, Any]:
     """Select parameters actually present in a submitted request envelope."""
     if not isinstance(wire, dict): return {}
     params = {key: wire[key] for key in (*_PARAMETER_KEYS, 'reasoning_effort', 'do_sample') if key in wire}
@@ -217,8 +285,13 @@ def safe_wire_metadata(wire: object, *, contract: object = None) -> dict[str, An
     if isinstance(thinking, dict): params['thinking'] = thinking.get('type')
     mode = 'tool' if isinstance(wire.get('tools'), list) else (
         wire.get('response_format', {}).get('type') if isinstance(wire.get('response_format'), dict) else 'unknown')
+    extra: dict[str, Any] = {}
+    if type(wire_bytes) is int and 0 <= wire_bytes <= 10**9:
+        extra['wire_bytes'] = wire_bytes
+    if type(wire.get('stream')) is bool:
+        extra['stream'] = wire['stream']
     return safe_diagnostic_context(model=wire.get('model'), parameters=params,
-        output_mode=mode, contract=getattr(contract, 'version', None) if contract is not None else 'none')
+        output_mode=mode, contract=getattr(contract, 'version', None) if contract is not None else 'none', **extra)
 
 
 def sanitize_provider_error(value: object) -> dict[str, str]:

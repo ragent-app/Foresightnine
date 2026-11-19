@@ -52,11 +52,27 @@ const SEC_INDEX = [
   { cik: 1000002, ticker: "CTEX", name: "Contoso Example Holdings" },
   { cik: 1000003, ticker: "FBEX", name: "Fabrikam Example Inc" },
 ];
-const DISCOVERY_STEP = { kind: "tool", name: "discover_sources", status: "completed", rationale: "搜索公开线索" };
 const DISCOVERY_CANDIDATES = [
   { url: "https://www.sec.gov/Archives/edgar/data/1000001/000100000126000012/nwex-20260630.htm", title: "Northwind Example Corp 10-K (fictional)", published_at: "2026-08-12T00:00:00Z" },
   { url: "https://news.example.com/northwind-capex", title: "示例新闻：Northwind 资本开支", published_at: "2026-10-20T00:00:00Z" },
 ];
+const DISCOVERY_STEP = {
+  kind: "tool",
+  name: "discover_sources",
+  status: "completed",
+  rationale: "搜索公开线索",
+  summary: {
+    kind: "discover_sources",
+    found_count: 2,
+    eligible_count: 1,
+    denied_count: 1,
+    leads_preview: DISCOVERY_CANDIDATES.map((item) => ({
+      title: item.title,
+      host: new URL(item.url).host,
+      published_at: item.published_at,
+    })),
+  },
+};
 
 class HttpError extends Error {
   constructor(status, code, message, { retryable = false, details = [], headers = {} } = {}) {
@@ -777,6 +793,7 @@ function effectiveQuestion(topic, run) {
 function pickVariant(question) {
   if (question.includes("部分")) return "partial";
   if (question.includes("失败")) return "fail";
+  if (question.includes("驳回")) return "rejected";
   return "normal";
 }
 
@@ -939,37 +956,164 @@ function commitTurn(data, run, mode, now) {
 }
 
 /** Advances one run by one step. */
-function advance(data, run) {
+function advance(data, run, broker) {
   const now = new Date();
   if (run.cancel_requested) {
+    broker?.publishReset(run, { call_seq: run.streamCallSeq ?? 1, reason: "cancelled" });
     touch(run, now, "cancelled");
     settleQuota(data, run);
+    broker?.publishTerminal(run);
     return;
   }
   if (run.operation.status === "pending") run.operation.status = "running";
+
+  if (run.cursor === 0 && !run.streamThinkingDone) {
+    run.streamThinkingDone = true;
+    run.streamCallSeq = 1;
+    touch(run, now);
+    broker?.publishCurrent(run);
+    broker?.publishDelta(run, {
+      call_seq: 1,
+      channel: "thinking",
+      delta: "先核对 Northwind 2025 与 2026 财年营业利润与总收入所在章节，",
+      seq: 0,
+    });
+    broker?.publishDelta(run, {
+      call_seq: 1,
+      channel: "thinking",
+      delta: "确认单位均为百万美元（millions USD），并检查是否存在口径调整附注。",
+      seq: 1,
+    });
+    broker?.publishDelta(run, {
+      call_seq: 1,
+      channel: "text",
+      delta: "先读取年报摘录中的营业利润与收入段落，核对两年财报口径。",
+      seq: 2,
+    });
+    return;
+  }
+
+  if (run.variant === "partial" && run.cursor === 2 && !run.streamPartialDraftDone) {
+    run.streamPartialDraftDone = true;
+    run.streamCallSeq = 2;
+    touch(run, now);
+    broker?.publishCurrent(run, { kind: "model", phase: "responding", retry_attempt: null, started_at: run.operation.updated_at });
+    broker?.publishDelta(run, {
+      call_seq: 2,
+      channel: "tool_status",
+      delta: "正在整理部分结论草稿…",
+      seq: 0,
+    });
+    broker?.publishDelta(run, {
+      call_seq: 2,
+      channel: "draft_report",
+      delta: "未完成草稿：正在尝试提交阶段性结果，等待服务端校验是否完整。",
+      seq: 1,
+    });
+    return;
+  }
+
+  if (run.cursor === RUN_STEPS.length - 1) {
+    if (!run.streamDraftPhase) {
+      run.streamDraftPhase = 1;
+      run.streamCallSeq = 3;
+      touch(run, now);
+      broker?.publishCurrent(run, { kind: "model", phase: "responding", retry_attempt: null, started_at: run.operation.updated_at });
+      broker?.publishDelta(run, {
+        call_seq: 3,
+        channel: "tool_status",
+        delta: "正在起草研究报告并整理引文，完成后将自动核验原文位置…",
+        seq: 0,
+      });
+      broker?.publishDelta(run, {
+        call_seq: 3,
+        channel: "draft_report",
+        delta: "Northwind 示例公司在 FY2026 的营业利润较 FY2025 实现显著增长（草稿整理中）。\n\n",
+        seq: 1,
+      });
+      broker?.publishDelta(run, {
+        call_seq: 3,
+        channel: "draft_report",
+        delta: run.variant === "rejected"
+          ? "待核验段落：初步引用了一处未对齐的附注数字，服务端将进行位置核验。"
+          : "上述增速基于已记录的两期营业利润口径，最终结论与引文编号将在提交核验后生成。",
+        seq: 2,
+      });
+      return;
+    }
+    if (run.variant === "rejected" && run.streamDraftPhase === 1) {
+      run.streamDraftPhase = 2;
+      touch(run, now);
+      broker?.publishReset(run, { call_seq: 3, reason: "submission_rejected" });
+      return;
+    }
+    if (run.variant === "rejected" && run.streamDraftPhase === 2) {
+      run.streamDraftPhase = 3;
+      run.streamCallSeq = 4;
+      touch(run, now);
+      broker?.publishDelta(run, {
+        call_seq: 4,
+        channel: "tool_status",
+        delta: "正在修正引文位置并重新起草研究报告…",
+        seq: 0,
+      });
+      broker?.publishDelta(run, {
+        call_seq: 4,
+        channel: "draft_report",
+        delta: "修正后草稿：Northwind 示例公司 FY2026 营业利润同比增速约 16.36%，引文已重新对齐。",
+        seq: 1,
+      });
+      return;
+    }
+  }
+
+  if (run.cursor === 0 && run.streamThinkingDone) {
+    broker?.publishReset(run, { call_seq: run.streamCallSeq ?? 1, reason: "tool_started" });
+  }
+
+  const eventIndex = run.events.length;
   run.events.push(rawEvent(RUN_STEPS[run.cursor]));
   run.cursor += 1;
   const cursor = run.cursor;
   if (cursor === RUN_STEPS.length) {
+    broker?.publishReset(run, { call_seq: run.streamCallSeq ?? 3, reason: "call_completed" });
     commitTurn(data, run, "completed", now);
     touch(run, now, "completed");
   } else if (run.variant === "partial" && cursor === 3) {
+    broker?.publishReset(run, { call_seq: run.streamCallSeq ?? 2, reason: "submission_partial" });
     commitTurn(data, run, "partial", now);
     touch(run, now, "failed");
   } else if (run.variant === "fail" && cursor === 2) {
+    broker?.publishReset(run, { call_seq: run.streamCallSeq ?? 1, reason: "failed" });
     touch(run, now, "failed");
   } else {
     touch(run, now);
   }
-  if (["completed", "failed", "cancelled"].includes(run.operation.status)) settleQuota(data, run);
+  broker?.publishEvent(run, eventIndex);
+  if (["completed", "failed", "cancelled"].includes(run.operation.status)) {
+    settleQuota(data, run);
+    broker?.publishTerminal(run);
+  } else {
+    broker?.publishCurrent(run);
+  }
 }
 
 function currentActivity(run) {
   if (run.operation.status !== "running") return null;
   const step = RUN_STEPS[run.cursor];
   if (!step) return null;
-  if (step.kind === "model") return { kind: "model" };
-  if (step.kind === "tool") return { kind: "tool", name: step.name };
+  if (step.kind === "model") {
+    return { kind: "model", phase: "thinking", retry_attempt: null, started_at: run.operation.updated_at };
+  }
+  if (step.kind === "tool") {
+    return {
+      kind: "tool",
+      name: step.name,
+      rationale: clip(step.rationale, 300),
+      target: clip(step.target, 200),
+      started_at: run.operation.updated_at,
+    };
+  }
   return null; // the submission step is not model or tool activity
 }
 
@@ -981,6 +1125,7 @@ function sanitizeEvent(event) {
   if (!isRecord(event)) return null;
   if (event.kind === "model") {
     const detail = isRecord(event.usage_detail) ? event.usage_detail : {};
+    const note = clip(event.note, 600);
     return {
       kind: "model",
       finish_reason: clip(event.finish_reason, 100),
@@ -988,6 +1133,7 @@ function sanitizeEvent(event) {
       input_tokens: int(detail.input_tokens),
       output_tokens: int(detail.output_tokens),
       settlement: clip(event.settlement, 100),
+      ...(note ? { note } : {}),
     };
   }
   if (event.kind === "model_failure") return { kind: "model_failure", code: clip(event.code, 100) };
@@ -999,10 +1145,35 @@ function sanitizeEvent(event) {
       reason: clip(event.reason, 100),
       rationale: clip(event.rationale, 300),
       denied_count: int(event.denied_count),
+      ...(isRecord(event.summary) ? { summary: structuredClone(event.summary) } : {}),
     };
   }
   if (event.kind === "submission") return { kind: "submission", status: clip(event.status, 100) };
   return null;
+}
+
+function interimFromEvents(events) {
+  let leads = 0;
+  let acquired = 0;
+  let read = 0;
+  let facts = 0;
+  let calcs = 0;
+  for (const event of events) {
+    if (!isRecord(event) || event.kind !== "tool" || !isRecord(event.summary)) continue;
+    const s = event.summary;
+    if (s.kind === "discover_sources" && Number.isInteger(s.eligible_count)) leads += s.eligible_count;
+    if (s.kind === "acquire_sources" && Number.isInteger(s.acquired_count)) acquired += s.acquired_count;
+    if (s.kind === "read_sources" && Number.isInteger(s.read_count)) read += s.read_count;
+    if (s.kind === "record_facts" && Number.isInteger(s.recorded_count)) facts += s.recorded_count;
+    if (s.kind === "calculate_financials" && Number.isInteger(s.calculated_count)) calcs += s.calculated_count;
+  }
+  return {
+    leads_count: leads,
+    acquired_sources_count: acquired,
+    read_sources_count: read,
+    facts_count: facts,
+    calculations_count: calcs,
+  };
 }
 
 function buildProgress(run, after) {
@@ -1017,6 +1188,7 @@ function buildProgress(run, after) {
     turn: { index: run.turn_index, question: run.question },
     usage: usageFromEvents(run.events),
     current: currentActivity(run),
+    interim: interimFromEvents(run.events),
     events,
     event_count: run.events.length,
     started_at: run.started_at,
@@ -1302,14 +1474,107 @@ function nextMonthStart(now) {
 
 // ---- Server -----------------------------------------------------------------------
 
-export function createServer({ tickMs = 1500 } = {}) {
+export function createServer({ tickMs = 1500, heartbeatMs = 15000, maxSsePerAccount = 6 } = {}) {
   /** accountId -> { email, created_at, data } */
   const accounts = new Map();
   /** token -> { accountId, expiresAt } */
   const sessions = new Map();
   /** scoped key -> { hash, operationId } */
   const idempotency = new Map();
+  /** operationId -> Set<{ res, cleanup, lastSentIndex }> */
+  const sseSubscribers = new Map();
+  /** accountId -> number of active SSE responses */
+  const accountSseCounts = new Map();
   let runSeq = 1000;
+
+  const writeSseFrame = (res, event, data, id = null) => {
+    if (res.writableEnded || res.destroyed) return;
+    const head = id !== null ? `event: ${event}\nid: ${id}\n` : `event: ${event}\n`;
+    res.write(`${head}data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const sseBroker = {
+    publishEvent(run, index) {
+      const subs = sseSubscribers.get(run.operation.operation_id);
+      if (!subs || subs.size === 0) return;
+      const clean = sanitizeEvent(run.events[index]);
+      if (!clean) return;
+      const payload = {
+        operation_id: run.operation.operation_id,
+        event: { index, ...clean },
+        event_count: run.events.length,
+        usage: usageFromEvents(run.events),
+        interim: interimFromEvents(run.events),
+        updated_at: run.operation.updated_at,
+      };
+      for (const sub of subs) {
+        if (index <= sub.lastSentIndex) continue;
+        sub.lastSentIndex = index;
+        writeSseFrame(sub.res, "step.event", payload, `ev:${index}`);
+      }
+    },
+    publishCurrent(run, overrideCurrent) {
+      const subs = sseSubscribers.get(run.operation.operation_id);
+      if (!subs || subs.size === 0) return;
+      const payload = {
+        operation_id: run.operation.operation_id,
+        operation_status: run.operation.status,
+        current: overrideCurrent === undefined ? currentActivity(run) : overrideCurrent,
+        usage: usageFromEvents(run.events),
+        interim: interimFromEvents(run.events),
+        updated_at: run.operation.updated_at,
+      };
+      for (const sub of subs) writeSseFrame(sub.res, "step.current", payload);
+    },
+    publishDelta(run, { call_seq, channel, delta, seq }) {
+      const subs = sseSubscribers.get(run.operation.operation_id);
+      if (!subs || subs.size === 0) return;
+      const payload = {
+        operation_id: run.operation.operation_id,
+        call_seq,
+        channel,
+        delta,
+        seq,
+      };
+      for (const sub of subs) writeSseFrame(sub.res, "stream.delta", payload);
+    },
+    publishReset(run, { call_seq, reason }) {
+      const subs = sseSubscribers.get(run.operation.operation_id);
+      if (!subs || subs.size === 0) return;
+      const payload = {
+        operation_id: run.operation.operation_id,
+        call_seq,
+        reason,
+      };
+      for (const sub of subs) writeSseFrame(sub.res, "stream.reset", payload);
+    },
+    publishTerminal(run) {
+      const subs = sseSubscribers.get(run.operation.operation_id);
+      if (!subs || subs.size === 0) return;
+      const payload = {
+        operation_id: run.operation.operation_id,
+        operation_status: run.operation.status,
+        version_id: run.version_id ?? null,
+      };
+      for (const sub of [...subs]) {
+        writeSseFrame(sub.res, "run.terminal", payload, `done:${run.operation.status}`);
+        sub.cleanup();
+        if (!sub.res.writableEnded) sub.res.end();
+      }
+    },
+  };
+
+  function parseLastEventId(raw, after) {
+    if (raw === undefined || raw === null) return { after, alreadyDone: false };
+    const value = String(raw).trim();
+    if (!value) return { after, alreadyDone: false };
+    let match = /^ev:(\d+)$/.exec(value);
+    if (match) return { after: Math.max(after, Number(match[1]) + 1), alreadyDone: false };
+    match = /^cp:(\d+)$/.exec(value);
+    if (match) return { after: Math.max(after, Number(match[1])), alreadyDone: false };
+    if (/^done:(completed|failed|cancelled)$/.test(value)) return { after, alreadyDone: true };
+    throw new HttpError(400, "invalid_last_event_id", "Invalid Last-Event-ID header.");
+  }
 
   function issueSession(email, status, res) {
     const accountId = `acct_${sha256(email).slice(0, 16)}`;
@@ -1684,6 +1949,76 @@ export function createServer({ tickMs = 1500 } = {}) {
     const after = raw === null ? 0 : /^\d+$/.test(raw) ? Number(raw) : NaN;
     if (!Number.isSafeInteger(after)) throw invalid("Input should be a non-negative integer.", "query/after");
     send(res, 200, buildProgress(run, after));
+  });
+  route("GET", "/v2/research/topics/:topic/runs/:op/events", true, ({ req, res, auth, params, query }) => {
+    const data = dataFor(auth.accountId);
+    const run = getRun(data, getTopic(data, params.topic).topic_id, params.op);
+    const raw = query.get("after");
+    const baseAfter = raw === null ? 0 : /^\d+$/.test(raw) ? Number(raw) : NaN;
+    if (!Number.isSafeInteger(baseAfter)) throw invalid("Input should be a non-negative integer.", "query/after");
+    const { after, alreadyDone } = parseLastEventId(req.headers["last-event-id"], baseAfter);
+    const activeCount = accountSseCounts.get(auth.accountId) ?? 0;
+    if (activeCount >= maxSsePerAccount) {
+      throw new HttpError(429, "rate_limited", "Too many concurrent research event streams.", {
+        retryable: true,
+        headers: { "Retry-After": "5" },
+      });
+    }
+    accountSseCounts.set(auth.accountId, activeCount + 1);
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    res.flushHeaders?.();
+    const snapshot = buildProgress(run, after);
+    writeSseFrame(res, "progress.snapshot", snapshot, `cp:${snapshot.event_count}`);
+
+    const opId = run.operation.operation_id;
+    let cleaned = false;
+    let hbTimer = null;
+    const sub = {
+      res,
+      lastSentIndex: snapshot.event_count - 1,
+      cleanup: () => {
+        if (cleaned) return;
+        cleaned = true;
+        if (hbTimer) clearInterval(hbTimer);
+        const set = sseSubscribers.get(opId);
+        if (set) {
+          set.delete(sub);
+          if (set.size === 0) sseSubscribers.delete(opId);
+        }
+        const nextCount = Math.max(0, (accountSseCounts.get(auth.accountId) ?? 1) - 1);
+        if (nextCount === 0) accountSseCounts.delete(auth.accountId);
+        else accountSseCounts.set(auth.accountId, nextCount);
+      },
+    };
+
+    if (alreadyDone || ["completed", "failed", "cancelled"].includes(run.operation.status)) {
+      writeSseFrame(res, "run.terminal", {
+        operation_id: opId,
+        operation_status: run.operation.status,
+        version_id: run.version_id ?? null,
+      }, `done:${run.operation.status}`);
+      sub.cleanup();
+      res.end();
+      return;
+    }
+
+    let set = sseSubscribers.get(opId);
+    if (!set) {
+      set = new Set();
+      sseSubscribers.set(opId, set);
+    }
+    set.add(sub);
+    hbTimer = setInterval(() => {
+      if (!res.writableEnded && !res.destroyed) res.write(": heartbeat\n\n");
+    }, heartbeatMs);
+    hbTimer.unref();
+    req.on("close", sub.cleanup);
+    res.on("close", sub.cleanup);
   });
   route("GET", "/v2/research/topics/:topic/runs/:op/recovery-status", true, ({ res, auth, params }) => {
     const data = dataFor(auth.accountId);
@@ -2419,12 +2754,20 @@ export function createServer({ tickMs = 1500 } = {}) {
     for (const account of accounts.values()) {
       if (!account.data) continue;
       for (const run of account.data.runs.values()) {
-        if (isActive(run)) advance(account.data, run);
+        if (isActive(run)) advance(account.data, run, sseBroker);
       }
     }
   }, tickMs);
   timer.unref();
-  server.on("close", () => clearInterval(timer));
+  server.on("close", () => {
+    clearInterval(timer);
+    for (const set of [...sseSubscribers.values()]) {
+      for (const sub of [...set]) {
+        sub.cleanup();
+        if (!sub.res.writableEnded) sub.res.end();
+      }
+    }
+  });
   // Test hook: inspect or mutate in-memory state (accountId -> { email, created_at, data }).
   server.mockState = { accounts, sessions };
   return server;

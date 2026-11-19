@@ -370,3 +370,554 @@ def test_native_claim_roles_persist_and_counterargument_survives_user_edit(monke
     assert saved_claims[1]['citations'][0]['location']['character_start'] == 21
     again = client.post(path + '/versions', headers=headers, json={'parent_version_id': saved.json()['versions'][-1]['version_id'], 'content': edited})
     assert again.status_code == 201, again.text
+
+
+def _tiny_pdf_bytes() -> bytes:
+    streams = [b'BT /F1 12 Tf 20 150 Td (Revenue 100) Tj ET', b'BT /F1 12 Tf 20 150 Td (Revenue 200) Tj ET']
+    objects = [
+        b'<< /Type /Catalog /Pages 2 0 R >>',
+        b'<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
+        b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R >>',
+        b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>',
+        b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    ]
+    objects.extend(b'<< /Length ' + str(len(stream)).encode() + b' >>\nstream\n' + stream + b'\nendstream' for stream in streams)
+    pdf = bytearray(b'%PDF-1.4\n')
+    offsets = [0]
+    for index, obj in enumerate(objects, 1):
+        offsets.append(len(pdf))
+        pdf.extend(f'{index} 0 obj\n'.encode() + obj + b'\nendobj\n')
+    start = len(pdf)
+    pdf.extend(f'xref\n0 {len(offsets)}\n0000000000 65535 f \n'.encode())
+    for offset in offsets[1:]:
+        pdf.extend(f'{offset:010d} 00000 n \n'.encode())
+    pdf.extend(f'trailer\n<< /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{start}\n%%EOF\n'.encode())
+    return bytes(pdf)
+
+
+def test_question_only_run_fetches_open_web_html_and_pdf_and_persists_partial_notes(monkeypatch):
+    import app.research_fetch as research_fetch
+
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.delenv('FORESIGHTNINE_FETCH_ALLOWED_HOSTS', raising=False)
+    monkeypatch.delenv('FORESIGHTNINE_FETCH_BLOCKED_HOSTS', raising=False)
+    monkeypatch.delenv('FORESIGHTNINE_SEC_USER_AGENT', raising=False)
+    monkeypatch.delenv('SEC_USER_AGENT', raising=False)
+
+    html_url = 'https://ir.example.com/news/q4'
+    pdf_url = 'https://ir.example.com/download?id=99'
+    pdf_bytes = _tiny_pdf_bytes()
+    html_bytes = b'<html><p>Web revenue was 100 USD.</p></html>'
+
+    class Search:
+        supports_project_search = True
+
+        def search(self, query, **kwargs):
+            return [
+                ProviderSearchCandidate('IR News', html_url, 'Unverified IR lead', None, None, True),
+                ProviderSearchCandidate('IR PDF', pdf_url, 'Unverified PDF lead', None, None, True),
+            ]
+
+    def fake_transport(method, url, headers, body, timeout, **kwargs):
+        if url == html_url:
+            return BinaryHttpResponse(200, html_bytes, {'content-type': 'text/html; charset=utf-8'})
+        if url == pdf_url:
+            return BinaryHttpResponse(200, pdf_bytes, {'content-type': 'application/pdf'})
+        raise AssertionError(f'Unexpected URL: {url}')
+
+    partial_notes = 'Acquired IR HTML and PDF; SEC structured data is unconfigured in this environment.'
+    seen_caps = {}
+
+    class Provider:
+        name = 'open-web-api-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=None, max_output_tokens=1000)
+
+        def complete(self, messages, tools, **kwargs):
+            results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
+            stage = len(results)
+            if stage == 0:
+                payload = json.loads(messages[1]['content'])
+                seen_caps['value'] = payload['available_capabilities']
+                return turn('discover_sources', {'query': 'Example revenue', 'rationale': 'Find web sources.'}, 'd1')
+            if stage == 1:
+                return turn('acquire_sources', {'urls': [html_url, pdf_url], 'rationale': 'Fetch HTML and PDF.'}, 'a1')
+            if stage == 2:
+                acquired = results[1]['results']
+                assert all(item['status'] == 'acquired' for item in acquired), results[1]
+                self.html_sid = acquired[0]['source_id']
+                self.pdf_sid = acquired[1]['source_id']
+                return turn('read_sources', {'reads': [{'source_id': self.html_sid}, {'source_id': self.pdf_sid}],
+                                             'rationale': 'Read both sources.'}, 'r1')
+            return turn('submit_research', {
+                'report': partial_notes,
+                'claims': [
+                    {'text': 'IR release states 100 USD revenue.', 'source_id': self.html_sid,
+                     'quotation': 'Web revenue was 100 USD.', 'role': 'support'},
+                    {'text': 'IR PDF page 2 states Revenue 200.', 'source_id': self.pdf_sid,
+                     'quotation': 'Revenue 200', 'role': 'support'},
+                ],
+                'limitations': ['SEC structured data is unconfigured.'],
+                'stopping_reason': 'partial_sources_only',
+                'status': 'partial',
+            }, 's1')
+
+    monkeypatch.setattr(api, 'evidence_provider', Search())
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    monkeypatch.setattr(api, '_reserve_search_call', lambda *_: None)
+    monkeypatch.setattr(research_fetch, '_validated_addresses', lambda host, port, *, allow_private=False: ('93.184.216.34',))
+    monkeypatch.setattr(research_fetch, '_default_binary_transport', fake_transport)
+
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'{uuid4().hex}@example.test',
+                                                        'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'What was revenue?'}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    run_resp = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex},
+                           json={'parent_version_id': topic['versions'][0]['version_id']})
+    assert run_resp.status_code == 202, run_resp.text
+    operation_id = run_resp.json()['operation']['operation_id']
+    for _ in range(200):
+        op = client.get(path + '/runs/' + operation_id, headers=headers).json()['operation']
+        if op['status'] in ('completed', 'failed', 'cancelled'):
+            break
+        time.sleep(.01)
+    assert op['status'] == 'completed', op
+
+    assert seen_caps['value']['search_available'] is True
+    assert seen_caps['value']['acquire_available'] is True
+    assert seen_caps['value']['web_fetch_enabled'] is True
+    assert seen_caps['value']['sec_available'] is False
+    assert seen_caps['value']['max_fetch_bytes'] == 5_000_000
+
+    version = client.get(path, headers=headers).json()['versions'][-1]
+    saved_turn = version['content']['turns'][-1]
+    assert saved_turn['status'] == 'partial'
+    assert saved_turn['report'] == ''
+    assert saved_turn['partial_notes'] == partial_notes
+    assert saved_turn['stopping_note'] == 'partial_sources_only'
+    assert len(version['content']['claims']) == 2
+
+    src_meta = {row['retrieval_method']: row for row in client.get(
+        f"{path}/versions/{version['version_id']}/sources", headers=headers).json()}
+    assert set(src_meta) == {'web_html', 'web_pdf'}
+    assert src_meta['web_html']['original_html_available'] is True
+    assert 'span markers' in src_meta['web_html']['extraction_disclosure']
+    assert src_meta['web_pdf']['original_pdf_available'] is True
+    assert src_meta['web_html']['permissions']['export'] is False
+    assert src_meta['web_pdf']['permissions']['export'] is False
+
+    pdf_id = src_meta['web_pdf']['source_id']
+    pdf_full = client.get(f'/v2/research/sources/{pdf_id}', headers=headers).json()
+    p2_start = pdf_full['text'].index('Revenue 200')
+    pdf_ctx = client.get(f'/v2/research/sources/{pdf_id}/context', headers=headers,
+                         params={'start': p2_start, 'end': p2_start + len('Revenue 200')})
+    assert pdf_ctx.status_code == 200 and pdf_ctx.json()['page_start'] == 2 and pdf_ctx.json()['page_end'] == 2
+
+    assert client.get(f"/v2/research/sources/{src_meta['web_html']['source_id']}/original", headers=headers).status_code == 403
+    assert client.get(f'/v2/research/sources/{pdf_id}/original', headers=headers).status_code == 403
+    assert client.get(f"{path}/versions/{version['version_id']}/export", headers=headers).status_code == 403
+    meta_export = client.get(f"{path}/versions/{version['version_id']}/export/metadata", headers=headers)
+    assert meta_export.status_code == 200 and meta_export.json()['claim_count'] == 2
+
+
+def test_question_only_run_calls_sec_company_concept_and_cites_sec_source(monkeypatch):
+    import threading
+    import app.research_structured_connector as connector
+    from app.research_sec import SecResult
+
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.setenv('FORESIGHTNINE_SEC_USER_AGENT', 'Example Research contact@example.test')
+
+    class Search:
+        supports_project_search = True
+
+        def search(self, query, **kwargs):
+            return []
+
+    entered, release = threading.Event(), threading.Event()
+    quote = '{"val": 130497000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26", "filed": "2025-02-26", "form": "10-K"}'
+
+    def fake_identities(req, agent):
+        assert agent == 'Example Research contact@example.test'
+        return {
+            'candidates': [{'cik': '0001045810', 'ticker': 'NVDA', 'name': 'NVIDIA CORP', 'exchange': None}],
+            'source_url': 'https://www.sec.gov/files/company_tickers.json',
+            'retrieved_at': '2026-01-01T00:00:00Z',
+            'response_sha256': 'idhash',
+            'limitation': 'current mapping',
+        }
+
+    def fake_concept(req, agent):
+        assert req.cik == '0001045810' and req.tag == 'Revenues'
+        entered.set()
+        assert release.wait(10)
+        return SecResult(
+            url='https://data.sec.gov/api/xbrl/companyconcept/CIK0001045810/us-gaap/Revenues.json',
+            title='NVIDIA CORP: Revenues (USD)',
+            text=f'SEC XBRL companyconcept\n{quote}',
+            response_sha256='secsha256',
+        )
+
+    seen_caps = {}
+
+    class Provider:
+        name = 'sec-concept-api-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=None, max_output_tokens=1000)
+
+        def complete(self, messages, tools, **kwargs):
+            results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
+            stage = len(results)
+            if stage == 0:
+                payload = json.loads(messages[1]['content'])
+                seen_caps['value'] = payload['available_capabilities']
+                assert 'contact@example.test' not in json.dumps(payload)
+                return turn('sec_company_concept', {
+                    'entity_query': 'NVDA',
+                    'taxonomy': 'us-gaap',
+                    'tag': 'Revenues',
+                    'unit': 'USD',
+                    'period_start': '2024-01-29',
+                    'period_end': '2025-01-26',
+                    'rationale': 'Get NVDA FY25 SEC XBRL revenue.',
+                }, 'sec1')
+            if stage == 1:
+                assert results[0]['status'] == 'acquired', results[0]
+                self.sec_sid = results[0]['source_id']
+                return turn('read_sources', {'reads': [{'source_id': self.sec_sid}], 'rationale': 'Read SEC data.'}, 'r1')
+            assert quote in results[1]['results'][0]['text']
+            return turn('submit_research', {
+                'report': 'NVIDIA FY25 revenue was 130,497,000,000 USD per SEC XBRL.',
+                'claims': [{
+                    'text': 'NVIDIA FY25 revenue was 130,497,000,000 USD.',
+                    'source_id': self.sec_sid,
+                    'quotation': quote,
+                    'role': 'support',
+                }],
+                'limitations': [],
+                'stopping_reason': 'answered',
+                'status': 'completed',
+            }, 's1')
+
+    monkeypatch.setattr(api, 'evidence_provider', Search())
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    monkeypatch.setattr(api, '_reserve_search_call', lambda *_: None)
+    monkeypatch.setattr(api, 'reserve_sec_request', lambda *_: True)
+    monkeypatch.setattr(connector, 'search_sec_identities', fake_identities)
+    monkeypatch.setattr(connector, 'fetch_sec_concept', fake_concept)
+
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'{uuid4().hex}@example.test',
+                                                        'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'What was NVDA FY25 revenue?'}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+
+    try:
+        run_resp = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex},
+                               json={'parent_version_id': topic['versions'][0]['version_id']})
+        assert run_resp.status_code == 202, run_resp.text
+        operation_id = run_resp.json()['operation']['operation_id']
+        assert entered.wait(10)
+        prog = client.get(path + '/runs/' + operation_id + '/progress', headers=headers)
+        assert prog.status_code == 200
+        current = prog.json()['current']
+        assert current['kind'] == 'tool' and current['name'] == 'sec_company_concept'
+        assert current['rationale'] == 'Get NVDA FY25 SEC XBRL revenue.'
+        assert current['target'] == 'NVDA · us-gaap:Revenues (USD)'
+        assert isinstance(current['started_at'], str) and current['started_at']
+    finally:
+        release.set()
+
+    for _ in range(200):
+        op = client.get(path + '/runs/' + operation_id, headers=headers).json()['operation']
+        if op['status'] in ('completed', 'failed', 'cancelled'):
+            break
+        time.sleep(.01)
+    assert op['status'] == 'completed', op
+    assert seen_caps['value']['sec_available'] is True
+
+    version = client.get(path, headers=headers).json()['versions'][-1]
+    assert version['content']['turns'][-1]['status'] == 'completed'
+    assert version['content']['turns'][-1]['partial_notes'] is None
+    sec_sid = version['content']['claims'][0]['citations'][0]['source_id']
+    assert sec_sid in version['source_ids']
+    sec_source = client.get(f'/v2/research/sources/{sec_sid}', headers=headers).json()
+    assert sec_source['retrieval_method'] == 'sec_companyconcept' and sec_source['kind'] == 'official'
+    assert 'contact@example.test' not in json.dumps(sec_source)
+
+    exported = client.get(f"{path}/versions/{version['version_id']}/export", headers=headers)
+    assert exported.status_code == 200
+    assert exported.json()['source_provenance'][0]['retrieval_method'] == 'sec_companyconcept'
+    assert 'contact@example.test' not in exported.text
+
+    # When auto_fetch_official=False, sec_available is False and calling sec_company_concept is denied.
+    class DeniedProvider:
+        name = 'sec-denied-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=None, max_output_tokens=1000)
+
+        def complete(self, messages, tools, **kwargs):
+            results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
+            if not results:
+                payload = json.loads(messages[1]['content'])
+                assert payload['available_capabilities']['sec_available'] is False
+                return turn('sec_company_concept', {
+                    'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'Revenues', 'unit': 'USD',
+                    'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'Test gate.',
+                }, 'sec_denied')
+            assert results[0] == {'status': 'restricted', 'reason': 'permission_denied'}
+            return turn('submit_research', {
+                'report': 'SEC tool permission denied.', 'claims': [], 'limitations': ['Retrieval disabled'],
+                'stopping_reason': 'permission_denied', 'status': 'partial',
+            }, 's_denied')
+
+    monkeypatch.setattr(api, 'challenge_provider', DeniedProvider())
+    denied_run = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={
+        'parent_version_id': version['version_id'], 'question_override': 'Check again', 'auto_fetch_official': False,
+    })
+    assert denied_run.status_code == 202
+    denied_op_id = denied_run.json()['operation']['operation_id']
+    for _ in range(200):
+        op = client.get(path + '/runs/' + denied_op_id, headers=headers).json()['operation']
+        if op['status'] in ('completed', 'failed', 'cancelled'):
+            break
+        time.sleep(.01)
+    assert op['status'] == 'completed'
+    denied_turn = client.get(path, headers=headers).json()['versions'][-1]['content']['turns'][-1]
+    assert denied_turn['status'] == 'partial' and denied_turn['report'] == ''
+    assert denied_turn['partial_notes'] == 'SEC tool permission denied.'
+
+
+def test_v1_search_candidates_skips_opaque_redirect_lead_while_invalid_keeps_fallback(monkeypatch):
+    from datetime import date
+
+    usable = ProviderSearchCandidate(
+        'Usable filing',
+        'https://example.com/filing',
+        'Valid excerpt.',
+        'Example',
+        date(2026, 8, 1),
+        True,
+    )
+    trailing_opaque_redirect = ProviderSearchCandidate(
+        'Opaque Google redirect',
+        'https://www.google.com/goto?url=CAESdwHEIkXX&gsessionid=x',
+        'Opaque.',
+        'Google',
+        None,
+        False,
+    )
+
+    class SearchWithRedirect:
+        name = 'redirect-filter-test'
+        supports_project_search = True
+
+        def search(self, query, *, limit):
+            return [usable, trailing_opaque_redirect]
+
+    monkeypatch.setattr(api, 'evidence_provider', SearchWithRedirect())
+    monkeypatch.setattr(api, '_reserve_search_call', lambda *_: None)
+    client = TestClient(api.app)
+
+    ok = client.get('/v1/search/candidates', params={'query': 'nvda revenue', 'limit': 5})
+    assert ok.status_code == 200, ok.text
+    body = ok.json()
+    assert body['project_search_available'] is True
+    assert body['fallback'] == 'client_bundle'
+    assert len(body['candidates']) == 1
+    assert body['candidates'][0]['url'] == 'https://example.com/filing'
+
+    class SearchWithMalformed:
+        name = 'malformed-test'
+        supports_project_search = True
+
+        def search(self, query, *, limit):
+            return [usable, {'title': 'Broken', 'url': 'javascript:alert(1)'}]
+
+    monkeypatch.setattr(api, 'evidence_provider', SearchWithMalformed())
+    fallback = client.get('/v1/search/candidates', params={'query': 'nvda revenue', 'limit': 5})
+    assert fallback.status_code == 200, fallback.text
+    assert fallback.json() == {
+        'schema_version': 'v1',
+        'provider': 'malformed-test',
+        'project_search_available': False,
+        'fallback': 'client_bundle',
+        'candidates': [],
+    }
+
+
+def test_start_research_run_uses_pace_sec_request_and_honors_reserve_override(monkeypatch):
+    from datetime import date, datetime, timezone
+    import math
+    import pytest
+    import app.research_official_retrieval as retrieval
+    import app.research_structured_connector as connector
+    from app.research_sec import SecFilingResult, SecResult
+
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.setenv('FORESIGHTNINE_SEC_USER_AGENT', 'Example Research contact@example.test')
+    monkeypatch.setattr(api, '_reserve_search_call', lambda *_: None)
+    assert api.reserve_sec_request is api._DEFAULT_RESERVE_SEC_REQUEST
+
+    # Pre-seed an immediate SEC slot so un-paced reserve_sec_request would return False.
+    api.SOURCE_RATE_LIMITS.put('sec', {'requested_at': datetime.now(timezone.utc).isoformat()})
+
+    pace_calls = []
+
+    def fake_pace(repository, *, cancel_event=None, deadline=None, **kwargs):
+        pace_calls.append({
+            'is_shared_repo': repository is api.SOURCE_RATE_LIMITS,
+            'has_cancel_event': cancel_event is not None,
+            'deadline': deadline,
+        })
+        return True
+
+    monkeypatch.setattr(api, 'pace_sec_request', fake_pace)
+
+    filing_url = 'https://www.sec.gov/Archives/edgar/data/1045810/000104581025000001/nvda-20250126.htm'
+
+    class Search:
+        supports_project_search = True
+
+        def search(self, query, **kwargs):
+            return [ProviderSearchCandidate('NVIDIA Form 10-K', filing_url, 'Annual filing.', 'SEC EDGAR', date(2025, 2, 26), True)]
+
+    rev_quote = '{"val": 130497000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26", "filed": "2025-02-26", "form": "10-K"}'
+    ni_quote = '{"val": 72880000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26", "filed": "2025-02-26", "form": "10-K"}'
+
+    def fake_identities(req, agent):
+        return {
+            'candidates': [{'cik': '0001045810', 'ticker': 'NVDA', 'name': 'NVIDIA CORP', 'exchange': None}],
+            'source_url': 'https://www.sec.gov/files/company_tickers.json',
+            'retrieved_at': '2026-01-01T00:00:00Z',
+            'response_sha256': 'idhash',
+            'limitation': 'current mapping',
+        }
+
+    def fake_concept(req, agent):
+        quote = rev_quote if req.tag == 'Revenues' else ni_quote
+        return SecResult(
+            url=f'https://data.sec.gov/api/xbrl/companyconcept/CIK0001045810/us-gaap/{req.tag}.json',
+            title=f'NVIDIA CORP: {req.tag} (USD)',
+            text=f'SEC XBRL companyconcept\n{quote}',
+            response_sha256=f'sha-{req.tag}',
+        )
+
+    def fake_filing(req, agent, **kwargs):
+        return SecFilingResult('NVIDIA Form 10-K excerpt.', 'sec-filing-sha', 'PGh0bWw+PC9odG1sPg==')
+
+    monkeypatch.setattr(api, 'evidence_provider', Search())
+    monkeypatch.setattr(connector, 'search_sec_identities', fake_identities)
+    monkeypatch.setattr(connector, 'fetch_sec_concept', fake_concept)
+    monkeypatch.setattr(retrieval, 'fetch_sec_filing', fake_filing)
+
+    class PacedProvider:
+        name = 'sec-pace-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=None, max_output_tokens=1000)
+
+        def complete(self, messages, tools, **kwargs):
+            results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
+            stage = len(results)
+            if stage == 0:
+                return turn('discover_sources', {'query': 'NVDA 10-K', 'rationale': 'Find SEC filing.'}, 'd1')
+            if stage == 1:
+                return turn('sec_company_concept', {
+                    'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'Revenues', 'unit': 'USD',
+                    'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'Fetch revenue.',
+                }, 'sec1')
+            if stage == 2:
+                assert results[1]['status'] == 'acquired', results[1]
+                self.rev_sid = results[1]['source_id']
+                return turn('sec_company_concept', {
+                    'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'NetIncomeLoss', 'unit': 'USD',
+                    'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'Fetch net income.',
+                }, 'sec2')
+            if stage == 3:
+                assert results[2]['status'] == 'acquired', results[2]
+                return turn('acquire_sources', {'urls': [filing_url], 'rationale': 'Acquire 10-K.'}, 'a1')
+            if stage == 4:
+                assert results[3]['results'][0]['status'] == 'acquired', results[3]
+                return turn('read_sources', {'reads': [{'source_id': self.rev_sid}], 'rationale': 'Read SEC revenue.'}, 'r1')
+            return turn('submit_research', {
+                'report': 'NVDA FY25 revenue was 130,497,000,000 USD.',
+                'claims': [{
+                    'text': 'NVDA FY25 revenue was 130,497,000,000 USD.',
+                    'source_id': self.rev_sid,
+                    'quotation': rev_quote,
+                    'role': 'support',
+                }],
+                'limitations': [],
+                'stopping_reason': 'answered',
+                'status': 'completed',
+            }, 's1')
+
+    monkeypatch.setattr(api, 'challenge_provider', PacedProvider())
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={
+        'email': f'{uuid4().hex}@example.test',
+        'password': 'correct horse battery staple!',
+    }).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'What were NVDA FY25 revenue and net income?'}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+
+    run_resp = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={
+        'parent_version_id': topic['versions'][0]['version_id'],
+        'max_elapsed_seconds': 60,
+    })
+    assert run_resp.status_code == 202, run_resp.text
+    op_id = run_resp.json()['operation']['operation_id']
+    for _ in range(200):
+        op = client.get(path + '/runs/' + op_id, headers=headers).json()['operation']
+        if op['status'] in ('completed', 'failed', 'cancelled'):
+            break
+        time.sleep(.01)
+    assert op['status'] == 'completed', op
+    assert len(pace_calls) == 5  # 2 per sec_company_concept call + 1 for SEC acquire_sources
+    assert all(call['is_shared_repo'] and call['has_cancel_event'] and math.isfinite(call['deadline']) for call in pace_calls)
+
+    # Monkeypatching api.reserve_sec_request overrides pace_sec_request for backward compatibility.
+    reserve_calls = []
+
+    def fake_reserve(repo):
+        reserve_calls.append(repo is api.SOURCE_RATE_LIMITS)
+        return len(reserve_calls) == 1
+
+    monkeypatch.setattr(api, 'reserve_sec_request', fake_reserve)
+    monkeypatch.setattr(api, 'pace_sec_request', lambda *a, **k: pytest.fail('pace_sec_request must not be called when reserve_sec_request is patched'))
+
+    class ReserveOverrideProvider:
+        name = 'sec-reserve-override-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=None, max_output_tokens=1000)
+
+        def complete(self, messages, tools, **kwargs):
+            results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
+            if not results:
+                return turn('sec_company_concept', {
+                    'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'Revenues', 'unit': 'USD',
+                    'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'Verify override.',
+                }, 'sec_override')
+            assert results[0]['status'] == 'failed' and results[0]['reason'] == 'source_rate_limited', results[0]
+            return turn('submit_research', {
+                'report': 'SEC request hit monkeypatched reserve limit.',
+                'claims': [],
+                'limitations': ['source_rate_limited'],
+                'stopping_reason': 'source_rate_limited',
+                'status': 'partial',
+            }, 's_override')
+
+    monkeypatch.setattr(api, 'challenge_provider', ReserveOverrideProvider())
+    latest_version_id = client.get(path, headers=headers).json()['versions'][-1]['version_id']
+    override_run = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={
+        'parent_version_id': latest_version_id,
+        'question_override': 'Check override behavior',
+    })
+    assert override_run.status_code == 202, override_run.text
+    override_op_id = override_run.json()['operation']['operation_id']
+    for _ in range(200):
+        op2 = client.get(path + '/runs/' + override_op_id, headers=headers).json()['operation']
+        if op2['status'] in ('completed', 'failed', 'cancelled'):
+            break
+        time.sleep(.01)
+    assert op2['status'] == 'completed', op2
+    assert len(reserve_calls) >= 2 and all(reserve_calls)

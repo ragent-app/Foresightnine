@@ -39,7 +39,7 @@ def test_free_account_snapshot_and_atomic_reservation() -> None:
     )
     snapshot = ledger.snapshot("account_test_123", now=datetime(2026, 1, 1, tzinfo=timezone.utc))
     assert snapshot["plan"] == "free"
-    assert snapshot["quota_limit"] == 200_000
+    assert snapshot["quota_limit"] == 1_000_000
     ledger.reserve("account_test_123", "reservation_test_123", 100_000, now=datetime(2026, 1, 1, tzinfo=timezone.utc))
     ledger.reserve("account_test_123", "reservation_test_123", 100_000, now=datetime(2026, 1, 1, tzinfo=timezone.utc))
     ledger.settle("reservation_test_123", 80_000, now=datetime(2026, 1, 1, tzinfo=timezone.utc))
@@ -47,7 +47,7 @@ def test_free_account_snapshot_and_atomic_reservation() -> None:
     result = ledger.snapshot("account_test_123", now=datetime(2026, 1, 1, tzinfo=timezone.utc))
     assert result["quota_consumed"] == 80_000
     assert result["quota_reserved"] == 0
-    assert result["quota_remaining"] == 120_000
+    assert result["quota_remaining"] == 920_000
 
 
 def test_zero_provider_usage_settles_to_zero_instead_of_conservative_estimate() -> None:
@@ -137,7 +137,7 @@ def test_entitlement_model_uses_server_override_and_glm_is_fallback(monkeypatch)
 def test_quota_rejects_before_reservation_crosses_limit() -> None:
     ledger = BillingLedger(InMemoryDocumentRepository(), InMemoryDocumentRepository(), InMemoryDocumentRepository())
     with pytest.raises(BillingError) as error:
-        ledger.reserve("account_test_123", "reservation_test_123", 200_001)
+        ledger.reserve("account_test_123", "reservation_test_123", 1_000_001)
     assert error.value.status_code == 429
     assert error.value.code == "quota_exceeded"
 
@@ -215,7 +215,7 @@ def test_account_endpoint_exposes_server_authoritative_free_grant(monkeypatch) -
     assert response.status_code == 200
     body = response.json()
     assert body["plan"] == "free"
-    assert body["quota_limit"] == 200_000
+    assert body["quota_limit"] == 1_000_000
     assert body["provider_model"] == "unknown"
     reset_state()
 
@@ -334,7 +334,7 @@ def test_failed_provider_call_releases_account_reservation(monkeypatch) -> None:
         summary = client.get("/v1/account", headers={"Authorization": f"Bearer {token}"})
         assert summary.status_code == 200
         assert summary.json()["quota_reserved"] == 0
-        assert summary.json()["quota_remaining"] == 200_000
+        assert summary.json()["quota_remaining"] == 1_000_000
     finally:
         main_module.challenge_provider = previous_provider
         reset_state()

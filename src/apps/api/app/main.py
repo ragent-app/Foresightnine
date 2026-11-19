@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from copy import copy, deepcopy
 from dataclasses import asdict
@@ -22,7 +23,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, HttpUrl, ValidationError
 from starlette.middleware.cors import CORSMiddleware
 
 from .contract_models import (
@@ -99,6 +100,7 @@ from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError
 from .research_topics import (AttachSourcesInput, ReadRange, ResearchCalculation, ResearchFact, ResearchFullExport, ResearchInput, ResearchMetadataExport,
     ResearchTopic, ResearchTopics, ResearchTurn, TopicNotFound, TopicVersionConflict, TurnUsage, VersionInput)
 from .research_progress import build_progress
+from .research_live_stream import ResearchLiveBroker, format_sse_frame, parse_last_event_id
 from .research_turns import gap_rows, merge_turn, prior_research_input
 from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, verified_direction_proof, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
@@ -131,9 +133,35 @@ from .research_assessment import assess_research_outcome
 from .research_artifacts import assemble_initial_artifacts, assemble_research_content, build_run_core, prepare_claim_evidence, prepare_run_claims
 from .research_counterpoint_stage import execute_counterpoint
 from .research_topics import ResearchContent
-from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text
-from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fetch_sec_concept, fetch_sec_filing, search_sec_identities, reserve_sec_request, validate_user_agent
+from .research_fetch import (
+    HTML_EXTRACTION_DISCLOSURE,
+    MAX_FETCH_BYTES,
+    PUBLIC_DOMAIN_OFFICIAL_HOSTS,
+    FetchFailure,
+    FetchSourceRequest,
+    fetch_allowed_hosts,
+    fetch_official_text,
+    fetch_source_document,
+    is_sec_host,
+    validate_public_https_url,
+)
+from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fetch_sec_concept, fetch_sec_filing, pace_sec_request, search_sec_identities, reserve_sec_request, validate_user_agent
+from .research_source_catalog import canonical_source_url, source_capabilities
+from .research_structured_connector import StructuredQuery, execute_structured_query
 from .research_uploads import HtmlUploadRequest, PdfFailure, PdfReextractRequest, PdfUploadRequest, extract_pdf, extract_uploaded_html
+
+_DEFAULT_FETCH_OFFICIAL_TEXT = fetch_official_text
+_DEFAULT_RESERVE_SEC_REQUEST = reserve_sec_request
+_HTML_RETRIEVAL_METHODS = frozenset({"official_html", "user_html", "sec_filing_html", "web_html"})
+_PDF_RETRIEVAL_METHODS = frozenset({"user_pdf", "web_pdf"})
+
+
+def _configured_sec_user_agent() -> tuple[str | None, bool]:
+    raw = os.environ.get("FORESIGHTNINE_SEC_USER_AGENT") or os.environ.get("SEC_USER_AGENT")
+    try:
+        return validate_user_agent(raw), True
+    except SecFailure:
+        return None, False
 
 
 oauth_trace_logger = logging.getLogger("foresightnine.oauth")
@@ -344,6 +372,7 @@ SOURCE_RATE_LIMITS = build_repository(storage_config, "source_rate_limits")
     CHALLENGE_OPERATION_RESULTS,
 ) = _build_entity_repositories(storage_config)
 operations = OperationManager(lifecycle_clock, store=build_operation_store(storage_config))
+research_live_broker = ResearchLiveBroker()
 OPERATION_SESSIONS: dict[str, str] = {}
 CHALLENGE_OPERATION_IDS: dict[str, str] = {}
 billing_ledger = BillingLedger(
@@ -354,10 +383,49 @@ billing_ledger = BillingLedger(
 )
 
 
+def _publish_research_terminal(operation_id: str, status: str) -> None:
+    inputs = RESEARCH_RUN_INPUTS.get(operation_id)
+    if not inputs:
+        return
+    owner_id = inputs.get("owner_id")
+    topic_id = inputs.get("topic_id")
+    if not isinstance(owner_id, str) or not isinstance(topic_id, str):
+        return
+    version = None
+    if status == "completed":
+        try:
+            topic = research_topics.get(owner_id, topic_id)
+            version = next(
+                (
+                    v
+                    for v in reversed(topic.versions)
+                    if v.created_by == "agent" and v.content.turns and operation_id in v.content.turns[-1].operation_ids
+                ),
+                None,
+            )
+        except TopicNotFound:
+            version = None
+    progress = build_progress(
+        operation_id=operation_id,
+        operation_status=status,
+        inputs=inputs,
+        checkpoint=inputs.get("runtime_checkpoint") or None,
+        saved_turn=version.content.turns[-1] if version else None,
+        version_id=version.version_id if version else None,
+        after=0,
+    )
+    research_live_broker.publish_terminal(
+        operation_id,
+        operation_status=status,
+        version_id=version.version_id if version else None,
+        progress=progress,
+    )
+
+
 def _release_terminal_reservation(operation_id: str, status: str) -> None:
     # A terminal operation alone does not establish whether submission occurred
     # or whether a provider charged it. Known-unsent paths release explicitly.
-    return
+    _publish_research_terminal(operation_id, status)
 
 
 operations.set_terminal_observer(_release_terminal_reservation)
@@ -448,6 +516,7 @@ NORMAL_CONFIRM_CRITICAL_CRITERIA = (
 
 def reset_state() -> None:
     operations.reset()
+    research_live_broker.reset()
     RESEARCH_TOPICS.clear()
     RESEARCH_SOURCES.clear()
     RESEARCH_RUN_INPUTS.clear()
@@ -500,6 +569,7 @@ def cleanup_expired_state() -> object:
     for operation_id, _challenge in tuple(CHALLENGE_OPERATION_RESULTS.items_for_retention()):
         if operations.store.get_operation(operation_id) is None:
             CHALLENGE_OPERATION_RESULTS.delete(operation_id)
+    research_live_broker.prune_expired()
     return report
 
 
@@ -582,11 +652,13 @@ def _messages_research_provider(settings: OpenAICompatibleSettings) -> Any:
                 or os.environ.get('FORESIGHTNINE_MESSAGES_CAPABILITY_MODEL') != settings.model
                 or os.environ.get('FORESIGHTNINE_MESSAGES_CAPABILITY_VERSION') != version):
             raise ValueError()
+        stream_enabled = os.environ.get('FORESIGHTNINE_MESSAGES_STREAM') == 'true'
     except (KeyError, ValueError):
         raise ApiProblem(503, 'internal_error', 'Messages research requires an explicit output limit, version, authentication scheme and native tools capability.') from None
     try:
         return AnthropicMessagesProvider(settings, ProviderPolicy(max_output_tokens=maximum, timeout_seconds=timeout),
-                                         anthropic_version=version, auth_scheme=auth, max_tokens=maximum)
+                                         anthropic_version=version, auth_scheme=auth, max_tokens=maximum,
+                                         stream_enabled=stream_enabled)
     except ProviderFailure:
         raise ApiProblem(503, 'internal_error', 'Messages research configuration is invalid.') from None
 
@@ -819,9 +891,11 @@ def _candidate_response(raw: object, provider_name: str) -> SearchCandidate:
     A candidate cannot become evidence through this route.  The client must still
     show it to the user and submit a separately hashed EvidenceSubmissionRequest.
     """
-    from .research_discovery import normalize_search_lead
+    from .research_discovery import RedirectLead, normalize_search_lead
     try:
         lead = normalize_search_lead(raw)
+    except RedirectLead:
+        raise
     except (ProviderFailure, ValueError):
         raise ProviderFailure("search_response_invalid", "Search provider returned an invalid candidate.", retryable=False) from None
     title, url, excerpt = lead.title, lead.url, lead.excerpt
@@ -866,9 +940,15 @@ def _search_candidates(query: str, limit: int, request: Request) -> SearchCandid
             schema_version="v1", provider=provider_name, project_search_available=False,
             fallback="client_bundle", candidates=[],
         )
+    from .research_discovery import RedirectLead
     _reserve_search_call(request)
     try:
-        candidates = [_candidate_response(item, provider_name) for item in search(query, limit=limit)]
+        candidates = []
+        for item in search(query, limit=limit):
+            try:
+                candidates.append(_candidate_response(item, provider_name))
+            except RedirectLead:
+                continue
     except ProviderFailure:
         record_provider_failure(provider=provider_name, endpoint="/v1/search/candidates")
         return SearchCandidatesResponse(
@@ -1636,9 +1716,10 @@ def list_research_version_sources(topic_id: str, version_id: str, authorization:
             result.append({"source_id": source_id, "status": "unavailable"})
             continue
         metadata = source.model_dump(mode="json", exclude={"text", "owner_id", "url", "original_pdf_base64", "original_html_base64"})
-        if source.retrieval_method == "user_pdf":
+        is_html = source.retrieval_method in _HTML_RETRIEVAL_METHODS
+        if source.retrieval_method in _PDF_RETRIEVAL_METHODS:
             metadata["original_pdf_available"] = bool(source.original_pdf_base64)
-        if source.retrieval_method in {"official_html", "user_html", "sec_filing_html"}:
+        if is_html:
             metadata["original_html_available"] = bool(source.original_html_base64)
         if pdf_text_spacing_suspect(source):
             metadata["pdf_text_spacing_warning"] = True
@@ -1647,7 +1728,7 @@ def list_research_version_sources(topic_id: str, version_id: str, authorization:
             metadata["url"] = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
         metadata["status"] = "available"
         metadata["verification"] = "user_declared_not_verified"
-        if source.retrieval_method in {"official_html", "user_html", "sec_filing_html"}:
+        if is_html:
             metadata["extraction_disclosure"] = HTML_EXTRACTION_DISCLOSURE
         result.append(metadata)
     return result
@@ -1711,7 +1792,7 @@ def export_research_version(topic_id: str, version_id: str, authorization: str |
                 parts = urlsplit(str(source.url))
                 metadata["url"] = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
             metadata["verification"] = "user_declared_not_verified"
-            if source.retrieval_method in {"official_html", "user_html", "sec_filing_html"}:
+            if source.retrieval_method in _HTML_RETRIEVAL_METHODS:
                 metadata["extraction_disclosure"] = HTML_EXTRACTION_DISCLOSURE
             sources.append(metadata)
     except SourceNotFound as error:
@@ -2030,9 +2111,10 @@ def calculate_research(request: CalculationRequest, authorization: str | None = 
 
 def _visible_research_source(source: ResearchSource) -> dict:
     result = source.model_dump(mode="json", exclude={"original_pdf_base64", "original_html_base64"})
-    if source.retrieval_method == "user_pdf":
+    is_html = source.retrieval_method in _HTML_RETRIEVAL_METHODS
+    if source.retrieval_method in _PDF_RETRIEVAL_METHODS:
         result["original_pdf_available"] = bool(source.original_pdf_base64)
-    if source.retrieval_method in {"official_html", "user_html", "sec_filing_html"}:
+    if is_html:
         result["original_html_available"] = bool(source.original_html_base64)
     if pdf_text_spacing_suspect(source):
         result["pdf_text_spacing_warning"] = True
@@ -2040,7 +2122,7 @@ def _visible_research_source(source: ResearchSource) -> dict:
         result.pop("text", None)
     # User-supplied provenance and permissions are declarations, not proof.
     result["verification"] = "user_declared_not_verified"
-    if source.retrieval_method in {"official_html", "user_html", "sec_filing_html"}:
+    if is_html:
         result["extraction_disclosure"] = HTML_EXTRACTION_DISCLOSURE
     return result
 
@@ -2160,10 +2242,11 @@ def get_research_source_original(source_id: str, authorization: str | None = Hea
     except SourceNotFound as error:
         raise ApiProblem(404, "not_found", "Research source not found.") from error
     raw = source.original_pdf_base64 or source.original_html_base64
-    if not raw or not source.permissions.display or not source.permissions.export:
+    is_html = source.retrieval_method in _HTML_RETRIEVAL_METHODS
+    is_pdf = source.retrieval_method in _PDF_RETRIEVAL_METHODS
+    if not raw or not source.permissions.display or not source.permissions.export or (not is_html and not is_pdf):
         raise ApiProblem(403, "invalid_request", "The original document is not available for download.")
     import base64
-    is_html = source.retrieval_method in {"official_html", "user_html", "sec_filing_html"}
     return Response(content=base64.b64decode(raw), media_type="application/octet-stream" if is_html else "application/pdf",
                     headers={"Content-Disposition": 'attachment; filename="source.html"' if is_html else 'attachment; filename="source.pdf"',
                              "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
@@ -2183,20 +2266,21 @@ def get_research_source_context(source_id: str, start: Annotated[int, Query(ge=0
     if end <= start or end > len(source.text) or end - start > 1000:
         raise ApiProblem(422, "invalid_request", "Source text location is invalid.")
     left, right = max(0, start - 300), min(len(source.text), end + 300)
-    if source.retrieval_method == "user_pdf":
+    is_pdf = source.retrieval_method in _PDF_RETRIEVAL_METHODS
+    if is_pdf:
         # Context stays on the relevant page(s), while retaining an exact
         # quote that itself crosses a page boundary.
         left = max(left, source.text.rfind("\f", 0, start) + 1)
         next_page = source.text.find("\f", end)
         if next_page >= 0:
             right = min(right, next_page)
-    table_context = table_context_window(source.text, start, end) if source.retrieval_method in {"official_html", "user_html", "sec_filing_html"} else None
+    table_context = table_context_window(source.text, start, end) if source.retrieval_method in _HTML_RETRIEVAL_METHODS else None
     return {"source_id": source.source_id, "title": source.title, "content_sha256": source.content_sha256,
             "start": start, "end": end, "context_start": left, "context_end": right,
             "before": source.text[left:start], "selected": source.text[start:end], "after": source.text[end:right],
             **({"table_context": table_context} if table_context else {}),
-            "page_start": source.text[:start].count("\f") + 1 if source.retrieval_method == "user_pdf" else None,
-            "page_end": source.text[:end].count("\f") + 1 if source.retrieval_method == "user_pdf" else None}
+            "page_start": source.text[:start].count("\f") + 1 if is_pdf else None,
+            "page_end": source.text[:end].count("\f") + 1 if is_pdf else None}
 
 
 @app.get("/v2/research/sources/{source_id}/table-structure", include_in_schema=False)
@@ -2220,16 +2304,29 @@ def fetch_research_source(request: FetchSourceRequest, http_request: Request) ->
     account = _authenticated_account(http_request.headers.get("Authorization"))
     if not request.permissions.store:
         raise ApiProblem(422, "invalid_request", "Source storage permission is required.")
-    if urlsplit(str(request.url)).hostname == "www.sec.gov":
+    try:
+        fetch_host = validate_public_https_url(str(request.url), allow_fragment=False, check_sec_path=False)
+    except ValueError as error:
+        raise ApiProblem(422, "invalid_request", "Only supported public HTTPS sources are available.") from error
+    if is_sec_host(fetch_host):
+        if fetch_host != "www.sec.gov":
+            raise ApiProblem(422, "invalid_request", "Only direct www.sec.gov SEC filing URLs are supported by fetch.")
+        parts = urlsplit(str(request.url))
+        sec_url = urlunsplit(("https", "www.sec.gov", parts.path, parts.query, ""))
+        try:
+            validate_public_https_url(sec_url, allow_fragment=False, check_sec_path=True)
+        except ValueError as error:
+            raise ApiProblem(422, "invalid_request", "Only direct www.sec.gov SEC filing URLs are supported by fetch.") from error
+        sec_request = request if str(request.url) == sec_url else request.model_copy(update={"url": HttpUrl(sec_url)})
         try:
             agent = validate_user_agent(os.environ.get("FORESIGHTNINE_SEC_USER_AGENT") or os.environ.get("SEC_USER_AGENT"))
             _reserve_search_call(http_request)
             if not reserve_sec_request(SOURCE_RATE_LIMITS):
                 raise ApiProblem(429, "rate_limited", "SEC request limit reached; retry later.", retryable=True, retry_after=1)
-            data = fetch_sec_filing(request, agent)
-            source = research_sources.create(account.account_id, SourceInput(title=request.title, text=data.text,
-                url=request.url, kind="official", permissions=request.permissions, published_at=request.published_at,
-                event_at=request.event_at, revised_at=request.revised_at, is_simulated=request.is_simulated),
+            data = fetch_sec_filing(sec_request, agent)
+            source = research_sources.create(account.account_id, SourceInput(title=sec_request.title, text=data.text,
+                url=sec_request.url, kind="official", permissions=sec_request.permissions, published_at=sec_request.published_at,
+                event_at=sec_request.event_at, revised_at=sec_request.revised_at, is_simulated=sec_request.is_simulated),
                 retrieval_method="sec_filing_html", response_sha256=data.response_sha256, response_content_type="text/html",
                 original_html_base64=data.original_base64)
             result = _visible_research_source(source)
@@ -2245,38 +2342,94 @@ def fetch_research_source(request: FetchSourceRequest, http_request: Request) ->
             raise ApiProblem(422, "invalid_request", "SEC filing data could not be used.") from error
     _reserve_search_call(http_request)
     try:
-        fetched = fetch_official_text(request)
-        source = research_sources.create(account.account_id, SourceInput(title=request.title,
-            text=fetched.text, url=request.url, kind="official", permissions=request.permissions,
-            published_at=request.published_at, event_at=request.event_at, revised_at=request.revised_at,
-            is_simulated=request.is_simulated),
-            retrieval_method="official_html", response_sha256=fetched.response_sha256,
-            response_content_type=fetched.content_type, original_html_base64=fetched.original_html_base64)
+        requested_url = canonical_source_url(str(request.url))
+        requested_host = (urlsplit(requested_url).hostname or "").lower().rstrip(".")
+        if fetch_official_text is not _DEFAULT_FETCH_OFFICIAL_TEXT:
+            fetched = fetch_official_text(request)
+            final_url = requested_url
+            redirect_count = 0
+        else:
+            fetched = fetch_source_document(request)
+            final_url = canonical_source_url(fetched.final_url)
+            redirect_count = fetched.redirect_count
+        final_host = (urlsplit(final_url).hostname or "").lower().rstrip(".")
+        is_official = requested_host in PUBLIC_DOMAIN_OFFICIAL_HOSTS and final_host in PUBLIC_DOMAIN_OFFICIAL_HOSTS
+        content_type = fetched.content_type
+        if content_type == "application/pdf":
+            retrieval_kwargs: dict[str, Any] = {
+                "retrieval_method": "user_pdf" if is_official else "web_pdf",
+                "original_pdf_base64": getattr(fetched, "original_pdf_base64", None),
+                "pdf_text_order": "layout",
+            }
+        else:
+            retrieval_kwargs = {
+                "retrieval_method": "official_html" if is_official else "web_html",
+                "original_html_base64": getattr(fetched, "original_html_base64", None),
+            }
+        provenance: dict[str, Any] = {}
+        if not is_official:
+            provenance = {
+                "final_url": final_url,
+                "web_retrieval": {
+                    "requested_url": requested_url,
+                    "final_url": final_url,
+                    "redirect_count": redirect_count,
+                    "content_type": content_type,
+                },
+            }
+        elif final_url != requested_url:
+            provenance = {"final_url": final_url}
+        source = research_sources.create(
+            account.account_id,
+            SourceInput(
+                title=request.title,
+                text=fetched.text,
+                url=final_url if getattr(fetched, "final_url", None) else request.url,
+                kind="official" if is_official else "user_supplied",
+                permissions=request.permissions,
+                published_at=request.published_at,
+                event_at=request.event_at,
+                revised_at=request.revised_at,
+                is_simulated=request.is_simulated,
+            ),
+            **retrieval_kwargs,
+            **({"provenance": provenance} if provenance else {}),
+            response_sha256=fetched.response_sha256,
+            response_content_type=content_type,
+        )
         return _visible_research_source(source)
     except FetchFailure as error:
         if error.code == "source_rate_limited":
             raise ApiProblem(429, "rate_limited", "Source temporarily rate limited.", retryable=True) from error
         if error.code in {"source_timeout", "source_unavailable"}:
             raise ApiProblem(503, "internal_error", "Source unavailable or timed out.", retryable=True) from error
+        if error.code == "source_blocked_policy":
+            raise ApiProblem(422, "invalid_request", "Source host or target is blocked by fetch policy.") from error
+        if error.code == "http_forbidden_or_challenge":
+            raise ApiProblem(422, "invalid_request", "Upstream site rejected the request (401/403 or challenge).") from error
+        if error.code == "not_found":
+            raise ApiProblem(422, "invalid_request", "Source URL was not found (404/410).") from error
+        if error.code == "source_too_large":
+            raise ApiProblem(422, "invalid_request", "Source exceeded the 5 MB download or text size limit.") from error
         raise ApiProblem(422, "invalid_request", "Source could not be used in the requested format.") from error
 
 
 @app.get("/v2/research/capabilities", include_in_schema=False)
 def get_research_capabilities(authorization: str | None = Header(default=None)) -> dict:
     """Which source capabilities this deployment has configured; no configuration values or secrets."""
-    from dataclasses import asdict
     from .research_historical_prices import configured_historical_prices
-    from .research_source_catalog import source_capabilities
     _authenticated_account(authorization)
-    try:
-        validate_user_agent(os.environ.get("FORESIGHTNINE_SEC_USER_AGENT") or os.environ.get("SEC_USER_AGENT"))
-        sec_available = True
-    except SecFailure:
-        sec_available = False
+    _, sec_available = _configured_sec_user_agent()
     search_available = bool(getattr(evidence_provider, "supports_project_search", False))
-    return {"schema_version": "v1", "search_available": search_available, "sec_available": sec_available,
-            "historical_prices_available": configured_historical_prices()[0] is not None,
-            "sources": [asdict(item) for item in source_capabilities(search_available=search_available, sec_available=sec_available)]}
+    allowed_hosts = fetch_allowed_hosts()
+    return {
+        "schema_version": "v1",
+        "search_available": search_available,
+        "web_fetch_enabled": not bool(allowed_hosts),
+        "sec_available": sec_available,
+        "historical_prices_available": configured_historical_prices()[0] is not None,
+        "sources": [asdict(item) for item in source_capabilities(search_available=search_available, sec_available=sec_available)],
+    }
 
 
 @app.post("/v2/research/identities/sec-search", include_in_schema=False)
@@ -2538,18 +2691,57 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         if request.discover_sources and callable(search) and getattr(evidence_provider, 'supports_project_search', False):
             discover = lambda query: search(query, limit=10, deadline=context.budget.deadline,
                                              cancel_event=context.cancel_event())
+        sec_agent_raw = os.environ.get('FORESIGHTNINE_SEC_USER_AGENT') or os.environ.get('SEC_USER_AGENT')
+        _, sec_configured = _configured_sec_user_agent()
+        retrieval_permitted = bool(request.auto_fetch_official and request.selected_source_ids != [])
+        def reserve_sec_for_run() -> bool:
+            if reserve_sec_request is not _DEFAULT_RESERVE_SEC_REQUEST:
+                return reserve_sec_request(SOURCE_RATE_LIMITS)
+            return pace_sec_request(
+                SOURCE_RATE_LIMITS,
+                cancel_event=context.cancel_event(),
+                deadline=context.budget.deadline,
+            )
         def acquire(url: str, title: str):
             nonlocal official_fetch_calls, official_fetch_status
             result = execute_official_retrieval(request=request, question=user_question, as_of=topic.request.as_of,
                 available_count=len(sources), candidates=[{'url': url, 'title': title}], sources=sources,
                 owner_id=account.account_id, operation_id=operation_id, store=research_sources,
-                sec_agent_config=os.environ.get('FORESIGHTNINE_SEC_USER_AGENT') or os.environ.get('SEC_USER_AGENT'),
-                reserve_sec=lambda: reserve_sec_request(SOURCE_RATE_LIMITS), context=context,
+                sec_agent_config=sec_agent_raw,
+                reserve_sec=reserve_sec_for_run, context=context,
                 batch_id=uuid4().hex)
             official_fetch_calls += result.calls
             official_fetch_status = result.status
             return result.source, {'status': result.status, 'notes': result.notes, 'outcomes': result.outcomes}
-        historical_config_for_run = historical_config if historical_available and request.auto_fetch_official and request.selected_source_ids != [] else None
+        def query_sec_concept(tool_request):
+            return execute_structured_query(
+                StructuredQuery(
+                    source_kind='sec_company_concept',
+                    parameters=tool_request.model_dump(mode='json', exclude={'rationale'}),
+                ),
+                owner_id=account.account_id,
+                operation_id=operation_id,
+                store=research_sources,
+                sec_agent_config=sec_agent_raw,
+                reserve_sec=reserve_sec_for_run,
+                context=context,
+                permitted=retrieval_permitted,
+                as_of=topic.request.as_of,
+            )
+        historical_config_for_run = historical_config if historical_available and retrieval_permitted else None
+        allowed_hosts = fetch_allowed_hosts()
+        retrieval_active = retrieval_permitted and topic.request.as_of is None and request.max_cost_usd is None
+        capabilities: dict[str, Any] = {
+            'search_available': discover is not None,
+            'acquire_available': retrieval_active,
+            'web_fetch_enabled': retrieval_active and allowed_hosts is None,
+            'sec_available': sec_configured and retrieval_active,
+            'historical_prices_available': historical_config_for_run is not None,
+            'max_fetch_bytes': MAX_FETCH_BYTES,
+            'supported_fetch_content_types': ['text/html', 'text/plain', 'application/pdf'],
+        }
+        if allowed_hosts is not None:
+            capabilities['fetch_allowed_hosts'] = sorted(allowed_hosts)
         def load_historical_prices(query: HistoricalPriceRequest):
             if historical_config_for_run is None or query.instrument_id not in {item.instrument_id for item in historical_config_for_run.instruments}:
                 return None
@@ -2576,15 +2768,50 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             journal.record_runtime_checkpoint(snapshot)
             last_runtime_state.clear()
             last_runtime_state.update(snapshot)
+            op_record = operations.store.get_operation(operation_id) or {}
+            if str(op_record.get('status') or 'running') == 'running':
+                inputs_now = RESEARCH_RUN_INPUTS.get(operation_id) or {
+                    'turn': turn_meta,
+                    'question': effective_question,
+                    'captured_at': turn_meta.get('started_at'),
+                }
+                live_progress = build_progress(
+                    operation_id=operation_id,
+                    operation_status='running',
+                    inputs=inputs_now,
+                    checkpoint=snapshot,
+                    saved_turn=None,
+                    version_id=None,
+                    after=0,
+                )
+                research_live_broker.publish_progress(operation_id, live_progress)
+        def publish_stream_event(event: dict[str, Any]) -> None:
+            kind = event.get('type')
+            if kind == 'delta':
+                research_live_broker.publish_delta(
+                    operation_id,
+                    call_seq=int(event['call_seq']),
+                    channel=event['channel'],
+                    delta=str(event['delta']),
+                    seq=int(event['seq']),
+                )
+            elif kind == 'reset':
+                research_live_broker.publish_reset(
+                    operation_id,
+                    call_seq=int(event['call_seq']),
+                    reason=str(event['reason']),
+                )
         if continuation_input is not None:
             save_runtime(admitted_continuation['runtime'])
         parent_now = research_topics.get(account.account_id, topic_id).versions[-1]
         outcome = run_research_agent(question=effective_question, sources=sources, model=provider,
-            context=context, discover=discover, acquire=acquire if request.auto_fetch_official and request.selected_source_ids != [] else None,
+            context=context, discover=discover, acquire=acquire if retrieval_permitted else None,
             historical_prices=load_historical_prices if historical_config_for_run is not None else None,
             historical_instruments=tuple(item.instrument_id for item in historical_config_for_run.instruments) if historical_config_for_run is not None else (),
+            sec_concept=query_sec_concept, capabilities=capabilities,
             checkpoint=save_runtime, initial_state=admitted_continuation.get('runtime'),
             on_submission=lambda: setattr(http_request.state, 'model_submission_started', True),
+            on_stream_event=publish_stream_event,
             as_of=topic.request.as_of,
             prior=prior_research_input(parent_now) if continuation_input is None else None, focus=focus)
         _raise_if_operation_cancelled(operation_id)
@@ -2623,7 +2850,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             question_origin=turn_meta['question_origin'], focus_citation=turn_meta.get('focus_citation'),
             operation_ids=[*turn_meta['operation_ids'], operation_id], parent_version_id=turn_meta['parent_version_id'],
             started_at=datetime.fromisoformat(turn_meta['started_at']), finished_at=lifecycle_clock.now(),
-            status=outcome.status, reason=outcome.reason, report=outcome.report, stopping_note=outcome.stopping_note,
+            status=outcome.status, reason=outcome.reason, report=outcome.report,
+            partial_notes=outcome.partial_notes, stopping_note=outcome.stopping_note,
             claim_ids=[item['claim_id'] for item in outcome.claims], fact_ids=[item['fact_id'] for item in outcome.facts],
             calculation_ids=[item['calculation_id'] for item in outcome.calculations], gaps=gap_rows(gaps),
             usage=TurnUsage(model_calls=context.calls, search_calls=context.search_calls, total_tokens=context.usage or 0),
@@ -2878,28 +3106,178 @@ def get_research_run_inputs(topic_id: str, operation_id: str, http_request: Requ
     return {key: value for key, value in record.items() if key not in {"owner_id", "recovery_snapshot", "recovery_pending", "recovery_continuation_operation_id", "recovery_terminal_checkpoint_version_id", "recovery_terminal_stage_receipts", "private_validation_diagnostics", "private_acquisition_decisions", "runtime_checkpoint", "runtime_request", "runtime_binding", "runtime_continuation_operation_id"}}
 
 
+def _authorize_research_run_progress(
+    account_id: str, topic_id: str, operation_id: str
+) -> tuple[ResearchTopic, Operation, dict[str, Any]]:
+    try:
+        topic = research_topics.get(account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+    operations.require_owner(operation_id, f"account:{account_id}")
+    operation = operations._cache_operation(operation_id)
+    if operation.endpoint != f"/v1/research/topics/{topic_id}/runs":
+        raise ApiProblem(404, "not_found", "Research run not found.")
+    inputs = RESEARCH_RUN_INPUTS.get(operation_id)
+    if not inputs or inputs.get("owner_id") != account_id or inputs.get("topic_id") != topic_id:
+        raise ApiProblem(404, "not_found", "Research run not found.")
+    return topic, operation, inputs
+
+
+def _build_research_run_progress_view(
+    topic: ResearchTopic, operation: Operation, inputs: Mapping[str, Any], *, after: int
+) -> dict[str, Any]:
+    version = next(
+        (
+            v
+            for v in reversed(topic.versions)
+            if v.created_by == "agent" and v.content.turns and operation.operation_id in v.content.turns[-1].operation_ids
+        ),
+        None,
+    )
+    return build_progress(
+        operation_id=operation.operation_id,
+        operation_status=str(operation.status),
+        inputs=inputs,
+        checkpoint=inputs.get("runtime_checkpoint") or None,
+        saved_turn=version.content.turns[-1] if version else None,
+        version_id=version.version_id if version else None,
+        after=after,
+    )
+
+
 @app.get("/v2/research/topics/{topic_id}/runs/{operation_id}/progress", include_in_schema=False)
 def get_research_run_progress(topic_id: str, operation_id: str, http_request: Request,
                               after: Annotated[int, Query(ge=0)] = 0) -> dict:
     """Return a sanitized view of the latest persisted checkpoint (whitelisted fields only)."""
     account = _authenticated_account(http_request.headers.get("Authorization"))
+    topic, operation, inputs = _authorize_research_run_progress(account.account_id, topic_id, operation_id)
+    return _build_research_run_progress_view(topic, operation, inputs, after=after)
+
+
+def _sse_terminal_frame(operation_id: str, status: str, version_id: str | None) -> str:
+    return format_sse_frame(
+        "run.terminal",
+        {"operation_id": operation_id, "operation_status": status, "version_id": version_id},
+        event_id=f"done:{status}",
+    )
+
+
+@app.get(
+    "/v2/research/topics/{topic_id}/runs/{operation_id}/events",
+    response_class=StreamingResponse,
+    include_in_schema=False,
+)
+async def stream_research_run_events(
+    topic_id: str,
+    operation_id: str,
+    http_request: Request,
+    after: Annotated[int, Query(ge=0)] = 0,
+    last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
+) -> StreamingResponse:
+    """Stream sanitized live research progress over Server-Sent Events."""
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    topic, operation, inputs = _authorize_research_run_progress(account.account_id, topic_id, operation_id)
+    cursor_after, _ = parse_last_event_id(last_event_id)
+    effective_after = max(after, cursor_after)
+
+    def load_progress(progress_after: int, *, cached_initial: bool = False) -> dict[str, Any]:
+        if cached_initial:
+            return _build_research_run_progress_view(topic, operation, inputs, after=progress_after)
+        topic_now = research_topics.get(account.account_id, topic_id)
+        op_now = operations._cache_operation(operation_id)
+        inputs_now = RESEARCH_RUN_INPUTS.get(operation_id) or inputs
+        return _build_research_run_progress_view(topic_now, op_now, inputs_now, after=progress_after)
+
+    sse_headers = {
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+    loop = asyncio.get_running_loop()
+    subscriber = research_live_broker.subscribe(operation_id, account_id=account.account_id, loop=loop)
     try:
-        topic = research_topics.get(account.account_id, topic_id)
-    except TopicNotFound as error:
-        raise ApiProblem(404, "not_found", "Research topic not found.") from error
-    operations.require_owner(operation_id, f"account:{account.account_id}")
-    operation = operations._cache_operation(operation_id)
-    if operation.endpoint != f"/v1/research/topics/{topic_id}/runs":
-        raise ApiProblem(404, "not_found", "Research run not found.")
-    inputs = RESEARCH_RUN_INPUTS.get(operation_id)
-    if not inputs or inputs.get("owner_id") != account.account_id or inputs.get("topic_id") != topic_id:
-        raise ApiProblem(404, "not_found", "Research run not found.")
-    version = next((v for v in reversed(topic.versions) if v.created_by == 'agent' and v.content.turns
-                    and operation_id in v.content.turns[-1].operation_ids), None)
-    return build_progress(operation_id=operation_id, operation_status=str(operation.status), inputs=inputs,
-                          checkpoint=inputs.get('runtime_checkpoint') or None,
-                          saved_turn=version.content.turns[-1] if version else None,
-                          version_id=version.version_id if version else None, after=after)
+        snapshot = load_progress(effective_after, cached_initial=True)
+    except BaseException:
+        research_live_broker.unsubscribe(subscriber)
+        raise
+    if snapshot["operation_status"] in {"completed", "failed", "cancelled"}:
+        research_live_broker.unsubscribe(subscriber)
+
+        async def terminal_only_stream():
+            yield format_sse_frame("progress.snapshot", snapshot, event_id=f"cp:{snapshot['event_count']}")
+            yield _sse_terminal_frame(operation_id, snapshot["operation_status"], snapshot["version_id"])
+
+        return StreamingResponse(terminal_only_stream(), media_type="text/event-stream", headers=sse_headers)
+
+    async def live_stream():
+        next_event_index = max(effective_after, int(snapshot.get("event_count") or 0))
+        try:
+            yield format_sse_frame("progress.snapshot", snapshot, event_id=f"cp:{snapshot['event_count']}")
+            while True:
+                if subscriber.needs_resync:
+                    subscriber.needs_resync = False
+                    resync = load_progress(next_event_index)
+                    next_event_index = max(next_event_index, int(resync.get("event_count") or 0))
+                    yield format_sse_frame("progress.snapshot", resync, event_id=f"cp:{resync['event_count']}")
+                    if resync["operation_status"] in {"completed", "failed", "cancelled"}:
+                        yield _sse_terminal_frame(operation_id, resync["operation_status"], resync["version_id"])
+                        return
+                try:
+                    frame = await asyncio.wait_for(
+                        subscriber.queue.get(),
+                        timeout=research_live_broker.heartbeat_seconds,
+                    )
+                except asyncio.TimeoutError:
+                    if await http_request.is_disconnected():
+                        return
+                    current_progress = load_progress(next_event_index)
+                    for ev in current_progress["events"]:
+                        ev_idx = ev.get("index")
+                        if type(ev_idx) is int and ev_idx >= next_event_index:
+                            next_event_index = ev_idx + 1
+                            yield format_sse_frame(
+                                "step.event",
+                                {
+                                    "operation_id": operation_id,
+                                    "event": ev,
+                                    "event_count": current_progress["event_count"],
+                                    "usage": current_progress["usage"],
+                                    "interim": current_progress["interim"],
+                                    "updated_at": current_progress["updated_at"],
+                                },
+                                event_id=f"ev:{ev_idx}",
+                            )
+                    if current_progress["operation_status"] in {"completed", "failed", "cancelled"}:
+                        yield _sse_terminal_frame(
+                            operation_id, current_progress["operation_status"], current_progress["version_id"]
+                        )
+                        return
+                    yield ": heartbeat\n\n"
+                    continue
+                event_name = frame.get("event")
+                data = frame.get("data") or {}
+                if event_name == "step.event":
+                    ev_obj = data.get("event") if isinstance(data, dict) else None
+                    ev_idx = ev_obj.get("index") if isinstance(ev_obj, dict) else None
+                    if type(ev_idx) is int:
+                        if ev_idx < next_event_index:
+                            continue
+                        next_event_index = ev_idx + 1
+                    yield format_sse_frame("step.event", data, event_id=frame.get("id"))
+                elif event_name == "run.terminal":
+                    if subscriber.needs_resync:
+                        subscriber.needs_resync = False
+                        resync = load_progress(next_event_index)
+                        next_event_index = max(next_event_index, int(resync.get("event_count") or 0))
+                        yield format_sse_frame("progress.snapshot", resync, event_id=f"cp:{resync['event_count']}")
+                    yield format_sse_frame("run.terminal", data, event_id=frame.get("id"))
+                    return
+                else:
+                    yield format_sse_frame(str(event_name), data, event_id=frame.get("id"))
+        finally:
+            research_live_broker.unsubscribe(subscriber)
+
+    return StreamingResponse(live_stream(), media_type="text/event-stream", headers=sse_headers)
 
 
 @app.get('/v2/research/topics/{topic_id}/runs/{operation_id}/settlement', include_in_schema=False)

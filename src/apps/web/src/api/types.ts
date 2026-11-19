@@ -3,26 +3,180 @@
 // apps/api/app/research_progress.py build_progress
 export type OperationStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
+export type ModelPhase = "connecting" | "thinking" | "responding" | "retrying";
+
+export interface DiscoverSourcesSummary {
+  kind: "discover_sources";
+  found_count: number;
+  eligible_count: number;
+  denied_count: number;
+  leads_preview: { title: string; host: string; published_at: string | null }[];
+}
+
+export interface AcquireSourcesSummary {
+  kind: "acquire_sources";
+  acquired_count: number;
+  failed_count: number;
+  items: { title: string; host: string; status: string; reason: string | null; total_characters: number | null }[];
+}
+
+export interface SecCompanyConceptSummary {
+  kind: "sec_company_concept";
+  entity: string;
+  taxonomy: string;
+  tag: string;
+  unit: string;
+  status: string;
+  title: string | null;
+  total_characters: number | null;
+}
+
+export interface HistoricalPricesSummary {
+  kind: "historical_prices";
+  instrument_id: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+  title: string | null;
+}
+
+export interface ReadSourcesSummary {
+  kind: "read_sources";
+  read_count: number;
+  items: { source_id: string; title: string; start: number; end: number; total_characters: number | null }[];
+}
+
+export interface RecordFactsSummary {
+  kind: "record_facts";
+  recorded_count: number;
+  facts_preview: { label: string; value: string; unit: string; currency: string | null; period: string }[];
+}
+
+export interface CalculateFinancialsSummary {
+  kind: "calculate_financials";
+  calculated_count: number;
+  calcs_preview: { formula_id: string; value: string; unit: string; currency: string | null; expression: string }[];
+}
+
+export type ToolEventSummary =
+  | DiscoverSourcesSummary
+  | AcquireSourcesSummary
+  | SecCompanyConceptSummary
+  | HistoricalPricesSummary
+  | ReadSourcesSummary
+  | RecordFactsSummary
+  | CalculateFinancialsSummary;
+
+export interface InterimSummary {
+  leads_count: number;
+  acquired_sources_count: number;
+  read_sources_count: number;
+  facts_count: number;
+  calculations_count: number;
+}
+
+export type CurrentActivity =
+  | { kind: "model"; phase?: ModelPhase | null; retry_attempt?: number | null; started_at?: string | null }
+  | { kind: "tool"; name: string; rationale?: string | null; target?: string | null; started_at?: string | null };
+
 // apps/api/app/research_progress.py build_progress
 export type ProgressEvent =
-  | { index: number; kind: "model"; finish_reason: string | null; usage: number | null; input_tokens: number | null; output_tokens: number | null; settlement: string | null }
+  | { index: number; kind: "model"; finish_reason: string | null; usage: number | null; input_tokens: number | null; output_tokens: number | null; settlement: string | null; note?: string | null }
   | { index: number; kind: "model_failure"; code: string | null }
-  | { index: number; kind: "tool"; name: string | null; status: string | null; reason: string | null; rationale: string | null; denied_count: number | null }
+  | { index: number; kind: "tool"; name: string | null; status: string | null; reason: string | null; rationale: string | null; denied_count: number | null; summary?: ToolEventSummary | null }
   | { index: number; kind: "submission"; status: string | null };
+
+export interface RunUsage {
+  model_calls: number;
+  search_calls: number;
+  total_tokens: number;
+}
 
 // apps/api/app/research_progress.py build_progress
 export interface RunProgress {
   operation_id: string;
   operation_status: OperationStatus;
   turn: { index: number; question: string };
-  usage: { model_calls: number; search_calls: number; total_tokens: number };
-  current: { kind: "model" } | { kind: "tool"; name: string } | null;
+  usage: RunUsage;
+  current: CurrentActivity | null;
+  interim?: InterimSummary | null;
   events: ProgressEvent[];
   event_count: number;
   started_at: string | null;
   updated_at: string | null;
   version_id: string | null;
 }
+
+export type StreamChannel = "thinking" | "text" | "tool_status" | "draft_report";
+
+export interface TransientStreamState {
+  callSeq: number | null;
+  thinking: string;
+  text: string;
+  toolStatus: string | null;
+  draftReport: string;
+  activeChannel: StreamChannel | null;
+  retractedNotice: string | null;
+  lastSeq: number;
+}
+
+export type TerminalOperationStatus = "completed" | "failed" | "cancelled";
+
+export type ResearchSseFrame =
+  | { event: "progress.snapshot"; id: string | null; data: RunProgress }
+  | {
+      event: "step.current";
+      id: string | null;
+      data: {
+        operation_id: string;
+        operation_status: OperationStatus;
+        current: CurrentActivity | null;
+        usage: RunUsage;
+        interim?: InterimSummary | null;
+        updated_at: string | null;
+      };
+    }
+  | {
+      event: "step.event";
+      id: string | null;
+      data: {
+        operation_id: string;
+        event: ProgressEvent;
+        event_count: number;
+        usage: RunUsage;
+        interim?: InterimSummary | null;
+        updated_at: string | null;
+      };
+    }
+  | {
+      event: "stream.delta";
+      id: string | null;
+      data: {
+        operation_id: string;
+        call_seq: number;
+        channel: StreamChannel;
+        delta: string;
+        seq: number;
+      };
+    }
+  | {
+      event: "stream.reset";
+      id: string | null;
+      data: {
+        operation_id: string;
+        call_seq: number;
+        reason: string;
+      };
+    }
+  | {
+      event: "run.terminal";
+      id: string | null;
+      data: {
+        operation_id: string;
+        operation_status: TerminalOperationStatus;
+        version_id: string | null;
+      };
+    };
 
 // apps/api/app/main.py get_research_recovery_status
 export interface RecoveryStatus {
@@ -111,6 +265,7 @@ export interface SecIdentitySearchResult {
 export interface ResearchCapabilities {
   schema_version: "v1";
   search_available: boolean;
+  web_fetch_enabled?: boolean;
   sec_available: boolean;
   historical_prices_available: boolean;
   sources: { name: string; output_type: string; permission: string; configured: boolean; hosts: string[]; coverage: string }[];

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 import json
 from pathlib import Path
 
@@ -188,3 +189,89 @@ def test_search_provider_selector_requires_explicit_glm_mcp_configuration(monkey
     assert built.supports_project_search is False
     with pytest.raises(ProviderFailure, match="not configured"):
         built.search("public query")
+
+
+def _mcp_replies(search_results: list[dict[str, object]]) -> list[HttpResponse]:
+    return [
+        response({"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-03-26"}}, session="safe-session-extra"),
+        HttpResponse(202, ""),
+        response({"jsonrpc": "2.0", "id": 2, "result": {"tools": [{"name": "web_search_prime", "inputSchema": {"type": "object", "properties": {"search_query": {"type": "string"}, "count": {"type": "integer"}}}}]}}),
+        response({"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": json.dumps({"search_result": search_results})}]}}),
+    ]
+
+
+def test_glm_mcp_search_prefers_fallback_and_unwrapped_urls_ahead_of_opaque_goto() -> None:
+    import base64
+
+    bing_target = "https://www.sec.gov/Archives/edgar/data/1045810/nvda-10k.htm"
+    bing_token = "a1" + base64.urlsafe_b64encode(bing_target.encode("utf-8")).decode("ascii").rstrip("=")
+    replies = _mcp_replies([
+        {"title": "Opaque first", "link": "https://www.google.com/goto?url=CAESdwHEIkXX&gsessionid=x", "content": "Opaque only."},
+        {"title": "Fallback url", "link": "https://www.google.com/goto?url=CAESopaque1", "url": "https://investor.nvidia.com/news", "content": "Investor release."},
+        {"title": "Fallback target_url", "link": "https://www.google.com/goto?url=CAESopaque2", "target_url": "https://www.bea.gov/news/release", "content": "BEA release."},
+        {"title": "Fallback real_url", "link": "https://www.google.com/goto?url=CAESopaque3", "real_url": "https://example.com/real", "content": "Real url."},
+        {"title": "Fallback origin_url", "link": "https://www.google.com/goto?url=CAESopaque4", "origin_url": "https://example.com/origin", "content": "Origin url."},
+        {"title": "Bing ck/a", "link": f"https://www.bing.com/ck/a?!&&p=1&u={bing_token}&ntb=1", "content": "SEC filing."},
+        {"title": "Yahoo RU", "link": "https://r.search.yahoo.com/_ylt=Awr9/RV=2/RO=10/RU=https%3a%2f%2ffinance.yahoo.com%2fquote%2fNVDA/RK=2/RS=xyz", "content": "Quote page."},
+    ])
+    calls: list[dict[str, object]] = []
+
+    def transport(_method: str, _url: str, _headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
+        calls.append(json.loads(body))
+        return replies.pop(0)
+
+    candidates = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=transport, sleeper=lambda _delay: None).search("nvidia filings", limit=6)
+
+    assert [c.url for c in candidates] == [
+        "https://investor.nvidia.com/news",
+        "https://www.bea.gov/news/release",
+        "https://example.com/real",
+        "https://example.com/origin",
+        bing_target,
+        "https://finance.yahoo.com/quote/NVDA",
+    ]
+    assert calls[-1]["params"] == {"name": "web_search_prime", "arguments": {"search_query": "nvidia filings", "count": 6}}
+
+
+def test_glm_mcp_search_keeps_all_opaque_goto_rows_for_runtime_without_poisoning_and_rejects_private_targets() -> None:
+    import base64
+
+    opaque_replies = _mcp_replies([
+        {"title": "Opaque 1", "link": "https://www.google.com/goto?url=CAESdwHEIkXX&gsessionid=x", "content": "Snippet 1."},
+        {"title": "Opaque 2", "link": "https://www.google.com/goto?url=CAESother123&gsessionid=y", "content": "Snippet 2."},
+    ])
+    provider = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=lambda *_args: opaque_replies.pop(0), sleeper=lambda _delay: None)
+    candidates = provider.search("public query", limit=5)
+
+    assert [c.url for c in candidates] == [
+        "https://www.google.com/goto?url=CAESdwHEIkXX&gsessionid=x",
+        "https://www.google.com/goto?url=CAESother123&gsessionid=y",
+    ]
+
+    private_bing = "a1" + base64.urlsafe_b64encode(b"http://127.0.0.1/private").decode("ascii").rstrip("=")
+    unsafe_replies = _mcp_replies([
+        {"title": "Wrapped private", "link": f"https://www.bing.com/ck/a?u={private_bing}", "content": "Must be dropped."},
+        {"title": "Opaque with private fallback", "link": "https://www.google.com/goto?url=CAESopaque", "url": "http://127.0.0.1/secret", "content": "Must be dropped."},
+    ])
+    unsafe_provider = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=lambda *_args: unsafe_replies.pop(0), sleeper=lambda _delay: None)
+    with pytest.raises(ProviderFailure, match="no safely usable"):
+        unsafe_provider.search("public query")
+
+
+def test_glm_mcp_search_parses_iso_timestamps_and_date_fallback_fields() -> None:
+    replies = _mcp_replies([
+        {"title": "YMD", "link": "https://example.com/1", "content": "One.", "publish_date": "2026-08-01"},
+        {"title": "ISO Z", "link": "https://example.com/2", "content": "Two.", "published_at": "2026-08-02T14:30:00Z"},
+        {"title": "Date field space TZ", "link": "https://example.com/3", "content": "Three.", "publish_date": "", "date": "2026-08-03 09:15:00+00:00"},
+        {"title": "TZ rollover", "link": "https://example.com/4", "content": "Four.", "date": "2026-08-03T23:30:00-05:00"},
+        {"title": "Bad trailing text", "link": "https://example.com/5", "content": "Five.", "publish_date": "2026-08-05garbage"},
+    ])
+    candidates = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=lambda *_args: replies.pop(0), sleeper=lambda _delay: None).search("dates", limit=5)
+
+    assert [(c.published_at, c.independently_reviewable) for c in candidates] == [
+        (date(2026, 8, 1), True),
+        (date(2026, 8, 2), True),
+        (date(2026, 8, 3), True),
+        (date(2026, 8, 4), True),
+        (None, False),
+    ]

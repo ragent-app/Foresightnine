@@ -6,8 +6,10 @@ record selection only; they do not verify source truth or model comprehension.
 from __future__ import annotations
 
 from datetime import datetime
+import posixpath
+import re
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 from .research_coverage import initial_source_coverage
 from .research_sources import ResearchSource
@@ -15,12 +17,45 @@ from .research_sources import ResearchSource
 MAX_SOURCES = 20
 
 
+def _normalize_fred_host(hostname: str | None) -> str:
+    if not hostname:
+        return ''
+    try:
+        return hostname.rstrip('.').encode('idna').decode('ascii').lower().rstrip('.')
+    except UnicodeError:
+        return ''
+
+
+def _normalize_fred_path(path: str) -> str:
+    current = path or '/'
+    for _ in range(2):
+        decoded = unquote(current)
+        if decoded == current:
+            break
+        current = decoded
+    collapsed = re.sub(r'/+', '/', current)
+    if not collapsed.startswith('/'):
+        collapsed = '/' + collapsed
+    return posixpath.normpath(collapsed).lower()
+
+
 def is_fred_source(url: str) -> bool:
-    parsed = urlsplit(url)
-    host = (parsed.hostname or '').lower().rstrip('.')
-    return (host in {'fred.stlouisfed.org', 'alfred.stlouisfed.org'}
-            or host.endswith('.fred.stlouisfed.org')
-            or (host == 'api.stlouisfed.org' and parsed.path.lower().startswith('/fred')))
+    """Return True if url targets FRED/ALFRED hosts or the api.stlouisfed.org /fred prefix."""
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return False
+    host = _normalize_fred_host(parsed.hostname)
+    if (
+        host in {'fred.stlouisfed.org', 'alfred.stlouisfed.org'}
+        or host.endswith('.fred.stlouisfed.org')
+        or host.endswith('.alfred.stlouisfed.org')
+    ):
+        return True
+    if host == 'api.stlouisfed.org':
+        normalized_path = _normalize_fred_path(parsed.path)
+        return normalized_path == '/fred' or normalized_path.startswith('/fred/')
+    return False
 
 
 def source_eligibility(sources: list[ResearchSource], as_of: datetime | None) -> list[tuple[ResearchSource, str]]:

@@ -425,6 +425,8 @@ class OperationManager:
                             if committed and rollback_result is not None: rollback_result(operation_id, result)
                             raise
                         self._cache_operation(operation_id, actual)
+                        if won:
+                            self._notify_terminal(operation_id, "completed")
                         if not won and committed and rollback_result is not None:
                             rollback_result(operation_id, result)
                 except Exception as failure:

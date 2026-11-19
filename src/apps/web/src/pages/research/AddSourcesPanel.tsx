@@ -1,7 +1,7 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { useId, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { ApiError } from "../../api/http";
-import { createTextSource, fetchOfficialSource, fetchSecConceptSource, searchSecIdentities, uploadHtmlSource, uploadPdfSource, useSecAvailable } from "../../api/sources";
+import { createTextSource, fetchOfficialSource, fetchSecConceptSource, searchSecIdentities, uploadHtmlSource, uploadPdfSource, useResearchCapabilities, useSecAvailable, useWebFetchAvailable } from "../../api/sources";
 import type { CreatedSource, SecIdentity, SourcePermissionFlags } from "../../api/types";
 import { PERMISSION_LABEL } from "../../lib/copy";
 import {
@@ -59,7 +59,13 @@ function addError(tab: AddSourceTab, kind: UploadKind | null, error: unknown): s
     if (error.status === 503 && tab === "file") return kind === "html" ? "网页解析繁忙，请稍后重试。" : "PDF 解析暂时不可用，请稍后重试。";
     if (error.status === 422 && error.details.length === 0) {
       if (tab === "file") return kind === "html" ? "网页文件无效、超过 5 MB、不是 UTF-8 编码，或没有可提取的文字。" : "PDF 无效、超过 5 MB、已加密，或没有可提取的文字。";
-      if (tab === "url") return "这个网址的内容无法按支持的格式获取。";
+      if (tab === "url") {
+        if (/blocked by fetch policy/i.test(error.message)) return "这个网站或跳转目标不在允许获取的范围内，可以保存后按文件添加。";
+        if (/rejected the request/i.test(error.message)) return "目标网站拒绝了自动访问（可能需要登录或触发了防爬验证），可以保存后按文件添加。";
+        if (/not found/i.test(error.message)) return "找不到该网址对应的页面（404/410）。";
+        if (/exceeded the 5 mb/i.test(error.message)) return "网页或提取文本超过 5 MB / 200 万字符上限，可以分段保存后添加。";
+        return "这个网址的内容无法按支持的格式获取。";
+      }
       if (tab === "sec") return "没有取到这个数据项。请检查公司、标签和单位。";
     }
   }
@@ -81,6 +87,8 @@ interface Props {
 export function AddSourcesPanel({ asOfIso, onAdded, onClose, initial, locked = false }: Props) {
   const ids = useId();
   const secAvailable = useSecAvailable();
+  const webFetchAvailable = useWebFetchAvailable();
+  const allowedHosts = useResearchCapabilities().data?.sources.find((item) => item.name === "official_html_pdf")?.hosts;
   const fileInput = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<AddSourceTab>(initial?.tab ?? (initial?.url ? "url" : "file"));
   const [file, setFile] = useState<File | null>(initial?.file ?? null);
@@ -114,7 +122,7 @@ export function AddSourcesPanel({ asOfIso, onAdded, onClose, initial, locked = f
   const kind = file ? uploadKind(file) : null;
   const sec = tab === "sec";
   const datesAllowed = !sec;
-  const urlProblem = tab === "url" ? fetchUrlProblem(url, secAvailable) : null;
+  const urlProblem = tab === "url" ? fetchUrlProblem(url, secAvailable, { webFetchEnabled: webFetchAvailable, allowedHosts }) : null;
   const textUrlProblem = tab === "text" && textUrl.trim() ? (() => { try { const parsed = new URL(textUrl.trim()); return /^https?:$/.test(parsed.protocol) ? null : "只支持 http 或 https 网址"; } catch { return "网址格式不正确"; } })() : null;
   const tagProblem = tag.trim() && !TAG_PATTERN.test(tag.trim()) ? "标签只能包含字母、数字和下划线，并以字母开头" : null;
   const unitProblem = unit.trim() && !UNIT_PATTERN.test(unit.trim()) ? "单位只能包含字母、数字和连字符" : null;
@@ -304,10 +312,11 @@ export function AddSourcesPanel({ asOfIso, onAdded, onClose, initial, locked = f
 
         {tab === "url" ? (
           <>
+            {!webFetchAvailable ? <p className="callout-lite warn" role="note"><Icon name="alert" size={16} />当前部署限制了开放网页抓取，仅支持已允许的网站或 SEC 申报文件；其他网页可以保存后按文件添加。</p> : null}
             <div className="field">
               <label htmlFor={`${ids}-url`}>网址</label>
               <input id={`${ids}-url`} type="url" inputMode="url" value={url} disabled={disabled} aria-invalid={urlTouched && urlProblem ? true : undefined}
-                onChange={(event) => setUrl(event.target.value)} onBlur={() => setUrlTouched(true)} placeholder="https://www.sec.gov/Archives/edgar/data/…" />
+                onChange={(event) => setUrl(event.target.value)} onBlur={() => setUrlTouched(true)} placeholder="https://" />
               {urlTouched && urlProblem ? <span className="err">{urlProblem}</span> : null}
               <span className="help">{FETCH_HELP}</span>
             </div>

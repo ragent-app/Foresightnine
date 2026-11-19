@@ -104,11 +104,77 @@ export function isEligibleForRun(source) {
 // ---- Scripted run: one step per tick ---------------------------------------
 
 export const RUN_STEPS = [
-  { kind: "model", usage: 2195, input: 1980, output: 215, finish_reason: "tool_calls" },
-  { kind: "tool", name: "read_sources", status: "read", rationale: "读取年报摘录中与问题相关的段落" },
-  { kind: "model", usage: 3764, input: 2428, output: 1336, finish_reason: "tool_calls" },
-  { kind: "tool", name: "record_facts", status: "completed", rationale: "记录两期营业利润" },
-  { kind: "tool", name: "calculate_financials", status: "completed", rationale: "计算两期营业利润率" },
+  {
+    kind: "model",
+    usage: 2195,
+    input: 1980,
+    output: 215,
+    finish_reason: "tool_calls",
+    note: "先读取年报摘录中的营业利润与收入段落，核对两年财报口径。",
+  },
+  {
+    kind: "tool",
+    name: "read_sources",
+    status: "read",
+    rationale: "读取年报摘录中与问题相关的段落",
+    target: "《Northwind 示例公司 2026 财年年报摘录》0–480 字",
+    summary: {
+      kind: "read_sources",
+      read_count: 1,
+      items: [
+        {
+          source_id: S1_ID,
+          title: "Northwind 示例公司 2026 财年年报摘录",
+          start: 235,
+          end: 396,
+          total_characters: S1_TEXT.length,
+        },
+      ],
+    },
+  },
+  {
+    kind: "model",
+    usage: 3764,
+    input: 2428,
+    output: 1336,
+    finish_reason: "tool_calls",
+    note: "已读取营业利润数据，接下来记录两期数字并计算同比增长率。",
+  },
+  {
+    kind: "tool",
+    name: "record_facts",
+    status: "completed",
+    rationale: "记录两期营业利润",
+    target: "营业利润（FY2026）、营业利润（FY2025）（2 项）",
+    summary: {
+      kind: "record_facts",
+      recorded_count: 2,
+      facts_preview: [
+        { label: "营业利润", value: "15104", unit: "millions", currency: "USD", period: "FY2026" },
+        { label: "营业利润", value: "12980", unit: "millions", currency: "USD", period: "FY2025" },
+      ],
+    },
+  },
+  {
+    kind: "tool",
+    name: "calculate_financials",
+    status: "completed",
+    rationale: "计算两期营业利润率",
+    target: "增长率（1 项）",
+    summary: {
+      kind: "calculate_financials",
+      calculated_count: 1,
+      calcs_preview: [
+        {
+          formula_id: "growth_percent",
+          value: "16.36",
+          unit: "percent",
+          currency: null,
+          expression: "(15104 / 12980 - 1) * 100",
+        },
+      ],
+    },
+  },
   { kind: "submission", status: "completed" },
 ];
 
@@ -120,10 +186,18 @@ export function rawEvent(step) {
       usage: step.usage,
       usage_detail: { input_tokens: step.input, output_tokens: step.output },
       finish_reason: step.finish_reason,
+      ...(step.note ? { note: step.note } : {}),
     };
   }
   if (step.kind === "tool") {
-    return { kind: "tool", name: step.name, status: step.status, reason: step.reason ?? null, rationale: step.rationale };
+    return {
+      kind: "tool",
+      name: step.name,
+      status: step.status,
+      reason: step.reason ?? null,
+      rationale: step.rationale,
+      ...(step.summary ? { summary: structuredClone(step.summary) } : {}),
+    };
   }
   return { kind: "submission", status: step.status };
 }
@@ -381,21 +455,44 @@ export function seed(now) {
     claim("C4", "counterargument", "营业费用因扩建数据中心而上升，可能继续压制利润率。", Q_OPEX, { challenges_claim_ids: ["C1"] }),
   ];
 
-  const model = (usage, input, output) => ({
+  const model = (usage, input, output, note = null) => ({
     kind: "model",
     usage,
     usage_detail: { input_tokens: input, output_tokens: output },
     finish_reason: "tool_calls",
+    ...(note ? { note } : {}),
   });
-  const tool = (name, status, rationale, reason = null) => ({ kind: "tool", name, status, reason, rationale });
+  const tool = (name, status, rationale, reason = null, summary = null) => ({
+    kind: "tool",
+    name,
+    status,
+    reason,
+    rationale,
+    ...(summary ? { summary } : {}),
+  });
 
   const events1 = [
-    model(4100, 3600, 500),
-    tool("read_sources", "read", "读取年报摘录中与问题相关的段落"),
-    model(5840, 4980, 860),
+    model(4100, 3600, 500, "先读取 Northwind 年报摘录中的总收入段落，核实 FY2025 与 FY2026 口径。"),
+    tool("read_sources", "read", "读取年报摘录中与问题相关的段落", null, {
+      kind: "read_sources",
+      read_count: 1,
+      items: [{ source_id: S1_ID, title: "Northwind 示例公司 2026 财年年报摘录", start: 120, end: 235, total_characters: S1_TEXT.length }],
+    }),
+    model(5840, 4980, 860, "提取总收入数字并计算同比增长率。"),
     tool("record_facts", "invalid", "记录 FY2026 与 FY2025 总收入", "citation_location_mismatch"),
-    tool("record_facts", "completed", "修正引文位置后重新记录"),
-    tool("calculate_financials", "completed", "收入同比增长率"),
+    tool("record_facts", "completed", "修正引文位置后重新记录", null, {
+      kind: "record_facts",
+      recorded_count: 2,
+      facts_preview: [
+        { label: "总收入", value: "48612", unit: "millions", currency: "USD", period: "FY2026" },
+        { label: "总收入", value: "41270", unit: "millions", currency: "USD", period: "FY2025" },
+      ],
+    }),
+    tool("calculate_financials", "completed", "收入同比增长率", null, {
+      kind: "calculate_financials",
+      calculated_count: 1,
+      calcs_preview: [{ formula_id: "growth_percent", value: "17.79", unit: "percent", currency: null, expression: "(48612 / 41270 - 1) * 100" }],
+    }),
     { kind: "model_failure", code: "provider_no_result" },
   ];
   const turn1 = {
@@ -422,11 +519,29 @@ export function seed(now) {
   };
 
   const events2 = [
-    model(5200, 4700, 500),
-    tool("read_sources", "read", "读取年报摘录中与问题相关的段落"),
-    model(7280, 6100, 1180),
-    tool("record_facts", "completed", "记录两期营业利润"),
-    tool("calculate_financials", "completed", "计算两期营业利润率"),
+    model(5200, 4700, 500, "对照年报摘录中的营业利润与营业费用说明，检验利润率变化与反方证据。"),
+    tool("read_sources", "read", "读取年报摘录中与问题相关的段落", null, {
+      kind: "read_sources",
+      read_count: 1,
+      items: [{ source_id: S1_ID, title: "Northwind 示例公司 2026 财年年报摘录", start: 235, end: 480, total_characters: S1_TEXT.length }],
+    }),
+    model(7280, 6100, 1180, "已核对两期营业利润及利润率，准备提交支持与反方结论。"),
+    tool("record_facts", "completed", "记录两期营业利润", null, {
+      kind: "record_facts",
+      recorded_count: 2,
+      facts_preview: [
+        { label: "营业利润", value: "15104", unit: "millions", currency: "USD", period: "FY2026" },
+        { label: "营业利润", value: "12980", unit: "millions", currency: "USD", period: "FY2025" },
+      ],
+    }),
+    tool("calculate_financials", "completed", "计算两期营业利润率", null, {
+      kind: "calculate_financials",
+      calculated_count: 2,
+      calcs_preview: [
+        { formula_id: "margin_percent", value: "31.07", unit: "percent", currency: null, expression: "(15104 / 48612) * 100" },
+        { formula_id: "margin_percent", value: "31.45", unit: "percent", currency: null, expression: "(12980 / 41270) * 100" },
+      ],
+    }),
     { kind: "submission", status: "completed" },
   ];
   const questionA2 = "营业利润率有没有随收入一起提高？请同时列出不支持“增长强劲”的证据。";

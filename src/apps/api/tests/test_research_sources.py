@@ -414,3 +414,260 @@ def test_fetched_official_html_original_is_private_permission_gated_attachment(m
     assert download.headers['x-content-type-options'] == 'nosniff'
     assert client.get('/v2/research/sources/' + restricted + '/original', headers=owner).status_code == 403
     assert client.get('/v2/research/sources/' + available + '/original', headers=other).status_code == 404
+
+
+def _tiny_pdf_bytes() -> bytes:
+    """Build two synthetic PDF pages without external PDF-generation dependencies."""
+    streams = [b"BT /F1 12 Tf 20 150 Td (Revenue 100) Tj ET", b"BT /F1 12 Tf 20 150 Td (Revenue 200) Tj ET"]
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    objects.extend(b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream" for stream in streams)
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for index, obj in enumerate(objects, 1):
+        offsets.append(len(pdf))
+        pdf.extend(f"{index} 0 obj\n".encode() + obj + b"\nendobj\n")
+    start = len(pdf)
+    pdf.extend(f"xref\n0 {len(offsets)}\n0000000000 65535 f \n".encode())
+    for offset in offsets[1:]:
+        pdf.extend(f"{offset:010d} 00000 n \n".encode())
+    pdf.extend(f"trailer\n<< /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{start}\n%%EOF\n".encode())
+    return bytes(pdf)
+
+
+def test_open_web_fetch_supports_html_and_pdf_without_suffix_and_maps_failures(monkeypatch):
+    from datetime import datetime, timezone
+    from uuid import uuid4
+    import app.research_fetch as research_fetch
+    from app.openai_compatible import BinaryHttpResponse, _TransportTimeout
+    from app.research_sources import ResearchSource, SourcePermissions, pdf_text_spacing_suspect
+
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    monkeypatch.delenv("FORESIGHTNINE_FETCH_ALLOWED_HOSTS", raising=False)
+    monkeypatch.delenv("FORESIGHTNINE_FETCH_BLOCKED_HOSTS", raising=False)
+    monkeypatch.delenv("FORESIGHTNINE_SEC_USER_AGENT", raising=False)
+    monkeypatch.delenv("SEC_USER_AGENT", raising=False)
+    monkeypatch.setattr(api, "_reserve_search_call", lambda request: None)
+
+    pdf_bytes = _tiny_pdf_bytes()
+    html_bytes = (
+        b"<html><p>NVIDIA Q4 summary</p>"
+        b"<table><tr><th>Year</th><th>Revenue</th></tr><tr><td>FY25</td><td>130.5B</td></tr></table>"
+        b"<div style='display:none'>HIDDEN PROMPT INJECTION</div></html>"
+    )
+
+    def fake_transport(method, url, headers, body, timeout, **kwargs):
+        if url == "https://ir.example.com/news/q4":
+            return BinaryHttpResponse(200, html_bytes, {"content-type": "text/html; charset=utf-8"})
+        if url == "https://ir.example.com/download?id=42":
+            return BinaryHttpResponse(200, pdf_bytes, {"content-type": "application/pdf"})
+        if url == "https://ir.example.com/notes":
+            return BinaryHttpResponse(200, b"Plain text notes", {"content-type": "text/plain"})
+        if url == "https://www.bea.gov/redirect-out":
+            return BinaryHttpResponse(302, b"", {"location": "https://cdn.example.org/mirror.html"})
+        if url == "https://cdn.example.org/mirror.html":
+            return BinaryHttpResponse(200, b"<html><p>Mirrored content</p></html>", {"content-type": "text/html"})
+        if url == "https://blocked-upstream.example.com/403":
+            return BinaryHttpResponse(403, b"", {})
+        if url == "https://missing.example.com/404":
+            return BinaryHttpResponse(404, b"", {})
+        if url == "https://ratelimit.example.com/429":
+            return BinaryHttpResponse(429, b"", {})
+        if url == "https://timeout.example.com/slow":
+            raise _TransportTimeout("timed out")
+        if url == "https://json.example.com/data":
+            return BinaryHttpResponse(200, b'{"ok": true}', {"content-type": "application/json"})
+        raise AssertionError(f"Unexpected transport URL: {url}")
+
+    monkeypatch.setattr(research_fetch, "_validated_addresses", lambda host, port, *, allow_private=False: ("93.184.216.34",))
+    monkeypatch.setattr(research_fetch, "_default_binary_transport", fake_transport)
+
+    client = TestClient(app)
+    reg = client.post("/v1/auth/local/register", json={"email": f"web-fetch-{uuid4().hex}@example.test",
+                                                        "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + reg["access_token"]}
+
+    # 1. Open-web HTML fetch (export=False)
+    web_html = client.post("/v2/research/sources/fetch", headers=headers, json={
+        "title": "NVIDIA IR Q4",
+        "url": "https://ir.example.com/news/q4",
+        "permissions": {"store": True, "display": True, "model_input": True, "export": False},
+    })
+    assert web_html.status_code == 201, web_html.text
+    html_data = web_html.json()
+    assert html_data["kind"] == "user_supplied"
+    assert html_data["retrieval_method"] == "web_html"
+    assert html_data["original_html_available"] is True
+    assert "original_html_base64" not in html_data
+    assert "span markers" in html_data["extraction_disclosure"]
+    assert "HIDDEN PROMPT INJECTION" not in html_data["text"]
+    assert html_data["permissions"]["export"] is False
+    assert html_data["provenance"]["final_url"] == "https://ir.example.com/news/q4"
+    assert client.get(f"/v2/research/sources/{html_data['source_id']}/original", headers=headers).status_code == 403
+
+    fy25_start = html_data["text"].index("FY25")
+    html_ctx = client.get(f"/v2/research/sources/{html_data['source_id']}/context", headers=headers,
+                          params={"start": fy25_start, "end": fy25_start + 4})
+    assert html_ctx.status_code == 200 and html_ctx.json()["table_context"] is not None
+
+    # 2. Open-web PDF without .pdf suffix (both export=True and export=False)
+    web_pdf_exportable = client.post("/v2/research/sources/fetch", headers=headers, json={
+        "title": "NVIDIA Filing PDF",
+        "url": "https://ir.example.com/download?id=42",
+        "permissions": {"store": True, "display": True, "model_input": True, "export": True},
+    })
+    assert web_pdf_exportable.status_code == 201, web_pdf_exportable.text
+    pdf_data = web_pdf_exportable.json()
+    assert pdf_data["kind"] == "user_supplied"
+    assert pdf_data["retrieval_method"] == "web_pdf"
+    assert pdf_data["original_pdf_available"] is True
+    assert "original_pdf_base64" not in pdf_data
+    assert pdf_data["pdf_text_order"] == "layout"
+    assert "Revenue 100" in pdf_data["text"] and "Revenue 200" in pdf_data["text"]
+
+    p2_start = pdf_data["text"].index("Revenue 200")
+    pdf_ctx = client.get(f"/v2/research/sources/{pdf_data['source_id']}/context", headers=headers,
+                         params={"start": p2_start, "end": p2_start + len("Revenue 200")})
+    assert pdf_ctx.status_code == 200
+    assert pdf_ctx.json()["page_start"] == 2 and pdf_ctx.json()["page_end"] == 2
+    assert "Revenue 100" not in pdf_ctx.json()["before"]
+
+    original_pdf = client.get(f"/v2/research/sources/{pdf_data['source_id']}/original", headers=headers)
+    assert original_pdf.status_code == 200 and original_pdf.content == pdf_bytes
+    assert original_pdf.headers["content-type"].startswith("application/pdf")
+    assert 'filename="source.pdf"' in original_pdf.headers["content-disposition"]
+
+    web_pdf_no_export = client.post("/v2/research/sources/fetch", headers=headers, json={
+        "title": "NVIDIA Filing PDF Private",
+        "url": "https://ir.example.com/download?id=42",
+        "permissions": {"store": True, "display": True, "model_input": True, "export": False},
+    })
+    assert web_pdf_no_export.status_code == 201
+    assert client.get(f"/v2/research/sources/{web_pdf_no_export.json()['source_id']}/original", headers=headers).status_code == 403
+
+    # 3. Plain-text URL and official host redirecting to third-party host
+    plain = client.post("/v2/research/sources/fetch", headers=headers, json={
+        "title": "Notes", "url": "https://ir.example.com/notes",
+        "permissions": {"store": True, "display": True},
+    })
+    assert plain.status_code == 201
+    assert plain.json()["kind"] == "user_supplied" and plain.json()["retrieval_method"] == "web_html"
+    assert plain.json()["original_html_available"] is False
+
+    redirected = client.post("/v2/research/sources/fetch", headers=headers, json={
+        "title": "Redirected", "url": "https://www.bea.gov/redirect-out",
+        "permissions": {"store": True, "display": True, "export": True},
+    })
+    assert redirected.status_code == 201
+    assert redirected.json()["kind"] == "user_supplied" and redirected.json()["retrieval_method"] == "web_html"
+    assert redirected.json()["provenance"]["final_url"] == "https://cdn.example.org/mirror.html"
+
+    # 4. pdf_text_spacing_suspect includes web_pdf
+    joined_text = ("Joinedwordswithoutspacesbetween " * 50).strip()
+    assert pdf_text_spacing_suspect(ResearchSource(
+        source_id="s-web-pdf", owner_id="owner", title="Web PDF", text=joined_text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="h", retrieval_method="web_pdf",
+        permissions=SourcePermissions(store=True, display=True),
+    )) is True
+
+    # 5. FetchFailure status mappings (429 / 503 / 422)
+    for bad_url, expected_code in (
+        ("https://ratelimit.example.com/429", 429),
+        ("https://timeout.example.com/slow", 503),
+        ("https://blocked-upstream.example.com/403", 422),
+        ("https://missing.example.com/404", 422),
+        ("https://json.example.com/data", 422),
+    ):
+        resp = client.post("/v2/research/sources/fetch", headers=headers, json={
+            "title": "Bad", "url": bad_url, "permissions": {"store": True},
+        })
+        assert resp.status_code == expected_code, (bad_url, resp.text)
+
+    monkeypatch.setenv("FORESIGHTNINE_FETCH_BLOCKED_HOSTS", "policy-blocked.example.com")
+    blocked_resp = client.post("/v2/research/sources/fetch", headers=headers, json={
+        "title": "Policy blocked", "url": "https://policy-blocked.example.com/report", "permissions": {"store": True},
+    })
+    assert blocked_resp.status_code == 422
+    monkeypatch.delenv("FORESIGHTNINE_FETCH_BLOCKED_HOSTS", raising=False)
+    monkeypatch.setenv("FORESIGHTNINE_FETCH_ALLOWED_HOSTS", "ir.example.com")
+    not_allowed = client.post("/v2/research/sources/fetch", headers=headers, json={
+        "title": "Not allowlisted", "url": "https://other.example.com/report", "permissions": {"store": True},
+    })
+    assert not_allowed.status_code == 422
+
+
+def test_fetch_routes_trailing_dot_sec_host_and_rejects_sec_subdomains_and_encoded_fred(monkeypatch):
+    import base64
+    from hashlib import sha256
+    from types import SimpleNamespace
+    from uuid import uuid4
+    import pytest
+    from app.operations import ApiProblem
+    from app.research_sec import SecFilingResult
+    from app.research_sources import SourcePermissions
+
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    monkeypatch.setenv("FORESIGHTNINE_SEC_USER_AGENT", "Example Research contact@example.test")
+    monkeypatch.setattr(api, "_reserve_search_call", lambda request: None)
+    monkeypatch.setattr(api, "reserve_sec_request", lambda *_: True)
+    monkeypatch.setattr(api, "fetch_source_document", lambda *_: pytest.fail("must not route SEC or FRED URLs to general web fetcher"))
+
+    seen_sec_urls = []
+    raw = b"<html><p>SEC trailing dot filing</p></html>"
+
+    def fake_sec_fetch(req, agent):
+        seen_sec_urls.append(str(req.url))
+        assert agent == "Example Research contact@example.test"
+        return SecFilingResult("SEC trailing dot filing", sha256(raw).hexdigest(), base64.b64encode(raw).decode())
+
+    monkeypatch.setattr(api, "fetch_sec_filing", fake_sec_fetch)
+    client = TestClient(app)
+    reg = client.post("/v1/auth/local/register", json={
+        "email": f"sec-edge-{uuid4().hex}@example.test",
+        "password": "correct horse battery staple!",
+    }).json()
+    headers = {"Authorization": "Bearer " + reg["access_token"]}
+
+    canonical_sec_url = "https://www.sec.gov/Archives/edgar/data/858877/000085887724000017/csco-20240727.htm"
+    trailing_dot_sec_url = "https://www.sec.gov./Archives/edgar/data/858877/000085887724000017/csco-20240727.htm"
+    sec_ok = client.post("/v2/research/sources/fetch", headers=headers, json={
+        "title": "SEC Filing Trailing Dot",
+        "url": trailing_dot_sec_url,
+        "permissions": {"store": True, "display": True, "model_input": True, "export": True},
+    })
+    assert sec_ok.status_code == 201, sec_ok.text
+    sec_data = sec_ok.json()
+    assert sec_data["retrieval_method"] == "sec_filing_html"
+    assert sec_data["kind"] == "official"
+    assert sec_data["url"] == canonical_sec_url
+    assert seen_sec_urls == [canonical_sec_url]
+
+    for bad_url in (
+        "https://efts.sec.gov/EDGAR/searchedgar/companysearch",
+        "https://api.stlouisfed.org/%66red/series/observations",
+        "https://sub.alfred.stlouisfed.org/series",
+    ):
+        resp = client.post("/v2/research/sources/fetch", headers=headers, json={
+            "title": "Rejected", "url": bad_url, "permissions": {"store": True},
+        })
+        assert resp.status_code == 422, (bad_url, resp.text)
+
+    # Also prove direct invocation fail-closes on non-www SEC subdomains before web fallback.
+    fake_http_request = SimpleNamespace(headers={"Authorization": headers["Authorization"]})
+    unvalidated_efts = SimpleNamespace(
+        url="https://efts.sec.gov/EDGAR/searchedgar/companysearch",
+        title="EFTS",
+        permissions=SourcePermissions(store=True),
+        published_at=None,
+        event_at=None,
+        revised_at=None,
+        is_simulated=False,
+    )
+    with pytest.raises(ApiProblem) as exc_info:
+        api.fetch_research_source(unvalidated_efts, fake_http_request)
+    assert exc_info.value.status_code == 422

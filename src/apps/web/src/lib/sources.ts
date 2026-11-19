@@ -29,18 +29,50 @@ export interface EligibilityInput {
   revised_at?: string | null | undefined;
 }
 
+function normalizeUrlPathname(rawPath: string): string {
+  let decoded = rawPath;
+  for (let pass = 0; pass < 2; pass += 1) {
+    const next = decoded.replace(/(?:%[0-9a-fA-F]{2})+/g, (sequence) => {
+      try {
+        return decodeURIComponent(sequence);
+      } catch {
+        return sequence;
+      }
+    });
+    if (next === decoded) break;
+    decoded = next;
+  }
+  const segments: string[] = [];
+  for (const segment of decoded.replace(/\/+/g, "/").split("/")) {
+    if (!segment || segment === ".") continue;
+    if (segment === "..") segments.pop();
+    else segments.push(segment);
+  }
+  return `/${segments.join("/")}`.toLowerCase();
+}
+
 export function isFredUrl(raw: string): boolean {
   let host = "";
   let path = "";
   try {
     const url = new URL(raw);
     host = url.hostname.toLowerCase().replace(/\.$/, "");
-    path = url.pathname.toLowerCase();
+    path = normalizeUrlPathname(url.pathname);
   } catch {
     return false;
   }
-  return host === "fred.stlouisfed.org" || host === "alfred.stlouisfed.org" || host.endsWith(".fred.stlouisfed.org")
-    || (host === "api.stlouisfed.org" && path.startsWith("/fred"));
+  return (
+    host === "fred.stlouisfed.org" ||
+    host.endsWith(".fred.stlouisfed.org") ||
+    host === "alfred.stlouisfed.org" ||
+    host.endsWith(".alfred.stlouisfed.org") ||
+    (host === "api.stlouisfed.org" && (path === "/fred" || path.startsWith("/fred/")))
+  );
+}
+
+export function isSecHost(host: string): boolean {
+  const normalized = host.toLowerCase().replace(/\.$/, "");
+  return normalized === "sec.gov" || normalized.endsWith(".sec.gov");
 }
 
 /** research_source_policy.source_eligibility, in the same order. Null means the next run reads it. */
@@ -58,20 +90,117 @@ export function ineligibility(source: EligibilityInput, asOf: string | null | un
   return null;
 }
 
-const FETCH_HOSTS = new Set(["www.bea.gov", "www.federalreserve.gov", "www.sec.gov"]);
 const SEC_FILING_PATH = /^\/Archives\/edgar\/data\/\d{1,10}\/\d{18}\/[A-Za-z0-9][A-Za-z0-9._-]{0,150}\.html?$/;
+const NON_PUBLIC_SUFFIXES = [".localhost", ".local", ".internal", ".test", ".invalid", ".arpa"] as const;
+const MAX_FETCH_URL_LENGTH = 2048;
 
-export const FETCH_HELP = "支持 SEC EDGAR 申报文件页面，以及美联储（www.federalreserve.gov）和美国经济分析局（www.bea.gov）的 HTTPS 页面。其他网页请保存后按文件添加。";
+export const FETCH_HELP = "支持公开 HTTPS 网页（HTML、纯文本、PDF）以及 SEC EDGAR 申报文件页面，暂不支持 FRED；如果目标网站拦截自动访问，可以保存后按文件添加。";
 
 export const SEC_UNAVAILABLE = "这个环境还没有配置 SEC 联系信息，暂时无法获取 SEC 资料。";
 
+export interface FetchUrlOptions {
+  webFetchEnabled?: boolean;
+  allowedHosts?: readonly string[] | undefined;
+}
+
+function parseIpv4Octets(host: string): readonly [number, number, number, number] | null {
+  if (!/^\d+(?:\.\d+){0,3}$/.test(host)) return null;
+  const parts = host.split(".").map((part) => Number(part));
+  if (parts.length < 1 || parts.length > 4) return null;
+  if (parts.length === 1) {
+    const v = parts[0]!;
+    if (!Number.isInteger(v) || v < 0 || v > 0xffffffff) return null;
+    return [(v >>> 24) & 0xff, (v >>> 16) & 0xff, (v >>> 8) & 0xff, v & 0xff];
+  }
+  const lastLimit = parts.length === 2 ? 0xffffff : parts.length === 3 ? 0xffff : 0xff;
+  for (let index = 0; index < parts.length; index += 1) {
+    const value = parts[index]!;
+    const limit = index < parts.length - 1 ? 0xff : lastLimit;
+    if (!Number.isInteger(value) || value < 0 || value > limit) return null;
+  }
+  const value = parts.length === 2
+    ? ((parts[0]! << 24) >>> 0) + parts[1]!
+    : parts.length === 3
+      ? ((parts[0]! << 24) >>> 0) + (parts[1]! << 16) + parts[2]!
+      : ((parts[0]! << 24) >>> 0) + (parts[1]! << 16) + (parts[2]! << 8) + parts[3]!;
+  return [(value >>> 24) & 0xff, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff];
+}
+
+function isNonPublicIpv4([a, b, c]: readonly [number, number, number, number]): boolean {
+  return (
+    a === 0 ||
+    a === 10 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 0 && (c === 0 || c === 2)) ||
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) ||
+    (a === 203 && b === 0 && c === 113) ||
+    a >= 224
+  );
+}
+
+function parseIpv6Groups(host: string): number[] | null {
+  const halves = host.split("::");
+  if (halves.length > 2) return null;
+  const parseSide = (side: string): number[] | null => {
+    if (!side) return [];
+    const tokens = side.split(":");
+    const groups: number[] = [];
+    for (let index = 0; index < tokens.length; index += 1) {
+      const token = tokens[index]!;
+      if (index === tokens.length - 1 && token.includes(".")) {
+        const octets = parseIpv4Octets(token);
+        if (!octets || token.split(".").length !== 4) return null;
+        groups.push((octets[0] << 8) | octets[1], (octets[2] << 8) | octets[3]);
+      } else if (/^[0-9a-f]{1,4}$/i.test(token)) {
+        groups.push(Number.parseInt(token, 16));
+      } else {
+        return null;
+      }
+    }
+    return groups;
+  };
+  const left = parseSide(halves[0]!);
+  if (!left) return null;
+  if (halves.length === 1) return left.length === 8 ? left : null;
+  const right = parseSide(halves[1]!);
+  if (!right) return null;
+  const missing = 8 - left.length - right.length;
+  if (missing < 1) return null;
+  return [...left, ...Array<number>(missing).fill(0), ...right];
+}
+
+function isNonPublicIpv6(groups: readonly number[]): boolean {
+  const [g0, g1, g2, g3, g4, g5, g6, g7] = groups as [number, number, number, number, number, number, number, number];
+  const allZeroPrefix = g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0;
+  if (allZeroPrefix && g5 === 0) {
+    if (g6 === 0 && (g7 === 0 || g7 === 1)) return true;
+    return isNonPublicIpv4([(g6 >> 8) & 0xff, g6 & 0xff, (g7 >> 8) & 0xff, g7 & 0xff]);
+  }
+  if (allZeroPrefix && g5 === 0xffff) {
+    return isNonPublicIpv4([(g6 >> 8) & 0xff, g6 & 0xff, (g7 >> 8) & 0xff, g7 & 0xff]);
+  }
+  if (g0 === 0x0064 && g1 === 0xff9b && ((g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0) || g2 === 1)) return true;
+  if (g0 === 0x0100 && g1 === 0 && g2 === 0 && g3 === 0) return true;
+  if (g0 === 0x2001 && g1 === 0x0db8) return true;
+  if ((g0 & 0xfe00) === 0xfc00) return true;
+  if ((g0 & 0xffc0) === 0xfe80) return true;
+  if ((g0 & 0xff00) === 0xff00) return true;
+  return false;
+}
+
 /**
- * research_fetch.FetchSourceRequest.allow_official_https_only. Returns a user-facing problem or null.
- * `secAvailable` comes from /v2/research/capabilities; SEC addresses need a configured contact.
+ * Mirrors research_fetch.FetchSourceRequest.validate_public_https_url.
+ * Returns a user-facing problem or null; the backend performs DNS resolution and remains authoritative.
  */
-export function fetchUrlProblem(raw: string, secAvailable = true): string | null {
+export function fetchUrlProblem(raw: string, secAvailable = true, options?: FetchUrlOptions): string | null {
   const value = raw.trim();
   if (!value) return "请输入网址";
+  if (value.length > MAX_FETCH_URL_LENGTH || value.includes("\\")) return "网址格式不正确";
   let url: URL;
   try {
     url = new URL(value);
@@ -82,14 +211,57 @@ export function fetchUrlProblem(raw: string, secAvailable = true): string | null
   if (url.username || url.password) return "网址不能包含账号或密码";
   if (url.port && url.port !== "443") return "网址不能指定端口";
   if (url.hash) return "网址不能包含 # 后的片段";
-  if (!FETCH_HOSTS.has(url.hostname)) return "这个网站目前不能直接获取";
-  if (url.hostname === "www.sec.gov" && (url.search || !SEC_FILING_PATH.test(url.pathname))) return "只支持 SEC EDGAR 申报文件的 HTML 页面地址";
-  if (url.hostname === "www.sec.gov" && !secAvailable) return SEC_UNAVAILABLE;
+
+  const rawAuthority = /^https:\/\/([^/?#]+)/i.exec(value)?.[1] ?? "";
+  const rawHost = rawAuthority.split("@").pop()?.replace(/:\d+$/, "").toLowerCase().replace(/\.$/, "") ?? "";
+  if (rawHost && !rawHost.startsWith("[")) {
+    const rawLabels = rawHost.split(".");
+    if (
+      rawLabels.every((label) => /^(?:0x[0-9a-f]+|0[0-7]+|\d+)$/.test(label)) &&
+      rawLabels.some((label) => label.startsWith("0x") || (label.length > 1 && label.startsWith("0")))
+    ) {
+      return "只支持公网网址，不能使用非标准格式的 IP 地址";
+    }
+    const rawIpv4 = parseIpv4Octets(rawHost);
+    if (rawIpv4 && isNonPublicIpv4(rawIpv4)) return "只支持公网网址，不能使用本机或内网地址";
+  }
+
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  const bareHost = host.replace(/^\[|\]$/g, "");
+  if (!bareHost || bareHost.length > 253 || bareHost === "localhost" || NON_PUBLIC_SUFFIXES.some((suffix) => bareHost.endsWith(suffix))) {
+    return "只支持公网网址，不能使用本机或内网地址";
+  }
+  if (host.startsWith("[") || bareHost.includes(":")) {
+    const groups = parseIpv6Groups(bareHost);
+    if (!groups || isNonPublicIpv6(groups)) return "只支持公网网址，不能使用本机或内网地址";
+  } else {
+    const ipv4 = parseIpv4Octets(bareHost);
+    if (ipv4) {
+      if (isNonPublicIpv4(ipv4)) return "只支持公网网址，不能使用本机或内网地址";
+    } else {
+      const labels = bareHost.split(".");
+      if (labels.length < 2 || labels.some((label) => !label)) return "只支持公网域名网址";
+    }
+  }
+
+  if (isFredUrl(value)) return INELIGIBLE_TEXT.source_not_authorized;
+  if (isSecHost(bareHost)) {
+    if (bareHost === "www.sec.gov") {
+      if (url.search || !SEC_FILING_PATH.test(url.pathname)) return "只支持 SEC EDGAR 申报文件的 HTML 页面地址";
+      if (!secAvailable) return SEC_UNAVAILABLE;
+      return null;
+    }
+    if (!secAvailable) return SEC_UNAVAILABLE;
+    return "目前只支持 SEC 申报文件页面（www.sec.gov/Archives/edgar/data/...）和研究任务中的 SEC 结构化数据查询。";
+  }
+  if (options?.webFetchEnabled === false && !(options.allowedHosts ?? []).includes(bareHost)) {
+    return "当前环境限制了开放网页抓取，可以保存后按文件添加";
+  }
   return null;
 }
 
-export function isFetchableUrl(raw: string, secAvailable = true): boolean {
-  return fetchUrlProblem(raw, secAvailable) === null;
+export function isFetchableUrl(raw: string, secAvailable = true, options?: FetchUrlOptions): boolean {
+  return fetchUrlProblem(raw, secAvailable, options) === null;
 }
 
 export type UploadKind = "pdf" | "html";

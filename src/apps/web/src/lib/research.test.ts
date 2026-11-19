@@ -51,6 +51,136 @@ describe("parseTurnEvents", () => {
     expect(parseTurnEvents(undefined)).toEqual([]);
     expect(parseTurnEvents([{ kind: "model", usage: 5 }])[0]).toMatchObject({ usage: 5, input_tokens: null });
   });
+  it("whitelists L1 model notes and strips thinking/signature/tool arguments", () => {
+    const [model] = parseTurnEvents([
+      {
+        kind: "model",
+        usage: 300,
+        input_tokens: 200,
+        output_tokens: 100,
+        note: `  ${"说明".repeat(400)}  `,
+        thinking: "secret chain of thought",
+        redacted_thinking: "opaque",
+        signature: "sig-123",
+      },
+    ]);
+    expect(model?.kind).toBe("model");
+    if (model?.kind === "model") {
+      expect(model.input_tokens).toBe(200);
+      expect(model.output_tokens).toBe(100);
+      expect(model.note?.length).toBe(600);
+      expect(model).not.toHaveProperty("thinking");
+      expect(model).not.toHaveProperty("redacted_thinking");
+      expect(model).not.toHaveProperty("signature");
+    }
+  });
+  it("whitelists all 7 L1 tool summaries and drops forbidden or malformed fields", () => {
+    const events = parseTurnEvents([
+      {
+        kind: "tool",
+        name: "discover_sources",
+        status: "completed",
+        summary: {
+          kind: "discover_sources",
+          found_count: 3,
+          eligible_count: 2,
+          denied_count: 1,
+          leads_preview: [
+            { title: "10-K", host: "sec.gov", published_at: "2026-08-01", url: "https://secret.invalid" },
+          ],
+        },
+      },
+      {
+        kind: "tool",
+        name: "acquire_sources",
+        status: "completed",
+        summary: {
+          kind: "acquire_sources",
+          acquired_count: 1,
+          failed_count: 1,
+          items: [
+            { title: "Filing", host: "sec.gov", status: "acquired", reason: null, total_characters: 12000, text: "LEAK" },
+            { title: "", host: "blocked.example.com", status: "failed", reason: "http_forbidden_or_challenge", total_characters: null },
+          ],
+        },
+      },
+      {
+        kind: "tool",
+        name: "sec_company_concept",
+        status: "acquired",
+        summary: {
+          kind: "sec_company_concept",
+          entity: "NVDA",
+          taxonomy: "us-gaap",
+          tag: "Revenues",
+          unit: "USD",
+          status: "acquired",
+          title: "NVIDIA Revenues",
+          total_characters: 4200,
+        },
+      },
+      {
+        kind: "tool",
+        name: "historical_prices",
+        status: "acquired",
+        summary: {
+          kind: "historical_prices",
+          instrument_id: "AAPL",
+          start_date: "2025-01-01",
+          end_date: "2025-12-31",
+          status: "acquired",
+          title: "AAPL daily",
+        },
+      },
+      {
+        kind: "tool",
+        name: "read_sources",
+        status: "read",
+        summary: {
+          kind: "read_sources",
+          read_count: 1,
+          items: [{ source_id: "s1", title: "10-K", start: 0, end: 500, total_characters: 5000, text: "RAW SOURCE TEXT" }],
+        },
+      },
+      {
+        kind: "tool",
+        name: "record_facts",
+        status: "completed",
+        summary: {
+          kind: "record_facts",
+          recorded_count: 1,
+          facts_preview: [{ label: "总收入", value: "48612", unit: "millions", currency: "USD", period: "FY2026", quotation: "RAW QUOTE" }],
+        },
+      },
+      {
+        kind: "tool",
+        name: "calculate_financials",
+        status: "completed",
+        summary: {
+          kind: "calculate_financials",
+          calculated_count: 1,
+          calcs_preview: [{ formula_id: "growth_percent", value: "17.79", unit: "percent", currency: null, expression: "(48612 / 41270 - 1) * 100" }],
+        },
+      },
+      {
+        kind: "tool",
+        name: "read_sources",
+        status: "read",
+        summary: { kind: "read_sources", read_count: -1, items: [] },
+      },
+    ]);
+    expect(events).toHaveLength(8);
+    const discover = events[0];
+    expect(discover?.kind === "tool" && discover.summary?.kind === "discover_sources" && discover.summary.leads_preview[0]).toEqual({
+      title: "10-K", host: "sec.gov", published_at: "2026-08-01",
+    });
+    const read = events[4];
+    expect(read?.kind === "tool" && read.summary?.kind === "read_sources" && read.summary.items[0]).not.toHaveProperty("text");
+    const facts = events[5];
+    expect(facts?.kind === "tool" && facts.summary?.kind === "record_facts" && facts.summary.facts_preview[0]).not.toHaveProperty("quotation");
+    const bad = events[7];
+    expect(bad?.kind === "tool" && bad.summary).toBeUndefined();
+  });
 });
 
 describe("stepRows", () => {
@@ -97,6 +227,23 @@ describe("stepRows", () => {
   });
   it("counts tool steps", () => {
     expect(toolStepCount(events)).toBe(3);
+  });
+  it("preserves model note and tool summary in stepRows", () => {
+    const rows = stepRows([
+      { index: 0, kind: "model", finish_reason: "tool_calls", usage: 200, input_tokens: 150, output_tokens: 50, settlement: null, note: "先读财报" },
+      {
+        index: 1,
+        kind: "tool",
+        name: "record_facts",
+        status: "completed",
+        reason: null,
+        rationale: "记录收入",
+        denied_count: null,
+        summary: { kind: "record_facts", recorded_count: 1, facts_preview: [{ label: "总收入", value: "100", unit: "millions", currency: "USD", period: "FY2026" }] },
+      },
+    ]);
+    expect(rows[0]).toEqual({ kind: "model", index: 0, text: "模型调用 · 150 输入 / 50 输出 Token", note: "先读财报" });
+    expect(rows[1]).toMatchObject({ kind: "tool", index: 1, label: "记录数字", summary: { kind: "record_facts", recorded_count: 1 } });
   });
 });
 

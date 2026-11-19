@@ -2,10 +2,10 @@ import type { ResearchV2 } from "@foresightnine/contracts";
 import { useId, useState } from "react";
 import { ApiError } from "../../api/http";
 import { useCreateCalculation, useRecalculate, useVersionSources } from "../../api/queries";
-import { downloadSourceOriginal, useSecAvailable } from "../../api/sources";
+import { downloadSourceOriginal, useResearchCapabilities, useSecAvailable, useWebFetchAvailable } from "../../api/sources";
 import type { AvailableVersionSource } from "../../api/types";
 import {
-  CALC_NOTE, calcChecks, INVALID_NOTE, LEAD_NOTE, PERMISSION_LABEL, PERMISSION_ORDER, retrievalMethodLabel, SOURCE_KIND_LABEL, toolLabel, VERIFICATION_LABEL,
+  CALC_NOTE, calcChecks, formatInterimSummary, INVALID_NOTE, LEAD_NOTE, PERMISSION_LABEL, PERMISSION_ORDER, retrievalMethodLabel, SOURCE_KIND_LABEL, VERIFICATION_LABEL,
 } from "../../lib/copy";
 import { saveBlob } from "../../lib/download";
 import { formatDateTime, formatInteger, formatQuantity } from "../../lib/format";
@@ -13,10 +13,11 @@ import { FORMULAS, pendingClaimEdits, type ClaimRoleInput, type FormulaId } from
 import { ineligibility, INELIGIBLE_TEXT, isFetchableUrl } from "../../lib/sources";
 import { claimRole, parseTurnEvents, readCoverage, ROLE_LABEL, stepRows, type AnswerTab, type ClaimRole } from "../../lib/research";
 import { Disclosure, Segmented } from "../../ui/controls";
-import { Icon, toolIcon } from "../../ui/icons";
+import { Icon } from "../../ui/icons";
 import { Panel } from "../../ui/Panel";
 import { describeError } from "../research/errors";
 import { calculationTitle } from "./Conversation";
+import { ProcessTimeline } from "./ProcessTimeline";
 import { CONFLICT_TEXT } from "./ReviewPanel";
 import { LIVE_TURN, useTopicView } from "./context";
 
@@ -225,6 +226,9 @@ function SourcesTab() {
   const view = useTopicView();
   const query = useVersionSources(view.topicId, view.version.version_id);
   const secAvailable = useSecAvailable();
+  const webFetchAvailable = useWebFetchAvailable();
+  const allowedHosts = useResearchCapabilities().data?.sources.find((item) => item.name === "official_html_pdf")?.hosts;
+  const fetchOptions = { webFetchEnabled: webFetchAvailable, allowedHosts };
   const asOf = view.topic.request.as_of ?? null;
   const candidates = (view.content.source_candidates ?? []).map((row) => ({
     title: typeof row.title === "string" ? row.title : "未命名线索",
@@ -253,13 +257,18 @@ function SourcesTab() {
               }
               const coverage = readCoverage(view.content, source.source_id);
               const reason = ineligibility(source, asOf);
+              const canReextract = source.retrieval_method === "user_pdf" && Boolean(source.original_pdf_available) && Boolean(source.pdf_text_spacing_warning);
               return (
                 <div key={source.source_id} className="item">
                   <span className="title">{source.title}</span>
                   <span className="meta">{sourceMeta(source)}</span>
                   <Permissions source={source} />
                   {reason ? <span className="flag">下一轮不会读取：{INELIGIBLE_TEXT[reason]}</span> : null}
-                  {source.pdf_text_spacing_warning ? <span className="flag">PDF 提取的文字间距可能有误，可以换一种顺序重新提取。</span> : null}
+                  {source.pdf_text_spacing_warning ? (
+                    <span className="flag">
+                      {canReextract ? "PDF 提取的文字间距可能有误，可以换一种顺序重新提取。" : "PDF 提取的文字间距可能有误，可对照原始文档或保存后重新上传提取。"}
+                    </span>
+                  ) : null}
                   {coverage.totalCharacters ? <CoverageBar ranges={coverage.ranges} total={coverage.totalCharacters} /> : null}
                   <span className="meta">
                     {coverage.totalCharacters !== null ? `已读 ${formatInteger(coverage.readCharacters)} / ${formatInteger(coverage.totalCharacters)} 字符` : `已读 ${formatInteger(coverage.readCharacters)} 字符`}
@@ -268,7 +277,7 @@ function SourcesTab() {
                   <div className="actions-row">
                     <button type="button" className="btn" onClick={() => view.openPanel({ kind: "reader", sourceId: source.source_id, range: coverage.ranges[0] ?? null })}>打开原文</button>
                     <DownloadOriginalButton source={source} />
-                    {source.retrieval_method === "user_pdf" && source.original_pdf_available && source.pdf_text_spacing_warning ? <ReextractButton source={source} /> : null}
+                    {canReextract ? <ReextractButton source={source} /> : null}
                   </div>
                 </div>
               );
@@ -289,7 +298,7 @@ function SourcesTab() {
                 web = parsed.protocol === "https:" || parsed.protocol === "http:";
               } catch { host = ""; }
               const acquired = known.has(lead.url);
-              const fetchable = !acquired && isFetchableUrl(lead.url, secAvailable);
+              const fetchable = !acquired && isFetchableUrl(lead.url, secAvailable, fetchOptions);
               return (
                 <div key={`${lead.url}-${index}`} className="lead">
                   <span>{lead.title}</span>
@@ -309,7 +318,7 @@ function SourcesTab() {
               );
             })}
           </div>
-          <p className="note inset">{LEAD_NOTE}{candidates.some((lead) => !isFetchableUrl(lead.url, secAvailable)) ? " 无法直接获取的网页，可以保存后按文件添加。" : ""}</p>
+          <p className="note inset">{LEAD_NOTE}{candidates.some((lead) => !isFetchableUrl(lead.url, secAvailable, fetchOptions)) ? " 无法直接获取的网页，可以保存后按文件添加。" : ""}</p>
         </div>
       ) : null}
     </>
@@ -484,34 +493,20 @@ function StepsTab({ turnKey, onTurn }: { turnKey: string | undefined; onTurn: (t
   if (view.live) options.push({ value: LIVE_TURN, label: "进行中" });
   if (options.length === 0) return <p className="empty-note">还没有研究过程。</p>;
   const selected = options.some((option) => option.value === turnKey) ? turnKey! : options[options.length - 1]!.value;
-  const liveSelected = selected === LIVE_TURN && view.live;
+  const liveSelected = Boolean(selected === LIVE_TURN && view.live);
   const events = liveSelected ? view.live!.events : parseTurnEvents(view.turns.find((turn) => turn.turn_id === selected)?.events);
   const rows = stepRows(events);
   const current = liveSelected ? view.live!.progress?.current ?? null : null;
+  const interimText = liveSelected ? formatInterimSummary(view.live!.progress?.interim) : "";
   const hasInvalid = events.some((event) => event.kind === "tool" && event.status === "invalid");
   return (
     <>
       {options.length > 1 ? <Segmented label="选择轮次" options={options} value={selected} onChange={onTurn} /> : null}
-      {rows.length === 0 && !current ? <p className="empty-note">这一轮还没有记录步骤。</p> : (
-        <ol className="steps">
-          {rows.map((row) => row.kind === "model" ? (
-            <li key={row.index} className="step model"><span /><span>{row.text}</span><span /></li>
-          ) : (
-            <li key={row.index} className="step">
-              <span className="ic"><Icon name={toolIcon(row.tool)} size={16} /></span>
-              <span>{row.label}</span>
-              <span className={`role light ${row.tone}`}>{row.status}</span>
-              {row.rationale || row.reason ? <span className="why">{[row.rationale, row.reason].filter(Boolean).join(" · ")}</span> : null}
-            </li>
-          ))}
-          {current ? (
-            <li className="step current">
-              <span className="ic"><Icon name={current.kind === "tool" ? toolIcon(current.name) : "sum"} size={16} /></span>
-              <span>{current.kind === "tool" ? toolLabel(current.name) : "模型思考中"}</span>
-              <span className="role light neutral">进行中</span>
-            </li>
-          ) : null}
-        </ol>
+      {interimText ? <p className="meta pt-interim-bar">{interimText}</p> : null}
+      {rows.length === 0 && !current ? (
+        <p className="empty-note">这一轮还没有记录步骤。</p>
+      ) : (
+        <ProcessTimeline events={events} current={current} live={liveSelected} inPanel />
       )}
       {hasInvalid ? <p className="note inset">{INVALID_NOTE}</p> : null}
     </>

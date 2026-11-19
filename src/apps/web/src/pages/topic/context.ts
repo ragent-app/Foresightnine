@@ -1,9 +1,14 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { createContext, useContext } from "react";
-import type { AvailableVersionSource, ProgressEvent, RunProgress } from "../../api/types";
+import type { AvailableVersionSource, ProgressEvent, RunProgress, TransientStreamState } from "../../api/types";
 import type { AnswerTab, CitationIndex } from "../../lib/research";
 import type { ReviewDraft } from "../../lib/review";
 import type { AddSourceInitial } from "../research/AddSourcesPanel";
+
+export interface LiveStreamStore {
+  getSnapshot: () => TransientStreamState;
+  subscribe: (listener: () => void) => () => void;
+}
 
 export type PanelState =
   | { kind: "record"; tab: AnswerTab; turnKey?: string }
@@ -25,6 +30,7 @@ export interface LiveRun {
   operation: ResearchV2.Operation;
   progress: RunProgress | null;
   events: ProgressEvent[];
+  stream?: LiveStreamStore | undefined;
 }
 
 export interface TopicView {

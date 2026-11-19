@@ -1470,3 +1470,230 @@ test("writes without a JSON content type are rejected like the backend boundary"
     await new Promise((resolve) => server2.close(resolve));
   }
 });
+
+describe("L2 SSE /runs/:op/events endpoint", () => {
+  async function readSse(response) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const frames = [];
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let match;
+      while ((match = /\r?\n\r?\n/.exec(buffer)) !== null) {
+        const chunk = buffer.slice(0, match.index);
+        buffer = buffer.slice(match.index + match[0].length);
+        if (!chunk) continue;
+        if (chunk.startsWith(":")) {
+          frames.push({ type: "comment", comment: chunk.slice(1).trim() });
+          continue;
+        }
+        let id = null;
+        let event = "message";
+        const dataLines = [];
+        for (const line of chunk.split(/\r?\n/)) {
+          if (line.startsWith(":")) continue;
+          const idx = line.indexOf(":");
+          const field = idx === -1 ? line : line.slice(0, idx);
+          const rawVal = idx === -1 ? "" : line.slice(idx + 1).replace(/^ /, "");
+          if (field === "id") id = rawVal;
+          else if (field === "event") event = rawVal;
+          else if (field === "data") dataLines.push(rawVal);
+        }
+        frames.push({ type: "event", id, event, data: JSON.parse(dataLines.join("\n")) });
+      }
+    }
+    return frames;
+  }
+
+  test("streams SSE snapshot, step updates, heartbeats, terminal frame, resume headers, and connection limits", async () => {
+    const sseServer = createServer({ tickMs: 30, heartbeatMs: 12, maxSsePerAccount: 2 });
+    await new Promise((resolve) => sseServer.listen(0, "127.0.0.1", resolve));
+    const url = `http://127.0.0.1:${sseServer.address().port}`;
+    try {
+      const email = `sse-${randomUUID()}@example.com`;
+      const reg = await fetch(`${url}/v1/auth/local/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: "correct-horse-battery" }),
+      });
+      assert.equal(reg.status, 201);
+      const authJson = await reg.json();
+      const authHeaders = { Authorization: `Bearer ${authJson.access_token}` };
+
+      const topicRes = await fetch(`${url}/v2/research/topics`, {
+        method: "POST",
+        headers: { ...authHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ question: "Northwind SSE L2 流式测试", source_ids: [S1_ID] }),
+      });
+      assert.equal(topicRes.status, 201);
+      const topic = await topicRes.json();
+
+      // 1. Live full run with discover_sources enabled (verifies eligible_count fix in interimFromEvents too)
+      const run1Res = await fetch(`${url}/v2/research/topics/${topic.topic_id}/runs`, {
+        method: "POST",
+        headers: { ...authHeaders, "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
+        body: JSON.stringify({ parent_version_id: topic.versions[0].version_id, discover_sources: true }),
+      });
+      assert.equal(run1Res.status, 202);
+      const { operation: op1 } = await run1Res.json();
+
+      const unauth = await fetch(`${url}/v2/research/topics/${topic.topic_id}/runs/${op1.operation_id}/events`);
+      assert.equal(unauth.status, 401);
+
+      const missing = await fetch(`${url}/v2/research/topics/${topic.topic_id}/runs/op_missing/events`, { headers: authHeaders });
+      assert.equal(missing.status, 404);
+
+      const badHeader = await fetch(`${url}/v2/research/topics/${topic.topic_id}/runs/${op1.operation_id}/events`, {
+        headers: { ...authHeaders, "Last-Event-ID": "bogus_id" },
+      });
+      assert.equal(badHeader.status, 400);
+      assert.equal((await badHeader.json()).error_code, "invalid_last_event_id");
+
+      const streamRes = await fetch(`${url}/v2/research/topics/${topic.topic_id}/runs/${op1.operation_id}/events`, {
+        headers: authHeaders,
+      });
+      assert.equal(streamRes.status, 200);
+      assert.match(streamRes.headers.get("content-type") ?? "", /text\/event-stream/);
+      assert.equal(streamRes.headers.get("cache-control"), "no-cache, no-transform");
+      assert.equal(streamRes.headers.get("x-accel-buffering"), "no");
+
+      const frames = await readSse(streamRes);
+      const events = frames.filter((f) => f.type === "event");
+      const comments = frames.filter((f) => f.type === "comment");
+      assert.equal(events[0].event, "progress.snapshot");
+      assert.ok(events.some((f) => f.event === "step.event"));
+      assert.ok(events.some((f) => f.event === "step.current"));
+      assert.equal(events.at(-1).event, "run.terminal");
+      assert.equal(events.at(-1).data.operation_status, "completed");
+      assert.ok(comments.some((c) => c.comment === "heartbeat"));
+
+      const stepEvents = events.filter((f) => f.event === "step.event");
+      const discoverEvent = stepEvents.find((f) => f.data.event?.name === "discover_sources");
+      if (discoverEvent?.data.event?.summary) {
+        assert.equal(discoverEvent.data.interim.leads_count, discoverEvent.data.event.summary.eligible_count);
+      }
+
+      // 2. Completed run immediate snapshot + terminal + after / Last-Event-ID slicing
+      const resumeAfter = await fetch(`${url}/v2/research/topics/${topic.topic_id}/runs/${op1.operation_id}/events?after=2`, {
+        headers: authHeaders,
+      });
+      assert.equal(resumeAfter.status, 200);
+      const resumeAfterFrames = (await readSse(resumeAfter)).filter((f) => f.type === "event");
+      assert.equal(resumeAfterFrames[0].event, "progress.snapshot");
+      assert.ok(resumeAfterFrames[0].data.events.every((e) => e.index >= 2));
+      assert.equal(resumeAfterFrames.at(-1).event, "run.terminal");
+
+      const resumeId = await fetch(`${url}/v2/research/topics/${topic.topic_id}/runs/${op1.operation_id}/events`, {
+        headers: { ...authHeaders, "Last-Event-ID": "ev:2" },
+      });
+      assert.equal(resumeId.status, 200);
+      const resumeIdFrames = (await readSse(resumeId)).filter((f) => f.type === "event");
+      assert.ok(resumeIdFrames[0].data.events.every((e) => e.index >= 3));
+      assert.equal(resumeIdFrames.at(-1).event, "run.terminal");
+
+      const resumeCp = await fetch(`${url}/v2/research/topics/${topic.topic_id}/runs/${op1.operation_id}/events`, {
+        headers: { ...authHeaders, "Last-Event-ID": "cp:3" },
+      });
+      assert.equal(resumeCp.status, 200);
+      const resumeCpFrames = (await readSse(resumeCp)).filter((f) => f.type === "event");
+      assert.ok(resumeCpFrames[0].data.events.every((e) => e.index >= 3));
+
+      const resumeDone = await fetch(`${url}/v2/research/topics/${topic.topic_id}/runs/${op1.operation_id}/events`, {
+        headers: { ...authHeaders, "Last-Event-ID": "done:completed" },
+      });
+      assert.equal(resumeDone.status, 200);
+      const resumeDoneFrames = (await readSse(resumeDone)).filter((f) => f.type === "event");
+      assert.equal(resumeDoneFrames.at(-1).event, "run.terminal");
+
+      // 3. Per-account connection limit (maxSsePerAccount = 2 -> 3rd gets 429) & slot cleanup on abort
+      const topicLatest = await (await fetch(`${url}/v2/research/topics/${topic.topic_id}`, { headers: authHeaders })).json();
+      const run2Res = await fetch(`${url}/v2/research/topics/${topic.topic_id}/runs`, {
+        method: "POST",
+        headers: { ...authHeaders, "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
+        body: JSON.stringify({ parent_version_id: topicLatest.versions.at(-1).version_id, discover_sources: true }),
+      });
+      assert.equal(run2Res.status, 202);
+      const { operation: op2 } = await run2Res.json();
+
+      const ac1 = new AbortController();
+      const ac2 = new AbortController();
+      const s1 = await fetch(`${url}/v2/research/topics/${topic.topic_id}/runs/${op2.operation_id}/events`, { headers: authHeaders, signal: ac1.signal });
+      const s2 = await fetch(`${url}/v2/research/topics/${topic.topic_id}/runs/${op2.operation_id}/events`, { headers: authHeaders, signal: ac2.signal });
+      assert.equal(s1.status, 200);
+      assert.equal(s2.status, 200);
+
+      const s3 = await fetch(`${url}/v2/research/topics/${topic.topic_id}/runs/${op2.operation_id}/events`, { headers: authHeaders });
+      assert.equal(s3.status, 429);
+      assert.equal(s3.headers.get("retry-after"), "5");
+      assert.equal((await s3.json()).error_code, "rate_limited");
+
+      ac1.abort();
+      await s1.body?.cancel().catch(() => {});
+      await sleep(25);
+      const s4 = await fetch(`${url}/v2/research/topics/${topic.topic_id}/runs/${op2.operation_id}/events`, { headers: authHeaders });
+      assert.equal(s4.status, 200);
+
+      ac2.abort();
+      await s2.body?.cancel().catch(() => {});
+      await s4.body?.cancel().catch(() => {});
+
+      // 4. L3 transient stream.delta & stream.reset frames + submission_rejected & submission_partial scenarios
+      const makeTopicAndRun = async (questionOverride) => {
+        const tRes = await fetch(`${url}/v2/research/topics`, {
+          method: "POST",
+          headers: { ...authHeaders, "Content-Type": "application/json" },
+          body: JSON.stringify({ question: questionOverride, source_ids: [S1_ID] }),
+        });
+        assert.equal(tRes.status, 201);
+        const createdTopic = await tRes.json();
+        const rRes = await fetch(`${url}/v2/research/topics/${createdTopic.topic_id}/runs`, {
+          method: "POST",
+          headers: { ...authHeaders, "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
+          body: JSON.stringify({ parent_version_id: createdTopic.versions[0].version_id, discover_sources: false }),
+        });
+        assert.equal(rRes.status, 202);
+        const { operation: op } = await rRes.json();
+        return { topicId: createdTopic.topic_id, opId: op.operation_id };
+      };
+
+      const normal = await makeTopicAndRun("正常 L3 流式分析");
+      const normalStream = await fetch(`${url}/v2/research/topics/${normal.topicId}/runs/${normal.opId}/events`, { headers: authHeaders });
+      const normalEvents = (await readSse(normalStream)).filter((f) => f.type === "event");
+      assert.ok(normalEvents.some((f) => f.event === "stream.delta" && f.data.channel === "thinking"));
+      assert.ok(normalEvents.some((f) => f.event === "stream.delta" && f.data.channel === "text"));
+      assert.ok(normalEvents.some((f) => f.event === "stream.delta" && f.data.channel === "tool_status"));
+      assert.ok(normalEvents.some((f) => f.event === "stream.delta" && f.data.channel === "draft_report"));
+      assert.ok(normalEvents.some((f) => f.event === "stream.reset" && f.data.reason === "tool_started"));
+      assert.ok(normalEvents.some((f) => f.event === "stream.reset" && f.data.reason === "call_completed"));
+      assert.equal(normalEvents.at(-1).event, "run.terminal");
+      assert.equal(normalEvents.at(-1).data.operation_status, "completed");
+      // Persisted turn events and /progress never store token deltas.
+      const normalProgress = await (await fetch(`${url}/v2/research/topics/${normal.topicId}/runs/${normal.opId}/progress?after=0`, { headers: authHeaders })).json();
+      assert.equal(normalProgress.event_count, 6);
+      assert.ok(normalProgress.events.every((e) => !("delta" in e) && !("thinking" in e)));
+
+      const rejected = await makeTopicAndRun("请测试驳回草稿回退场景");
+      const rejectedStream = await fetch(`${url}/v2/research/topics/${rejected.topicId}/runs/${rejected.opId}/events`, { headers: authHeaders });
+      const rejectedEvents = (await readSse(rejectedStream)).filter((f) => f.type === "event");
+      assert.ok(rejectedEvents.some((f) => f.event === "stream.reset" && f.data.reason === "submission_rejected"));
+      assert.ok(rejectedEvents.some((f) => f.event === "stream.delta" && f.data.channel === "draft_report" && f.data.delta.includes("修正后草稿")));
+      assert.equal(rejectedEvents.at(-1).data.operation_status, "completed");
+
+      const partial = await makeTopicAndRun("请输出部分完成场景");
+      const partialStream = await fetch(`${url}/v2/research/topics/${partial.topicId}/runs/${partial.opId}/events`, { headers: authHeaders });
+      const partialEvents = (await readSse(partialStream)).filter((f) => f.type === "event");
+      const partialDraftIdx = partialEvents.findIndex((f) => f.event === "stream.delta" && f.data.channel === "draft_report");
+      const partialResetIdx = partialEvents.findIndex((f) => f.event === "stream.reset" && f.data.reason === "submission_partial");
+      assert.ok(partialDraftIdx >= 0, "expected partial run to stream draft_report before retraction");
+      assert.ok(partialResetIdx > partialDraftIdx, "expected submission_partial reset after partial draft_report");
+      assert.equal(partialEvents.at(-1).event, "run.terminal");
+      assert.equal(partialEvents.at(-1).data.operation_status, "failed");
+    } finally {
+      sseServer.closeAllConnections?.();
+      await new Promise((resolve) => sseServer.close(resolve));
+    }
+  });
+});

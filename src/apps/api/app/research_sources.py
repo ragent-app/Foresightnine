@@ -62,6 +62,19 @@ class SourceInput(BaseModel):
         return value
 
 
+RetrievalMethod = Literal[
+    "user_supplied",
+    "official_html",
+    "sec_companyconcept",
+    "user_pdf",
+    "user_html",
+    "sec_filing_html",
+    "historical_prices",
+    "web_html",
+    "web_pdf",
+]
+
+
 class ResearchSource(BaseModel):
     schema_version: Literal["1"] = "1"
     source_id: str
@@ -76,7 +89,7 @@ class ResearchSource(BaseModel):
     revised_at: datetime | None = None
     obtained_at: datetime
     content_sha256: str
-    retrieval_method: Literal["user_supplied", "official_html", "sec_companyconcept", "user_pdf", "user_html", "sec_filing_html", "historical_prices"] = "user_supplied"
+    retrieval_method: RetrievalMethod = "user_supplied"
     pdf_text_order: Literal["layout", "reading"] | None = None
     derived_from_source_id: str | None = None
     response_sha256: str | None = None
@@ -143,7 +156,7 @@ def pdf_text_spacing_suspect(source: ResearchSource) -> bool:
     Sample at most 100,000 characters across the document. Other scripts and
     short excerpts are not assessed; false positives and false negatives remain.
     """
-    if source.retrieval_method != "user_pdf":
+    if source.retrieval_method not in {"user_pdf", "web_pdf"}:
         return False
     text = source.text
     if len(text) <= 100_000:
@@ -223,7 +236,7 @@ class ResearchSources:
     def __init__(self, repository: JsonDocumentRepository[ResearchSource]):
         self.repository = repository
 
-    def create(self, owner: str, request: SourceInput, *, retrieval_method: Literal["user_supplied", "official_html", "sec_companyconcept", "user_pdf", "user_html", "sec_filing_html", "historical_prices"] = "user_supplied",
+    def create(self, owner: str, request: SourceInput, *, retrieval_method: RetrievalMethod = "user_supplied",
                response_sha256: str | None = None, response_content_type: str | None = None,
                original_pdf_base64: str | None = None, original_html_base64: str | None = None, pdf_text_order: Literal["layout", "reading"] | None = None,
                derived_from_source_id: str | None = None, source_id: str | None = None,

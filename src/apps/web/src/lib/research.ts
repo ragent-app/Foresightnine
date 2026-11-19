@@ -1,5 +1,14 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
-import type { ProgressEvent } from "../api/types";
+import type {
+  CurrentActivity,
+  InterimSummary,
+  ModelPhase,
+  OperationStatus,
+  ProgressEvent,
+  RunProgress,
+  RunUsage,
+  ToolEventSummary,
+} from "../api/types";
 import { gapText, MODEL_FAILURE_LABEL, toolLabel, toolReasonLabel, toolStatusLabel } from "./copy";
 import { formatInteger } from "./format";
 
@@ -13,52 +22,310 @@ type ResearchTopic = ResearchV2.ResearchTopic;
 
 const RATIONALE_LIMIT = 300;
 const NAME_LIMIT = 100;
+const NOTE_LIMIT = 600;
+const TITLE_LIMIT = 160;
+const HOST_LIMIT = 120;
+const DETAIL_LIMIT = 200;
+const PREVIEW_LIMIT = 5;
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 const int = (value: unknown): number | null => (typeof value === "number" && Number.isInteger(value) ? value : null);
+const nonNegInt = (value: unknown): number | null => (typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null);
 const text = (value: unknown, limit: number): string | null => (typeof value === "string" ? value.slice(0, limit) : null);
+function cleanNote(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, NOTE_LIMIT) : null;
+}
+
+function parseToolSummary(raw: unknown): ToolEventSummary | null {
+  if (!isRecord(raw)) return null;
+  switch (raw["kind"]) {
+    case "discover_sources": {
+      const found_count = nonNegInt(raw["found_count"]);
+      const eligible_count = nonNegInt(raw["eligible_count"]);
+      const denied_count = nonNegInt(raw["denied_count"]);
+      if (found_count === null || eligible_count === null || denied_count === null) return null;
+      const previewRaw = Array.isArray(raw["leads_preview"]) ? raw["leads_preview"].slice(0, PREVIEW_LIMIT) : [];
+      const leads_preview: { title: string; host: string; published_at: string | null }[] = [];
+      for (const item of previewRaw) {
+        if (!isRecord(item)) continue;
+        const title = text(item["title"], TITLE_LIMIT) ?? "";
+        const host = text(item["host"], HOST_LIMIT) ?? "";
+        if (!title && !host) continue;
+        leads_preview.push({
+          title,
+          host,
+          published_at: text(item["published_at"], NAME_LIMIT),
+        });
+      }
+      return { kind: "discover_sources", found_count, eligible_count, denied_count, leads_preview };
+    }
+    case "acquire_sources": {
+      const acquired_count = nonNegInt(raw["acquired_count"]);
+      const failed_count = nonNegInt(raw["failed_count"]);
+      if (acquired_count === null || failed_count === null) return null;
+      const itemsRaw = Array.isArray(raw["items"]) ? raw["items"].slice(0, PREVIEW_LIMIT) : [];
+      const items: { title: string; host: string; status: string; reason: string | null; total_characters: number | null }[] = [];
+      for (const item of itemsRaw) {
+        if (!isRecord(item)) continue;
+        const status = text(item["status"], NAME_LIMIT);
+        if (!status) continue;
+        items.push({
+          title: text(item["title"], TITLE_LIMIT) ?? "",
+          host: text(item["host"], HOST_LIMIT) ?? "",
+          status,
+          reason: text(item["reason"], NAME_LIMIT),
+          total_characters: nonNegInt(item["total_characters"]),
+        });
+      }
+      return { kind: "acquire_sources", acquired_count, failed_count, items };
+    }
+    case "sec_company_concept": {
+      const entity = text(raw["entity"], DETAIL_LIMIT);
+      const taxonomy = text(raw["taxonomy"], NAME_LIMIT);
+      const tag = text(raw["tag"], DETAIL_LIMIT);
+      const unit = text(raw["unit"], NAME_LIMIT);
+      const status = text(raw["status"], NAME_LIMIT);
+      if (!entity || !taxonomy || !tag || !unit || !status) return null;
+      return {
+        kind: "sec_company_concept",
+        entity,
+        taxonomy,
+        tag,
+        unit,
+        status,
+        title: text(raw["title"], TITLE_LIMIT),
+        total_characters: nonNegInt(raw["total_characters"]),
+      };
+    }
+    case "historical_prices": {
+      const instrument_id = text(raw["instrument_id"], NAME_LIMIT);
+      const start_date = text(raw["start_date"], NAME_LIMIT);
+      const end_date = text(raw["end_date"], NAME_LIMIT);
+      const status = text(raw["status"], NAME_LIMIT);
+      if (!instrument_id || !start_date || !end_date || !status) return null;
+      return {
+        kind: "historical_prices",
+        instrument_id,
+        start_date,
+        end_date,
+        status,
+        title: text(raw["title"], TITLE_LIMIT),
+      };
+    }
+    case "read_sources": {
+      const read_count = nonNegInt(raw["read_count"]);
+      if (read_count === null) return null;
+      const itemsRaw = Array.isArray(raw["items"]) ? raw["items"].slice(0, PREVIEW_LIMIT) : [];
+      const items: { source_id: string; title: string; start: number; end: number; total_characters: number | null }[] = [];
+      for (const item of itemsRaw) {
+        if (!isRecord(item)) continue;
+        const source_id = text(item["source_id"], NAME_LIMIT);
+        const title = text(item["title"], TITLE_LIMIT) ?? "";
+        const start = nonNegInt(item["start"]);
+        const end = nonNegInt(item["end"]);
+        if (!source_id || start === null || end === null) continue;
+        items.push({
+          source_id,
+          title,
+          start,
+          end,
+          total_characters: nonNegInt(item["total_characters"]),
+        });
+      }
+      return { kind: "read_sources", read_count, items };
+    }
+    case "record_facts": {
+      const recorded_count = nonNegInt(raw["recorded_count"]);
+      if (recorded_count === null) return null;
+      const previewRaw = Array.isArray(raw["facts_preview"]) ? raw["facts_preview"].slice(0, PREVIEW_LIMIT) : [];
+      const facts_preview: { label: string; value: string; unit: string; currency: string | null; period: string }[] = [];
+      for (const item of previewRaw) {
+        if (!isRecord(item)) continue;
+        const label = text(item["label"], DETAIL_LIMIT);
+        const value = text(item["value"], NAME_LIMIT);
+        const unit = text(item["unit"], NAME_LIMIT);
+        const period = text(item["period"], NAME_LIMIT);
+        if (!label || value === null || !unit || !period) continue;
+        facts_preview.push({
+          label,
+          value,
+          unit,
+          currency: text(item["currency"], NAME_LIMIT),
+          period,
+        });
+      }
+      return { kind: "record_facts", recorded_count, facts_preview };
+    }
+    case "calculate_financials": {
+      const calculated_count = nonNegInt(raw["calculated_count"]);
+      if (calculated_count === null) return null;
+      const previewRaw = Array.isArray(raw["calcs_preview"]) ? raw["calcs_preview"].slice(0, PREVIEW_LIMIT) : [];
+      const calcs_preview: { formula_id: string; value: string; unit: string; currency: string | null; expression: string }[] = [];
+      for (const item of previewRaw) {
+        if (!isRecord(item)) continue;
+        const formula_id = text(item["formula_id"], NAME_LIMIT);
+        const value = text(item["value"], NAME_LIMIT);
+        const unit = text(item["unit"], NAME_LIMIT);
+        const expression = text(item["expression"], DETAIL_LIMIT);
+        if (!formula_id || value === null || !unit || !expression) continue;
+        calcs_preview.push({
+          formula_id,
+          value,
+          unit,
+          currency: text(item["currency"], NAME_LIMIT),
+          expression,
+        });
+      }
+      return { kind: "calculate_financials", calculated_count, calcs_preview };
+    }
+    default:
+      return null;
+  }
+}
+
+const OPERATION_STATUSES = new Set<OperationStatus>(["pending", "running", "completed", "failed", "cancelled"]);
+const MODEL_PHASES = new Set<ModelPhase>(["connecting", "thinking", "responding", "retrying"]);
+
+/** Sanitizes a single checkpoint or SSE progress event, preserving an explicit `index` when valid. */
+export function sanitizeProgressEvent(event: unknown, fallbackIndex?: number): ProgressEvent | null {
+  if (!isRecord(event)) return null;
+  const index = nonNegInt(event["index"]) ?? fallbackIndex;
+  if (index === undefined) return null;
+  switch (event["kind"]) {
+    case "model": {
+      const detail = isRecord(event["usage_detail"]) ? event["usage_detail"] : {};
+      const note = cleanNote(event["note"]);
+      return {
+        index,
+        kind: "model",
+        finish_reason: text(event["finish_reason"], NAME_LIMIT),
+        usage: int(event["usage"]),
+        input_tokens: int(detail["input_tokens"]) ?? int(event["input_tokens"]),
+        output_tokens: int(detail["output_tokens"]) ?? int(event["output_tokens"]),
+        settlement: text(event["settlement"], NAME_LIMIT),
+        ...(note ? { note } : {}),
+      };
+    }
+    case "model_failure":
+      return { index, kind: "model_failure", code: text(event["code"], NAME_LIMIT) };
+    case "tool": {
+      const summary = parseToolSummary(event["summary"]);
+      return {
+        index,
+        kind: "tool",
+        name: text(event["name"], NAME_LIMIT),
+        status: text(event["status"], NAME_LIMIT),
+        reason: text(event["reason"], NAME_LIMIT),
+        rationale: text(event["rationale"], RATIONALE_LIMIT),
+        denied_count: int(event["denied_count"]),
+        ...(summary ? { summary } : {}),
+      };
+    }
+    case "submission":
+      return { index, kind: "submission", status: text(event["status"], NAME_LIMIT) };
+    default:
+      return null;
+  }
+}
+
+export function sanitizeCurrentActivity(raw: unknown): CurrentActivity | null {
+  if (!isRecord(raw)) return null;
+  if (raw["kind"] === "model") {
+    const phaseRaw = text(raw["phase"], NAME_LIMIT);
+    const phase = phaseRaw && MODEL_PHASES.has(phaseRaw as ModelPhase) ? (phaseRaw as ModelPhase) : null;
+    const attemptRaw = nonNegInt(raw["retry_attempt"]);
+    return {
+      kind: "model",
+      phase,
+      retry_attempt: attemptRaw !== null && attemptRaw > 0 ? attemptRaw : null,
+      started_at: text(raw["started_at"], NAME_LIMIT),
+    };
+  }
+  if (raw["kind"] === "tool") {
+    const name = text(raw["name"], NAME_LIMIT);
+    if (!name) return null;
+    return {
+      kind: "tool",
+      name,
+      rationale: text(raw["rationale"], RATIONALE_LIMIT),
+      target: text(raw["target"], DETAIL_LIMIT),
+      started_at: text(raw["started_at"], NAME_LIMIT),
+    };
+  }
+  return null;
+}
+
+export function sanitizeInterimSummary(raw: unknown): InterimSummary | null {
+  if (!isRecord(raw)) return null;
+  const leads_count = nonNegInt(raw["leads_count"]);
+  const acquired_sources_count = nonNegInt(raw["acquired_sources_count"]);
+  const read_sources_count = nonNegInt(raw["read_sources_count"]);
+  const facts_count = nonNegInt(raw["facts_count"]);
+  const calculations_count = nonNegInt(raw["calculations_count"]);
+  if (
+    leads_count === null ||
+    acquired_sources_count === null ||
+    read_sources_count === null ||
+    facts_count === null ||
+    calculations_count === null
+  ) {
+    return null;
+  }
+  return { leads_count, acquired_sources_count, read_sources_count, facts_count, calculations_count };
+}
+
+export function sanitizeRunUsage(raw: unknown): RunUsage | null {
+  if (!isRecord(raw)) return null;
+  const model_calls = nonNegInt(raw["model_calls"]);
+  const search_calls = nonNegInt(raw["search_calls"]);
+  const total_tokens = nonNegInt(raw["total_tokens"]);
+  if (model_calls === null || search_calls === null || total_tokens === null) return null;
+  return { model_calls, search_calls, total_tokens };
+}
+
+export function sanitizeRunProgress(raw: unknown): RunProgress | null {
+  if (!isRecord(raw)) return null;
+  const operation_id = text(raw["operation_id"], NAME_LIMIT);
+  const statusRaw = text(raw["operation_status"], NAME_LIMIT);
+  if (!operation_id || !statusRaw || !OPERATION_STATUSES.has(statusRaw as OperationStatus)) return null;
+  const turnRaw = isRecord(raw["turn"]) ? raw["turn"] : {};
+  const eventsRaw = Array.isArray(raw["events"]) ? raw["events"] : [];
+  const events: ProgressEvent[] = [];
+  eventsRaw.forEach((item, pos) => {
+    const clean = sanitizeProgressEvent(item, pos);
+    if (clean) events.push(clean);
+  });
+  const interim = sanitizeInterimSummary(raw["interim"]);
+  return {
+    operation_id,
+    operation_status: statusRaw as OperationStatus,
+    turn: {
+      index: int(turnRaw["index"]) ?? 0,
+      question: text(turnRaw["question"], 2000) ?? "",
+    },
+    usage: sanitizeRunUsage(raw["usage"]) ?? { model_calls: 0, search_calls: 0, total_tokens: 0 },
+    current: sanitizeCurrentActivity(raw["current"]),
+    ...(interim ? { interim } : {}),
+    events,
+    event_count: nonNegInt(raw["event_count"]) ?? events.length,
+    started_at: text(raw["started_at"], NAME_LIMIT),
+    updated_at: text(raw["updated_at"], NAME_LIMIT),
+    version_id: text(raw["version_id"], NAME_LIMIT),
+  };
+}
 
 /** Mirrors apps/api/app/research_progress.py sanitize_event; `index` is the position in the raw array. */
 export function parseTurnEvents(raw: readonly unknown[] | undefined): ProgressEvent[] {
   const result: ProgressEvent[] = [];
   (raw ?? []).forEach((event, index) => {
     if (!isRecord(event)) return;
-    switch (event["kind"]) {
-      case "model": {
-        const detail = isRecord(event["usage_detail"]) ? event["usage_detail"] : {};
-        result.push({
-          index,
-          kind: "model",
-          finish_reason: text(event["finish_reason"], NAME_LIMIT),
-          usage: int(event["usage"]),
-          input_tokens: int(detail["input_tokens"]),
-          output_tokens: int(detail["output_tokens"]),
-          settlement: text(event["settlement"], NAME_LIMIT),
-        });
-        return;
-      }
-      case "model_failure":
-        result.push({ index, kind: "model_failure", code: text(event["code"], NAME_LIMIT) });
-        return;
-      case "tool":
-        result.push({
-          index,
-          kind: "tool",
-          name: text(event["name"], NAME_LIMIT),
-          status: text(event["status"], NAME_LIMIT),
-          reason: text(event["reason"], NAME_LIMIT),
-          rationale: text(event["rationale"], RATIONALE_LIMIT),
-          denied_count: int(event["denied_count"]),
-        });
-        return;
-      case "submission":
-        result.push({ index, kind: "submission", status: text(event["status"], NAME_LIMIT) });
-        return;
-      default:
-        return;
-    }
+    // Stored ResearchTurn.events use the raw array index as the authoritative sequence position.
+    const clean = sanitizeProgressEvent({ ...event, index }, index);
+    if (clean) result.push(clean);
   });
   return result;
 }
@@ -74,8 +341,9 @@ export type StepRow =
       tone: StepTone;
       rationale: string | null;
       reason: string | null;
+      summary?: ToolEventSummary | null;
     }
-  | { kind: "model"; index: number; text: string };
+  | { kind: "model"; index: number; text: string; note?: string | null };
 
 function statusTone(status: string | null): StepTone {
   switch (status) {
@@ -98,7 +366,8 @@ function statusTone(status: string | null): StepTone {
 export function stepRows(events: ProgressEvent[]): StepRow[] {
   return events.map((event): StepRow => {
     switch (event.kind) {
-      case "tool":
+      case "tool": {
+        const summary = parseToolSummary(event.summary);
         return {
           kind: "tool",
           index: event.index,
@@ -108,7 +377,9 @@ export function stepRows(events: ProgressEvent[]): StepRow[] {
           tone: statusTone(event.status),
           rationale: event.rationale,
           reason: toolReasonLabel(event.reason),
+          ...(summary ? { summary } : {}),
         };
+      }
       case "submission":
         return {
           kind: "tool",
@@ -127,7 +398,8 @@ export function stepRows(events: ProgressEvent[]): StepRow[] {
         } else if (event.usage !== null) {
           label = `模型调用 · ${formatInteger(event.usage)} Token`;
         }
-        return { kind: "model", index: event.index, text: label };
+        const note = cleanNote(event.note);
+        return { kind: "model", index: event.index, text: label, ...(note ? { note } : {}) };
       }
       case "model_failure":
         return {

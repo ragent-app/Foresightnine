@@ -5,11 +5,14 @@ not fetch documents or authorize their use.
 """
 from __future__ import annotations
 
+import base64
+import binascii
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timezone
 import inspect
+import re
 from typing import Any, Callable
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import SplitResult, parse_qs, unquote, urlsplit
 
 from pydantic import ValidationError
 
@@ -35,17 +38,90 @@ class RedirectLead(ValueError):
 
 # Search-engine click-through paths and the query parameter that carries the target, if any.
 _REDIRECTORS = {
-    '/url': ('q', 'url'),
-    '/goto': ('url',),
-    '/aclk': ('adurl',),
-    '/l/': ('uddg',),
+    '/url': ('q', 'url', 'u', 'target', 'dest'),
+    '/goto': ('url', 'q', 'u', 'target', 'dest'),
+    '/aclk': ('adurl', 'url', 'q', 'u'),
+    '/l/': ('uddg', 'u', 'url'),
+    '/link': ('url', 'q', 'u', 'target'),
 }
+_BASE64_TOKEN = re.compile(r'^[A-Za-z0-9+/_-]+={0,2}$')
+_YAHOO_TRACKING_PREFIXES = ('_ylt=', '_ylu=', '_ylc=', 'RV=', 'RE=', 'RO=', 'RK=', 'RS=', 'RU=')
+
+
+def _is_bing_host(host: str) -> bool:
+    host = host.lower().rstrip('.')
+    return host == 'bing.com' or host.endswith('.bing.com')
+
+
+def _is_yahoo_search_host(host: str) -> bool:
+    host = host.lower().rstrip('.')
+    labels = host.split('.')
+    return host in ('rds.yahoo.com', 'srd.yahoo.com') or any(
+        labels[i] == 'search' and labels[i + 1] == 'yahoo' for i in range(len(labels) - 1)
+    )
 
 
 def _is_search_engine(host: str) -> bool:
     host = host.lower().rstrip('.')
+    if not host:
+        return False
     labels = host.split('.')
-    return 'google' in labels[:-1] or host in ('duckduckgo.com', 'html.duckduckgo.com', 'lite.duckduckgo.com')
+    return (
+        'google' in labels[:-1]
+        or host == 'duckduckgo.com'
+        or host.endswith('.duckduckgo.com')
+        or _is_bing_host(host)
+        or _is_yahoo_search_host(host)
+        or host in ('baidu.com', 'www.baidu.com', 'm.baidu.com', 'sogou.com', 'www.sogou.com')
+    )
+
+
+def _usable_target_url(candidate: str) -> str | None:
+    if not candidate or any(ch.isspace() or ord(ch) < 32 for ch in candidate):
+        return None
+    target = urlsplit(candidate)
+    if target.scheme not in ('http', 'https') or not target.hostname or _is_search_engine(target.hostname):
+        return None
+    ClientSearchEvidenceProvider().validate_url(candidate)
+    return candidate
+
+
+def _decode_bing_target(value: str) -> str | None:
+    """Decode Bing `/ck/a` `u=a1<base64>` click-through target tokens."""
+    if not value.startswith('a1'):
+        return None
+    encoded = value[2:].replace(' ', '+')
+    if not encoded or not _BASE64_TOKEN.fullmatch(encoded):
+        return None
+    padded = encoded if '=' in encoded else encoded + '=' * (-len(encoded) % 4)
+    if len(padded) % 4 != 0:
+        return None
+    try:
+        raw = base64.b64decode(padded.replace('-', '+').replace('_', '/'), validate=True)
+        return raw.decode('utf-8')
+    except (binascii.Error, UnicodeDecodeError, ValueError):
+        return None
+
+
+def _unwrap_yahoo_redirect(parts: SplitResult, query: dict[str, list[str]]) -> str | None:
+    """Extract target URL from Yahoo `/RU=<percent-encoded-url>/` click-through paths."""
+    segments = [segment for segment in parts.path.split('/') if segment]
+    is_yahoo_redirector = any(
+        segment.startswith(_YAHOO_TRACKING_PREFIXES) or segment[:3].lower() == 'ru=' for segment in segments
+    )
+    if not is_yahoo_redirector and 'RU' not in query and 'ru' not in query:
+        return None
+    for segment in segments:
+        if segment[:3].lower() == 'ru=':
+            usable = _usable_target_url(unquote(segment[3:]))
+            if usable is not None:
+                return usable
+    for key in ('RU', 'ru'):
+        for value in query.get(key, ()):
+            usable = _usable_target_url(value)
+            if usable is not None:
+                return usable
+    raise RedirectLead('Search result is a search-engine redirect without a usable target URL.')
 
 
 def unwrap_redirect_url(url: str) -> str:
@@ -57,21 +133,45 @@ def unwrap_redirect_url(url: str) -> str:
     parts = urlsplit(url)
     if not parts.hostname or not _is_search_engine(parts.hostname):
         return url
-    keys = next((names for path, names in _REDIRECTORS.items() if parts.path.rstrip('/') == path.rstrip('/')), None)
+    query = parse_qs(parts.query)
+    if _is_yahoo_search_host(parts.hostname):
+        unwrapped = _unwrap_yahoo_redirect(parts, query)
+        if unwrapped is not None:
+            return unwrapped
+    normalized_path = parts.path.rstrip('/').lower()
+    if _is_bing_host(parts.hostname) and normalized_path == '/ck/a':
+        for key in ('u', 'url', 'q'):
+            for value in query.get(key, ()):
+                decoded = _decode_bing_target(value) if key == 'u' else None
+                for candidate in (decoded, value):
+                    if candidate is None:
+                        continue
+                    usable = _usable_target_url(candidate)
+                    if usable is not None:
+                        return usable
+        raise RedirectLead('Search result is a search-engine redirect without a usable target URL.')
+    keys = next((names for path, names in _REDIRECTORS.items() if normalized_path == path.rstrip('/').lower()), None)
     if keys is None:
         return url
-    query = parse_qs(parts.query)
     for key in keys:
         for value in query.get(key, ()):
-            target = urlsplit(value)
-            if target.scheme in ('http', 'https') and target.hostname and not _is_search_engine(target.hostname):
-                return value
+            usable = _usable_target_url(value)
+            if usable is not None:
+                return usable
     raise RedirectLead('Search result is a search-engine redirect without a usable target URL.')
 
 
 def search_lead_url(raw: object) -> str | None:
     value = raw.get('url') if isinstance(raw, dict) else getattr(raw, 'url', None)
-    return value if isinstance(value, str) else None
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    if not stripped:
+        return value
+    try:
+        return unwrap_redirect_url(stripped)
+    except (RedirectLead, ProviderFailure):
+        return value
 
 
 def normalize_search_lead(raw: object) -> SearchLead:

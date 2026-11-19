@@ -25,6 +25,7 @@ import {
   Settings,
   Sigma,
   SlidersHorizontal,
+  Sparkles,
   SquarePen,
   Upload,
   X,
@@ -61,6 +62,7 @@ export const Icons = {
   alert: CircleAlert,
   up: ChevronUp,
   down: ChevronDown,
+  sparkles: Sparkles,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof Icons;
@@ -75,6 +77,7 @@ const TOOL_ICON: Record<string, IconName> = {
   read_sources: "read",
   discover_sources: "globe",
   acquire_sources: "fetch",
+  sec_company_concept: "database",
   historical_prices: "chart",
   record_facts: "pen",
   calculate_financials: "sum",

@@ -25,7 +25,7 @@ import { optionTokens } from "./research/optionTokens";
 import { ResearchSettingsPanel } from "./research/ResearchSettingsPanel";
 import { CitationSheet } from "./topic/Citation";
 import { TopicContext, type FocusCitation, type LiveRun, type PanelState, type TopicView } from "./topic/context";
-import { InterruptedTurn, PendingTurn, TurnView, type TurnActions } from "./topic/Conversation";
+import { InterruptedTurn, LiveTurn, TurnView, type TurnActions } from "./topic/Conversation";
 import { LiveBar } from "./topic/LiveBar";
 import { ReaderPanel } from "./topic/ReaderPanel";
 import { RecordPanel } from "./topic/RecordPanel";
@@ -49,6 +49,10 @@ export function TopicPage() {
   const inspector = useMedia(MEDIA.inspector);
   const { setPanelOpen } = useLayout();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const liveTurnRef = useRef<HTMLElement>(null);
+  const nearBottomRef = useRef(true);
+  const lastScrollTopRef = useRef(0);
+  const suppressScrollUntilRef = useRef(0);
   const composerRef = useRef<ComposerHandle>(null);
   const scrolled = useScrolledPast(scrollRef);
 
@@ -57,6 +61,7 @@ export function TopicPage() {
   const [focus, setFocus] = useState<FocusCitation | null>(null);
   const [options, setOptions] = useState<RunOptions>(DEFAULT_OPTIONS);
   const [pendingAsk, setPendingAsk] = useState<PendingAsk | null>(null);
+  const [awayFromLive, setAwayFromLive] = useState(false);
   const [notice, setNotice] = useState<{ text: string; tone: "info" | "error" } | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [draft, setDraftState] = useState<ReviewDraft>({});
@@ -98,7 +103,9 @@ export function TopicPage() {
 
   // Reset per-topic state when navigating between topics.
   useEffect(() => {
-    setPanel(null); setText(""); setFocus(null); setPendingAsk(null); setNotice(null); setOptions(DEFAULT_OPTIONS); setDraftState({}); setSendPrompt(null);
+    setPanel(null); setText(""); setFocus(null); setPendingAsk(null); setAwayFromLive(false);
+    nearBottomRef.current = true; lastScrollTopRef.current = 0; suppressScrollUntilRef.current = 0;
+    setNotice(null); setOptions(DEFAULT_OPTIONS); setDraftState({}); setSendPrompt(null);
   }, [topicId]);
 
   const dirty = version ? isDirty(version, draft) : false;
@@ -192,7 +199,12 @@ export function TopicPage() {
   const view: TopicView | null = useMemo(() => {
     if (!topic || !version) return null;
     const live: LiveRun | null = activeRun
-      ? { operation: activeRun, progress: progressMatches(activeRun.operation_id) ? progress.progress : null, events: progressMatches(activeRun.operation_id) ? progress.events : [] }
+      ? {
+          operation: activeRun,
+          progress: progressMatches(activeRun.operation_id) ? progress.progress : null,
+          events: progressMatches(activeRun.operation_id) ? progress.events : [],
+          stream: { getSnapshot: progress.getStreamSnapshot, subscribe: progress.subscribeStream },
+        }
       : null;
     return {
       topicId,
@@ -240,7 +252,7 @@ export function TopicPage() {
     };
     // progressMatches reads progress.progress, listed below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topic, version, content, turns, citations, sources, activeRun, progress.progress, progress.events, turnNumbers, topicId, inspector, locked, addToTopic, draft, setDraft, dirty, saveDraft, saveVersion.isPending, notify]);
+  }, [topic, version, content, turns, citations, sources, activeRun, progress.progress, progress.events, progress.getStreamSnapshot, progress.subscribeStream, turnNumbers, topicId, inspector, locked, addToTopic, draft, setDraft, dirty, saveDraft, saveVersion.isPending, notify]);
   const cancelling = cancel.isPending || (cancel.isSuccess && cancel.variables?.operation_id === activeRun?.operation_id);
 
   const send = () => {
@@ -261,6 +273,8 @@ export function TopicPage() {
     };
     startTurn.mutate(body, {
       onSuccess: () => {
+        nearBottomRef.current = true;
+        setAwayFromLive(false);
         setPendingAsk({ question, at: new Date().toISOString(), turnsAt: turns.length });
         setText("");
         setFocus(null);
@@ -319,7 +333,91 @@ export function TopicPage() {
   const live = view?.live ?? null;
   const liveIndex = live?.progress?.turn.index ?? 0;
   const showLiveTurn = live !== null && (live.progress ? liveIndex > turns.length : pendingAsk !== null || turns.length === 0);
+  const showPendingTurn = showLiveTurn || (!live && pendingAsk !== null);
   const liveQuestion = (live?.progress?.turn.question || pendingAsk?.question || (turns.length === 0 ? topic?.request.question : "")) ?? "";
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !showPendingTurn) {
+      nearBottomRef.current = true;
+      suppressScrollUntilRef.current = 0;
+      setAwayFromLive(false);
+      return undefined;
+    }
+    lastScrollTopRef.current = el.scrollTop;
+    const update = () => {
+      const top = el.scrollTop;
+      const scrolledUp = top < lastScrollTopRef.current - 4;
+      lastScrollTopRef.current = top;
+      const distance = el.scrollHeight - top - el.clientHeight;
+      if (scrolledUp) suppressScrollUntilRef.current = 0;
+      if (Date.now() < suppressScrollUntilRef.current) {
+        if (distance <= 80) {
+          suppressScrollUntilRef.current = 0;
+          nearBottomRef.current = true;
+          setAwayFromLive(false);
+        }
+        return;
+      }
+      const near = distance <= 80;
+      nearBottomRef.current = near;
+      setAwayFromLive(!near);
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    return () => el.removeEventListener("scroll", update);
+  }, [showPendingTurn]);
+
+  const liveEventCount = live?.events.length ?? 0;
+  const liveCurrent = live?.progress?.current;
+  const liveCurrentKey = liveCurrent
+    ? liveCurrent.kind === "tool"
+      ? `tool:${liveCurrent.name}:${liveCurrent.rationale ?? ""}:${liveCurrent.target ?? ""}`
+      : `model:${liveCurrent.phase ?? ""}:${liveCurrent.retry_attempt ?? ""}`
+    : "";
+
+  useEffect(() => {
+    if (!showPendingTurn || !nearBottomRef.current) return undefined;
+    const frame = requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const reduced = prefersReducedMotion();
+      if (!reduced && el.scrollHeight > el.clientHeight) {
+        suppressScrollUntilRef.current = Date.now() + 450;
+      }
+      el.scrollTo?.({ top: el.scrollHeight, behavior: reduced ? "auto" : "smooth" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [showPendingTurn, liveEventCount, liveCurrentKey]);
+
+  const onDraftGrow = useCallback(() => {
+    if (!nearBottomRef.current) return;
+    requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (!el || !nearBottomRef.current) return;
+      const reduced = prefersReducedMotion();
+      if (!reduced && el.scrollHeight > el.clientHeight) {
+        suppressScrollUntilRef.current = Date.now() + 450;
+      }
+      el.scrollTo?.({ top: el.scrollHeight, behavior: reduced ? "auto" : "smooth" });
+    });
+  }, []);
+
+  const scrollToLive = useCallback(() => {
+    nearBottomRef.current = true;
+    setAwayFromLive(false);
+    const target = liveTurnRef.current;
+    const scroller = scrollRef.current;
+    const reduced = prefersReducedMotion();
+    if (!reduced && scroller && scroller.scrollHeight > scroller.clientHeight) {
+      suppressScrollUntilRef.current = Date.now() + 450;
+    }
+    if (target?.scrollIntoView && scroller && scroller.clientHeight > 0) {
+      target.scrollIntoView({ block: "end", behavior: reduced ? "auto" : "smooth" });
+    } else if (scroller) {
+      scroller.scrollTo?.({ top: scroller.scrollHeight, behavior: reduced ? "auto" : "smooth" });
+    }
+  }, []);
 
   const tokens: ComposerToken[] = [
     ...(focus ? [{ key: "focus", label: `深挖引用 ${focus.n}`, removeLabel: "移除深挖", onRemove: () => setFocus(null) }] : []),
@@ -390,13 +488,21 @@ export function TopicPage() {
                   startedAt={orphanRun.created_at}
                   question={(progressMatches(orphanRun.operation_id) ? progress.progress?.turn.question : "") || (turns.length === 0 ? topic!.request.question ?? "" : "")}
                   status={orphanRun.status === "cancelled" ? "cancelled" : "failed"}
+                  events={progressMatches(orphanRun.operation_id) ? progress.events : []}
                   actions={turnActions((progressMatches(orphanRun.operation_id) ? progress.progress?.turn.question : "") || topic!.request.question || "", true)}
                 />
               ) : null}
               {showLiveTurn ? (
-                <PendingTurn number={liveIndex > 0 ? liveIndex : turns.length + 1} startedAt={live!.progress?.started_at ?? live!.operation.created_at} question={liveQuestion} />
+                <LiveTurn
+                  sectionRef={liveTurnRef}
+                  number={liveIndex > 0 ? liveIndex : turns.length + 1}
+                  startedAt={live!.progress?.started_at ?? live!.operation.created_at}
+                  question={liveQuestion}
+                  live={live}
+                  onDraftGrow={onDraftGrow}
+                />
               ) : !live && pendingAsk ? (
-                <PendingTurn number={turns.length + 1} startedAt={pendingAsk.at} question={pendingAsk.question} />
+                <LiveTurn sectionRef={liveTurnRef} number={turns.length + 1} startedAt={pendingAsk.at} question={pendingAsk.question} live={null} />
               ) : null}
               {turns.length === 0 && !live && !orphanRun && !pendingAsk && !runs.isLoading ? (
                 <div className="turn">
@@ -417,8 +523,14 @@ export function TopicPage() {
         <TopicContext.Provider value={view}>
           <div className="dock">
             <div className="dock-inner">
+              {live && awayFromLive ? (
+                <button type="button" className="jump-live glass" onClick={scrollToLive}>
+                  <Icon name="down" size={14} />
+                  回到实时过程
+                </button>
+              ) : null}
               {live ? (
-                <LiveBar live={live} cancelling={cancelling} onCancel={() => cancel.mutate(live.operation)} />
+                <LiveBar live={live} cancelling={cancelling} awayFromLive={awayFromLive} onJumpToLive={scrollToLive} onCancel={() => cancel.mutate(live.operation)} />
               ) : suggestions.length > 0 ? (
                 <div className="suggest">
                   {suggestions.map((item) => <button key={item.key} type="button" className="link" onClick={() => prefill(item.prefill)}>{item.label}</button>)}

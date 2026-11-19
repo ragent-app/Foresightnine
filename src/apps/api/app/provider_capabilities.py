@@ -8,7 +8,61 @@ import json
 import os
 from copy import deepcopy
 from dataclasses import dataclass
+from typing import Mapping
 from .phase3 import ProviderFailure
+
+
+VALID_INPUT_COUNTERS = frozenset({'utf8_byte_upper_bound', 'chars_div_3'})
+
+
+@dataclass(frozen=True)
+class DualInputEstimate:
+    """Separate conservative UTF-8 byte safety bound from ceil(chars/3) working estimate."""
+    utf8_byte_upper_bound: int
+    heuristic_tokens: int
+    char_count: int
+    heuristic_method: str = 'ceil_chars_div_3'
+
+
+def estimate_utf8_byte_upper_bound(text: str, *, envelope_bytes: int = 0) -> int:
+    """Conservative UTF-8 byte safety upper bound for quota admission and wire limits."""
+    return len(text.encode('utf-8')) + max(0, envelope_bytes)
+
+
+def estimate_heuristic_tokens(text: str, *, envelope_chars: int = 0) -> int:
+    """Realistic working token estimate using ceil(chars / 3) for mixed EN/CJK text."""
+    total_chars = len(text) + max(0, envelope_chars)
+    return (total_chars + 2) // 3 if total_chars > 0 else 0
+
+
+def estimate_dual_input(text: str, *, envelope_bytes: int = 0, envelope_chars: int = 0) -> DualInputEstimate:
+    """Compute both conservative UTF-8 byte upper bound and ceil(chars / 3) token estimate."""
+    return DualInputEstimate(
+        utf8_byte_upper_bound=estimate_utf8_byte_upper_bound(text, envelope_bytes=envelope_bytes),
+        heuristic_tokens=estimate_heuristic_tokens(text, envelope_chars=envelope_chars),
+        char_count=len(text),
+    )
+
+
+def configured_research_max_output_tokens(environ: Mapping[str, str] | None = None) -> int | None:
+    """Read FORESIGHTNINE_RESEARCH_MAX_OUTPUT_TOKENS when set; fail closed if invalid."""
+    source = os.environ if environ is None else environ
+    raw = source.get('FORESIGHTNINE_RESEARCH_MAX_OUTPUT_TOKENS', '').strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        raise _invalid() from None
+    if value < 1:
+        raise _invalid()
+    return value
+
+
+def resolve_output_token_limit(*candidates: int | None) -> int | None:
+    """Return the tightest positive integer output cap across explicit policy/profile bounds."""
+    limits = [value for value in candidates if type(value) is int and value > 0]
+    return min(limits) if limits else None
 
 
 @dataclass(frozen=True)
@@ -52,7 +106,7 @@ def configured_profile(endpoint: str, model: str) -> CapabilityProfile | None:
                 if not isinstance(value[key], list) or any(not isinstance(x, str) or not x for x in value[key]):
                     raise ValueError()
                 value[key] = tuple(value[key])
-        if 'input_counter' in value and value['input_counter'] != 'utf8_byte_upper_bound':
+        if 'input_counter' in value and value['input_counter'] not in VALID_INPUT_COUNTERS:
             raise ValueError()
         if value['mode'] not in {'json_schema','tool','json_object'}:
             raise ValueError()
