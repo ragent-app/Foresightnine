@@ -1,0 +1,4 @@
+# 363: same locked dependencies as the 8ec8761 image; only apps/api/app differs between the commits.
+FROM foresightnine-api:web-acceptance-8ec8761
+RUN rm -rf /app/apps/api/app
+COPY apps/api/app /app/apps/api/app
