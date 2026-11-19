@@ -1,0 +1,59 @@
+name: foresightnine-acceptance-362
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: foresightnine_acceptance
+      POSTGRES_USER: foresightnine
+      POSTGRES_PASSWORD: ${ACCEPT_PG_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - /home/lxx/Foresightnine/src/infra/migrations/001_research_state.sql:/docker-entrypoint-initdb.d/001_research_state.sql:ro
+      - /home/lxx/Foresightnine/src/infra/migrations/002_operation_state.sql:/docker-entrypoint-initdb.d/002_operation_state.sql:ro
+    healthcheck:
+      test: [CMD, pg_isready, -U, foresightnine, -d, foresightnine_acceptance]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+  redis:
+    image: redis:7-alpine
+    command: [redis-server, --appendonly, 'yes']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+  api:
+    image: foresightnine-api:web-acceptance-8ec8761
+    init: true
+    env_file:
+      - path: /home/lxx/.local/state/foresightnine/local-research/local.env
+        format: raw
+    environment:
+      FORESIGHTNINE_ENV: development
+      FORESIGHTNINE_STORAGE_MODE: postgres
+      FORESIGHTNINE_POSTGRES_URL: postgresql://foresightnine:${ACCEPT_PG_PASSWORD}@postgres:5432/foresightnine_acceptance
+      FORESIGHTNINE_ABUSE_MODE: redis
+      FORESIGHTNINE_REDIS_URL: redis://redis:6379/0
+      FORESIGHTNINE_LOCAL_AUTH_MODE: mock
+      FORESIGHTNINE_CORS_ORIGINS: http://127.0.0.1:4176
+      FORESIGHTNINE_SEARCH_PROVIDER: glm_coding_mcp
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:8002:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, /app/apps/api/.venv/bin/python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=2)"]
+      interval: 3s
+      timeout: 4s
+      retries: 12
+volumes:
+  postgres-data:
+  redis-data:

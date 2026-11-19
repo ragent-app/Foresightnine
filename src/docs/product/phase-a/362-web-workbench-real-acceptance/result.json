@@ -1,0 +1,404 @@
+{
+  "experiment": "362-web-workbench-real-acceptance",
+  "script_log": [
+    "2026-11-19T05:06:39.365Z A1 submitted on topic topic_63992e9872b34c7f968525a42ebf8540",
+    "2026-11-19T05:06:39.369Z A1: running",
+    "2026-11-19T05:07:05.832Z A1: livebar \"研究中 · 模型思考中 2 次调用 · 0:28 取消\"",
+    "2026-11-19T05:07:30.297Z A1: livebar \"研究中 · 模型思考中 3 次调用 · 0:53 取消\"",
+    "2026-11-19T05:07:56.752Z A1: livebar \"研究中 · 模型思考中 4 次调用 · 1:19 取消\"",
+    "2026-11-19T05:08:28.817Z A1: finished after 109 s",
+    "2026-11-19T05:08:34.690Z A1: callout primary {\"text\":\"重新提问\",\"disabled\":false}",
+    "2026-11-19T05:08:42.354Z A1: no citation number in the answer",
+    "2026-11-19T05:08:48.775Z A2 submitted",
+    "2026-11-19T05:08:49.994Z A2: running",
+    "2026-11-19T05:09:16.493Z A2: livebar \"研究中 · 模型思考中 2 次调用 · 0:26 取消\"",
+    "2026-11-19T05:09:41.003Z A2: livebar \"研究中 · 模型思考中 2 次调用 · 0:51 取消\"",
+    "2026-11-19T05:10:01.045Z A2: finished after 71 s",
+    "2026-11-19T05:10:06.925Z A2: callout primary {\"text\":\"重新提问\",\"disabled\":false}",
+    "2026-11-19T05:10:16.916Z A2: reader highlight true",
+    "2026-11-19T05:10:26.654Z A3 review saved; export status 200",
+    "2026-11-19T05:10:35.812Z B submitted on topic topic_a4104381bf5b44e39bec649c3c8dd908",
+    "2026-11-19T05:10:36.277Z B1: running",
+    "2026-11-19T05:11:02.692Z B1: livebar \"研究中 · 搜索线索 1 次调用 · 1 次搜索 · 0:28 取消\"",
+    "2026-11-19T05:11:27.108Z B1: livebar \"研究中 · 搜索线索 1 次调用 · 1 次搜索 · 0:52 取消\"",
+    "2026-11-19T05:11:53.530Z B1: livebar \"研究中 · 模型思考中 2 次调用 · 2 次搜索 · 1:19 取消\"",
+    "2026-11-19T05:14:45.874Z B1: finished after 250 s",
+    "2026-11-19T05:14:51.754Z B1: callout primary {\"text\":\"交付已有成果\",\"disabled\":false}",
+    "2026-11-19T05:14:59.436Z B1: no citation number in the answer",
+    "2026-11-19T05:14:59.995Z B export status 200"
+  ],
+  "continued": {},
+  "csp_violations": [],
+  "console_errors": [],
+  "topic_a": {
+    "available": true,
+    "turns": [
+      {
+        "index": 1,
+        "status": "partial",
+        "reason": "provider_timeout",
+        "stopping_note": null,
+        "usage": {
+          "model_calls": 4,
+          "search_calls": 0,
+          "total_tokens": 16071
+        },
+        "search_status": "not_requested",
+        "official_fetch_status": "not_requested",
+        "operation_ids": [
+          "operation:b1a98637fa3272d6a6c665a2"
+        ],
+        "tools": [
+          {
+            "name": "read_sources",
+            "status": "completed",
+            "reason": null
+          },
+          {
+            "name": "record_facts",
+            "status": "invalid",
+            "reason": null
+          },
+          {
+            "name": "record_facts",
+            "status": "invalid",
+            "reason": null
+          },
+          {
+            "name": "record_facts",
+            "status": "completed",
+            "reason": null
+          }
+        ],
+        "gaps": [
+          {
+            "code": "provider_no_result",
+            "message": "Provider request ended without a usable result."
+          }
+        ],
+        "report_characters": 0,
+        "report": ""
+      },
+      {
+        "index": 2,
+        "status": "partial",
+        "reason": "submitted",
+        "stopping_note": "所给资料全文已读取，仅含两个财年的总收入，缺少两个年度的营业利润数据，营业利润率无法计算；按用户要求不推测，故停止。",
+        "usage": {
+          "model_calls": 2,
+          "search_calls": 0,
+          "total_tokens": 8604
+        },
+        "search_status": "not_requested",
+        "official_fetch_status": "not_requested",
+        "operation_ids": [
+          "operation:4f4aa31f2f08eb3f843df005"
+        ],
+        "tools": [
+          {
+            "name": "read_sources",
+            "status": "completed",
+            "reason": null
+          }
+        ],
+        "gaps": [
+          {
+            "code": "model_reported",
+            "message": "缺少 2026 财年营业利润（operating income）数据"
+          },
+          {
+            "code": "model_reported",
+            "message": "缺少 2025 财年营业利润（operating income）数据"
+          },
+          {
+            "code": "model_reported",
+            "message": "仅有一份收入摘录，无完整利润表，无法从给定资料计算营业利润率"
+          },
+          {
+            "code": "model_reported",
+            "message": "总收入数值沿用先前研究已记录的事实（fact-d72bbd40d755450b868b8179e94de502、fact-94ca225cb0984dd8ad4f59515a6d5a08），本轮未新增可计算量"
+          }
+        ],
+        "report_characters": 0,
+        "report": ""
+      }
+    ],
+    "facts": [
+      {
+        "fact_id": "fact-d72bbd40d755450b868b8179e94de502",
+        "label": "微软 2026 财年总收入",
+        "value": "331839",
+        "unit": "百万美元",
+        "currency": "USD",
+        "period": "截至 2026-06-30 的财政年度",
+        "verification": "numeric_and_location_match_semantics_not_verified",
+        "currency_quote_missing": null,
+        "scale_quote_missing": null,
+        "currency_unspecified": null
+      },
+      {
+        "fact_id": "fact-94ca225cb0984dd8ad4f59515a6d5a08",
+        "label": "微软 2025 财年总收入",
+        "value": "281724",
+        "unit": "百万美元",
+        "currency": "USD",
+        "period": "截至 2025-06-30 的财政年度",
+        "verification": "numeric_and_location_match_semantics_not_verified",
+        "currency_quote_missing": null,
+        "scale_quote_missing": null,
+        "currency_unspecified": null
+      }
+    ],
+    "calculations": [],
+    "claims": [
+      {
+        "claim_id": "claim-7c2f3fd0e4364306898103256b2f5c56",
+        "role": "support",
+        "turn_id": "turn-bd1dfcf74872420b991bf46ace8f95aa",
+        "text": "该摘录（全文 203 字符）仅包含两个财年的总收入数据：2026 财年 331,839 百万美元、2025 财年 281,724 百万美元；全文未包含任何营业利润（operating income）数据，因此无法计算营业利润率，也无法判断两个年度的营业利润率是否变化。",
+        "edited_by_user": false,
+        "citations": [
+          {
+            "source": "acceptance-source",
+            "quotation": "Microsoft Corporation fiscal 2026 annual report, income statements. Amounts in millions of U.S. dollars. Year ended June 30, 2026: total revenue 331,839. Year ended June 30, 2025: total revenue 281,724.",
+            "span": [
+              0,
+              202
+            ],
+            "matches_source_txt": true
+          }
+        ]
+      }
+    ],
+    "runs": [
+      {
+        "operation_id": "operation:4f4aa31f2f08eb3f843df005",
+        "status": "completed",
+        "created_at": "2026-11-19T05:08:49.105129Z",
+        "updated_at": "2026-11-19T05:09:57.889640Z"
+      },
+      {
+        "operation_id": "operation:b1a98637fa3272d6a6c665a2",
+        "status": "completed",
+        "created_at": "2026-11-19T05:06:37.105841Z",
+        "updated_at": "2026-11-19T05:08:25.130493Z"
+      }
+    ],
+    "checks": {
+      "A1_amounts_match": true,
+      "A1_growth_17_79": false,
+      "A1_claim_cites_source_span": false,
+      "A2_margin_number_in_claims": [],
+      "A2_margin_number_in_report": false,
+      "A2_margin_calculations": 0,
+      "A2_gaps": [
+        "model_reported",
+        "model_reported",
+        "model_reported",
+        "model_reported"
+      ],
+      "review": {
+        "versions": [
+          {
+            "created_by": "user",
+            "review": "draft",
+            "summary_chars": 0
+          },
+          {
+            "created_by": "agent",
+            "review": "draft",
+            "summary_chars": 0
+          },
+          {
+            "created_by": "agent",
+            "review": "draft",
+            "summary_chars": 0
+          },
+          {
+            "created_by": "user",
+            "review": "draft",
+            "summary_chars": 83
+          }
+        ],
+        "last_by_user_with_summary": true
+      },
+      "export_status": 200
+    }
+  },
+  "topic_b": {
+    "available": true,
+    "turns": [
+      {
+        "index": 1,
+        "status": "partial",
+        "reason": "submitted",
+        "stopping_note": "所有可获取来源(SEC、微软投资者关系、微软新闻站、gcs-web、Google跳转链接)的获取均失败或受限,且发现预算耗尽,无法读取任何原文;问题仍未解答,故以 partial 状态停止并如实记录缺口。",
+        "usage": {
+          "model_calls": 8,
+          "search_calls": 3,
+          "total_tokens": 64823
+        },
+        "search_status": "search_budget_exhausted",
+        "official_fetch_status": "no_eligible_source",
+        "operation_ids": [
+          "operation:3997baff155f10fde8c1b575"
+        ],
+        "tools": [
+          {
+            "name": "discover_sources",
+            "status": "completed",
+            "reason": null
+          },
+          {
+            "name": "discover_sources",
+            "status": "completed",
+            "reason": null
+          },
+          {
+            "name": "acquire_sources",
+            "status": "unavailable",
+            "reason": "source_cannot_be_acquired"
+          },
+          {
+            "name": "discover_sources",
+            "status": "completed",
+            "reason": null
+          },
+          {
+            "name": "discover_sources",
+            "status": "failed",
+            "reason": "search_budget_exhausted"
+          },
+          {
+            "name": "acquire_sources",
+            "status": "unavailable",
+            "reason": "source_cannot_be_acquired"
+          },
+          {
+            "name": "acquire_sources",
+            "status": "unavailable",
+            "reason": "source_cannot_be_acquired"
+          },
+          {
+            "name": "discover_sources",
+            "status": "failed",
+            "reason": "search_budget_exhausted"
+          },
+          {
+            "name": "acquire_sources",
+            "status": "unavailable",
+            "reason": "source_cannot_be_acquired"
+          }
+        ],
+        "gaps": [
+          {
+            "code": "search_candidates_not_acquired",
+            "message": "Search found candidate links, but their original material could not be acquired through the configured sources."
+          },
+          {
+            "code": "no_cited_claims",
+            "message": "No source-backed claims with verified locations were submitted; add or read relevant authorized material and continue research."
+          },
+          {
+            "code": "model_reported",
+            "message": "未能读取任何原文:所有获取尝试均失败(SEC 未配置、microsoft.com 投资者关系页与 news.microsoft.com 不受支持、gcs-web 静态文件不支持、Google 跳转链接被拒),因此没有可引用的原文语句,也未提交任何 claim。"
+          },
+          {
+            "code": "model_reported",
+            "message": "发现(discover_sources)预算在第三次搜索时耗尽,无法寻找第三方替代来源(如聚合数据平台)。"
+          },
+          {
+            "code": "model_reported",
+            "message": "已发现的 SEC 10-K 链接(msft-20260630.htm)、FY26 Q4 新闻稿页、FY27 Q1 报道均为未核实线索,不能作为证据引用,其标题中的日期(如 07/29/2026 提交)未经原文确认。"
+          },
+          {
+            "code": "model_reported",
+            "message": "因此 FY2026 全年总收入及与 FY2025 的同比增速均未获验证;本报告不提供任何未经来源核实的数字,也无法对增长率进行确定性计算(缺少两个已核实的财年收入事实)。"
+          }
+        ],
+        "report_characters": 0,
+        "report": ""
+      }
+    ],
+    "source_candidates": [
+      {
+        "title": "10-K",
+        "url": "https://www.sec.gov/Archives/edgar/data/789019/000119312526323660/msft-20260630.htm",
+        "published_at": null,
+        "status": "unverified"
+      },
+      {
+        "title": "Form 10-K for Microsoft Corp filed 07/29/2026",
+        "url": "https://microsoft.gcs-web.com/static-files/8a9beeed-0e9e-48e6-b4fb-593d558e2693",
+        "published_at": null,
+        "status": "unverified"
+      },
+      {
+        "title": "Microsoft Investor Relations - SEC Filings",
+        "url": "https://www.microsoft.com/en-us/investor/sec-filings",
+        "published_at": null,
+        "status": "unverified"
+      },
+      {
+        "title": "Microsoft 2026 Annual Report",
+        "url": "https://www.google.com/goto?url=CAESdwHEIkXXtfqyyf-5dl7_svrG8aRxyxgq66wQuFFbVcgEW6sORtNjZzlwPAe-g0lQ5YypDmYDD_nhPiHoNq94ySH9e92XxO2qN8VXn159jX9IyF0Z9RkaLxE62Xl4rgvSw0f3KIY7g83LtwQQ4A4957-TcHxIRumw&gsessionid=qDFoDbbPMl0iikgMwP8_tKgD7MIUF11IjQGVeXuneMEn3Dwat8Tgew",
+        "published_at": null,
+        "status": "unverified"
+      },
+      {
+        "title": "FY26 Q4 - Press Releases - Investor Relations",
+        "url": "https://www.google.com/goto?url=CAESjwEBxCJF1w1JPRJvIDUQr9lNbBWGDBYQdxBly7lU3Vl4TwQQtg_ARSXP-JzRH4_bFMueEcfaLcgutVq4G5zfnpPOq6GZ2oao8rwN7aCu3vzQMvK1ri3Z4WlNQDw8IOV0GUDWbH8rAdeAM0k0zy8TKyqNJvz3lCIyD_p90GnVqAoF4Pvwlqh6J1brxNnD3RMjVg&gsessionid=qDFoDbbPMl0iikgMwP8_tKgD7MIUF11IjQGVeXuneMEn3Dwat8Tgew",
+        "published_at": null,
+        "status": "unverified"
+      },
+      {
+        "title": "FY26 Q3 - Press Releases - Investor Relations",
+        "url": "https://www.google.com/goto?url=CAESjwEBxCJF1wdMQCQMxM8EWFAgnib5r0Rj1oy2k1YKqsWOeUkS8XnWQX2tczvilgBbFFgU7dE8IOD-zO4K4idZLbtbTginVCsAt9KjzdEFg4jjJifacRT4q4zRzZWOIhC4EAz4A8qY-PiodTsdt-b6nAZBuOdBnmgNo7oHcIa5fzBt-okd9r80N3C-IfaKFSnDYw&gsessionid=qDFoDbbPMl0iikgMwP8_tKgD7MIUF11IjQGVeXuneMEn3Dwat8Tgew",
+        "published_at": null,
+        "status": "unverified"
+      },
+      {
+        "title": "10-K",
+        "url": "https://www.google.com/goto?url=CAESkAEBxCJF18CeU8tnkGAvSTqJ9RU_kL6kBSVceH8d8597-fVjzSULYOEHqlTHPihW-2REVWh0-eOFeANkZRD7SiDg3UPxwGQaqScLC0JKsLE_IKBy5taqcK0GyMe_ZwbEjCi9gDZyAQEER36ymSd2pbmoOwxVvnYmQlN78w5JZUC0AmLt1VlZnvAih7RG0liovP0&gsessionid=qDFoDbbPMl0iikgMwP8_tKgD7MIUF11IjQGVeXuneMEn3Dwat8Tgew",
+        "published_at": null,
+        "status": "unverified"
+      },
+      {
+        "title": "FY26 Q2 - Press Releases - Investor Relations",
+        "url": "https://www.google.com/goto?url=CAESjwEBxCJF1wTktqNNBx6D3XUk5B35KOd-5W2Oodu2mV0ey5yoU3HgYAsG4enSF539H9AXNUcM1-ZTuvddvrLq8E4W31PrLbsYWbUR_zLo9vA0V4QLxJPHTTVQtEdORfXwQvz88_5q-mB8ph-G87YUiu9xJaFon-7KHe7knUi9GgSnQ4zuZrPzE-Ck8fZqQ-ZQJQ&gsessionid=qDFoDbbPMl0iikgMwP8_tKgD7MIUF11IjQGVeXuneMEn3Dwat8Tgew",
+        "published_at": null,
+        "status": "unverified"
+      },
+      {
+        "title": "Microsoft Investor Relations - Annual Reports",
+        "url": "https://www.google.com/goto?url=CAESdAHEIkXXqhFnw8Yty2AhAxN9d23yy-iT3OW8kAJrBHpFWD-1DL9jw_gTT_xx67JxkP4hiDuX-p9QwgMgB52w31L2yZU_XuDdRDzpYS-vbvHrSszqlbB6zpHgFiXHc5mIcrjpkA7XKYanBjGGrOCUAHO9VMVb&gsessionid=qDFoDbbPMl0iikgMwP8_tKgD7MIUF11IjQGVeXuneMEn3Dwat8Tgew",
+        "published_at": null,
+        "status": "unverified"
+      },
+      {
+        "title": "FY26 Q1 - Press Releases - Investor Relations",
+        "url": "https://www.microsoft.com/en-us/investor/earnings/fy-2026-q1/press-release-webcast",
+        "published_at": null,
+        "status": "unverified"
+      }
+    ],
+    "sources": [],
+    "claims": [],
+    "facts": [],
+    "calculations": [],
+    "runs": [
+      {
+        "operation_id": "operation:3997baff155f10fde8c1b575",
+        "status": "completed",
+        "created_at": "2026-11-19T05:10:33.931964Z",
+        "updated_at": "2026-11-19T05:14:42.059047Z"
+      }
+    ],
+    "checks": {
+      "search_calls": 3,
+      "candidates_shown": 10,
+      "claims_without_acquired_source": [],
+      "export_status": 200
+    }
+  }
+}
