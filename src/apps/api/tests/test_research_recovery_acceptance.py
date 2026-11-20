@@ -978,3 +978,264 @@ def test_runtime_continuation_policy_and_recovery_status_edge_cases():
         'checkpoint': 'runtime',
         'version_id': 'v1',
     }
+
+
+def test_repeated_timeout_circuit_breaker_blocks_recovery_status_and_continue(monkeypatch):
+    from app.phase3 import ProviderFailure
+    from tests.test_research_runtime import turn
+
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRIES', '0')
+    monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+
+    client = TestClient(api.app)
+    registration = client.post('/v1/auth/local/register', json={
+        'email': f'timeout-circuit-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!',
+    })
+    assert registration.status_code == 201
+    headers = {'Authorization': 'Bearer ' + registration.json()['access_token']}
+    long_text = 'Nasdaq index closed at 18000. ' + ('Market commentary footnote. ' * 100)
+    source = client.post('/v2/research/sources', headers=headers, json={
+        'title': 'Market Feed', 'text': long_text,
+        'permissions': {'store': True, 'display': True, 'model_input': True, 'export': True},
+    })
+    assert source.status_code == 201
+    source_id = source.json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={
+        'question': 'Analyze recent index movement.', 'source_ids': [source_id],
+    })
+    assert topic.status_code == 201
+    path = '/v2/research/topics/' + topic.json()['topic_id']
+
+    observed_continue_messages: list[list[dict]] = []
+
+    class AlwaysTimingOutProvider:
+        name = 'always-timeout-test'
+        policy = SimpleNamespace(timeout_seconds=120, max_input_tokens=None, max_output_tokens=16384)
+
+        def __init__(self):
+            self.calls = 0
+
+        def complete(self, messages, tools, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return turn('read_sources', {'reads': [{'source_id': source_id}], 'rationale': 'Read market feed.'}, 'read1')
+            if self.calls == 3:
+                observed_continue_messages.append(messages)
+            err = ProviderFailure('provider_timeout', 'Stream deadline exceeded.', retryable=True)
+            err.provider_response_received = True
+            err.timeout_kind = 'stream_deadline_timeout'
+            err.elapsed_ms = 120000
+            err.wire_bytes = 25000
+            err.streamed_bytes = 2048
+            raise err
+
+    provider = AlwaysTimingOutProvider()
+    monkeypatch.setattr(api, 'challenge_provider', provider)
+
+    started = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={
+        'parent_version_id': topic.json()['versions'][-1]['version_id'],
+        'discover_sources': False,
+    })
+    assert started.status_code == 202, started.text
+    op1 = started.json()['operation']['operation_id']
+    assert _terminal(client, path, headers, op1) == 'completed'
+    cp1 = api.RESEARCH_RUN_INPUTS.get(op1)['runtime_checkpoint']
+    assert len(cp1['failed_attempts']) == 1
+    assert cp1['failed_attempts'][0]['reason'] == 'provider_timeout'
+    assert cp1['failed_attempts'][0]['timeout_kind'] == 'stream_deadline_timeout'
+    assert cp1['model_receipts'][-1]['settlement'] == 'unknown'
+    assert cp1['events'][-1]['usage'] is None
+    v1_turn = client.get(path, headers=headers).json()['versions'][-1]['content']['turns'][-1]
+    assert any(g['code'] == 'provider_timeout' for g in v1_turn['gaps']), v1_turn['gaps']
+    assert not any(g['code'] in ('provider_error', 'provider_no_result') for g in v1_turn['gaps']), v1_turn['gaps']
+
+    status1 = client.get(f'{path}/runs/{op1}/recovery-status', headers=headers)
+    assert status1.status_code == 200
+    assert status1.json()['can_continue'] is True
+    assert status1.json()['can_deliver'] is False
+    assert status1.json()['reason'] is None
+
+    cont1 = client.post(f'{path}/runs/{op1}/continue', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={})
+    assert cont1.status_code == 202, cont1.text
+    op2 = cont1.json()['operation']['operation_id']
+    assert _terminal(client, path, headers, op2) == 'completed'
+    assert provider.calls == 3
+
+    # 1st /continue with facts=[] preserves the unread read_sources tool result and injects timeout guidance via tail_note.
+    tool_msgs = [json.loads(m['content']) for m in observed_continue_messages[0] if m['role'] == 'tool']
+    assert len(tool_msgs) == 1
+    assert 'cleared' not in tool_msgs[0]
+    assert 'Nasdaq index closed at 18000.' in tool_msgs[0]['results'][0]['text']
+    prefix_user_payload = json.loads(observed_continue_messages[0][1]['content'])
+    assert 'recovery_guidance' not in prefix_user_payload
+    assert 'prior_failed_attempts' not in prefix_user_payload
+    tail_msg = observed_continue_messages[0][-1]
+    assert tail_msg['role'] == 'user' and tail_msg['content'].startswith('[Recovery context: ')
+    tail_payload = json.loads(tail_msg['content'][len('[Recovery context: '):-1])
+    assert 'record_facts' in tail_payload['recovery_guidance']
+    assert 'timed out mid-generation' in tail_payload['recovery_guidance']
+
+    cp2 = api.RESEARCH_RUN_INPUTS.get(op2)['runtime_checkpoint']
+    assert cp2['continuation_count'] == 1
+    assert cp2['consecutive_timeout_continuations'] == 1
+    assert cp2['consecutive_truncation_continuations'] == 0
+    assert len(cp2['failed_attempts']) == 2
+
+    status2 = client.get(f'{path}/runs/{op2}/recovery-status', headers=headers)
+    assert status2.status_code == 200
+    assert status2.json()['can_continue'] is False
+    assert status2.json()['can_deliver'] is False
+    assert status2.json()['reason'] == 'repeated_timeout'
+
+    blocked = client.post(f'{path}/runs/{op2}/continue', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={})
+    assert blocked.status_code == 409, blocked.text
+    body = blocked.json()
+    assert body['error_code'] == 'lifecycle_conflict'
+    assert provider.calls == 3
+
+
+def test_runtime_timeout_continuation_policy_and_loop_breaker_edge_cases():
+    from app.research_recovery import (
+        L2_COMPACT_AFTER_CHARS,
+        MAX_TIMEOUT_CONTINUATIONS,
+        TIMEOUT_FAILURE_REASONS,
+        prepare_runtime_continuation,
+        recovery_status,
+        runtime_timeout_loop_blocked,
+        runtime_truncation_loop_blocked,
+    )
+
+    assert TIMEOUT_FAILURE_REASONS == frozenset({'provider_timeout'})
+    assert MAX_TIMEOUT_CONTINUATIONS == 2
+
+    # 1. facts=[] and history < 80k preserves latest read_sources verbatim and injects timeout guidance.
+    unread_cp = {
+        'user': '{}',
+        'history': [
+            {'assistant': {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'd1', 'name': 'discover_sources', 'input': {}}]},
+             'results': [{'tool_call_id': 'd1', 'content': json.dumps({'leads': [{'url': 'https://example.com', 'title': 'Lead'}]}), 'is_error': False}]},
+            {'assistant': {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'r1', 'name': 'read_sources', 'input': {}}]},
+             'results': [{'tool_call_id': 'r1', 'content': json.dumps({'results': [{'source_id': 's1', 'start': 0, 'end': 3000, 'text': 'B' * 3000}]}), 'is_error': False}]},
+        ],
+        'failed_attempts': [{'reason': 'provider_timeout'}],
+        'read_ranges': [{'source_id': 's1', 'start': 0, 'end': 3000}],
+        'facts': [],
+    }
+    prepared_unread = prepare_runtime_continuation(unread_cp)
+    assert prepared_unread['continuation_count'] == 1
+    assert prepared_unread['consecutive_timeout_continuations'] == 1
+    assert 'B' * 3000 in prepared_unread['history'][1]['results'][0]['content']
+    assert 'cleared' not in json.loads(prepared_unread['history'][0]['results'][0]['content'])
+    assert 'timed out mid-generation' in prepared_unread['continuation_guidance']
+    assert 'record_facts' in prepared_unread['continuation_guidance']
+    assert len(prepared_unread['continuation_guidance']) <= 500
+
+    # 2. facts!=[] runs keep_recent=1 compaction with reason='timeout_continuation_compacted'.
+    with_facts_cp = {
+        **unread_cp,
+        'facts': [{'fact_id': 'f1', 'label': 'rev', 'value': 100}],
+    }
+    # Make history[0] > _COMPACT_MIN_RESULT_CHARS (300) so it qualifies for compaction.
+    with_facts_cp['history'] = [
+        {'assistant': {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'r0', 'name': 'read_sources', 'input': {}}]},
+         'results': [{'tool_call_id': 'r0', 'content': json.dumps({'results': [{'source_id': 's0', 'start': 0, 'end': 2500, 'text': 'A' * 2500}]}), 'is_error': False}]},
+        unread_cp['history'][1],
+    ]
+    prepared_facts = prepare_runtime_continuation(with_facts_cp)
+    first_res = json.loads(prepared_facts['history'][0]['results'][0]['content'])
+    assert first_res['cleared'] is True
+    assert first_res['reason'] == 'timeout_continuation_compacted'
+    assert 'B' * 3000 in prepared_facts['history'][1]['results'][0]['content']
+    assert prepared_facts['context_receipts'][-1]['trigger'] == 'l2_continuation'
+
+    # 3. facts=[] and history >= L2_COMPACT_AFTER_CHARS (80_000) runs keep_recent=1 (NEVER keep_recent=0).
+    giant_cp = {
+        'user': '{}',
+        'history': [
+            {'assistant': {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'r0', 'name': 'read_sources', 'input': {}}]},
+             'results': [{'tool_call_id': 'r0', 'content': json.dumps({'results': [{'source_id': 's0', 'start': 0, 'end': 45000, 'text': 'A' * 45000}]}), 'is_error': False}]},
+            {'assistant': {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'r1', 'name': 'read_sources', 'input': {}}]},
+             'results': [{'tool_call_id': 'r1', 'content': json.dumps({'results': [{'source_id': 's1', 'start': 0, 'end': 40000, 'text': 'B' * 40000}]}), 'is_error': False}]},
+        ],
+        'failed_attempts': [{'reason': 'provider_timeout'}],
+        'read_ranges': [{'source_id': 's0', 'start': 0, 'end': 45000}, {'source_id': 's1', 'start': 0, 'end': 40000}],
+        'facts': [],
+    }
+    assert len(json.dumps(giant_cp['history'])) >= L2_COMPACT_AFTER_CHARS
+    prepared_giant = prepare_runtime_continuation(giant_cp)
+    assert json.loads(prepared_giant['history'][0]['results'][0]['content'])['reason'] == 'timeout_continuation_compacted'
+    assert 'B' * 40000 in prepared_giant['history'][1]['results'][0]['content']
+    assert prepared_giant['context_receipts'][-1]['trigger'] == 'l2_continuation'
+
+    # 4. consecutive_timeout_continuations resets to 0 when latest failure is not a timeout.
+    non_timeout_after_timeout_cp = {
+        'user': '{}',
+        'history': [],
+        'failed_attempts': [{'reason': 'provider_timeout'}, {'reason': 'no_submission'}],
+        'consecutive_timeout_continuations': 1,
+        'read_ranges': [],
+        'facts': [],
+    }
+    prepared_reset = prepare_runtime_continuation(non_timeout_after_timeout_cp)
+    assert prepared_reset['consecutive_timeout_continuations'] == 0
+
+    # 5. Distinctness & consecutive circuit breaker checks:
+    two_timeouts_cp = {
+        'failed_attempts': [{'reason': 'provider_timeout'}, {'reason': 'provider_timeout'}],
+        'consecutive_timeout_continuations': 1,
+    }
+    assert runtime_timeout_loop_blocked(two_timeouts_cp) is True
+    assert runtime_truncation_loop_blocked(two_timeouts_cp) is False
+
+    two_truncs_cp = {
+        'failed_attempts': [{'reason': 'provider_output_truncated'}, {'reason': 'provider_output_truncated'}],
+        'consecutive_truncation_continuations': 1,
+    }
+    assert runtime_truncation_loop_blocked(two_truncs_cp) is True
+    assert runtime_timeout_loop_blocked(two_truncs_cp) is False
+
+    non_consecutive_timeout_cp = {
+        'failed_attempts': [
+            {'reason': 'provider_timeout'},
+            {'reason': 'no_submission'},
+            {'reason': 'provider_timeout'},
+        ],
+        'continuation_count': 2,
+        'consecutive_timeout_continuations': 0,
+    }
+    assert runtime_timeout_loop_blocked(non_consecutive_timeout_cp) is False
+
+    # Completed submission waiting for delivery is never blocked by repeated_timeout.
+    assert runtime_timeout_loop_blocked({**two_timeouts_cp, 'submission': {'status': 'partial'}}) is False
+
+    # 6. recovery_status reports repeated_timeout when runtime_checkpoint hits timeout circuit breaker.
+    now = datetime.now(timezone.utc)
+    topic = SimpleNamespace(
+        topic_id='t1',
+        owner_id='owner1',
+        versions=[SimpleNamespace(
+            version_id='v1',
+            created_by='agent',
+            review='draft',
+            content=SimpleNamespace(run={'operation_id': 'op1', 'checkpoint': 'runtime'}),
+        )],
+    )
+    status = recovery_status(
+        topic=topic,
+        operation={'operation_id': 'op1', 'owner_subject': 'account:owner1', 'endpoint': '/v1/research/topics/t1/runs', 'status': 'failed'},
+        inputs={'owner_id': 'owner1', 'topic_id': 't1', 'operation_id': 'op1', 'runtime_checkpoint': two_timeouts_cp},
+        owner_id='owner1',
+        operation_id='op1',
+        now=now,
+        source_fingerprints=[],
+        provider_matches=True,
+    )
+    assert status == {
+        'can_continue': False,
+        'can_deliver': False,
+        'reason': 'repeated_timeout',
+        'checkpoint': 'runtime',
+        'version_id': 'v1',
+    }

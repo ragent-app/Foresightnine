@@ -1,7 +1,7 @@
 """Financial research loop using native model tools and run-scoped authority."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Callable, Literal, Mapping
@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from .model_protocol import (ModelToolDefinition, ModelToolResult, ModelAssistantContinuation, ModelTurnExchange, ModelTurnInput)
 from .chat_research_adapter import ChatResearchAdapter
 from .research_calculations import CalculationRequest, calculate, calculation_input_status
+from .research_charts import CreateChartRequest, build_research_chart
 from .research_analysis import _quoted_numbers
 from .phase3 import ProviderFailure
 from .research_discovery import RedirectLead, normalize_search_lead, search_lead_url
@@ -32,6 +33,8 @@ from .research_sources import ResearchSource
 
 MAX_READ_SOURCE_SPAN_CHARS = 25_000
 MAX_READ_SOURCES_BATCH_CHARS = 40_000
+MAX_READ_SOURCES_TURN_CHARS = 40_000
+MAX_TURN_TOOL_RESULT_CHARS = 60_000
 MAX_OUTLINE_ENTRIES = 100
 DEFAULT_OUTLINE_ENTRIES = 60
 MAX_OUTLINE_TITLE_CHARS = 200
@@ -185,9 +188,17 @@ class Claim(BaseModel):
         description='IDs of prior claims from prior_research that this claim contradicts or weakens.')
 
 
+REPORT_FORMAT_GUIDANCE = (
+    'Write the report in concise restricted GFM Markdown: use ## or ### section headings, lists and **bold**, '
+    'and prefer GFM tables for multi-period or cross-company financial figures. Never output raw HTML tags or '
+    'Markdown images ![](...). Write currency amounts directly (for example $130.5B or USD 130.5B) and never '
+    'wrap text in single $ math delimiters.'
+)
+
+
 class SubmitRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    report: str = Field(min_length=1, max_length=100000)
+    report: str = Field(min_length=1, max_length=100000, description=REPORT_FORMAT_GUIDANCE)
     claims: list[Claim]
     limitations: list[str] = Field(max_length=499)
     stopping_reason: str = Field(min_length=1)
@@ -254,6 +265,7 @@ TOOLS = [
     _tool('sec_company_concept', 'Request authorized SEC XBRL company concept observations (US GAAP/IFRS/DEI) for an issuer, tag, unit, and exact period.', SecConceptToolRequest),
     _tool('record_facts', 'Record quoted numeric observations; source match does not establish semantic accuracy.', FactsRequest),
     _tool('calculate_financials', 'Calculate comparable financial quantities; input values remain unverified.', CalculateRequest),
+    _tool('create_chart', 'Build a verified, evidence-bound chart or causal transmission graph (chart_type="causal_graph") from recorded fact IDs, calculation IDs, historical_prices / sec_company_concept sources, or prior claim IDs.', CreateChartRequest),
     _tool('submit_research', 'Submit research with exact quotations and explicit gaps.', SubmitRequest),
 ]
 SYSTEM = ("You are a financial research coordinator. Identify evidence needs, choose actions, observe results, "
@@ -268,11 +280,14 @@ SYSTEM = ("You are a financial research coordinator. Identify evidence needs, ch
           "(hard limits: max 25000 characters per slice and max 40000 characters total per read_sources call). "
           "For historical market performance, identify the instrument and use a usable price series or authorized dated observations. "
           "The input lists available historical price instruments. If required prices are missing, explain the gap without inventing prices. "
-          "Use deterministic calculation where needed. Submit exact source quotations; offsets are optional when the quotation is unique in read ranges; "
+          "Use deterministic calculation where needed. "
+          "Use create_chart only when a visual comparison, trend, waterfall, price series, or causal transmission graph materially improves clarity; bind numeric series strictly to recorded fact_ids, calculation_ids, or acquired historical_prices / sec_company_concept source_ids and never supply raw numeric arrays. For chart_type='causal_graph' (macro -> industry -> company -> asset transmission chains or scenario branches), populate causal_graph without y_axes/series, bind edges to known claim_ids from prior_research when available, and mark unsupported links as assumptions. When referencing a created chart in report, place [[chart:chart_id]] on its own line. "
+          "Submit exact source quotations; offsets are optional when the quotation is unique in read ranges; "
           "do not claim semantic verification from a quotation match. Submit status partial promptly when the question remains unanswered, "
           "including when no claim can be cited or when available paths are blocked or exhausted, without retrying failed paths; "
           "label each claim with its role (support or counterargument) and include "
           "counterarguments when evidence against the conclusion was found; report limitations and why you stopped. "
+          + REPORT_FORMAT_GUIDANCE + " "
           "prior_research contains records from earlier turns of this topic. They are prior records, not newly verified evidence. "
           "Reuse their fact IDs for calculations instead of re-recording the same numbers. Do not restate prior claims; add only new findings. "
           "When new evidence contradicts a prior claim, submit a new claim with challenges_claim_ids naming it. "
@@ -288,6 +303,7 @@ GAP_CODES = {
     'search_candidates_not_acquired': 'Search found candidate links, but their original material could not be acquired through the configured sources.',
     'historical_prices_unavailable': 'No authorized historical price series was available for the requested instrument and period.',
     'provider_no_result': 'Provider request ended without a usable result.',
+    'provider_timeout': 'The model request timed out before completing a response.',
     'provider_error': 'The model provider reported an error.',
     'source_selection_partial': ('Source selection is partial or unknown; absence from unseen material is not established. '
                                  'Review the selected ranges and obtain relevant additional material.'),
@@ -311,8 +327,18 @@ def gap(code: str, message: str | None = None) -> dict:
 
 def provider_gap(error: object) -> dict:
     """Map a provider failure to a stable gap while keeping the provider's own message."""
-    message = str(error)
-    return gap('provider_no_result' if message == GAP_CODES['provider_no_result'] else 'provider_error', message or None)
+    if isinstance(error, Mapping):
+        code = error.get('code')
+        message = str(error.get('message') or '')
+    else:
+        code = getattr(error, 'code', None)
+        message = str(error)
+    if code == 'provider_timeout':
+        return gap('provider_timeout', message or None)
+    return gap(
+        'provider_no_result' if message == GAP_CODES['provider_no_result'] or code == 'provider_no_result' else 'provider_error',
+        message or None,
+    )
 
 
 @dataclass
@@ -329,6 +355,7 @@ class RuntimeOutcome:
     events: list[dict]
     stopping_note: str | None = None
     partial_notes: str | None = None
+    charts: list[dict] = field(default_factory=list)
 
 
 def _acquisition_failure_reason(details: dict[str, Any], outcomes: list[Any],
@@ -371,7 +398,7 @@ def _build_acquire_result(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return result
 
 
-PRIOR_LIMITS = {'facts': 200, 'calculations': 100, 'claims': 100}
+PRIOR_LIMITS = {'facts': 200, 'calculations': 100, 'claims': 100, 'charts': 50}
 _FORMULA_TARGET_LABELS = {'growth_percent': '增长率', 'margin_percent': '利润率', 'difference': '差值'}
 
 
@@ -748,7 +775,9 @@ def _search_source(req: SearchSourceRequest, *, source_by_id: Mapping[str, Resea
 
 
 def _read_sources(req: ReadRequest, *, source_by_id: Mapping[str, ResearchSource],
-                  as_of: datetime | None, read_ranges: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+                  as_of: datetime | None, read_ranges: list[dict[str, Any]],
+                  already_read_turn_chars: int = 0,
+                  remaining_bulk_turn_chars: int | None = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
     planned: list[dict[str, Any]] = []
     checked_reads: list[dict[str, Any]] = []
     oversized_items: list[dict[str, Any]] = []
@@ -836,6 +865,36 @@ def _read_sources(req: ReadRequest, *, source_by_id: Mapping[str, ResearchSource
             'reads': checked_reads,
         }, None
 
+    remaining_turn_read = max(0, MAX_READ_SOURCES_TURN_CHARS - max(0, already_read_turn_chars))
+    if total_requested_chars > 0 and (
+        already_read_turn_chars + total_requested_chars > MAX_READ_SOURCES_TURN_CHARS
+        or (remaining_bulk_turn_chars is not None and total_requested_chars > remaining_bulk_turn_chars)
+    ):
+        exceeds_bulk = (
+            remaining_bulk_turn_chars is not None
+            and total_requested_chars > remaining_bulk_turn_chars
+            and already_read_turn_chars + total_requested_chars <= MAX_READ_SOURCES_TURN_CHARS
+        )
+        error_code = 'turn_tool_result_budget_exceeded' if exceeds_bulk else 'read_turn_budget_exceeded'
+        return {
+            'status': 'invalid',
+            'error': error_code,
+            'reason': (
+                f'Cumulative read_sources characters in this turn ({already_read_turn_chars + total_requested_chars}) '
+                f'exceeds per-turn budget ({MAX_READ_SOURCES_TURN_CHARS}; remaining {remaining_turn_read} characters). '
+                f'Do not split large reads across parallel read_sources calls in the same turn.'
+            ),
+            'instruction': (
+                f'Record key facts from already-read material via record_facts first, or narrow further reads '
+                f'in the next turn using search_source or outline_source (remaining turn read budget: {remaining_turn_read} characters).'
+            ),
+            'turn_read_characters': max(0, already_read_turn_chars),
+            'requested_characters': total_requested_chars,
+            'remaining_turn_characters': remaining_turn_read,
+            'max_turn_characters': MAX_READ_SOURCES_TURN_CHARS,
+            'reads': checked_reads,
+        }, None
+
     results = []
     read_items = []
     for entry in planned:
@@ -870,8 +929,10 @@ def _read_sources(req: ReadRequest, *, source_by_id: Mapping[str, ResearchSource
     return {'results': results, 'rationale': req.rationale}, tool_summary
 
 
-DEFAULT_L1_COMPACT_TRIGGER_CHARS = 120_000
+DEFAULT_L1_COMPACT_TRIGGER_CHARS = 90_000
 DEFAULT_L1_KEEP_RECENT = 2
+MAX_CONTEXT_RECEIPTS = 20
+PRIOR_RESEARCH_TOKEN_BUDGET = 12_000
 _COMPACT_MIN_RESULT_CHARS = 800
 _COMPACT_GIANT_PROTECTED_CHARS = 8_000
 _COMPACT_RECOVERY_HINT = (
@@ -890,6 +951,7 @@ _PROTECTED_COMPACT_TOOLS = frozenset({
     'submit_research',
     'record_facts',
     'calculate_financials',
+    'create_chart',
 })
 _TOOLS_SERIALIZED_CHARS = len(json.dumps([asdict(t) for t in TOOLS], ensure_ascii=False, separators=(',', ':')))
 
@@ -979,6 +1041,8 @@ def _infer_tool_name(parsed: Mapping[str, Any] | None) -> str:
         return 'record_facts'
     if 'calculations' in parsed:
         return 'calculate_financials'
+    if 'chart_id' in parsed and 'chart_type' in parsed:
+        return 'create_chart'
     results = parsed.get('results')
     if isinstance(results, list):
         if any(isinstance(r, Mapping) and 'start' in r and 'text' in r for r in results):
@@ -1031,6 +1095,41 @@ def _extract_compaction_coverage(
     return source_ids, source_spans
 
 
+def _strip_consumed_thinking(assistant: Any) -> tuple[int, int]:
+    """Strip consumed thinking blocks from a historical assistant message safely.
+
+    Never removes thinking blocks unless at least one non-thinking block (such as
+    ``tool_use`` or non-empty ``text``) remains so message validity is preserved.
+    """
+    if not isinstance(assistant, dict):
+        return 0, 0
+    content = assistant.get('content')
+    if not isinstance(content, list) or not content:
+        return 0, 0
+    thinking_blocks: list[Any] = []
+    remaining: list[Any] = []
+    for block in content:
+        if isinstance(block, Mapping) and block.get('type') in ('thinking', 'redacted_thinking'):
+            thinking_blocks.append(block)
+        else:
+            remaining.append(block)
+    if not thinking_blocks or not remaining:
+        return 0, 0
+    has_valid_non_thinking = any(
+        (isinstance(b, Mapping) and (b.get('type') != 'text' or bool(b.get('text'))))
+        or (isinstance(b, str) and bool(b))
+        for b in remaining
+    )
+    if not has_valid_non_thinking:
+        return 0, 0
+    chars_cleared = sum(
+        len(json.dumps(b, ensure_ascii=False, separators=(',', ':'), default=str))
+        for b in thinking_blocks
+    )
+    assistant['content'] = remaining
+    return 1, chars_cleared
+
+
 def compact_runtime_history(
     state: dict[str, Any],
     *,
@@ -1038,13 +1137,15 @@ def compact_runtime_history(
     trigger_chars: int = DEFAULT_L1_COMPACT_TRIGGER_CHARS,
     force: bool = False,
     reason: str | None = None,
+    trigger: str | None = None,
 ) -> dict[str, Any]:
-    """Deterministically replace bulky older tool results in ``state['history']`` with compact descriptors.
+    """Deterministically replace bulky older tool results and consumed thinking blocks in ``state['history']``.
 
     Preserves ``state['history'][-keep_recent:]`` verbatim (and leaves ``state['history']``
     completely untouched below ``trigger_chars`` when ``force=False`` so prompt prefixes
     stay byte-identical for KV-cache reuse). Never modifies ``read_ranges``, ``facts``,
-    ``calculations``, or ``events``.
+    ``calculations``, or ``events``. Records a bounded receipt into ``state['context_receipts']``
+    whenever compaction actually clears results or thinking blocks.
     """
     history = state.get('history')
     if not isinstance(history, list) or not history:
@@ -1058,6 +1159,10 @@ def compact_runtime_history(
             'kept_recent': 0,
             'compacted_tools': [],
             'cleared_call_ids': [],
+            'cleared_thinking_turns': 0,
+            'cleared_thinking_chars': 0,
+            'omitted_spans': [],
+            'receipt': None,
         }
 
     keep = max(0, int(keep_recent))
@@ -1076,6 +1181,10 @@ def compact_runtime_history(
             'kept_recent': kept_recent,
             'compacted_tools': [],
             'cleared_call_ids': [],
+            'cleared_thinking_turns': 0,
+            'cleared_thinking_chars': 0,
+            'omitted_spans': [],
+            'receipt': None,
         }
     if cutoff == 0:
         return {
@@ -1088,9 +1197,14 @@ def compact_runtime_history(
             'kept_recent': kept_recent,
             'compacted_tools': [],
             'cleared_call_ids': [],
+            'cleared_thinking_turns': 0,
+            'cleared_thinking_chars': 0,
+            'omitted_spans': [],
+            'receipt': None,
         }
 
     effective_reason = reason or ('continuation_compacted' if force else 'context_compacted')
+    effective_trigger = trigger or ('l2_continuation' if force else 'l1_in_turn')
     facts_recorded_count = len(state.get('facts') or []) if isinstance(state.get('facts'), list) else 0
     event_tool_names: dict[str, str] = {}
     for ev in state.get('events') or []:
@@ -1102,10 +1216,16 @@ def compact_runtime_history(
     cleared_count = 0
     compacted_tools: list[str] = []
     cleared_call_ids: list[str] = []
+    cleared_thinking_turns = 0
+    cleared_thinking_chars = 0
+    omitted_spans: list[dict[str, Any]] = []
 
     for exchange in history[:cutoff]:
         if not isinstance(exchange, Mapping):
             continue
+        t_turns, t_chars = _strip_consumed_thinking(exchange.get('assistant'))
+        cleared_thinking_turns += t_turns
+        cleared_thinking_chars += t_chars
         results = exchange.get('results')
         if not isinstance(results, list) or not results:
             continue
@@ -1180,21 +1300,52 @@ def compact_runtime_history(
                 compacted_tools.append(tool_name)
             if call_id:
                 cleared_call_ids.append(call_id)
+            for sp in source_spans:
+                if sp not in omitted_spans and len(omitted_spans) < 50:
+                    omitted_spans.append(sp)
 
     after_chars = _history_serialized_chars(history)
-    if cleared_count > 0:
+    chars_saved = max(0, before_chars - after_chars)
+    did_compact = cleared_count > 0 or cleared_thinking_turns > 0
+    receipt: dict[str, Any] | None = None
+    if did_compact:
         prev_count = state.get('compaction_count')
         state['compaction_count'] = (prev_count if type(prev_count) is int and prev_count >= 0 else 0) + 1
+        receipt = {
+            'trigger': effective_trigger,
+            'reason': effective_reason,
+            'before_chars': before_chars,
+            'after_chars': after_chars,
+            'chars_saved': chars_saved,
+            'cleared_tool_call_ids': cleared_call_ids[:50],
+            'cleared_thinking_turns': cleared_thinking_turns,
+            'cleared_thinking_chars': cleared_thinking_chars,
+            'omitted_spans': omitted_spans[:50],
+            'preserved_facts_count': facts_recorded_count,
+            'prefix_reset': True,
+            'at': _now_iso(),
+        }
+        receipts = state.get('context_receipts')
+        if not isinstance(receipts, list):
+            receipts = []
+            state['context_receipts'] = receipts
+        receipts.append(receipt)
+        if len(receipts) > MAX_CONTEXT_RECEIPTS:
+            del receipts[:-MAX_CONTEXT_RECEIPTS]
     return {
-        'compacted': cleared_count > 0,
-        'reason': effective_reason if cleared_count > 0 else 'nothing_to_compact',
+        'compacted': did_compact,
+        'reason': effective_reason if did_compact else 'nothing_to_compact',
         'before_chars': before_chars,
         'after_chars': after_chars,
-        'chars_saved': max(0, before_chars - after_chars),
+        'chars_saved': chars_saved,
         'cleared_count': cleared_count,
         'kept_recent': kept_recent,
         'compacted_tools': compacted_tools,
         'cleared_call_ids': cleared_call_ids,
+        'cleared_thinking_turns': cleared_thinking_turns,
+        'cleared_thinking_chars': cleared_thinking_chars,
+        'omitted_spans': omitted_spans[:50],
+        'receipt': receipt,
     }
 
 
@@ -1218,8 +1369,17 @@ def _l1_compaction_trigger_chars(
     capacity = getattr(model, 'research_capacity', None)
     profile = capacity() if callable(capacity) else None
     if profile is not None:
+        work_limit = getattr(profile, 'work_context_tokens', None)
         context_limit = getattr(profile, 'context_tokens', None)
         input_counter = getattr(profile, 'input_counter', None)
+        if type(work_limit) is int and work_limit > 0:
+            if input_counter == 'chars_div_3':
+                available = int(work_limit * 3 * 0.55) - fixed_chars
+            elif input_counter == 'utf8_byte_upper_bound':
+                available = int(work_limit * 0.55) - fixed_chars
+            else:
+                available = int(work_limit * 0.55) - fixed_chars
+            trigger = min(trigger, max(1_000, available))
         if type(context_limit) is int and context_limit > 0:
             if input_counter == 'chars_div_3':
                 available = int(context_limit * 3 * 0.58) - fixed_chars
@@ -1260,6 +1420,103 @@ def _sanitize_failed_usage(usage: Any) -> int | dict[str, int] | None:
     return None
 
 
+_SAFE_TIMEOUT_KIND_RE = re.compile(r'^[A-Za-z0-9_.:-]{1,64}$')
+_TIMEOUT_STAGE_TO_KIND = {
+    'dns': 'connect_timeout',
+    'tcp': 'connect_timeout',
+    'tls': 'connect_timeout',
+    'request_write': 'connect_timeout',
+    'response_headers': 'header_timeout',
+    'response_body': 'stream_idle_timeout',
+    'deadline': 'stream_deadline_timeout',
+}
+
+
+def _sanitize_timeout_kind(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    if not cleaned or not _SAFE_TIMEOUT_KIND_RE.fullmatch(cleaned):
+        return None
+    return cleaned
+
+
+def _sanitize_bounded_nonneg_int(value: Any, *, max_value: int = 10**9) -> int | None:
+    if type(value) is int and 0 <= value <= max_value:
+        return value
+    if isinstance(value, float) and not isinstance(value, bool) and math.isfinite(value) and 0 <= value <= max_value:
+        return int(value)
+    return None
+
+
+def _extract_failure_metadata(
+    *,
+    error: Any = None,
+    call_diag: Mapping[str, Any] | None = None,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    meta: dict[str, Any] = {}
+
+    def read_field(src: Any, key: str) -> Any:
+        if src is None:
+            return None
+        if isinstance(src, Mapping):
+            return src.get(key)
+        return getattr(src, key, None)
+
+    raw_timeout_kind = read_field(error, 'timeout_kind')
+    raw_elapsed_ms = read_field(error, 'elapsed_ms')
+    raw_wire_bytes = read_field(error, 'wire_bytes')
+    raw_streamed_bytes = read_field(error, 'streamed_bytes')
+
+    if isinstance(call_diag, Mapping):
+        transport = call_diag.get('transport') if isinstance(call_diag.get('transport'), Mapping) else {}
+        ctx = call_diag.get('context') if isinstance(call_diag.get('context'), Mapping) else {}
+        stream_metrics = call_diag.get('stream_metrics') if isinstance(call_diag.get('stream_metrics'), Mapping) else {}
+
+        if raw_timeout_kind is None:
+            raw_timeout_kind = call_diag.get('timeout_kind') if call_diag.get('timeout_kind') is not None else transport.get('timeout_kind')
+        if raw_elapsed_ms is None:
+            raw_elapsed_ms = call_diag.get('elapsed_ms') if call_diag.get('elapsed_ms') is not None else transport.get('elapsed_ms')
+        if raw_wire_bytes is None:
+            raw_wire_bytes = call_diag.get('wire_bytes') if call_diag.get('wire_bytes') is not None else ctx.get('wire_bytes')
+        if raw_streamed_bytes is None:
+            for candidate in (
+                call_diag.get('streamed_bytes'),
+                transport.get('streamed_bytes'),
+                stream_metrics.get('streamed_bytes'),
+                stream_metrics.get('reassembled_bytes'),
+            ):
+                if candidate is not None:
+                    raw_streamed_bytes = candidate
+                    break
+
+        stages = transport.get('stages')
+        if isinstance(stages, list):
+            for stage in reversed(stages):
+                if not isinstance(stage, Mapping) or stage.get('result') != 'timeout':
+                    continue
+                if raw_timeout_kind is None and reason == 'provider_timeout':
+                    raw_timeout_kind = _TIMEOUT_STAGE_TO_KIND.get(str(stage.get('stage') or ''))
+                if raw_elapsed_ms is None:
+                    raw_elapsed_ms = stage.get('elapsed_ms')
+                break
+
+    clean_kind = _sanitize_timeout_kind(raw_timeout_kind)
+    if clean_kind is not None:
+        meta['timeout_kind'] = clean_kind
+    clean_elapsed = _sanitize_bounded_nonneg_int(raw_elapsed_ms)
+    if clean_elapsed is not None:
+        meta['elapsed_ms'] = clean_elapsed
+    clean_wire = _sanitize_bounded_nonneg_int(raw_wire_bytes)
+    if clean_wire is not None:
+        meta['wire_bytes'] = clean_wire
+    clean_streamed = _sanitize_bounded_nonneg_int(raw_streamed_bytes)
+    if clean_streamed is not None:
+        meta['streamed_bytes'] = clean_streamed
+    return meta
+
+
 def _record_failed_attempt(
     state: dict[str, Any],
     *,
@@ -1267,6 +1524,12 @@ def _record_failed_attempt(
     reason: str,
     finish_reason: str | None = None,
     usage: Any = None,
+    error: Any = None,
+    call_diag: Mapping[str, Any] | None = None,
+    timeout_kind: str | None = None,
+    elapsed_ms: int | None = None,
+    wire_bytes: int | None = None,
+    streamed_bytes: int | None = None,
 ) -> None:
     attempts = state.get('failed_attempts')
     if not isinstance(attempts, list):
@@ -1279,26 +1542,35 @@ def _record_failed_attempt(
         for item in attempts
     ):
         return
-    attempts.append({
+    meta = _extract_failure_metadata(error=error, call_diag=call_diag, reason=clean_reason)
+    explicit_kind = _sanitize_timeout_kind(timeout_kind)
+    if explicit_kind is not None:
+        meta['timeout_kind'] = explicit_kind
+    for key, val in (('elapsed_ms', elapsed_ms), ('wire_bytes', wire_bytes), ('streamed_bytes', streamed_bytes)):
+        clean_val = _sanitize_bounded_nonneg_int(val)
+        if clean_val is not None:
+            meta[key] = clean_val
+    entry: dict[str, Any] = {
         'call_id': clean_call_id,
         'reason': clean_reason,
         'finish_reason': _clip(finish_reason, 100) if isinstance(finish_reason, str) and finish_reason else None,
         'usage': _sanitize_failed_usage(usage),
         'history_chars': _history_serialized_chars(state.get('history')),
         'at': _now_iso(),
-    })
+        **meta,
+    }
+    attempts.append(entry)
     if len(attempts) > 20:
         del attempts[:-20]
 
 
-def _user_with_failure_awareness(user_text: str, state: Mapping[str, Any]) -> str:
-    """Inject bounded failure/continuation awareness transiently without mutating ``state['user']``."""
+def _failure_awareness_payload(state: Mapping[str, Any]) -> tuple[list[dict[str, Any]], str] | None:
     raw_attempts = state.get('failed_attempts')
     attempts = [item for item in raw_attempts if isinstance(item, Mapping)] if isinstance(raw_attempts, list) else []
     raw_guidance = state.get('continuation_guidance')
     custom_guidance = _clip(raw_guidance.strip(), 500) if isinstance(raw_guidance, str) and raw_guidance.strip() else None
     if not attempts and not custom_guidance:
-        return user_text
+        return None
     recent: list[dict[str, Any]] = []
     for item in attempts[-3:]:
         row: dict[str, Any] = {'reason': item.get('reason')}
@@ -1308,6 +1580,13 @@ def _user_with_failure_awareness(user_text: str, state: Mapping[str, Any]) -> st
             row['history_chars'] = item['history_chars']
         if item.get('usage') is not None:
             row['usage'] = item['usage']
+        clean_kind = _sanitize_timeout_kind(item.get('timeout_kind'))
+        if clean_kind is not None:
+            row['timeout_kind'] = clean_kind
+        for meta_key in ('elapsed_ms', 'wire_bytes', 'streamed_bytes'):
+            meta_val = _sanitize_bounded_nonneg_int(item.get(meta_key))
+            if meta_val is not None:
+                row[meta_key] = meta_val
         recent.append(row)
     reasons = {row.get('reason') for row in recent}
     if custom_guidance:
@@ -1318,11 +1597,36 @@ def _user_with_failure_awareness(user_text: str, state: Mapping[str, Any]) -> st
             'Do not repeat wide reads or emit overly long drafts; rely on recorded facts and read_ranges, '
             'use search_source and tiny targeted read_sources slices only if essential, and call submit_research concisely.'
         )
+    elif 'provider_timeout' in reasons:
+        guidance = (
+            'Prior attempt timed out mid-generation. Keep reasoning concise, extract and persist '
+            'key facts incrementally via smaller record_facts batches first, and avoid trying '
+            'to think and draft everything in one giant turn.'
+        )
     else:
         guidance = (
             'Resuming after prior incomplete attempt(s). Review recorded facts, read_ranges, and history, '
             'then proceed toward submit_research.'
         )
+    return recent, guidance
+
+
+def _build_failure_awareness_note(state: Mapping[str, Any]) -> str | None:
+    """Build bounded tail recovery/failure context without mutating ``state['user']``."""
+    payload_parts = _failure_awareness_payload(state)
+    if payload_parts is None:
+        return None
+    recent, guidance = payload_parts
+    note_payload = {'prior_failed_attempts': recent, 'recovery_guidance': guidance} if recent else {'recovery_guidance': guidance}
+    return f'[Recovery context: {json.dumps(note_payload, ensure_ascii=False)}]'
+
+
+def _user_with_failure_awareness(user_text: str, state: Mapping[str, Any]) -> str:
+    """Inject bounded failure/continuation awareness transiently without mutating ``state['user']``."""
+    payload_parts = _failure_awareness_payload(state)
+    if payload_parts is None:
+        return user_text
+    recent, guidance = payload_parts
     try:
         parsed = json.loads(user_text)
     except (TypeError, ValueError):
@@ -1364,55 +1668,356 @@ def _default_partial_notes(
     )
 
 
-def _prior_research(prior: dict, sources: list[ResearchSource], as_of: datetime | None) -> tuple[dict, dict]:
-    """Build the bounded prior-turn summary for the model and the private state it needs.
+def _prior_tokens(value: Any) -> int:
+    text = json.dumps(value, ensure_ascii=False, separators=(',', ':'), default=str)
+    return (len(text) + 2) // 3 if text else 0
 
-    The summary carries records, not newly verified evidence. Recorded read ranges are
-    reusable only while the source is still eligible and its content is unchanged.
+
+def _prior_research_token_budget(model: Any) -> int:
+    capacity = getattr(model, 'research_capacity', None)
+    profile = capacity() if callable(capacity) else None
+    work_limit = getattr(profile, 'work_context_tokens', None) if profile is not None else None
+    if type(work_limit) is int and work_limit > 0:
+        return min(PRIOR_RESEARCH_TOKEN_BUDGET, max(1_000, int(work_limit * 0.25)))
+    return PRIOR_RESEARCH_TOKEN_BUDGET
+
+
+def _turn_batch_usage(state: Mapping[str, Any]) -> tuple[int, int]:
+    """Compute cumulative read_sources characters and bulk tool result characters in the current turn."""
+    history = state.get('history')
+    if not isinstance(history, list) or not history:
+        return 0, 0
+    exchange = history[-1]
+    if not isinstance(exchange, Mapping):
+        return 0, 0
+    results = exchange.get('results')
+    if not isinstance(results, list) or not results:
+        return 0, 0
+    assistant_calls = _extract_assistant_tool_calls(exchange.get('assistant'))
+    event_tool_names: dict[str, str] = {}
+    for ev in state.get('events') or []:
+        if isinstance(ev, Mapping) and ev.get('kind') == 'tool':
+            tc_id, t_name = ev.get('tool_call_id'), ev.get('name')
+            if isinstance(tc_id, str) and tc_id and isinstance(t_name, str) and t_name:
+                event_tool_names[tc_id] = t_name
+    read_chars = 0
+    bulk_result_chars = 0
+    for res in results:
+        if not isinstance(res, Mapping):
+            continue
+        raw_content = res.get('content')
+        content_len = len(raw_content) if isinstance(raw_content, str) else 0
+        res_call_id = res.get('tool_call_id') if isinstance(res.get('tool_call_id'), str) else ''
+        tool_name, _ = assistant_calls.get(res_call_id, ('', {}))
+        if not tool_name:
+            tool_name = event_tool_names.get(res_call_id, '')
+        parsed: dict[str, Any] | None = None
+        if isinstance(raw_content, str) and raw_content.lstrip().startswith('{'):
+            try:
+                loaded = json.loads(raw_content)
+                if isinstance(loaded, dict):
+                    parsed = loaded
+            except (TypeError, ValueError):
+                parsed = None
+        if not tool_name:
+            tool_name = _infer_tool_name(parsed)
+        if tool_name in _BULK_COMPACT_TOOLS and not res.get('is_error'):
+            bulk_result_chars += content_len
+        if tool_name == 'read_sources' and not res.get('is_error') and isinstance(parsed, Mapping):
+            rows = parsed.get('results')
+            if isinstance(rows, list):
+                for row in rows:
+                    if isinstance(row, Mapping) and isinstance(row.get('text'), str):
+                        read_chars += len(row['text'])
+            elif parsed.get('cleared') is True and isinstance(parsed.get('source_spans'), list):
+                for sp in parsed['source_spans']:
+                    if isinstance(sp, Mapping) and type(sp.get('start')) is int and type(sp.get('end')) is int:
+                        read_chars += max(0, sp['end'] - sp['start'])
+    return read_chars, bulk_result_chars
+
+
+def _prior_research(
+    prior: dict,
+    sources: list[ResearchSource],
+    as_of: datetime | None,
+    *,
+    token_budget: int = PRIOR_RESEARCH_TOKEN_BUDGET,
+) -> tuple[dict, dict]:
+    """Build the priority-bucketed, token-budgeted prior-turn summary and private state.
+
+    Priority tiers (using ``ceil(chars / 3)`` token accounting):
+      - P0: note, user_review, open_gaps, failed_source_accesses
+      - P1: recorded facts and calculations (most recent first, deduped)
+      - P2: recorded claims and charts (most recent first, deduped)
+      - P3: eligible unchanged read_ranges index (most recent first)
+
+    Never mid-clips citations and records any omitted items explicitly in
+    ``summary['prior_omitted']`` (``I-FIN-CTX-003 NO_SILENT_GAP``).
     """
-    facts_all, calcs_all, claims_all = (list(prior.get(key) or []) for key in ('facts', 'calculations', 'claims'))
-    facts = facts_all[-PRIOR_LIMITS['facts']:]
-    calcs = calcs_all[-PRIOR_LIMITS['calculations']:]
-    claims = claims_all[-PRIOR_LIMITS['claims']:]
+    facts_all, calcs_all, claims_all, charts_all = (
+        list(prior.get(key) or []) for key in ('facts', 'calculations', 'claims', 'charts')
+    )
+    facts_pool = facts_all[-PRIOR_LIMITS['facts']:]
+    calcs_pool = calcs_all[-PRIOR_LIMITS['calculations']:]
+    claims_pool = claims_all[-PRIOR_LIMITS['claims']:]
+    charts_pool = charts_all[-PRIOR_LIMITS['charts']:]
+
     eligible = {s.source_id: s for s, code in source_eligibility(sources, as_of) if code == 'eligible'}
     hashes = prior.get('source_hashes') if isinstance(prior.get('source_hashes'), dict) else {}
-    ranges = []
+    ranges_all: list[dict[str, Any]] = []
     for item in prior.get('read_ranges') or []:
         source = eligible.get(item.get('source_id'))
         start, end = item.get('character_start'), item.get('character_end')
         if (source is not None and hashes.get(source.source_id) == source.content_sha256
                 and type(start) is int and type(end) is int and 0 <= start < end <= len(source.text)):
             row = {'source_id': source.source_id, 'character_start': start, 'character_end': end}
-            if row not in ranges:
-                ranges.append(row)
+            if row not in ranges_all:
+                ranges_all.append(row)
+
     def first_citation(claim: dict) -> dict:
         citations = claim.get('citations') or []
         return citations[0] if citations and isinstance(citations[0], dict) else {}
-    truncated = {'facts': len(facts_all) - len(facts), 'calculations': len(calcs_all) - len(calcs),
-                 'claims': len(claims_all) - len(claims)}
-    summary = {
+
+    open_gaps_all = [
+        {'code': g['code'], 'message': g['message']}
+        for g in (prior.get('gaps') or [])
+        if isinstance(g, Mapping) and isinstance(g.get('code'), str) and isinstance(g.get('message'), str)
+    ]
+    open_gaps = open_gaps_all[-100:]
+    gaps_count_dropped = max(0, len(open_gaps_all) - len(open_gaps))
+
+    raw_failed_accesses = prior.get('failed_source_accesses') or prior.get('failed_sources') or []
+    failed_accesses_deduped: list[dict[str, Any]] = []
+    if isinstance(raw_failed_accesses, list):
+        for item in raw_failed_accesses:
+            if not isinstance(item, Mapping):
+                continue
+            clean_access: dict[str, Any] = {}
+            if isinstance(item.get('url'), str) and item['url'].strip():
+                clean_access['url'] = _clip(item['url'].strip(), 300)
+            if isinstance(item.get('host'), str) and item['host'].strip():
+                clean_access['host'] = _clip(item['host'].strip(), 120)
+            if isinstance(item.get('status'), str) and item['status'].strip():
+                clean_access['status'] = _clip(item['status'].strip(), 100)
+            if isinstance(item.get('reason'), str) and item['reason'].strip():
+                clean_access['reason'] = _clip(item['reason'].strip(), 100)
+            if clean_access and clean_access not in failed_accesses_deduped:
+                failed_accesses_deduped.append(clean_access)
+    failed_accesses = failed_accesses_deduped[-50:]
+    failed_access_count_dropped = max(0, len(failed_accesses_deduped) - len(failed_accesses))
+
+    summary: dict[str, Any] = {
         'note': 'Prior records from earlier turns; not newly verified evidence.',
-        'facts': [{'fact_id': f['fact_id'], 'label': f['label'], 'value': f['value'], 'unit': f['unit'],
-                   'currency': f.get('currency'), 'period': f['period'], 'source_id': f['source_id'],
-                   'quotation': _clip(f.get('quotation', ''), 300)} for f in facts],
-        'calculations': [{'calculation_id': c['calculation_id'], 'formula_id': c['formula_id'], 'value': c['value'],
-                          'unit': c['unit'], 'input_fact_ids': [item['fact_id'] for item in c.get('inputs', [])]} for c in calcs],
-        'claims': [{'claim_id': c['claim_id'], 'role': c['role'], 'text': _clip(c['text'], 500),
-                    'source_id': first_citation(c).get('source_id'),
-                    'quotation': _clip(first_citation(c).get('quotation', ''), 300)} for c in claims],
-        'open_gaps': [{'code': g['code'], 'message': g['message']} for g in prior.get('gaps') or []],
-        'read_ranges': ranges,
+        'facts': [],
+        'calculations': [],
+        'claims': [],
+        'charts': [],
+        'open_gaps': open_gaps,
+        'read_ranges': [],
         'user_review': {'review': prior.get('review'), 'note': _clip(prior.get('note', ''), 1000),
                         'summary': _clip(prior.get('summary', ''), 2000)},
     }
+    if failed_accesses:
+        summary['failed_source_accesses'] = failed_accesses
+
+    budget = max(0, int(token_budget))
+    p0_tokens = _prior_tokens(summary)
+    omission_reserve = 64 if budget > p0_tokens + 64 else 0
+    remaining = max(0, budget - p0_tokens - omission_reserve)
+
+    # P1: facts and calculations (most recent first, deduped)
+    unique_facts_desc: list[tuple[dict[str, Any], int]] = []
+    seen_fact_ids: set[str] = set()
+    seen_fact_sigs: set[tuple[Any, ...]] = set()
+    for f in reversed(facts_pool):
+        if not isinstance(f, Mapping):
+            continue
+        fid = f.get('fact_id')
+        sig = (f.get('label'), str(f.get('value')), f.get('unit'), f.get('currency'), f.get('period'), f.get('source_id'))
+        if (isinstance(fid, str) and fid in seen_fact_ids) or sig in seen_fact_sigs:
+            continue
+        if isinstance(fid, str) and fid:
+            seen_fact_ids.add(fid)
+        seen_fact_sigs.add(sig)
+        row = {
+            'fact_id': f['fact_id'], 'label': f['label'], 'value': f['value'], 'unit': f['unit'],
+            'currency': f.get('currency'), 'period': f['period'], 'source_id': f['source_id'],
+            'quotation': _clip(f.get('quotation', ''), 300),
+        }
+        unique_facts_desc.append((row, _prior_tokens(row) + 1))
+
+    unique_calcs_desc: list[tuple[dict[str, Any], int]] = []
+    seen_calc_ids: set[str] = set()
+    seen_calc_sigs: set[tuple[Any, ...]] = set()
+    for c in reversed(calcs_pool):
+        if not isinstance(c, Mapping):
+            continue
+        cid = c.get('calculation_id')
+        input_ids = tuple(item['fact_id'] for item in c.get('inputs', []) if isinstance(item, Mapping) and 'fact_id' in item)
+        sig = (c.get('formula_id'), str(c.get('value')), c.get('unit'), input_ids)
+        if (isinstance(cid, str) and cid in seen_calc_ids) or sig in seen_calc_sigs:
+            continue
+        if isinstance(cid, str) and cid:
+            seen_calc_ids.add(cid)
+        seen_calc_sigs.add(sig)
+        row = {
+            'calculation_id': c['calculation_id'], 'formula_id': c['formula_id'], 'value': c['value'],
+            'unit': c['unit'], 'input_fact_ids': list(input_ids),
+        }
+        unique_calcs_desc.append((row, _prior_tokens(row) + 1))
+
+    selected_calcs_desc: list[dict[str, Any]] = []
+    leftover_calcs_desc: list[tuple[dict[str, Any], int]] = []
+    calc_cap = remaining if not unique_facts_desc else max(1, remaining // 3)
+    calc_spent = 0
+    for row, cost in unique_calcs_desc:
+        if calc_spent + cost <= calc_cap and cost <= remaining:
+            selected_calcs_desc.append(row)
+            calc_spent += cost
+            remaining -= cost
+        else:
+            leftover_calcs_desc.append((row, cost))
+
+    selected_facts_desc: list[dict[str, Any]] = []
+    facts_budget_dropped = 0
+    for row, cost in unique_facts_desc:
+        if cost <= remaining:
+            selected_facts_desc.append(row)
+            remaining -= cost
+        else:
+            facts_budget_dropped += 1
+
+    calcs_budget_dropped = 0
+    for row, cost in leftover_calcs_desc:
+        if cost <= remaining:
+            selected_calcs_desc.append(row)
+            remaining -= cost
+        else:
+            calcs_budget_dropped += 1
+
+    # P2: claims and charts (most recent first, deduped; never mid-clip citations)
+    unique_claims_desc: list[tuple[dict[str, Any], int]] = []
+    seen_claim_ids: set[str] = set()
+    for c in reversed(claims_pool):
+        if not isinstance(c, Mapping):
+            continue
+        cid = c.get('claim_id')
+        if isinstance(cid, str) and cid in seen_claim_ids:
+            continue
+        if isinstance(cid, str) and cid:
+            seen_claim_ids.add(cid)
+        cit = first_citation(c)
+        row = {
+            'claim_id': c['claim_id'], 'role': c['role'], 'text': _clip(c['text'], 500),
+            'source_id': cit.get('source_id'),
+            'quotation': _clip(cit.get('quotation', ''), 300),
+        }
+        unique_claims_desc.append((row, _prior_tokens(row) + 1))
+
+    selected_claims_desc: list[dict[str, Any]] = []
+    claims_budget_dropped = 0
+    for row, cost in unique_claims_desc:
+        if cost <= remaining:
+            selected_claims_desc.append(row)
+            remaining -= cost
+        else:
+            claims_budget_dropped += 1
+
+    unique_charts_desc: list[tuple[dict[str, Any], int]] = []
+    seen_chart_ids: set[str] = set()
+    for c in reversed(charts_pool):
+        if not isinstance(c, Mapping):
+            continue
+        cid = c.get('chart_id')
+        if isinstance(cid, str) and cid in seen_chart_ids:
+            continue
+        if isinstance(cid, str) and cid:
+            seen_chart_ids.add(cid)
+        row = {
+            'chart_id': c['chart_id'], 'chart_type': c['chart_type'],
+            'title': _clip(c.get('title', ''), 200), 'replaces_chart_id': c.get('replaces_chart_id'),
+        }
+        unique_charts_desc.append((row, _prior_tokens(row) + 1))
+
+    selected_charts_desc: list[dict[str, Any]] = []
+    charts_budget_dropped = 0
+    for row, cost in unique_charts_desc:
+        if cost <= remaining:
+            selected_charts_desc.append(row)
+            remaining -= cost
+        else:
+            charts_budget_dropped += 1
+
+    # P3: read_ranges index (most recent first)
+    selected_ranges_desc: list[dict[str, Any]] = []
+    ranges_budget_dropped = 0
+    for row in reversed(ranges_all):
+        cost = _prior_tokens(row) + 1
+        if cost <= remaining:
+            selected_ranges_desc.append(row)
+            remaining -= cost
+        else:
+            ranges_budget_dropped += 1
+
+    summary['facts'] = list(reversed(selected_facts_desc))
+    summary['calculations'] = list(reversed(selected_calcs_desc))
+    summary['claims'] = list(reversed(selected_claims_desc))
+    summary['charts'] = list(reversed(selected_charts_desc))
+    summary['read_ranges'] = list(reversed(selected_ranges_desc))
+
+    truncated = {
+        'facts': len(facts_all) - len(facts_pool),
+        'calculations': len(calcs_all) - len(calcs_pool),
+        'claims': len(claims_all) - len(claims_pool),
+        'charts': len(charts_all) - len(charts_pool),
+    }
     if any(truncated.values()):
         summary['truncated'] = truncated
+
+    prior_omitted: dict[str, dict[str, Any]] = {}
+    for category, count_drop, budget_drop in (
+        ('open_gaps', gaps_count_dropped, 0),
+        ('failed_source_accesses', failed_access_count_dropped, 0),
+        ('facts', truncated['facts'], facts_budget_dropped),
+        ('calculations', truncated['calculations'], calcs_budget_dropped),
+        ('claims', truncated['claims'], claims_budget_dropped),
+        ('charts', truncated['charts'], charts_budget_dropped),
+        ('read_ranges', 0, ranges_budget_dropped),
+    ):
+        total_drop = count_drop + budget_drop
+        if total_drop <= 0:
+            continue
+        if count_drop > 0 and budget_drop > 0:
+            reason = 'token_budget_and_count_limit'
+        elif budget_drop > 0:
+            reason = 'token_budget'
+        else:
+            reason = 'count_limit'
+        prior_omitted[category] = {'count': total_drop, 'reason': reason}
+    if prior_omitted:
+        summary['prior_omitted'] = prior_omitted
+
     state = {
         'prior_facts': [{key: f.get(key) for key in ('fact_id', 'label', 'value', 'unit', 'currency', 'period', 'source_id',
-                                                      'character_start', 'character_end')} for f in facts],
+                                                      'character_start', 'character_end')} for f in facts_pool],
+        'prior_calculations': [{key: c.get(key) for key in ('calculation_id', 'formula_id', 'expression', 'inputs',
+                                                             'value', 'unit', 'currency')} for c in calcs_pool],
         'prior_claim_ids': [c['claim_id'] for c in claims_all],
+        'prior_claims_meta': [
+            {
+                'claim_id': c['claim_id'],
+                'source_ids': list(dict.fromkeys(
+                    cit['source_id']
+                    for cit in (c.get('citations') or [])
+                    if isinstance(cit, Mapping) and isinstance(cit.get('source_id'), str) and cit['source_id']
+                )),
+            }
+            for c in claims_all
+            if isinstance(c, Mapping) and isinstance(c.get('claim_id'), str) and c['claim_id']
+        ],
+        'prior_chart_ids': [c['chart_id'] for c in charts_all],
         'prior_cited_claims': sum(1 for c in claims_all if c.get('citations')),
-        'prior_read_ranges': [{'source_id': r['source_id'], 'start': r['character_start'], 'end': r['character_end']} for r in ranges],
+        'prior_read_ranges': [{'source_id': r['source_id'], 'start': r['character_start'], 'end': r['character_end']} for r in ranges_all],
     }
     return summary, state
 
@@ -1441,6 +2046,8 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
         state = json.loads(json.dumps(initial_state))
         if not isinstance(state.get('failed_attempts'), list):
             state['failed_attempts'] = []
+        if not isinstance(state.get('charts'), list):
+            state['charts'] = []
     else:
         inventory = [{'source_id': s.source_id, 'eligibility': code,
                       **({'title': s.title,
@@ -1465,9 +2072,14 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
             payload['focus_citation'] = focus
             focus_ranges = [{'source_id': focus['source_id'], 'start': focus['character_start'], 'end': focus['character_end']}]
         if prior is not None:
-            payload['prior_research'], prior_state = _prior_research(prior, sources, as_of)
+            payload['prior_research'], prior_state = _prior_research(
+                prior,
+                sources,
+                as_of,
+                token_budget=_prior_research_token_budget(model),
+            )
         state = {'user': json.dumps(payload, ensure_ascii=False), 'history': [],
-                 'events': [], 'read_ranges': [], 'facts': [], 'calculations': [], 'leads': [],
+                 'events': [], 'read_ranges': [], 'facts': [], 'calculations': [], 'charts': [], 'leads': [],
                  'acquired_source_ids': [], 'failed_attempts': [], 'pending': None,
                  'focus_ranges': focus_ranges, **prior_state}
     def save() -> None:
@@ -1560,6 +2172,14 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                     target = (f"{'、'.join(names[:3])}{' 等' if len(names) > 3 else ''}（{len(calcs_arg)} 项）")[:200]
                 else:
                     target = f'{len(calcs_arg)} 项计算'[:200]
+        elif name == 'create_chart':
+            title = tool_args.get('title')
+            ctype = tool_args.get('chart_type')
+            if isinstance(title, str) and title.strip():
+                prefix = f'{ctype.strip()} · ' if isinstance(ctype, str) and ctype.strip() else ''
+                target = f'{prefix}{title.strip()}'[:200]
+            elif isinstance(ctype, str) and ctype.strip():
+                target = ctype.strip()[:200]
         return rationale, target
     def _tool_batch_pending(batch_call_id: str, raw_calls: list[dict], next_cursor: int,
                             *, started_at: str | None = None) -> dict[str, Any]:
@@ -1600,9 +2220,11 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                 eligible_sources=[s for s in sources if _is_source_eligible(s, as_of)],
             )
         unique = list({(item['code'], item['message']): item for item in [*derived, *(gaps or [])]}.values())
+        chart_sources = [sid for chart in state.get('charts', []) for sid in chart.get('source_ids', [])]
+        used_source_ids = list(dict.fromkeys([*(x['source_id'] for x in state['read_ranges']), *chart_sources]))
         return RuntimeOutcome(status, reason, report, claims or [], state.get('facts', []), state['calculations'], unique[:500],
-                              list(dict.fromkeys(x['source_id'] for x in state['read_ranges'])), [], state['events'],
-                              stopping_note, resolved_partial_notes)
+                              used_source_ids, [], state['events'],
+                              stopping_note, resolved_partial_notes, charts=list(state.get('charts', [])))
     if state.get('stopped'):
         return outcome('partial', state['stopped'], gaps=[gap('run_stopped')])
     if state.get('submission'):
@@ -1646,17 +2268,32 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
     submission_retries = 0
 
     def turn_input():
+        tail_note = _build_failure_awareness_note(state)
+        try:
+            accepts_tail = 'tail_note' in inspect.signature(ModelTurnInput).parameters
+        except (TypeError, ValueError):
+            accepts_tail = False
+        history_items = tuple(
+            ModelTurnExchange(
+                ModelAssistantContinuation(item['assistant']),
+                tuple(ModelToolResult(**result) for result in item['results']),
+            )
+            for item in state['history']
+        )
+        if accepts_tail:
+            return ModelTurnInput(
+                SYSTEM,
+                state['user'],
+                tuple(TOOLS),
+                history_items,
+                tail_note=tail_note,
+            )
+        user_text = state['user'] if state['history'] else _user_with_failure_awareness(state['user'], state)
         return ModelTurnInput(
             SYSTEM,
-            _user_with_failure_awareness(state['user'], state),
+            user_text,
             tuple(TOOLS),
-            tuple(
-                ModelTurnExchange(
-                    ModelAssistantContinuation(item['assistant']),
-                    tuple(ModelToolResult(**result) for result in item['results']),
-                )
-                for item in state['history']
-            ),
+            history_items,
         )
     def append_result(call_id, result):
         state['history'][-1]['results'].append({'tool_call_id': call_id,
@@ -1705,7 +2342,11 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                 force=False,
             )
             turn = turn_input()
-            wire = json.dumps({'user': turn.user}, ensure_ascii=False)
+            tail_note = getattr(turn, 'tail_note', None)
+            wire = json.dumps(
+                {'user': turn.user, **({'tail_note': tail_note} if tail_note else {})},
+                ensure_ascii=False,
+            )
             try:
                 estimator = getattr(model, 'estimate_turn_input', None)
                 if callable(estimator):
@@ -1721,7 +2362,7 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                 call_id = str(context.diagnostic_context.get('operation_id') or 'research') + ':research-agent:' + uuid4().hex
                 before = context.start_model(call_id, reservation)
             except ProviderFailure as error:
-                _record_failed_attempt(state, call_id=None, reason=error.code)
+                _record_failed_attempt(state, call_id=None, reason=error.code, error=error)
                 save()
                 return outcome('partial', error.code, gaps=[provider_gap(error)])
             stream_call_seq += 1
@@ -1795,28 +2436,31 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                                 context.ensure_running()
                                 return outcome('partial', 'provider_cancelled', gaps=[gap('cancelled')])
                             continue
-                    if error.code in ('provider_output_truncated', 'provider_context_limit') or (not error.retryable and not is_cancelled):
+                    if error.code in ('provider_output_truncated', 'provider_context_limit', 'provider_timeout') or (not error.retryable and not is_cancelled):
                         _record_failed_attempt(
                             state,
                             call_id=call_id,
                             reason=error.code,
                             finish_reason=diag_finish,
                             usage=diag_usage,
+                            error=error,
+                            call_diag=call_diag,
                         )
                     save()
                     _emit_reset(active_call_seq, 'cancelled' if is_cancelled else 'failed')
                     active_call_seq = None
                     return outcome('partial', error.code, gaps=[provider_gap(error)])
                 elif received:
+                    failure_meta = _extract_failure_metadata(error=error, call_diag=call_diag, reason=error.code)
                     state['pending'] = {'kind': 'model_returned', 'call_id': call_id,
                         'usage': tokens, 'before': list(before), 'started_at': model_started_at,
                         'finish_reason': diag_finish, 'usage_detail': diag_usage,
-                        'error': {'code': error.code, 'message': str(error), 'retryable': error.retryable}}
+                        'error': {'code': error.code, 'message': str(error), 'retryable': error.retryable, **failure_meta}}
                     save()
                 else:
                     context.finish_model(call_id, None, before)
                     is_trunc_or_ctx = error.code in ('provider_output_truncated', 'provider_context_limit')
-                    should_record = is_trunc_or_ctx or (not error.retryable and not is_cancelled)
+                    should_record = is_trunc_or_ctx or error.code == 'provider_timeout' or (not error.retryable and not is_cancelled)
                     if should_record:
                         _record_failed_attempt(
                             state,
@@ -1824,6 +2468,8 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                             reason=error.code,
                             finish_reason=diag_finish,
                             usage=diag_usage,
+                            error=error,
+                            call_diag=call_diag,
                         )
                     if is_trunc_or_ctx:
                         state['events'].append({'kind': 'model_failure', 'call_id': call_id, 'code': error.code,
@@ -1874,7 +2520,7 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                     'external_state': 'returned', 'usage': returned.get('usage'), 'settlement': accounting})
                 state.setdefault('model_receipts', []).append({'call_id': call_id, 'provider': 'returned', 'settlement': accounting})
                 if (
-                    error['code'] in ('provider_output_truncated', 'provider_context_limit')
+                    error['code'] in ('provider_output_truncated', 'provider_context_limit', 'provider_timeout')
                     or (error.get('retryable') is False and error['code'] != 'provider_cancelled')
                 ):
                     _record_failed_attempt(
@@ -1883,12 +2529,14 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                         reason=error['code'],
                         finish_reason=returned.get('finish_reason'),
                         usage=returned.get('usage') if returned.get('usage') is not None else returned.get('usage_detail'),
+                        error=error,
+                        call_diag=context.private_diagnostics.get(call_id),
                     )
                 state['pending'] = None
                 save()
                 _emit_reset(active_call_seq, 'cancelled' if error['code'] == 'provider_cancelled' else 'failed')
                 active_call_seq = None
-                return outcome('partial', error['code'], gaps=[provider_gap(error['message'])])
+                return outcome('partial', error['code'], gaps=[provider_gap(error)])
             calls = [SimpleNamespace(**item) for item in returned['calls']]
             ids = [c.id for c in calls]
             if (not isinstance(returned['message'], dict) or returned.get('stop_class') == 'truncated' or
@@ -1961,13 +2609,15 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                              'search_source': SearchSourceRequest, 'discover_sources': DiscoverRequest,
                              'acquire_sources': AcquireRequest, 'historical_prices': HistoricalPriceRequest,
                              'sec_company_concept': SecConceptToolRequest, 'record_facts': FactsRequest,
-                             'calculate_financials': CalculateRequest, 'submit_research': SubmitRequest}.get(call.name)
+                             'calculate_financials': CalculateRequest, 'create_chart': CreateChartRequest,
+                             'submit_research': SubmitRequest}.get(call.name)
                 if model_cls is None:
                     raise ValueError('Unknown tool.')
                 req = model_cls.model_validate(args)
                 action = {k: v for k, v in args.items() if k != 'rationale'}
                 signature = sha256(json.dumps({'name': call.name, 'args': action, 'reads': state['read_ranges'],
                     'facts': [{k: v for k, v in f.items() if k != 'fact_id'} for f in state.get('facts', [])],
+                    'charts': [{'chart_id': c.get('chart_id'), 'replaces_chart_id': c.get('replaces_chart_id')} for c in state.get('charts', [])],
                     'lead_urls': [lead.get('url') for lead in state.get('leads', []) if isinstance(lead, dict)]},
                     sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()
                 if signature in seen:
@@ -1977,9 +2627,28 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                     return outcome('partial', 'no_progress', gaps=[gap('no_progress')])
                 seen.add(signature)
                 state['seen'] = sorted(seen)
-                if call.name == 'read_sources':
+                turn_read_chars, turn_bulk_result_chars = _turn_batch_usage(state)
+                if call.name in _BULK_COMPACT_TOOLS and turn_bulk_result_chars >= MAX_TURN_TOOL_RESULT_CHARS:
+                    result = {
+                        'status': 'invalid',
+                        'error': 'turn_tool_result_budget_exceeded',
+                        'reason': (
+                            f'Cumulative bulk tool result size in this turn ({turn_bulk_result_chars} characters) '
+                            f'reached the per-turn limit ({MAX_TURN_TOOL_RESULT_CHARS}). '
+                            f'Record facts from already-retrieved material first or continue in the next turn.'
+                        ),
+                        'instruction': 'Call record_facts or calculate_financials on existing evidence, or finish the turn before issuing more bulk reads/queries.',
+                        'turn_tool_result_characters': turn_bulk_result_chars,
+                        'max_turn_tool_result_characters': MAX_TURN_TOOL_RESULT_CHARS,
+                    }
+                elif call.name == 'read_sources':
                     result, tool_summary = _read_sources(
-                        req, source_by_id=source_by_id, as_of=as_of, read_ranges=state['read_ranges'],
+                        req,
+                        source_by_id=source_by_id,
+                        as_of=as_of,
+                        read_ranges=state['read_ranges'],
+                        already_read_turn_chars=turn_read_chars,
+                        remaining_bulk_turn_chars=max(0, MAX_TURN_TOOL_RESULT_CHARS - turn_bulk_result_chars),
                     )
                 elif call.name == 'outline_source':
                     result = _outline_source(req, source_by_id=source_by_id, as_of=as_of)
@@ -2122,6 +2791,17 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                             row_status = details.get('status', 'denied_or_unavailable')
                             rows.append({'url': url, 'status': row_status,
                                          'reason': row_reason, 'notes': notes, 'outcomes': outcomes})
+                            failed_accesses = state.setdefault('failed_source_accesses', [])
+                            failed_entry = {
+                                'url': _clip(requested_url, 300),
+                                'host': _clip(host, 120) if host else None,
+                                'status': str(row_status)[:100] if isinstance(row_status, str) and row_status else 'denied_or_unavailable',
+                                'reason': str(row_reason)[:100] if isinstance(row_reason, str) and row_reason else None,
+                            }
+                            if failed_entry not in failed_accesses:
+                                failed_accesses.append(failed_entry)
+                                if len(failed_accesses) > 50:
+                                    del failed_accesses[:-50]
                             lead_title = (
                                 lead.get('title')
                                 if isinstance(lead.get('title'), str) and lead.get('title').strip()
@@ -2381,6 +3061,73 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                             for row in rows[:5]
                         ],
                     }
+                elif call.name == 'create_chart':
+                    all_facts = [*state.get('prior_facts', []), *state.get('facts', [])]
+                    all_calcs = [*state.get('prior_calculations', []), *state.get('calculations', [])]
+                    existing_charts = [
+                        {'chart_id': cid} for cid in state.get('prior_chart_ids', [])
+                    ] + list(state.get('charts', []))
+                    chart = build_research_chart(
+                        req,
+                        facts=all_facts,
+                        calculations=all_calcs,
+                        sources=source_by_id,
+                        claims=list(state.get('prior_claims_meta', [])),
+                        existing_charts=existing_charts,
+                        as_of=as_of,
+                        allow_simulated=False,
+                    )
+                    chart_dict = chart.model_dump(mode='json')
+                    state.setdefault('charts', []).append(chart_dict)
+                    if chart.causal_graph is not None:
+                        result = {
+                            'status': 'created',
+                            'chart_id': chart.chart_id,
+                            'chart_type': chart.chart_type,
+                            'title': chart.title,
+                            'subtitle': chart.subtitle,
+                            'node_count': len(chart.causal_graph.nodes),
+                            'edge_count': len(chart.causal_graph.edges),
+                            'has_projected_points': chart.has_projected_points,
+                            'replaces_chart_id': chart.replaces_chart_id,
+                            'source_ids': chart.source_ids,
+                            'embed_marker': f'[[chart:{chart.chart_id}]]',
+                        }
+                        summary_series_count = len(chart.causal_graph.nodes)
+                        summary_point_count = len(chart.causal_graph.edges)
+                    else:
+                        result = {
+                            'status': 'created',
+                            'chart_id': chart.chart_id,
+                            'chart_type': chart.chart_type,
+                            'title': chart.title,
+                            'subtitle': chart.subtitle,
+                            'axes': chart_dict['axes'],
+                            'series_summary': [
+                                {
+                                    'name': s['name'],
+                                    'mark': s['mark'],
+                                    'y_axis_id': s['y_axis_id'],
+                                    'point_count': len(s['points']),
+                                    'first_x': s['points'][0]['x'] if s['points'] else None,
+                                    'last_x': s['points'][-1]['x'] if s['points'] else None,
+                                }
+                                for s in chart_dict['series']
+                            ],
+                            'replaces_chart_id': chart.replaces_chart_id,
+                            'source_ids': chart.source_ids,
+                            'embed_marker': f'[[chart:{chart.chart_id}]]',
+                        }
+                        summary_series_count = len(chart.series)
+                        summary_point_count = sum(len(s.points) for s in chart.series)
+                    tool_summary = {
+                        'kind': 'create_chart',
+                        'chart_id': chart.chart_id,
+                        'chart_type': chart.chart_type,
+                        'title': _clip(chart.title, 160),
+                        'series_count': summary_series_count,
+                        'point_count': summary_point_count,
+                    }
                 else:
                     claims = []
                     rejected_claims = 0
@@ -2428,8 +3175,8 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                     return outcome(status, 'submitted', report=report, claims=claims,
                                    gaps=gaps, stopping_note=req.stopping_reason, partial_notes=partial_notes)
             except ProviderFailure as error:
-                if error.code in ('provider_output_truncated', 'provider_context_limit') or not error.retryable:
-                    _record_failed_attempt(state, call_id=call.id, reason=error.code)
+                if error.code in ('provider_output_truncated', 'provider_context_limit', 'provider_timeout') or not error.retryable:
+                    _record_failed_attempt(state, call_id=call.id, reason=error.code, error=error)
                     save()
                 _emit_reset(batch_call_seq, 'failed')
                 active_call_seq = None
@@ -2445,7 +3192,9 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                                   else call.raw_arguments)
                 invalid_signature = sha256(json.dumps({'name': call.name, 'action': invalid_action,
                     'reads': state['read_ranges'], 'facts': [{k: v for k, v in f.items() if k != 'fact_id'}
-                    for f in state.get('facts', [])], 'leads': state.get('leads', [])},
+                    for f in state.get('facts', [])],
+                    'charts': [{'chart_id': c.get('chart_id'), 'replaces_chart_id': c.get('replaces_chart_id')} for c in state.get('charts', [])],
+                    'leads': state.get('leads', [])},
                     sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()
                 invalid_seen = state.setdefault('invalid_seen', [])
                 if invalid_signature in invalid_seen:

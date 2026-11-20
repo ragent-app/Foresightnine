@@ -249,7 +249,14 @@ class ResearchExecutionContext:
         self.private_diagnostics.setdefault(call_id, {})['context'] = safe_diagnostic_context(**metadata)
         self._persist_diagnostic(call_id)
         set_finish_reason(None)
-        from .research_diagnostics import sanitize_transport_diagnostic
+        from .research_diagnostics import sanitize_stream_metrics, sanitize_transport_diagnostic
+        turn_arg = args[0] if args else None
+        raw_tools = getattr(turn_arg, 'tools', None)
+        declared_tool_names = (
+            frozenset(t.name for t in raw_tools if isinstance(getattr(t, 'name', None), str) and t.name)
+            if isinstance(raw_tools, (tuple, list))
+            else None
+        ) or None
         def capture_transport(snapshot: object) -> None:
             if not isinstance(snapshot, dict):
                 return
@@ -262,6 +269,10 @@ class ResearchExecutionContext:
                 diagnostic.setdefault('context', {})['wire_bytes'] = snapshot['wire_bytes']
             if type(snapshot.get('max_tokens')) is int and 0 < snapshot['max_tokens'] <= 10**9:
                 diagnostic.setdefault('context', {}).setdefault('parameters', {}).setdefault('max_tokens', snapshot['max_tokens'])
+            if isinstance(snapshot.get('stream_metrics'), dict):
+                safe_metrics = sanitize_stream_metrics(snapshot['stream_metrics'], allowed_tool_names=declared_tool_names)
+                if safe_metrics:
+                    diagnostic['stream_metrics'] = safe_metrics
             if 'stop_reason' in snapshot:
                 diagnostic['stop_reason'] = safe_stop_reason(snapshot.get('stop_reason'))
                 diagnostic['finish'] = normalize_finish_reason(snapshot.get('stop_reason'))
@@ -297,7 +308,11 @@ class ResearchExecutionContext:
                 self.response_error_usage.add(call_id)
             receipt['provider'] = ('returned' if getattr(error, 'provider_response_received', False) is True else 'unknown')
             if receipt['provider'] == 'returned':
-                receipt['processing_error'] = 'post_response_processing_failure'
+                receipt['processing_error'] = (
+                    'stream_timeout'
+                    if isinstance(error, ProviderFailure) and error.code == 'provider_timeout'
+                    else 'post_response_processing_failure'
+                )
             finish_value = _resolved_finish()
             if isinstance(error, ProviderFailure) and error.code == 'invalid_provider_output':
                 category = getattr(error, 'diagnostic_category', None)
@@ -322,7 +337,7 @@ class ResearchExecutionContext:
 
     def mark_model_processing_error(self, call_id: str, category: str) -> None:
         receipt = self.model_call_receipts.get(call_id)
-        if receipt is not None and receipt['provider'] == 'returned' and category in {'contract_validation', 'post_response_processing_failure'}:
+        if receipt is not None and receipt['provider'] == 'returned' and category in {'contract_validation', 'post_response_processing_failure', 'stream_timeout'}:
             receipt['processing_error'] = category
 
     def finish_model(self, call_id: str, tokens: int | None, before: tuple[int, int | None, int | None]) -> None:
@@ -385,7 +400,7 @@ def execute_planning(*, requested: bool, question: str, scope: str,
     input_limit = getattr(policy, 'max_input_tokens', None)
     output_limit = getattr(policy, 'max_output_tokens', None)
     timeout = getattr(policy, 'timeout_seconds', None)
-    if not isinstance(timeout, (int, float)) or not 0 < timeout <= 180:
+    if not isinstance(timeout, (int, float)) or not 0 < timeout <= 600:
         return PlanningResult('unavailable')
     prompt = plan_prompt(question, scope, source_languages)
     legacy_input_limit = None if callable(getattr(provider, 'research_prompt_fits', None)) else input_limit
@@ -529,7 +544,7 @@ def execute_generation(*, question: str, scope: str, sources: list[ResearchSourc
             parameters = inspect.signature(generate).parameters
         except (TypeError, ValueError) as error:
             raise ProviderFailure('provider_budget_unknown', 'Provider limits cannot be enforced.', retryable=False) from error
-        if not isinstance(timeout, (int, float)) or not 0 < timeout <= 180 or 'timeout_seconds' not in parameters:
+        if not isinstance(timeout, (int, float)) or not 0 < timeout <= 600 or 'timeout_seconds' not in parameters:
             raise ProviderFailure('provider_budget_unknown', 'Provider limits cannot be enforced.', retryable=False)
         legacy_limit = None if callable(getattr(provider, 'research_prompt_fits', None)) else input_limit
         if legacy_limit is not None and not research_prompt_fits(prompt, RESEARCH_SYSTEM_PROMPT, legacy_limit - contract_overhead):

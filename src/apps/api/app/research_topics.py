@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .storage import JsonDocumentRepository, StorageConflictError, owner_items
 from .research_calculations import calculation_result_status
+from .research_charts import ResearchChart
 
 
 class ResearchInput(BaseModel):
@@ -171,6 +172,7 @@ class ResearchTurn(BaseModel):
     claim_ids: list[str] = Field(default_factory=list)
     fact_ids: list[str] = Field(default_factory=list)
     calculation_ids: list[str] = Field(default_factory=list)
+    chart_ids: list[str] = Field(default_factory=list)
     gaps: list[ResearchGap] = Field(default_factory=list)
     usage: TurnUsage
     search_status: str
@@ -190,6 +192,7 @@ class ResearchContent(BaseModel):
     facts: list[ResearchFact] = Field(default_factory=list)
     calculations: list[ResearchCalculation] = Field(default_factory=list)
     claims: list[ResearchClaim] = Field(default_factory=list)
+    charts: list[ResearchChart] = Field(default_factory=list)
     # Open gaps: the latest turn's gaps.
     gaps: list[ResearchGap] = Field(default_factory=list)
     turns: list[ResearchTurn] = Field(default_factory=list)

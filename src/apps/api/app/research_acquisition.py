@@ -108,7 +108,7 @@ def execute_decision(*, question: str, target: dict, requirements: list[dict], c
                      repair: dict[str, Any] | None = None) -> AcquisitionResult:
     policy = getattr(provider, 'policy', None)
     inp, out, timeout = (getattr(policy, key, None) for key in ('max_input_tokens', 'max_output_tokens', 'timeout_seconds'))
-    if not callable(generate) or not isinstance(timeout, (int, float)) or not 0 < timeout <= 180:
+    if not callable(generate) or not isinstance(timeout, (int, float)) or not 0 < timeout <= 600:
         return AcquisitionResult('unavailable', reason='provider_unavailable')
     if context.cost_limited:
         return AcquisitionResult('unavailable', reason='cost_unknown')

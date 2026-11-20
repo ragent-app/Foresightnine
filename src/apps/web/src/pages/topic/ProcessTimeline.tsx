@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type {
   AcquireSourcesSummary,
   CalculateFinancialsSummary,
+  CreateChartSummary,
   CurrentActivity,
   DiscoverSourcesSummary,
   HistoricalPricesSummary,
@@ -12,6 +13,7 @@ import type {
   ToolEventSummary,
 } from "../../api/types";
 import {
+  chartTypeLabel,
   formulaLabel,
   LIVE_STAGED_TAG,
   modelPhaseLabel,
@@ -23,6 +25,7 @@ import {
 import { formatDateTime, formatInteger, formatQuantity } from "../../lib/format";
 import { stepRows, type StepRow } from "../../lib/research";
 import { Icon, toolIcon } from "../../ui/icons";
+import { MarkdownContent } from "../../ui/MarkdownContent";
 import { MEDIA, useMedia } from "../../ui/media";
 import type { LiveStreamStore } from "./context";
 import { LiveActiveStream, LiveActiveStreamRow } from "./LiveStreamView";
@@ -190,6 +193,21 @@ function CalcsSummaryView({ summary, live }: { summary: CalculateFinancialsSumma
   );
 }
 
+function CreateChartSummaryView({ summary, live }: { summary: CreateChartSummary; live: boolean }) {
+  const detail = summary.chart_type === "causal_graph"
+    ? `${chartTypeLabel(summary.chart_type)} · ${formatInteger(summary.series_count)} 个节点 · ${formatInteger(summary.point_count)} 条传导关系`
+    : `${chartTypeLabel(summary.chart_type)} · ${formatInteger(summary.series_count)} 条序列 · ${formatInteger(summary.point_count)} 个数据点`;
+  return (
+    <div className="pt-summary">
+      <div className="pt-sub-row">
+        <span className="pt-sub">{summary.title}</span>
+        {live ? <span className="pt-staged">{LIVE_STAGED_TAG}</span> : null}
+      </div>
+      <span className="meta">{detail}</span>
+    </div>
+  );
+}
+
 function ToolSummaryView({ summary, live }: { summary: ToolEventSummary; live: boolean }) {
   switch (summary.kind) {
     case "discover_sources":
@@ -206,6 +224,8 @@ function ToolSummaryView({ summary, live }: { summary: ToolEventSummary; live: b
       return <FactsSummaryView summary={summary} live={live} />;
     case "calculate_financials":
       return <CalcsSummaryView summary={summary} live={live} />;
+    case "create_chart":
+      return <CreateChartSummaryView summary={summary} live={live} />;
   }
 }
 
@@ -220,7 +240,9 @@ function TimelineStepRow({ row, live }: { row: StepRow; live: boolean }) {
               <span className="pt-note-label">{PROCESS_NOTE_LABEL}</span>
               <span className="meta">{row.text}</span>
             </div>
-            <p className="pt-note">{row.note}</p>
+            <div className="pt-note">
+              <MarkdownContent content={row.note} variant="inline" />
+            </div>
           </div>
         </li>
       );
@@ -257,7 +279,9 @@ function TimelineStepRow({ row, live }: { row: StepRow; live: boolean }) {
 function CurrentStepRow({ current, stream }: { current: CurrentActivity; stream?: LiveStreamStore | undefined }) {
   const isTool = current.kind === "tool";
   const label = isTool ? toolLabel(current.name) : modelPhaseLabel(current.phase, current.retry_attempt);
-  const rationale = isTool ? current.rationale : null;
+  const rationale = isTool
+    ? current.rationale || (current.name === "create_chart" ? "正在组装并校验图表数据与单位口径…" : null)
+    : null;
   const target = isTool && current.target && current.target !== rationale ? current.target : null;
   return (
     <li className="pt-row pt-current">

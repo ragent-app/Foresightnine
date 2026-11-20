@@ -305,8 +305,21 @@ export function fictionalPdfText(title, order, { joined = false, normalized = fa
 }
 
 export const REPORT_TURN2 =
-  "营业利润率没有随收入一起提高。按摘录中的金额计算，2026 财年营业利润率约为 31.07%（15,104 / 48,612），上一财年约为 31.45%（12,980 / 41,270），小幅下降约 0.38 个百分点。\n\n" +
-  "不支持“增长强劲”的证据主要有两点：一是利润率下滑，说明收入增速没有完全转化为利润；二是年报提到营业费用因扩建数据中心而上升，管理层预期容量投资下一财年仍将保持高位，可能继续压制利润率。";
+  "## 利润率变化与反方证据核验\n\n" +
+  "营业利润率没有随收入一起提高。按摘录中的金额计算，2026 财年营业利润率约为 **31.07%**（15,104 / 48,612），上一财年约为 **31.45%**（12,980 / 41,270），小幅下降约 `-0.38 pp`。\n\n" +
+  "| 对比项目 | FY2025 | FY2026 | 同比变化 |\n" +
+  "| --- | ---: | ---: | ---: |\n" +
+  "| Northwind 总收入（USD M） | 41,270 | 48,612 | +17.79% |\n" +
+  "| Northwind 营业利润（USD M） | 12,980 | 15,104 | +16.36% |\n" +
+  "| 营业利润率 | 31.45% | 31.07% | -0.38 pp |\n" +
+  "| 示例行业基准对比（模拟参考） | $60.9B | $130.5B | +114.2% |\n\n" +
+  "[[chart:chart_northwind_combo]]\n\n" +
+  "不支持“增长强劲”的证据主要有两点：一是利润率下滑，说明收入增速没有完全转化为利润；二是年报提到营业费用因扩建数据中心而上升，管理层预期容量投资下一财年仍将保持高位。\n\n" +
+  "```python\n" +
+  "margin_fy26 = 15104 / 48612  # 0.310705...\n" +
+  "margin_fy25 = 12980 / 41270  # 0.314514...\n" +
+  "```\n\n" +
+  "公开检索入口参见 [SEC EDGAR 检索页面](https://www.sec.gov/edgar/searchedgar/companysearch)。";
 
 
 /**
@@ -511,6 +524,7 @@ export function seed(now) {
     fact_ids: ["F1", "F2"],
     claim_ids: [],
     calculation_ids: ["C-growth"],
+    chart_ids: [],
     gaps: structuredClone(PARTIAL_GAPS),
     read_ranges: [revenueParagraphRange(text)],
     official_fetch_status: "not_requested",
@@ -542,9 +556,161 @@ export function seed(now) {
         { formula_id: "margin_percent", value: "31.45", unit: "percent", currency: null, expression: "(12980 / 41270) * 100" },
       ],
     }),
+    tool("create_chart", "completed", "对比总收入与营业利润率，生成双轴组合图", null, {
+      kind: "create_chart",
+      chart_id: "chart_northwind_combo",
+      chart_type: "combo_bar_line",
+      title: "Northwind 营业收入与营业利润率对比",
+      series_count: 2,
+      point_count: 4,
+    }),
+    tool("create_chart", "completed", "展示财报发布窗口股价走势参考", null, {
+      kind: "create_chart",
+      chart_id: "chart_northwind_price",
+      chart_type: "price_series",
+      title: "Northwind 股价表现与财报窗口参考",
+      series_count: 1,
+      point_count: 8,
+    }),
+    tool("create_chart", "completed", "梳理云收入增长与费用扩张对营业利润率的传导路径", null, {
+      kind: "create_chart",
+      chart_id: "chart_northwind_causal",
+      chart_type: "causal_graph",
+      title: "Northwind 收入增长与利润率传导路径",
+      series_count: 6,
+      point_count: 5,
+    }),
     { kind: "submission", status: "completed" },
   ];
   const questionA2 = "营业利润率有没有随收入一起提高？请同时列出不支持“增长强劲”的证据。";
+  const rev25Span = span(text, Q_REV25);
+  const rev26Span = span(text, Q_REV26);
+  const opi25Span = span(text, Q_OPI25);
+  const opi26Span = span(text, Q_OPI26);
+  const comboChart = {
+    chart_id: "chart_northwind_combo",
+    turn_id: "turn_a2",
+    chart_type: "combo_bar_line",
+    title: "Northwind 营业收入与营业利润率对比",
+    subtitle: "左轴：USD millions（量级：millions） · 右轴：percent · 截至 2026-08-05",
+    x_label: "财年",
+    axes: [
+      { id: "left", label: "总收入", unit: "USD millions", currency: "USD", scale: "millions" },
+      { id: "right", label: "营业利润率", unit: "percent", currency: null, scale: "ones" },
+    ],
+    series: [
+      {
+        name: "总收入",
+        mark: "bar",
+        y_axis_id: "left",
+        is_projected: false,
+        points: [
+          {
+            x: "FY2025",
+            y: "41270",
+            display_value: "USD 41,270 millions",
+            is_projected: false,
+            provenance: { fact_id: "F2", calculation_id: null, source_id: S1_ID, ...rev25Span },
+          },
+          {
+            x: "FY2026",
+            y: "48612",
+            display_value: "USD 48,612 millions",
+            is_projected: false,
+            provenance: { fact_id: "F1", calculation_id: null, source_id: S1_ID, ...rev26Span },
+          },
+        ],
+      },
+      {
+        name: "营业利润率",
+        mark: "line",
+        y_axis_id: "right",
+        is_projected: false,
+        points: [
+          {
+            x: "FY2025",
+            y: "31.45",
+            display_value: "31.45%",
+            is_projected: false,
+            provenance: { fact_id: null, calculation_id: "C-margin-fy25", source_id: S1_ID, ...opi25Span },
+          },
+          {
+            x: "FY2026",
+            y: "31.07",
+            display_value: "31.07%",
+            is_projected: false,
+            provenance: { fact_id: null, calculation_id: "C-margin-fy26", source_id: S1_ID, ...opi26Span },
+          },
+        ],
+      },
+    ],
+    is_simulated: false,
+    has_projected_points: false,
+    replaces_chart_id: null,
+    source_ids: [S1_ID],
+  };
+  const priceChart = {
+    chart_id: "chart_northwind_price",
+    turn_id: "turn_a2",
+    chart_type: "price_series",
+    title: "Northwind 股价表现与财报窗口参考",
+    subtitle: "单位：USD · 截至 2026-08-05",
+    x_label: "交易日",
+    axes: [{ id: "left", label: "收盘价", unit: "USD", currency: "USD", scale: "ones" }],
+    series: [
+      {
+        name: "Northwind (NWD)",
+        mark: "area",
+        y_axis_id: "left",
+        is_projected: false,
+        points: [
+          { x: "2026-07-24", y: "124.5", display_value: "USD 124.5", is_projected: false, provenance: { fact_id: null, calculation_id: null, source_id: S1_ID, ...rev25Span } },
+          { x: "2026-07-27", y: "126.2", display_value: "USD 126.2", is_projected: false, provenance: { fact_id: null, calculation_id: null, source_id: S1_ID, ...rev25Span } },
+          { x: "2026-07-28", y: "128.4", display_value: "USD 128.4", is_projected: false, provenance: { fact_id: null, calculation_id: null, source_id: S1_ID, ...opi25Span } },
+          { x: "2026-07-29", y: "127.8", display_value: "USD 127.8", is_projected: false, provenance: { fact_id: null, calculation_id: null, source_id: S1_ID, ...opi25Span } },
+          { x: "2026-07-30", y: "131.6", display_value: "USD 131.6", is_projected: false, provenance: { fact_id: null, calculation_id: null, source_id: S1_ID, ...rev26Span } },
+          { x: "2026-07-31", y: "134.9", display_value: "USD 134.9", is_projected: false, provenance: { fact_id: null, calculation_id: null, source_id: S1_ID, ...rev26Span } },
+          { x: "2026-08-03", y: "133.4", display_value: "USD 133.4", is_projected: false, provenance: { fact_id: null, calculation_id: null, source_id: S1_ID, ...opi26Span } },
+          { x: "2026-08-04", y: "136.2", display_value: "USD 136.2", is_projected: false, provenance: { fact_id: null, calculation_id: null, source_id: S1_ID, ...opi26Span } },
+        ],
+      },
+    ],
+    is_simulated: false,
+    has_projected_points: false,
+    replaces_chart_id: null,
+    source_ids: [S1_ID],
+  };
+  const causalChart = {
+    chart_id: "chart_northwind_causal",
+    turn_id: "turn_a2",
+    chart_type: "causal_graph",
+    title: "Northwind 收入增长与利润率传导路径",
+    subtitle: "逻辑传导图 · 含已核实引证与未核实假设 · 截至 2026-08-05",
+    x_label: "",
+    axes: [],
+    series: [],
+    causal_graph: {
+      nodes: [
+        { id: "n_cloud", label: "企业云与订阅需求扩张", category: "macro", status: "confirmed", detail: "企业云预算保持高增长韧性" },
+        { id: "n_dc", label: "数据中心算力扩容周期", category: "industry", status: "confirmed", detail: "行业持续扩大机柜与集群投入" },
+        { id: "n_rev", label: "Northwind 总收入增长 +17.79%", category: "company", status: "confirmed", detail: "FY2026 总收入 48,612 M USD" },
+        { id: "n_opex", label: "营业费用率上行", category: "company", status: "confirmed", detail: "数据中心扩建推升营业开支" },
+        { id: "n_margin", label: "营业利润率承压 (-0.38 pp)", category: "asset", status: "confirmed", detail: "利润率由 31.45% 降至 31.07%" },
+        { id: "n_capex_risk", label: "若明年资本开支效率不及预期", category: "scenario", status: "assumption", detail: "失效条件：单机柜利用率提升且费用率回落" },
+      ],
+      edges: [
+        { from_id: "n_cloud", to_id: "n_rev", relation: "驱动云与订阅收入扩张", direction: "positive", claim_ids: ["C1", "C2"], unverified_assumption: false },
+        { from_id: "n_dc", to_id: "n_opex", relation: "推升数据中心扩容营业费用", direction: "positive", claim_ids: ["C4"], unverified_assumption: false },
+        { from_id: "n_rev", to_id: "n_margin", relation: "增速未完全转化为利润率", direction: "conditional", claim_ids: ["C3"], unverified_assumption: false },
+        { from_id: "n_opex", to_id: "n_margin", relation: "费用扩张压制营业利润率", direction: "negative", claim_ids: ["C3", "C4"], unverified_assumption: false },
+        { from_id: "n_capex_risk", to_id: "n_margin", relation: "产能爬坡滞后或挤压利润率", direction: "uncertain", claim_ids: [], unverified_assumption: true },
+      ],
+    },
+    is_simulated: false,
+    has_projected_points: true,
+    replaces_chart_id: null,
+    source_ids: [S1_ID],
+  };
   const turn2 = {
     turn_id: "turn_a2",
     index: 2,
@@ -561,6 +727,7 @@ export function seed(now) {
     fact_ids: ["F3", "F4", "F5", "F6"],
     claim_ids: ["C1", "C2", "C3", "C4"],
     calculation_ids: ["C-margin-fy26", "C-margin-fy25", "C-margin-diff-legacy"],
+    chart_ids: ["chart_northwind_combo", "chart_northwind_price", "chart_northwind_causal"],
     gaps: [],
     read_ranges: [revenueParagraphRange(text), operatingParagraphRange(text)],
     official_fetch_status: "not_requested",
@@ -609,6 +776,7 @@ export function seed(now) {
       review: "draft",
       content: {
         calculations: [CGROWTH],
+        charts: [],
         claims: [],
         facts: [F1, F2],
         gaps: structuredClone(PARTIAL_GAPS),
@@ -627,6 +795,7 @@ export function seed(now) {
       review: "draft",
       content: {
         calculations: [CGROWTH, CM26, CM25, CLEGACY],
+        charts: [comboChart, priceChart, causalChart],
         claims,
         facts: [F1, F2, F3, F4, F5, F6],
         gaps: [],
@@ -675,6 +844,7 @@ export function seed(now) {
     fact_ids: [],
     claim_ids: [],
     calculation_ids: [],
+    chart_ids: [],
     gaps: [],
     read_ranges: [{ source_id: S2_ID, character_start: 0, character_end: s2.text.length }],
     official_fetch_status: "not_requested",

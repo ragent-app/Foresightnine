@@ -646,7 +646,7 @@ B4 已把缺口改为 `{code, message}` 结构，代码表见 `research_runtime.
 | 缺口按代码对照中文 | B4 的 `gaps[].code` | 已完成 |
 | 深挖引用 | B2 修复后，`focus_citation` 会传给模型，格式为 `{claim_id, citation_index}` | 已完成 |
 | 引用编号 | 前端按主题内引文的首次出现顺序计算，后端不需要新增字段 | 无需改后端 |
-| 报告按 Markdown 渲染 | B6 格式约定 | 未完成；在此之前按纯文本分段渲染 |
+| 报告按 Markdown 渲染 | B6 格式约定（受限 GFM Markdown，见 [B6 方案](../product/markdown-rendering-b6-plan-2026-11-19.md) 第 3 节） | 正在本地实现与验收，尚未发布：后端 M3 已在 `SubmitRequest.report` 字段说明与 `SYSTEM` 中声明受限 GFM 约定（`##`/`###` 分节、列表、`**加粗**`、多期财务数据优先 GFM 表格；禁止原始 HTML 与 `![](...)` 图片；金额直接写 `$130.5B`，不使用单 `$` 公式），API 路径、字段类型与服务端纯文本存储/导出边界不变；前端 M1/M2（`react-markdown` + `remark-gfm` AST 白名单渲染）进行中。发布前，历史纯文本报告仍作为合法 Markdown 兼容渲染 |
 | 资料不允许模型读取时的提示 | 从资料元数据的权限字段计算（`source_processing` 已删除） | 无需改后端 |
 
 ## 9. 实施记录

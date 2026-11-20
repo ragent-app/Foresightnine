@@ -68,7 +68,7 @@ describe("labels", () => {
     expect(turnReasonLabel("boom")).toBe("模型服务返回错误（boom）");
   });
   it("labels recovery reasons", () => {
-    expect(Object.keys(RECOVERY_REASON_LABEL)).toHaveLength(8);
+    expect(Object.keys(RECOVERY_REASON_LABEL)).toHaveLength(9);
     expect(recoveryReasonLabel("budget_exhausted")).toBe("预算已用完");
     const repeated = recoveryReasonLabel("repeated_truncation");
     expect(repeated).toBe(RECOVERY_REASON_LABEL["repeated_truncation"]);
@@ -78,6 +78,16 @@ describe("labels", () => {
     expect(repeated).toMatch(/输出|上下文/);
     expect(repeated).toMatch(/缩小/);
     expect(repeated).toMatch(/查看|导出/);
+    const repeatedTimeout = recoveryReasonLabel("repeated_timeout");
+    expect(repeatedTimeout).toBe(RECOVERY_REASON_LABEL["repeated_timeout"]);
+    expect(repeatedTimeout).not.toBe("当前无法恢复");
+    expect(repeatedTimeout).not.toContain("repeated_timeout");
+    expect(repeatedTimeout).not.toContain("provider_timeout");
+    expect(repeatedTimeout).not.toContain("/continue");
+    expect(repeatedTimeout).toMatch(/超时/);
+    expect(repeatedTimeout).toMatch(/继续研究/);
+    expect(repeatedTimeout).toMatch(/缩小/);
+    expect(repeatedTimeout).toMatch(/查看|导出/);
     expect(recoveryReasonLabel("???")).toBe("当前无法恢复");
     expect(recoveryReasonLabel("repeated_output_truncation")).toBe("当前无法恢复");
     expect(recoveryReasonLabel("")).toBe("");
@@ -108,7 +118,13 @@ describe("gapText", () => {
   it("uses fixed text for known codes", () => {
     expect(gapText({ code: "cancelled", message: "x" })).toBe("研究已取消。");
     expect(gapText({ code: "no_cited_claims", message: "x" })).toBe("还没有引文位置已核实的结论。请添加或读取相关资料后继续研究。");
-    expect(Object.keys(GAP_LABEL)).toHaveLength(17);
+    const timeoutGap = gapText({ code: "provider_timeout", message: "Provider timed out without a usable result." });
+    expect(timeoutGap).toBe(GAP_LABEL["provider_timeout"]);
+    expect(timeoutGap).toMatch(/单次.*超时/);
+    expect(timeoutGap).not.toContain("provider_timeout");
+    expect(timeoutGap).not.toContain("Provider timed out");
+    expect(timeoutGap).not.toBe(gapText({ code: "provider_no_result", message: "x" }));
+    expect(Object.keys(GAP_LABEL)).toHaveLength(18);
   });
   it("handles provider_error, model_reported and unknown codes", () => {
     expect(gapText({ code: "provider_error", message: "429" })).toBe("模型服务返回错误。（429）");

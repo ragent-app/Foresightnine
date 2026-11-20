@@ -151,3 +151,147 @@ def test_stop_reason_usage_and_wire_metadata_sanitization():
     assert meta['stream'] is True
     assert meta['parameters'] == {'max_tokens': 16384}
     assert 'SECRET' not in repr(meta)
+
+
+def test_sanitize_transport_diagnostic_allows_timeout_kind_and_600s_elapsed():
+    from app.research_diagnostics import sanitize_transport_diagnostic
+
+    plain = sanitize_transport_diagnostic({
+        'submission_state': 'response_received',
+        'stages': [{'stage': 'tcp', 'result': 'ok', 'elapsed_ms': 12}],
+    })
+    assert plain == {
+        'submission_state': 'response_received',
+        'stages': [{'stage': 'tcp', 'result': 'ok', 'elapsed_ms': 12}],
+    }
+
+    for kind in ('connect_timeout', 'header_timeout', 'stream_idle_timeout', 'stream_deadline_timeout', 'response_timeout'):
+        sanitized = sanitize_transport_diagnostic({
+            'submission_state': 'response_received',
+            'timeout_kind': kind,
+            'secret': 'SECRET_SHOULD_DROP',
+            'stages': [
+                {'stage': 'response_body', 'result': 'timeout', 'elapsed_ms': 300_000},
+                {'stage': 'deadline', 'result': 'timeout', 'elapsed_ms': 600_000},
+                {'stage': 'deadline', 'result': 'timeout', 'elapsed_ms': 600_001},
+            ],
+        })
+        assert sanitized == {
+            'submission_state': 'response_received',
+            'timeout_kind': kind,
+            'stages': [
+                {'stage': 'response_body', 'result': 'timeout', 'elapsed_ms': 300_000},
+                {'stage': 'deadline', 'result': 'timeout', 'elapsed_ms': 600_000},
+            ],
+        }
+        assert 'SECRET_SHOULD_DROP' not in repr(sanitized)
+
+    invalid_kind = sanitize_transport_diagnostic({
+        'submission_state': 'started_unknown',
+        'timeout_kind': 'SECRET_UNKNOWN_KIND',
+        'stages': [],
+    })
+    assert invalid_kind == {'submission_state': 'started_unknown', 'stages': []}
+    assert 'SECRET_UNKNOWN_KIND' not in repr(invalid_kind)
+
+
+def test_warn_if_timeout_output_mismatch_helper(caplog):
+    import logging
+    from app.research_diagnostics import warn_if_timeout_output_mismatch
+
+    with caplog.at_level(logging.WARNING, logger='app.research_diagnostics'):
+        caplog.clear()
+        assert warn_if_timeout_output_mismatch(8192, 239.9, streaming=True) is True
+        assert warn_if_timeout_output_mismatch(16384, 120, streaming=False) is True
+        assert len(caplog.records) == 2
+        assert 'max_output_tokens=8192' in caplog.records[0].message
+        assert 'streaming=true' in caplog.records[0].message
+
+        caplog.clear()
+        assert warn_if_timeout_output_mismatch(8192, 240) is False
+        assert warn_if_timeout_output_mismatch(16384, 300) is False
+        assert warn_if_timeout_output_mismatch(4096, 120) is False
+        assert warn_if_timeout_output_mismatch(8192, 0) is False
+        assert warn_if_timeout_output_mismatch(8192, float('nan')) is False
+        assert warn_if_timeout_output_mismatch(True, 120) is False
+        assert warn_if_timeout_output_mismatch(8192, True) is False
+        assert caplog.records == []
+
+
+def test_openai_compatible_timeout_attaches_metadata_and_600s_policy(monkeypatch):
+    from app.openai_compatible import OpenAICompatibleLlmProvider, _TransportTimeout
+    from app.phase3 import ProviderFailure, ProviderPolicy
+
+    monkeypatch.setenv('FORESIGHTNINE_LLM_BASE_URL', 'https://api.example.com/v1')
+    monkeypatch.setenv('FORESIGHTNINE_LLM_MODEL', 'unit-model')
+    monkeypatch.setenv('FORESIGHTNINE_LLM_API_KEY', 'test-secret')
+    monkeypatch.setenv('FORESIGHTNINE_LLM_ALLOWED_HOSTS', 'api.example.com')
+
+    built_600 = OpenAICompatibleLlmProvider.from_environment(
+        policy=ProviderPolicy(timeout_seconds=600, max_output_tokens=16384),
+        transport=lambda *a: (_ for _ in ()).throw(_TransportTimeout(timeout_kind='header_timeout')),
+    )
+    with pytest.raises(ProviderFailure) as caught:
+        built_600.generate_structured('private prompt', max_output_tokens=16384)
+    assert caught.value.code == 'provider_timeout'
+    assert caught.value.timeout_kind == 'header_timeout'
+    assert type(caught.value.elapsed_ms) is int and caught.value.elapsed_ms >= 0
+    assert type(caught.value.wire_bytes) is int and caught.value.wire_bytes > 0
+    assert caught.value.streamed_bytes is None
+
+    with pytest.raises(ValueError, match='between 0 and 600'):
+        OpenAICompatibleLlmProvider.from_environment(policy=ProviderPolicy(timeout_seconds=601))
+
+
+def test_sanitize_stream_metrics_bounds_and_drops_secrets():
+    from app.research_diagnostics import sanitize_stream_metrics
+
+    assert sanitize_stream_metrics('not-a-dict') == {}
+    cleaned = sanitize_stream_metrics(
+        {
+            'frames_received': 12,
+            'ttft_ms': 340,
+            'last_frame_elapsed_ms': 1200,
+            'reassembled_bytes': 512,
+            'block_bytes_by_type': {
+                'thinking': 400,
+                'text': 100,
+                'tool_use': 12,
+                'redacted_thinking': True,
+                'extra_secret_block': 999,
+            },
+            'active_tool_names': ['read_sources', 'SECRET_LEAK', 'read_sources', 'submit_research', 'bad name!'],
+            'raw_payload': 'SECRET_RAW_PAYLOAD',
+        },
+        allowed_tool_names=frozenset({'read_sources', 'submit_research'}),
+    )
+    assert cleaned == {
+        'frames_received': 12,
+        'ttft_ms': 340,
+        'last_frame_elapsed_ms': 1200,
+        'reassembled_bytes': 512,
+        'block_bytes_by_type': {
+            'thinking': 400,
+            'text': 100,
+            'tool_use': 12,
+            'redacted_thinking': 0,
+        },
+        'active_tool_names': ['read_sources', 'unrecognized', 'submit_research'],
+    }
+    assert 'SECRET' not in repr(cleaned)
+
+    default_tools = sanitize_stream_metrics({
+        'frames_received': True,
+        'ttft_ms': -5,
+        'last_frame_elapsed_ms': 4_000_000,
+        'reassembled_bytes': -1,
+        'active_tool_names': ['lookup', 'SECRET_NAME', 'calculate_financials'],
+    })
+    assert default_tools == {
+        'frames_received': 0,
+        'ttft_ms': None,
+        'last_frame_elapsed_ms': None,
+        'reassembled_bytes': 0,
+        'block_bytes_by_type': {'thinking': 0, 'text': 0, 'tool_use': 0, 'redacted_thinking': 0},
+        'active_tool_names': ['lookup', 'unrecognized', 'calculate_financials'],
+    }

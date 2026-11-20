@@ -154,3 +154,82 @@ def test_research_output_token_overrides_work_without_model_brand_assumptions(mo
         assert exc.value.code == 'provider_configuration_invalid'
     assert resolve_output_token_limit(None, 16384, 8192, None) == 8192
     assert resolve_output_token_limit(None, None) is None
+
+
+def test_capability_profile_work_context_tokens_and_explicit_cache_control_validation(monkeypatch):
+    from app.phase3 import ProviderPolicy
+    from app.provider_capabilities import configured_profile
+    from tests.test_research_capacity_unset import context
+
+    endpoint = 'https://custom-endpoint.example.test/v1/messages'
+    monkeypatch.setenv('FORESIGHTNINE_LLM_ENDPOINT_VERSION', 'v1')
+    monkeypatch.setenv('FORESIGHTNINE_LLM_CAPABILITY_PROFILE', json.dumps({
+        'endpoint': endpoint,
+        'model': 'custom-model-v1',
+        'version': 'v1',
+        'mode': 'json_object',
+        'output_tokens': 16384,
+        'work_context_tokens': 64000,
+        'explicit_cache_control': True,
+    }))
+    loaded = configured_profile(endpoint, 'custom-model-v1')
+    assert loaded is not None
+    assert loaded.work_context_tokens == 64000
+    assert loaded.explicit_cache_control is True
+
+    # Default explicit_cache_control is False and work_context_tokens is None when omitted.
+    monkeypatch.setenv('FORESIGHTNINE_LLM_CAPABILITY_PROFILE', json.dumps({
+        'endpoint': endpoint,
+        'model': 'custom-model-v1',
+        'version': 'v1',
+        'mode': 'json_object',
+    }))
+    defaults = configured_profile(endpoint, 'custom-model-v1')
+    assert defaults is not None
+    assert defaults.work_context_tokens is None
+    assert defaults.explicit_cache_control is False
+
+    for bad_work in (0, -1, True, 1.5, '64000', None):
+        monkeypatch.setenv('FORESIGHTNINE_LLM_CAPABILITY_PROFILE', json.dumps({
+            'endpoint': endpoint,
+            'model': 'custom-model-v1',
+            'version': 'v1',
+            'mode': 'json_object',
+            'work_context_tokens': bad_work,
+        }))
+        with pytest.raises(ProviderFailure) as exc:
+            configured_profile(endpoint, 'custom-model-v1')
+        assert exc.value.code == 'provider_configuration_invalid'
+
+    for bad_cache in ('true', 1, 0, None):
+        monkeypatch.setenv('FORESIGHTNINE_LLM_CAPABILITY_PROFILE', json.dumps({
+            'endpoint': endpoint,
+            'model': 'custom-model-v1',
+            'version': 'v1',
+            'mode': 'json_object',
+            'explicit_cache_control': bad_cache,
+        }))
+        with pytest.raises(ProviderFailure) as exc:
+            configured_profile(endpoint, 'custom-model-v1')
+        assert exc.value.code == 'provider_configuration_invalid'
+
+    # work_context_tokens MUST NOT trigger billing/input-admission rejection in prepare_model_call.
+    monkeypatch.setenv('FORESIGHTNINE_LLM_CAPABILITY_PROFILE', json.dumps({
+        'endpoint': endpoint,
+        'model': 'custom-model-v1',
+        'version': 'v1',
+        'mode': 'json_object',
+        'output_tokens': 16384,
+        'work_context_tokens': 32000,
+        'input_counter': 'chars_div_3',
+    }))
+    profile_obj = configured_profile(endpoint, 'custom-model-v1')
+    provider_double = type('P', (), {
+        'policy': ProviderPolicy(max_output_tokens=16384),
+        'research_capacity': lambda self: profile_obj,
+    })()
+    ctx, _ = context(entitlement=50_000_000)
+    reservation, output = ctx.prepare_model_call(provider_double, 'x' * 150_000, 'sys')
+    assert output == 16384
+    assert reservation == 150_000 + 3 + 192 + 16384
+    assert 'context_input_tokens' not in ctx.pending_reservation

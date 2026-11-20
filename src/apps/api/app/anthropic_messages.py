@@ -1,7 +1,9 @@
 """Anthropic Messages wire protocol for research turns."""
 from __future__ import annotations
 import json
+import logging
 import socket
+from time import monotonic
 from typing import Any, Callable
 from urllib.parse import urlsplit
 from .model_protocol import ModelResponse, ModelToolCall, ModelUsage
@@ -10,6 +12,7 @@ from .openai_compatible import (
     _SseLineParser,
     _TransportFailure,
     _TransportTimeout,
+    _build_transport_failure,
     _default_stream_transport,
     _default_transport,
     _invoke_stream_transport,
@@ -18,6 +21,8 @@ from .openai_compatible import (
 from .phase3 import ProviderFailure
 from .research_stream_extract import TopLevelReportExtractor
 from .transport_diagnostics import TransportDiagnostics
+
+_logger = logging.getLogger(__name__)
 
 
 def _endpoint(base):
@@ -38,6 +43,13 @@ class AnthropicMessagesProvider:
         self.transport = transport
         self.stream_transport = stream_transport
         self.stream_enabled = stream_enabled
+        from .research_diagnostics import warn_if_timeout_output_mismatch
+        warn_if_timeout_output_mismatch(
+            self.max_tokens,
+            getattr(policy, 'timeout_seconds', None),
+            streaming=stream_enabled,
+            logger=_logger,
+        )
 
     def research_capacity(self):
         from .provider_capabilities import configured_profile
@@ -117,14 +129,76 @@ class AnthropicMessagesProvider:
             raise ValueError()
         return ModelResponse({'role': 'assistant', 'content': safe_blocks}, tuple(calls), usage, reason, 'tool_calls' if calls else 'end')
 
-    def _wire(self, turn, cap=None):
-        messages = [{'role': 'user', 'content': turn.user}]
-        for exchange in turn.history:
-            messages.append(exchange.assistant.envelope)
-            messages.append({'role': 'user', 'content': [{'type': 'tool_result', 'tool_use_id': r.tool_call_id, 'content': r.content, 'is_error': r.is_error} for r in exchange.results]})
-        wire = {'model': self.settings.model, 'system': turn.system, 'messages': messages, 'max_tokens': min(self.max_tokens, cap) if cap is not None else self.max_tokens}
+    @staticmethod
+    def _mark_last_prefix_cache_control(messages: list[dict[str, Any]]) -> None:
+        """Mark the last stable content block in ``messages`` with ephemeral cache_control."""
+        for idx in range(len(messages) - 1, -1, -1):
+            msg = messages[idx]
+            content = msg.get('content')
+            if isinstance(content, list) and content:
+                last_block = content[-1]
+                if isinstance(last_block, dict):
+                    copied_content = list(content)
+                    copied_content[-1] = {**last_block, 'cache_control': {'type': 'ephemeral'}}
+                    messages[idx] = {**msg, 'content': copied_content}
+                    return
+            elif isinstance(content, str):
+                messages[idx] = {
+                    **msg,
+                    'content': [{'type': 'text', 'text': content, 'cache_control': {'type': 'ephemeral'}}],
+                }
+                return
+
+    def _wire(self, turn, cap=None, *, profile=None):
+        effective_profile = profile if profile is not None else self.research_capacity()
+        explicit_cache = bool(
+            effective_profile is not None and getattr(effective_profile, 'explicit_cache_control', False) is True
+        )
+        raw_tail = getattr(turn, 'tail_note', None)
+        tail_note = raw_tail if isinstance(raw_tail, str) and raw_tail.strip() else None
+
+        if turn.history:
+            messages: list[dict[str, Any]] = [{'role': 'user', 'content': turn.user}]
+            for exchange in turn.history:
+                messages.append(exchange.assistant.envelope)
+                results_content: list[dict[str, Any]] = [
+                    {'type': 'tool_result', 'tool_use_id': r.tool_call_id, 'content': r.content, 'is_error': r.is_error}
+                    for r in exchange.results
+                ]
+                messages.append({'role': 'user', 'content': results_content})
+            if explicit_cache:
+                self._mark_last_prefix_cache_control(messages)
+            if tail_note is not None:
+                messages[-1]['content'].append({'type': 'text', 'text': tail_note})
+        else:
+            if explicit_cache:
+                user_blocks: list[dict[str, Any]] = [
+                    {'type': 'text', 'text': turn.user, 'cache_control': {'type': 'ephemeral'}}
+                ]
+                if tail_note is not None:
+                    user_blocks.append({'type': 'text', 'text': tail_note})
+                messages = [{'role': 'user', 'content': user_blocks}]
+            elif tail_note is not None:
+                messages = [{'role': 'user', 'content': [{'type': 'text', 'text': turn.user}, {'type': 'text', 'text': tail_note}]}]
+            else:
+                messages = [{'role': 'user', 'content': turn.user}]
+
+        system_payload: Any = (
+            [{'type': 'text', 'text': turn.system, 'cache_control': {'type': 'ephemeral'}}]
+            if explicit_cache
+            else turn.system
+        )
+        wire: dict[str, Any] = {
+            'model': self.settings.model,
+            'system': system_payload,
+            'messages': messages,
+            'max_tokens': min(self.max_tokens, cap) if cap is not None else self.max_tokens,
+        }
         if turn.tools:
-            wire['tools'] = [{'name': t.name, 'description': t.description, 'input_schema': t.input_schema} for t in turn.tools]
+            wire_tools = [{'name': t.name, 'description': t.description, 'input_schema': t.input_schema} for t in turn.tools]
+            if explicit_cache:
+                wire_tools[-1]['cache_control'] = {'type': 'ephemeral'}
+            wire['tools'] = wire_tools
         return wire
 
     def estimate_turn_input_dual(self, turn):
@@ -148,13 +222,17 @@ class AnthropicMessagesProvider:
             safe_stop_reason,
             safe_usage_diagnostics,
             safe_wire_metadata,
+            sanitize_stream_metrics,
             set_finish_reason,
+            warn_if_timeout_output_mismatch,
         )
         set_finish_reason(None)
+        call_started_at = monotonic()
         diagnostics = TransportDiagnostics()
         response = None
         wire = None
         wire_bytes: int | None = None
+        streaming = False
         transport_entered = False
         _UNSET = object()
         observed_stop_reason: Any = _UNSET
@@ -163,14 +241,47 @@ class AnthropicMessagesProvider:
 
         saw_message_start = False
         saw_message_stop = False
+        saw_message_delta_usage = False
         stream_role: str | None = None
         stream_stop_reason: str | None = None
         usage_raw: dict[str, Any] = {}
         block_acc: dict[int, dict[str, Any]] = {}
         reassembled_bytes = 0
+        block_bytes_by_type: dict[str, int] = {
+            'thinking': 0,
+            'text': 0,
+            'tool_use': 0,
+            'redacted_thinking': 0,
+        }
+        active_tool_names: list[str] = []
+        frames_received = 0
+        ttft_ms: int | None = None
+        last_frame_elapsed_ms: int | None = None
+        allowed_tool_names = frozenset(
+            t.name for t in getattr(turn, 'tools', ()) if isinstance(getattr(t, 'name', None), str) and t.name
+        )
+
+        def usable_stream_usage() -> ModelUsage | None:
+            if not usage_raw:
+                return None
+            usage_obj = self._usage_from_dict(usage_raw)
+            if usage_obj is None:
+                return None
+            if saw_message_delta_usage or any(
+                type(val) is int and val > 0
+                for val in (
+                    usage_obj.input_tokens,
+                    usage_obj.output_tokens,
+                    usage_obj.total_tokens,
+                    usage_obj.cache_creation_input_tokens,
+                    usage_obj.cache_read_input_tokens,
+                )
+            ):
+                return usage_obj
+            return None
 
         def partial_reported_tokens() -> int | None:
-            usage_obj = self._usage_from_dict(usage_raw) if usage_raw else None
+            usage_obj = usable_stream_usage()
             return usage_obj.total_tokens if usage_obj is not None else None
 
         def emit_diagnostics() -> None:
@@ -182,14 +293,27 @@ class AnthropicMessagesProvider:
                 return
             try:
                 observation = diagnostics.snapshot()
+                observation['elapsed_ms'] = max(0, int((monotonic() - call_started_at) * 1000))
+                if streaming:
+                    observation['streamed_bytes'] = reassembled_bytes
+                if (streaming and transport_entered) or frames_received > 0:
+                    observation['stream_metrics'] = sanitize_stream_metrics(
+                        {
+                            'frames_received': frames_received,
+                            'ttft_ms': ttft_ms,
+                            'last_frame_elapsed_ms': last_frame_elapsed_ms,
+                            'reassembled_bytes': reassembled_bytes,
+                            'block_bytes_by_type': dict(block_bytes_by_type),
+                            'active_tool_names': list(active_tool_names),
+                        },
+                        allowed_tool_names=allowed_tool_names or None,
+                    )
                 effective_stop_reason = (
                     observed_stop_reason
                     if observed_stop_reason is not _UNSET
                     else (stream_stop_reason if stream_stop_reason is not None else _UNSET)
                 )
-                effective_usage = observed_usage if observed_usage is not None else (
-                    self._usage_from_dict(usage_raw) if usage_raw else None
-                )
+                effective_usage = observed_usage if observed_usage is not None else usable_stream_usage()
                 if wire is not None:
                     meta = safe_wire_metadata(wire, wire_bytes=wire_bytes)
                     meta['provider'] = 'anthropic_messages'
@@ -215,15 +339,22 @@ class AnthropicMessagesProvider:
             if on_stream_event is not None:
                 on_stream_event(payload)
 
-        def add_reassembled_bytes(text_chunk: str) -> None:
+        def add_reassembled_bytes(text_chunk: str, block_type: str | None = None) -> None:
             nonlocal reassembled_bytes
-            reassembled_bytes += len(text_chunk.encode('utf-8'))
-            if reassembled_bytes > _MAX_RESPONSE_BYTES:
+            chunk_bytes = len(text_chunk.encode('utf-8'))
+            if reassembled_bytes + chunk_bytes > _MAX_RESPONSE_BYTES:
                 raise ValueError()
+            reassembled_bytes += chunk_bytes
+            if block_type in block_bytes_by_type:
+                block_bytes_by_type[block_type] += chunk_bytes
 
         def handle_sse_frame(event_name: str, data: str) -> None:
-            nonlocal saw_message_start, saw_message_stop, stream_role, stream_stop_reason
+            nonlocal saw_message_start, saw_message_stop, saw_message_delta_usage
+            nonlocal stream_role, stream_stop_reason, frames_received, ttft_ms, last_frame_elapsed_ms
             diagnostics.submission('response_received')
+            frames_received += 1
+            now_ms = max(0, int((monotonic() - call_started_at) * 1000))
+            last_frame_elapsed_ms = now_ms
             stripped = data.strip()
             if event_name == 'ping':
                 return
@@ -257,23 +388,27 @@ class AnthropicMessagesProvider:
                     raise ValueError()
                 btype = block.get('type')
                 if btype == 'text':
+                    if ttft_ms is None:
+                        ttft_ms = now_ms
                     initial = block.get('text', '')
                     if not isinstance(initial, str):
                         raise ValueError()
                     if initial:
-                        add_reassembled_bytes(initial)
+                        add_reassembled_bytes(initial, 'text')
                         emit_stream_safe({'channel': 'text', 'delta': initial})
                     block_acc[idx] = {'type': 'text', 'parts': [initial] if initial else [], 'stopped': False}
                 elif btype == 'thinking':
+                    if ttft_ms is None:
+                        ttft_ms = now_ms
                     init_think = block.get('thinking', '')
                     init_sig = block.get('signature', '')
                     if not isinstance(init_think, str) or not isinstance(init_sig, str):
                         raise ValueError()
                     if init_think:
-                        add_reassembled_bytes(init_think)
+                        add_reassembled_bytes(init_think, 'thinking')
                         emit_stream_safe({'channel': 'thinking', 'delta': init_think})
                     if init_sig:
-                        add_reassembled_bytes(init_sig)
+                        add_reassembled_bytes(init_sig, 'thinking')
                     block_acc[idx] = {
                         'type': 'thinking',
                         'thinking_parts': [init_think] if init_think else [],
@@ -281,18 +416,28 @@ class AnthropicMessagesProvider:
                         'stopped': False,
                     }
                 elif btype == 'redacted_thinking':
+                    if ttft_ms is None:
+                        ttft_ms = now_ms
                     data_val = block.get('data')
                     if not isinstance(data_val, str):
                         raise ValueError()
-                    add_reassembled_bytes(data_val)
+                    add_reassembled_bytes(data_val, 'redacted_thinking')
                     block_acc[idx] = {'type': 'redacted_thinking', 'data': data_val, 'stopped': False}
                 elif btype == 'tool_use':
+                    if ttft_ms is None:
+                        ttft_ms = now_ms
                     block_id, block_name = block.get('id'), block.get('name')
                     if not isinstance(block_id, str) or not block_id or not isinstance(block_name, str) or not block_name:
                         raise ValueError()
                     init_input = block.get('input')
                     if init_input is not None and not isinstance(init_input, dict):
                         raise ValueError()
+                    if allowed_tool_names:
+                        safe_tool_name = block_name if block_name in allowed_tool_names else 'unrecognized'
+                    else:
+                        safe_tool_name = block_name if block_name.isascii() and block_name.replace('_', '').isalnum() and block_name[0].islower() else 'unrecognized'
+                    if safe_tool_name not in active_tool_names and len(active_tool_names) < 32:
+                        active_tool_names.append(safe_tool_name)
                     status_msg = (
                         '正在起草研究报告并整理引文，完成后将自动核验原文位置…'
                         if block_name == 'submit_research'
@@ -322,31 +467,39 @@ class AnthropicMessagesProvider:
                     chunk = delta.get('text')
                     if entry['type'] != 'text' or not isinstance(chunk, str):
                         raise ValueError()
+                    if ttft_ms is None:
+                        ttft_ms = now_ms
                     if chunk:
-                        add_reassembled_bytes(chunk)
+                        add_reassembled_bytes(chunk, 'text')
                         entry['parts'].append(chunk)
                         emit_stream_safe({'channel': 'text', 'delta': chunk})
                 elif dtype == 'thinking_delta':
                     chunk = delta.get('thinking')
                     if entry['type'] != 'thinking' or not isinstance(chunk, str):
                         raise ValueError()
+                    if ttft_ms is None:
+                        ttft_ms = now_ms
                     if chunk:
-                        add_reassembled_bytes(chunk)
+                        add_reassembled_bytes(chunk, 'thinking')
                         entry['thinking_parts'].append(chunk)
                         emit_stream_safe({'channel': 'thinking', 'delta': chunk})
                 elif dtype == 'signature_delta':
                     chunk = delta.get('signature')
                     if entry['type'] != 'thinking' or not isinstance(chunk, str):
                         raise ValueError()
+                    if ttft_ms is None:
+                        ttft_ms = now_ms
                     if chunk:
-                        add_reassembled_bytes(chunk)
+                        add_reassembled_bytes(chunk, 'thinking')
                         entry['signature_parts'].append(chunk)
                 elif dtype == 'input_json_delta':
                     chunk = delta.get('partial_json')
                     if entry['type'] != 'tool_use' or not isinstance(chunk, str):
                         raise ValueError()
+                    if ttft_ms is None:
+                        ttft_ms = now_ms
                     if chunk:
-                        add_reassembled_bytes(chunk)
+                        add_reassembled_bytes(chunk, 'tool_use')
                         entry['json_parts'].append(chunk)
                         if entry['extractor'] is not None:
                             draft_delta = entry['extractor'].feed(chunk)
@@ -366,7 +519,10 @@ class AnthropicMessagesProvider:
                 if isinstance(delta, dict) and isinstance(delta.get('stop_reason'), str):
                     stream_stop_reason = delta['stop_reason']
                 if isinstance(payload.get('usage'), dict):
-                    usage_raw.update({k: v for k, v in payload['usage'].items() if v is not None})
+                    clean_usage = {k: v for k, v in payload['usage'].items() if v is not None}
+                    if clean_usage:
+                        saw_message_delta_usage = True
+                        usage_raw.update(clean_usage)
                 return
             if ev_type == 'message_stop':
                 saw_message_stop = True
@@ -400,7 +556,13 @@ class AnthropicMessagesProvider:
                     getattr(self.policy, 'max_output_tokens', None),
                     getattr(profile, 'output_tokens', None),
                 )
-                wire = self._wire(turn, effective_max_tokens)
+                warn_if_timeout_output_mismatch(
+                    effective_max_tokens,
+                    timeout,
+                    streaming=streaming,
+                    logger=_logger,
+                )
+                wire = self._wire(turn, effective_max_tokens, profile=profile)
                 if streaming:
                     wire['stream'] = True
                 body = json.dumps(wire, ensure_ascii=False, separators=(',', ':')).encode()
@@ -491,9 +653,15 @@ class AnthropicMessagesProvider:
                         error.reported_tokens = partial_reported_tokens()
                 raise
             except (_TransportFailure, TimeoutError, socket.timeout) as error:
-                code = 'provider_cancelled' if cancel_event and cancel_event.is_set() else 'provider_timeout' if isinstance(error, (TimeoutError, socket.timeout, _TransportTimeout)) else 'provider_transport_error'
-                failure = ProviderFailure(code, 'Provider request ended without a usable result.', retryable=True)
-                failure.provider_response_received = diagnostics.snapshot()['submission_state'] == 'response_received'
+                failure = _build_transport_failure(
+                    error,
+                    diagnostics,
+                    cancelled=bool(cancel_event and cancel_event.is_set()),
+                    message='Provider request ended without a usable result.',
+                    started_at=call_started_at,
+                    wire_bytes=wire_bytes,
+                    streamed_bytes=reassembled_bytes if streaming else None,
+                )
                 if failure.provider_response_received:
                     failure.reported_tokens = partial_reported_tokens()
                 raise failure from None
@@ -510,23 +678,31 @@ class AnthropicMessagesProvider:
                     if stream_stop_reason is not None:
                         observed_stop_reason = stream_stop_reason
                         set_finish_reason(stream_stop_reason)
-                    observed_usage = self._usage_from_dict(usage_raw) if usage_raw else None
+                    observed_usage = usable_stream_usage()
                     failure = ProviderFailure('provider_cancelled', 'Provider result discarded.', retryable=True)
                     failure.provider_response_received = True
                     failure.reported_tokens = observed_usage.total_tokens if observed_usage else None
+                    failure.timeout_kind = None
+                    failure.elapsed_ms = max(0, int((monotonic() - call_started_at) * 1000))
+                    failure.wire_bytes = wire_bytes
+                    failure.streamed_bytes = reassembled_bytes
                     raise failure
                 if not saw_message_stop:
                     if stream_stop_reason is not None:
                         observed_stop_reason = stream_stop_reason
                         set_finish_reason(stream_stop_reason)
-                    observed_usage = self._usage_from_dict(usage_raw) if usage_raw else None
+                    observed_usage = usable_stream_usage()
                     failure = ProviderFailure('provider_transport_error', 'Provider stream ended unexpectedly.', retryable=True)
                     failure.provider_response_received = True
                     failure.reported_tokens = observed_usage.total_tokens if observed_usage else None
+                    failure.timeout_kind = None
+                    failure.elapsed_ms = max(0, int((monotonic() - call_started_at) * 1000))
+                    failure.wire_bytes = wire_bytes
+                    failure.streamed_bytes = reassembled_bytes
                     raise failure
                 try:
                     observed_stop_reason = stream_stop_reason
-                    observed_usage = self._usage_from_dict(usage_raw) if usage_raw else None
+                    observed_usage = usable_stream_usage()
                     set_finish_reason(stream_stop_reason)
                     emit_diagnostics()
                     if not saw_message_start or stream_role != 'assistant':

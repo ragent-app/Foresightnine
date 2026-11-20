@@ -574,3 +574,226 @@ def test_sse_endpoint_heartbeat_catches_cross_process_storage_updates(env, live_
         asyncio.run(scenario())
     finally:
         release.set()
+
+
+def test_sse_terminal_race_between_authorize_and_subscribe_does_not_wait_for_heartbeat(env, live_server, monkeypatch):
+    # High heartbeat proves fast termination does not wait on heartbeat polling.
+    monkeypatch.setattr(api.research_live_broker, 'heartbeat_seconds', 10.0)
+    sid = env.source_id
+    entered = threading.Event()
+    release = threading.Event()
+
+    def blocked(messages, kwargs):
+        entered.set()
+        assert release.wait(10)
+        return submit(sid)(messages, kwargs)
+
+    env.install(Scripted(read_all(sid), blocked))
+    op_id = env.start().json()['operation']['operation_id']
+    assert entered.wait(10)
+
+    orig_subscribe = api.research_live_broker.subscribe
+    race_triggered = threading.Event()
+
+    def racing_subscribe(operation_id: str, *, account_id: str, loop: asyncio.AbstractEventLoop):
+        if operation_id == op_id and not race_triggered.is_set():
+            race_triggered.set()
+            # Finish the operation AFTER _authorize_research_run_progress ran, BEFORE subscribe registers.
+            release.set()
+            assert env.wait(op_id)['status'] == 'completed'
+        return orig_subscribe(operation_id, account_id=account_id, loop=loop)
+
+    monkeypatch.setattr(api.research_live_broker, 'subscribe', racing_subscribe)
+
+    t0 = time.monotonic()
+
+    async def scenario():
+        async with httpx.AsyncClient(base_url=live_server, timeout=3.0) as client:
+            async with client.stream('GET', f'{env.path}/runs/{op_id}/events', headers=env.headers) as resp:
+                assert resp.status_code == 200
+                return await _read_sse_frames(resp)
+
+    try:
+        frames = asyncio.run(scenario())
+    finally:
+        release.set()
+
+    elapsed = time.monotonic() - t0
+    assert race_triggered.is_set()
+    assert elapsed < 3.0
+    assert [f['event'] for f in frames] == ['progress.snapshot', 'run.terminal']
+    assert frames[0]['data']['operation_status'] == 'completed'
+    assert frames[0]['data']['version_id'] == env.latest()['version_id']
+    assert frames[1]['id'] == 'done:completed'
+    assert frames[1]['data']['version_id'] == env.latest()['version_id']
+
+
+def test_sse_endpoint_continue_from_partial_streams_cumulative_snapshot_and_deltas(env, live_server, monkeypatch):
+    from types import SimpleNamespace
+    from app.anthropic_messages import AnthropicMessagesProvider
+    from app.phase3 import ProviderFailure, ProviderPolicy
+
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRIES', '0')
+    sid = env.source_id
+    continue_entered = threading.Event()
+    continue_release = threading.Event()
+    call_counter = {'n': 0}
+
+    def stream_transport(method, url, headers, body, timeout, on_frame):
+        n = call_counter['n']
+        call_counter['n'] += 1
+        if n == 0:
+            args_json = json.dumps({'reads': [{'source_id': sid}], 'rationale': 'read initial disclosure'})
+            frames = [
+                ('message_start', {'type': 'message_start', 'message': {'role': 'assistant', 'content': [], 'usage': {'input_tokens': 5, 'output_tokens': 1}}}),
+                ('content_block_start', {'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'tool_use', 'id': 'call_1', 'name': 'read_sources', 'input': {}}}),
+                ('content_block_delta', {'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'input_json_delta', 'partial_json': args_json}}),
+                ('content_block_stop', {'type': 'content_block_stop', 'index': 0}),
+                ('message_delta', {'type': 'message_delta', 'delta': {'stop_reason': 'tool_use'}, 'usage': {'output_tokens': 5}}),
+                ('message_stop', {'type': 'message_stop'}),
+            ]
+            for ev, payload in frames:
+                on_frame(ev, json.dumps(payload))
+            return None
+        if n == 1:
+            # Fail mid-stream / timeout during op1 so Turn 1 saves status='partial' with cumulative checkpoint.
+            on_frame('message_start', json.dumps({'type': 'message_start', 'message': {'role': 'assistant', 'content': [], 'usage': {'input_tokens': 6, 'output_tokens': 1}}}))
+            err = ProviderFailure('provider_timeout', 'upstream timed out', retryable=True)
+            err.provider_response_received = True
+            err.reported_tokens = 7
+            raise err
+        # op2 (/continue) streams thinking + submit_research draft_report
+        continue_entered.set()
+        assert continue_release.wait(10)
+        submit_json = json.dumps({
+            'status': 'completed',
+            'report': 'CONTINUED REPORT',
+            'claims': [{'text': 'Revenue was 100 USD.', 'source_id': sid, 'quotation': 'Revenue was 100 USD.', 'role': 'support'}],
+            'limitations': [],
+            'stopping_reason': 'answered',
+        })
+        frames = [
+            ('message_start', {'type': 'message_start', 'message': {'role': 'assistant', 'content': [], 'usage': {'input_tokens': 8, 'output_tokens': 1}}}),
+            ('content_block_start', {'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'thinking', 'thinking': '', 'signature': ''}}),
+            ('content_block_delta', {'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'thinking_delta', 'thinking': 'Continuing from partial checkpoint.'}}),
+            ('content_block_delta', {'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'signature_delta', 'signature': 'SIG'}}),
+            ('content_block_stop', {'type': 'content_block_stop', 'index': 0}),
+            ('content_block_start', {'type': 'content_block_start', 'index': 1, 'content_block': {'type': 'tool_use', 'id': 'call_2', 'name': 'submit_research', 'input': {}}}),
+        ]
+        for i in range(0, len(submit_json), 10):
+            frames.append(('content_block_delta', {'type': 'content_block_delta', 'index': 1, 'delta': {'type': 'input_json_delta', 'partial_json': submit_json[i:i + 10]}}))
+        frames.extend([
+            ('content_block_stop', {'type': 'content_block_stop', 'index': 1}),
+            ('message_delta', {'type': 'message_delta', 'delta': {'stop_reason': 'tool_use'}, 'usage': {'output_tokens': 12}}),
+            ('message_stop', {'type': 'message_stop'}),
+        ])
+        for ev, payload in frames:
+            on_frame(ev, json.dumps(payload))
+        return None
+
+    provider = AnthropicMessagesProvider(
+        SimpleNamespace(base_url='https://example.com/anthropic', model='m-s1', api_key='sk-test', allow_private_network=False),
+        ProviderPolicy(timeout_seconds=10, max_output_tokens=1000),
+        anthropic_version='2023-06-01',
+        auth_scheme='x-api-key',
+        max_tokens=500,
+        stream_transport=stream_transport,
+        stream_enabled=True,
+    )
+    env.install(provider)
+
+    op1 = env.run()
+    latest_v1 = env.latest()
+    assert latest_v1['content']['turns'][-1]['status'] == 'partial'
+    assert latest_v1['content']['turns'][-1]['index'] == 1
+
+    cont_resp = env.client.post(
+        f'{env.path}/runs/{op1}/continue',
+        headers={**env.headers, 'Idempotency-Key': uuid4().hex},
+        json={},
+    )
+    assert cont_resp.status_code == 202, cont_resp.text
+    op2 = cont_resp.json()['operation']['operation_id']
+    assert continue_entered.wait(10)
+
+    async def scenario():
+        async with httpx.AsyncClient(base_url=live_server, timeout=10.0) as client:
+            async with client.stream('GET', f'{env.path}/runs/{op2}/events?after=0', headers=env.headers) as resp:
+                assert resp.status_code == 200
+                lines_iter = resp.aiter_lines()
+                snap_lines: list[str] = []
+                async for line in lines_iter:
+                    snap_lines.append(line)
+                    if line == '':
+                        break
+                snap_frames = _parse_sse_frames(snap_lines)
+                assert len(snap_frames) == 1
+                assert snap_frames[0]['event'] == 'progress.snapshot'
+                snap_data = snap_frames[0]['data']
+                assert snap_data['turn']['index'] == 1
+                prior_events = snap_data['events']
+                assert [e['index'] for e in prior_events] == list(range(len(prior_events)))
+                assert len(prior_events) >= 3
+                assert any(e['kind'] == 'tool' and e['name'] == 'read_sources' for e in prior_events)
+
+                continue_release.set()
+                rest_lines: list[str] = []
+                async for line in lines_iter:
+                    rest_lines.append(line)
+                return snap_frames + _parse_sse_frames(rest_lines)
+
+    try:
+        frames = asyncio.run(scenario())
+    finally:
+        continue_release.set()
+
+    assert env.wait(op2)['status'] == 'completed'
+    event_names = [f['event'] for f in frames]
+    assert 'step.event' in event_names
+    assert 'step.current' in event_names
+    assert 'stream.delta' in event_names
+    assert event_names[-1] == 'run.terminal'
+
+    deltas = [f['data'] for f in frames if f.get('event') == 'stream.delta']
+    assert any(d['channel'] == 'thinking' and 'Continuing from partial checkpoint.' in d['delta'] for d in deltas)
+    assert any(d['channel'] == 'draft_report' and d['delta'] == 'CONTINUED REPORT' for d in deltas)
+
+    final_turn = env.latest()['content']['turns'][-1]
+    assert final_turn['index'] == 1
+    assert final_turn['status'] == 'completed'
+    assert final_turn['report'] == 'CONTINUED REPORT'
+    assert op1 in final_turn['operation_ids'] and op2 in final_turn['operation_ids']
+
+
+def test_sse_topic_deleted_after_subscribe_returns_404_and_releases_subscription(env, monkeypatch):
+    from app.research_topics import TopicNotFound
+
+    sid = env.source_id
+    env.install(Scripted(read_all(sid), submit(sid)))
+    op_id = env.run()
+    account_id = api.RESEARCH_RUN_INPUTS.get(op_id)['owner_id']
+    assert api.research_live_broker.active_streams_for_account(account_id) == 0
+
+    orig_subscribe = api.research_live_broker.subscribe
+    orig_get = api.research_topics.get
+    subscribed = threading.Event()
+
+    def tracking_subscribe(operation_id, *, account_id, loop):
+        sub = orig_subscribe(operation_id, account_id=account_id, loop=loop)
+        subscribed.set()
+        return sub
+
+    def racing_get(acct, topic_id):
+        # Simulate topic deletion in the window after subscribe() and before the fresh snapshot read.
+        if subscribed.is_set():
+            raise TopicNotFound(topic_id)
+        return orig_get(acct, topic_id)
+
+    monkeypatch.setattr(api.research_live_broker, 'subscribe', tracking_subscribe)
+    monkeypatch.setattr(api.research_topics, 'get', racing_get)
+
+    resp = env.client.get(f'{env.path}/runs/{op_id}/events', headers=env.headers)
+    assert subscribed.is_set()
+    assert resp.status_code == 404
+    assert resp.json()['error_code'] == 'not_found'
+    assert api.research_live_broker.active_streams_for_account(account_id) == 0

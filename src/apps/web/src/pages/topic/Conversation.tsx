@@ -1,14 +1,16 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
-import { useMemo, useState, type Ref } from "react";
+import { useCallback, useMemo, useState, type Ref } from "react";
 import type { ProgressEvent, RecoveryStatus } from "../../api/types";
 import { formatInterimParts, formulaLabel, gapText, recoveryReasonLabel, turnReasonLabel, TURN_STATUS_LABEL, VERIFY_NOTE } from "../../lib/copy";
 import { displayTurnNumber, formatClock, formatDuration, formatInteger, formatQuantity, turnStamp } from "../../lib/format";
-import { answerSummary, claimRole, parseTurnEvents, partialSummary, ROLE_LABEL, stepRows, toolStepCount, turnContent, turnDurationMs } from "../../lib/research";
+import { answerSummary, claimRole, parseTurnEvents, partialSummary, ROLE_LABEL, stepRows, toolStepCount, turnCharts, turnContent, turnDurationMs } from "../../lib/research";
 import { Disclosure } from "../../ui/controls";
 import { Icon } from "../../ui/icons";
+import { extractReferencedChartIds, MarkdownContent } from "../../ui/MarkdownContent";
 import { useNow } from "../../ui/media";
 import { Menu, type MenuEntry } from "../../ui/Menu";
 import { CitationButton } from "./Citation";
+import { ChartCard } from "./charts/ChartCard";
 import { LiveDraftPreview, LiveEmptyOrStream } from "./LiveStreamView";
 import { ProcessTimeline } from "./ProcessTimeline";
 import { useTopicView, type LiveRun } from "./context";
@@ -46,24 +48,16 @@ function usageMeta(turn: ResearchV2.ResearchTurn): string {
   return parts.join(" · ");
 }
 
-function paragraphs(text: string): string[] {
-  return text.split(/\n\s*\n/).map((part) => part.trim()).filter(Boolean);
-}
-
-function noteLines(text: string): string[] {
-  return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-}
-
 function PartialNotesBlock({ notes }: { notes: string }) {
-  const lines = noteLines(notes);
-  if (lines.length === 0) return null;
+  const trimmed = notes.trim();
+  if (!trimmed) return null;
   const label = "过程与缺口说明（未核实线索与建议，非正式结论）";
   return (
     <Disclosure summary={label} defaultOpen>
       <p className="note">以下说明来自模型补充，未经原文位置或数据核对，不作为正式结论。</p>
       <div className="callout-lite ok" role="note" aria-label={label}>
         <div className="field">
-          {lines.map((line, index) => <p key={index}>{line}</p>)}
+          <MarkdownContent content={trimmed} variant="notes" />
         </div>
       </div>
     </Disclosure>
@@ -83,12 +77,14 @@ export function AskBubble({ text, focusLabel }: { text: string; focusLabel?: str
   );
 }
 
+const BLOCKED_CONTINUATION_REASONS = new Set<string>(["repeated_truncation", "repeated_timeout"]);
+
 /** Callout actions follow spec §4.3: one primary decision, the rest under “更多”. */
 function CalloutActions({ actions }: { actions: TurnActions }) {
   const { recovery } = actions;
-  const repeatedTruncation = recovery?.reason === "repeated_truncation";
-  const canContinue = recovery?.can_continue === true && !repeatedTruncation;
-  const canDeliver = recovery?.can_deliver === true && actions.deliverable && !repeatedTruncation;
+  const continuationBlocked = recovery?.reason ? BLOCKED_CONTINUATION_REASONS.has(recovery.reason) : false;
+  const canContinue = recovery?.can_continue === true && !continuationBlocked;
+  const canDeliver = recovery?.can_deliver === true && actions.deliverable && !continuationBlocked;
   const disabled = actions.busy || actions.locked;
   let primary: { label: string; onClick: () => void; disabled: boolean };
   if (actions.checking && !recovery) primary = { label: "正在检查恢复状态…", onClick: () => undefined, disabled: true };
@@ -98,7 +94,7 @@ function CalloutActions({ actions }: { actions: TurnActions }) {
 
   const more: MenuEntry[] = [];
   if (canDeliver && canContinue) more.push({ key: "deliver", label: "交付已有成果", icon: "check", onSelect: actions.onDeliver, disabled });
-  if (actions.onFillGap && !repeatedTruncation) more.push({ key: "gap", label: "补充缺口", icon: "chev", onSelect: actions.onFillGap, disabled: actions.locked });
+  if (actions.onFillGap && !continuationBlocked) more.push({ key: "gap", label: "补充缺口", icon: "chev", onSelect: actions.onFillGap, disabled: actions.locked });
   more.push({ key: "add", label: "添加资料", icon: "plus", onSelect: actions.onAddSources, disabled: actions.locked });
   if (primary.label !== "重新提问") more.push({ key: "ask", label: "重新提问", icon: "pen", onSelect: actions.onAskAgain, disabled: actions.locked });
 
@@ -186,7 +182,7 @@ function ClaimList({ claims }: { claims: readonly ResearchV2.ResearchClaim[] }) 
           <li key={claimId || claim.text} id={claimId ? `claim-${claimId}` : undefined}>
             <span className={`role ${role}`}>{ROLE_LABEL[role]}</span>
             <span>
-              {claim.text}
+              <MarkdownContent content={claim.text} variant="inline" />
               {(claim.citations ?? []).map((citation, index) => (
                 <CitationButton key={index} n={view.citations.numberFor(citation)} citation={citation} claimId={claimId} citationIndex={index} />
               ))}
@@ -203,12 +199,31 @@ export function AnswerBlock({ turn, actions }: { turn: ResearchV2.ResearchTurn; 
   const view = useTopicView();
   const items = turnContent(view.content, turn);
   const partial = turn.status === "partial";
-  const report = paragraphs(turn.report ?? "");
+  const reportText = (turn.report ?? "").trim();
   const partialNotes = partial ? (turn.partial_notes ?? "").trim() : "";
   const events = useMemo(() => parseTurnEvents(turn.events), [turn.events]);
   const rows = useMemo(() => stepRows(events), [events]);
   const toolSteps = useMemo(() => toolStepCount(events), [events]);
   const [processOpen, setProcessOpen] = useState(false);
+
+  const chartsById = useMemo(() => {
+    const map = new Map<string, ResearchV2.ResearchChart>();
+    for (const chart of view.content.charts ?? []) {
+      map.set(chart.chart_id, chart);
+    }
+    return map;
+  }, [view.content.charts]);
+
+  const turnChartList = useMemo(() => turnCharts(view.content, turn), [view.content, turn]);
+  const inlineChartIds = useMemo(() => extractReferencedChartIds(reportText), [reportText]);
+  const trailingCharts = useMemo(
+    () => turnChartList.filter((chart) => !inlineChartIds.has(chart.chart_id)),
+    [turnChartList, inlineChartIds],
+  );
+  const renderChart = useCallback(
+    (chart: ResearchV2.ResearchChart) => <ChartCard chart={chart} />,
+    [],
+  );
 
   let processSummary = "";
   if (rows.length > 0) {
@@ -251,10 +266,24 @@ export function AnswerBlock({ turn, actions }: { turn: ResearchV2.ResearchTurn; 
           ) : null}
         </div>
       ) : null}
-      {report.length > 0 ? (
-        <div className="report">{report.map((text, index) => <p key={index}>{text}</p>)}</div>
+      {reportText ? (
+        <div className="report">
+          <MarkdownContent
+            content={reportText}
+            variant="report"
+            chartsById={chartsById}
+            renderChart={renderChart}
+          />
+        </div>
       ) : partial ? (
         <p>{partialSummary({ facts: items.facts.length, calculations: items.calculations.length, claims: items.claims.length })}</p>
+      ) : null}
+      {trailingCharts.length > 0 ? (
+        <div className="turn-charts">
+          {trailingCharts.map((chart) => (
+            <ChartCard key={chart.chart_id} chart={chart} />
+          ))}
+        </div>
       ) : null}
       <StatLine calculations={items.calculations} turnId={turn.turn_id} />
       <ClaimList claims={items.claims} />
@@ -307,13 +336,14 @@ export function InterruptedTurn({ number, startedAt, question, status, actions, 
   );
 }
 
-export function LiveTurn({ number, startedAt, question, live = null, sectionRef, onDraftGrow }: {
+export function LiveTurn({ number, startedAt, question, live = null, sectionRef, onDraftGrow, continuing = null }: {
   number: number;
   startedAt: string;
   question: string;
   live?: LiveRun | null;
   sectionRef?: Ref<HTMLElement>;
   onDraftGrow?: (() => void) | undefined;
+  continuing?: "continue" | "deliver" | null | undefined;
 }) {
   const now = useNow(true);
   const [expanded, setExpanded] = useState(true);
@@ -332,15 +362,26 @@ export function LiveTurn({ number, startedAt, question, live = null, sectionRef,
   const events = live?.events ?? [];
   const current = progress?.current ?? null;
   const hasTimeline = events.length > 0 || current !== null;
+  const isContinue = continuing === "continue" || continuing === "deliver";
+  const statusTitle = continuing === "deliver"
+    ? (isPending ? "排队中 · 交付已有成果" : "正在交付已有成果")
+    : continuing === "continue"
+      ? (isPending ? "排队中 · 继续研究" : "正在继续研究")
+      : (isPending ? "排队中" : "正在研究");
 
   return (
-    <section ref={sectionRef} className="turn" aria-label={`第 ${number} 轮`} aria-busy="true">
-      <TurnStamp number={number} iso={startedAt} />
-      <AskBubble text={question} />
+    <section
+      ref={sectionRef}
+      className={isContinue ? "turn turn-continuation" : "turn"}
+      aria-label={isContinue ? `第 ${number} 轮继续研究` : `第 ${number} 轮`}
+      aria-busy="true"
+    >
+      {!isContinue ? <TurnStamp number={number} iso={startedAt} /> : null}
+      {!isContinue && question ? <AskBubble text={question} /> : null}
       <div className="answer live-turn">
         <div className="live-turn-head">
           <span className="dot running" aria-hidden="true" />
-          <span className="live-turn-title">{isPending ? "排队中" : "正在研究"}</span>
+          <span className="live-turn-title">{statusTitle}</span>
           {metaParts.length > 0 ? <span className="meta live-turn-meta">{metaParts.join(" · ")}</span> : null}
           <button
             type="button"

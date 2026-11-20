@@ -116,7 +116,9 @@ def test_settlement_failure_saves_response_and_recovery_does_not_resubmit():
     resumed = run_research_agent(question='Q', sources=[source()], model=m, context=c, initial_state=snapshot)
     assert resumed.reason == 'no_submission'
     assert len(m.inputs) == 2  # The second request follows the recovered read; the first is never replayed.
-    assert m.inputs[-1][-1]['tool_call_id'] == 'a'
+    tool_msgs = [msg for msg in m.inputs[-1] if msg.get('role') == 'tool']
+    assert tool_msgs and tool_msgs[-1]['tool_call_id'] == 'a'
+    assert 'settlement_failed' in m.inputs[-1][-1]['content']
 
 
 def test_tool_batch_cursor_resumes_without_model_replay():
@@ -1705,8 +1707,8 @@ def test_l1_compaction_triggers_under_tight_context_and_record_facts_still_locat
             self.step = 0
 
         def research_capacity(self):
-            # Trigger watermark: ~32_000 * 3 * 0.58 - fixed (~10k) ≈ ~45k chars.
-            return SimpleNamespace(context_tokens=32_000, output_tokens=1000, input_counter='chars_div_3')
+            # Trigger watermark: ~36_000 * 3 * 0.58 - fixed (~19k) ≈ ~44k chars.
+            return SimpleNamespace(context_tokens=36_000, output_tokens=1000, input_counter='chars_div_3')
 
         def estimate_turn_input(self, turn_obj):
             return 100
@@ -1861,8 +1863,8 @@ def test_failed_attempts_and_partial_notes_recorded_across_truncation_context_in
     assert isinstance(attempt['call_id'], str) and attempt['call_id']
     assert isinstance(attempt['at'], str) and attempt['at']
 
-    # Resuming from that checkpoint injects prior_failed_attempts + recovery_guidance into turn.user transiently,
-    # without mutating state['user'], and preserves JSON structure.
+    # Resuming from that checkpoint keeps turn.user byte-identical to state['user'] (I-FIN-CTX-001)
+    # and passes prior_failed_attempts + recovery_guidance via turn.tail_note.
     original_user = final_cp['user']
 
     class CaptureResume:
@@ -1905,10 +1907,12 @@ def test_failed_attempts_and_partial_notes_recorded_across_truncation_context_in
     assert res_ok.status == 'completed'
     assert res_ok.partial_notes is None
     assert resumed_saved[-1]['user'] == original_user
-    resumed_user_payload = json.loads(capture.turns[0].user)
-    assert resumed_user_payload['question'] == 'Compare revenue?'
-    assert resumed_user_payload['prior_failed_attempts'][0]['reason'] == 'provider_output_truncated'
-    assert 'search_source' in resumed_user_payload['recovery_guidance']
+    assert capture.turns[0].user == original_user
+    tail_note = capture.turns[0].tail_note or ''
+    assert tail_note.startswith('[Recovery context: ')
+    tail_payload = json.loads(tail_note[len('[Recovery context: '):-1])
+    assert tail_payload['prior_failed_attempts'][0]['reason'] == 'provider_output_truncated'
+    assert 'search_source' in tail_payload['recovery_guidance']
 
     # 2. received=False truncation and context_limit still save failed_attempts & clear pending!
     for code in ('provider_output_truncated', 'provider_context_limit'):
@@ -1980,12 +1984,14 @@ def test_failed_attempts_and_partial_notes_recorded_across_truncation_context_in
     assert settle_saved[-1]['failed_attempts'][-1]['reason'] == 'settlement_failed'
 
 
-def test_default_120k_and_max_input_tokens_watermarks_and_giant_protected_force():
-    from app.research_runtime import compact_runtime_history
+def test_default_90k_and_max_input_tokens_watermarks_and_giant_protected_force():
+    from app.research_runtime import DEFAULT_L1_COMPACT_TRIGGER_CHARS, compact_runtime_history
 
-    # 1. Default 120,000-char L1 watermark in run_research_agent:
-    #    4 x 24,000-char reads (~98k history) stay verbatim; 6th read pushes >120k and compacts older turns!
-    doc_text = ''.join(f'[CHUNK_{i:02d}] ' + ('X' * 23_989) for i in range(6))
+    assert DEFAULT_L1_COMPACT_TRIGGER_CHARS == 90_000
+
+    # 1. Default 90,000-char L1 watermark in run_research_agent:
+    #    4 x 20,000-char reads (~82k history) stay verbatim; 5th read pushes >90k and compacts older turns!
+    doc_text = ''.join(f'[CHUNK_{i:02d}] ' + ('X' * 19_989) for i in range(6))
     src = source()
     src.source_id = 's_big'
     src.text = doc_text
@@ -2003,12 +2009,12 @@ def test_default_120k_and_max_input_tokens_watermarks_and_giant_protected_force(
             self.turns.append(turn_obj)
             self.step += 1
             if self.step <= 6:
-                start = (self.step - 1) * 24_000
+                start = (self.step - 1) * 20_000
                 return ModelResponse(
                     {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': f'r{self.step}', 'name': 'read_sources',
-                                                       'input': {'reads': [{'source_id': 's_big', 'start': start, 'end': start + 24_000}], 'rationale': f'read {self.step}'}}]},
+                                                       'input': {'reads': [{'source_id': 's_big', 'start': start, 'end': start + 20_000}], 'rationale': f'read {self.step}'}}]},
                     (ModelToolCall(f'r{self.step}', 'read_sources',
-                                   {'reads': [{'source_id': 's_big', 'start': start, 'end': start + 24_000}], 'rationale': f'read {self.step}'}),),
+                                   {'reads': [{'source_id': 's_big', 'start': start, 'end': start + 20_000}], 'rationale': f'read {self.step}'}),),
                     ModelUsage(10, 5, 15), 'tool_use', 'tool_calls',
                 )
             return ModelResponse(
@@ -2037,13 +2043,13 @@ def test_default_120k_and_max_input_tokens_watermarks_and_giant_protected_force(
         checkpoint=lambda s: saved_big.append(json.loads(json.dumps(s))),
     )
     assert res_big.status == 'completed'
-    # Before step 6 (after 5 x 24k = ~122k history!), L1 triggers once; before step 5 (4 x 24k = ~98k), zero compaction!
+    # Before step 5 (after 4 x 20k = ~82k history), zero compaction! Before step 6 (5 x 20k = ~102k > 90k), L1 triggers once!
     assert 'cleared' not in m_big.turns[4].history[0].results[0].content
     assert json.loads(m_big.turns[5].history[0].results[0].content)['cleared'] is True
     assert json.loads(m_big.turns[5].history[2].results[0].content)['cleared'] is True
     assert 'cleared' not in m_big.turns[5].history[3].results[0].content  # keep_recent=2
     assert 'cleared' not in m_big.turns[5].history[4].results[0].content
-    # Step 7 is below 120k again -> steps 0..4 stay byte-identical to step 6!
+    # Step 7 is below 90k again -> steps 0..4 stay byte-identical to step 6!
     assert m_big.turns[6].history[:5] == m_big.turns[5].history[:5]
     assert saved_big[-1]['compaction_count'] == 1
 
@@ -2118,3 +2124,578 @@ def test_default_120k_and_max_input_tokens_watermarks_and_giant_protected_force(
     yes_force = compact_runtime_history(prot_state, keep_recent=1, force=True)
     assert yes_force['compacted'] is True
     assert json.loads(prot_state['history'][0]['results'][0]['content'])['cleared'] is True
+
+
+def test_submit_report_and_system_declare_restricted_gfm_markdown():
+    from app.research_runtime import REPORT_FORMAT_GUIDANCE, SYSTEM, TOOLS, SubmitRequest
+
+    description = SubmitRequest.model_fields['report'].description
+    assert description == REPORT_FORMAT_GUIDANCE
+    submit_tool = next(tool for tool in TOOLS if tool.name == 'submit_research')
+    assert submit_tool.input_schema['properties']['report']['description'] == REPORT_FORMAT_GUIDANCE
+    assert REPORT_FORMAT_GUIDANCE in SYSTEM
+    for token in ('restricted GFM Markdown', 'GFM tables', 'raw HTML', '![](...)', '$130.5B', 'single $'):
+        assert token in REPORT_FORMAT_GUIDANCE
+    # Storage contract unchanged: report remains a bounded plain string field.
+    assert SubmitRequest.model_fields['report'].annotation is str
+    assert SubmitRequest.model_json_schema()['properties']['report']['maxLength'] == 100000
+
+
+def test_provider_timeout_recorded_across_exit_paths_with_metadata(monkeypatch):
+    from app.phase3 import ProviderFailure
+    from app.research_runtime import _user_with_failure_awareness
+
+    src = source()
+
+    # 1. received=True timeout (model_returned error branch) records failed_attempts + bounded metadata,
+    #    and survives recovery if interrupted while pending['kind'] == 'model_returned'.
+    class StreamTimeoutModel:
+        def estimate_turn_input(self, t):
+            return 10
+
+        def complete_turn(self, t, **kwargs):
+            err = ProviderFailure('provider_timeout', 'Stream timed out.', retryable=True, reported_tokens=None)
+            err.provider_response_received = True
+            err.timeout_kind = 'stream_deadline_timeout'
+            err.elapsed_ms = 120000
+            err.wire_bytes = 88610
+            err.streamed_bytes = 4096
+            raise err
+
+    saved_received = []
+    out_received = run_research_agent(
+        question='Analyze trend',
+        sources=[src],
+        model=StreamTimeoutModel(),
+        context=context(),
+        checkpoint=lambda s: saved_received.append(json.loads(json.dumps(s))),
+    )
+    assert out_received.status == 'partial'
+    assert out_received.reason == 'provider_timeout'
+    cp_received = saved_received[-1]
+    assert cp_received['pending'] is None
+    assert len(cp_received['failed_attempts']) == 1
+    attempt = cp_received['failed_attempts'][0]
+    assert attempt['reason'] == 'provider_timeout'
+    assert attempt['timeout_kind'] == 'stream_deadline_timeout'
+    assert attempt['elapsed_ms'] == 120000
+    assert attempt['wire_bytes'] == 88610
+    assert attempt['streamed_bytes'] == 4096
+
+    # Crash between pending='model_returned' save and finish_model still retains metadata on recovery.
+    model_returned_cp = next(s for s in saved_received if (s.get('pending') or {}).get('kind') == 'model_returned')
+    assert model_returned_cp['pending']['error']['timeout_kind'] == 'stream_deadline_timeout'
+    resumed_saved = []
+    resumed_out = run_research_agent(
+        question='Analyze trend',
+        sources=[src],
+        model=StreamTimeoutModel(),
+        context=context(),
+        initial_state=model_returned_cp,
+        checkpoint=lambda s: resumed_saved.append(json.loads(json.dumps(s))),
+    )
+    assert resumed_out.reason == 'provider_timeout'
+    assert resumed_saved[-1]['failed_attempts'][-1]['timeout_kind'] == 'stream_deadline_timeout'
+    assert resumed_saved[-1]['failed_attempts'][-1]['wire_bytes'] == 88610
+
+    # Transient failure awareness forwards bounded timeout metadata and timeout guidance.
+    aware = json.loads(_user_with_failure_awareness(json.dumps({'question': 'Analyze trend'}), cp_received))
+    assert aware['prior_failed_attempts'][0]['timeout_kind'] == 'stream_deadline_timeout'
+    assert aware['prior_failed_attempts'][0]['elapsed_ms'] == 120000
+    assert aware['prior_failed_attempts'][0]['wire_bytes'] == 88610
+    assert aware['prior_failed_attempts'][0]['streamed_bytes'] == 4096
+    assert 'record_facts' in aware['recovery_guidance']
+
+    # 2. received=False (started_unknown) preserves pending['kind']=='model' AND records failed_attempts.
+    class HeaderTimeoutModel:
+        def estimate_turn_input(self, t):
+            return 10
+
+        def complete_turn(self, t, **kwargs):
+            err = ProviderFailure('provider_timeout', 'Header timed out.', retryable=True)
+            err.timeout_kind = 'header_timeout'
+            err.elapsed_ms = 45000
+            err.wire_bytes = 1234
+            err.streamed_bytes = 0
+            raise err
+
+    saved_unknown = []
+    out_unknown = run_research_agent(
+        question='Q',
+        sources=[src],
+        model=HeaderTimeoutModel(),
+        context=context(),
+        checkpoint=lambda s: saved_unknown.append(json.loads(json.dumps(s))),
+    )
+    assert out_unknown.reason == 'provider_timeout'
+    assert saved_unknown[-1]['pending']['kind'] == 'model'
+    assert saved_unknown[-1]['failed_attempts'][-1]['reason'] == 'provider_timeout'
+    assert saved_unknown[-1]['failed_attempts'][-1]['timeout_kind'] == 'header_timeout'
+    assert saved_unknown[-1]['failed_attempts'][-1]['elapsed_ms'] == 45000
+    assert saved_unknown[-1]['failed_attempts'][-1]['wire_bytes'] == 1234
+    assert saved_unknown[-1]['failed_attempts'][-1]['streamed_bytes'] == 0
+
+    # 3. not_started after pre-send retries exhaust: records failed_attempts and derives stage fallback from call_diag.
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRIES', '1')
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRY_BASE_SECONDS', '0')
+
+    class ConnectTimeoutModel:
+        def __init__(self):
+            self.calls = 0
+
+        def estimate_turn_input(self, t):
+            return 10
+
+        def complete_turn(self, t, *, diagnostic_callback=None, **kwargs):
+            self.calls += 1
+            if diagnostic_callback is not None:
+                diagnostic_callback({
+                    'submission_state': 'not_started',
+                    'stages': [{'stage': 'tls', 'result': 'timeout', 'elapsed_ms': 15000}],
+                    'wire_bytes': 512,
+                })
+            raise ProviderFailure('provider_timeout', 'TLS handshake timed out.', retryable=True)
+
+    connect_model = ConnectTimeoutModel()
+    saved_presend = []
+    out_presend = run_research_agent(
+        question='Q',
+        sources=[src],
+        model=connect_model,
+        context=context(),
+        checkpoint=lambda s: saved_presend.append(json.loads(json.dumps(s))),
+    )
+    assert out_presend.reason == 'provider_timeout'
+    assert connect_model.calls == 2
+    assert saved_presend[-1]['pending'] is None
+    assert len(saved_presend[-1]['failed_attempts']) == 1
+    presend_attempt = saved_presend[-1]['failed_attempts'][0]
+    assert presend_attempt['reason'] == 'provider_timeout'
+    assert presend_attempt['timeout_kind'] == 'connect_timeout'
+    assert presend_attempt['elapsed_ms'] == 15000
+    assert presend_attempt['wire_bytes'] == 512
+
+    # 4. Graceful degradation when error & call_diag have no timeout metadata at all.
+    class BareTimeoutModel:
+        def complete(self, messages, tools, **kwargs):
+            raise ProviderFailure('provider_timeout', 'Bare timeout.', retryable=True)
+
+    saved_bare = []
+    out_bare = run_research_agent(
+        question='Q',
+        sources=[src],
+        model=BareTimeoutModel(),
+        context=context(),
+        checkpoint=lambda s: saved_bare.append(json.loads(json.dumps(s))),
+    )
+    assert out_bare.reason == 'provider_timeout'
+    bare_attempt = saved_bare[-1]['failed_attempts'][-1]
+    assert bare_attempt['reason'] == 'provider_timeout'
+    for optional_key in ('timeout_kind', 'elapsed_ms', 'wire_bytes', 'streamed_bytes'):
+        assert optional_key not in bare_attempt
+
+
+def test_parallel_read_sources_turn_budget_and_resumed_tool_batch_enforcement():
+    from app.research_runtime import MAX_READ_SOURCES_TURN_CHARS, MAX_TURN_TOOL_RESULT_CHARS
+
+    assert MAX_READ_SOURCES_TURN_CHARS == 40_000
+    assert MAX_TURN_TOOL_RESULT_CHARS == 60_000
+
+    doc_text = ('A' * 25_000) + ('B' * 25_000) + ('C' * 25_000)
+    src = source()
+    src.source_id = 's_turn'
+    src.text = doc_text
+    src.content_sha256 = 'hash-turn'
+
+    # 1. Same turn issuing 25k + 15k + 5k parallel read_sources calls:
+    #    First 2 succeed (40k total); 3rd exceeds 40k turn budget -> status='invalid', is_error=True, read_ranges unpolluted.
+    a1 = {'reads': [{'source_id': 's_turn', 'start': 0, 'end': 25_000}], 'rationale': 'part 1'}
+    a2 = {'reads': [{'source_id': 's_turn', 'start': 25_000, 'end': 40_000}], 'rationale': 'part 2'}
+    a3 = {'reads': [{'source_id': 's_turn', 'start': 40_000, 'end': 45_000}], 'rationale': 'part 3'}
+    c1 = ModelToolCall('r1', 'read_sources', json.dumps(a1))
+    c2 = ModelToolCall('r2', 'read_sources', json.dumps(a2))
+    c3 = ModelToolCall('r3', 'read_sources', json.dumps(a3))
+    parallel_turn = ModelResponse(
+        {'role': 'assistant', 'content': None, 'tool_calls': [
+            {'id': 'r1', 'type': 'function', 'function': {'name': 'read_sources', 'arguments': c1.arguments}},
+            {'id': 'r2', 'type': 'function', 'function': {'name': 'read_sources', 'arguments': c2.arguments}},
+            {'id': 'r3', 'type': 'function', 'function': {'name': 'read_sources', 'arguments': c3.arguments}},
+        ]},
+        (c1, c2, c3),
+        ModelUsage(10, 5, 15),
+        'tool_calls',
+    )
+    m = Model([parallel_turn, ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')])
+    saved = []
+    out = run_research_agent(
+        question='Read chunks?',
+        sources=[src],
+        model=m,
+        context=context(),
+        checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
+    )
+    assert out.reason == 'no_submission'
+    assert saved[-1]['read_ranges'] == [
+        {'source_id': 's_turn', 'start': 0, 'end': 25_000},
+        {'source_id': 's_turn', 'start': 25_000, 'end': 40_000},
+    ]
+    r3_msg = next(msg for msg in m.inputs[1] if msg.get('role') == 'tool' and msg.get('tool_call_id') == 'r3')
+    r3_payload = json.loads(r3_msg['content'])
+    assert r3_payload['status'] == 'invalid'
+    assert r3_payload['error'] == 'read_turn_budget_exceeded'
+    assert r3_payload['remaining_turn_characters'] == 0
+    assert 'record_facts' in r3_payload['instruction']
+    assert 'search_source' in r3_payload['instruction']
+    assert saved[-1]['history'][0]['results'][2]['is_error'] is True
+
+    # 2. Resumed tool_batch checkpoint (cursor=1 after r1=25k already ran) STILL enforces 40k turn budget!
+    resumed_state = {
+        'user': json.dumps({'question': 'Q'}),
+        'history': [{'assistant': parallel_turn.message, 'results': [
+            {'tool_call_id': 'r1', 'content': json.dumps({'results': [{'source_id': 's_turn', 'start': 0, 'end': 25_000, 'status': 'read', 'text': 'A' * 25_000}]}), 'is_error': False},
+        ]}],
+        'events': [],
+        'read_ranges': [{'source_id': 's_turn', 'start': 0, 'end': 25_000}],
+        'facts': [],
+        'calculations': [],
+        'charts': [],
+        'pending': {
+            'kind': 'tool_batch',
+            'call_id': 'm1',
+            'cursor': 1,
+            'calls': [
+                {'id': 'r1', 'name': 'read_sources', 'arguments': a1, 'raw_arguments': None},
+                {'id': 'r2_big', 'name': 'read_sources', 'arguments': {'reads': [{'source_id': 's_turn', 'start': 25_000, 'end': 45_000}], 'rationale': 'too big'}, 'raw_arguments': None},
+            ],
+        },
+    }
+    m_resumed = Model([ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')])
+    saved_res = []
+    run_research_agent(
+        question='Q',
+        sources=[src],
+        model=m_resumed,
+        context=context(),
+        initial_state=resumed_state,
+        checkpoint=lambda s: saved_res.append(json.loads(json.dumps(s))),
+    )
+    assert saved_res[-1]['read_ranges'] == [{'source_id': 's_turn', 'start': 0, 'end': 25_000}]
+    r2_res = json.loads(saved_res[-1]['history'][0]['results'][1]['content'])
+    assert r2_res['status'] == 'invalid' and r2_res['error'] == 'read_turn_budget_exceeded'
+    assert r2_res['remaining_turn_characters'] == 15_000
+
+    # 3. General MAX_TURN_TOOL_RESULT_CHARS=60_000 blocks bulk tools above 60k while keeping record_facts allowed.
+    fact_quote = 'Fact quote 100 USD.'
+    src_bulk = source()
+    src_bulk.source_id = 's_bulk'
+    src_bulk.text = fact_quote + ' ' + ('Z' * 20_000)
+    calls_bulk = [
+        {'id': 'b1', 'name': 'read_sources', 'arguments': {'reads': [{'source_id': 's_bulk', 'start': 0, 'end': 20_000}], 'rationale': 'b1'}, 'raw_arguments': None},
+        {'id': 'b2', 'name': 'outline_source', 'arguments': {'source_id': 's_bulk', 'rationale': 'b2'}, 'raw_arguments': None},
+        {'id': 'b3', 'name': 'record_facts', 'arguments': {'facts': [{'label': 'num', 'value': 100, 'unit': 'USD', 'currency': 'USD', 'period': '2025', 'source_id': 's_bulk', 'quotation': fact_quote}], 'rationale': 'f'}, 'raw_arguments': None},
+    ]
+    bulk_state = {
+        'user': json.dumps({'question': 'Q'}),
+        'history': [{'assistant': {'role': 'assistant', 'content': []}, 'results': [
+            {'tool_call_id': 'prior_bulk', 'content': json.dumps({'results': [{'text': 'X' * 60_500}]}), 'is_error': False},
+        ]}],
+        'events': [{'kind': 'tool', 'tool_call_id': 'prior_bulk', 'name': 'search_source', 'status': 'completed'}],
+        'read_ranges': [{'source_id': 's_bulk', 'start': 0, 'end': 200}],
+        'facts': [],
+        'calculations': [],
+        'charts': [],
+        'pending': {'kind': 'tool_batch', 'call_id': 'mbulk', 'cursor': 1, 'calls': calls_bulk},
+    }
+    m_bulk = Model([ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')])
+    saved_bulk = []
+    run_research_agent(
+        question='Q',
+        sources=[src_bulk],
+        model=m_bulk,
+        context=context(),
+        initial_state=bulk_state,
+        checkpoint=lambda s: saved_bulk.append(json.loads(json.dumps(s))),
+    )
+    outline_res = json.loads(saved_bulk[-1]['history'][0]['results'][1]['content'])
+    assert outline_res['status'] == 'invalid' and outline_res['error'] == 'turn_tool_result_budget_exceeded'
+    assert saved_bulk[-1]['history'][0]['results'][1]['is_error'] is True
+    assert len(saved_bulk[-1]['facts']) == 1  # Protected record_facts still succeeded!
+
+
+def test_compact_runtime_history_clears_old_thinking_and_writes_context_receipts():
+    from app.research_runtime import MAX_CONTEXT_RECEIPTS, compact_runtime_history
+
+    state = {
+        'user': '{}',
+        'read_ranges': [{'source_id': 's1', 'start': 0, 'end': 1_500}],
+        'facts': [{'fact_id': 'f1'}],
+        'calculations': [],
+        'events': [],
+        'history': [
+            {
+                'assistant': {'role': 'assistant', 'content': [
+                    {'type': 'thinking', 'thinking': 'T' * 2_000, 'signature': 'sig1'},
+                    {'type': 'redacted_thinking', 'data': 'R' * 400},
+                    {'type': 'tool_use', 'id': 'c1', 'name': 'read_sources', 'input': {'reads': [{'source_id': 's1', 'start': 0, 'end': 1_500}]}},
+                ]},
+                'results': [
+                    {'tool_call_id': 'c1', 'content': json.dumps({'results': [{'source_id': 's1', 'start': 0, 'end': 1_500, 'text': 'D' * 1_500}]}), 'is_error': False},
+                ],
+            },
+            {
+                # Small tool result (<800 chars), but has a consumed thinking block -> still strips thinking!
+                'assistant': {'role': 'assistant', 'content': [
+                    {'type': 'thinking', 'thinking': 'S' * 1_000, 'signature': 'sig2'},
+                    {'type': 'tool_use', 'id': 'c2', 'name': 'record_facts', 'input': {}},
+                ]},
+                'results': [
+                    {'tool_call_id': 'c2', 'content': json.dumps({'facts': [{'fact_id': 'f1'}]}), 'is_error': False},
+                ],
+            },
+            {
+                # Only thinking block (no non-thinking block) -> safety guard keeps it intact.
+                'assistant': {'role': 'assistant', 'content': [
+                    {'type': 'thinking', 'thinking': 'ONLY_THINK', 'signature': 'sig3'},
+                ]},
+                'results': [
+                    {'tool_call_id': 'c3', 'content': 'ok', 'is_error': False},
+                ],
+            },
+            {
+                # Recent turn inside keep_recent=1 -> untouched!
+                'assistant': {'role': 'assistant', 'content': [
+                    {'type': 'thinking', 'thinking': 'RECENT_THINK', 'signature': 'sig4'},
+                    {'type': 'tool_use', 'id': 'c4', 'name': 'read_sources', 'input': {}},
+                ]},
+                'results': [
+                    {'tool_call_id': 'c4', 'content': json.dumps({'results': [{'source_id': 's1', 'start': 1_500, 'end': 3_000, 'text': 'E' * 1_500}]}), 'is_error': False},
+                ],
+            },
+        ],
+    }
+
+    report = compact_runtime_history(state, keep_recent=1, trigger_chars=1_000, force=False)
+    assert report['compacted'] is True
+    assert report['cleared_count'] == 1
+    assert report['cleared_thinking_turns'] == 2
+    assert report['cleared_thinking_chars'] > 3_000
+    assert report['omitted_spans'] == [{'source_id': 's1', 'start': 0, 'end': 1_500}]
+
+    # c1 & c2 thinking stripped while tool_use preserved; c3 safety-preserved; c4 recent untouched.
+    assert [b['type'] for b in state['history'][0]['assistant']['content']] == ['tool_use']
+    assert [b['type'] for b in state['history'][1]['assistant']['content']] == ['tool_use']
+    assert [b['type'] for b in state['history'][2]['assistant']['content']] == ['thinking']
+    assert [b['type'] for b in state['history'][3]['assistant']['content']] == ['thinking', 'tool_use']
+
+    assert len(state['context_receipts']) == 1
+    receipt = state['context_receipts'][0]
+    assert receipt['trigger'] == 'l1_in_turn'
+    assert receipt['cleared_tool_call_ids'] == ['c1']
+    assert receipt['cleared_thinking_turns'] == 2
+    assert receipt['omitted_spans'] == [{'source_id': 's1', 'start': 0, 'end': 1_500}]
+    assert receipt['preserved_facts_count'] == 1
+    assert receipt['prefix_reset'] is True
+    assert receipt['after_chars'] < receipt['before_chars']
+    assert receipt['chars_saved'] == receipt['before_chars'] - receipt['after_chars']
+    assert isinstance(receipt['at'], str) and receipt['at']
+
+    # Verify receipts are capped at MAX_CONTEXT_RECEIPTS (20).
+    for idx in range(25):
+        state['history'].insert(0, {
+            'assistant': {'role': 'assistant', 'content': [
+                {'type': 'thinking', 'thinking': f'T{idx}' * 100, 'signature': 'sig'},
+                {'type': 'tool_use', 'id': f'cx_{idx}', 'name': 'search_source', 'input': {}},
+            ]},
+            'results': [{'tool_call_id': f'cx_{idx}', 'content': 'ok', 'is_error': False}],
+        })
+        compact_runtime_history(state, keep_recent=1, force=True, trigger='l1_in_turn')
+    assert len(state['context_receipts']) == MAX_CONTEXT_RECEIPTS
+
+
+def test_work_context_tokens_and_tail_note_preserve_messages_zero_byte_identical(monkeypatch):
+    from app.anthropic_messages import AnthropicMessagesProvider
+    from app.openai_compatible import HttpResponse
+    from app.phase3 import ProviderPolicy
+    from app.provider_capabilities import CapabilityProfile
+
+    # 1. work_context_tokens triggers L1 at ~0.55 * work_context_tokens * 3 - fixed_chars without context_tokens.
+    doc_text = ''.join(f'[W_{i:02d}] ' + ('X' * 9_993) for i in range(4))
+    src = source()
+    src.source_id = 's_wc'
+    src.text = doc_text
+    src.content_sha256 = 'hash-wc'
+
+    class WorkContextModel:
+        policy = SimpleNamespace(timeout_seconds=10, max_input_tokens=None, max_output_tokens=1000)
+
+        def __init__(self):
+            self.step = 0
+            self.turns = []
+
+        def research_capacity(self):
+            # context_tokens=None (so admission unaffected), work_context_tokens=22_000 -> ~36,300 - ~18,800 ≈ 17,500 trigger
+            return CapabilityProfile(
+                endpoint='https://example.com/v1/messages',
+                model='wc-model',
+                version='2023-06-01',
+                mode='json_object',
+                context_tokens=None,
+                work_context_tokens=22_000,
+                input_counter='chars_div_3',
+                native_tools=True,
+                stream=False,
+                continuation=True,
+            )
+
+        def estimate_turn_input(self, turn_obj):
+            return 100
+
+        def complete_turn(self, turn_obj, **kwargs):
+            self.turns.append(turn_obj)
+            self.step += 1
+            if self.step <= 3:
+                start = (self.step - 1) * 10_000
+                return ModelResponse(
+                    {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': f'w{self.step}', 'name': 'read_sources',
+                                                       'input': {'reads': [{'source_id': 's_wc', 'start': start, 'end': start + 10_000}], 'rationale': 'r'}}]},
+                    (ModelToolCall(f'w{self.step}', 'read_sources', {'reads': [{'source_id': 's_wc', 'start': start, 'end': start + 10_000}], 'rationale': 'r'}),),
+                    ModelUsage(10, 5, 15), 'tool_use', 'tool_calls',
+                )
+            return ModelResponse(
+                {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'sub', 'name': 'submit_research', 'input': {
+                    'report': 'Seen [W_00].',
+                    'claims': [{'text': 'Seen.', 'source_id': 's_wc', 'quotation': '[W_00]', 'role': 'support'}],
+                    'limitations': [], 'stopping_reason': 'answered',
+                }}]},
+                (ModelToolCall('sub', 'submit_research', {
+                    'report': 'Seen [W_00].',
+                    'claims': [{'text': 'Seen.', 'source_id': 's_wc', 'quotation': '[W_00]', 'role': 'support'}],
+                    'limitations': [], 'stopping_reason': 'answered',
+                }),),
+                ModelUsage(10, 5, 15), 'tool_use', 'tool_calls',
+            )
+
+    wc_model = WorkContextModel()
+    wc_saved = []
+    wc_out = run_research_agent(
+        question='Check work context?',
+        sources=[src],
+        model=wc_model,
+        context=context(),
+        checkpoint=lambda s: wc_saved.append(json.loads(json.dumps(s))),
+    )
+    assert wc_out.status == 'completed'
+    assert json.loads(wc_model.turns[3].history[0].results[0].content)['cleared'] is True
+    assert wc_saved[-1]['context_receipts'][0]['trigger'] == 'l1_in_turn'
+
+    # 2. Real AnthropicMessagesProvider wire check: messages[0] stays byte-identical to state['user'] on recovery
+    #    when history is non-empty, and tail_note is appended to the last user tool_result message.
+    captured_wires: list[dict] = []
+    call_n = {'n': 0}
+
+    def wire_transport(method, url, headers, body, timeout, *, diagnostics, **kwargs):
+        call_n['n'] += 1
+        captured_wires.append(json.loads(body))
+        diagnostics.submission('response_received')
+        if call_n['n'] == 1:
+            return HttpResponse(200, json.dumps({
+                'role': 'assistant',
+                'stop_reason': 'tool_use',
+                'content': [{'type': 'tool_use', 'id': 'r1', 'name': 'read_sources',
+                             'input': {'reads': [{'source_id': 's_wc', 'start': 0, 'end': 100}], 'rationale': 'read'}}],
+                'usage': {'input_tokens': 10, 'output_tokens': 5},
+            }), {})
+        if call_n['n'] == 2:
+            raise TimeoutError('deadline')
+        return HttpResponse(200, json.dumps({
+            'role': 'assistant',
+            'stop_reason': 'tool_use',
+            'content': [{'type': 'tool_use', 'id': 'sub1', 'name': 'submit_research', 'input': {
+                'report': 'Done.',
+                'claims': [{'text': 'Done.', 'source_id': 's_wc', 'quotation': '[W_00]', 'role': 'support'}],
+                'limitations': [], 'stopping_reason': 'answered',
+            }}],
+            'usage': {'input_tokens': 20, 'output_tokens': 10},
+        }), {})
+
+    monkeypatch.setattr('app.anthropic_messages._default_transport', wire_transport)
+    provider = AnthropicMessagesProvider(
+        SimpleNamespace(base_url='https://example.com', model='model', api_key='fixture', allow_private_network=False),
+        ProviderPolicy(retry_base_seconds=0),
+        anthropic_version='2023-06-01', auth_scheme='x-api-key', max_tokens=1000,
+    )
+    saved_wire = []
+    out_to = run_research_agent(
+        question='Check KV prefix?',
+        sources=[src],
+        model=provider,
+        context=context(),
+        checkpoint=lambda s: saved_wire.append(json.loads(json.dumps(s))),
+    )
+    assert out_to.reason == 'provider_timeout'
+    cp_to = saved_wire[-1]
+    out_ok = run_research_agent(
+        question='Check KV prefix?',
+        sources=[src],
+        model=provider,
+        context=context(),
+        initial_state=cp_to,
+    )
+    assert out_ok.status == 'completed'
+    assert captured_wires[2]['messages'][0] == captured_wires[1]['messages'][0]
+    assert captured_wires[2]['messages'][0]['content'] == cp_to['user']
+    tail_blocks = captured_wires[2]['messages'][-1]['content']
+    assert tail_blocks[0]['type'] == 'tool_result'
+    assert tail_blocks[-1]['type'] == 'text'
+    assert 'provider_timeout' in tail_blocks[-1]['text']
+
+
+def test_provider_timeout_produces_dedicated_gap_code_and_unknown_settlement():
+    from app.phase3 import ProviderFailure
+    from app.research_runtime import GAP_CODES, provider_gap
+
+    assert 'provider_timeout' in GAP_CODES
+    assert provider_gap(ProviderFailure('provider_timeout', 'Stream deadline exceeded.', retryable=True)) == {
+        'code': 'provider_timeout',
+        'message': 'Stream deadline exceeded.',
+    }
+    assert provider_gap({'code': 'provider_timeout', 'message': 'Idle timeout.'}) == {
+        'code': 'provider_timeout',
+        'message': 'Idle timeout.',
+    }
+    assert provider_gap(ProviderFailure('provider_transport_error', 'Connection reset.', retryable=True)) == {
+        'code': 'provider_error',
+        'message': 'Connection reset.',
+    }
+    assert provider_gap(GAP_CODES['provider_no_result']) == {
+        'code': 'provider_no_result',
+        'message': GAP_CODES['provider_no_result'],
+    }
+
+    # Mid-stream timeout with provider_response_received=True and reported_tokens=None (Item 3.1):
+    # hits the saved model_returned error dict branch, produces gap code 'provider_timeout',
+    # settles with settlement='unknown' (never 0-token settled), and leaves pending=None.
+    class MidStreamTimeoutModel:
+        def complete(self, messages, tools, **kwargs):
+            err = ProviderFailure('provider_timeout', 'Stream aborted before usage delta.', retryable=True, reported_tokens=None)
+            err.provider_response_received = True
+            err.timeout_kind = 'stream_idle_timeout'
+            raise err
+
+    saved: list[dict] = []
+    ctx = context()
+    out = run_research_agent(
+        question='Summarize filing?',
+        sources=[source()],
+        model=MidStreamTimeoutModel(),
+        context=ctx,
+        checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
+    )
+    assert out.status == 'partial'
+    assert out.reason == 'provider_timeout'
+    assert out.gaps == [{'code': 'provider_timeout', 'message': 'Stream aborted before usage delta.'}]
+    assert saved[-1]['pending'] is None
+    assert saved[-1]['failed_attempts'][-1]['reason'] == 'provider_timeout'
+    assert saved[-1]['model_receipts'][-1]['settlement'] == 'unknown'
+    assert saved[-1]['events'][-1]['usage'] is None
+    assert ctx.usage is None

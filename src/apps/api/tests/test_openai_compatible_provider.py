@@ -207,7 +207,10 @@ def test_account_settings_inherit_the_bounded_deployment_timeout(monkeypatch: py
 
 def test_environment_timeout_rejects_unbounded_or_invalid_values(monkeypatch: pytest.MonkeyPatch) -> None:
     configure(monkeypatch)
-    monkeypatch.setenv("FORESIGHTNINE_LLM_TIMEOUT_SECONDS", "181")
+    monkeypatch.setenv("FORESIGHTNINE_LLM_TIMEOUT_SECONDS", "300")
+    built_300 = OpenAICompatibleLlmProvider.from_environment()
+    assert built_300.policy.timeout_seconds == 300
+    monkeypatch.setenv("FORESIGHTNINE_LLM_TIMEOUT_SECONDS", "601")
     built = OpenAICompatibleLlmProvider.from_environment()
     with pytest.raises(ProviderFailure, match="configuration"):
         built.generate_challenge(request())

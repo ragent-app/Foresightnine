@@ -42,6 +42,7 @@ class ModelTurnInput:
     user: str
     tools: tuple[ModelToolDefinition, ...]
     history: tuple[ModelTurnExchange, ...]
+    tail_note: str | None = None
 
 
 @dataclass(frozen=True)

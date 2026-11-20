@@ -49,6 +49,13 @@ _HIDDEN_STYLE_RE = re.compile(
 )
 _CSS_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
 _HIDDEN_CONTAINER_TAGS = frozenset({"ix:header", "ix:hidden", "template"})
+_HARD_HIDDEN_TAGS = frozenset({"script", "style", "noscript", "svg"})
+_BOILERPLATE_TAGS = frozenset({"nav", "footer", "aside"})
+_BOILERPLATE_ROLES = frozenset({"navigation", "banner", "contentinfo", "complementary"})
+_PRESERVE_CONTAINER_TAGS = frozenset({"main", "article", "table"})
+_VOID_HTML_TAGS = frozenset({
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr",
+})
 
 HTML_EXTRACTION_DISCLOSURE = (
     "Webpage text is extracted; table separators and span markers, when present, "
@@ -201,6 +208,18 @@ class _TextParser(HTMLParser):
         self._table_depth = 0
         self._row_stack: list[_TableRowState] = []
         self._cell_stack: list[_TableCellState] = []
+        self._scope_stack: list[tuple[str, bool]] = []
+
+    def _boilerplate_suppressed(self) -> bool:
+        return bool(self._scope_stack and self._scope_stack[-1][1])
+
+    @staticmethod
+    def _has_boilerplate_role(attrs: list[tuple[str, str | None]]) -> bool:
+        for name, value in attrs:
+            if name == "role" and isinstance(value, str):
+                if any(token in _BOILERPLATE_ROLES for token in value.strip().lower().split()):
+                    return True
+        return False
 
     def _finish_cell(self) -> None:
         if not self._cell_stack:
@@ -239,9 +258,19 @@ class _TextParser(HTMLParser):
             del self.parts[row.part_start:]
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag in {"script", "style", "noscript", "svg", "nav", "footer"}:
+        if tag in _HARD_HIDDEN_TAGS:
             self.hidden += 1
         if self.hidden:
+            return
+        if tag in _PRESERVE_CONTAINER_TAGS:
+            suppressed = False
+        elif tag in _BOILERPLATE_TAGS or self._has_boilerplate_role(attrs):
+            suppressed = True
+        else:
+            suppressed = self._boilerplate_suppressed()
+        if tag not in _VOID_HTML_TAGS:
+            self._scope_stack.append((tag, suppressed))
+        if suppressed:
             return
         if tag == "table":
             self._table_depth += 1
@@ -286,10 +315,22 @@ class _TextParser(HTMLParser):
             self.parts.append(" " if self.cell_depth else "\n")
 
     def handle_endtag(self, tag: str) -> None:
-        if tag in {"script", "style", "noscript", "svg", "nav", "footer"} and self.hidden:
+        if tag in _HARD_HIDDEN_TAGS and self.hidden:
             self.hidden -= 1
             return
         if self.hidden:
+            return
+        scope_idx: int | None = None
+        for idx in range(len(self._scope_stack) - 1, -1, -1):
+            if self._scope_stack[idx][0] == tag:
+                scope_idx = idx
+                break
+        if scope_idx is not None:
+            was_suppressed = self._scope_stack[scope_idx][1]
+            del self._scope_stack[scope_idx:]
+            if was_suppressed:
+                return
+        elif self._boilerplate_suppressed():
             return
         if tag in {"td", "th"} and self.cell_depth:
             self.cell_depth -= 1
@@ -306,7 +347,7 @@ class _TextParser(HTMLParser):
             self.parts.append(" " if self.cell_depth else "\n")
 
     def handle_data(self, data: str) -> None:
-        if self.hidden:
+        if self.hidden or self._boilerplate_suppressed():
             return
         if self.row_depth and not self.cell_depth and not data.strip():
             return
@@ -321,14 +362,13 @@ class _TextParser(HTMLParser):
         self.cell_depth = 0
         self.row_depth = 0
         self._table_depth = 0
+        self._scope_stack.clear()
 
 
 class _SafeHtmlParser(_TextParser):
     """Omit XBRL headers and explicitly hidden subtrees without executing CSS."""
 
-    _void = frozenset({
-        "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr",
-    })
+    _void = _VOID_HTML_TAGS
 
     def __init__(self) -> None:
         super().__init__()

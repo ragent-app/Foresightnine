@@ -621,3 +621,47 @@ def test_table_slimming_handles_nested_tables_malformed_tags_and_provenance_trac
     assert traced is not None
     alignment = annual_table_value_alignment({"status": "available", **traced}, Decimal("53803"), "FY2024 (year ended July 27, 2024)")
     assert alignment is not None and alignment["status"] == "matched"
+
+
+def test_extract_html_suppresses_boilerplate_containers_while_preserving_main_article_and_tables():
+    html = (
+        '<html>'
+        '<header role="banner"><span>Site Banner</span><nav><ul><li>Markets</li><li>News</li></ul></nav></header>'
+        '<div role="navigation"><div>Mega menu <span>Portfolio</span></div></div>'
+        '<div role="NAVIGATION"><p>Mixed case nav</p></div>'
+        '<main>'
+        '  <article>'
+        '    <h1>Nasdaq Market Analysis</h1>'
+        '    <p>Nasdaq rose 1.5% on earnings.</p>'
+        '    <footer>Share buttons and copyright</footer>'
+        '  </article>'
+        '  <aside><div role="complementary">Trending tickers and ads</div></aside>'
+        '</main>'
+        '<footer role="contentinfo">'
+        '  <p>Terms of service disclaimer</p>'
+        '  <table><tr><th>Metric</th><th>FY25</th></tr><tr><td>Revenue</td><td>130,497</td></tr></table>'
+        '</footer>'
+        '<div style="display:none"><table><tr><td>Hidden table</td></tr></table></div>'
+        '</html>'
+    )
+    doc = fetch_source_document(
+        request("https://finance.example.com/quote/ixic"),
+        lambda *a: BinaryHttpResponse(200, html.encode("utf-8"), {"content-type": "text/html; charset=utf-8"}),
+    )
+    assert "Nasdaq Market Analysis" in doc.text
+    assert "Nasdaq rose 1.5% on earnings." in doc.text
+    assert "| Metric | FY25 |" in doc.text
+    assert "| Revenue | 130,497 |" in doc.text
+    for boilerplate in (
+        "Site Banner",
+        "Markets",
+        "News",
+        "Mega menu",
+        "Portfolio",
+        "Mixed case nav",
+        "Share buttons and copyright",
+        "Trending tickers and ads",
+        "Terms of service disclaimer",
+        "Hidden table",
+    ):
+        assert boilerplate not in doc.text

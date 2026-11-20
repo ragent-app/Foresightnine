@@ -20,11 +20,15 @@ from .storage import JsonDocumentRepository, _drop_legacy_null_fields
 
 
 MAX_TRUNCATION_CONTINUATIONS = 2
+MAX_TIMEOUT_CONTINUATIONS = 2
 L2_COMPACT_AFTER_CHARS = 80_000
 TRUNCATION_FAILURE_REASONS = frozenset({
     'provider_output_truncated',
     'provider_context_limit',
     'incomplete_model_response',
+})
+TIMEOUT_FAILURE_REASONS = frozenset({
+    'provider_timeout',
 })
 CONTINUATION_COMPACTION_REASONS = frozenset({
     'provider_output_truncated',
@@ -39,6 +43,9 @@ _AGGRESSIVE_COMPACTION_REASONS = frozenset({
 _REPEATED_TRUNCATION_MESSAGE = (
     'Research continuation is blocked after repeated model output or context limit failures.'
 )
+_REPEATED_TIMEOUT_MESSAGE = (
+    'Research continuation is blocked after repeated model timeout failures.'
+)
 
 
 def _checkpoint_failure_reasons(checkpoint: Mapping[str, Any], *, saved_turn: Any = None) -> list[str]:
@@ -51,13 +58,14 @@ def _checkpoint_failure_reasons(checkpoint: Mapping[str, Any], *, saved_turn: An
                 if isinstance(reason, str) and reason:
                     reasons.append(reason)
     tail_reason: str | None = None
+    tail_candidates = CONTINUATION_COMPACTION_REASONS | TIMEOUT_FAILURE_REASONS
     stopped = checkpoint.get('stopped')
-    if isinstance(stopped, str) and stopped in CONTINUATION_COMPACTION_REASONS:
+    if isinstance(stopped, str) and stopped in tail_candidates:
         tail_reason = stopped
     elif saved_turn is not None:
         turn_reason = getattr(saved_turn, 'reason', None)
         turn_status = getattr(saved_turn, 'status', None)
-        if turn_status == 'partial' and isinstance(turn_reason, str) and turn_reason in CONTINUATION_COMPACTION_REASONS:
+        if turn_status == 'partial' and isinstance(turn_reason, str) and turn_reason in tail_candidates:
             tail_reason = turn_reason
     if tail_reason and (not reasons or reasons[-1] != tail_reason):
         reasons.append(tail_reason)
@@ -100,6 +108,48 @@ def runtime_truncation_loop_blocked(
     return False
 
 
+def runtime_timeout_loop_blocked(
+    checkpoint: Mapping[str, Any] | None,
+    *,
+    saved_turn: Any = None,
+    max_continuations: int = MAX_TIMEOUT_CONTINUATIONS,
+) -> bool:
+    """Return True once consecutive timeout failures hit the circuit-breaker cap.
+
+    Allows 1 continuation after an initial ``provider_timeout``; once consecutive
+    timeout failures reach ``max_continuations`` (default 2), further ``/continue``
+    calls are blocked with ``'repeated_timeout'``.
+    """
+    if not isinstance(checkpoint, Mapping) or checkpoint.get('submission'):
+        return False
+    if max_continuations <= 0:
+        return True
+    saved_reason = getattr(saved_turn, 'reason', None) if getattr(saved_turn, 'status', None) == 'partial' else None
+    if isinstance(saved_reason, str) and saved_reason and saved_reason not in TIMEOUT_FAILURE_REASONS:
+        return False
+    reasons = _checkpoint_failure_reasons(checkpoint, saved_turn=saved_turn)
+    if not reasons:
+        return False
+    latest_reason = reasons[-1]
+    if latest_reason not in TIMEOUT_FAILURE_REASONS:
+        return False
+    trailing_timeouts = 0
+    for item in reversed(reasons):
+        if item in TIMEOUT_FAILURE_REASONS:
+            trailing_timeouts += 1
+        else:
+            break
+    if trailing_timeouts >= max_continuations:
+        return True
+    consecutive = checkpoint.get('consecutive_timeout_continuations')
+    consecutive_count = consecutive if type(consecutive) is int and consecutive >= 0 else 0
+    if consecutive_count >= max_continuations:
+        return True
+    if isinstance(saved_reason, str) and saved_reason in TIMEOUT_FAILURE_REASONS and (consecutive_count + 1) >= max_continuations:
+        return True
+    return False
+
+
 def _should_compact_continuation(state: Mapping[str, Any], reasons: list[str]) -> bool:
     if any(reason in CONTINUATION_COMPACTION_REASONS for reason in reasons):
         return True
@@ -118,16 +168,18 @@ def prepare_runtime_continuation(
     max_history_chars: int | None = None,
     saved_turn: Any = None,
 ) -> dict[str, Any]:
-    """Enforce the truncation circuit breaker and apply L2 compaction before resuming."""
+    """Enforce truncation/timeout circuit breakers and apply differentiated compaction before resuming."""
     if runtime_truncation_loop_blocked(checkpoint, saved_turn=saved_turn):
         raise ApiProblem(409, 'lifecycle_conflict', _REPEATED_TRUNCATION_MESSAGE)
+    if runtime_timeout_loop_blocked(checkpoint, saved_turn=saved_turn):
+        raise ApiProblem(409, 'lifecycle_conflict', _REPEATED_TIMEOUT_MESSAGE)
     state = deepcopy(dict(checkpoint))
     reasons = _checkpoint_failure_reasons(state, saved_turn=saved_turn)
     latest_reason = reasons[-1] if reasons else None
     if saved_turn is not None and not state.get('failed_attempts'):
         turn_reason = getattr(saved_turn, 'reason', None)
         turn_status = getattr(saved_turn, 'status', None)
-        if turn_status == 'partial' and isinstance(turn_reason, str) and turn_reason in CONTINUATION_COMPACTION_REASONS:
+        if turn_status == 'partial' and isinstance(turn_reason, str) and turn_reason in (CONTINUATION_COMPACTION_REASONS | TIMEOUT_FAILURE_REASONS):
             state['failed_attempts'] = [{'call_id': None, 'reason': turn_reason, 'finish_reason': None, 'usage': None, 'history_chars': None, 'at': None}]
     prev_count = state.get('continuation_count')
     state['continuation_count'] = (prev_count if type(prev_count) is int and prev_count >= 0 else 0) + 1
@@ -137,21 +189,57 @@ def prepare_runtime_continuation(
         state['consecutive_truncation_continuations'] = prev_trunc_count + 1
     else:
         state['consecutive_truncation_continuations'] = prev_trunc_count
-    if state.get('stopped') in TRUNCATION_FAILURE_REASONS:
+    prev_timeout = state.get('consecutive_timeout_continuations')
+    prev_timeout_count = prev_timeout if type(prev_timeout) is int and prev_timeout >= 0 else 0
+    if latest_reason in TIMEOUT_FAILURE_REASONS:
+        state['consecutive_timeout_continuations'] = prev_timeout_count + 1
+    else:
+        state['consecutive_timeout_continuations'] = 0
+    if state.get('stopped') in (TRUNCATION_FAILURE_REASONS | TIMEOUT_FAILURE_REASONS):
         state.pop('stopped', None)
-    if _should_compact_continuation(state, reasons):
+
+    effective_limit = (
+        min(L2_COMPACT_AFTER_CHARS, max(2_000, int(max_history_chars)))
+        if type(max_history_chars) is int and max_history_chars > 0
+        else L2_COMPACT_AFTER_CHARS
+    )
+    if latest_reason in TIMEOUT_FAILURE_REASONS:
+        from .research_runtime import _history_serialized_chars, compact_runtime_history
+
+        has_facts = bool(state.get('facts'))
+        history_chars = _history_serialized_chars(state.get('history'))
+        cleared_count = 0
+        if has_facts or history_chars >= effective_limit:
+            # Preserve keep_recent=1 (never 0) so newly read unread-fact sources are not wiped.
+            compaction = compact_runtime_history(
+                state,
+                keep_recent=1,
+                force=True,
+                reason='timeout_continuation_compacted',
+                trigger='l2_continuation',
+            )
+            cleared_count = int(compaction.get('cleared_count') or 0)
+        facts_count = len(state.get('facts') or [])
+        reads_count = len(state.get('read_ranges') or [])
+        compaction_note = (
+            f'compacted {cleared_count} older tool results; ' if cleared_count > 0 else 'preserved recent reads; '
+        )
+        state['continuation_guidance'] = (
+            f'Resuming after provider_timeout (continuation #{state["continuation_count"]}; '
+            f'{compaction_note}{facts_count} recorded facts and {reads_count} read ranges preserved). '
+            f'The previous model call timed out mid-generation. Keep reasoning concise, '
+            f'extract and persist key facts incrementally via smaller record_facts batches first, '
+            f'and avoid trying to think and draft the entire report in one giant turn.'
+        )
+    elif _should_compact_continuation(state, reasons):
         from .research_runtime import compact_runtime_history
 
-        effective_limit = (
-            min(L2_COMPACT_AFTER_CHARS, max(2_000, int(max_history_chars)))
-            if type(max_history_chars) is int and max_history_chars > 0
-            else L2_COMPACT_AFTER_CHARS
-        )
         compaction = compact_runtime_history(
             state,
             keep_recent=1,
             force=True,
             reason='continuation_compacted',
+            trigger='l2_continuation',
         )
         if latest_reason in _AGGRESSIVE_COMPACTION_REASONS or int(compaction.get('after_chars') or 0) >= effective_limit:
             compaction = compact_runtime_history(
@@ -159,6 +247,7 @@ def prepare_runtime_continuation(
                 keep_recent=0,
                 force=True,
                 reason='continuation_compacted',
+                trigger='l2_continuation',
             )
         facts_count = len(state.get('facts') or [])
         reads_count = len(state.get('read_ranges') or [])
@@ -695,6 +784,10 @@ def recovery_status(*, topic: ResearchTopic, operation: dict[str, Any], inputs: 
         if runtime_cp and runtime_truncation_loop_blocked(runtime_cp):
             result['can_deliver'] = False
             result['reason'] = 'repeated_truncation'
+            return result
+        if runtime_cp and runtime_timeout_loop_blocked(runtime_cp):
+            result['can_deliver'] = False
+            result['reason'] = 'repeated_timeout'
             return result
         result['reason'] = 'no_checkpoint'
         return result

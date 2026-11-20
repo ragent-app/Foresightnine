@@ -270,4 +270,66 @@ describe("ProcessTimeline", () => {
     expect(screen.getByText("<em>Lead</em>")).toBeTruthy();
     expect(container.querySelector("script, img, b, em, iframe")).toBeNull();
   });
+
+  it("renders create_chart tool summaries with staged indicator when live and calm placeholder while assembling", () => {
+    mockTabletMatch(true);
+    const chartEvents: ProgressEvent[] = [
+      {
+        index: 0,
+        kind: "tool",
+        name: "create_chart",
+        status: "completed",
+        reason: null,
+        rationale: "可视化收入与利润率",
+        denied_count: null,
+        summary: {
+          kind: "create_chart",
+          chart_id: "chart-1",
+          chart_type: "combo_bar_line",
+          title: "Northwind 收入与利润率对比",
+          series_count: 2,
+          point_count: 4,
+        },
+      },
+    ];
+
+    const { rerender } = render(
+      <ProcessTimeline
+        events={chartEvents}
+        current={{ kind: "tool", name: "create_chart", rationale: null, target: null }}
+        live
+      />,
+    );
+
+    expect(screen.getAllByText("生成图表")).toHaveLength(2);
+    expect(screen.getByText("Northwind 收入与利润率对比")).toBeTruthy();
+    expect(screen.getByText("柱线组合图 · 2 条序列 · 4 个数据点")).toBeTruthy();
+    expect(screen.getByText("运行中暂存")).toBeTruthy();
+    expect(screen.getByText("正在组装并校验图表数据与单位口径…")).toBeTruthy();
+
+    rerender(<ProcessTimeline events={chartEvents} live={false} />);
+    expect(screen.queryByText("运行中暂存")).toBeNull();
+
+    const causalEvent: ProgressEvent[] = [
+      {
+        index: 1,
+        kind: "tool",
+        name: "create_chart",
+        status: "completed",
+        reason: null,
+        rationale: "生成逻辑传导图",
+        denied_count: null,
+        summary: {
+          kind: "create_chart",
+          chart_id: "chart-cg",
+          chart_type: "causal_graph",
+          title: "Northwind 传导路径",
+          series_count: 6,
+          point_count: 5,
+        },
+      },
+    ];
+    rerender(<ProcessTimeline events={causalEvent} live={false} />);
+    expect(screen.getByText("逻辑传导图 · 6 个节点 · 5 条传导关系")).toBeTruthy();
+  });
 });

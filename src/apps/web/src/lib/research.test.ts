@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { ResearchV2 } from "@foresightnine/contracts";
 import type { ProgressEvent } from "../api/types";
 import {
-  ROLE_LABEL, answerSummary, buildCitationIndex, claimRole, parseTurnEvents, partialSummary, readCoverage, stepRows,
-  suggestionsFor, toolStepCount, topicTitle, turnContent, turnDurationMs,
+  ROLE_LABEL, answerSummary, buildCitationIndex, claimRole, parseTurnEvents, partialSummary, readCoverage, sanitizeProgressEvent, stepRows,
+  suggestionsFor, toolStepCount, topicTitle, turnCharts, turnContent, turnDurationMs,
 } from "./research";
 
 const cite = (source_id: string, start: number, end: number): ResearchV2.Citation => ({
@@ -397,5 +397,68 @@ describe("suggestionsFor", () => {
   it("returns both in order", () => {
     const content: ResearchV2.ResearchContent = { claims: [claim("c1")], turns: [turn("t1", { gaps: [{ code: "x", message: "m" }] })] };
     expect(suggestionsFor(content).map((s) => s.key)).toEqual(["gap", "counter"]);
+  });
+});
+
+describe("V1 chart event parsing & turnCharts", () => {
+  it("sanitizes create_chart tool summaries and drops malformed ones", () => {
+    const valid = sanitizeProgressEvent({
+      kind: "tool",
+      name: "create_chart",
+      status: "completed",
+      rationale: "生成双轴对比图",
+      summary: {
+        kind: "create_chart",
+        chart_id: "chart-abc",
+        chart_type: "combo_bar_line",
+        title: "收入与利润率对比",
+        series_count: 2,
+        point_count: 4,
+      },
+    }, 3);
+    expect(valid).toEqual({
+      index: 3,
+      kind: "tool",
+      name: "create_chart",
+      status: "completed",
+      reason: null,
+      rationale: "生成双轴对比图",
+      denied_count: null,
+      summary: {
+        kind: "create_chart",
+        chart_id: "chart-abc",
+        chart_type: "combo_bar_line",
+        title: "收入与利润率对比",
+        series_count: 2,
+        point_count: 4,
+      },
+    });
+
+    const invalid = sanitizeProgressEvent({
+      kind: "tool",
+      name: "create_chart",
+      status: "completed",
+      summary: { kind: "create_chart", chart_id: "", chart_type: "bar", title: "x", series_count: -1, point_count: 2 },
+    }, 4);
+    expect(invalid).toEqual({
+      index: 4,
+      kind: "tool",
+      name: "create_chart",
+      status: "completed",
+      reason: null,
+      rationale: null,
+      denied_count: null,
+    });
+  });
+
+  it("selects charts in turn.chart_ids order, dedupes ids, ignores unknown ids, and falls back to turn_id", () => {
+    const c1 = { chart_id: "c1", turn_id: "t1", chart_type: "bar", title: "C1", axes: [], series: [] } as ResearchV2.ResearchChart;
+    const c2 = { chart_id: "c2", turn_id: "t1", chart_type: "line", title: "C2", axes: [], series: [] } as ResearchV2.ResearchChart;
+    const c3 = { chart_id: "c3", turn_id: "t2", chart_type: "price_series", title: "C3", axes: [], series: [] } as ResearchV2.ResearchChart;
+    const content: ResearchV2.ResearchContent = { charts: [c1, c2, c3] };
+
+    expect(turnCharts(content, turn("t1", { chart_ids: ["c2", "missing", "c1", "c2"] })).map((c) => c.chart_id)).toEqual(["c2", "c1"]);
+    expect(turnCharts(content, turn("t2")).map((c) => c.chart_id)).toEqual(["c3"]);
+    expect(turnCharts({}, turn("t1"))).toEqual([]);
   });
 });

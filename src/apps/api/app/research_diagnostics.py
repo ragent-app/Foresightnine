@@ -6,8 +6,9 @@ import math
 import os
 import re
 from pathlib import Path
-from typing import Any
+from typing import AbstractSet, Any
 from pydantic import BaseModel, ValidationError
+from .transport_diagnostics import VALID_TIMEOUT_KINDS
 
 _finish: ContextVar[str] = ContextVar('research_provider_finish', default='unknown')
 _ALLOWED_ERRORS = frozenset({'missing','extra_forbidden','list_type','dict_type','model_type','string_type',
@@ -120,7 +121,7 @@ def sanitize_transport_diagnostic(value: object) -> dict[str, Any]:
             if not isinstance(item, dict):
                 continue
             stage, result, elapsed = item.get('stage'), item.get('result'), item.get('elapsed_ms')
-            if not isinstance(stage, str) or stage not in _TRANSPORT_STAGES or not isinstance(result, str) or result not in _TRANSPORT_RESULTS or type(elapsed) is not int or not 0 <= elapsed <= 180000:
+            if not isinstance(stage, str) or stage not in _TRANSPORT_STAGES or not isinstance(result, str) or result not in _TRANSPORT_RESULTS or type(elapsed) is not int or not 0 <= elapsed <= 600_000:
                 continue
             safe = {'stage': stage, 'result': result, 'elapsed_ms': elapsed}
             for key, lower, upper in (('errno', 0, 65535), ('status_code', 100, 599)):
@@ -128,7 +129,99 @@ def sanitize_transport_diagnostic(value: object) -> dict[str, Any]:
                 if type(number) is int and lower <= number <= upper:
                     safe[key] = number
             stages.append(safe)
-    return {'submission_state': state, 'stages': stages}
+    safe_result: dict[str, Any] = {'submission_state': state, 'stages': stages}
+    timeout_kind = value.get('timeout_kind')
+    if isinstance(timeout_kind, str) and timeout_kind in VALID_TIMEOUT_KINDS:
+        safe_result['timeout_kind'] = timeout_kind
+    return safe_result
+
+
+_STREAM_BLOCK_TYPES = ('thinking', 'text', 'tool_use', 'redacted_thinking')
+_SAFE_TOOL_NAME = re.compile(r'^[a-z][a-z0-9_]{0,63}$')
+
+
+def sanitize_stream_metrics(
+    value: object,
+    *,
+    allowed_tool_names: AbstractSet[str] | None = None,
+) -> dict[str, Any]:
+    """Retain only bounded, content-free SSE stream metrics."""
+    if not isinstance(value, dict):
+        return {}
+
+    def bounded_int(raw: object, upper: int) -> int | None:
+        return raw if type(raw) is int and 0 <= raw <= upper else None
+
+    frames = bounded_int(value.get('frames_received'), 10**7)
+    if frames is None:
+        frames = 0
+    ttft = bounded_int(value.get('ttft_ms'), 3_600_000)
+    last_frame = bounded_int(value.get('last_frame_elapsed_ms'), 3_600_000)
+    reassembled = bounded_int(value.get('reassembled_bytes'), 10**8)
+    if reassembled is None:
+        reassembled = 0
+
+    raw_blocks = value.get('block_bytes_by_type')
+    blocks: dict[str, int] = {}
+    for btype in _STREAM_BLOCK_TYPES:
+        count = bounded_int(raw_blocks.get(btype), 10**8) if isinstance(raw_blocks, dict) else None
+        blocks[btype] = count if count is not None else 0
+
+    raw_tools = value.get('active_tool_names')
+    tools: list[str] = []
+    if isinstance(raw_tools, (list, tuple)):
+        for item in raw_tools[:64]:
+            if not isinstance(item, str):
+                continue
+            if item == 'unrecognized':
+                clean_name = 'unrecognized'
+            elif allowed_tool_names is not None:
+                clean_name = item if item in allowed_tool_names else 'unrecognized'
+            elif _SAFE_TOOL_NAME.fullmatch(item):
+                clean_name = item
+            else:
+                clean_name = 'unrecognized'
+            if clean_name not in tools:
+                tools.append(clean_name)
+                if len(tools) >= 32:
+                    break
+
+    return {
+        'frames_received': frames,
+        'ttft_ms': ttft,
+        'last_frame_elapsed_ms': last_frame,
+        'reassembled_bytes': reassembled,
+        'block_bytes_by_type': blocks,
+        'active_tool_names': tools,
+    }
+
+
+def warn_if_timeout_output_mismatch(
+    max_output_tokens: int | None,
+    timeout_seconds: float | None,
+    *,
+    streaming: bool | None = None,
+    logger: logging.Logger | None = None,
+) -> bool:
+    """Log a non-blocking warning when output cap >= 8192 and timeout < 240s."""
+    if (
+        type(max_output_tokens) is not int
+        or max_output_tokens < 8192
+        or not isinstance(timeout_seconds, (int, float))
+        or isinstance(timeout_seconds, bool)
+        or not math.isfinite(timeout_seconds)
+        or not 0 < timeout_seconds < 240
+    ):
+        return False
+    target_logger = logger or logging.getLogger(__name__)
+    target_logger.warning(
+        'llm_timeout_output_cap_mismatch max_output_tokens=%d timeout_seconds=%.1f recommended_min_timeout_seconds=%d streaming=%s',
+        max_output_tokens,
+        float(timeout_seconds),
+        240,
+        'unknown' if streaming is None else str(bool(streaming)).lower(),
+    )
+    return True
 
 
 _IDENTIFIER = re.compile(r'^[A-Za-z0-9_.:-]{1,128}$')

@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import { queryKeys } from "../api/queries";
 import { jsonResponse, storeSession } from "../test/fixtures";
 import * as researchLib from "../lib/research";
 import { routerFuture, routes } from "../app/router";
@@ -73,15 +74,17 @@ function mockApi(handler: Handler) {
   return fetchMock;
 }
 
-function renderTopic() {
+function renderTopic(client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   storeSession();
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createMemoryRouter(routes, { future: routerFuture, initialEntries: ["/research/t1"] });
-  return render(
-    <QueryClientProvider client={client}>
-      <RouterProvider router={router} future={{ v7_startTransition: true }} />
-    </QueryClientProvider>,
-  );
+  return {
+    client,
+    ...render(
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} future={{ v7_startTransition: true }} />
+      </QueryClientProvider>,
+    ),
+  };
 }
 
 const CLAIMS: ResearchV2.ResearchClaim[] = [
@@ -1180,6 +1183,765 @@ describe("TopicPage", () => {
       expect(await within(region).findByText(/恢复检查：连续多次达到模型输出或上下文长度上限/)).toBeTruthy();
       expect(within(region).queryByRole("button", { name: "继续研究" })).toBeNull();
       expect(within(region).getByRole("button", { name: "重新提问" })).toBeTruthy();
+    });
+  });
+
+  describe("Phase 1.2 repeated timeout recovery guidance and button gating", () => {
+    it("blocks continue and deliver, hides fill-gap, and displays localized repeated_timeout guidance on a partial turn", async () => {
+      const partial = turn(1, {
+        question: "分析纳斯达克最近走势，并分析预测未来的可能",
+        status: "partial",
+        reason: "provider_timeout",
+        report: "",
+        gaps: [{ code: "provider_timeout", message: "Provider timed out without a usable result." }],
+      });
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([partial]));
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+        if (url.pathname.endsWith("/op_1/recovery-status")) {
+          return jsonResponse({ can_continue: false, can_deliver: false, reason: "repeated_timeout", checkpoint: "tool_batch", version_id: "v2" });
+        }
+        return undefined;
+      });
+      renderTopic();
+      const region = await screen.findByRole("region", { name: "第 1 轮" });
+      expect(within(region).getByText("部分完成")).toBeTruthy();
+      expect(within(region).getByText("停止原因：模型服务请求超时")).toBeTruthy();
+      expect(await within(region).findByText(/恢复检查：连续多次发生模型单次调用超时/)).toBeTruthy();
+      expect(within(region).queryByText(/repeated_timeout/)).toBeNull();
+      expect(within(region).queryByText(/provider_timeout/)).toBeNull();
+
+      expect(within(region).queryByRole("button", { name: "继续研究" })).toBeNull();
+      expect(within(region).queryByRole("button", { name: "交付已有成果" })).toBeNull();
+      const reaskButton = within(region).getByRole("button", { name: "重新提问" });
+      fireEvent.click(within(region).getByRole("button", { name: "更多" }));
+      const menu = await screen.findByRole("menu");
+      expect(within(menu).getByRole("menuitem", { name: "添加资料" })).toBeTruthy();
+      expect(within(menu).queryByRole("menuitem", { name: "补充缺口" })).toBeNull();
+      fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "取消" }));
+
+      fireEvent.click(reaskButton);
+      expect((screen.getByRole("textbox", { name: "追问" }) as HTMLTextAreaElement).value).toBe("分析纳斯达克最近走势，并分析预测未来的可能");
+    });
+
+    it("never exposes continue or deliver even if recovery payload carries can_continue/can_deliver alongside repeated_timeout", async () => {
+      const partial = turn(1, {
+        status: "partial",
+        reason: "provider_timeout",
+        report: "",
+        gaps: [{ code: "provider_timeout", message: "Provider timed out without a usable result." }],
+      });
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([partial]));
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+        if (url.pathname.endsWith("/op_1/recovery-status")) {
+          return jsonResponse({ can_continue: true, can_deliver: true, reason: "repeated_timeout", checkpoint: "tool_batch", version_id: "v2" });
+        }
+        return undefined;
+      });
+      renderTopic();
+      const region = await screen.findByRole("region", { name: "第 1 轮" });
+      expect(await within(region).findByText(/恢复检查：连续多次发生模型单次调用超时/)).toBeTruthy();
+      expect(within(region).queryByRole("button", { name: "继续研究" })).toBeNull();
+      expect(within(region).queryByRole("button", { name: "交付已有成果" })).toBeNull();
+      expect(within(region).getByRole("button", { name: "重新提问" })).toBeTruthy();
+      fireEvent.click(within(region).getByRole("button", { name: "更多" }));
+      const menu = await screen.findByRole("menu");
+      expect(within(menu).getByRole("menuitem", { name: "添加资料" })).toBeTruthy();
+      expect(within(menu).queryByRole("menuitem", { name: "补充缺口" })).toBeNull();
+    });
+
+    it("shows localized repeated_timeout guidance on an interrupted orphan run and falls back to re-ask", async () => {
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([turn(1)]));
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_2", "failed"), operation("op_1", "completed")]);
+        if (url.pathname.endsWith("/op_2/recovery-status")) {
+          return jsonResponse({ can_continue: false, can_deliver: false, reason: "repeated_timeout", checkpoint: "tool_batch", version_id: "v2" });
+        }
+        if (url.pathname.endsWith("/op_2/events")) return jsonResponse({ error_code: "method_not_allowed", message: "fallback" }, { status: 405 });
+        if (url.pathname.endsWith("/op_2/progress")) {
+          return jsonResponse({
+            operation_id: "op_2",
+            operation_status: "failed",
+            turn: { index: 2, question: "连续超时中断问题" },
+            usage: { model_calls: 2, search_calls: 0, total_tokens: 12000 },
+            current: null,
+            events: [{ index: 0, kind: "model_failure", code: "provider_timeout" }],
+            event_count: 1,
+            started_at: NOW,
+            updated_at: NOW,
+            version_id: null,
+          });
+        }
+        return undefined;
+      });
+      renderTopic();
+      const region = await screen.findByRole("region", { name: "第 2 轮" });
+      expect(within(region).getByText("运行中断")).toBeTruthy();
+      expect(await within(region).findByText("模型调用失败 · 请求超时")).toBeTruthy();
+      expect(await within(region).findByText(/恢复检查：连续多次发生模型单次调用超时/)).toBeTruthy();
+      expect(within(region).queryByRole("button", { name: "继续研究" })).toBeNull();
+      expect(within(region).queryByRole("button", { name: "交付已有成果" })).toBeNull();
+      expect(within(region).getByRole("button", { name: "重新提问" })).toBeTruthy();
+      fireEvent.click(within(region).getByRole("button", { name: "更多" }));
+      const menu = await screen.findByRole("menu");
+      expect(within(menu).getByRole("menuitem", { name: "添加资料" })).toBeTruthy();
+      expect(within(menu).queryByRole("menuitem", { name: "补充缺口" })).toBeNull();
+    });
+  });
+
+  describe("S1 continuation & multi-turn live streaming fixes", () => {
+    it("1) shows continuation LiveTurn without duplicate bubble, hides old partial card actions, and survives refresh", async () => {
+      const partial = turn(1, { status: "partial", reason: "no_submission", gaps: [{ code: "no_cited_claims", message: "x" }] });
+      const encoder = new TextEncoder();
+      let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
+      const body = new ReadableStream<Uint8Array>({ start(c) { streamController = c; } });
+      let continued = false;
+
+      mockApi((url, init) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([partial]));
+        if (url.pathname === "/v2/research/topics/t1/runs") {
+          return jsonResponse(
+            continued ? [operation("op_3", "running"), operation("op_1", "failed")] : [operation("op_1", "failed")],
+          );
+        }
+        if (url.pathname.endsWith("/op_1/recovery-status")) {
+          return jsonResponse({ can_continue: true, can_deliver: false, reason: null, checkpoint: "tool_batch", version_id: "v2" });
+        }
+        if (url.pathname.endsWith("/op_1/continue") && init.method === "POST") {
+          continued = true;
+          return jsonResponse(operation("op_3", "pending"), { status: 202 });
+        }
+        if (url.pathname.endsWith("/op_3/events")) {
+          return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8" } });
+        }
+        return undefined;
+      });
+      const sendFrame = (event: string, data: unknown, id?: string) => {
+        streamController!.enqueue(encoder.encode(`${id ? `id: ${id}\n` : ""}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      };
+
+      const { unmount } = renderTopic();
+      const continueBtn = await screen.findByRole("button", { name: "继续研究" });
+      await waitFor(() => expect((continueBtn as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(continueBtn);
+
+      const contRegion = await screen.findByRole("region", { name: "第 1 轮继续研究" });
+      expect(within(contRegion).getByText("正在继续研究")).toBeTruthy();
+      expect(screen.getAllByText("问题 1")).toHaveLength(1);
+      const oldRegion = screen.getByRole("region", { name: "第 1 轮" });
+      expect(within(oldRegion).queryByRole("button", { name: "继续研究" })).toBeNull();
+      expect(within(oldRegion).queryByRole("button", { name: "重新提问" })).toBeNull();
+
+      await waitFor(() => expect(streamController).toBeTruthy());
+      sendFrame("progress.snapshot", {
+        operation_id: "op_3",
+        operation_status: "running",
+        turn: { index: 1, question: "问题 1" },
+        usage: { model_calls: 1, search_calls: 0, total_tokens: 150 },
+        interim: null,
+        current: { kind: "model", phase: "thinking", retry_attempt: null, started_at: NOW },
+        events: [],
+        event_count: 0,
+        started_at: NOW,
+        updated_at: NOW,
+        version_id: null,
+      }, "cp:0");
+      sendFrame("stream.delta", { operation_id: "op_3", call_seq: 1, channel: "thinking", delta: "续跑思考轨迹。", seq: 0 });
+      sendFrame("stream.delta", { operation_id: "op_3", call_seq: 1, channel: "draft_report", delta: "续跑未核验草稿。", seq: 1 });
+
+      expect(await within(contRegion).findByText("续跑思考轨迹。")).toBeTruthy();
+      expect(within(contRegion).getByText("续跑未核验草稿。")).toBeTruthy();
+      expect(screen.getAllByText("问题 1")).toHaveLength(1);
+      unmount();
+
+      // Simulate hard refresh while op_3 is active (no pendingContinue local state).
+      let refreshCtrl: ReadableStreamDefaultController<Uint8Array> | null = null;
+      const refreshBody = new ReadableStream<Uint8Array>({ start(c) { refreshCtrl = c; } });
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([partial]));
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_3", "running"), operation("op_1", "failed")]);
+        if (url.pathname.endsWith("/op_3/events")) {
+          return new Response(refreshBody, { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8" } });
+        }
+        return undefined;
+      });
+      renderTopic();
+      const refreshRegion = await screen.findByRole("region", { name: "第 1 轮继续研究" });
+      expect(within(refreshRegion).getByText("正在继续研究")).toBeTruthy();
+      expect(screen.getAllByText("问题 1")).toHaveLength(1);
+      await waitFor(() => expect(refreshCtrl).toBeTruthy());
+      refreshCtrl!.enqueue(encoder.encode(`id: cp:0\nevent: progress.snapshot\ndata: ${JSON.stringify({
+        operation_id: "op_3",
+        operation_status: "running",
+        turn: { index: 1, question: "问题 1" },
+        usage: { model_calls: 1, search_calls: 0, total_tokens: 150 },
+        interim: null,
+        current: { kind: "model", phase: "thinking", retry_attempt: null, started_at: NOW },
+        events: [],
+        event_count: 0,
+        started_at: NOW,
+        updated_at: NOW,
+        version_id: null,
+      })}\n\nevent: stream.delta\ndata: ${JSON.stringify({ operation_id: "op_3", call_seq: 1, channel: "thinking", delta: "重连思考恢复。", seq: 0 })}\n\n`));
+      expect(await within(refreshRegion).findByText("重连思考恢复。")).toBeTruthy();
+    });
+
+    it("2) shows continuation deliver mode labels on partial turn '交付已有成果'", async () => {
+      const partial = turn(1, { status: "partial", reason: "no_submission", gaps: [{ code: "no_cited_claims", message: "x" }] });
+      const encoder = new TextEncoder();
+      let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
+      const body = new ReadableStream<Uint8Array>({ start(c) { streamController = c; } });
+      let delivered = false;
+
+      mockApi((url, init) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([partial]));
+        if (url.pathname === "/v2/research/topics/t1/runs") {
+          return jsonResponse(
+            delivered ? [operation("op_3", "pending"), operation("op_1", "failed")] : [operation("op_1", "failed")],
+          );
+        }
+        if (url.pathname.endsWith("/op_1/recovery-status")) {
+          return jsonResponse({ can_continue: false, can_deliver: true, reason: null, checkpoint: "submission", version_id: "v2" });
+        }
+        if (url.pathname.endsWith("/op_1/recover") && init.method === "POST") {
+          delivered = true;
+          return jsonResponse(operation("op_3", "pending"), { status: 202 });
+        }
+        if (url.pathname.endsWith("/op_3/events")) {
+          return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8" } });
+        }
+        return undefined;
+      });
+
+      renderTopic();
+      const deliverBtn = await screen.findByRole("button", { name: "交付已有成果" });
+      await waitFor(() => expect((deliverBtn as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(deliverBtn);
+
+      const contRegion = await screen.findByRole("region", { name: "第 1 轮继续研究" });
+      expect(within(contRegion).getByText("排队中 · 交付已有成果")).toBeTruthy();
+
+      await waitFor(() => expect(streamController).toBeTruthy());
+      streamController!.enqueue(encoder.encode(`id: cp:0\nevent: progress.snapshot\ndata: ${JSON.stringify({
+        operation_id: "op_3",
+        operation_status: "running",
+        turn: { index: 1, question: "问题 1" },
+        usage: { model_calls: 1, search_calls: 0, total_tokens: 90 },
+        interim: null,
+        current: { kind: "model", phase: "responding", retry_attempt: null, started_at: NOW },
+        events: [],
+        event_count: 0,
+        started_at: NOW,
+        updated_at: NOW,
+        version_id: null,
+      })}\n\n`));
+      expect(await within(contRegion).findByText("正在交付已有成果")).toBeTruthy();
+    });
+
+    it("3) mounts Turn 2 LiveTurn immediately without flicker when continuing an orphanRun", async () => {
+      let bodyCtrl: ReadableStreamDefaultController<Uint8Array> | null = null;
+      const body = new ReadableStream<Uint8Array>({ start(c) { bodyCtrl = c; } });
+      let continued = false;
+
+      mockApi((url, init) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([turn(1)]));
+        if (url.pathname === "/v2/research/topics/t1/runs") {
+          return jsonResponse(
+            continued
+              ? [operation("op_3", "running"), operation("op_2", "failed"), operation("op_1", "completed")]
+              : [operation("op_2", "failed"), operation("op_1", "completed")],
+          );
+        }
+        if (url.pathname.endsWith("/op_2/recovery-status")) {
+          return jsonResponse({ can_continue: true, can_deliver: false, reason: null, checkpoint: "tool_batch", version_id: "v2" });
+        }
+        if (url.pathname.endsWith("/op_2/events")) return jsonResponse({ error_code: "method_not_allowed", message: "fallback" }, { status: 405 });
+        if (url.pathname.endsWith("/op_2/progress")) {
+          return jsonResponse({
+            operation_id: "op_2",
+            operation_status: "failed",
+            turn: { index: 2, question: "失败的追问问题" },
+            usage: { model_calls: 1, search_calls: 0, total_tokens: 100 },
+            current: null,
+            events: [],
+            event_count: 0,
+            started_at: NOW,
+            updated_at: NOW,
+            version_id: null,
+          });
+        }
+        if (url.pathname.endsWith("/op_2/continue") && init.method === "POST") {
+          continued = true;
+          return jsonResponse(operation("op_3", "running"), { status: 202 });
+        }
+        if (url.pathname.endsWith("/op_3/events")) {
+          return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8" } });
+        }
+        return undefined;
+      });
+
+      renderTopic();
+      const orphanRegion = await screen.findByRole("region", { name: "第 2 轮" });
+      expect(await within(orphanRegion).findByText("失败的追问问题")).toBeTruthy();
+      const continueBtn = within(orphanRegion).getByRole("button", { name: "继续研究" });
+      await waitFor(() => expect((continueBtn as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(continueBtn);
+
+      // Even before op_3/events pushes progress.snapshot, LiveTurn for Turn 2 mounts immediately.
+      await waitFor(() => expect(bodyCtrl).toBeTruthy());
+      const liveRegion = await screen.findByRole("region", { name: "第 2 轮" });
+      expect(within(liveRegion).getByText("正在研究")).toBeTruthy();
+      expect(within(liveRegion).getByText("失败的追问问题")).toBeTruthy();
+      expect(screen.queryByRole("region", { name: /继续研究/ })).toBeNull();
+    });
+
+    it("4) settles pendingAsk by operationId cleanly on Turn 2 follow-up regardless of clock skew and preserves live process", async () => {
+      const encoder = new TextEncoder();
+      let streamCtrl: ReadableStreamDefaultController<Uint8Array> | null = null;
+      const body = new ReadableStream<Uint8Array>({ start(c) { streamCtrl = c; } });
+      let started = false;
+
+      mockApi((url, init) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([turn(1)]));
+        if (url.pathname === "/v2/research/topics/t1/runs" && init.method === "POST") {
+          started = true;
+          return jsonResponse(operation("op_9", "pending"), { status: 202 });
+        }
+        if (url.pathname === "/v2/research/topics/t1/runs") {
+          if (!started) return jsonResponse([operation("op_1", "completed")]);
+          const base = operation("op_9", "running");
+          const op9 = { ...base, operation: { ...base.operation, created_at: "2020-01-01T00:00:00Z" } };
+          return jsonResponse([op9, operation("op_1", "completed")]);
+        }
+        if (url.pathname.endsWith("/op_9/events")) {
+          return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8" } });
+        }
+        return undefined;
+      });
+
+      const { container } = renderTopic();
+      await screen.findByRole("region", { name: "第 1 轮" });
+      const scroller = container.querySelector('[data-page="TopicPage"]') as HTMLDivElement;
+      const scrollToSpy = vi.fn();
+      scroller.scrollTo = scrollToSpy;
+      Object.defineProperty(scroller, "scrollHeight", { value: 1200, configurable: true });
+      Object.defineProperty(scroller, "clientHeight", { value: 400, configurable: true });
+      Object.defineProperty(scroller, "scrollTop", { value: 0, configurable: true, writable: true });
+
+      const composer = screen.getByRole("textbox", { name: "追问" });
+      fireEvent.change(composer, { target: { value: "第二轮新追问" } });
+      fireEvent.keyDown(composer, { key: "Enter", ctrlKey: true });
+
+      const liveRegion = await screen.findByRole("region", { name: "第 2 轮" });
+      expect(within(liveRegion).getByText("第二轮新追问")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "回到实时过程" })).toBeNull();
+      await waitFor(() => expect(scrollToSpy).toHaveBeenCalled());
+      await waitFor(() => expect(streamCtrl).toBeTruthy());
+
+      streamCtrl!.enqueue(encoder.encode(`id: cp:0\nevent: progress.snapshot\ndata: ${JSON.stringify({
+        operation_id: "op_9",
+        operation_status: "running",
+        turn: { index: 2, question: "第二轮新追问" },
+        usage: { model_calls: 1, search_calls: 0, total_tokens: 100 },
+        interim: null,
+        current: { kind: "model", phase: "thinking", retry_attempt: null, started_at: NOW },
+        events: [],
+        event_count: 0,
+        started_at: NOW,
+        updated_at: NOW,
+        version_id: null,
+      })}\n\nevent: stream.delta\ndata: ${JSON.stringify({ operation_id: "op_9", call_seq: 1, channel: "thinking", delta: "追问实时思考。", seq: 0 })}\n\n`));
+
+      expect(await within(liveRegion).findByText("追问实时思考。")).toBeTruthy();
+      expect(screen.getAllByText("第二轮新追问")).toHaveLength(1);
+    });
+
+    it("5) streams live thinking and tool status inside the right RecordPanel StepsTab before committed rows arrive", async () => {
+      const encoder = new TextEncoder();
+      let streamCtrl: ReadableStreamDefaultController<Uint8Array> | null = null;
+      const body = new ReadableStream<Uint8Array>({ start(c) { streamCtrl = c; } });
+
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([turn(1)]));
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_2", "running"), operation("op_1", "completed")]);
+        if (url.pathname.endsWith("/op_2/events")) {
+          return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8" } });
+        }
+        return undefined;
+      });
+
+      renderTopic();
+      await waitFor(() => expect(streamCtrl).toBeTruthy());
+      streamCtrl!.enqueue(encoder.encode(`id: cp:0\nevent: progress.snapshot\ndata: ${JSON.stringify({
+        operation_id: "op_2",
+        operation_status: "running",
+        turn: { index: 2, question: "侧栏流式测试" },
+        usage: { model_calls: 1, search_calls: 0, total_tokens: 50 },
+        interim: null,
+        current: null,
+        events: [],
+        event_count: 0,
+        started_at: NOW,
+        updated_at: NOW,
+        version_id: null,
+      })}\n\nevent: stream.delta\ndata: ${JSON.stringify({ operation_id: "op_2", call_seq: 1, channel: "thinking", delta: "面板中的实时思考", seq: 0 })}\n\nevent: stream.delta\ndata: ${JSON.stringify({ operation_id: "op_2", call_seq: 1, channel: "tool_status", delta: "面板正在起草报告…", seq: 1 })}\n\n`));
+
+      fireEvent.click(await screen.findByRole("button", { name: "打开过程面板" }));
+      const dialog = await screen.findByRole("dialog");
+      expect(await within(dialog).findByText("面板中的实时思考")).toBeTruthy();
+      expect(within(dialog).getByText("面板正在起草报告…")).toBeTruthy();
+      expect(within(dialog).queryByText("这一轮还没有记录步骤。")).toBeNull();
+    });
+
+    it("6) prevents double rendering via liveCommitted when topic commits op_2 before runs cache drops activeRun", async () => {
+      const encoder = new TextEncoder();
+      let streamCtrl: ReadableStreamDefaultController<Uint8Array> | null = null;
+      const body = new ReadableStream<Uint8Array>({ start(c) { streamCtrl = c; } });
+      let topicCommitted = false;
+
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics/t1") {
+          return jsonResponse(
+            topicWith(topicCommitted ? [turn(1), turn(2, { operation_ids: ["op_2"], report: "已落盘正式报告。" })] : [turn(1)]),
+          );
+        }
+        // Intentionally keep returning op_2 as running even after topic refreshes.
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_2", "running"), operation("op_1", "completed")]);
+        if (url.pathname.endsWith("/op_2/events")) {
+          return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8" } });
+        }
+        return undefined;
+      });
+
+      const { client } = renderTopic();
+      await waitFor(() => expect(streamCtrl).toBeTruthy());
+      streamCtrl!.enqueue(encoder.encode(`id: cp:0\nevent: progress.snapshot\ndata: ${JSON.stringify({
+        operation_id: "op_2",
+        operation_status: "running",
+        turn: { index: 2, question: "问题 2" },
+        usage: { model_calls: 1, search_calls: 0, total_tokens: 100 },
+        interim: null,
+        current: { kind: "model", phase: "responding", retry_attempt: null, started_at: NOW },
+        events: [],
+        event_count: 0,
+        started_at: NOW,
+        updated_at: NOW,
+        version_id: null,
+      })}\n\n`));
+
+      expect(await screen.findByText("正在研究")).toBeTruthy();
+
+      topicCommitted = true;
+      await client.invalidateQueries({ queryKey: queryKeys.topic("t1") });
+
+      expect(await screen.findByText("已落盘正式报告。")).toBeTruthy();
+      await waitFor(() => expect(screen.queryByText("正在研究")).toBeNull());
+      expect(screen.getAllByRole("region", { name: "第 2 轮" })).toHaveLength(1);
+    });
+  });
+
+  describe("M2 restricted GFM Markdown rendering", () => {
+    it("renders GFM report tables, code blocks, safe links, inline notes/claims, and streaming Markdown drafts without historical TurnView rerenders", async () => {
+      const durationSpy = vi.spyOn(researchLib, "turnDurationMs");
+      const encoder = new TextEncoder();
+      let streamCtrl: ReadableStreamDefaultController<Uint8Array> | null = null;
+      const body = new ReadableStream<Uint8Array>({ start(c) { streamCtrl = c; } });
+
+      const richClaim: ResearchV2.ResearchClaim = {
+        claim_id: "C_MD",
+        role: "support",
+        text: "**云服务收入**由 $42.0B 增至 `$130.5B`",
+        turn_id: "turn_1",
+        citations: [{ source_id: "s1", quotation: QUOTE, location: { character_start: START, character_end: END } }],
+      };
+      const richTurn1 = turn(1, {
+        claim_ids: ["C_MD"],
+        events: [
+          { kind: "model", usage: 500, usage_detail: { input_tokens: 400, output_tokens: 100 }, finish_reason: "tool_calls", note: "优先核对 **10-K 附注**" },
+          { kind: "submission", status: "completed" },
+        ],
+        report: [
+          "# 收入核验报告",
+          "",
+          "| 期间 | 收入 | 同比 |",
+          "| --- | ---: | ---: |",
+          "| FY2025 | $42.0B | — |",
+          "| FY2026 | $130.5B | +114.2% |",
+          "",
+          "```python",
+          "growth = (130.5 / 42.0 - 1) * 100",
+          "```",
+          "",
+          "参考 [SEC 原文](https://www.sec.gov/Archives/edgar/data/1/a.htm) ![pixel](https://evil.com/pixel.png)",
+        ].join("\n"),
+      });
+
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([richTurn1], [richClaim]));
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_2", "running"), operation("op_1", "completed")]);
+        if (url.pathname.endsWith("/op_2/events")) {
+          return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8" } });
+        }
+        return undefined;
+      });
+
+      try {
+        const { container } = renderTopic();
+        const turn1Region = await screen.findByRole("region", { name: "第 1 轮" });
+        expect(within(turn1Region).getByRole("heading", { level: 2, name: "收入核验报告" })).toBeTruthy();
+        expect(turn1Region.querySelector("h1")).toBeNull();
+        expect(turn1Region.querySelector("img")).toBeNull();
+        expect(within(turn1Region).getByText("[图片：pixel]")).toBeTruthy();
+        expect(turn1Region.querySelectorAll("td.md-num").length).toBeGreaterThanOrEqual(4);
+        const extLink = within(turn1Region).getByRole("link", { name: /SEC 原文/ }) as HTMLAnchorElement;
+        expect(extLink.href).toBe("https://www.sec.gov/Archives/edgar/data/1/a.htm");
+        expect(within(turn1Region).getByText("云服务收入").tagName).toBe("STRONG");
+        expect(within(turn1Region).getByRole("button", { name: "引用 1" })).toBeTruthy();
+
+        // Expand collapsed process summary and confirm inline Markdown in model.note.
+        fireEvent.click(within(turn1Region).getByRole("button", { name: /已完成 1 步研究过程/ }));
+        expect(within(turn1Region).getByText("10-K 附注").tagName).toBe("STRONG");
+
+        await waitFor(() => expect(streamCtrl).toBeTruthy());
+        streamCtrl!.enqueue(encoder.encode(`id: cp:0\nevent: progress.snapshot\ndata: ${JSON.stringify({
+          operation_id: "op_2",
+          operation_status: "running",
+          turn: { index: 2, question: "Markdown 草稿测试" },
+          usage: { model_calls: 1, search_calls: 0, total_tokens: 100 },
+          interim: null,
+          current: { kind: "model", phase: "responding", retry_attempt: null, started_at: NOW },
+          events: [],
+          event_count: 0,
+          started_at: NOW,
+          updated_at: NOW,
+          version_id: null,
+        })}\n\n`));
+
+        const liveRegion = await screen.findByRole("region", { name: "第 2 轮" });
+        const turn1CallsBeforeDraft = durationSpy.mock.calls.length;
+        streamCtrl!.enqueue(encoder.encode(`event: stream.delta\ndata: ${JSON.stringify({
+          operation_id: "op_2", call_seq: 1, channel: "draft_report", delta: "## 草稿对比\n\n| 指标 | 数值 |\n| --- | ---: |\n| 收入 | **$130.5B** |", seq: 0,
+        })}\n\n`));
+
+        const draftBox = await within(liveRegion).findByRole("region", { name: "未核验报告草稿预览" });
+        expect(await within(draftBox).findByRole("heading", { level: 2, name: "草稿对比" })).toBeTruthy();
+        expect(within(draftBox).getByText("$130.5B").tagName).toBe("STRONG");
+        expect(draftBox.querySelector("table")).toBeTruthy();
+        expect(container.querySelector("img")).toBeNull();
+        expect(durationSpy.mock.calls.length).toBe(turn1CallsBeforeDraft);
+      } finally {
+        durationSpy.mockRestore();
+      }
+    });
+  });
+
+  describe("V1 evidence-bound charts in AnswerBlock", () => {
+    it("renders [[chart:...]] inline, auto-places unreferenced charts before StatLine, ignores invalid anchors, and opens ReaderPanel on provenance click", async () => {
+      const cCombo: ResearchV2.ResearchChart = {
+        chart_id: "c_combo",
+        turn_id: "turn_1",
+        chart_type: "combo_bar_line",
+        title: "内联营业收入与利润率图",
+        subtitle: "左轴：USD millions · 右轴：percent",
+        x_label: "财年",
+        axes: [
+          { id: "left", label: "总收入", unit: "USD millions", currency: "USD", scale: "millions" },
+          { id: "right", label: "利润率", unit: "percent", currency: null, scale: "ones" },
+        ],
+        series: [
+          {
+            name: "总收入",
+            mark: "bar",
+            y_axis_id: "left",
+            is_projected: false,
+            points: [
+              {
+                x: "FY2026",
+                y: "48612",
+                display_value: "USD 48,612 millions",
+                is_projected: false,
+                provenance: { fact_id: "f1", source_id: "s1", character_start: START, character_end: END },
+              },
+            ],
+          },
+          {
+            name: "利润率",
+            mark: "line",
+            y_axis_id: "right",
+            is_projected: false,
+            points: [
+              {
+                x: "FY2026",
+                y: "31.07",
+                display_value: "31.07%",
+                is_projected: false,
+                provenance: { calculation_id: "calc_1", source_id: "s1", character_start: START, character_end: END },
+              },
+            ],
+          },
+        ],
+        is_simulated: false,
+        has_projected_points: false,
+        replaces_chart_id: null,
+        source_ids: ["s1"],
+      };
+
+      const cPrice: ResearchV2.ResearchChart = {
+        chart_id: "c_price",
+        turn_id: "turn_1",
+        chart_type: "price_series",
+        title: "文末自动排布股价走势图",
+        subtitle: "单位：USD",
+        x_label: "交易日",
+        axes: [{ id: "left", label: "收盘价", unit: "USD", currency: "USD", scale: "ones" }],
+        series: [
+          {
+            name: "NWD",
+            mark: "area",
+            y_axis_id: "left",
+            is_projected: false,
+            points: [
+              {
+                x: "2026-08-04",
+                y: "136.2",
+                display_value: "USD 136.2",
+                is_projected: false,
+                provenance: { source_id: "s1", character_start: START, character_end: END },
+              },
+            ],
+          },
+        ],
+        is_simulated: false,
+        has_projected_points: false,
+        replaces_chart_id: null,
+        source_ids: ["s1"],
+      };
+
+      const chartTurn = turn(1, {
+        claim_ids: ["C1"],
+        calculation_ids: ["calc_1"],
+        chart_ids: ["c_combo", "c_price"],
+        report: [
+          "## 核心分析",
+          "",
+          "[[chart:c_combo]]",
+          "",
+          "[[chart:bogus_missing_chart]]",
+          "",
+          "```text",
+          "[[chart:c_price]]",
+          "```",
+          "",
+          "报告结尾段落。",
+        ].join("\n"),
+      });
+
+      const calc: ResearchV2.ResearchCalculation = {
+        calculation_id: "calc_1",
+        turn_id: "turn_1",
+        formula_id: "margin_percent",
+        formula_version: "1",
+        expression: "15104 / 48612 * 100",
+        value: "31.07",
+        unit: "percent",
+        currency: null,
+        decimal_places: 2,
+        rounding: "half_up",
+        inputs: [],
+        input_verification: "not_verified_by_calculator",
+        input_precision_status: "not_established",
+      };
+
+      const topicData: ResearchV2.ResearchTopic = {
+        topic_id: "t1",
+        owner_id: "acc_1",
+        created_at: NOW,
+        updated_at: NOW,
+        request: { question: "Northwind 示例公司的收入增长有多快？", source_ids: ["s1"] },
+        versions: [
+          {
+            version_id: "v2",
+            created_at: NOW,
+            created_by: "agent",
+            review: "draft",
+            source_ids: ["s1"],
+            content: {
+              turns: [chartTurn],
+              claims: [{ ...CLAIMS[0]!, turn_id: "turn_1" }],
+              calculations: [calc],
+              charts: [cCombo, cPrice],
+              sources: [],
+            },
+          },
+        ],
+      };
+
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicData);
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([]);
+        if (url.pathname === "/v2/research/topics/t1/versions/v2/sources") {
+          return jsonResponse([
+            {
+              status: "available",
+              source_id: "s1",
+              title: "Northwind 2026 年报",
+              kind: "user_supplied",
+              is_simulated: false,
+              published_at: NOW,
+              event_at: null,
+              revised_at: null,
+              obtained_at: NOW,
+              content_sha256: "sha1234567890",
+              retrieval_method: "user_supplied",
+              pdf_text_order: null,
+              derived_from_source_id: null,
+              permissions: { store: true, model_input: true, display: true, export: true },
+              verification: "user_declared_not_verified",
+            },
+          ]);
+        }
+        if (url.pathname === "/v2/research/topics/t1/versions/v2/sources/s1/text") {
+          return jsonResponse({ source_id: "s1", text: TEXT, content_sha256: "sha1234567890" });
+        }
+        return undefined;
+      });
+
+      renderTopic();
+      const turnRegion = await screen.findByRole("region", { name: "第 1 轮" });
+
+      // 1) Inline chart appears inside .report .md-chart-slot exactly once; trailing chart appears in .turn-charts between .report and .stats.
+      const inlineFigures = within(turnRegion.querySelector(".report") as HTMLElement).getAllByRole("figure");
+      expect(inlineFigures).toHaveLength(1);
+      expect(inlineFigures[0]!.getAttribute("aria-label")).toBe("内联营业收入与利润率图");
+
+      const trailingFigures = within(turnRegion.querySelector(".turn-charts") as HTMLElement).getAllByRole("figure");
+      expect(trailingFigures).toHaveLength(1);
+      expect(trailingFigures[0]!.getAttribute("aria-label")).toBe("文末自动排布股价走势图");
+
+      // Total figures = 2 (no duplication), invalid anchor silently ignored, fenced code preserves literal anchor.
+      expect(within(turnRegion).getAllByRole("figure")).toHaveLength(2);
+      expect(within(turnRegion).queryByText("[[chart:bogus_missing_chart]]")).toBeNull();
+      expect(turnRegion.querySelector("pre")?.textContent).toContain("[[chart:c_price]]");
+
+      // Ordering: report -> trailing charts -> stats
+      const reportEl = turnRegion.querySelector(".report")!;
+      const trailingEl = turnRegion.querySelector(".turn-charts")!;
+      const statsEl = turnRegion.querySelector(".stats")!;
+      expect(reportEl.compareDocumentPosition(trailingEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(trailingEl.compareDocumentPosition(statsEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+      // 2) Switch to table view and click provenance to open ReaderPanel highlighting exact source quotation.
+      const comboFigure = screen.getByRole("figure", { name: "内联营业收入与利润率图" });
+      fireEvent.click(within(comboFigure).getByRole("button", { name: "数据表" }));
+      fireEvent.click(within(comboFigure).getByRole("button", { name: /USD 48,612 millions/ }));
+
+      const readerPanel = await screen.findByRole("dialog", { name: "Northwind 2026 年报" });
+      await waitFor(() => {
+        const activeMark = readerPanel.querySelector("mark.on");
+        expect(activeMark?.textContent).toBe(QUOTE);
+      });
+      expect(readerPanel.querySelectorAll("mark.on").length).toBeGreaterThanOrEqual(1);
     });
   });
 });

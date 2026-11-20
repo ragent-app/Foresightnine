@@ -699,3 +699,109 @@ def test_configured_research_model_follows_the_research_protocol() -> None:
                                       "FORESIGHTNINE_RESEARCH_LLM_MODEL": "research"}) == "research"
     assert configured_research_model({"FORESIGHTNINE_LLM_MODEL": "general"}) == "general"
     assert configured_research_model({"FORESIGHTNINE_RESEARCH_MODEL_PROTOCOL": "anthropic_messages"}) == "unknown"
+
+
+def test_mid_stream_timeout_zero_message_start_leaves_reservation_unresolved(monkeypatch) -> None:
+    import json
+    from types import SimpleNamespace
+    from fastapi import Request
+    from app.anthropic_messages import AnthropicMessagesProvider
+    from app.model_protocol import ModelTurnInput
+    from app.openai_compatible import _TransportTimeout
+    from app.phase3 import ProviderFailure, ProviderPolicy
+    from app.research_budget import ResearchExecutionBudget
+    from app.research_coordinator import ResearchExecutionContext
+
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    monkeypatch.setenv("FORESIGHTNINE_LLM_ENDPOINT_VERSION", "v1")
+    monkeypatch.setenv("FORESIGHTNINE_LLM_CAPABILITY_PROFILE", json.dumps({
+        "endpoint": "https://example.com/api/anthropic/v1/messages",
+        "model": "configured-model",
+        "version": "v1",
+        "mode": "json_object",
+        "native_tools": True,
+        "stream": True,
+    }))
+    reset_state()
+    try:
+        account_id = "account_stream_billing_test"
+        op_id = "op_stream_billing_test"
+        call_id = f"{op_id}:research-agent:call1"
+        billing_ledger.ensure_state(account_id, now=main_module.lifecycle_clock.now())
+        req = Request({"type": "http", "headers": []})
+        req.state.billing_account_id = account_id
+        req.state.model_account = SimpleNamespace(account_id=account_id)
+
+        def mock_stream(method, url, headers, body, timeout, *, on_frame, **_kwargs):
+            on_frame("message_start", json.dumps({
+                "type": "message_start",
+                "message": {"role": "assistant", "content": [], "usage": {"input_tokens": 0, "output_tokens": 0}},
+            }))
+            on_frame("content_block_start", json.dumps({
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": {"type": "thinking", "thinking": "", "signature": ""},
+            }))
+            on_frame("content_block_delta", json.dumps({
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "thinking_delta", "thinking": "partial thinking"},
+            }))
+            raise _TransportTimeout(timeout_kind="stream_deadline_timeout")
+
+        provider = AnthropicMessagesProvider(
+            SimpleNamespace(base_url="https://example.com/api/anthropic", model="configured-model", api_key="sk-test", allow_private_network=False),
+            ProviderPolicy(timeout_seconds=300, max_output_tokens=16384),
+            anthropic_version="2023-06-01",
+            auth_scheme="x-api-key",
+            max_tokens=16384,
+            stream_transport=mock_stream,
+        )
+
+        def reserve(cid: str, token_budget: int | None) -> None:
+            billing_ledger.reserve(account_id, f"model:{cid}", token_budget or 0, now=main_module.lifecycle_clock.now())
+
+        def settle(cid: str, actual_tokens: int | None) -> None:
+            req.state.billing_reservation_id = f"model:{cid}"
+            main_module._settle_model_call(req, cid, actual_tokens)
+
+        ctx = ResearchExecutionContext(
+            ResearchExecutionBudget(2, 0, None, float("inf")),
+            False,
+            lambda: None,
+            lambda: None,
+            reserve,
+            settle,
+            lambda: None,
+            entitlement_remaining=lambda: billing_ledger.snapshot(account_id, now=main_module.lifecycle_clock.now())["quota_remaining"],
+            now=lambda: 0.0,
+        )
+        reservation, output_cap = ctx.prepare_model_call(provider, "prompt", "system")
+        before = ctx.start_model(call_id, reservation)
+        with pytest.raises(ProviderFailure) as caught:
+            ctx.invoke_model(
+                call_id,
+                provider.complete_turn,
+                ModelTurnInput("system", "prompt", (), ()),
+                max_output_tokens=output_cap,
+                on_stream_event=lambda _ev: None,
+            )
+        assert caught.value.code == "provider_timeout"
+        assert caught.value.provider_response_received is True
+        assert caught.value.reported_tokens is None
+
+        ctx.finish_model(call_id, caught.value.reported_tokens, before)
+        assert ctx.model_call_receipts[call_id] == {
+            "provider": "returned",
+            "settlement": "unknown",
+            "processing_error": "stream_timeout",
+        }
+        usage_entry = billing_ledger.usage.get(f"model:{call_id}")
+        assert usage_entry is not None
+        assert usage_entry.status == "reserved"
+        assert usage_entry.actual_tokens is None
+        snap = billing_ledger.snapshot(account_id, now=main_module.lifecycle_clock.now())
+        assert snap["quota_consumed"] == 0
+        assert snap["quota_reserved"] == reservation
+    finally:
+        reset_state()

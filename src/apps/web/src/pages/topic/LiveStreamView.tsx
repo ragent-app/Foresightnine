@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import type { TransientStreamState } from "../../api/types";
 import { PROCESS_NOTE_LABEL } from "../../lib/copy";
 import { formatInteger } from "../../lib/format";
+import { splitStableMarkdownBlocks } from "../../lib/markdownStream";
 import { Icon } from "../../ui/icons";
+import { MarkdownContent } from "../../ui/MarkdownContent";
 import type { LiveStreamStore } from "./context";
 
 const EMPTY_STREAM: TransientStreamState = {
@@ -27,8 +29,41 @@ export function useLiveStream(stream?: LiveStreamStore | undefined): TransientSt
   );
 }
 
-function splitParagraphs(text: string): string[] {
-  return text.split(/\n\s*\n/).map((part) => part.trim()).filter(Boolean);
+/** Dashed-border unverified preview for incremental `submit_research.report` deltas. */
+export function LiveDraftPreview({ stream, onGrow }: { stream?: LiveStreamStore | undefined; onGrow?: (() => void) | undefined }) {
+  const state = useLiveStream(stream);
+  const hasDraft = state.draftReport.trim().length > 0;
+  const blockCount = useMemo(() => {
+    if (!hasDraft) return 0;
+    const split = splitStableMarkdownBlocks(state.draftReport);
+    return split.stableBlocks.length + (split.activeTail.trim() ? 1 : 0);
+  }, [hasDraft, state.draftReport]);
+  const onGrowRef = useRef(onGrow);
+  onGrowRef.current = onGrow;
+
+  useEffect(() => {
+    if (blockCount > 0) onGrowRef.current?.();
+  }, [blockCount]);
+
+  if (!hasDraft) return null;
+
+  const streamingDraft = state.activeChannel === "draft_report";
+  return (
+    <div className="draft-preview" role="region" aria-label="未核验报告草稿预览">
+      <div className="draft-warning">
+        <Icon name="alert" size={14} />
+        <span>草稿生成中 · 引文与数值尚未经服务端核验，最终结果以核验后为准</span>
+      </div>
+      <div className="report draft-report">
+        <MarkdownContent
+          content={state.draftReport}
+          variant="draft"
+          streaming
+          showCursor={streamingDraft}
+        />
+      </div>
+    </div>
+  );
 }
 
 function hasStepStreamContent(state: TransientStreamState): boolean {
@@ -123,10 +158,14 @@ function LiveStepContent({ state }: { state: TransientStreamState }) {
       {state.text.length > 0 ? (
         <div className="ls-text-block">
           <span className="pt-note-label">{PROCESS_NOTE_LABEL}</span>
-          <p className="ls-process-text">
-            {state.text}
-            {state.activeChannel === "text" ? <span className="stream-cursor" aria-hidden="true" /> : null}
-          </p>
+          <div className="ls-process-text">
+            <MarkdownContent
+              content={state.text}
+              variant="inline"
+              streaming
+              showCursor={state.activeChannel === "text"}
+            />
+          </div>
         </div>
       ) : null}
     </div>
@@ -159,13 +198,17 @@ export function LiveActiveStreamRow({ stream }: { stream?: LiveStreamStore | und
 }
 
 /** Shown inside LiveTurn before any committed events or `current` step arrive. */
-export function LiveEmptyOrStream({ stream, idleText }: { stream?: LiveStreamStore | undefined; idleText: string }) {
+export function LiveEmptyOrStream({ stream, idleText, inPanel = false }: {
+  stream?: LiveStreamStore | undefined;
+  idleText: string;
+  inPanel?: boolean | undefined;
+}) {
   const state = useLiveStream(stream);
   if (!hasStepStreamContent(state)) {
-    return <p className="meta live-turn-empty">{idleText}</p>;
+    return <p className={inPanel ? "empty-note" : "meta live-turn-empty"}>{idleText}</p>;
   }
   return (
-    <ol className="pt-list" aria-label="研究过程时间线">
+    <ol className={`pt-list${inPanel ? " in-panel" : ""}`} aria-label="研究过程时间线">
       <li className="pt-row pt-current pt-stream-row">
         <span className="pt-ic" aria-hidden="true"><span className="dot running" /></span>
         <div className="pt-main">
@@ -177,38 +220,5 @@ export function LiveEmptyOrStream({ stream, idleText }: { stream?: LiveStreamSto
         </div>
       </li>
     </ol>
-  );
-}
-
-/** Dashed-border unverified preview for incremental `submit_research.report` deltas. */
-export function LiveDraftPreview({ stream, onGrow }: { stream?: LiveStreamStore | undefined; onGrow?: (() => void) | undefined }) {
-  const state = useLiveStream(stream);
-  const parts = useMemo(() => splitParagraphs(state.draftReport), [state.draftReport]);
-  const paragraphCount = parts.length;
-  const onGrowRef = useRef(onGrow);
-  onGrowRef.current = onGrow;
-
-  useEffect(() => {
-    if (paragraphCount > 0) onGrowRef.current?.();
-  }, [paragraphCount]);
-
-  if (paragraphCount === 0) return null;
-
-  const streamingDraft = state.activeChannel === "draft_report";
-  return (
-    <div className="draft-preview" role="region" aria-label="未核验报告草稿预览">
-      <div className="draft-warning">
-        <Icon name="alert" size={14} />
-        <span>草稿生成中 · 引文与数值尚未经服务端核验，最终结果以核验后为准</span>
-      </div>
-      <div className="report draft-report">
-        {parts.map((paragraph, index) => (
-          <p key={index}>
-            {paragraph}
-            {streamingDraft && index === parts.length - 1 ? <span className="stream-cursor" aria-hidden="true" /> : null}
-          </p>
-        ))}
-      </div>
-    </div>
   );
 }

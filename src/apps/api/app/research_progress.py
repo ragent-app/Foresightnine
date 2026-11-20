@@ -246,6 +246,22 @@ def _sanitize_summary(tool_name: str | None, raw: Any) -> dict[str, Any] | None:
             'calculated_count': calculated_count,
             'calcs_preview': calcs_preview,
         }
+    elif kind == 'create_chart':
+        chart_id = _text(raw.get('chart_id'), NAME_LIMIT)
+        chart_type = _text(raw.get('chart_type'), 40)
+        title = _text(raw.get('title'), TITLE_LIMIT)
+        series_count = _nonneg_int(raw.get('series_count'))
+        point_count = _nonneg_int(raw.get('point_count'))
+        if not (chart_id and chart_type and title) or series_count is None or point_count is None:
+            return None
+        clean = {
+            'kind': 'create_chart',
+            'chart_id': chart_id,
+            'chart_type': chart_type,
+            'title': title,
+            'series_count': series_count,
+            'point_count': point_count,
+        }
     return _fit_summary_bytes(clean) if clean is not None else None
 
 
@@ -418,6 +434,49 @@ def _interim_counts(checkpoint: Mapping[str, Any] | None, saved_turn: Any) -> di
     }
 
 
+_CONTEXT_TRIGGERS = frozenset({'l1_in_turn', 'l2_continuation'})
+
+
+def _sanitize_context_receipts(checkpoint: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Return whitelisted context compaction summary without raw prompt text or call IDs."""
+    raw = (checkpoint or {}).get('context_receipts')
+    if not isinstance(raw, list):
+        return {'count': 0, 'total_chars_saved': 0, 'recent': []}
+    sanitized: list[dict[str, Any]] = []
+    total_saved = 0
+    for item in raw[-20:]:
+        if not isinstance(item, Mapping):
+            continue
+        trigger = _text(item.get('trigger'), NAME_LIMIT)
+        if not trigger or trigger not in _CONTEXT_TRIGGERS:
+            trigger = 'compacted'
+        before_chars = _nonneg_int(item.get('before_chars')) or 0
+        after_chars = _nonneg_int(item.get('after_chars')) or 0
+        chars_saved = _nonneg_int(item.get('chars_saved')) or 0
+        total_saved += chars_saved
+        cleared_ids = item.get('cleared_tool_call_ids')
+        omitted_spans = item.get('omitted_spans')
+        sanitized.append({
+            'trigger': trigger,
+            'reason': _text(item.get('reason'), NAME_LIMIT),
+            'before_chars': before_chars,
+            'after_chars': after_chars,
+            'chars_saved': chars_saved,
+            'cleared_results_count': len(cleared_ids) if isinstance(cleared_ids, list) else 0,
+            'cleared_thinking_turns': _nonneg_int(item.get('cleared_thinking_turns')) or 0,
+            'cleared_thinking_chars': _nonneg_int(item.get('cleared_thinking_chars')) or 0,
+            'omitted_spans_count': len(omitted_spans) if isinstance(omitted_spans, list) else 0,
+            'preserved_facts_count': _nonneg_int(item.get('preserved_facts_count')) or 0,
+            'prefix_reset': bool(item.get('prefix_reset')) if type(item.get('prefix_reset')) is bool else False,
+            'at': _text(item.get('at'), TIMESTAMP_LIMIT),
+        })
+    return {
+        'count': len(sanitized),
+        'total_chars_saved': total_saved,
+        'recent': sanitized[-5:],
+    }
+
+
 def build_progress(*, operation_id: str, operation_status: str, inputs: Mapping[str, Any], checkpoint: Mapping[str, Any] | None,
                    saved_turn: Any, version_id: str | None, after: int) -> dict[str, Any]:
     """Assemble the public progress document from private inputs, checkpoint and saved turn."""
@@ -443,6 +502,7 @@ def build_progress(*, operation_id: str, operation_status: str, inputs: Mapping[
         'usage': usage,
         'current': current_activity(checkpoint) if operation_status == 'running' else None,
         'interim': _interim_counts(checkpoint, saved_turn),
+        'context_receipts': _sanitize_context_receipts(checkpoint),
         'events': sanitize_events(events, after),
         'event_count': len(events),
         'started_at': started if isinstance(started, str) else None,

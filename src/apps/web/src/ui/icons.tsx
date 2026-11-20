@@ -1,6 +1,7 @@
 import type { LucideIcon, LucideProps } from "lucide-react";
 import {
   ArrowUp,
+  BarChart2,
   BookOpen,
   Check,
   ChevronDown,
@@ -8,6 +9,7 @@ import {
   ChevronUp,
   CircleAlert,
   CircleCheck,
+  Copy,
   Database,
   Download,
   Ellipsis,
@@ -17,6 +19,7 @@ import {
   LineChart,
   Link2,
   LogOut,
+  Maximize2,
   PanelLeft,
   PanelRight,
   PenLine,
@@ -27,6 +30,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   SquarePen,
+  Table2,
   Upload,
   X,
 } from "lucide-react";
@@ -50,9 +54,13 @@ export const Icons = {
   sum: Sigma,
   check: Check,
   chev: ChevronRight,
+  copy: Copy,
   download: Download,
   globe: Globe,
   chart: LineChart,
+  barChart: BarChart2,
+  maximize: Maximize2,
+  table: Table2,
   file: FileText,
   upload: Upload,
   link: Link2,
@@ -81,6 +89,7 @@ const TOOL_ICON: Record<string, IconName> = {
   historical_prices: "chart",
   record_facts: "pen",
   calculate_financials: "sum",
+  create_chart: "barChart",
   submit_research: "check",
 };
 

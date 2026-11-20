@@ -122,7 +122,8 @@ from .research_workflow import ResearchWorkflow, StageReceipt
 from .research_orchestrator import CoordinationObservation, ResearchOrchestrator
 from .research_recovery import (prepare_recovery, recovered_content, RecoveryJournal, RecoverySnapshot, RecoveryBudget,
     prepare_continuation, continuation_context, restore_stage_state, stage_result_settled, model_receipts_confirmed,
-    external_results_confirmed, recovery_status, runtime_truncation_loop_blocked, _REPEATED_TRUNCATION_MESSAGE)
+    external_results_confirmed, recovery_status, runtime_truncation_loop_blocked, _REPEATED_TRUNCATION_MESSAGE,
+    runtime_timeout_loop_blocked, _REPEATED_TIMEOUT_MESSAGE)
 from .research_gap_followup import build_gap_focus
 from .research_requirements import combined_requirements, unresolved_original_requirement, unresolved_requirement_indexes, evidence_need_details
 from .research_coordinator import has_usable_research_counterpoint
@@ -484,6 +485,30 @@ def _remove_challenge_operation_result(operation_id: str, challenge: ChallengeRe
         CHALLENGE_OPERATION_RESULTS.delete(operation_id)
 
 
+def _warn_if_research_timeout_mismatch(
+    max_output_tokens: int | None,
+    timeout_seconds: float | None,
+    *,
+    source: str,
+) -> None:
+    """Emit a non-blocking warning when high research output caps pair with short LLM timeouts."""
+    import math
+    if (
+        type(max_output_tokens) is int
+        and max_output_tokens >= 8192
+        and isinstance(timeout_seconds, (int, float))
+        and not isinstance(timeout_seconds, bool)
+        and math.isfinite(timeout_seconds)
+        and timeout_seconds < 240
+    ):
+        logging.getLogger(__name__).warning(
+            "research_timeout_output_mismatch source=%s max_output_tokens=%s timeout_seconds=%s recommended_min_timeout=240",
+            source,
+            max_output_tokens,
+            timeout_seconds,
+        )
+
+
 def _assert_runtime_ready() -> None:
     """Probe every external dependency required by the selected runtime."""
     if storage_config.mode is StorageMode.POSTGRES:
@@ -502,6 +527,25 @@ def _assert_runtime_ready() -> None:
         abuse_control.check_ready()
     except Exception as error:
         raise RuntimeError("Abuse-control state is not ready.") from error
+    raw_max_output = os.environ.get("FORESIGHTNINE_RESEARCH_MAX_OUTPUT_TOKENS", "").strip()
+    if raw_max_output:
+        try:
+            configured_max_output = int(raw_max_output)
+        except ValueError:
+            configured_max_output = None
+        if configured_max_output is not None and configured_max_output >= 8192:
+            raw_timeout = os.environ.get("FORESIGHTNINE_RESEARCH_LLM_TIMEOUT_SECONDS", "").strip()
+            if not raw_timeout and os.environ.get("FORESIGHTNINE_RESEARCH_MODEL_PROTOCOL", "").strip() != "anthropic_messages":
+                raw_timeout = os.environ.get("FORESIGHTNINE_LLM_TIMEOUT_SECONDS", "").strip()
+            try:
+                configured_timeout = float(raw_timeout or "20")
+            except ValueError:
+                configured_timeout = None
+            _warn_if_research_timeout_mismatch(
+                configured_max_output,
+                configured_timeout,
+                source="startup_config",
+            )
 
 NORMAL_CONFIRM_MINIMUM_TOTAL = 30
 NORMAL_CONFIRM_MINIMUM_CRITICAL_SCORE = 3
@@ -646,7 +690,7 @@ def _messages_research_provider(settings: OpenAICompatibleSettings) -> Any:
         auth = os.environ['FORESIGHTNINE_MESSAGES_AUTH_SCHEME'].strip()
         timeout = float(os.environ.get('FORESIGHTNINE_RESEARCH_LLM_TIMEOUT_SECONDS', '20'))
         import math
-        if maximum <= 0 or not version or not auth or not math.isfinite(timeout) or not 0 < timeout <= 180 or os.environ.get('FORESIGHTNINE_MESSAGES_NATIVE_TOOLS') != 'true' or os.environ.get('FORESIGHTNINE_MESSAGES_CONTINUATION') != 'true':
+        if maximum <= 0 or not version or not auth or not math.isfinite(timeout) or not 0 < timeout <= 600 or os.environ.get('FORESIGHTNINE_MESSAGES_NATIVE_TOOLS') != 'true' or os.environ.get('FORESIGHTNINE_MESSAGES_CONTINUATION') != 'true':
             raise ValueError()
         if (os.environ.get('FORESIGHTNINE_MESSAGES_CAPABILITY_BASE_URL', '').rstrip('/') != settings.base_url
                 or os.environ.get('FORESIGHTNINE_MESSAGES_CAPABILITY_MODEL') != settings.model
@@ -655,6 +699,7 @@ def _messages_research_provider(settings: OpenAICompatibleSettings) -> Any:
         stream_enabled = os.environ.get('FORESIGHTNINE_MESSAGES_STREAM') == 'true'
     except (KeyError, ValueError):
         raise ApiProblem(503, 'internal_error', 'Messages research requires an explicit output limit, version, authentication scheme and native tools capability.') from None
+    _warn_if_research_timeout_mismatch(maximum, timeout, source="messages_provider")
     try:
         return AnthropicMessagesProvider(settings, ProviderPolicy(max_output_tokens=maximum, timeout_seconds=timeout),
                                          anthropic_version=version, auth_scheme=auth, max_tokens=maximum,
@@ -1779,12 +1824,21 @@ def export_research_version(topic_id: str, version_id: str, authorization: str |
     source_ids.update(fact.source_id for fact in version.content.facts)
     source_ids.update(citation.source_id for claim in version.content.claims for citation in claim.citations)
     source_ids.update(item.source_id for turn in version.content.turns for item in turn.read_ranges)
+    chart_source_ids: set[str] = set()
+    for chart in version.content.charts:
+        chart_source_ids.update(chart.source_ids)
+        for chart_series in chart.series:
+            for point in chart_series.points:
+                chart_source_ids.add(point.provenance.source_id)
+    source_ids.update(chart_source_ids)
     sources = []
     try:
         for source_id in sorted(source_ids):
             source = research_sources.get(account.account_id, source_id)
             if not source.permissions.export:
                 raise ApiProblem(403, "invalid_request", "A research source is not permitted for export.")
+            if source_id in chart_source_ids and not source.permissions.display:
+                raise ApiProblem(403, "invalid_request", "A chart references a source that is not permitted for display.")
             metadata = source.model_dump(mode="json", exclude={"text", "owner_id", "url", "original_pdf_base64", "original_html_base64"})
             if pdf_text_spacing_suspect(source):
                 metadata["pdf_text_spacing_warning"] = True
@@ -1848,7 +1902,8 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
         content = request.content.model_copy(deep=True)
         before = previous.content
         if (content.turns != before.turns or content.sources != before.sources or
-                content.source_candidates != before.source_candidates or content.gaps != before.gaps):
+                content.source_candidates != before.source_candidates or content.gaps != before.gaps or
+                content.charts != before.charts):
             raise ApiProblem(422, "invalid_request", "Server-produced research records cannot be edited.")
         allowed_sources = set(previous.source_ids)
         loaded: dict[str, ResearchSource] = {}
@@ -2539,11 +2594,12 @@ _OFFICIAL_FETCH_STATUS_PRIORITY = {
     "unavailable": 3,
     "unconfigured": 3,
     "sec_contact_unconfigured": 3,
-    "unknown": 4,
-    "failed": 5,
-    "partial": 6,
-    "retrieved": 7,
-    "completed": 7,
+    "web_retrieved": 4,
+    "unknown": 5,
+    "failed": 6,
+    "partial": 7,
+    "retrieved": 8,
+    "completed": 8,
 }
 
 
@@ -2751,9 +2807,17 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 reserve_sec=reserve_sec_for_run, context=context,
                 batch_id=uuid4().hex)
             official_fetch_calls += result.calls
+            has_official = any(getattr(item, 'kind', None) == 'official' for item, _ in result.retrieved)
+            merged_status: str | None = result.status
+            if result.retrieved and not has_official:
+                merged_status = 'web_retrieved'
+            elif not result.retrieved and result.status == 'failed':
+                target_host = (urlsplit(url).hostname or '').lower().rstrip('.')
+                if target_host not in PUBLIC_DOMAIN_OFFICIAL_HOSTS and not is_sec_host(target_host):
+                    merged_status = None
             official_fetch_status = _merge_official_fetch_status(
                 official_fetch_status,
-                result.status,
+                merged_status,
                 auto_fetch_official=request.auto_fetch_official,
             )
             return result.source, {'status': result.status, 'notes': result.notes, 'outcomes': result.outcomes}
@@ -2853,6 +2917,38 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     call_seq=int(event['call_seq']),
                     reason=str(event['reason']),
                 )
+        def _prior_with_failed_sources(version_obj: Any) -> dict | None:
+            prior_data = prior_research_input(version_obj)
+            if prior_data is None:
+                return None
+            failed_records: list[dict[str, Any]] = []
+            seen_hosts: set[str] = set()
+            for prior_turn in version_obj.content.turns:
+                for op_id in getattr(prior_turn, 'operation_ids', ()) or ():
+                    op_inputs = RESEARCH_RUN_INPUTS.get(op_id) or {}
+                    cp = op_inputs.get('runtime_checkpoint') if isinstance(op_inputs, Mapping) else None
+                    for row in (cp.get('failed_source_accesses') or []) if isinstance(cp, Mapping) else []:
+                        if isinstance(row, Mapping) and row not in failed_records:
+                            failed_records.append(dict(row))
+                            if isinstance(row.get('host'), str) and row['host']:
+                                seen_hosts.add(row['host'])
+                for ev in getattr(prior_turn, 'events', ()) or ():
+                    if not isinstance(ev, Mapping) or ev.get('kind') != 'tool' or ev.get('name') != 'acquire_sources':
+                        continue
+                    summary = ev.get('summary')
+                    for item in (summary.get('items') or []) if isinstance(summary, Mapping) else []:
+                        if not isinstance(item, Mapping) or item.get('status') in ('acquired', 'completed'):
+                            continue
+                        host = item.get('host')
+                        if isinstance(host, str) and host in seen_hosts:
+                            continue
+                        rec = {k: item.get(k) for k in ('host', 'status', 'reason') if item.get(k)}
+                        if rec and rec not in failed_records:
+                            failed_records.append(rec)
+            if failed_records:
+                prior_data['failed_source_accesses'] = failed_records[-50:]
+            return prior_data
+
         if continuation_input is not None:
             save_runtime(admitted_continuation['runtime'])
         parent_now = research_topics.get(account.account_id, topic_id).versions[-1]
@@ -2865,7 +2961,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             on_submission=lambda: setattr(http_request.state, 'model_submission_started', True),
             on_stream_event=publish_stream_event,
             as_of=topic.request.as_of,
-            prior=prior_research_input(parent_now) if continuation_input is None else None, focus=focus)
+            prior=_prior_with_failed_sources(parent_now) if continuation_input is None else None, focus=focus)
         _raise_if_operation_cancelled(operation_id)
         version_chain.source_ids = list(dict.fromkeys([*version_chain.source_ids, *outcome.source_ids]))
         candidates = []
@@ -2905,12 +3001,15 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             status=outcome.status, reason=outcome.reason, report=outcome.report,
             partial_notes=outcome.partial_notes, stopping_note=outcome.stopping_note,
             claim_ids=[item['claim_id'] for item in outcome.claims], fact_ids=[item['fact_id'] for item in outcome.facts],
-            calculation_ids=[item['calculation_id'] for item in outcome.calculations], gaps=gap_rows(gaps),
+            calculation_ids=[item['calculation_id'] for item in outcome.calculations],
+            chart_ids=[item['chart_id'] for item in outcome.charts],
+            gaps=gap_rows(gaps),
             usage=TurnUsage(model_calls=context.calls, search_calls=context.search_calls, total_tokens=context.usage or 0),
             search_status=search_status, official_fetch_status=official_fetch_status,
             read_ranges=[ReadRange.model_validate(item) for item in ranges], events=outcome.events)
         content = merge_turn(parent_now.content, turn, claims=outcome.claims, facts=outcome.facts,
-                             calculations=outcome.calculations, sources=source_summaries(outcome.source_ids, ranges),
+                             calculations=outcome.calculations, charts=outcome.charts,
+                             sources=source_summaries(outcome.source_ids, ranges),
                              source_candidates=candidates)
         return ResearchRunResult(operation_id=operation_id, topic_id=topic_id,
             parent_version_id=request.parent_version_id, status=outcome.status, content=content), topic_id
@@ -3060,6 +3159,7 @@ def get_research_recovery_status(topic_id: str, operation_id: str, http_request:
         elif unknown: reason = 'unknown_external'
         elif checkpoint.get('submission') and getattr(saved_turn, 'status', None) == 'completed': reason = 'unavailable'
         elif reason is None and runtime_truncation_loop_blocked(checkpoint, saved_turn=saved_turn): reason = 'repeated_truncation'
+        elif reason is None and runtime_timeout_loop_blocked(checkpoint, saved_turn=saved_turn): reason = 'repeated_timeout'
         return {'can_continue': reason is None and not checkpoint.get('submission'),
                 'can_deliver': reason is None and bool(checkpoint.get('submission')),
                 'reason': reason, 'checkpoint': pending.get('kind') or 'runtime', 'version_id': latest.version_id}
@@ -3099,6 +3199,8 @@ def continue_research_run(topic_id: str, operation_id: str, response: Response,
         raise ApiProblem(409, 'lifecycle_conflict', 'This research submission was already saved.')
     if runtime_truncation_loop_blocked(checkpoint, saved_turn=saved_turn):
         raise ApiProblem(409, 'lifecycle_conflict', _REPEATED_TRUNCATION_MESSAGE)
+    if runtime_timeout_loop_blocked(checkpoint, saved_turn=saved_turn):
+        raise ApiProblem(409, 'lifecycle_conflict', _REPEATED_TIMEOUT_MESSAGE)
     if parent.version_id != inputs['parent_version_id']:
         if parent.review != 'draft' or saved_turn is None:
             raise ApiProblem(409, 'lifecycle_conflict', 'Research changed after the checkpoint.')
@@ -3244,9 +3346,7 @@ async def stream_research_run_events(
     cursor_after, _ = parse_last_event_id(last_event_id)
     effective_after = max(after, cursor_after)
 
-    def load_progress(progress_after: int, *, cached_initial: bool = False) -> dict[str, Any]:
-        if cached_initial:
-            return _build_research_run_progress_view(topic, operation, inputs, after=progress_after)
+    def load_progress(progress_after: int) -> dict[str, Any]:
         topic_now = research_topics.get(account.account_id, topic_id)
         op_now = operations._cache_operation(operation_id)
         inputs_now = RESEARCH_RUN_INPUTS.get(operation_id) or inputs
@@ -3260,7 +3360,10 @@ async def stream_research_run_events(
     loop = asyncio.get_running_loop()
     subscriber = research_live_broker.subscribe(operation_id, account_id=account.account_id, loop=loop)
     try:
-        snapshot = load_progress(effective_after, cached_initial=True)
+        try:
+            snapshot = load_progress(effective_after)
+        except TopicNotFound as error:
+            raise ApiProblem(404, "not_found", "Research topic not found.") from error
     except BaseException:
         research_live_broker.unsubscribe(subscriber)
         raise

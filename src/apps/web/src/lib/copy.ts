@@ -25,7 +25,46 @@ export const TOOL_LABEL: Readonly<Record<string, string>> = {
   historical_prices: "获取历史行情",
   record_facts: "记录数字",
   calculate_financials: "计算",
+  create_chart: "生成图表",
   submit_research: "提交结论",
+};
+
+export const CHART_TYPE_LABEL: Readonly<Record<string, string>> = {
+  bar: "柱状图",
+  grouped_bar: "分组柱状图",
+  stacked_bar: "堆叠柱状图",
+  line: "折线图",
+  combo_bar_line: "柱线组合图",
+  waterfall: "瀑布图",
+  scatter: "散点图",
+  price_series: "行情走势图",
+  causal_graph: "逻辑传导图",
+};
+
+export function chartTypeLabel(chartType: string | null | undefined): string {
+  if (!chartType) return "图表";
+  return CHART_TYPE_LABEL[chartType] ?? chartType;
+}
+
+export const CAUSAL_CATEGORY_LABEL: Readonly<Record<string, string>> = {
+  macro: "宏观",
+  industry: "行业",
+  company: "公司",
+  asset: "资产",
+  scenario: "情景",
+};
+
+export const CAUSAL_STATUS_LABEL: Readonly<Record<string, string>> = {
+  confirmed: "已核实",
+  assumption: "假设",
+  invalidated: "已失效",
+};
+
+export const CAUSAL_DIRECTION_LABEL: Readonly<Record<string, string>> = {
+  positive: "正向传导",
+  negative: "负向传导",
+  conditional: "条件传导",
+  uncertain: "不确定",
 };
 
 export function toolLabel(name: string | null): string {
@@ -182,6 +221,7 @@ export const RECOVERY_REASON_LABEL: Readonly<Record<string, string>> = {
   already_used: "这个检查点已经用过",
   budget_exhausted: "预算已用完",
   repeated_truncation: "连续多次达到模型输出或上下文长度上限，无法再通过“继续研究”恢复；建议缩小问题范围重新提问，或先查看、导出已收集的部分事实",
+  repeated_timeout: "连续多次发生模型单次调用超时，无法再通过“继续研究”恢复；建议缩小问题范围重新提问，或先查看、导出已收集的资料与部分事实",
   unavailable: "当前无法恢复",
 };
 
@@ -242,6 +282,7 @@ export const GAP_LABEL: Readonly<Record<string, string>> = {
   search_candidates_not_acquired: "搜索找到了候选链接，但当前来源无法获取原文。",
   historical_prices_unavailable: "所请求的标的和期间没有已授权的历史行情。",
   provider_no_result: "模型请求没有返回可用结果。",
+  provider_timeout: "单次模型调用超时，未能返回完整结果。",
   source_selection_partial: "部分资料还没有读完，未读部分中是否有相关内容尚不确定。",
   run_stopped: "上一次运行已经停止，需要重新提问。",
   external_result_unknown: "有一次外部请求的结果未知，需要核对后才能继续。",

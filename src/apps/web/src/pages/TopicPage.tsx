@@ -35,6 +35,14 @@ interface PendingAsk {
   question: string;
   at: string;
   turnsAt: number;
+  operationId: string;
+}
+
+interface PendingContinue {
+  mode: "continue" | "deliver";
+  targetTurnId: string | null;
+  operationId: string | null;
+  question: string;
 }
 
 function flash(element: Element): void {
@@ -61,6 +69,8 @@ export function TopicPage() {
   const [focus, setFocus] = useState<FocusCitation | null>(null);
   const [options, setOptions] = useState<RunOptions>(DEFAULT_OPTIONS);
   const [pendingAsk, setPendingAsk] = useState<PendingAsk | null>(null);
+  const [askedOp, setAskedOp] = useState<{ operationId: string; question: string } | null>(null);
+  const [pendingContinue, setPendingContinue] = useState<PendingContinue | null>(null);
   const [awayFromLive, setAwayFromLive] = useState(false);
   const [notice, setNotice] = useState<{ text: string; tone: "info" | "error" } | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -103,7 +113,7 @@ export function TopicPage() {
 
   // Reset per-topic state when navigating between topics.
   useEffect(() => {
-    setPanel(null); setText(""); setFocus(null); setPendingAsk(null); setAwayFromLive(false);
+    setPanel(null); setText(""); setFocus(null); setPendingAsk(null); setAskedOp(null); setPendingContinue(null); setAwayFromLive(false);
     nearBottomRef.current = true; lastScrollTopRef.current = 0; suppressScrollUntilRef.current = 0;
     setNotice(null); setOptions(DEFAULT_OPTIONS); setDraftState({}); setSendPrompt(null);
   }, [topicId]);
@@ -133,10 +143,44 @@ export function TopicPage() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
 
-  // Pending question bubble: hide once the turn is saved or the run stops without one.
+  // Pending question bubble: hide once the started operation becomes tracked, stops, or commits.
   useEffect(() => {
-    if (pendingAsk && (turns.length > pendingAsk.turnsAt || (orphanRun && orphanRun.created_at >= pendingAsk.at))) setPendingAsk(null);
-  }, [pendingAsk, turns.length, orphanRun]);
+    if (!pendingAsk) return;
+    if (
+      activeRun?.operation_id === pendingAsk.operationId
+      || orphanRun?.operation_id === pendingAsk.operationId
+      || turns.some((turn) => turn.operation_ids.includes(pendingAsk.operationId))
+      || turns.length > pendingAsk.turnsAt
+    ) {
+      setPendingAsk(null);
+    }
+  }, [pendingAsk, activeRun, orphanRun, turns]);
+
+  useEffect(() => {
+    if (!pendingContinue || pendingContinue.operationId === null) return;
+    const opId = pendingContinue.operationId;
+    if (
+      turns.some((turn) => turn.operation_ids.includes(opId))
+      || orphanRun?.operation_id === opId
+      || (activeRun !== null && activeRun.operation_id !== opId)
+      || (!activeRun && latestRun?.operation_id === opId && !isActiveStatus(latestRun.status))
+    ) {
+      setPendingContinue(null);
+    }
+  }, [pendingContinue, activeRun, latestRun, orphanRun, turns]);
+
+  useEffect(() => {
+    if (!askedOp) return;
+    const opId = askedOp.operationId;
+    if (
+      turns.some((turn) => turn.operation_ids.includes(opId))
+      || orphanRun?.operation_id === opId
+      || (activeRun !== null && activeRun.operation_id !== opId)
+      || (!activeRun && latestRun?.operation_id === opId && !isActiveStatus(latestRun.status))
+    ) {
+      setAskedOp(null);
+    }
+  }, [askedOp, activeRun, latestRun, orphanRun, turns]);
 
   // Screen readers hear state changes only (spec §4.3).
   const previousActive = useRef<string | null>(null);
@@ -262,6 +306,16 @@ export function TopicPage() {
     sendWith(version.version_id);
   };
 
+  const followLiveOutput = useCallback(() => {
+    nearBottomRef.current = true;
+    setAwayFromLive(false);
+    suppressScrollUntilRef.current = Date.now() + 550;
+    requestAnimationFrame(() => {
+      const element = scrollRef.current;
+      element?.scrollTo?.({ top: element.scrollHeight, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    });
+  }, []);
+
   const sendWith = (parentVersionId: string) => {
     const question = text.trim();
     if (!question) return;
@@ -272,23 +326,29 @@ export function TopicPage() {
       ...(focus ? { focus_citation: { claim_id: focus.claimId, citation_index: focus.citationIndex } } : {}),
     };
     startTurn.mutate(body, {
-      onSuccess: () => {
-        nearBottomRef.current = true;
-        setAwayFromLive(false);
-        setPendingAsk({ question, at: new Date().toISOString(), turnsAt: turns.length });
+      onSuccess: (response) => {
+        setPendingContinue(null);
+        setAskedOp({ operationId: response.operation.operation_id, question });
+        setPendingAsk({ question, at: new Date().toISOString(), turnsAt: turns.length, operationId: response.operation.operation_id });
         setText("");
         setFocus(null);
-        requestAnimationFrame(() => {
-          const element = scrollRef.current;
-          element?.scrollTo?.({ top: element.scrollHeight, behavior: prefersReducedMotion() ? "auto" : "smooth" });
-        });
+        followLiveOutput();
       },
     });
   };
 
   const startFirstTurn = () => {
     if (!version || locked || !optionsValid(options)) return;
-    startTurn.mutate({ parent_version_id: version.version_id, ...runRequestFields(options) });
+    startTurn.mutate(
+      { parent_version_id: version.version_id, ...runRequestFields(options) },
+      {
+        onSuccess: () => {
+          setPendingContinue(null);
+          setAskedOp(null);
+          followLiveOutput();
+        },
+      },
+    );
   };
 
   const exportVersion = async (kind: "full" | "metadata") => {
@@ -316,14 +376,36 @@ export function TopicPage() {
 
   const title = topic ? topicTitle(topic) : "";
   const lastGap = lastTurn?.gaps?.[0];
-  const turnActions = (question: string, deliverable: boolean): TurnActions => ({
+  const turnActions = (question: string, deliverable: boolean, targetTurnId: string | null): TurnActions => ({
     recovery: recovery.data,
     checking: recovery.isLoading,
     busy: continueTurn.isPending || recoverTurn.isPending,
     locked,
     error: continueTurn.error ? describeError(continueTurn.error) : recoverTurn.error ? describeError(recoverTurn.error) : null,
-    onContinue: () => { if (recoveryOperation) continueTurn.mutate(recoveryOperation); },
-    onDeliver: () => { if (recoveryOperation) recoverTurn.mutate(recoveryOperation); },
+    onContinue: () => {
+      if (!recoveryOperation) return;
+      setAskedOp(null);
+      setPendingContinue({ mode: "continue", targetTurnId, operationId: null, question });
+      continueTurn.mutate(recoveryOperation, {
+        onSuccess: (response) => {
+          setPendingContinue({ mode: "continue", targetTurnId, operationId: response.operation.operation_id, question });
+          followLiveOutput();
+        },
+        onError: () => setPendingContinue(null),
+      });
+    },
+    onDeliver: () => {
+      if (!recoveryOperation) return;
+      setAskedOp(null);
+      setPendingContinue({ mode: "deliver", targetTurnId, operationId: null, question });
+      recoverTurn.mutate(recoveryOperation, {
+        onSuccess: (response) => {
+          setPendingContinue({ mode: "deliver", targetTurnId, operationId: response.operation.operation_id, question });
+          followLiveOutput();
+        },
+        onError: () => setPendingContinue(null),
+      });
+    },
     onAskAgain: () => prefill(question),
     onFillGap: lastGap ? () => prefill(`请继续补充上一轮的缺口：${gapText(lastGap)}`) : null,
     onAddSources: () => setPanel({ kind: "add" }),
@@ -332,9 +414,27 @@ export function TopicPage() {
 
   const live = view?.live ?? null;
   const liveIndex = live?.progress?.turn.index ?? 0;
-  const showLiveTurn = live !== null && (live.progress ? liveIndex > turns.length : pendingAsk !== null || turns.length === 0);
+  const liveCommitted = live !== null && turns.some((turn) => turn.operation_ids.includes(live.operation.operation_id));
+  const liveTerminal = live?.progress != null && !isActiveStatus(live.progress.operation_status);
+  const showLiveTurn = live !== null && !liveCommitted && !liveTerminal;
   const showPendingTurn = showLiveTurn || (!live && pendingAsk !== null);
-  const liveQuestion = (live?.progress?.turn.question || pendingAsk?.question || (turns.length === 0 ? topic?.request.question : "")) ?? "";
+  const isContinuingLastTurn =
+    showLiveTurn
+    && lastTurn !== null
+    && (live.progress
+      ? live.progress.turn.index === lastTurn.index
+      : pendingContinue !== null
+        ? pendingContinue.targetTurnId === lastTurn.turn_id
+        : lastTurn.status === "partial" && pendingAsk === null && askedOp?.operationId !== live.operation.operation_id);
+  const continuingMode = isContinuingLastTurn ? (pendingContinue?.mode ?? "continue") : null;
+  const liveNumber = liveIndex > 0 ? liveIndex : isContinuingLastTurn && lastTurn ? displayTurnNumber(lastTurn) : turns.length + 1;
+  const liveQuestion = (
+    live?.progress?.turn.question
+    || pendingAsk?.question
+    || (askedOp && askedOp.operationId === live?.operation.operation_id ? askedOp.question : "")
+    || (!isContinuingLastTurn ? pendingContinue?.question : "")
+    || (turns.length === 0 ? topic?.request.question : "")
+  ) ?? "";
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -479,7 +579,7 @@ export function TopicPage() {
                 <TurnView
                   key={turn.turn_id}
                   turn={turn}
-                  actions={index === turns.length - 1 && turn.status === "partial" && !orphanRun ? turnActions(turn.question, turn.reason !== "submitted") : null}
+                  actions={index === turns.length - 1 && turn.status === "partial" && !orphanRun && !activeRun ? turnActions(turn.question, turn.reason !== "submitted", turn.turn_id) : null}
                 />
               ))}
               {orphanRun && !activeRun ? (
@@ -489,17 +589,18 @@ export function TopicPage() {
                   question={(progressMatches(orphanRun.operation_id) ? progress.progress?.turn.question : "") || (turns.length === 0 ? topic!.request.question ?? "" : "")}
                   status={orphanRun.status === "cancelled" ? "cancelled" : "failed"}
                   events={progressMatches(orphanRun.operation_id) ? progress.events : []}
-                  actions={turnActions((progressMatches(orphanRun.operation_id) ? progress.progress?.turn.question : "") || topic!.request.question || "", true)}
+                  actions={turnActions((progressMatches(orphanRun.operation_id) ? progress.progress?.turn.question : "") || topic!.request.question || "", true, null)}
                 />
               ) : null}
               {showLiveTurn ? (
                 <LiveTurn
                   sectionRef={liveTurnRef}
-                  number={liveIndex > 0 ? liveIndex : turns.length + 1}
+                  number={liveNumber}
                   startedAt={live!.progress?.started_at ?? live!.operation.created_at}
                   question={liveQuestion}
                   live={live}
                   onDraftGrow={onDraftGrow}
+                  continuing={continuingMode}
                 />
               ) : !live && pendingAsk ? (
                 <LiveTurn sectionRef={liveTurnRef} number={turns.length + 1} startedAt={pendingAsk.at} question={pendingAsk.question} live={null} />

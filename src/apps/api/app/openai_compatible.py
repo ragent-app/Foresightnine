@@ -11,11 +11,12 @@ from __future__ import annotations
 import codecs
 from dataclasses import dataclass, field, replace
 from contextlib import nullcontext
-from .transport_diagnostics import TransportDiagnostics
+from .transport_diagnostics import TransportDiagnostics, VALID_TIMEOUT_KINDS
 from http.client import HTTPConnection, HTTPSConnection, HTTPException
 import inspect
 import ipaddress
 import json
+import logging
 import math
 import os
 import queue
@@ -24,7 +25,7 @@ import socket
 import ssl
 from time import monotonic, sleep
 from threading import BoundedSemaphore, Event, Lock, Thread
-from typing import Any, Callable, Mapping, Protocol
+from typing import Any, Callable, Mapping, NoReturn, Protocol
 from .model_protocol import ModelResponse
 from urllib.parse import urlencode, urlsplit
 
@@ -69,6 +70,7 @@ _STRUCTURED_OUTPUT_KEYS = frozenset({
     "unresolved_issues", "citation_ids", "public_fact_citation_ids", "native_search_used",
 })
 _HOST_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+_logger = logging.getLogger(__name__)
 
 
 class OpenAICompatibleTransport(Protocol):
@@ -106,7 +108,49 @@ class _TransportFailure(OSError):
 
 
 class _TransportTimeout(_TransportFailure):
-    pass
+    def __init__(self, *args: object, timeout_kind: str | None = None) -> None:
+        super().__init__(*args)
+        self.timeout_kind = (
+            timeout_kind if isinstance(timeout_kind, str) and timeout_kind in VALID_TIMEOUT_KINDS else None
+        )
+
+
+def _raise_timeout(diagnostics: TransportDiagnostics | None, timeout_kind: str, cause: BaseException | None = None) -> NoReturn:
+    if diagnostics is not None:
+        diagnostics.set_timeout_kind(timeout_kind)
+    raise _TransportTimeout(timeout_kind=timeout_kind) from cause
+
+
+def _build_transport_failure(
+    error: BaseException,
+    diagnostics: TransportDiagnostics,
+    *,
+    cancelled: bool,
+    message: str,
+    started_at: float,
+    wire_bytes: int | None,
+    streamed_bytes: int | None,
+) -> ProviderFailure:
+    is_timeout = not cancelled and isinstance(error, (TimeoutError, socket.timeout, _TransportTimeout))
+    code = "provider_cancelled" if cancelled else ("provider_timeout" if is_timeout else "provider_transport_error")
+    timeout_kind = None
+    if is_timeout:
+        raw_kind = getattr(error, "timeout_kind", None)
+        if isinstance(raw_kind, str) and raw_kind in VALID_TIMEOUT_KINDS:
+            timeout_kind = raw_kind
+            diagnostics.set_timeout_kind(timeout_kind)
+    snap = diagnostics.snapshot()
+    if is_timeout and timeout_kind is None:
+        snap_kind = snap.get("timeout_kind")
+        if isinstance(snap_kind, str) and snap_kind in VALID_TIMEOUT_KINDS:
+            timeout_kind = snap_kind
+    failure = ProviderFailure(code, message, retryable=True)
+    failure.provider_response_received = snap["submission_state"] == "response_received"
+    failure.timeout_kind = timeout_kind
+    failure.elapsed_ms = max(0, int((monotonic() - started_at) * 1000))
+    failure.wire_bytes = wire_bytes
+    failure.streamed_bytes = streamed_bytes
+    return failure
 
 
 class _PinnedHTTPConnection(HTTPConnection):
@@ -223,7 +267,7 @@ def _transport_timeout_from_environment(name: str, default: float | None) -> flo
         value = float(raw)
     except ValueError:
         raise ProviderFailure("provider_configuration_invalid", "LLM transport timeout configuration is invalid.", retryable=False) from None
-    if not math.isfinite(value) or not 0 < value <= 180:
+    if not math.isfinite(value) or not 0 < value <= 600:
         raise ProviderFailure("provider_configuration_invalid", "LLM transport timeout configuration is invalid.", retryable=False)
     return value
 
@@ -237,7 +281,7 @@ def _llm_timeout_from_environment() -> float:
         timeout = float(raw)
     except ValueError:
         raise ProviderFailure("provider_configuration_invalid", "LLM timeout configuration is invalid.", retryable=False) from None
-    if not math.isfinite(timeout) or not 0 < timeout <= 180:
+    if not math.isfinite(timeout) or not 0 < timeout <= 600:
         raise ProviderFailure("provider_configuration_invalid", "LLM timeout configuration is invalid.", retryable=False)
     return timeout
 
@@ -385,7 +429,7 @@ def _open_and_send_connection(
     if parsed.query:
         path = f"{path}?{parsed.query}"
     if stopped.is_set() or monotonic() >= deadline:
-        raise _TransportTimeout()
+        _raise_timeout(diagnostics, "connect_timeout")
     # Try only the previously validated numeric addresses. Connection failures
     # occur before HTTP submission, so fallback never resends a model request.
     connection: HTTPConnection | None = None
@@ -393,7 +437,7 @@ def _open_and_send_connection(
     for address in addresses:
         remaining = deadline - monotonic()
         if remaining <= 0:
-            raise _TransportTimeout() from last_error
+            _raise_timeout(diagnostics, "connect_timeout", last_error)
         connect_timeout = min(remaining, connect_timeout_seconds)
         if parsed.scheme == "https":
             candidate = _PinnedHTTPSConnection(parsed.hostname, port, address, connect_timeout)
@@ -406,7 +450,7 @@ def _open_and_send_connection(
         register_connection(candidate)
         if stopped.is_set():
             candidate.close()
-            raise _TransportTimeout()
+            _raise_timeout(diagnostics, "connect_timeout")
         try:
             candidate.connect()
         except OSError as error:
@@ -418,7 +462,7 @@ def _open_and_send_connection(
         remaining = deadline - monotonic()
         if remaining <= 0:
             connection.close()
-            raise _TransportTimeout()
+            _raise_timeout(diagnostics, "connect_timeout")
         io_timeout = min(remaining, initial_io_timeout_seconds) if initial_io_timeout_seconds is not None else remaining
         connection.timeout = io_timeout
         if connection.sock is not None:
@@ -426,13 +470,13 @@ def _open_and_send_connection(
         break
     if connection is None:
         if isinstance(last_error, (TimeoutError, socket.timeout)):
-            raise _TransportTimeout() from last_error
+            _raise_timeout(diagnostics, "connect_timeout", last_error)
         raise _TransportFailure() from last_error
     try:
         if stopped.is_set() or monotonic() >= deadline:
-            raise _TransportTimeout()
+            _raise_timeout(diagnostics, "connect_timeout")
         if begin_submission is not None and not begin_submission():
-            raise _TransportTimeout()
+            _raise_timeout(diagnostics, "connect_timeout")
         with diagnostics.stage("request_write") if diagnostics else nullcontext():
             connection.request(method, path, body=body, headers=dict(headers))
     except _TransportTimeout:
@@ -442,7 +486,7 @@ def _open_and_send_connection(
     except (TimeoutError, socket.timeout) as error:
         register_connection(None)
         connection.close()
-        raise _TransportTimeout() from error
+        _raise_timeout(diagnostics, "connect_timeout", error)
     except (OSError, ssl.SSLError, HTTPException) as error:
         register_connection(None)
         connection.close()
@@ -484,19 +528,23 @@ def _execute_binary_transport(
         response_deadline = monotonic() + response_timeout_seconds if response_timeout_seconds is not None else deadline
         if register_response_deadline is not None:
             register_response_deadline(response_deadline)
-        def apply_response_timeout() -> None:
+        current_timeout_kind = "header_timeout"
+        def apply_response_timeout(kind: str) -> None:
             remaining = min(deadline, response_deadline) - monotonic()
-            if remaining <= 0:
-                raise _TransportTimeout()
+            if remaining <= 0 or stopped.is_set():
+                if stopped.is_set() and diagnostics is not None and diagnostics.timeout_kind is not None:
+                    raise _TransportTimeout(timeout_kind=diagnostics.timeout_kind)
+                _raise_timeout(diagnostics, kind)
             if connection.sock is not None:
                 connection.sock.settimeout(remaining)
         with diagnostics.stage("response_headers") if diagnostics else nullcontext():
-            apply_response_timeout()
+            apply_response_timeout("header_timeout")
             response = connection.getresponse()
         if diagnostics:
             diagnostics.record("response_headers", 0, status_code=response.status)
+        current_timeout_kind = "stream_deadline_timeout" if deadline <= response_deadline else "response_timeout"
         with diagnostics.stage("response_body") if diagnostics else nullcontext():
-            apply_response_timeout()
+            apply_response_timeout(current_timeout_kind)
             content = response.read(max_response_bytes + 1)
         if len(content) > max_response_bytes:
             raise _TransportFailure("response too large")
@@ -518,7 +566,10 @@ def _execute_binary_transport(
     except _TransportTimeout:
         raise
     except (TimeoutError, socket.timeout) as error:
-        raise _TransportTimeout() from error
+        if stopped.is_set() and diagnostics is not None and diagnostics.timeout_kind is not None:
+            raise _TransportTimeout(timeout_kind=diagnostics.timeout_kind) from error
+        kind = "stream_deadline_timeout" if (current_timeout_kind != "header_timeout" and monotonic() >= deadline) else current_timeout_kind
+        _raise_timeout(diagnostics, kind, error)
     except (OSError, ssl.SSLError, HTTPException) as error:
         raise _TransportFailure() from error
     finally:
@@ -543,7 +594,7 @@ def _default_binary_transport(
     may still have incurred charges even when this function times out.
     """
     if not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
-        raise _TransportTimeout()
+        _raise_timeout(diagnostics, "connect_timeout")
     if not 1 <= max_response_bytes <= 5_000_000:
         raise _TransportFailure("invalid response limit")
     slots = _TRANSPORT_SLOTS
@@ -584,23 +635,36 @@ def _default_binary_transport(
     except BaseException:
         slots.release()
         raise
-    remaining = max(0.0, deadline - monotonic())
+    now = monotonic()
+    remaining = max(0.0, deadline - now)
     end_reason = None
+    response_deadline = deadline
     while not finished.wait(min(remaining, .05) if cancel_event is not None or response_timeout_seconds is not None else remaining):
         if cancel_event is not None and cancel_event.is_set():
             end_reason = "cancelled"
             break
         with guard:
             response_deadline = state.get("response_deadline", deadline)
-        remaining = max(0.0, min(deadline, response_deadline) - monotonic())
+        now = monotonic()
+        remaining = max(0.0, min(deadline, response_deadline) - now)
         if remaining <= 0:
             end_reason = "deadline"
             break
     if end_reason:
+        timeout_kind: str | None = None
+        deadline_expired = deadline <= response_deadline or now >= deadline
         with guard:
             stopped.set()
             if diagnostics:
-                diagnostics.interrupt(end_reason, (timeout - max(0.0, deadline - monotonic())) * 1000)
+                timeout_kind = diagnostics.interrupt(
+                    end_reason,
+                    (timeout - max(0.0, deadline - monotonic())) * 1000,
+                    infer_timeout=(end_reason == "deadline"),
+                    streaming=False,
+                    deadline_expired=deadline_expired,
+                )
+            elif end_reason == "deadline":
+                timeout_kind = "stream_deadline_timeout" if deadline_expired else "response_timeout"
             connection = state.get("connection")
         # Shutdown does not wait for a blocked reader; the worker owns final
         # close. A DNS call or third-party socket may still outlive the caller,
@@ -612,8 +676,12 @@ def _default_binary_transport(
                 shutdown(socket.SHUT_RDWR)
             except OSError:
                 pass
-        raise _TransportTimeout()
+        raise _TransportTimeout(timeout_kind=timeout_kind)
     error = state.get("error")
+    if isinstance(error, _TransportTimeout):
+        if diagnostics is not None and error.timeout_kind is not None:
+            diagnostics.set_timeout_kind(error.timeout_kind)
+        raise error
     if isinstance(error, _TransportFailure):
         raise error
     if error is not None:
@@ -757,22 +825,27 @@ def _execute_stream_worker(
     )
     try:
         header_limit = min(deadline, monotonic() + initial_wait)
-        def apply_sock_timeout(limit: float) -> None:
+        current_timeout_kind = "header_timeout"
+        def apply_sock_timeout(limit: float, kind: str) -> None:
             remaining = limit - monotonic()
             if remaining <= 0 or stopped.is_set():
-                raise _TransportTimeout()
+                if stopped.is_set() and diagnostics is not None and diagnostics.timeout_kind is not None:
+                    raise _TransportTimeout(timeout_kind=diagnostics.timeout_kind)
+                _raise_timeout(diagnostics, kind)
             if connection.sock is not None:
                 connection.sock.settimeout(remaining)
 
         with diagnostics.stage("response_headers") if diagnostics else nullcontext():
-            apply_sock_timeout(header_limit)
+            apply_sock_timeout(header_limit, "header_timeout")
             response = connection.getresponse()
         if diagnostics:
             diagnostics.record("response_headers", 0, status_code=response.status)
         resp_headers = {str(key).lower(): str(value) for key, value in response.headers.items()}
         if not 200 <= response.status < 300:
+            idle_limit = monotonic() + idle_timeout_seconds
+            current_timeout_kind = "stream_deadline_timeout" if deadline <= idle_limit else "stream_idle_timeout"
             with diagnostics.stage("response_body") if diagnostics else nullcontext():
-                apply_sock_timeout(min(deadline, monotonic() + idle_timeout_seconds))
+                apply_sock_timeout(min(deadline, idle_limit), current_timeout_kind)
                 err_bytes = response.read(_MAX_ERROR_RESPONSE_BYTES + 1)[:_MAX_ERROR_RESPONSE_BYTES]
             if diagnostics:
                 diagnostics.submission("response_received")
@@ -782,8 +855,10 @@ def _execute_stream_worker(
 
         media_type = resp_headers.get("content-type", "").split(";", 1)[0].strip().lower()
         if media_type != "text/event-stream":
+            idle_limit = monotonic() + idle_timeout_seconds
+            current_timeout_kind = "stream_deadline_timeout" if deadline <= idle_limit else "stream_idle_timeout"
             with diagnostics.stage("response_body") if diagnostics else nullcontext():
-                apply_sock_timeout(min(deadline, monotonic() + idle_timeout_seconds))
+                apply_sock_timeout(min(deadline, idle_limit), current_timeout_kind)
                 content = response.read(max_response_bytes + 1)
             if len(content) > max_response_bytes:
                 raise _TransportFailure("response too large")
@@ -808,7 +883,9 @@ def _execute_stream_worker(
         read_chunk = getattr(response, "read1", None) or response.read
         with diagnostics.stage("response_body") if diagnostics else nullcontext():
             while True:
-                apply_sock_timeout(min(deadline, monotonic() + idle_timeout_seconds))
+                idle_limit = monotonic() + idle_timeout_seconds
+                current_timeout_kind = "stream_deadline_timeout" if deadline <= idle_limit else "stream_idle_timeout"
+                apply_sock_timeout(min(deadline, idle_limit), current_timeout_kind)
                 raw = read_chunk(8192)
                 if not raw:
                     remaining_length = getattr(response, "length", None)
@@ -836,7 +913,10 @@ def _execute_stream_worker(
     except _TransportTimeout:
         raise
     except (TimeoutError, socket.timeout) as error:
-        raise _TransportTimeout() from error
+        if stopped.is_set() and diagnostics is not None and diagnostics.timeout_kind is not None:
+            raise _TransportTimeout(timeout_kind=diagnostics.timeout_kind) from error
+        kind = "stream_deadline_timeout" if (current_timeout_kind != "header_timeout" and monotonic() >= deadline) else current_timeout_kind
+        _raise_timeout(diagnostics, kind, error)
     except (OSError, ssl.SSLError, HTTPException) as error:
         raise _TransportFailure() from error
     finally:
@@ -864,7 +944,7 @@ def _default_stream_transport(
 ) -> HttpResponse | None:
     """Stream SSE frames safely with SSRF checks, dual byte caps, 3-tier timeouts, and fast cancel."""
     if not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
-        raise _TransportTimeout()
+        _raise_timeout(diagnostics, "connect_timeout")
     if not isinstance(idle_timeout_seconds, (int, float)) or not math.isfinite(idle_timeout_seconds) or idle_timeout_seconds <= 0:
         raise ProviderFailure("provider_configuration_invalid", "Stream idle timeout is invalid.", retryable=False)
     if not 1 <= max_response_bytes <= 5_000_000 or not 1 <= max_stream_bytes <= 10_000_000:
@@ -942,11 +1022,17 @@ def _default_stream_transport(
                 raise _TransportTimeout()
             active_limit = min(deadline, idle_deadline)
             if now >= active_limit:
-                reason = "deadline" if deadline <= idle_deadline else ("response_body" if got_headers else "response_headers")
-                if diagnostics:
-                    diagnostics.interrupt(reason, (timeout - max(0.0, deadline - now)) * 1000)
+                deadline_expired = deadline <= idle_deadline or now >= deadline
+                if diagnostics is not None:
+                    timeout_kind = diagnostics.interrupt_stream_timeout(
+                        (timeout - max(0.0, deadline - now)) * 1000,
+                        deadline_expired=deadline_expired,
+                        got_headers=got_headers,
+                    )
+                else:
+                    timeout_kind = "stream_deadline_timeout" if deadline_expired else ("stream_idle_timeout" if got_headers else "header_timeout")
                 shutdown_active()
-                raise _TransportTimeout()
+                raise _TransportTimeout(timeout_kind=timeout_kind)
             wait_slice = min(0.05, max(0.001, active_limit - now))
             try:
                 kind, payload = events_q.get(timeout=wait_slice)
@@ -966,6 +1052,10 @@ def _default_stream_transport(
             elif kind == "eof":
                 return None
             elif kind == "error":
+                if isinstance(payload, _TransportTimeout):
+                    if diagnostics is not None and payload.timeout_kind is not None:
+                        diagnostics.set_timeout_kind(payload.timeout_kind)
+                    raise payload
                 if isinstance(payload, _TransportFailure):
                     raise payload
                 raise _TransportFailure() from payload
@@ -1175,6 +1265,12 @@ class OpenAICompatibleLlmProvider(LlmProvider):
         self.sleeper = sleeper or sleep
         self.configuration_error = configuration_error
         self._validate_policy()
+        from .research_diagnostics import warn_if_timeout_output_mismatch
+        warn_if_timeout_output_mismatch(
+            self.policy.max_output_tokens,
+            self.policy.timeout_seconds,
+            logger=_logger,
+        )
 
     @classmethod
     def from_environment(
@@ -1213,8 +1309,8 @@ class OpenAICompatibleLlmProvider(LlmProvider):
         return False
 
     def _validate_policy(self) -> None:
-        if not 0 < self.policy.timeout_seconds <= 180:
-            raise ValueError("OpenAI-compatible timeout must be between 0 and 180 seconds.")
+        if not 0 < self.policy.timeout_seconds <= 600:
+            raise ValueError("OpenAI-compatible timeout must be between 0 and 600 seconds.")
         if not 1 <= self.policy.max_attempts <= 3:
             raise ValueError("OpenAI-compatible attempts must be between 1 and 3.")
         if not 0 <= self.policy.retry_base_seconds <= 2:
@@ -1720,8 +1816,17 @@ class OpenAICompatibleLlmProvider(LlmProvider):
             else 45.0
         )
         streamed_sse = False
+        call_started_at = monotonic()
         try:
             timeout = min(self.policy.timeout_seconds, timeout_seconds) if timeout_seconds is not None else self.policy.timeout_seconds
+            from .research_diagnostics import warn_if_timeout_output_mismatch
+            effective_max_tokens = wire.get("max_tokens")
+            warn_if_timeout_output_mismatch(
+                effective_max_tokens if type(effective_max_tokens) is int else None,
+                timeout,
+                streaming=streaming,
+                logger=_logger,
+            )
             headers = {
                 "Accept": "text/event-stream" if streaming else "application/json",
                 "Content-Type": "application/json",
@@ -1800,9 +1905,15 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                 error.reported_tokens = partial_reported_tokens()
             raise
         except (_TransportTimeout, TimeoutError, socket.timeout, _TransportFailure) as error:
-            code = "provider_cancelled" if cancel_event is not None and cancel_event.is_set() else ("provider_timeout" if isinstance(error, (TimeoutError, socket.timeout, _TransportTimeout)) else "provider_transport_error")
-            failure = ProviderFailure(code, "Provider call ended without a usable result; submission may be unknown.", retryable=True)
-            failure.provider_response_received = diagnostics.snapshot()['submission_state'] == 'response_received'
+            failure = _build_transport_failure(
+                error,
+                diagnostics,
+                cancelled=cancel_event is not None and cancel_event.is_set(),
+                message="Provider call ended without a usable result; submission may be unknown.",
+                started_at=call_started_at,
+                wire_bytes=len(body),
+                streamed_bytes=reassembled_bytes if streaming else None,
+            )
             if failure.provider_response_received:
                 failure.reported_tokens = partial_reported_tokens()
             raise failure from None
@@ -1973,13 +2084,23 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                 except Exception as diagnostic_error:
                     report_diagnostic_write_failure(diagnostic_error)
             raise
-        request_metadata = safe_wire_metadata(json.loads(body), contract=contract)
+        request_metadata = safe_wire_metadata(json.loads(body), contract=contract, wire_bytes=len(body))
         response = None
         diagnostics = TransportDiagnostics()
         if not self._default_transport_used:
             diagnostics.submission("unavailable")
+        call_started_at = monotonic()
         try:
             call_timeout = min(self.policy.timeout_seconds, timeout_seconds) if timeout_seconds is not None else self.policy.timeout_seconds
+            from .research_diagnostics import warn_if_timeout_output_mismatch
+            parsed_wire = json.loads(body)
+            wire_max_tokens = parsed_wire.get('max_tokens') if isinstance(parsed_wire, dict) else None
+            warn_if_timeout_output_mismatch(
+                wire_max_tokens if type(wire_max_tokens) is int else None,
+                call_timeout,
+                streaming=False,
+                logger=_logger,
+            )
             headers = {"Accept":"application/json", "Content-Type":"application/json", "Authorization":f"Bearer {self.settings.api_key}"}
             if self._default_transport_used:
                 response = _default_transport("POST", _endpoint(self.settings.base_url), headers, body, call_timeout,
@@ -1992,16 +2113,27 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                     on_submission()
                 response = self.transport("POST", _endpoint(self.settings.base_url), headers, body, call_timeout)
                 diagnostics.submission("response_received")
-        except (_TransportTimeout, TimeoutError, socket.timeout):
-            if cancel_event is not None and cancel_event.is_set():
-                failure = ProviderFailure("provider_cancelled", "Provider request was cancelled; result may be unknown.", retryable=True)
-            else:
-                failure = ProviderFailure("provider_timeout", "Provider timed out without a usable result.", retryable=True)
-            failure.provider_response_received = diagnostics.snapshot()['submission_state'] == 'response_received'
-            raise failure from None
-        except _TransportFailure:
-            failure = ProviderFailure("provider_transport_error", "Provider transport failed without a usable result.", retryable=True)
-            failure.provider_response_received = diagnostics.snapshot()['submission_state'] == 'response_received'
+        except (_TransportTimeout, TimeoutError, socket.timeout, _TransportFailure) as error:
+            cancelled = cancel_event is not None and cancel_event.is_set()
+            is_timeout = not cancelled and isinstance(error, (_TransportTimeout, TimeoutError, socket.timeout))
+            msg = (
+                "Provider request was cancelled; result may be unknown."
+                if cancelled
+                else (
+                    "Provider timed out without a usable result."
+                    if is_timeout
+                    else "Provider transport failed without a usable result."
+                )
+            )
+            failure = _build_transport_failure(
+                error,
+                diagnostics,
+                cancelled=cancelled,
+                message=msg,
+                started_at=call_started_at,
+                wire_bytes=len(body),
+                streamed_bytes=None,
+            )
             raise failure from None
         finally:
             if cancel_event is not None and cancel_event.is_set():

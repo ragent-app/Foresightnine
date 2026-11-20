@@ -17,6 +17,7 @@ type ResearchTurn = ResearchV2.ResearchTurn;
 type ResearchClaim = ResearchV2.ResearchClaim;
 type ResearchFact = ResearchV2.ResearchFact;
 type ResearchCalculation = ResearchV2.ResearchCalculation;
+type ResearchChart = ResearchV2.ResearchChart;
 type Citation = ResearchV2.Citation;
 type ResearchTopic = ResearchV2.ResearchTopic;
 
@@ -181,6 +182,15 @@ function parseToolSummary(raw: unknown): ToolEventSummary | null {
         });
       }
       return { kind: "calculate_financials", calculated_count, calcs_preview };
+    }
+    case "create_chart": {
+      const chart_id = text(raw["chart_id"], NAME_LIMIT)?.trim() ?? "";
+      const chart_type = text(raw["chart_type"], 40)?.trim() ?? "";
+      const title = text(raw["title"], TITLE_LIMIT)?.trim() ?? "";
+      const series_count = nonNegInt(raw["series_count"]);
+      const point_count = nonNegInt(raw["point_count"]);
+      if (!chart_id || !chart_type || !title || series_count === null || point_count === null) return null;
+      return { kind: "create_chart", chart_id, chart_type, title, series_count, point_count };
     }
     default:
       return null;
@@ -477,6 +487,27 @@ export function turnContent(
     facts: select(content.facts, turn.fact_ids, (f) => f.fact_id, turn.turn_id),
     calculations: select(content.calculations, turn.calculation_ids, (c) => c.calculation_id, turn.turn_id),
   };
+}
+
+/** Charts belonging to `turn`, preserving `turn.chart_ids` order or falling back to `chart.turn_id`. */
+export function turnCharts(content: ResearchContent, turn: ResearchTurn): ResearchChart[] {
+  const all = content.charts ?? [];
+  if (all.length === 0) return [];
+  const ids = turn.chart_ids;
+  if (ids && ids.length > 0) {
+    const byId = new Map(all.map((chart) => [chart.chart_id, chart]));
+    const seen = new Set<string>();
+    const result: ResearchChart[] = [];
+    for (const id of ids) {
+      if (seen.has(id)) continue;
+      const chart = byId.get(id);
+      if (!chart) continue;
+      seen.add(id);
+      result.push(chart);
+    }
+    return result;
+  }
+  return all.filter((chart) => chart.turn_id === turn.turn_id);
 }
 
 export function partialSummary({ facts, calculations, claims }: { facts: number; calculations: number; claims: number }): string {

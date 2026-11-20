@@ -322,6 +322,8 @@ def test_gap_codes_for_uncited_partial_and_model_reported_limitations(env):
 
 
 def test_prior_research_truncation_in_agent_input():
+    from app.research_runtime import PRIOR_RESEARCH_TOKEN_BUDGET, _prior_research, _prior_tokens
+
     facts = [{'fact_id': f'fact-{i}', 'label': 'revenue', 'value': str(i), 'unit': 'USD', 'currency': 'USD', 'period': str(i),
               'source_id': 's1', 'quotation': 'q' * 400, 'character_start': 0, 'character_end': 20} for i in range(205)]
     claims = [{'claim_id': f'claim-{i}', 'role': 'support', 'text': 't' * 600, 'challenges_claim_ids': [],
@@ -336,15 +338,30 @@ def test_prior_research_truncation_in_agent_input():
                                {'source_id': 'gone', 'character_start': 0, 'character_end': 5}],
                'source_hashes': {'s1': 'h'}, 'review': 'confirmed', 'note': 'n' * 1500, 'summary': 's' * 3000})
     prior = json.loads(saved[0]['user'])['prior_research']
-    assert len(prior['facts']) == 200 and prior['facts'][0]['fact_id'] == 'fact-5' and prior['facts'][-1]['fact_id'] == 'fact-204'
-    assert prior['truncated'] == {'facts': 5, 'calculations': 0, 'claims': 1}
-    assert len(prior['facts'][0]['quotation']) == 300 and len(prior['claims'][0]['text']) == 500
-    assert len(prior['claims'][0]['quotation']) == 300 and len(prior['claims']) == 100
+    assert _prior_tokens(prior) <= PRIOR_RESEARCH_TOKEN_BUDGET == 12_000
+    # P0 preserved in full (bounded only by per-field caps).
     assert prior['user_review'] == {'review': 'confirmed', 'note': 'n' * 1000, 'summary': 's' * 2000}
     assert prior['open_gaps'] == [{'code': 'no_progress', 'message': 'x'}]
-    assert prior['read_ranges'] == [{'source_id': 's1', 'character_start': 0, 'character_end': 20}]
+    # P1 keeps most recent facts with verbatim 300-char quotation (no mid-clipping).
+    assert 0 < len(prior['facts']) < 200
+    assert prior['facts'][-1]['fact_id'] == 'fact-204'
+    assert all(len(f['quotation']) == 300 for f in prior['facts'])
+    assert prior['prior_omitted']['facts']['count'] == 205 - len(prior['facts'])
+    assert prior['prior_omitted']['claims']['count'] == 101 - len(prior['claims'])
+    assert prior['prior_omitted'].get('read_ranges', {}).get('count', 0) >= 0
     assert saved[0]['prior_read_ranges'] == [{'source_id': 's1', 'start': 0, 'end': 20}]
     assert len(saved[0]['prior_claim_ids']) == 101  # Every prior claim stays challengeable.
+
+    # With sufficient token_budget (100_000), explicit item caps keep last 200 facts & 100 claims.
+    unbounded, _ = _prior_research(
+        {'facts': facts, 'calculations': [], 'claims': claims, 'gaps': [], 'read_ranges': []},
+        [src],
+        None,
+        token_budget=100_000,
+    )
+    assert len(unbounded['facts']) == 200 and unbounded['facts'][0]['fact_id'] == 'fact-5' and unbounded['facts'][-1]['fact_id'] == 'fact-204'
+    assert len(unbounded['claims']) == 100 and len(unbounded['claims'][0]['text']) == 500 and len(unbounded['claims'][0]['quotation']) == 300
+    assert unbounded['truncated'] == {'facts': 5, 'calculations': 0, 'claims': 1, 'charts': 0}
 
 
 def test_prior_read_ranges_require_unchanged_content_and_no_truncation_key_when_small():
@@ -516,12 +533,16 @@ def test_continue_after_provider_output_truncated_runs_l2_compaction_and_succeed
                 err = ProviderFailure('provider_output_truncated', 'Provider output was truncated.', retryable=False, reported_tokens=4096)
                 err.provider_response_received = True
                 raise err
-            # Call 3 runs after L2 compaction on /continue: tool result must be compacted and guidance injected,
+            # Call 3 runs after L2 compaction on /continue: tool result must be compacted and guidance injected via tail_note,
             # while recorded read_ranges still let submit_research locate the quotation verbatim.
-            tool_msg = json.loads(messages[-1]['content'])
+            tool_msg = json.loads([m for m in messages if m['role'] == 'tool'][-1]['content'])
             assert tool_msg.get('cleared') is True and tool_msg.get('reason') == 'continuation_compacted', tool_msg
-            user_payload = json.loads(messages[1]['content'])
-            assert 'continuation_guidance' in user_payload or 'recovery_guidance' in user_payload, user_payload
+            prefix_payload = json.loads(messages[1]['content'])
+            assert 'continuation_guidance' not in prefix_payload and 'recovery_guidance' not in prefix_payload, prefix_payload
+            tail_msg = messages[-1]
+            assert tail_msg['role'] == 'user' and tail_msg['content'].startswith('[Recovery context: '), tail_msg
+            tail_payload = json.loads(tail_msg['content'][len('[Recovery context: '):-1])
+            assert 'continuation_guidance' in tail_payload or 'recovery_guidance' in tail_payload, tail_payload
             return turn('submit_research', {
                 'report': 'Revenue was 100 USD.',
                 'claims': [{'text': 'Revenue was 100 USD.', 'source_id': source_id, 'quotation': quote, 'role': 'support'}],
@@ -652,3 +673,178 @@ def test_continue_after_incomplete_model_response_clears_stopped_and_compacts(mo
     assert provider.calls == 4
     assert payloads[3] < payloads[2]
     assert client.get(path, headers=headers).json()['versions'][-1]['content']['turns'][-1]['status'] == 'completed'
+
+
+def test_continue_after_provider_timeout_preserves_unread_sources_and_injects_timeout_guidance(monkeypatch):
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRIES', '0')
+    quote = 'Revenue was 100 USD.'
+    long_text = quote + ' ' + ('Market commentary note. ' * 200)
+    seen_calls: list[list[dict]] = []
+
+    class TimeoutThenRecoverProvider:
+        name = 'timeout-continue-test'
+        policy = ProviderPolicy(max_attempts=1, max_output_tokens=16384, timeout_seconds=120)
+
+        def __init__(self):
+            self.calls = 0
+
+        def complete(self, messages, tools, **kwargs):
+            self.calls += 1
+            seen_calls.append(messages)
+            if self.calls == 1:
+                return turn('read_sources', {'reads': [{'source_id': source_id}], 'rationale': 'Read source.'}, 'r1')
+            if self.calls == 2:
+                err = ProviderFailure('provider_timeout', 'Stream timed out mid-generation.', retryable=True)
+                err.provider_response_received = True
+                err.timeout_kind = 'stream_deadline_timeout'
+                err.elapsed_ms = 120000
+                err.wire_bytes = 18000
+                err.streamed_bytes = 1024
+                raise err
+            if self.calls == 3:
+                # On 1st /continue with facts=[], read_sources result must be preserved (not cleared),
+                # and timeout guidance must instruct concise reasoning + incremental record_facts via tail_note.
+                tool_msgs = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
+                assert len(tool_msgs) == 1
+                assert 'cleared' not in tool_msgs[0]
+                assert quote in tool_msgs[0]['results'][0]['text']
+                prefix_payload = json.loads(messages[1]['content'])
+                assert 'recovery_guidance' not in prefix_payload
+                assert 'prior_failed_attempts' not in prefix_payload
+                tail_msg = messages[-1]
+                assert tail_msg['role'] == 'user' and tail_msg['content'].startswith('[Recovery context: '), tail_msg
+                tail_payload = json.loads(tail_msg['content'][len('[Recovery context: '):-1])
+                guidance = tail_payload.get('recovery_guidance', '')
+                assert 'timed out mid-generation' in guidance and 'record_facts' in guidance
+                return turn('record_facts', {'rationale': 'Record key fact.', 'facts': [
+                    {**FACT_ARGS, 'value': 100, 'period': '2025', 'source_id': source_id, 'quotation': quote},
+                ]}, 'f1')
+            return turn('submit_research', {
+                'report': 'Revenue was 100 USD.',
+                'claims': [{'text': 'Revenue was 100 USD.', 'source_id': source_id, 'quotation': quote, 'role': 'support'}],
+                'limitations': [], 'stopping_reason': 'answered', 'status': 'completed',
+            }, 's1')
+
+    provider = TimeoutThenRecoverProvider()
+    monkeypatch.setattr(api, 'challenge_provider', provider)
+    monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    source_id = client.post('/v2/research/sources', headers=headers, json={
+        'title': 'Market Filing', 'text': long_text,
+        'permissions': {'store': True, 'display': True, 'model_input': True, 'export': True},
+    }).json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Revenue?', 'source_ids': [source_id]}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+
+    run1 = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={
+        'parent_version_id': topic['versions'][0]['version_id'], 'discover_sources': False,
+    })
+    assert run1.status_code == 202
+    op1 = run1.json()['operation']['operation_id']
+    for _ in range(300):
+        op = client.get(f'{path}/runs/{op1}', headers=headers).json()['operation']
+        if op['status'] in ('completed', 'failed', 'cancelled'):
+            break
+        time.sleep(.01)
+    assert op['status'] == 'completed'
+    cp1 = api.RESEARCH_RUN_INPUTS.get(op1)['runtime_checkpoint']
+    assert len(cp1['failed_attempts']) == 1 and cp1['failed_attempts'][0]['reason'] == 'provider_timeout'
+    v1_turn = client.get(path, headers=headers).json()['versions'][-1]['content']['turns'][-1]
+    assert any(g['code'] == 'provider_timeout' for g in v1_turn['gaps']), v1_turn['gaps']
+
+    cont = client.post(f'{path}/runs/{op1}/continue', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={})
+    assert cont.status_code == 202, cont.text
+    op2 = cont.json()['operation']['operation_id']
+    for _ in range(300):
+        op = client.get(f'{path}/runs/{op2}', headers=headers).json()['operation']
+        if op['status'] in ('completed', 'failed', 'cancelled'):
+            break
+        time.sleep(.01)
+    assert op['status'] == 'completed'
+    assert provider.calls == 4
+    final = client.get(path, headers=headers).json()['versions'][-1]['content']
+    assert final['turns'][-1]['status'] == 'completed'
+    assert final['turns'][-1]['operation_ids'] == [op1, op2]
+    assert final['claims'][0]['citations'][0]['quotation'] == quote
+
+
+def test_prior_research_priority_bucketing_dedupes_includes_failed_sources_and_omits_transparently():
+    from types import SimpleNamespace
+    from app.provider_capabilities import CapabilityProfile
+    from app.research_runtime import PRIOR_RESEARCH_TOKEN_BUDGET, _prior_research, _prior_research_token_budget, _prior_tokens
+
+    assert _prior_research_token_budget(None) == PRIOR_RESEARCH_TOKEN_BUDGET == 12_000
+    tight_profile = CapabilityProfile(
+        endpoint='https://api.example.com', model='m', version='v1', mode='tool',
+        schema_dialect='required_nullable_v1', context_tokens=16_000, work_context_tokens=16_000,
+    )
+    assert _prior_research_token_budget(SimpleNamespace(research_capacity=lambda: tight_profile)) == 4_000 < PRIOR_RESEARCH_TOKEN_BUDGET
+
+    src_long = source()
+    src_long.text = 'X' * 5000
+    src_long.content_sha256 = 'h-long'
+
+    # Duplicate facts/calcs keep only the most recent equivalent item; calculations are not starved by facts.
+    facts = [
+        {'fact_id': 'f-old', 'label': 'revenue', 'value': '100', 'unit': 'USD', 'currency': 'USD', 'period': '2025Q1',
+         'source_id': 's1', 'quotation': 'Q1 ' * 60, 'character_start': 0, 'character_end': 10},
+        {'fact_id': 'f-dup', 'label': 'revenue', 'value': '100', 'unit': 'USD', 'currency': 'USD', 'period': '2025Q1',
+         'source_id': 's1', 'quotation': 'Q1 latest', 'character_start': 0, 'character_end': 10},
+    ] + [
+        {'fact_id': f'f-extra-{i}', 'label': f'metric_{i}', 'value': str(i), 'unit': 'USD', 'currency': 'USD', 'period': '2025Q2',
+         'source_id': 's1', 'quotation': f'quote-{i} ' + ('x' * 240), 'character_start': 10, 'character_end': 30}
+        for i in range(18)
+    ]
+    calcs = [
+        {'calculation_id': 'c-old', 'formula_id': 'margin', 'value': 0.25, 'unit': 'ratio', 'inputs': [{'fact_id': 'f-dup'}]},
+        {'calculation_id': 'c-dup', 'formula_id': 'margin', 'value': 0.25, 'unit': 'ratio', 'inputs': [{'fact_id': 'f-dup'}]},
+        {'calculation_id': 'c-keep', 'formula_id': 'growth', 'value': 0.15, 'unit': 'ratio', 'inputs': [{'fact_id': 'f-extra-0'}]},
+    ]
+    claims = [
+        {'claim_id': f'cl-{i}', 'role': 'support', 'text': f'Claim body {i} ' + ('y' * 250), 'challenges_claim_ids': [],
+         'citations': [{'source_id': 's1', 'quotation': f'cite-{i} ' + ('z' * 150), 'location': {'character_start': 0, 'character_end': 12}}]}
+        for i in range(12)
+    ]
+    read_ranges = [{'source_id': 's1', 'character_start': i * 100, 'character_end': i * 100 + 50} for i in range(30)]
+    failed_accesses = [{'url': 'https://example.com/10k', 'host': 'example.com', 'status': 'failed', 'reason': 'http_forbidden_or_challenge'}]
+
+    compact_prior, _ = _prior_research(
+        {
+            'note': 'Follow up on guidance.',
+            'review': 'revised',
+            'summary': 'Need margin reconciliation.',
+            'gaps': [{'code': 'missing_filing', 'message': '10-Q missing'}],
+            'failed_source_accesses': failed_accesses,
+            'source_hashes': {'s1': 'h-long'},
+            'facts': facts,
+            'calculations': calcs,
+            'claims': claims,
+            'read_ranges': read_ranges,
+        },
+        [src_long],
+        None,
+        token_budget=3500,
+    )
+    assert _prior_tokens(compact_prior) <= 3500
+    # P0 fields remain intact.
+    assert compact_prior['failed_source_accesses'] == failed_accesses
+    assert compact_prior['open_gaps'] == [{'code': 'missing_filing', 'message': '10-Q missing'}]
+    assert compact_prior['user_review']['review'] == 'revised'
+    # Deduped facts/calcs keep the newer copy, and calculations survive alongside facts.
+    fact_ids = [f['fact_id'] for f in compact_prior['facts']]
+    calc_ids = [c['calculation_id'] for c in compact_prior['calculations']]
+    assert 'f-old' not in fact_ids
+    assert 'c-old' not in calc_ids
+    assert 'c-keep' in calc_ids and 'c-dup' in calc_ids
+    # P2 claims kept are never mid-clipped; omitted lower-priority items are accounted for.
+    assert 0 < len(compact_prior['claims']) < 12
+    for cl in compact_prior['claims']:
+        assert cl['text'].startswith('Claim body ')
+        assert len(cl['text']) in (len('Claim body 0 ') + 250, len('Claim body 10 ') + 250)
+    omitted = compact_prior['prior_omitted']
+    assert omitted['claims']['count'] == 12 - len(compact_prior['claims'])
+    assert omitted['read_ranges']['count'] == 30 - len(compact_prior['read_ranges'])

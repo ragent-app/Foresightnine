@@ -73,14 +73,36 @@ class CapabilityProfile:
     mode: str
     schema_dialect: str | None = None
     context_tokens: int | None = None
+    work_context_tokens: int | None = None
     output_tokens: int | None = None
     input_counter: str | None = None
     native_tools: bool | None = None
     stream: bool | None = None
     usage: bool | None = None
     continuation: bool | None = None
+    explicit_cache_control: bool = False
     generation_parameters: tuple[str, ...] | None = None
     continuation_fields: tuple[str, ...] | None = None
+
+
+_PROFILE_KEYS = frozenset({
+    'endpoint',
+    'model',
+    'version',
+    'mode',
+    'schema_dialect',
+    'context_tokens',
+    'work_context_tokens',
+    'output_tokens',
+    'input_counter',
+    'native_tools',
+    'stream',
+    'usage',
+    'continuation',
+    'explicit_cache_control',
+    'generation_parameters',
+    'continuation_fields',
+})
 
 
 def _invalid() -> ProviderFailure:
@@ -93,13 +115,13 @@ def configured_profile(endpoint: str, model: str) -> CapabilityProfile | None:
         return None
     try:
         value = json.loads(raw)
-        if not isinstance(value, dict) or not {'endpoint','model','version','mode'} <= set(value) or set(value) - {'endpoint','model','version','mode','schema_dialect','context_tokens','output_tokens','input_counter','native_tools','stream','usage','continuation','generation_parameters','continuation_fields'}:
+        if not isinstance(value, dict) or not {'endpoint','model','version','mode'} <= set(value) or set(value) - _PROFILE_KEYS:
             raise ValueError()
         if any(not isinstance(value[k], str) or not value[k] or len(value[k]) > 512 for k in ('endpoint','model','version','mode')):
             raise ValueError()
-        if any(type(value[k]) is not int or value[k] < 1 for k in ('context_tokens','output_tokens') if k in value):
+        if any(type(value[k]) is not int or value[k] < 1 for k in ('context_tokens','work_context_tokens','output_tokens') if k in value):
             raise ValueError()
-        if any(type(value[k]) is not bool for k in ('native_tools','stream','usage','continuation') if k in value):
+        if any(type(value[k]) is not bool for k in ('native_tools','stream','usage','continuation','explicit_cache_control') if k in value):
             raise ValueError()
         for key in ('generation_parameters', 'continuation_fields'):
             if key in value:

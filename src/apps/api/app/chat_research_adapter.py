@@ -18,6 +18,13 @@ class ChatResearchAdapter:
             messages.append(exchange.assistant.envelope)
             messages.extend({'role': 'tool', 'tool_call_id': result.tool_call_id, 'content': result.content}
                             for result in exchange.results)
+        raw_tail = getattr(turn, 'tail_note', None)
+        tail_note = raw_tail if isinstance(raw_tail, str) and raw_tail.strip() else None
+        if tail_note is not None:
+            if turn.history:
+                messages.append({'role': 'user', 'content': tail_note})
+            else:
+                messages[-1] = {'role': 'user', 'content': f'{turn.user}\n\n{tail_note}'}
         tools = [{'type': 'function', 'function': {'name': tool.name, 'description': tool.description,
                   'parameters': tool.input_schema}} for tool in turn.tools]
         return messages, tools

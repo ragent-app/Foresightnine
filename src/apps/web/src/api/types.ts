@@ -58,6 +58,15 @@ export interface CalculateFinancialsSummary {
   calcs_preview: { formula_id: string; value: string; unit: string; currency: string | null; expression: string }[];
 }
 
+export interface CreateChartSummary {
+  kind: "create_chart";
+  chart_id: string;
+  chart_type: string;
+  title: string;
+  series_count: number;
+  point_count: number;
+}
+
 export type ToolEventSummary =
   | DiscoverSourcesSummary
   | AcquireSourcesSummary
@@ -65,7 +74,8 @@ export type ToolEventSummary =
   | HistoricalPricesSummary
   | ReadSourcesSummary
   | RecordFactsSummary
-  | CalculateFinancialsSummary;
+  | CalculateFinancialsSummary
+  | CreateChartSummary;
 
 export interface InterimSummary {
   leads_count: number;

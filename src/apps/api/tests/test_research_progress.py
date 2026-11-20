@@ -19,7 +19,7 @@ from app.research_topics import ReadRange, ResearchTurn, TurnUsage
 from tests.test_research_multiturn import (Q1, Q2, TEXT, Scripted, env, read_all, submit)  # noqa: F401
 from tests.test_research_runtime import Model, context, source, turn
 
-PROGRESS_KEYS = {'operation_id', 'operation_status', 'turn', 'usage', 'current', 'interim', 'events', 'event_count',
+PROGRESS_KEYS = {'operation_id', 'operation_status', 'turn', 'usage', 'current', 'interim', 'context_receipts', 'events', 'event_count',
                  'started_at', 'updated_at', 'version_id'}
 
 
@@ -888,3 +888,74 @@ def test_saved_turn_interim_deduplicates_repeat_leads_and_acquisitions():
         'facts_count': 0,
         'calculations_count': 0,
     }
+
+
+def test_progress_exposes_whitelisted_context_receipts_without_leaking_secrets():
+    import json
+
+    cp = {
+        'status': 'awaiting_model',
+        'user': json.dumps({'question': 'Q?'}),
+        'context_receipts': [
+            {
+                'trigger': 'l1_in_turn',
+                'reason': 'token_watermark',
+                'before_chars': 95_000,
+                'after_chars': 25_000,
+                'chars_saved': 70_000,
+                'cleared_results_count': 3,
+                'cleared_thinking_turns': 2,
+                'cleared_thinking_chars': 12_000,
+                'omitted_spans': [{'source_id': 's1', 'start': 0, 'end': 5000}],
+                'preserved_facts_count': 4,
+                'prefix_reset': False,
+                'cleared_tool_call_ids': ['tc-secret-1', 'tc-secret-2', 'tc-secret-3'],
+                'call_id': 'call-secret-abc',
+                'raw_text': 'TOP_SECRET_PROMPT_LEAK',
+                'at': '2026-11-19T22:00:00Z',
+            },
+            {
+                'trigger': 'l2_continuation',
+                'reason': 'continuation_compacted',
+                'before_chars': 40_000,
+                'after_chars': 15_000,
+                'chars_saved': 25_000,
+                'cleared_results_count': 1,
+                'cleared_thinking_turns': 1,
+                'cleared_thinking_chars': 3_000,
+                'omitted_spans': [{'source_id': 's1', 'start': 5000, 'end': 9000}, {'source_id': 's2', 'start': 0, 'end': 2000}],
+                'preserved_facts_count': 6,
+                'prefix_reset': True,
+                'at': '2026-11-19T22:01:00Z',
+            },
+        ],
+    }
+    prog = build_progress(operation_id='op-ctx', operation_status='running', inputs={'question': 'Q?'},
+                          checkpoint=cp, saved_turn=None, version_id='v1', after=0)
+    receipts = prog['context_receipts']
+    assert receipts['count'] == 2
+    assert receipts['total_chars_saved'] == 95_000
+    assert len(receipts['recent']) == 2
+    assert receipts['recent'][0] == {
+        'trigger': 'l1_in_turn',
+        'reason': 'token_watermark',
+        'before_chars': 95_000,
+        'after_chars': 25_000,
+        'chars_saved': 70_000,
+        'cleared_results_count': 3,
+        'cleared_thinking_turns': 2,
+        'cleared_thinking_chars': 12_000,
+        'omitted_spans_count': 1,
+        'preserved_facts_count': 4,
+        'prefix_reset': False,
+        'at': '2026-11-19T22:00:00Z',
+    }
+    assert receipts['recent'][1]['omitted_spans_count'] == 2
+    assert receipts['recent'][1]['prefix_reset'] is True
+    serialized = json.dumps(prog)
+    for forbidden in ('call-secret-abc', 'tc-secret-1', 'TOP_SECRET_PROMPT_LEAK', 'cleared_tool_call_ids', 'call_id'):
+        assert forbidden not in serialized
+
+    empty_prog = build_progress(operation_id='op-empty', operation_status='queued', inputs={'question': 'Q?'},
+                                checkpoint=None, saved_turn=None, version_id='v1', after=0)
+    assert empty_prog['context_receipts'] == {'count': 0, 'total_chars_saved': 0, 'recent': []}

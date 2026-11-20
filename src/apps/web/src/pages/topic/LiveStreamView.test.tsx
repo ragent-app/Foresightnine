@@ -161,4 +161,27 @@ describe("LiveStreamView", () => {
     expect(container.querySelector("a")).toBeNull();
     expect(container.querySelector("b")).toBeNull();
   });
+
+  it("renders Markdown inside draftReport safely while stripping HTML/images and neutralizing links", () => {
+    const { store } = createTestStreamStore({
+      callSeq: 1,
+      text: "步骤说明：**正在比对** ![x](https://evil.com/a.png)",
+      draftReport: "## 草稿小节\n\n安全正文：<script>alert(1)</script> 营收 **$130.5B**。\n\n![追踪](https://evil.com/p.png) [点击](javascript:alert(1))",
+      activeChannel: "draft_report",
+    });
+    const { container } = render(
+      <>
+        <LiveActiveStream stream={store} />
+        <LiveDraftPreview stream={store} />
+      </>,
+    );
+
+    expect(screen.getByRole("heading", { level: 2, name: "草稿小节" })).toBeTruthy();
+    expect(screen.getByText("$130.5B")).toBeTruthy();
+    expect(screen.getByText("[图片：追踪]")).toBeTruthy();
+    expect(screen.getByText("正在比对")).toBeTruthy();
+    expect(container.querySelector("script")).toBeNull();
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("a")).toBeNull();
+  });
 });

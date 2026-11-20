@@ -399,7 +399,7 @@ function calcInputStatus(calc, facts) {
 
 // ---- Version content validation (mirrors the research_topics models) ------------------------
 
-const CONTENT_KEYS = ["summary", "sources", "source_candidates", "facts", "calculations", "claims", "gaps", "turns"];
+const CONTENT_KEYS = ["summary", "sources", "source_candidates", "facts", "calculations", "charts", "claims", "gaps", "turns"];
 const FACT_COMPUTED_FIELDS = ["currency_quote_missing", "scale_quote_missing", "currency_unspecified"];
 const CALCULATION_COMPUTED_FIELDS = ["input_status", "legacy_unit_warning", "result_status"];
 const FACT_KEYS = ["fact_id", "turn_id", "label", "value", "unit", "currency", "period", "source_id", "quotation", "character_start", "character_end", "location", "verification", ...FACT_COMPUTED_FIELDS];
@@ -579,7 +579,7 @@ function validateVersionInput(body) {
   if (body.note !== undefined) readString(body.note, "body/note", { max: 10000 });
   const { content } = body;
   if (content.summary !== undefined) readString(content.summary, "body/content/summary", { max: 100000 });
-  for (const key of ["sources", "source_candidates", "facts", "calculations", "claims", "gaps", "turns"]) {
+  for (const key of ["sources", "source_candidates", "facts", "calculations", "charts", "claims", "gaps", "turns"]) {
     if (content[key] !== undefined && !Array.isArray(content[key])) throw invalid("Input should be a valid list.", `body/content/${key}`);
   }
   if ((content.source_candidates ?? []).length > 10) throw invalid("List should have at most 10 items.", "body/content/source_candidates");
@@ -772,7 +772,7 @@ function resolveDiscovery(body) {
 
 function ensureContent(content) {
   const next = structuredClone(content ?? {});
-  for (const key of ["calculations", "claims", "facts", "gaps", "source_candidates", "sources", "turns"]) {
+  for (const key of ["calculations", "charts", "claims", "facts", "gaps", "source_candidates", "sources", "turns"]) {
     if (!Array.isArray(next[key])) next[key] = [];
   }
   return next;
@@ -916,6 +916,7 @@ function commitTurn(data, run, mode, now) {
     fact_ids: content.facts.filter((item) => item.turn_id === turnId).map((item) => item.fact_id),
     claim_ids: content.claims.filter((item) => item.turn_id === turnId).map((item) => item.claim_id),
     calculation_ids: content.calculations.filter((item) => item.turn_id === turnId).map((item) => item.calculation_id),
+    chart_ids: content.charts.filter((item) => item.turn_id === turnId).map((item) => item.chart_id),
     gaps: completed ? (noSources ? [structuredClone(PARTIAL_GAPS[0])] : []) : structuredClone(PARTIAL_GAPS),
     read_ranges: northwind
       ? completed
@@ -928,7 +929,16 @@ function commitTurn(data, run, mode, now) {
   };
   if (completed) {
     turn.report = northwind
-      ? "本轮复核了年报摘录中的营业利润：2026 财年营业利润为 15,104 百万美元，上一财年为 12,980 百万美元，同比增长约 16.36%。\n\n结果来自对摘录的读取和确定性计算；金额单位与币种沿用摘录开头的说明，尚未与原始披露逐项核对。"
+      ? "## 营业利润与增速核验结论\n\n" +
+        "本轮复核了年报摘录中的营业利润：2026 财年营业利润为 **15,104 百万美元**，上一财年为 **12,980 百万美元**，同比增长约 **+16.36%**。\n\n" +
+        "| 财务指标 | FY2025 | FY2026 | 同比 |\n" +
+        "| --- | ---: | ---: | ---: |\n" +
+        "| 营业利润（USD M） | 12,980 | 15,104 | +16.36% |\n" +
+        "| 示例对照规模（模拟参考） | $60.9B | $130.5B | +114.2% |\n\n" +
+        "```text\n" +
+        "growth_percent = (15104 / 12980 - 1) * 100 = 16.36%\n" +
+        "```\n\n" +
+        "来源与口径说明沿用年报摘录，延伸检索可参考 [SEC EDGAR](https://www.sec.gov/edgar/searchedgar/companysearch)。"
       : noSources
         ? "本轮没有选择任何来源，因此没有形成可引用的主张。\n\n这是本地 QA 模拟的运行结果，不含真实研究结论。"
         : "本轮已读取所附资料，但没有形成可引用的具体主张。\n\n这是本地 QA 模拟的运行结果，不含真实研究结论。";
@@ -1013,6 +1023,26 @@ function advance(data, run, broker) {
     return;
   }
 
+  if (run.kind === "continue" && run.cursor === 3 && !run.streamContinueThinkingDone) {
+    run.streamContinueThinkingDone = true;
+    run.streamCallSeq = 1;
+    touch(run, now);
+    broker?.publishCurrent(run, { kind: "model", phase: "thinking", retry_attempt: null, started_at: run.operation.updated_at });
+    broker?.publishDelta(run, {
+      call_seq: 1,
+      channel: "thinking",
+      delta: "从断点继续执行：已读取总收入与前序步骤，接下来记录营业利润并计算同比。",
+      seq: 0,
+    });
+    broker?.publishDelta(run, {
+      call_seq: 1,
+      channel: "text",
+      delta: "续跑中：正在核对营业利润及增速计算。",
+      seq: 1,
+    });
+    return;
+  }
+
   if (run.cursor === RUN_STEPS.length - 1) {
     if (!run.streamDraftPhase) {
       run.streamDraftPhase = 1;
@@ -1028,16 +1058,22 @@ function advance(data, run, broker) {
       broker?.publishDelta(run, {
         call_seq: 3,
         channel: "draft_report",
-        delta: "Northwind 示例公司在 FY2026 的营业利润较 FY2025 实现显著增长（草稿整理中）。\n\n",
+        delta: "## 营业利润与增速核验结论\n\nNorthwind 示例公司在 FY2026 的营业利润较 FY2025 实现稳健增长（**+16.36%**）。\n\n",
         seq: 1,
+      });
+      broker?.publishDelta(run, {
+        call_seq: 3,
+        channel: "draft_report",
+        delta: "| 财务指标 | FY2025 | FY2026 | 同比 |\n| --- | ---: | ---: | ---: |\n| 营业利润（USD M） | 12,980 | 15,104 | +16.36% |\n| 示例行业对照 | $60.9B | $130.5B | +114.2% |\n\n",
+        seq: 2,
       });
       broker?.publishDelta(run, {
         call_seq: 3,
         channel: "draft_report",
         delta: run.variant === "rejected"
           ? "待核验段落：初步引用了一处未对齐的附注数字，服务端将进行位置核验。"
-          : "上述增速基于已记录的两期营业利润口径，最终结论与引文编号将在提交核验后生成。",
-        seq: 2,
+          : "```text\ngrowth_percent = (15104 / 12980 - 1) * 100 = 16.36%\n```\n\n参见 [SEC EDGAR](https://www.sec.gov/edgar/searchedgar/companysearch)。",
+        seq: 3,
       });
       return;
     }
@@ -1067,7 +1103,7 @@ function advance(data, run, broker) {
     }
   }
 
-  if (run.cursor === 0 && run.streamThinkingDone) {
+  if ((run.cursor === 0 && run.streamThinkingDone) || (run.kind === "continue" && run.cursor === 3 && run.streamContinueThinkingDone)) {
     broker?.publishReset(run, { call_seq: run.streamCallSeq ?? 1, reason: "tool_started" });
   }
 
@@ -2062,6 +2098,10 @@ export function createServer({ tickMs = 1500, heartbeatMs = 15000, maxSsePerAcco
     content.sources.forEach((row) => typeof row.source_id === "string" && ids.add(row.source_id));
     content.facts.forEach((fact) => ids.add(fact.source_id));
     content.claims.forEach((claim) => (claim.citations ?? []).forEach((c) => ids.add(c.source_id)));
+    content.charts.forEach((chart) => {
+      (chart.source_ids ?? []).forEach((id) => ids.add(id));
+      (chart.series ?? []).forEach((s) => (s.points ?? []).forEach((p) => p?.provenance?.source_id && ids.add(p.provenance.source_id)));
+    });
     content.turns.forEach((turn) => (turn.read_ranges ?? []).forEach((r) => ids.add(r.source_id)));
     const provenance = [];
     for (const id of [...ids].sort()) {
@@ -2453,7 +2493,7 @@ export function createServer({ tickMs = 1500, heartbeatMs = 15000, maxSsePerAcco
     }
     const before = ensureContent(previous.content);
     const incoming = body.content;
-    for (const key of ["turns", "sources", "source_candidates", "gaps"]) {
+    for (const key of ["charts", "turns", "sources", "source_candidates", "gaps"]) {
       if (!same(incoming[key] ?? [], before[key])) throw unprocessable("Server-produced research records cannot be edited.");
     }
 

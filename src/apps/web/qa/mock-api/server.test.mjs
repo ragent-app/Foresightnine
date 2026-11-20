@@ -1691,9 +1691,68 @@ describe("L2 SSE /runs/:op/events endpoint", () => {
       assert.ok(partialResetIdx > partialDraftIdx, "expected submission_partial reset after partial draft_report");
       assert.equal(partialEvents.at(-1).event, "run.terminal");
       assert.equal(partialEvents.at(-1).data.operation_status, "failed");
+
+      // Continuing that partial turn emits live thinking + GFM draft_report and finishes with GFM Markdown report.
+      const contRes = await fetch(`${url}/v2/research/topics/${partial.topicId}/runs/${partial.opId}/continue`, {
+        method: "POST",
+        headers: { ...authHeaders, "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
+        body: JSON.stringify({}),
+      });
+      assert.equal(contRes.status, 202);
+      const { operation: contOp } = await contRes.json();
+      const contStream = await fetch(`${url}/v2/research/topics/${partial.topicId}/runs/${contOp.operation_id}/events`, { headers: authHeaders });
+      const contEvents = (await readSse(contStream)).filter((f) => f.type === "event");
+      assert.ok(contEvents.some((f) => f.event === "stream.delta" && f.data.channel === "thinking"));
+      const draftChunks = contEvents
+        .filter((f) => f.event === "stream.delta" && f.data.channel === "draft_report")
+        .map((f) => f.data.delta)
+        .join("");
+      assert.match(draftChunks, /\|\s*财务指标\s*\|/);
+      assert.match(draftChunks, /\$130\.5B/);
+      assert.match(draftChunks, /\+114\.2%/);
+      assert.equal(contEvents.at(-1).data.operation_status, "completed");
+      const finalTopic = await (await fetch(`${url}/v2/research/topics/${partial.topicId}`, { headers: authHeaders })).json();
+      const finalReport = finalTopic.versions.at(-1).content.turns.at(-1).report;
+      assert.match(finalReport, /^##\s+/);
+      assert.match(finalReport, /https:\/\/www\.sec\.gov/);
     } finally {
       sseServer.closeAllConnections?.();
       await new Promise((resolve) => sseServer.close(resolve));
     }
+  });
+
+  test("Topic A Turn 2 seeds V1 charts (combo_bar_line inline + price_series trailing + create_chart events) and protects charts on review save", async () => {
+    const topics = (await call("GET", "/v2/research/topics")).json;
+    const topicA = topics.find((t) => t.request.question.startsWith("Northwind"));
+    const latest = topicA.versions.at(-1);
+    const turn2 = latest.content.turns[1];
+
+    assert.equal(latest.content.charts.length, 3);
+    assert.deepEqual(turn2.chart_ids, ["chart_northwind_combo", "chart_northwind_price", "chart_northwind_causal"]);
+    assert.match(turn2.report, /^\[\[chart:chart_northwind_combo\]\]$/m);
+    assert.ok(turn2.events.some((e) => e.kind === "tool" && e.name === "create_chart" && e.summary?.chart_id === "chart_northwind_combo"));
+    assert.ok(turn2.events.some((e) => e.kind === "tool" && e.name === "create_chart" && e.summary?.chart_id === "chart_northwind_price"));
+    assert.ok(turn2.events.some((e) => e.kind === "tool" && e.name === "create_chart" && e.summary?.chart_id === "chart_northwind_causal"));
+    const causal = latest.content.charts.find((c) => c.chart_id === "chart_northwind_causal");
+    assert.equal(causal?.chart_type, "causal_graph");
+    assert.equal(causal?.causal_graph?.nodes.length, 6);
+    assert.equal(causal?.causal_graph?.edges.length, 5);
+
+    // User review version save preserves charts unchanged and rejects tampered charts with 422.
+    const saved = await call("POST", `${topicPath(topicA.topic_id)}/versions`, {
+      body: { parent_version_id: latest.version_id, content: { ...latest.content, summary: "已复核图表" }, review: "confirmed", note: "" },
+    });
+    assert.equal(saved.status, 201);
+    assert.deepEqual(saved.json.versions.at(-1).content.charts, latest.content.charts);
+
+    const tampered = await call("POST", `${topicPath(topicA.topic_id)}/versions`, {
+      body: {
+        parent_version_id: saved.json.versions.at(-1).version_id,
+        content: { ...saved.json.versions.at(-1).content, charts: [] },
+        review: "draft",
+        note: "",
+      },
+    });
+    assert.equal(tampered.status, 422);
   });
 });

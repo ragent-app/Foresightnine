@@ -100,6 +100,341 @@
         "title": "CalculationRequest",
         "type": "object"
       },
+      "CausalGraphEdge": {
+        "additionalProperties": false,
+        "properties": {
+          "claim_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Claim Ids",
+            "type": "array"
+          },
+          "direction": {
+            "default": "uncertain",
+            "enum": [
+              "positive",
+              "negative",
+              "uncertain",
+              "conditional"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "from_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "From Id",
+            "type": "string"
+          },
+          "relation": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Relation",
+            "type": "string"
+          },
+          "to_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "To Id",
+            "type": "string"
+          },
+          "unverified_assumption": {
+            "default": false,
+            "title": "Unverified Assumption",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "from_id",
+          "to_id",
+          "relation"
+        ],
+        "title": "CausalGraphEdge",
+        "type": "object"
+      },
+      "CausalGraphNode": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "enum": [
+              "macro",
+              "industry",
+              "company",
+              "asset",
+              "scenario"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "status": {
+            "default": "assumption",
+            "enum": [
+              "confirmed",
+              "assumption",
+              "invalidated"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "category"
+        ],
+        "title": "CausalGraphNode",
+        "type": "object"
+      },
+      "CausalGraphSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/CausalGraphEdge"
+            },
+            "maxItems": 40,
+            "minItems": 1,
+            "title": "Edges",
+            "type": "array"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/CausalGraphNode"
+            },
+            "maxItems": 20,
+            "minItems": 2,
+            "title": "Nodes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "nodes",
+          "edges"
+        ],
+        "title": "CausalGraphSpec",
+        "type": "object"
+      },
+      "ChartAxis": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "id": {
+            "enum": [
+              "left",
+              "right"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "scale": {
+            "default": "ones",
+            "enum": [
+              "ones",
+              "thousands",
+              "millions",
+              "billions",
+              "trillions"
+            ],
+            "title": "Scale",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "unit"
+        ],
+        "title": "ChartAxis",
+        "type": "object"
+      },
+      "ChartPoint": {
+        "additionalProperties": false,
+        "properties": {
+          "display_value": {
+            "title": "Display Value",
+            "type": "string"
+          },
+          "is_projected": {
+            "default": false,
+            "title": "Is Projected",
+            "type": "boolean"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/ChartProvenance"
+          },
+          "x": {
+            "title": "X",
+            "type": "string"
+          },
+          "y": {
+            "title": "Y",
+            "type": "string"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "display_value",
+          "provenance"
+        ],
+        "title": "ChartPoint",
+        "type": "object"
+      },
+      "ChartProvenance": {
+        "additionalProperties": false,
+        "properties": {
+          "calculation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Id"
+          },
+          "character_end": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character End"
+          },
+          "character_start": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Start"
+          },
+          "fact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fact Id"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "title": "ChartProvenance",
+        "type": "object"
+      },
+      "ChartSeries": {
+        "additionalProperties": false,
+        "properties": {
+          "is_projected": {
+            "default": false,
+            "title": "Is Projected",
+            "type": "boolean"
+          },
+          "mark": {
+            "enum": [
+              "bar",
+              "line",
+              "area",
+              "scatter",
+              "waterfall"
+            ],
+            "title": "Mark",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/ChartPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "y_axis_id": {
+            "default": "left",
+            "enum": [
+              "left",
+              "right"
+            ],
+            "title": "Y Axis Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "mark",
+          "points"
+        ],
+        "title": "ChartSeries",
+        "type": "object"
+      },
       "Citation": {
         "additionalProperties": false,
         "properties": {
@@ -851,6 +1186,114 @@
         "title": "ResearchCalculation",
         "type": "object"
       },
+      "ResearchChart": {
+        "additionalProperties": false,
+        "properties": {
+          "axes": {
+            "items": {
+              "$ref": "#/components/schemas/ChartAxis"
+            },
+            "title": "Axes",
+            "type": "array"
+          },
+          "causal_graph": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CausalGraphSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "chart_id": {
+            "title": "Chart Id",
+            "type": "string"
+          },
+          "chart_type": {
+            "enum": [
+              "bar",
+              "grouped_bar",
+              "stacked_bar",
+              "line",
+              "combo_bar_line",
+              "waterfall",
+              "scatter",
+              "price_series",
+              "causal_graph"
+            ],
+            "title": "Chart Type",
+            "type": "string"
+          },
+          "has_projected_points": {
+            "default": false,
+            "title": "Has Projected Points",
+            "type": "boolean"
+          },
+          "is_simulated": {
+            "default": false,
+            "title": "Is Simulated",
+            "type": "boolean"
+          },
+          "replaces_chart_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaces Chart Id"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/ChartSeries"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          },
+          "subtitle": {
+            "default": "",
+            "title": "Subtitle",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Id"
+          },
+          "x_label": {
+            "default": "",
+            "title": "X Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chart_id",
+          "chart_type",
+          "title"
+        ],
+        "title": "ResearchChart",
+        "type": "object"
+      },
       "ResearchClaim": {
         "additionalProperties": false,
         "description": "One finding. `turn_id` is None for a user-authored claim.",
@@ -922,6 +1365,13 @@
               "$ref": "#/components/schemas/ResearchCalculation"
             },
             "title": "Calculations",
+            "type": "array"
+          },
+          "charts": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchChart"
+            },
+            "title": "Charts",
             "type": "array"
           },
           "claims": {
@@ -1569,6 +2019,13 @@
               "type": "string"
             },
             "title": "Calculation Ids",
+            "type": "array"
+          },
+          "chart_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Chart Ids",
             "type": "array"
           },
           "claim_ids": {

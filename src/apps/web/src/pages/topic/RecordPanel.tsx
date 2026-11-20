@@ -17,6 +17,7 @@ import { Icon } from "../../ui/icons";
 import { Panel } from "../../ui/Panel";
 import { describeError } from "../research/errors";
 import { calculationTitle } from "./Conversation";
+import { LiveEmptyOrStream } from "./LiveStreamView";
 import { ProcessTimeline } from "./ProcessTimeline";
 import { CONFLICT_TEXT } from "./ReviewPanel";
 import { LIVE_TURN, useTopicView } from "./context";
@@ -497,6 +498,7 @@ function StepsTab({ turnKey, onTurn }: { turnKey: string | undefined; onTurn: (t
   const events = liveSelected ? view.live!.events : parseTurnEvents(view.turns.find((turn) => turn.turn_id === selected)?.events);
   const rows = stepRows(events);
   const current = liveSelected ? view.live!.progress?.current ?? null : null;
+  const stream = liveSelected ? view.live!.stream : undefined;
   const interimText = liveSelected ? formatInterimSummary(view.live!.progress?.interim) : "";
   const hasInvalid = events.some((event) => event.kind === "tool" && event.status === "invalid");
   return (
@@ -504,9 +506,13 @@ function StepsTab({ turnKey, onTurn }: { turnKey: string | undefined; onTurn: (t
       {options.length > 1 ? <Segmented label="选择轮次" options={options} value={selected} onChange={onTurn} /> : null}
       {interimText ? <p className="meta pt-interim-bar">{interimText}</p> : null}
       {rows.length === 0 && !current ? (
-        <p className="empty-note">这一轮还没有记录步骤。</p>
+        liveSelected ? (
+          <LiveEmptyOrStream stream={stream} idleText="正在等待研究过程输出…" inPanel />
+        ) : (
+          <p className="empty-note">这一轮还没有记录步骤。</p>
+        )
       ) : (
-        <ProcessTimeline events={events} current={current} live={liveSelected} inPanel />
+        <ProcessTimeline events={events} current={current} live={liveSelected} stream={stream} inPanel />
       )}
       {hasInvalid ? <p className="note inset">{INVALID_NOTE}</p> : null}
     </>

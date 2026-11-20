@@ -496,6 +496,7 @@ def test_question_only_run_fetches_open_web_html_and_pdf_and_persists_partial_no
     assert saved_turn['report'] == ''
     assert saved_turn['partial_notes'] == partial_notes
     assert saved_turn['stopping_note'] == 'partial_sources_only'
+    assert saved_turn['official_fetch_status'] == 'web_retrieved'
     assert len(version['content']['claims']) == 2
 
     src_meta = {row['retrieval_method']: row for row in client.get(
@@ -1061,3 +1062,362 @@ def test_sec_company_concept_syncs_official_fetch_status_with_priority_guard(mon
     assert status == 'completed'
     v2 = client.get(path, headers=headers).json()['versions'][-1]
     assert v2['content']['turns'][-1]['official_fetch_status'] == 'completed'
+
+
+def test_messages_provider_timeout_cap_600_and_mismatch_warning(monkeypatch, caplog):
+    import logging
+    import pytest
+    from app.openai_compatible import OpenAICompatibleSettings
+    from app.phase3 import ProviderFailure, ProviderPolicy
+    from app.research_acquisition import execute_decision
+    from app.research_budget import ResearchExecutionBudget
+    from app.research_coordinator import ResearchExecutionContext, execute_generation, execute_planning
+
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_MAX_OUTPUT_TOKENS', '16384')
+    monkeypatch.setenv('FORESIGHTNINE_MESSAGES_VERSION', '2023-06-01')
+    monkeypatch.setenv('FORESIGHTNINE_MESSAGES_AUTH_SCHEME', 'bearer')
+    monkeypatch.setenv('FORESIGHTNINE_MESSAGES_NATIVE_TOOLS', 'true')
+    monkeypatch.setenv('FORESIGHTNINE_MESSAGES_CONTINUATION', 'true')
+    monkeypatch.setenv('FORESIGHTNINE_MESSAGES_CAPABILITY_BASE_URL', 'https://models.example.test/v1')
+    monkeypatch.setenv('FORESIGHTNINE_MESSAGES_CAPABILITY_MODEL', 'endpoint-model')
+    monkeypatch.setenv('FORESIGHTNINE_MESSAGES_CAPABILITY_VERSION', '2023-06-01')
+    settings = OpenAICompatibleSettings.from_values(
+        base_url='https://models.example.test/v1',
+        model='endpoint-model',
+        api_key='fixture-key',
+        allowlist='models.example.test',
+    )
+
+    # 1. max_output_tokens >= 8192 with timeout < 240 logs non-blocking warning without failing.
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_LLM_TIMEOUT_SECONDS', '120')
+    with caplog.at_level(logging.WARNING, logger='app.main'):
+        caplog.clear()
+        provider_120 = api._messages_research_provider(settings)
+        api._assert_runtime_ready()
+    assert provider_120.policy.timeout_seconds == 120.0
+    mismatch_warnings = [r.message for r in caplog.records if 'research_timeout_output_mismatch' in r.message]
+    assert len(mismatch_warnings) == 2
+
+    # 2. timeout == 300 (>= 240 and <= 600) is accepted cleanly with no mismatch warning.
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_LLM_TIMEOUT_SECONDS', '300')
+    with caplog.at_level(logging.WARNING, logger='app.main'):
+        caplog.clear()
+        provider_300 = api._messages_research_provider(settings)
+        api._assert_runtime_ready()
+    assert provider_300.policy.timeout_seconds == 300.0
+    assert not any('research_timeout_output_mismatch' in r.message for r in caplog.records)
+
+    # 3. timeout > 600 is rejected.
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_LLM_TIMEOUT_SECONDS', '601')
+    with pytest.raises(api.ApiProblem) as exc_601:
+        api._messages_research_provider(settings)
+    assert exc_601.value.status_code == 503
+
+    # 4. research_coordinator & research_acquisition accept timeout_seconds=300 and reject 601.
+    ctx = ResearchExecutionContext(
+        ResearchExecutionBudget(3, 0, None, 1000.0),
+        False,
+        lambda: None,
+        lambda: None,
+        lambda *_: None,
+        lambda *_: None,
+        lambda: None,
+        now=lambda: 0.0,
+    )
+    ok_provider = SimpleNamespace(name='p', policy=ProviderPolicy(max_input_tokens=10000, max_output_tokens=16384, timeout_seconds=300.0))
+    bad_provider = SimpleNamespace(name='p', policy=ProviderPolicy(max_input_tokens=10000, max_output_tokens=16384, timeout_seconds=601.0))
+
+    def fake_gen(prompt, *, cancel_event=None, system=None, timeout_seconds=None):
+        return {}, 0
+
+    from tests.test_research_runtime import source
+    sample_sources = [source()]
+    assert execute_planning(
+        requested=True, question='Q?', scope='', provider=bad_provider, generate=fake_gen, context=ctx, call_id='c1',
+    ).status == 'unavailable'
+    gen_bad = execute_generation(
+        question='Q?', scope='', as_of=None, sources=sample_sources, provider=bad_provider, generate=fake_gen, context=ctx, call_id='c2',
+        focus=None, planning_steps=[], require_counterarguments=False,
+    )
+    assert gen_bad.unavailable_reason == 'provider_budget_unknown'
+    acq_bad = execute_decision(
+        question='Q?', target={}, requirements=[], candidates=[], ranges=[], feedback=[], capabilities=[],
+        provider=bad_provider, generate=fake_gen, context=ctx, call_id='c3',
+    )
+    assert acq_bad.status == 'unavailable' and acq_bad.reason == 'provider_unavailable'
+    # Confirm 300s passes the timeout guard on planning, generation, and acquisition.
+    seen_timeouts: list[float] = []
+
+    def capture_gen(prompt, *, cancel_event=None, system=None, timeout_seconds=None):
+        seen_timeouts.append(timeout_seconds)
+        raise ProviderFailure('provider_transport_error', 'probe', retryable=True)
+
+    plan_300 = execute_planning(
+        requested=True, question='Q?', scope='', provider=ok_provider, generate=capture_gen, context=ctx, call_id='c4',
+    )
+    assert plan_300.attempted is True and plan_300.error == 'provider_transport_error'
+    gen_300 = execute_generation(
+        question='Q?', scope='', as_of=None, sources=sample_sources, provider=ok_provider, generate=capture_gen, context=ctx, call_id='c5',
+        focus=None, planning_steps=[], require_counterarguments=False,
+    )
+    assert gen_300.unavailable_reason == 'provider_transport_error'
+    acq_300 = execute_decision(
+        question='Q?', target={}, requirements=[], candidates=[], ranges=[], feedback=[], capabilities=[],
+        provider=ok_provider, generate=capture_gen, context=ctx, call_id='c6',
+    )
+    assert acq_300.reason == 'provider_transport_error'
+    assert seen_timeouts == [300.0, 300.0, 300.0]
+
+
+def test_multiturn_api_propagates_failed_source_accesses_to_prior_research(monkeypatch):
+    import app.research_fetch as research_fetch
+
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.delenv('FORESIGHTNINE_FETCH_ALLOWED_HOSTS', raising=False)
+    monkeypatch.delenv('FORESIGHTNINE_FETCH_BLOCKED_HOSTS', raising=False)
+
+    blocked_url = 'https://blocked.example.com/10k.pdf'
+
+    class Search:
+        supports_project_search = True
+
+        def search(self, query, **kwargs):
+            return [ProviderSearchCandidate('Blocked 10-K', blocked_url, 'Quarterly lead', None, None, True)]
+
+    def fake_transport(method, url, headers, body, timeout, **kwargs):
+        if url == blocked_url:
+            return BinaryHttpResponse(403, b'Forbidden', {'content-type': 'text/html'})
+        raise AssertionError(f'Unexpected URL: {url}')
+
+    turn2_prior: dict = {}
+
+    class TwoTurnProvider:
+        name = 'failed-source-multiturn-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=None, max_output_tokens=1000)
+
+        def __init__(self):
+            self.turn_index = 1
+
+        def complete(self, messages, tools, **kwargs):
+            results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
+            if self.turn_index == 1:
+                if len(results) == 0:
+                    return turn('discover_sources', {'query': 'Blocked 10-K', 'rationale': 'Find 10-K.'}, 'd1')
+                if len(results) == 1:
+                    return turn('acquire_sources', {'urls': [blocked_url], 'rationale': 'Try fetching 10-K.'}, 'a1')
+                acq_res = results[1]['results'][0]
+                assert acq_res['status'] in ('failed', 'denied'), acq_res
+                self.turn_index = 2
+                return turn('submit_research', {
+                    'report': 'Target filing returned HTTP 403.',
+                    'claims': [],
+                    'limitations': ['Target URL returned 403.'],
+                    'stopping_reason': 'source_blocked',
+                    'status': 'partial',
+                }, 's1')
+            payload = json.loads(messages[1]['content'])
+            turn2_prior['value'] = payload.get('prior_research')
+            return turn('submit_research', {
+                'report': 'Acknowledged blocked source from prior turn.',
+                'claims': [],
+                'limitations': ['Prior source blocked.'],
+                'stopping_reason': 'confirmed_blocked',
+                'status': 'partial',
+            }, 's2')
+
+    monkeypatch.setattr(api, 'evidence_provider', Search())
+    monkeypatch.setattr(api, 'challenge_provider', TwoTurnProvider())
+    monkeypatch.setattr(api, '_reserve_search_call', lambda *_: None)
+    monkeypatch.setattr(research_fetch, '_validated_addresses', lambda host, port, *, allow_private=False: ('93.184.216.34',))
+    monkeypatch.setattr(research_fetch, '_default_binary_transport', fake_transport)
+
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'{uuid4().hex}@example.test',
+                                                        'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'What did 10-K say?'}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+
+    run1 = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex},
+                       json={'parent_version_id': topic['versions'][0]['version_id']})
+    assert run1.status_code == 202, run1.text
+    op1 = run1.json()['operation']['operation_id']
+    for _ in range(200):
+        st1 = client.get(f'{path}/runs/{op1}', headers=headers).json()['operation']
+        if st1['status'] in ('completed', 'failed', 'cancelled'):
+            break
+        time.sleep(.01)
+    assert st1['status'] == 'completed', st1
+
+    latest_version_id = client.get(path, headers=headers).json()['versions'][-1]['version_id']
+    run2 = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={
+        'parent_version_id': latest_version_id,
+        'question_override': 'Follow up without retrying blocked URL',
+        'discover_sources': False,
+    })
+    assert run2.status_code == 202, run2.text
+    op2 = run2.json()['operation']['operation_id']
+    for _ in range(200):
+        st2 = client.get(f'{path}/runs/{op2}', headers=headers).json()['operation']
+        if st2['status'] in ('completed', 'failed', 'cancelled'):
+            break
+        time.sleep(.01)
+    assert st2['status'] == 'completed', st2
+    failed = turn2_prior['value']['failed_source_accesses']
+    assert any(item.get('url') == blocked_url for item in failed), failed
+
+
+def test_web_html_acquisition_does_not_mark_official_fetch_status_completed_and_preserves_sec_priority(monkeypatch):
+    import app.research_fetch as research_fetch
+    import app.research_structured_connector as connector
+    from app.research_sec import SecResult
+
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.setenv('FORESIGHTNINE_SEC_USER_AGENT', 'Example Research contact@example.test')
+    monkeypatch.delenv('FORESIGHTNINE_FETCH_ALLOWED_HOSTS', raising=False)
+    monkeypatch.delenv('FORESIGHTNINE_FETCH_BLOCKED_HOSTS', raising=False)
+    monkeypatch.setattr(api, '_reserve_search_call', lambda *_: None)
+    monkeypatch.setattr(api, 'reserve_sec_request', lambda *_: True)
+
+    yahoo_url = 'https://finance.yahoo.com/quote/IXIC'
+    schwab_url = 'https://www.schwab.com/learn/market-update'
+    sec_quote = '{"val": 130497000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26", "filed": "2025-02-26", "form": "10-K"}'
+
+    class Search:
+        supports_project_search = True
+
+        def search(self, query, **kwargs):
+            return [
+                ProviderSearchCandidate('Yahoo Nasdaq', yahoo_url, 'Index quote page', None, None, True),
+                ProviderSearchCandidate('Schwab Update', schwab_url, 'Market note', None, None, True),
+            ]
+
+    def fake_transport(method, url, headers, body, timeout, **kwargs):
+        if url == yahoo_url:
+            return BinaryHttpResponse(
+                200,
+                b'<html><nav>Yahoo Nav</nav><main><p>Nasdaq closed at 18500.</p></main><footer>Copyright</footer></html>',
+                {'content-type': 'text/html; charset=utf-8'},
+            )
+        if url == schwab_url:
+            return BinaryHttpResponse(
+                200,
+                b'<html><aside>Ad banner</aside><article><p>Schwab commentary text.</p></article></html>',
+                {'content-type': 'text/html; charset=utf-8'},
+            )
+        raise AssertionError(f'Unexpected URL: {url}')
+
+    def fake_identities(req, agent):
+        return {
+            'candidates': [{'cik': '0001045810', 'ticker': 'NVDA', 'name': 'NVIDIA CORP', 'exchange': None}],
+            'source_url': 'https://www.sec.gov/files/company_tickers.json',
+            'retrieved_at': '2026-01-01T00:00:00Z',
+            'response_sha256': 'idhash',
+            'limitation': 'current mapping',
+        }
+
+    def fake_concept(req, agent):
+        return SecResult(
+            url='https://data.sec.gov/api/xbrl/companyconcept/CIK0001045810/us-gaap/Revenues.json',
+            title='NVIDIA CORP: Revenues (USD)',
+            text=f'SEC XBRL companyconcept\n{sec_quote}',
+            response_sha256='secsha',
+        )
+
+    class MultiTurnProvider:
+        name = 'web-vs-official-status-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=None, max_output_tokens=1000)
+
+        def __init__(self):
+            self.turn_no = 1
+
+        def complete(self, messages, tools, **kwargs):
+            results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
+            if self.turn_no == 1:
+                if len(results) == 0:
+                    return turn('discover_sources', {'query': 'Nasdaq quote', 'rationale': 'Find web page.'}, 'd1')
+                if len(results) == 1:
+                    return turn('acquire_sources', {'urls': [yahoo_url], 'rationale': 'Fetch Yahoo quote.'}, 'a1')
+                if len(results) == 2:
+                    self.yahoo_sid = results[1]['results'][0]['source_id']
+                    return turn('read_sources', {'reads': [{'source_id': self.yahoo_sid}], 'rationale': 'Read Yahoo HTML.'}, 'r1')
+                read_text = results[2]['results'][0]['text']
+                assert 'Nasdaq closed at 18500.' in read_text
+                assert 'Yahoo Nav' not in read_text and 'Copyright' not in read_text
+                self.turn_no = 2
+                return turn('submit_research', {
+                    'report': 'Retrieved Yahoo web page only.',
+                    'claims': [{'text': 'Nasdaq closed at 18500.', 'source_id': self.yahoo_sid,
+                                'quotation': 'Nasdaq closed at 18500.', 'role': 'support'}],
+                    'limitations': ['Public web only.'],
+                    'stopping_reason': 'partial_web',
+                    'status': 'partial',
+                }, 's1')
+            if self.turn_no == 2:
+                if len(results) == 0:
+                    return turn('sec_company_concept', {
+                        'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'Revenues', 'unit': 'USD',
+                        'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'Fetch SEC XBRL.',
+                    }, 'sec1')
+                if len(results) == 1:
+                    return turn('acquire_sources', {'urls': [schwab_url], 'rationale': 'Fetch Schwab HTML in same turn.'}, 'a2')
+                self.turn_no = 3
+                return turn('submit_research', {
+                    'report': 'Retrieved SEC XBRL and Schwab HTML.',
+                    'claims': [],
+                    'limitations': ['No synthesis needed.'],
+                    'stopping_reason': 'partial_sec',
+                    'status': 'partial',
+                }, 's2')
+            if len(results) == 0:
+                return turn('discover_sources', {'query': 'Schwab update', 'rationale': 'Find Schwab.'}, 'd3')
+            if len(results) == 1:
+                return turn('acquire_sources', {'urls': [schwab_url], 'rationale': 'Fetch Schwab HTML.'}, 'a3')
+            return turn('submit_research', {
+                'report': 'Retrieved additional web page after SEC.',
+                'claims': [],
+                'limitations': ['Done.'],
+                'stopping_reason': 'partial_done',
+                'status': 'partial',
+            }, 's3')
+
+    monkeypatch.setattr(api, 'evidence_provider', Search())
+    monkeypatch.setattr(api, 'challenge_provider', MultiTurnProvider())
+    monkeypatch.setattr(research_fetch, '_validated_addresses', lambda host, port, *, allow_private=False: ('93.184.216.34',))
+    monkeypatch.setattr(research_fetch, '_default_binary_transport', fake_transport)
+    monkeypatch.setattr(connector, 'search_sec_identities', fake_identities)
+    monkeypatch.setattr(connector, 'fetch_sec_concept', fake_concept)
+
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'{uuid4().hex}@example.test',
+                                                        'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Check official vs web status?'}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+
+    def run_once(parent_version_id: str, question_override: str | None = None):
+        body = {'parent_version_id': parent_version_id}
+        if question_override is not None:
+            body['question_override'] = question_override
+        resp = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex}, json=body)
+        assert resp.status_code == 202, resp.text
+        op_id = resp.json()['operation']['operation_id']
+        for _ in range(200):
+            op = client.get(f'{path}/runs/{op_id}', headers=headers).json()['operation']
+            if op['status'] in ('completed', 'failed', 'cancelled'):
+                break
+            time.sleep(.01)
+        assert op['status'] == 'completed', op
+        return client.get(path, headers=headers).json()['versions'][-1]
+
+    v1 = run_once(topic['versions'][0]['version_id'])
+    turn1 = v1['content']['turns'][-1]
+    assert turn1['official_fetch_status'] == 'web_retrieved'
+    v1_sources = client.get(f"{path}/versions/{v1['version_id']}/sources", headers=headers).json()
+    assert v1_sources[0]['retrieval_method'] == 'web_html' and v1_sources[0]['kind'] == 'user_supplied'
+
+    v2 = run_once(v1['version_id'], 'Check SEC XBRL then Schwab in same turn?')
+    assert v2['content']['turns'][-1]['official_fetch_status'] == 'completed'
+
+    v3 = run_once(v2['version_id'], 'Check Schwab web page alone in new turn?')
+    assert v3['content']['turns'][-1]['official_fetch_status'] == 'web_retrieved'
