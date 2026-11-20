@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PERMISSIONS, fetchUrlProblem, fileToBase64, ineligibility, isFetchableUrl, isFredUrl, isSecHost, SEC_UNAVAILABLE, titleFromFilename, uploadKind } from "./sources";
+import { MAX_UPLOAD_BYTES, usesStreamingUpload, DEFAULT_PERMISSIONS, fetchUrlProblem, fileToBase64, ineligibility, isFetchableUrl, isFredUrl, isSecHost, SEC_UNAVAILABLE, titleFromFilename, uploadKind } from "./sources";
 
 const ALL = DEFAULT_PERMISSIONS;
 const CUTOFF = "2026-06-30T00:00:00Z";
@@ -121,6 +121,14 @@ describe("file helpers", () => {
     expect(uploadKind({ name: "x", type: "application/pdf" })).toBe("pdf");
     expect(uploadKind({ name: "page.htm", type: "" })).toBe("html");
     expect(uploadKind({ name: "notes.docx", type: "" })).toBeNull();
+    expect(uploadKind({ name: "report.TXT", type: "" })).toBe("text");
+  });
+
+  it("streams plain text and files above the JSON limit, and keeps small PDF/HTML on the base64 route", () => {
+    expect(usesStreamingUpload({ size: MAX_UPLOAD_BYTES }, "pdf")).toBe(false);
+    expect(usesStreamingUpload({ size: MAX_UPLOAD_BYTES + 1 }, "pdf")).toBe(true);
+    expect(usesStreamingUpload({ size: MAX_UPLOAD_BYTES + 1 }, "html")).toBe(true);
+    expect(usesStreamingUpload({ size: 10 }, "text")).toBe(true);
   });
 
   it("derives a title from the file name", () => {

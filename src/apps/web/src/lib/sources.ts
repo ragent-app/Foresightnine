@@ -3,7 +3,8 @@ import type { SourcePermissionFlags } from "../api/types";
 // Mirrors of backend source rules so the UI can say, before a run, whether a
 // source will be read. The backend stays authoritative; these only explain.
 
-export const MAX_UPLOAD_BYTES = 5_000_000; // research_uploads.py MAX_PDF_BYTES
+export const MAX_UPLOAD_BYTES = 5_000_000; // research_uploads.py MAX_PDF_BYTES: largest base64 (JSON) upload
+export const MAX_LARGE_UPLOAD_BYTES = 200_000_000; // FORESIGHTNINE_LARGE_DOCUMENT_MAX_BYTES default: streamed multipart upload
 export const MAX_TEXT_CHARACTERS = 2_000_000; // research_sources.py SourceInput.text
 export const MAX_SOURCES_PER_RUN = 20; // research_source_policy.py MAX_SOURCES
 
@@ -264,12 +265,20 @@ export function isFetchableUrl(raw: string, secAvailable = true, options?: Fetch
   return fetchUrlProblem(raw, secAvailable, options) === null;
 }
 
-export type UploadKind = "pdf" | "html";
+export type UploadKind = "pdf" | "html" | "text";
+
+export const UPLOAD_KIND_LABEL: Readonly<Record<UploadKind, string>> = { pdf: "PDF", html: "HTML", text: "文本" };
+
+/** Files above the JSON limit, and plain text, go through the streaming multipart endpoint. */
+export function usesStreamingUpload(file: { size: number }, kind: UploadKind): boolean {
+  return kind === "text" || file.size > MAX_UPLOAD_BYTES;
+}
 
 export function uploadKind(file: { name: string; type: string }): UploadKind | null {
   const name = file.name.toLowerCase();
   if (file.type === "application/pdf" || name.endsWith(".pdf")) return "pdf";
   if (file.type === "text/html" || name.endsWith(".html") || name.endsWith(".htm")) return "html";
+  if (file.type === "text/plain" || name.endsWith(".txt")) return "text";
   return null;
 }
 

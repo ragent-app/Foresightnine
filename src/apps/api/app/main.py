@@ -13,6 +13,8 @@ import logging
 import os
 import re
 import secrets
+import tempfile
+from pathlib import Path
 from time import monotonic
 from typing import Annotated, Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -23,6 +25,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, HttpUrl, ValidationError
 from starlette.middleware.cors import CORSMiddleware
 
@@ -79,7 +82,7 @@ from .models import (
 )
 from .operations import ApiProblem, OperationManager, format_sse
 from .retention import RetentionPolicy, cleanup_research_state
-from .security import SecurityBoundaryMiddleware, TrustedProxyResolver, build_captcha_verifier, build_security_config
+from .security import BodyTooLarge, SecurityBoundaryMiddleware, TrustedProxyResolver, build_captcha_verifier, build_security_config
 from .telemetry import record_provider_failure, record_stale_data_denial, telemetry
 from .phase4_live import LivePhase4Adapter
 from .phase3 import ChallengeDraft, ChallengeInput, LlmProvider, ProviderFailure, SearchEvidenceBundle, build_llm_provider, build_search_evidence_provider
@@ -2242,6 +2245,117 @@ def upload_research_html(request: HtmlUploadRequest, authorization: str | None =
         raise ApiProblem(422, "invalid_request", "HTML is invalid, too large, not UTF-8, or has no extractable text.") from error
 
 
+@app.post("/v2/research/sources/upload", status_code=201, include_in_schema=False)
+async def upload_research_document_stream(request: Request, authorization: str | None = Header(default=None)) -> dict:
+    """Stream a large PDF, HTML or text document (multipart) to disk and ingest it with the paged pipeline."""
+    from starlette.concurrency import run_in_threadpool
+    from .research_fetch import large_document_max_bytes
+    from .research_upload_stream import (
+        MAX_FIELD_BYTES, MAX_FORM_FIELDS, UPLOAD_WORKERS, HashingFileSink, UploadFormError, check_form_items,
+        ingest_uploaded_file, parse_stream_fields, sniff_upload_kind,
+    )
+    account = _authenticated_account(authorization)  # before reading any body bytes
+    if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "multipart/form-data":
+        raise ApiProblem(415, "unsupported_media_type", "Multipart form data is required.")
+    cap = large_document_max_bytes()
+    # Starlette spools file parts to disk but does not cap their size, so count the receive stream: an oversized
+    # chunked upload stops here without being buffered.
+    original_receive = request._receive
+    received = 0
+
+    async def limited_receive() -> Any:
+        nonlocal received
+        message = await original_receive()
+        if message.get("type") == "http.request":
+            received += len(message.get("body", b""))
+            if received > cap + 1_048_576:
+                raise BodyTooLarge
+        return message
+
+    request._receive = limited_receive
+    try:
+        form = await request.form(max_files=1, max_fields=MAX_FORM_FIELDS, max_part_size=MAX_FIELD_BYTES)
+    except BodyTooLarge as error:
+        raise ApiProblem(413, "request_too_large", "The document exceeds the upload size limit.") from error
+    except StarletteHTTPException as error:
+        raise ApiProblem(422, "invalid_request", "The upload form is invalid or incomplete.") from error
+    except Exception as error:
+        if type(error).__name__ in {"MultiPartException", "MalformedMultipartError"}:
+            raise ApiProblem(422, "invalid_request", "The upload form is invalid or incomplete.") from error
+        raise
+    try:
+        try:
+            raw_fields, upload = check_form_items(list(form.multi_items()))
+            fields = parse_stream_fields(raw_fields)
+        except UploadFormError as error:
+            raise ApiProblem(422, "invalid_request", "The upload form is invalid or incomplete.") from error
+        filename = getattr(upload, "filename", None)
+        with tempfile.TemporaryDirectory(prefix="foresight-upload-") as directory:
+            def spool_to_disk() -> HashingFileSink:
+                sink = HashingFileSink(Path(directory) / "upload.bin")
+                try:
+                    upload.file.seek(0)
+                    while True:
+                        block = upload.file.read(1 << 20)
+                        if not block:
+                            break
+                        sink.write(block)
+                finally:
+                    sink.close()
+                return sink
+
+            sink = await run_in_threadpool(spool_to_disk)
+            if sink.size > cap:
+                raise ApiProblem(413, "request_too_large", "The document exceeds the upload size limit.")
+            path, digest, size = sink.path, sink.hexdigest(), sink.size
+
+            def ingest() -> dict:
+                kind = sniff_upload_kind(path, filename)
+                # Vision OCR needs a research run to reserve and settle usage; an upload outside a run has
+                # no billing hooks to bind, so only local OCR engines run here.
+                ingested = ingest_uploaded_file(path, kind=kind, title=fields.title, permissions=fields.permissions,
+                                                sha256_hex=digest, size=size, ocr_usage=None)
+                doc = ingested.document
+                provenance = {"document_pages": doc.pages} if doc.pages else {}
+                if kind == "pdf":
+                    created = research_sources.create(account.account_id, SourceInput(title=fields.title, text=doc.text,
+                        published_at=fields.published_at, event_at=fields.event_at, revised_at=fields.revised_at,
+                        is_simulated=fields.is_simulated, permissions=fields.permissions), retrieval_method="user_pdf",
+                        response_sha256=digest, response_content_type="application/pdf",
+                        original_pdf_base64=ingested.original_base64, pdf_text_order=fields.text_order,
+                        provenance=provenance)
+                else:
+                    created = research_sources.create(account.account_id, SourceInput(title=fields.title, text=doc.text,
+                        published_at=fields.published_at, event_at=fields.event_at, revised_at=fields.revised_at,
+                        is_simulated=fields.is_simulated, permissions=fields.permissions), retrieval_method="user_html",
+                        response_sha256=digest, response_content_type=doc.content_type,
+                        original_html_base64=ingested.original_base64, provenance=provenance)
+                metadata = _visible_research_source(created)
+                metadata.pop("text", None)
+                return metadata
+
+            if not UPLOAD_WORKERS.acquire(blocking=False):
+                raise ApiProblem(503, "internal_error", "Document extraction is busy.", retryable=True, retry_after=5)
+            try:
+                return await run_in_threadpool(ingest)
+            except FetchFailure as error:
+                if error.code == "source_unavailable":
+                    raise ApiProblem(503, "internal_error", "Document extraction is unavailable.", retryable=True) from error
+                if error.code == "ocr_required":
+                    raise ApiProblem(422, "invalid_request", "The PDF has no usable text layer and no OCR engine produced text for it.") from error
+                if error.code == "source_too_large":
+                    raise ApiProblem(422, "invalid_request", "The document text exceeds the supported size.") from error
+                if error.code == "source_format_unsupported":
+                    raise ApiProblem(422, "invalid_request", "Only PDF, HTML or plain text files are supported.") from error
+                raise ApiProblem(422, "invalid_request", "The document is invalid, encrypted, or has no extractable text.") from error
+            except SourcePermissionError as error:
+                raise ApiProblem(422, "invalid_request", "Source storage permission is required.") from error
+            finally:
+                UPLOAD_WORKERS.release()
+    finally:
+        await form.close()
+
+
 @app.post("/v2/research/sources/{source_id}/reextract", status_code=201, include_in_schema=False)
 def reextract_research_pdf(source_id: str, request: PdfReextractRequest, response: Response,
                            authorization: str | None = Header(default=None),
@@ -2469,6 +2583,8 @@ def fetch_research_source(request: FetchSourceRequest, http_request: Request) ->
             raise ApiProblem(429, "rate_limited", "Source temporarily rate limited.", retryable=True) from error
         if error.code in {"source_timeout", "source_unavailable"}:
             raise ApiProblem(503, "internal_error", "Source unavailable or timed out.", retryable=True) from error
+        if error.code == "source_blocked_terms":
+            raise ApiProblem(422, "invalid_request", "This site's terms do not permit automated access; upload the document instead.") from error
         if error.code == "source_blocked_policy":
             raise ApiProblem(422, "invalid_request", "Source host or target is blocked by fetch policy.") from error
         if error.code == "http_forbidden_or_challenge":

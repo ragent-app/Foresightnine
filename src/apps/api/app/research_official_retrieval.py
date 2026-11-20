@@ -30,6 +30,7 @@ from .research_runs import ResearchRunRequest
 from .research_sec import SecFailure, fetch_sec_filing, validate_user_agent
 from .research_source_catalog import canonical_source_url, official_document_capability
 from .research_source_policy import is_fred_source
+from .research_source_terms import terms_decision
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourcePermissions
 
 # Keep module-level names patchable by existing tests while dispatching unpatched calls through fetch_source_document.
@@ -64,6 +65,10 @@ _FAILURE_DETAILS: dict[str, tuple[str, str]] = {
     'source_blocked_policy': (
         'The source host or redirect target is blocked by retrieval policy.',
         'Source blocked by retrieval policy.',
+    ),
+    'source_blocked_terms': (
+        "This site's terms do not permit automated access; it was not fetched. Use the issuer's own investor-relations copy, an SEC filing, or ask the user to upload the document.",
+        "Site terms do not permit automated access.",
     ),
     'source_timeout': (
         'The source retrieval timed out; the search result remains an unverified lead.',
@@ -114,6 +119,9 @@ def _upgrade_http_to_https(url: str) -> str:
 def _restricted_reason(address: str) -> tuple[str, str]:
     if is_fred_source(address):
         return 'source_blocked_policy', 'FRED sources are not authorized.'
+    terms = terms_decision(address)
+    if not terms.allowed:
+        return 'source_blocked_terms', terms.message
     hostname = (urlsplit(address).hostname or '').lower().rstrip('.')
     if hostname:
         if is_host_blocked(hostname):
@@ -253,8 +261,8 @@ def execute_official_retrieval(*, request: ResearchRunRequest, question: str | N
                 record_sec_host_restricted(index)
                 continue
             outcome(index, 'restricted', reason, error_detail=detail)
-            if reason == 'source_blocked_policy':
-                add_note(_FAILURE_DETAILS['source_blocked_policy'][0])
+            if reason in ('source_blocked_policy', 'source_blocked_terms'):
+                add_note(_FAILURE_DETAILS[reason][0])
             continue
         is_official_host = requested_host in PUBLIC_DOMAIN_OFFICIAL_HOSTS
         request_permissions = SourcePermissions(store=True, display=True, model_input=True, export=is_official_host)

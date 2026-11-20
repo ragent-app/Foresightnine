@@ -32,6 +32,7 @@ from .research_discovery import RedirectLead, normalize_search_lead, search_lead
 from .research_live_stream import DeltaCoalescer
 from .research_source_catalog import canonical_source_url
 from .research_source_policy import is_fred_source, source_eligibility
+from .research_source_terms import terms_decision
 from .research_sources import ResearchSource
 
 
@@ -573,6 +574,7 @@ TOOL_FAILURE_GUIDANCE: dict[str, str] = {
     'version_not_stored': 'The recognised text could not be stored as a new source version. Use other sources or other pages.',
     'source_timeout': 'The source timed out. The outcome is not retried automatically; use another source or report the gap.',
     'source_unavailable': 'The source could not be reached. Use another source or report the gap.',
+    'source_blocked_terms': "This site's terms do not permit automated access. Use the issuer's own investor-relations website copy, an SEC filing if the company files with the SEC, or ask the user to upload the document.",
     'http_forbidden_or_challenge': 'The site refused automated access. Use another source for the same facts.',
     'not_found': 'The page does not exist at this URL. Discover another source instead of guessing URLs.',
     'source_rate_limited': 'The source rate limit was reached. Wait for other work or use another source.',
@@ -3447,6 +3449,7 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                             denied_count = 0
                             denied_reasons = {'source_not_authorized': 0, 'invalid_lead': 0, 'redirect_link': 0}
                             unresolved_titles: list[str] = []
+                            terms_blocked_count = 0
                             if not isinstance(found, (list, tuple)):
                                 found = [None]
                             for raw in found:
@@ -3469,8 +3472,13 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                                     denied_count += 1
                                     denied_reasons['invalid_lead'] += 1
                                     continue
-                                eligible_leads.append({'url': canonical_source_url(candidate.url), 'title': candidate.title,
-                                    'published_at': candidate.published_at.isoformat() if candidate.published_at else None})
+                                lead_row = {'url': canonical_source_url(candidate.url), 'title': candidate.title,
+                                    'published_at': candidate.published_at.isoformat() if candidate.published_at else None}
+                                lead_terms = terms_decision(lead_row['url'])
+                                if not lead_terms.allowed:
+                                    lead_row.update(terms_status=lead_terms.status, acquirable=False)
+                                    terms_blocked_count += 1
+                                eligible_leads.append(lead_row)
                             if found and denied_reasons['invalid_lead'] == len(found):
                                 state['search_invalid_response'] = True
                                 result = {'status': 'failed', 'reason': 'search_response_invalid',
@@ -3479,6 +3487,9 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                                 reason = ('search_no_results' if not found else 'search_sources_denied' if not eligible_leads else None)
                                 result = {'status': 'completed', 'reason': reason, 'leads': eligible_leads, 'denied_count': denied_count,
                                           'denied_reasons': denied_reasons, 'warning': 'Unverified leads are not evidence.'}
+                                if terms_blocked_count:
+                                    result['terms_blocked_count'] = terms_blocked_count
+                                    result.setdefault('message', TOOL_FAILURE_GUIDANCE['source_blocked_terms'])
                                 if unresolved_titles:
                                     result['unresolved_titles'] = unresolved_titles
                                     result['message'] = ('Some results were opaque redirect links and cannot be acquired. '
@@ -3536,6 +3547,12 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                                          'hint': 'Only pass URLs returned by discover_sources or filings.'})
                             summary_rows.append({'title': host or '未命名来源', 'host': host, 'status': 'denied_or_unavailable',
                                                  'reason': 'lead_not_discovered', 'total_characters': None})
+                            continue
+                        if lead.get('acquirable') is False or not terms_decision(requested_url).allowed:
+                            rows.append({'url': url, 'status': 'denied_or_unavailable', 'reason': 'source_blocked_terms',
+                                         'external_state': 'not_started'})
+                            summary_rows.append({'title': host or '未命名来源', 'host': host, 'status': 'denied_or_unavailable',
+                                                 'reason': 'source_blocked_terms', 'total_characters': None})
                             continue
                         acquired_ids = state.setdefault('acquired_lead_sources', {})
                         prior_source = source_by_id.get(acquired_ids.get(requested_url))

@@ -129,6 +129,7 @@ export const TOOL_REASON_LABEL: Readonly<Record<string, string>> = {
   source_too_large: "网页或提取文本超过 5 MB / 200 万字符上限",
   source_format_unsupported: "目标网址返回的格式不受支持（仅支持 HTML、纯文本和 PDF）",
   source_blocked_policy: "该网址或跳转目标被策略拦截",
+  source_blocked_terms: "该网站的条款不允许自动访问，请改用公司官网副本或自行上传文件",
   source_rate_limited: "目标网站请求过于频繁（429），请稍后再试",
   source_invalid: "获取到的文档内容为空或格式无效",
   source_timeout: "获取原文超时",

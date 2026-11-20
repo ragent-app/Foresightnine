@@ -12,7 +12,8 @@ dependencies = [
   "google-auth>=2.40,<3.0",
   "requests>=2.32,<3.0",
   "cryptography>=43,<47",
-  "uvicorn[standard]>=0.34,<1.0"
+  "uvicorn[standard]>=0.34,<1.0",
+  "python-multipart>=0.0.34",
 ]
 
 [dependency-groups]

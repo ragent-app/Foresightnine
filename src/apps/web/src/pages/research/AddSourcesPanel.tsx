@@ -1,12 +1,12 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { useId, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { ApiError } from "../../api/http";
-import { createTextSource, fetchOfficialSource, fetchSecConceptSource, searchSecIdentities, uploadHtmlSource, uploadPdfSource, useResearchCapabilities, useSecAvailable, useWebFetchAvailable } from "../../api/sources";
+import { createTextSource, fetchOfficialSource, fetchSecConceptSource, searchSecIdentities, uploadDocumentStream, uploadHtmlSource, uploadPdfSource, useResearchCapabilities, useSecAvailable, useWebFetchAvailable } from "../../api/sources";
 import type { CreatedSource, SecIdentity, SourcePermissionFlags } from "../../api/types";
 import { PERMISSION_LABEL } from "../../lib/copy";
 import {
   DEFAULT_PERMISSIONS, FETCH_HELP, fetchUrlProblem, fileToBase64, formatBytes, ineligibility, INELIGIBLE_TEXT, MAX_TEXT_CHARACTERS,
-  MAX_UPLOAD_BYTES, SEC_UNAVAILABLE, titleFromFilename, uploadKind, type UploadKind,
+  MAX_LARGE_UPLOAD_BYTES, SEC_UNAVAILABLE, titleFromFilename, UPLOAD_KIND_LABEL, uploadKind, usesStreamingUpload, type UploadKind,
 } from "../../lib/sources";
 import { Disclosure, Segmented } from "../../ui/controls";
 import { Icon } from "../../ui/icons";
@@ -56,10 +56,15 @@ const UNIT_PATTERN = /^[A-Za-z0-9-]+$/;
 function addError(tab: AddSourceTab, kind: UploadKind | null, error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 503 && /contact is not configured/i.test(error.message)) return "SEC 数据还没有配置联系信息，暂时无法获取。";
-    if (error.status === 503 && tab === "file") return kind === "html" ? "网页解析繁忙，请稍后重试。" : "PDF 解析暂时不可用，请稍后重试。";
+    if (error.status === 503 && tab === "file") return kind === "pdf" ? "PDF 解析暂时不可用，请稍后重试。" : "文档解析繁忙，请稍后重试。";
+    if (error.status === 413 && tab === "file") return "文件超过上传上限（200 MB）。";
     if (error.status === 422 && error.details.length === 0) {
-      if (tab === "file") return kind === "html" ? "网页文件无效、超过 5 MB、不是 UTF-8 编码，或没有可提取的文字。" : "PDF 无效、超过 5 MB、已加密，或没有可提取的文字。";
+      if (tab === "file") {
+        if (/no usable text layer/i.test(error.message)) return "这份 PDF 是扫描件，且没有可用的文字识别结果。可以换一份带文字层的版本再上传。";
+        return kind === "pdf" ? "PDF 无效、已加密，或没有可提取的文字。" : "文件无效、过大，或没有可提取的文字。";
+      }
       if (tab === "url") {
+        if (/terms do not permit automated access/i.test(error.message)) return "这个网站的条款不允许自动访问。请下载文件后在“文件”中上传，或使用公司官网投资者关系页面上的副本。";
         if (/blocked by fetch policy/i.test(error.message)) return "这个网站或跳转目标不在允许获取的范围内，可以保存后按文件添加。";
         if (/rejected the request/i.test(error.message)) return "目标网站拒绝了自动访问（可能需要登录或触发了防爬验证），可以保存后按文件添加。";
         if (/not found/i.test(error.message)) return "找不到该网址对应的页面（404/410）。";
@@ -131,8 +136,8 @@ export function AddSourcesPanel({ asOfIso, onAdded, onClose, initial, locked = f
     setError(null);
     if (!next) return;
     const nextKind = uploadKind(next);
-    if (!nextKind) { setFileProblem("只支持 PDF 或 HTML 文件。其他格式可以复制文字后在“文本”中添加。"); return; }
-    if (next.size > MAX_UPLOAD_BYTES) { setFileProblem(`文件为 ${formatBytes(next.size)}，超过 5 MB 的上限。`); return; }
+    if (!nextKind) { setFileProblem("只支持 PDF、HTML 或纯文本文件。其他格式可以复制文字后在“文本”中添加。"); return; }
+    if (next.size > MAX_LARGE_UPLOAD_BYTES) { setFileProblem(`文件为 ${formatBytes(next.size)}，超过 200 MB 的上限。`); return; }
     setFileProblem(null);
     setFile(next);
     if (!title.trim() || (file && title === titleFromFilename(file.name))) setTitle(titleFromFilename(next.name));
@@ -195,6 +200,12 @@ export function AddSourcesPanel({ asOfIso, onAdded, onClose, initial, locked = f
   const create = async (): Promise<CreatedSource> => {
     const shared = { permissions, ...(simulated ? { is_simulated: true } : {}), ...dates() };
     if (tab === "file") {
+      if (usesStreamingUpload(file!, kind!)) {
+        return uploadDocumentStream(file!, {
+          title: title.trim(), permissions, ...(simulated ? { is_simulated: true } : {}), ...dates(),
+          ...(kind === "pdf" ? { text_order: textOrder } : {}),
+        });
+      }
       const encoded = await fileToBase64(file!);
       return kind === "pdf"
         ? uploadPdfSource({ title: title.trim(), pdf_base64: encoded, text_order: textOrder, ...shared })
@@ -263,7 +274,7 @@ export function AddSourcesPanel({ asOfIso, onAdded, onClose, initial, locked = f
             {file ? (
               <div className="file-row">
                 <Icon name="file" />
-                <span className="grow"><span className="title">{file.name}</span><span className="meta">{kind === "pdf" ? "PDF" : "HTML"} · {formatBytes(file.size)}</span></span>
+                <span className="grow"><span className="title">{file.name}</span><span className="meta">{UPLOAD_KIND_LABEL[kind ?? "html"]} · {formatBytes(file.size)}</span></span>
                 <button type="button" className="icon-btn close" aria-label="移除文件" disabled={disabled} onClick={() => { setFile(null); if (fileInput.current) fileInput.current.value = ""; }}>
                   <Icon name="close" size={14} />
                 </button>
@@ -276,12 +287,12 @@ export function AddSourcesPanel({ asOfIso, onAdded, onClose, initial, locked = f
                 onDrop={onDrop}
               >
                 <Icon name="upload" size={22} />
-                <span>拖入 PDF 或 HTML 文件</span>
+                <span>拖入 PDF、HTML 或文本文件</span>
                 <button type="button" className="btn" onClick={() => fileInput.current?.click()}>选择文件</button>
-                <span className="meta">单个文件不超过 5 MB</span>
+                <span className="meta">单个文件不超过 200 MB；年报等大文件按页读取，扫描页会自动识别文字</span>
               </div>
             )}
-            <input ref={fileInput} type="file" accept=".pdf,.html,.htm,application/pdf,text/html" hidden onChange={(event) => pickFile(event.target.files?.[0])} />
+            <input ref={fileInput} type="file" accept=".pdf,.html,.htm,.txt,application/pdf,text/html,text/plain" hidden onChange={(event) => pickFile(event.target.files?.[0])} />
             {fileProblem ? <span className="inline-error" role="alert">{fileProblem}</span> : null}
             <TitleField id={`${ids}-title`} value={title} onChange={setTitle} disabled={disabled} />
             {kind === "pdf" ? (

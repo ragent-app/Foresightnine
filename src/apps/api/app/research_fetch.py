@@ -40,6 +40,7 @@ from .research_documents import (
 )
 from .phase3 import ClientSearchEvidenceProvider, ProviderFailure
 from .research_source_policy import is_fred_source
+from .research_source_terms import terms_decision
 from .research_sources import SourcePermissions
 
 
@@ -704,6 +705,9 @@ def _check_fetch_target(url: str, *, is_redirect: bool, check_dns: bool) -> str:
         raise FetchFailure("source_unavailable", "SEC URLs must use the dedicated SEC filing fetcher.")
     if is_host_blocked(hostname):
         raise FetchFailure("source_blocked_policy", "Host is blocked by fetch policy.")
+    terms = terms_decision(url)
+    if not terms.allowed:
+        raise FetchFailure("source_blocked_terms", terms.message)
     allowed_hosts = fetch_allowed_hosts()
     if allowed_hosts is not None and hostname not in allowed_hosts:
         raise FetchFailure("source_blocked_policy", "Host is not in the configured fetch allowlist.")

@@ -100,6 +100,10 @@ class TurnstileCaptchaVerifier:
         return decoded
 
 
+STREAMING_UPLOAD_PATH = "/v2/research/sources/upload"
+STREAMING_UPLOAD_OVERHEAD_BYTES = 1_048_576
+
+
 class BodyTooLarge(Exception):
     """Raised while consuming a request stream that exceeds the byte cap."""
 
@@ -279,7 +283,22 @@ class SecurityBoundaryMiddleware(BaseHTTPMiddleware):
         request.state.client_ip = client_ip
         session_id = request.headers.get("X-Session-ID")
         body: bytes = b""
-        if request.method in {"POST", "PUT", "PATCH"}:
+        if request.method == "POST" and request.url.path == STREAMING_UPLOAD_PATH:
+            # Large-document upload: never buffered here. The endpoint streams the multipart body to disk and
+            # enforces the byte cap on the receive stream; Content-Length is only a fast rejection.
+            from .research_fetch import large_document_max_bytes
+            content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+            if content_type != "multipart/form-data":
+                return _boundary_error(415, "unsupported_media_type", "Multipart form data is required.", request)
+            content_length = request.headers.get("content-length")
+            if content_length is not None:
+                try:
+                    if int(content_length) > large_document_max_bytes() + STREAMING_UPLOAD_OVERHEAD_BYTES:
+                        return _boundary_error(413, "request_too_large", "Request body exceeds the configured limit.", request)
+                except ValueError:
+                    return _boundary_error(400, "invalid_request", "Request headers are invalid.", request)
+            request.state.session_id = session_id
+        elif request.method in {"POST", "PUT", "PATCH"}:
             if request.method == "POST" and request.url.path == "/v2/research/sources":
                 body_limit = self.config.max_research_source_body_bytes
             elif request.url.path in {"/v2/research/sources/pdf", "/v2/research/sources/html"}:

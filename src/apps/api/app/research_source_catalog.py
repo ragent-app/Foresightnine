@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
 
+from .research_source_terms import terms_decision
 from .research_fetch import fetch_allowed_hosts, is_host_blocked, is_sec_host, validate_public_https_url
 
 
@@ -75,7 +76,7 @@ def official_document_capability(url: str, *, sec_available: bool) -> SourceCapa
         hostname = validate_public_https_url(url, allow_fragment=True, check_sec_path=False)
     except ValueError:
         return None
-    if is_host_blocked(hostname):
+    if is_host_blocked(hostname) or not terms_decision(url).allowed:
         return None
     caps = source_capabilities(sec_available=sec_available)
     if is_sec_host(hostname):

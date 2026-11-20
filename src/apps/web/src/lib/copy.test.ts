@@ -124,7 +124,8 @@ describe("gapText", () => {
     expect(timeoutGap).not.toContain("provider_timeout");
     expect(timeoutGap).not.toContain("Provider timed out");
     expect(timeoutGap).not.toBe(gapText({ code: "provider_no_result", message: "x" }));
-    expect(Object.keys(GAP_LABEL)).toHaveLength(18);
+    expect(Object.keys(GAP_LABEL)).toHaveLength(19);
+    expect(GAP_LABEL).toHaveProperty("market_data_key_required");
   });
   it("handles provider_error, model_reported and unknown codes", () => {
     expect(gapText({ code: "provider_error", message: "429" })).toBe("模型服务返回错误。（429）");

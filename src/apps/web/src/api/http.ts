@@ -111,6 +111,8 @@ export interface ApiRequestOptions {
   accept?: string;
   headers?: Record<string, string>;
   raw?: boolean;
+  /** Multipart body (the browser sets the boundary); used by the streaming document upload only. */
+  form?: FormData;
 }
 
 function isAbortError(error: unknown): boolean {
@@ -131,7 +133,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   const method = options.method ?? "GET";
   // The API boundary accepts only JSON for POST and PUT (security.py, 415 otherwise), so a
   // write without a body still sends an empty JSON object (363 acceptance: continue, recover, logout).
-  const body = options.body === undefined && (method === "POST" || method === "PUT") ? {} : options.body;
+  const body = options.form !== undefined ? undefined : options.body === undefined && (method === "POST" || method === "PUT") ? {} : options.body;
   const headers: Record<string, string> = {
     ...(options.headers ?? {}),
     Accept: options.accept ?? "application/json",
@@ -148,6 +150,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     cache: "no-store",
   };
   if (body !== undefined) init.body = JSON.stringify(body);
+  if (options.form !== undefined) init.body = options.form;
   if (options.signal) init.signal = options.signal;
 
   let response: Response;

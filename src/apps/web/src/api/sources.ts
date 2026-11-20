@@ -1,7 +1,7 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { apiRequest } from "./http";
 import { useQuery } from "@tanstack/react-query";
-import type { CreatedSource, HtmlUploadRequest, ResearchCapabilities, SecIdentitySearchResult } from "./types";
+import type { CreatedSource, HtmlUploadRequest, ResearchCapabilities, SecIdentitySearchResult, SourcePermissionFlags } from "./types";
 
 // Source creation, attachment and original download. Each function mirrors one
 // route in apps/api/app/main.py (create_research_source … get_research_source_original).
@@ -18,6 +18,30 @@ export function uploadPdfSource(body: ResearchV2.PdfUploadRequest): Promise<Crea
 
 export function uploadHtmlSource(body: HtmlUploadRequest): Promise<CreatedSource> {
   return apiRequest<CreatedSource>("/v2/research/sources/html", { method: "POST", body });
+}
+
+export interface StreamUploadFields {
+  title: string;
+  permissions: SourcePermissionFlags;
+  is_simulated?: boolean;
+  published_at?: string;
+  event_at?: string;
+  revised_at?: string;
+  text_order?: "layout" | "reading";
+}
+
+/** Large documents (and plain text): multipart, streamed to disk by the API; POST /v2/research/sources/upload. */
+export function uploadDocumentStream(file: File, fields: StreamUploadFields, signal?: AbortSignal): Promise<CreatedSource> {
+  const form = new FormData();
+  form.set("title", fields.title);
+  form.set("permissions", JSON.stringify(fields.permissions));
+  if (fields.is_simulated) form.set("is_simulated", "true");
+  for (const key of ["published_at", "event_at", "revised_at", "text_order"] as const) {
+    const value = fields[key];
+    if (value) form.set(key, value);
+  }
+  form.set("file", file, file.name); // last, so the API has every field before the body
+  return apiRequest<CreatedSource>("/v2/research/sources/upload", { method: "POST", form, ...(signal ? { signal } : {}) });
 }
 
 export function fetchOfficialSource(body: ResearchV2.FetchSourceRequest): Promise<CreatedSource> {

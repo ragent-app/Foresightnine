@@ -3102,6 +3102,55 @@
         "summary": "Fetch Research Sec Concept"
       }
     },
+    "/v2/research/sources/upload": {
+      "post": {
+        "description": "Stream a large PDF, HTML or text document (multipart) to disk and ingest it with the paged pipeline.",
+        "operationId": "upload_research_document_stream_v2_research_sources_upload_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Upload Research Document Stream V2 Research Sources Upload Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Research Document Stream"
+      }
+    },
     "/v2/research/sources/{source_id}": {
       "get": {
         "operationId": "get_research_source_v2_research_sources__source_id__get",
