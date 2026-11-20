@@ -539,7 +539,7 @@ def test_sse_endpoint_heartbeat_catches_cross_process_storage_updates(env, live_
                 stored = api.RESEARCH_RUN_INPUTS.get(op_id)
                 stored['runtime_checkpoint']['events'].append({
                     'kind': 'tool',
-                    'name': 'discover_sources',
+                    'name': 'news_search',
                     'status': 'completed',
                     'rationale': 'cross-process event',
                 })
@@ -550,7 +550,7 @@ def test_sse_endpoint_heartbeat_catches_cross_process_storage_updates(env, live_
                 for _ in range(30):
                     line = await asyncio.wait_for(lines_iter.__anext__(), timeout=2.0)
                     caught_lines.append(line)
-                    if line == '' and any('discover_sources' in item for item in caught_lines):
+                    if line == '' and any('news_search' in item for item in caught_lines):
                         break
                 frames = _parse_sse_frames(caught_lines)
                 assert any(f.get('event') == 'step.event' and f['id'] == 'ev:2' for f in frames)

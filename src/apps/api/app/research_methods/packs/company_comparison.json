@@ -1,6 +1,6 @@
 {
  "id": "company_comparison",
- "version": "1.0.0",
+ "version": "1.1.0",
  "title_zh": "公司比较",
  "title_en": "Company comparison",
  "applies_when": {
@@ -74,7 +74,7 @@
    "preferred_tools": [
     "company_financials",
     "filings",
-    "discover_sources"
+    "news_search"
    ],
    "required": true,
    "freshness": "latest filed period of each company as of research_clock",
@@ -110,7 +110,7 @@
     "filings",
     "read_pages",
     "search_library",
-    "discover_sources"
+    "news_search"
    ],
    "required": false,
    "freshness": "latest filing",

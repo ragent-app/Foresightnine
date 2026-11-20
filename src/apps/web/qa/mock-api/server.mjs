@@ -58,11 +58,11 @@ const DISCOVERY_CANDIDATES = [
 ];
 const DISCOVERY_STEP = {
   kind: "tool",
-  name: "discover_sources",
+  name: "news_search",
   status: "completed",
   rationale: "搜索公开线索",
   summary: {
-    kind: "discover_sources",
+    kind: "news_search",
     found_count: 2,
     eligible_count: 1,
     denied_count: 1,
@@ -1197,7 +1197,7 @@ function interimFromEvents(events) {
   for (const event of events) {
     if (!isRecord(event) || event.kind !== "tool" || !isRecord(event.summary)) continue;
     const s = event.summary;
-    if (s.kind === "discover_sources" && Number.isInteger(s.eligible_count)) leads += s.eligible_count;
+    if (s.kind === "news_search" && Number.isInteger(s.eligible_count)) leads += s.eligible_count;
     if (s.kind === "acquire_sources" && Number.isInteger(s.acquired_count)) acquired += s.acquired_count;
     if (s.kind === "read_sources" && Number.isInteger(s.read_count)) read += s.read_count;
     if (s.kind === "record_facts" && Number.isInteger(s.recorded_count)) facts += s.recorded_count;

@@ -17,7 +17,9 @@ import {
   FileText,
   Globe,
   LineChart,
+  Library,
   Link2,
+  Newspaper,
   LogOut,
   Maximize2,
   PanelLeft,
@@ -71,6 +73,8 @@ export const Icons = {
   up: ChevronUp,
   down: ChevronDown,
   sparkles: Sparkles,
+  library: Library,
+  news: Newspaper,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof Icons;
@@ -83,7 +87,8 @@ export function Icon({ name, size = 18, ...rest }: { name: IconName; size?: numb
 
 const TOOL_ICON: Record<string, IconName> = {
   read_sources: "read",
-  discover_sources: "globe",
+  search_library: "library",
+  news_search: "news",
   acquire_sources: "fetch",
   sec_company_concept: "database",
   historical_prices: "chart",

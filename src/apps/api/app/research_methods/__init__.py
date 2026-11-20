@@ -26,7 +26,7 @@ MIN_SELECT_SCORE = 2
 # Tools a pack may name. search_library / news_search are optional and may be
 # absent in a given run; the renderer marks anything unavailable.
 KNOWN_TOOLS = frozenset({
-    'resolve_entity', 'market_data', 'company_financials', 'filings', 'discover_sources',
+    'resolve_entity', 'market_data', 'company_financials', 'filings',
     'acquire_sources', 'read_sources', 'read_pages', 'outline_source', 'search_source',
     'request_ocr', 'record_facts', 'calculate_financials', 'create_chart', 'submit_research',
     'search_library', 'news_search',
@@ -37,7 +37,6 @@ CAPABILITY_FLAG = {
     'market_data': 'market_data_available',
     'company_financials': 'sec_financials_available',
     'filings': 'filings_available',
-    'discover_sources': 'search_available',
     'acquire_sources': 'acquire_available',
     'search_library': 'search_library_available',
     'news_search': 'news_search_available',

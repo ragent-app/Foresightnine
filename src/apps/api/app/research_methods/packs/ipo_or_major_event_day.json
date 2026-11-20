@@ -1,6 +1,6 @@
 {
  "id": "ipo_or_major_event_day",
- "version": "1.0.0",
+ "version": "1.1.0",
  "title_zh": "IPO 与重大事件首日",
  "title_en": "IPO or major event day",
  "applies_when": {
@@ -79,7 +79,7 @@
    "description": "Offer price, shares, venue, ticker and pricing date from the issuer or regulator filing.",
    "preferred_tools": [
     "filings",
-    "discover_sources",
+    "news_search",
     "acquire_sources",
     "read_pages"
    ],
@@ -93,8 +93,7 @@
    "description": "First trade time and price, open, high, low, close and volume of the event session.",
    "preferred_tools": [
     "market_data",
-    "news_search",
-    "discover_sources"
+    "news_search"
    ],
    "required": true,
    "freshness": "through last_completed_session",
@@ -117,8 +116,7 @@
    "description": "After-hours or next-session information if the session is not complete.",
    "preferred_tools": [
     "market_data",
-    "news_search",
-    "discover_sources"
+    "news_search"
    ],
    "required": false,
    "freshness": "research_clock",

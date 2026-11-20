@@ -18,8 +18,9 @@ export const TURN_STATUS_LABEL: Readonly<Record<string, string>> = {
 export const TOOL_LABEL: Readonly<Record<string, string>> = {
   read_sources: "阅读资料",
   search_source: "检索资料",
+  search_library: "检索资料库",
   outline_source: "查看资料目录",
-  discover_sources: "搜索线索",
+  news_search: "搜索线索",
   acquire_sources: "获取原文",
   sec_company_concept: "查询 SEC 结构化数据",
   historical_prices: "获取历史行情",
@@ -289,6 +290,8 @@ export const GAP_LABEL: Readonly<Record<string, string>> = {
   market_data_key_required: "未配置个人行情 key，行情数据不可用；报告中引用的价格并非来自行情数据。请在设置中添加自己的 Twelve Data key。",
   provider_no_result: "模型请求没有返回可用结果。",
   provider_timeout: "单次模型调用超时，未能返回完整结果。",
+  source_discrepancy_material: "不同来源对同一数字的口径差异超出容差，请查看口径核对表，并在引用时说明参考值与差异。",
+  source_discrepancy_minor: "不同来源对同一数字有小幅差异（不是四舍五入造成），请查看口径核对表。",
   source_selection_partial: "部分资料还没有读完，未读部分中是否有相关内容尚不确定。",
   run_stopped: "上一次运行已经停止，需要重新提问。",
   external_result_unknown: "有一次外部请求的结果未知，需要核对后才能继续。",
@@ -434,3 +437,32 @@ export const LIVE_STAGED_TAG = "运行中暂存";
 export const VERIFY_NOTE = "系统已核对引文位置和数字；结论是否被引文充分支持，需要你判断。";
 export const CALC_NOTE = "计算使用已记录的输入；原始数据的精度和口径未核验。";
 export const LEAD_NOTE = "搜索结果只是线索，获取并阅读原文后才能作为证据。";
+
+export const SOURCE_CLASS_LABEL: Readonly<Record<string, string>> = {
+  market_data: "行情数据",
+  filing: "申报文件",
+  issuer: "公司官网",
+  news: "新闻与网页",
+  user_upload: "用户资料",
+  other: "其他",
+};
+
+export const RECONCILIATION_BADGE_LABEL: Readonly<Record<string, string>> = {
+  consistent: "一致",
+  rounding_only: "仅四舍五入差异",
+  differs_minor: "有小幅差异",
+  differs_material: "差异较大",
+};
+
+export const COVERAGE_STATUS_TONE: Readonly<Record<string, "support" | "review" | "neutral">> = {
+  obtained: "support",
+  partial: "review",
+  not_found: "review",
+  blocked_by_terms: "review",
+  license_restricted: "review",
+  tool_unavailable: "review",
+  failed: "review",
+  not_attempted: "neutral",
+};
+
+export const ATTRIBUTION_NOTE_LABEL = "新闻线索来源";

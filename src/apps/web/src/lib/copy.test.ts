@@ -16,6 +16,8 @@ describe("labels", () => {
     expect(toolLabel("read_sources")).toBe("阅读资料");
     expect(toolLabel("search_source")).toBe("检索资料");
     expect(toolLabel("outline_source")).toBe("查看资料目录");
+    expect(toolLabel("search_library")).toBe("检索资料库");
+    expect(toolLabel("news_search")).toBe("搜索线索");
     expect(toolLabel("sec_company_concept")).toBe("查询 SEC 结构化数据");
     expect(toolLabel("submit_research")).toBe("提交结论");
     expect(toolLabel("calculate_financials")).toBe("计算");
@@ -124,7 +126,7 @@ describe("gapText", () => {
     expect(timeoutGap).not.toContain("provider_timeout");
     expect(timeoutGap).not.toContain("Provider timed out");
     expect(timeoutGap).not.toBe(gapText({ code: "provider_no_result", message: "x" }));
-    expect(Object.keys(GAP_LABEL)).toHaveLength(19);
+    expect(Object.keys(GAP_LABEL)).toHaveLength(21);
     expect(GAP_LABEL).toHaveProperty("market_data_key_required");
   });
   it("handles provider_error, model_reported and unknown codes", () => {

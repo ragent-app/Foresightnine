@@ -1,6 +1,6 @@
 {
  "id": "market_trend",
- "version": "1.0.0",
+ "version": "1.1.0",
  "title_zh": "指数与行情走势",
  "title_en": "Market or index trend",
  "applies_when": {
@@ -117,8 +117,7 @@
    "description": "Comparison with a broader benchmark and a breadth or constituent view.",
    "preferred_tools": [
     "market_data",
-    "news_search",
-    "discover_sources"
+    "news_search"
    ],
    "required": false,
    "freshness": "through last_completed_session",
@@ -131,7 +130,6 @@
    "preferred_tools": [
     "search_library",
     "news_search",
-    "discover_sources",
     "acquire_sources",
     "read_pages"
    ],

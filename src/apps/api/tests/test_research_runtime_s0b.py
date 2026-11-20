@@ -192,10 +192,10 @@ def test_failed_acquisition_is_not_cached_and_repeat_follows_general_rules():
 
 
 def test_lone_all_duplicate_response_gets_results_and_warning_then_two_in_a_row_stop():
-    m = Model([turn('discover_sources', {'query': 'Q', 'rationale': 'first'}, 'a'),
-               multi([('discover_sources', {'query': 'Q', 'rationale': 'again'}, 'b'),
-                      ('discover_sources', {'query': 'Q', 'rationale': 'once more'}, 'c')]),
-               multi([('discover_sources', {'query': 'Q', 'rationale': 'and again'}, 'd')])])
+    m = Model([turn('news_search', {'query': 'Q', 'rationale': 'first'}, 'a'),
+               multi([('news_search', {'query': 'Q', 'rationale': 'again'}, 'b'),
+                      ('news_search', {'query': 'Q', 'rationale': 'once more'}, 'c')]),
+               multi([('news_search', {'query': 'Q', 'rationale': 'and again'}, 'd')])])
     out = run(m, [])
     assert out.reason == 'no_progress'
     assert [e.get('duplicate') for e in out.events if e.get('kind') == 'tool'] == [None, 'action', 'action', 'action']
@@ -205,10 +205,10 @@ def test_lone_all_duplicate_response_gets_results_and_warning_then_two_in_a_row_
 
 
 def test_new_action_between_duplicate_responses_resets_the_streak():
-    m = Model([turn('discover_sources', {'query': 'Q', 'rationale': 'first'}, 'a'),
-               turn('discover_sources', {'query': 'Q', 'rationale': 'again'}, 'b'),
-               turn('discover_sources', {'query': 'Q2', 'rationale': 'new move'}, 'c'),
-               turn('discover_sources', {'query': 'Q2', 'rationale': 'repeat'}, 'd'), STOP])
+    m = Model([turn('news_search', {'query': 'Q', 'rationale': 'first'}, 'a'),
+               turn('news_search', {'query': 'Q', 'rationale': 'again'}, 'b'),
+               turn('news_search', {'query': 'Q2', 'rationale': 'new move'}, 'c'),
+               turn('news_search', {'query': 'Q2', 'rationale': 'repeat'}, 'd'), STOP])
     out = run(m, [])
     assert out.reason == 'no_submission'
     assert [e.get('duplicate') for e in out.events if e.get('kind') == 'tool'] == [None, 'action', None, 'action']

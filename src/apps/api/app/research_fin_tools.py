@@ -422,7 +422,7 @@ class FinDataToolbox:
                 return {'cik': info['cik'], 'entity_id': info['entity_id'], 'symbol': info['symbol'], 'name': info['name']}, None
             if info['exchange'] and normalize_exchange(info['exchange']) not in US_EXCHANGES:
                 return None, {'status': 'failed', 'reason': 'no_sec_filings_for_entity',
-                              'message': 'SEC data covers US-registered issuers; this entity is listed elsewhere. Use discover_sources and acquire_sources for its official disclosures.'}
+                              'message': 'SEC data covers US-registered issuers; this entity is listed elsewhere. Use news_search and acquire_sources for its official disclosures.'}
             symbol = info['symbol']
         else:
             symbol = req.ticker
@@ -528,7 +528,7 @@ class FinDataToolbox:
             if res.status == 'denied':
                 return FinToolOutcome({'status': 'denied', 'reason': res.reason,
                                        'message': ("EDGAR full-text search is not enabled by this deployment's data policy. "
-                                                   "Use filings with action='list' for a company, or discover_sources.")})
+                                                   "Use filings with action='list' for a company, or news_search.")})
             rows = []
             for h in res.data:
                 rows.append({k: v for k, v in {

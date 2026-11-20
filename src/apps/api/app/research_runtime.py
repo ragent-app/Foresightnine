@@ -31,6 +31,10 @@ from .research_fin_tools import (CompanyFinancialsRequest, FilingsRequest, FinDa
 from .research_discovery import RedirectLead, normalize_search_lead, search_lead_url
 from .research_live_stream import DeltaCoalescer
 from .research_source_catalog import canonical_source_url
+from .research_library import ResearchLibrary
+from .research_library_tool import (SearchLibraryRequest, head_source_id, run_search_library, sync_library)
+from .research_news_tool import NewsSearchRequest, NewsOutcome, DiscoverCallableProvider, run_news_search
+from . import research_run_insights as insights
 from .research_source_policy import is_fred_source, source_eligibility
 from .research_source_terms import terms_decision
 from .research_sources import ResearchSource
@@ -129,12 +133,6 @@ class SearchSourceRequest(BaseModel):
         if not value.strip():
             raise ValueError('Query must not be empty.')
         return value
-
-
-class DiscoverRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    query: str = Field(min_length=1)
-    rationale: str = Field(min_length=1)
 
 
 class AcquireRequest(BaseModel):
@@ -382,7 +380,8 @@ TOOLS = [
         'Search an authorized local source document for keywords or phrases and return matching character offsets and ~300-character snippets.',
         SearchSourceRequest,
     ),
-    _tool('discover_sources', 'Search for unverified leads, not evidence.', DiscoverRequest),
+    _tool('search_library', 'Ranked passage search across all authorized sources of this run (lexical, numbers and dates exact). Returns hits with read_sources ranges or read_pages pages, OCR verification notes and coverage of what could not be searched. search_source stays the exact literal search inside one source.', SearchLibraryRequest),
+    _tool('news_search', 'Search news and the web for unverified leads (not evidence), clustered by story with independent-source counts; optional date window and languages. Pass the returned URLs to acquire_sources.', NewsSearchRequest),
     _tool('acquire_sources', 'Acquire previously discovered leads when authorized.', AcquireRequest),
     _tool('resolve_entity', 'Resolve a company or security name, ticker, CIK or ISIN to candidate entity_ids with exchange, currency and identifiers. Returns every plausible candidate and never picks one for you; choose explicitly.', ResolveEntityRequest),
     _tool('market_data', "Fetch OHLCV bars (daily by default; intraday sizes for event-day analysis) for an entity_id or symbol+exchange over a date range or lookback, using the account's own market-data key. Returns a source whose lines are <SYMBOL>@<EXCHANGE> | <ts> | <interval> | O .. H .. L .. C .. V .. <currency>; quote them with record_facts.", MarketDataRequest),
@@ -411,7 +410,7 @@ SYSTEM = ("You are a financial research coordinator. Identify evidence needs, ch
           "(research_as_of, when set, is a cutoff for evidence and not the current time); never infer the current date from training knowledge. "
           "State in the report the as-of date of each data series used. "
           "When a tool result carries message, suggested_actions or hints, follow them before giving up on a path. "
-          "Discovery returns leads, not evidence. Only pass URLs returned by discover_sources or filings into acquire_sources; "
+          "Discovery returns leads, not evidence. Only pass URLs returned by news_search or filings into acquire_sources; "
           "never invent or guess URLs. For a security or company, call resolve_entity first and pass the chosen entity_id onward. "
           "Use company_financials (when sec_financials_available) for structured US-registered issuer statement lines, filings (when filings_available) to list "
           "filings and obtain document URLs for acquire_sources, and market_data (when market_data_available) for price history. "
@@ -421,6 +420,7 @@ SYSTEM = ("You are a financial research coordinator. Identify evidence needs, ch
           "offset, then call read_sources on targeted [start, end] slices rather than blind sequential chunks "
           "(hard limits: max 25000 characters per slice and max 40000 characters total per read_sources call). "
           "For PDFs whose outline_source result has page_count, use outline_source then read_pages for targeted pages. "
+          "search_library ranks passages across all authorized sources and maps hits to read locations; search_source is the exact literal search within one source. "
           "Pages with status needs_ocr are recognised on demand (request_ocr, or automatically by read_pages) into a new source_id that replaces the old one for later reads; treat numbers from pages with status ocr as needing a check against the original page when a warning says so. "
           "For historical market performance, resolve the instrument and use a market_data series or authorized dated observations. "
           "If required prices are missing, explain the gap without inventing prices. "
@@ -463,6 +463,8 @@ GAP_CODES = {
     'search_result_unknown': 'Search result is unknown; reconciliation is required.',
     'acquisition_result_unknown': 'Source acquisition outcome needs reconciliation.',
     'model_reported': 'Limitation reported by the model.',
+    'source_discrepancy_material': 'Sources disagree on a recorded figure by more than the metric tolerance; the reference value and the other values are listed.',
+    'source_discrepancy_minor': 'Sources differ slightly on a recorded figure (within a loose tolerance but not explained by rounding).',
 }
 
 
@@ -501,6 +503,10 @@ class RuntimeOutcome:
     stopping_note: str | None = None
     partial_notes: str | None = None
     charts: list[dict] = field(default_factory=list)
+    reconciliation: dict | None = None
+    coverage_map: dict | None = None
+    method_packs: list[dict] = field(default_factory=list)
+    attributions: list[dict] = field(default_factory=list)
 
 
 def _acquisition_failure_reason(details: dict[str, Any], outcomes: list[Any],
@@ -539,7 +545,7 @@ def _build_acquire_result(rows: list[dict[str, Any]]) -> dict[str, Any]:
         top_reason = failure_reasons[0] if len(failure_reasons) == 1 else 'source_cannot_be_acquired'
         result.update(status='unavailable', reason=top_reason)
         if top_reason == 'lead_not_discovered':
-            result['hint'] = 'Only pass URLs returned by discover_sources.'
+            result['hint'] = 'Only pass URLs returned by news_search.'
     return result
 
 
@@ -557,7 +563,7 @@ TOOL_FAILURE_GUIDANCE: dict[str, str] = {
     'entity_ambiguous': 'More than one issuer matched. Call resolve_entity and pass the chosen entity_id.',
     'entity_not_found': 'No exact match. Call resolve_entity with the company name.',
     'entity_not_resolved': 'This entity has no known symbol or CIK in this run. Call resolve_entity first.',
-    'no_sec_filings_for_entity': 'SEC data covers US-registered issuers only. Use discover_sources and acquire_sources for the official disclosures of this company.',
+    'no_sec_filings_for_entity': 'SEC data covers US-registered issuers only. Use news_search and acquire_sources for the official disclosures of this company.',
     'no_xbrl_facts': 'The SEC has no XBRL facts for this company. Read its filings with filings and acquire_sources.',
     'no_matching_lines': 'No requested line was reported under the standard tag mapping. Read the filing itself.',
     'cik_not_found': 'The SEC has no such CIK. Call resolve_entity.',
@@ -578,7 +584,7 @@ TOOL_FAILURE_GUIDANCE: dict[str, str] = {
     'http_forbidden_or_challenge': 'The site refused automated access. Use another source for the same facts.',
     'not_found': 'The page does not exist at this URL. Discover another source instead of guessing URLs.',
     'source_rate_limited': 'The source rate limit was reached. Wait for other work or use another source.',
-    'lead_not_discovered': 'Only pass URLs returned by discover_sources or filings. Run one of them first.',
+    'lead_not_discovered': 'Only pass URLs returned by news_search or filings. Run one of them first.',
     'search_no_results': 'The search returned no results. Retry with a different, more specific query.',
     'search_sources_denied': 'All results were denied or unusable. Retry with a different query or publisher name.',
 }
@@ -1347,7 +1353,8 @@ _BULK_COMPACT_TOOLS = frozenset({
     'search_source',
     'outline_source',
     'read_pages',
-    'discover_sources',
+    'search_library',
+    'news_search',
     'acquire_sources',
     'resolve_entity',
     'market_data',
@@ -1442,12 +1449,14 @@ def _extract_assistant_tool_calls(assistant: Any) -> dict[str, tuple[str, dict[s
 def _infer_tool_name(parsed: Mapping[str, Any] | None) -> str:
     if not isinstance(parsed, Mapping):
         return 'unknown'
+    if 'library_coverage' in parsed:
+        return 'search_library'
     if 'hits' in parsed and 'query' in parsed:
         return 'search_source'
     if 'entries' in parsed and 'total_detected_entries' in parsed:
         return 'outline_source'
     if 'leads' in parsed:
-        return 'discover_sources'
+        return 'news_search'
     if 'facts' in parsed:
         return 'record_facts'
     if 'calculations' in parsed:
@@ -1490,7 +1499,7 @@ def _extract_compaction_coverage(
 
     if isinstance(parsed, Mapping):
         add_source_id(parsed.get('source_id'))
-        for list_key in ('results', 'reads'):
+        for list_key in ('results', 'reads', 'hits'):
             rows = parsed.get(list_key)
             if isinstance(rows, list):
                 for row in rows:
@@ -2499,7 +2508,8 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                        prior: dict | None = None, focus: dict | None = None,
                        clock: dict | None = None,
                        now: Callable[[], datetime] | None = None,
-                       ocr_pages: Callable[[ResearchSource, list[int]], OcrOutcome] | None = None) -> RuntimeOutcome:
+                       ocr_pages: Callable[[ResearchSource, list[int]], OcrOutcome] | None = None,
+                       news_providers: list[Any] | None = None) -> RuntimeOutcome:
     """Execute serially; a pending external call is never replayed on recovery.
 
     Checkpoint callbacks must durably save the provided complete state before returning.
@@ -2511,6 +2521,8 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
     callback owner through the run's reserve/settle hooks and come back as ``OcrOutcome.events``.
     """
     source_by_id = {s.source_id: s for s in sources}
+    news_provider_list = (list(news_providers) if news_providers is not None
+                          else ([DiscoverCallableProvider(discover)] if discover is not None else []))
     if initial_state:
         state = json.loads(json.dumps(initial_state))
         if not isinstance(state.get('failed_attempts'), list):
@@ -2534,11 +2546,18 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                              'sec_financials_available': False, 'filings_available': False}).items():
             available_capabilities.setdefault(flag, value)
         available_capabilities.setdefault('sec_available', bool(available_capabilities.get('sec_financials_available')))
+        available_capabilities.setdefault('search_library_available', True)
+        available_capabilities.setdefault('news_search_available', bool(news_provider_list))
+        if news_provider_list:
+            available_capabilities.setdefault('news_search_providers', [str(getattr(p, 'name', 'unknown')) for p in news_provider_list])
         if ocr_pages is not None:
             available_capabilities.setdefault('pdf_ocr_on_demand', True)
+        # Method packs go right after the research clock in the first user message, never into SYSTEM/TOOLS.
+        pack_texts, pack_records = insights.method_pack_texts(question, available_capabilities)
         payload: dict[str, Any] = {'question': question, 'sources': inventory,
                  'research_as_of': as_of.isoformat() if as_of is not None else None,
                  **({'research_clock': clock} if clock is not None else {}),
+                 **({'method_packs': pack_texts} if pack_texts else {}),
                  'available_capabilities': available_capabilities}
         prior_state: dict[str, Any] = {}
         focus_ranges: list[dict[str, Any]] = []
@@ -2555,7 +2574,7 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
         state = {'user': json.dumps(payload, ensure_ascii=False), 'history': [],
                  'events': [], 'read_ranges': [], 'facts': [], 'calculations': [], 'charts': [], 'leads': [],
                  'acquired_source_ids': [], 'failed_attempts': [], 'pending': None,
-                 'focus_ranges': focus_ranges, **prior_state}
+                 'focus_ranges': focus_ranges, 'method_packs': pack_records, **prior_state}
     def save() -> None:
         if checkpoint is not None:
             checkpoint(state)
@@ -2567,10 +2586,14 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
         raw_rationale = tool_args.get('rationale')
         rationale = raw_rationale.strip()[:300] if isinstance(raw_rationale, str) and raw_rationale.strip() else None
         target: str | None = None
-        if name == 'discover_sources':
+        if name == 'news_search':
             query = tool_args.get('query')
             if isinstance(query, str) and query.strip():
                 target = query.strip()[:200]
+        elif name == 'search_library':
+            query = tool_args.get('query')
+            if isinstance(query, str) and query.strip():
+                target = f'资料库 · {query.strip()[:120]}'[:200]
         elif name == 'acquire_sources':
             urls = tool_args.get('urls')
             if isinstance(urls, list):
@@ -2693,6 +2716,8 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
             pending_batch['target'] = target
             pending_batch['started_at'] = started_at or _now_iso()
         return pending_batch
+    library_box: list[ResearchLibrary] = []
+
     def outcome(status: str, reason: str, *, report: str = '', claims: list[dict] | None = None,
                 gaps: list[dict] | None = None, stopping_note: str | None = None,
                 partial_notes: str | None = None) -> RuntimeOutcome:
@@ -2716,13 +2741,26 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                 reason=reason,
                 eligible_sources=[s for s in sources if _is_source_eligible(s, as_of)],
             )
+        report_rec = insights.reconcile_run(state, source_by_id)
+        derived.extend(insights.reconciliation_gap_rows(report_rec))
         unique = list({(item['code'], item['message']): item for item in [*derived, *(gaps or [])]}.values())
         chart_sources = [sid for chart in state.get('charts', []) for sid in chart.get('source_ids', [])]
         acquired_ids_all = [sid for sid in (state.get('acquired_source_ids') or []) if isinstance(sid, str) and sid]
         used_source_ids = list(dict.fromkeys([*(x['source_id'] for x in state['read_ranges']), *chart_sources, *acquired_ids_all]))
+        library_cov = None
+        if library_box:
+            try:
+                library_cov = library_box[0].coverage()
+            except Exception:
+                library_cov = None
+        coverage_raw = insights.run_coverage_map(state, source_by_id, library_coverage=library_cov, gaps=unique[:500])
         return RuntimeOutcome(status, reason, report, claims or [], state.get('facts', []), state['calculations'], unique[:500],
                               used_source_ids, [], state['events'],
-                              stopping_note, resolved_partial_notes, charts=list(state.get('charts', [])))
+                              stopping_note, resolved_partial_notes, charts=list(state.get('charts', [])),
+                              reconciliation=insights.reconciliation_view(report_rec),
+                              coverage_map=insights.coverage_view(coverage_raw),
+                              method_packs=list(state.get('method_packs') or []),
+                              attributions=list(state.get('attributions') or []))
     if state.get('stopped'):
         return outcome('partial', state['stopped'], gaps=[gap('run_stopped')])
     if state.get('submission'):
@@ -3307,7 +3345,8 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                     raise ValueError('Tool arguments must be a valid JSON object.')
                 args = call.arguments
                 model_cls = {'read_sources': ReadRequest, 'read_pages': ReadPagesRequest, 'outline_source': OutlineSourceRequest,
-                             'search_source': SearchSourceRequest, 'discover_sources': DiscoverRequest,
+                             'search_source': SearchSourceRequest, 'search_library': SearchLibraryRequest,
+                             'news_search': NewsSearchRequest,
                              'acquire_sources': AcquireRequest, 'resolve_entity': ResolveEntityRequest,
                              'market_data': MarketDataRequest, 'company_financials': CompanyFinancialsRequest,
                              'filings': FilingsRequest, 'record_facts': FactsRequest,
@@ -3417,8 +3456,20 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                                             source_by_id=source_by_id, as_of=as_of)
                     if head_id != req.source_id and isinstance(result, dict) and result.get('status') != 'denied_or_unavailable':
                         result['source_version'] = _version_note(req.source_id, head_id)
-                elif call.name == 'discover_sources':
-                    if discover is None or state.get('search_invalid_response'):
+                elif call.name == 'search_library':
+                    try:
+                        if not library_box:
+                            library_box.append(ResearchLibrary())
+                        sync_library(library_box[0], source_by_id, state.get('source_versions') or {}, as_of)
+                        result, tool_summary = run_search_library(
+                            req, library=library_box[0], source_by_id=source_by_id,
+                            versions=state.get('source_versions') or {}, as_of=as_of,
+                            needs_check=lambda src, page: (lambda dp: dp is not None and _ocr_page_needs_check(dp, page))(_document_pages(src)))
+                    except Exception:
+                        result, tool_summary = {'status': 'failed', 'reason': 'library_unavailable',
+                                                'message': 'The source library could not be searched; use search_source instead.'}, None
+                elif call.name == 'news_search':
+                    if not news_provider_list or state.get('search_invalid_response'):
                         result = {'status': 'unavailable', 'reason': ('search_response_invalid' if state.get('search_invalid_response') else 'search_not_authorized_or_unavailable')}
                     else:
                         try:
@@ -3434,89 +3485,30 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                         state['pending'] = {'kind': 'search', 'call_id': call.id,
                                             'rationale': t_rationale, 'target': t_target, 'started_at': tool_started_at}
                         save()
-                        try:
-                            found = discover(req.query)
-                        except ProviderFailure as error:
-                            if (getattr(error, 'provider_response_received', False) is not True and error.code not in
-                                    {'search_query_invalid', 'search_provider_unconfigured', 'search_query_provider_limit', 'search_response_invalid'}):
-                                return outcome('partial', error.code, gaps=[gap('search_result_unknown')])
-                            found = []
-                            if error.code == 'search_response_invalid':
-                                state['search_invalid_response'] = True
-                            result = {'status': 'failed', 'reason': error.code}
-                        else:
-                            eligible_leads = []
-                            denied_count = 0
-                            denied_reasons = {'source_not_authorized': 0, 'invalid_lead': 0, 'redirect_link': 0}
-                            unresolved_titles: list[str] = []
-                            terms_blocked_count = 0
-                            if not isinstance(found, (list, tuple)):
-                                found = [None]
-                            for raw in found:
-                                try:
-                                    url = search_lead_url(raw)
-                                    if url and is_fred_source(url):
-                                        denied_count += 1
-                                        denied_reasons['source_not_authorized'] += 1
-                                        continue
-                                    candidate = normalize_search_lead(raw)
-                                except RedirectLead:
-                                    # Opaque click-through links cannot be reviewed or acquired.
-                                    denied_count += 1
-                                    denied_reasons['redirect_link'] += 1
-                                    raw_title = raw.get('title') if isinstance(raw, dict) else getattr(raw, 'title', None)
-                                    if isinstance(raw_title, str) and raw_title.strip() and len(unresolved_titles) < 5:
-                                        unresolved_titles.append(raw_title.strip()[:160])
-                                    continue
-                                except (ValueError, ProviderFailure):
-                                    denied_count += 1
-                                    denied_reasons['invalid_lead'] += 1
-                                    continue
-                                lead_row = {'url': canonical_source_url(candidate.url), 'title': candidate.title,
-                                    'published_at': candidate.published_at.isoformat() if candidate.published_at else None}
-                                lead_terms = terms_decision(lead_row['url'])
-                                if not lead_terms.allowed:
-                                    lead_row.update(terms_status=lead_terms.status, acquirable=False)
-                                    terms_blocked_count += 1
-                                eligible_leads.append(lead_row)
-                            if found and denied_reasons['invalid_lead'] == len(found):
-                                state['search_invalid_response'] = True
-                                result = {'status': 'failed', 'reason': 'search_response_invalid',
-                                          'denied_count': denied_count, 'denied_reasons': denied_reasons}
-                            else:
-                                reason = ('search_no_results' if not found else 'search_sources_denied' if not eligible_leads else None)
-                                result = {'status': 'completed', 'reason': reason, 'leads': eligible_leads, 'denied_count': denied_count,
-                                          'denied_reasons': denied_reasons, 'warning': 'Unverified leads are not evidence.'}
-                                if terms_blocked_count:
-                                    result['terms_blocked_count'] = terms_blocked_count
-                                    result.setdefault('message', TOOL_FAILURE_GUIDANCE['source_blocked_terms'])
-                                if unresolved_titles:
-                                    result['unresolved_titles'] = unresolved_titles
-                                    result['message'] = ('Some results were opaque redirect links and cannot be acquired. '
-                                                         'Search again with a more specific query, e.g. quote one of the unresolved_titles '
-                                                         'or add the publisher or site name.')
-                            tool_summary = {
-                                'kind': 'discover_sources',
-                                'found_count': len(found),
-                                'eligible_count': len(eligible_leads),
-                                'denied_count': denied_count,
-                                'leads_preview': [
-                                    {
-                                        'title': _clip(lead['title'], 160),
-                                        'host': _safe_host(lead['url']),
-                                        'published_at': lead.get('published_at'),
-                                    }
-                                    for lead in eligible_leads[:5]
-                                ],
-                            }
-                            existing = {lead['url'] for lead in state.get('leads', []) if isinstance(lead, dict) and isinstance(lead.get('url'), str)}
-                            for lead in eligible_leads:
-                                if lead['url'] not in existing:
-                                    state.setdefault('leads', []).append(lead)
-                                    existing.add(lead['url'])
-                                references = state.setdefault('lead_discovery_calls', {}).setdefault(lead['url'], [])
-                                if call.id not in references:
-                                    references.append(call.id)
+                        news = run_news_search(req, providers=news_provider_list, as_of=as_of,
+                                               blocked_message=TOOL_FAILURE_GUIDANCE['source_blocked_terms'],
+                                               redirect_message=('Some results were opaque redirect links and cannot be acquired. '
+                                                                 'Search again with a more specific query, e.g. quote one of the unresolved_titles '
+                                                                 'or add the publisher or site name.'))
+                        if news.unknown_failure is not None:
+                            return outcome('partial', news.unknown_failure.code, gaps=[gap('search_result_unknown')])
+                        if news.invalid_response:
+                            state['search_invalid_response'] = True
+                        result, tool_summary = news.result, news.summary
+                        if news.denied_count is not None and news.result.get('status') == 'failed':
+                            tool_summary = None
+                        existing = {lead['url'] for lead in state.get('leads', []) if isinstance(lead, dict) and isinstance(lead.get('url'), str)}
+                        for lead in news.lead_rows:
+                            if lead['url'] not in existing:
+                                state.setdefault('leads', []).append(lead)
+                                existing.add(lead['url'])
+                            references = state.setdefault('lead_discovery_calls', {}).setdefault(lead['url'], [])
+                            if call.id not in references:
+                                references.append(call.id)
+                        known_attr = state.setdefault('attributions', [])
+                        for attribution in news.attributions:
+                            if attribution not in known_attr:
+                                known_attr.append(attribution)
                         state['pending'] = _tool_batch_pending(call_id, [vars(c) for c in calls], index,
                                                                started_at=tool_started_at)
                 elif call.name == 'acquire_sources' and (acquire_keys := [_acquire_key(u) for u in req.urls]) and all(
@@ -3544,7 +3536,7 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                         if lead is None:
                             rows.append({'url': url, 'status': 'denied_or_unavailable',
                                          'reason': 'lead_not_discovered',
-                                         'hint': 'Only pass URLs returned by discover_sources or filings.'})
+                                         'hint': 'Only pass URLs returned by news_search or filings.'})
                             summary_rows.append({'title': host or '未命名来源', 'host': host, 'status': 'denied_or_unavailable',
                                                  'reason': 'lead_not_discovered', 'total_characters': None})
                             continue
@@ -3621,6 +3613,8 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                         source_by_id[source.source_id] = source
                         sources.append(source)
                         acquired_ids[requested_url] = source.source_id
+                        if isinstance(lead.get('cluster_id'), str) and lead['cluster_id']:
+                            state.setdefault('source_clusters', {})[source.source_id] = lead['cluster_id']
                         state.setdefault('acquired_actions', {})['acquire|' + requested_url] = [source.source_id]
                         acquired_source_list = state.setdefault('acquired_source_ids', [])
                         if source.source_id not in acquired_source_list:
@@ -3701,6 +3695,9 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                     result = {'facts': rows}
                     if ocr_warnings:
                         result['warnings'] = ocr_warnings
+                    rec_summary = insights.reconciliation_for_model(insights.reconcile_run(state, source_by_id))
+                    if rec_summary is not None:
+                        result['reconciliation'] = rec_summary
                     tool_summary = {
                         'kind': 'record_facts',
                         'recorded_count': len(rows),
@@ -3920,11 +3917,11 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                 'status': result.get('status', 'completed'),
                 'rationale': args.get('rationale')[:300] if isinstance(args.get('rationale'), str) else None,
             }
-            if call.name == 'discover_sources':
+            if call.name == 'news_search':
                 if type(result.get('denied_count')) is int:
                     event['denied_count'] = result['denied_count']
                     event['denied_reasons'] = result['denied_reasons']
-            if call.name in {'discover_sources', 'acquire_sources'} | _FIN_TOOLS:
+            if call.name in {'news_search', 'acquire_sources'} | _FIN_TOOLS:
                 reason = result.get('reason')
                 if isinstance(reason, str) and len(reason) <= 100 and all(c.isalnum() or c == '_' for c in reason):
                     event['reason'] = reason

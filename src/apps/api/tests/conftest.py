@@ -6,7 +6,9 @@ import os
 import socket
 import sys
 
+import os
 import pytest
+os.environ.setdefault("FORESIGHTNINE_GDELT_ENABLED", "0")
 
 API_ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE_ROOT = API_ROOT.parents[1]

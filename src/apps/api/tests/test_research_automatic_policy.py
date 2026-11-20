@@ -130,7 +130,7 @@ def test_explicit_empty_selection_blocks_implicit_search_but_keeps_explicit_budg
     assert resp.status_code==202,resp.text
     op=resp.json()['operation']['operation_id']
     captured=client.get(path+'/runs/'+op+'/inputs',headers=headers).json()['budget']
-    assert captured.get('max_search_calls') is None and not captured['discover_sources'] and not captured['auto_fetch_official']
+    assert captured.get('max_search_calls') is None and not captured['news_search'] and not captured['auto_fetch_official']
     for _ in range(500):
         status=client.get(path+'/runs/'+op,headers=headers).json()['operation']['status']
         if status in ('completed','failed','cancelled'): break

@@ -820,3 +820,22 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 @media (prefers-reduced-motion: reduce) {
   .chart-modal, .chart-seg-btn, .chart-tool-btn, .cg-node-box, .cg-edge-line, .cg-claim-btn { animation: none; transition: none; }
 }
+
+/* Evidence views: data-as-of list, reconciliation table, coverage map, attribution. */
+.ev-views { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.ev-asof { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.ev-asof li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.ev-asof-k { color: var(--on-variant); min-width: 6em; }
+.ev-block { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; min-width: 0; }
+.ev-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ev-table th, .ev-table td { padding: 6px 8px; text-align: left; vertical-align: top; border-bottom: 0.5px solid var(--separator); }
+.ev-table tbody th { font-weight: 500; display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.ev-num { text-align: right; white-space: nowrap; }
+.ev-cells, .ev-cov, .ev-docs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ev-cells li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.ev-cov li { display: flex; flex-direction: column; gap: 2px; }
+.ev-cov-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.ev-title { font-weight: 500; }
+.ev-docs li { display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; }
+.ev-attribution { margin: 0; }
+.pt-attribution { font-size: 12px; }

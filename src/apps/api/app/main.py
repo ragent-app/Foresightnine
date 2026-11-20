@@ -122,6 +122,8 @@ from .research_coordinator import ResearchExecutionContext, PlanningResult, exec
 from .research_lifecycle import ResearchVersionChain
 from .research_checkpoints import ResearchCheckpointPublisher
 from .research_official_retrieval import execute_official_retrieval, official_source_id
+from .research_news_tool import default_news_providers
+from .research_run_insights import method_pack_records
 from .research_ocr import OcrUsageHooks, build_ocr_pages_callback, vision_engine_configured
 from .research_workflow import ResearchWorkflow, StageReceipt
 from .research_orchestrator import CoordinationObservation, ResearchOrchestrator
@@ -2990,6 +2992,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         retrieval_active = retrieval_permitted and topic.request.as_of is None and request.max_cost_usd is None
         capabilities: dict[str, Any] = {
             'search_available': discover is not None,
+            'news_search_available': discover is not None,
+            'search_library_available': True,
             'acquire_available': retrieval_active,
             'web_fetch_enabled': retrieval_active and allowed_hosts is None,
             'sec_available': sec_configured and retrieval_active,
@@ -3105,6 +3109,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         outcome = run_research_agent(question=effective_question, sources=sources, model=provider,
             context=context, discover=discover, acquire=acquire if retrieval_permitted else None,
             fin_data=fin_data, capabilities=capabilities,
+            news_providers=default_news_providers(discover) if discover is not None else [],
             checkpoint=save_runtime, initial_state=admitted_continuation.get('runtime'),
             on_submission=lambda: setattr(http_request.state, 'model_submission_started', True),
             on_stream_event=publish_stream_event,
@@ -3125,7 +3130,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                'status': 'unverified', 'published_at': lead.get('published_at')})
         ranges = [{'source_id': item['source_id'], 'character_start': item['start'], 'character_end': item['end']}
                   for item in last_runtime_state.get('read_ranges', [])]
-        search_events = [event for event in outcome.events if event.get('name') == 'discover_sources']
+        search_events = [event for event in outcome.events if event.get('name') == 'news_search']
         if search_events:
             search_status = search_events[-1]['reason'] if search_events[-1].get('reason') else search_events[-1]['status']
         # Eligible material that is not fully read (counting earlier turns) limits what absence can mean.
@@ -3159,7 +3164,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             gaps=gap_rows(gaps),
             usage=TurnUsage(model_calls=context.calls, search_calls=context.search_calls, total_tokens=known_total, usage_status=usage_status),
             search_status=search_status, official_fetch_status=official_fetch_status,
-            read_ranges=[ReadRange.model_validate(item) for item in ranges], events=outcome.events)
+            read_ranges=[ReadRange.model_validate(item) for item in ranges], events=outcome.events,
+            reconciliation=outcome.reconciliation, coverage_map=outcome.coverage_map,
+            method_packs=outcome.method_packs, attributions=outcome.attributions)
         content = merge_turn(parent_now.content, turn, claims=outcome.claims, facts=outcome.facts,
                              calculations=outcome.calculations, charts=outcome.charts,
                              sources=source_summaries(outcome.source_ids, ranges),
@@ -3249,6 +3256,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 ("max_input_tokens", "max_output_tokens", "timeout_seconds")},
             "system_prompt_sha256": sha256(RUNTIME_SYSTEM.encode("utf-8")).hexdigest(),
             "selection_method": RESEARCH_SELECTION_METHOD,
+            "method_packs": ((RESEARCH_RUN_INPUTS.get(continuation_input['operation_id']) or {}).get('method_packs', [])
+                             if continuation_input is not None else method_pack_records(effective_question)),
         })
 
     # Existing operation receipts have a v1 endpoint constraint. The v1 alias

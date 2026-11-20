@@ -676,19 +676,19 @@ describe("mock research API", () => {
 
     const on = await ran({ discover_sources: true });
     assert.equal(on.run.resolvedDiscover, true);
-    const discovery = on.events.find((event) => event.kind === "tool" && event.name === "discover_sources");
+    const discovery = on.events.find((event) => event.kind === "tool" && event.name === "news_search");
     assert.equal(discovery.status, "completed");
     assert.equal(discovery.rationale, "搜索公开线索");
     assert.ok(on.final.usage.search_calls >= 1);
     assert.ok(on.turn.usage.search_calls >= 1);
-    assert.ok(on.turn.events.some((event) => event.kind === "tool" && event.name === "discover_sources"));
+    assert.ok(on.turn.events.some((event) => event.kind === "tool" && event.name === "news_search"));
     assert.equal(on.turn.search_status, "completed");
     assert.deepEqual(on.saved.content.source_candidates.map((row) => row.url), leads);
     assert.deepEqual(Object.keys(on.saved.content.source_candidates[0]).sort(), ["published_at", "retrieved_at", "search_provider", "search_result_hash", "status", "title", "url"]);
 
     for (const extra of [{ discover_sources: null }, { discover_sources: false }, { max_search_calls: 0 }, { discover_sources: true, max_search_calls: 0 }]) {
       const off = await ran(extra);
-      assert.equal(off.events.some((event) => event.name === "discover_sources"), false, JSON.stringify(extra));
+      assert.equal(off.events.some((event) => event.name === "news_search"), false, JSON.stringify(extra));
       assert.equal(off.turn.search_status, "not_requested");
       assert.equal(off.turn.usage.search_calls, 0);
       assert.deepEqual(off.saved.content.source_candidates, []);
@@ -712,7 +712,7 @@ describe("mock research API", () => {
     assert.equal((await omitted({ max_search_calls: 0 })).resolvedDiscover, false);
     const omittedRun = await omitted({});
     assert.equal(omittedRun.discoverActive, true);
-    assert.ok(omittedRun.events.some((event) => event.name === "discover_sources"));
+    assert.ok(omittedRun.events.some((event) => event.name === "news_search"));
 
     // A candidate URL that is already saved is not duplicated by a later discovery.
     const topic = await newTopic([], "发现来源测试");
@@ -1571,7 +1571,7 @@ describe("L2 SSE /runs/:op/events endpoint", () => {
       assert.ok(comments.some((c) => c.comment === "heartbeat"));
 
       const stepEvents = events.filter((f) => f.event === "step.event");
-      const discoverEvent = stepEvents.find((f) => f.data.event?.name === "discover_sources");
+      const discoverEvent = stepEvents.find((f) => f.data.event?.name === "news_search");
       if (discoverEvent?.data.event?.summary) {
         assert.equal(discoverEvent.data.interim.leads_count, discoverEvent.data.event.summary.eligible_count);
       }

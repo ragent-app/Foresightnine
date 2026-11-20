@@ -134,7 +134,7 @@ LEADS = [{"title": "HK annual report", "url": "https://www1.hkexnews.hk/listedco
 
 
 def test_discovery_keeps_blocked_leads_visible_but_not_acquirable():
-    m = Model([turn("discover_sources", {"query": "q", "rationale": "r"}, "d1"), STOP])
+    m = Model([turn("news_search", {"query": "q", "rationale": "r"}, "d1"), STOP])
     run_research_agent(question="Q", sources=[], model=m, context=context(), discover=lambda q: LEADS)
     fb = feedback(m)
     by_host = {lead["url"].split("/")[2]: lead for lead in fb["leads"]}
@@ -146,7 +146,7 @@ def test_discovery_keeps_blocked_leads_visible_but_not_acquirable():
 
 def test_acquire_of_blocked_lead_is_denied_without_calling_acquire():
     calls = []
-    m = Model([turn("discover_sources", {"query": "q", "rationale": "r"}, "d1"),
+    m = Model([turn("news_search", {"query": "q", "rationale": "r"}, "d1"),
                turn("acquire_sources", {"urls": [LEADS[0]["url"], LEADS[1]["url"]], "rationale": "r"}, "a1"), STOP])
     run_research_agent(question="Q", sources=[], model=m, context=context(), discover=lambda q: LEADS,
                        acquire=lambda url, title: calls.append(url) or (None, {"status": "failed"}))

@@ -161,6 +161,22 @@ class ReadRange(BaseModel):
     character_end: int = Field(gt=0)
 
 
+class MethodPackRef(BaseModel):
+    """A research method pack that was loaded into the run's first message (id, version and content fingerprint)."""
+    model_config = ConfigDict(extra="forbid")
+    pack_id: str
+    version: str
+    fingerprint: str
+
+
+class TurnAttribution(BaseModel):
+    """Attribution that must travel with a result, for example the GDELT Project citation."""
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    text: str
+    url: str | None = None
+
+
 class ResearchTurn(BaseModel):
     """One question and its run. Immutable once saved, except by continuing the same turn."""
     model_config = ConfigDict(extra="forbid")
@@ -189,6 +205,11 @@ class ResearchTurn(BaseModel):
     read_ranges: list[ReadRange] = Field(default_factory=list)
     # Sanitized run events keep their own per-tool shape; extra keys are allowed here only.
     events: list[dict] = Field(default_factory=list)
+    # Deterministic run views (versioned UI structures, see research_reconciliation.ui_view / research_coverage_map.ui_view).
+    reconciliation: dict | None = None
+    coverage_map: dict | None = None
+    method_packs: list[MethodPackRef] = Field(default_factory=list)
+    attributions: list[TurnAttribution] = Field(default_factory=list)
 
 
 class ResearchContent(BaseModel):

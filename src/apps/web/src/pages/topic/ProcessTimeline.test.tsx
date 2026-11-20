@@ -30,13 +30,13 @@ const RICH_EVENTS: ProgressEvent[] = [
   {
     index: 1,
     kind: "tool",
-    name: "discover_sources",
+    name: "news_search",
     status: "completed",
     reason: null,
     rationale: "检索财报线索",
     denied_count: 1,
     summary: {
-      kind: "discover_sources",
+      kind: "news_search",
       found_count: 2,
       eligible_count: 1,
       denied_count: 1,
@@ -241,13 +241,13 @@ describe("ProcessTimeline", () => {
       {
         index: 1,
         kind: "tool",
-        name: "discover_sources",
+        name: "news_search",
         status: "completed",
         reason: null,
         rationale: "<img src=x onerror=alert(1)>",
         denied_count: null,
         summary: {
-          kind: "discover_sources",
+          kind: "news_search",
           found_count: 1,
           eligible_count: 1,
           denied_count: 0,

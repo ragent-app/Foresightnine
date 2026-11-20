@@ -52,7 +52,7 @@ TOOL_CATEGORY: dict[str, str] = {
     "historical_prices": "market_prices", "market_data": "market_prices",
     "company_financials": "financial_statements", "sec_company_concept": "financial_statements", "sec_company_facts": "financial_statements",
     "filings": "filings", "sec_filings": "filings", "sec_full_text_search": "filings",
-    "discover_sources": "news_web", "acquire_sources": "news_web",
+    "news_search": "news_web", "acquire_sources": "news_web",
 }
 _MACRO_TOOL = re.compile(r"^(?:macro|fred|world_?bank|imf|ecb|oecd|bls|census)", re.I)
 _DATA_TOOLS = frozenset(TOOL_CATEGORY)
@@ -431,7 +431,7 @@ def build_coverage_map(state: Mapping[str, Any] | None = None, *, events: Sequen
         purpose = _clip(e.get("rationale"))
         c = cats[cat]
         c["events"] += 1
-        if name == "discover_sources":
+        if name == "news_search":
             found, denied = summary.get("found_count"), e.get("denied_count", summary.get("denied_count"))
             eligible = summary.get("eligible_count")
             c["counts"]["discover_calls"] += 1

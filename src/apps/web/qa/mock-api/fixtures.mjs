@@ -206,7 +206,7 @@ export function usageFromEvents(events) {
   const models = events.filter((e) => e.kind === "model");
   return {
     model_calls: models.length,
-    search_calls: events.filter((e) => e.kind === "tool" && e.name === "discover_sources" && e.status === "completed").length,
+    search_calls: events.filter((e) => e.kind === "tool" && e.name === "news_search" && e.status === "completed").length,
     total_tokens: models.reduce((sum, e) => sum + (Number.isInteger(e.usage) ? e.usage : 0), 0),
   };
 }

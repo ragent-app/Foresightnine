@@ -11,6 +11,7 @@ import { extractReferencedChartIds, MarkdownContent } from "../../ui/MarkdownCon
 import { useNow } from "../../ui/media";
 import { Menu, type MenuEntry } from "../../ui/Menu";
 import { CitationButton } from "./Citation";
+import { EvidenceViews } from "./EvidenceViews";
 import { ChartCard } from "./charts/ChartCard";
 import { LiveDraftPreview, LiveEmptyOrStream } from "./LiveStreamView";
 import { ProcessTimeline } from "./ProcessTimeline";
@@ -299,6 +300,7 @@ export function AnswerBlock({ turn, actions }: { turn: ResearchV2.ResearchTurn; 
       <ClaimList claims={items.claims} />
       {items.claims.length > 0 ? <p className="note">{VERIFY_NOTE}</p> : null}
       <GapCallout turn={turn} actions={actions} tone={partial ? "partial" : "completed"} />
+      <EvidenceViews turn={turn} />
       {partial && partialNotes ? <PartialNotesBlock notes={partialNotes} /> : null}
       <SummaryLinks turn={turn} />
     </div>

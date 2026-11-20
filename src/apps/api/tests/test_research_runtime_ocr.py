@@ -509,7 +509,7 @@ def test_api_run_ocr_vision_page_is_billed_in_ledger(monkeypatch, tmp_path, at_i
             self.calls += 1
             results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
             if not results:
-                return turn('discover_sources', {'query': 'Report revenue', 'rationale': 'find'}, 'd1')
+                return turn('news_search', {'query': 'Report revenue', 'rationale': 'find'}, 'd1')
             if len(results) == 1:
                 return turn('acquire_sources', {'urls': [pdf_url], 'rationale': 'fetch'}, 'a1')
             if len(results) == 2:

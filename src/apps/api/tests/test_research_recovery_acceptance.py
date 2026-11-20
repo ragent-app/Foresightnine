@@ -1114,7 +1114,7 @@ def test_runtime_timeout_continuation_policy_and_loop_breaker_edge_cases():
     unread_cp = {
         'user': '{}',
         'history': [
-            {'assistant': {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'd1', 'name': 'discover_sources', 'input': {}}]},
+            {'assistant': {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'd1', 'name': 'news_search', 'input': {}}]},
              'results': [{'tool_call_id': 'd1', 'content': json.dumps({'leads': [{'url': 'https://example.com', 'title': 'Lead'}]}), 'is_error': False}]},
             {'assistant': {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'r1', 'name': 'read_sources', 'input': {}}]},
              'results': [{'tool_call_id': 'r1', 'content': json.dumps({'results': [{'source_id': 's1', 'start': 0, 'end': 3000, 'text': 'B' * 3000}]}), 'is_error': False}]},

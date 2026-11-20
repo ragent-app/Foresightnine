@@ -6,7 +6,7 @@ Provider access and storage are explicit capabilities supplied by the caller.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from hashlib import sha256
 from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
@@ -340,6 +340,14 @@ def execute_official_retrieval(*, request: ResearchRunRequest, question: str | N
                 content_type = fetched.content_type
                 redirect_count = getattr(fetched, 'redirect_count', 0)
                 retrieval = _retrieval_fields(is_official, content_type, fetched)
+            date_info = getattr(fetched, 'published_date', None)
+            if isinstance(date_info, dict) and date_info:
+                provenance_dates = {k: v for k, v in {
+                    'published_at_source': date_info.get('source'), 'published_at_timezone': date_info.get('timezone'),
+                    'published_at_confidence': date_info.get('confidence'), 'published_at_precision': date_info.get('precision'),
+                    'modified_at': date_info.get('modified_at')}.items() if v}
+            else:
+                provenance_dates = {}
             effective_permissions = SourcePermissions(store=True, display=True, model_input=True, export=is_official)
             effective_kind = 'official' if is_official else 'user_supplied'
             provenance: dict[str, Any] = {}
@@ -355,9 +363,19 @@ def execute_official_retrieval(*, request: ResearchRunRequest, question: str | N
                 }
             elif final_url != canonical_source_url(str(source_request.url)):
                 provenance = {'final_url': final_url}
+            if provenance_dates:
+                provenance = {**provenance, **provenance_dates}
             document_pages = getattr(fetched, 'pages', None)
             if isinstance(document_pages, dict) and document_pages:
                 provenance = {**provenance, 'document_pages': document_pages}
+            published_dt = None
+            if isinstance(date_info, dict) and isinstance(date_info.get('published_at'), str):
+                try:
+                    parsed_dt = datetime.fromisoformat(date_info['published_at'])
+                    # Naive values (timezone unknown) are stored as UTC with the uncertainty kept in provenance.
+                    published_dt = parsed_dt if parsed_dt.tzinfo else parsed_dt.replace(tzinfo=timezone.utc)
+                except ValueError:
+                    published_dt = None
             context.ensure_running()
             # A URL alone is not a version: re-fetch and compare raw response
             # hashes, falling back to extracted text only where no raw hash exists.
@@ -382,6 +400,7 @@ def execute_official_retrieval(*, request: ResearchRunRequest, question: str | N
                         url=final_url,
                         kind=effective_kind,
                         permissions=effective_permissions,
+                        **({'published_at': published_dt} if published_dt is not None else {}),
                     ),
                     **retrieval,
                     **({'provenance': provenance} if provenance else {}),

@@ -23,12 +23,13 @@ PERIOD_LIMIT = 64
 EXPRESSION_LIMIT = 200
 TIMESTAMP_LIMIT = 64
 SUMMARY_MAX_BYTES = 2048
+_ATTRIBUTION_IDS = frozenset({'gdelt'})
 
 _STATUSES = ('pending', 'running', 'completed', 'failed', 'cancelled')
 _MODEL_PHASES = ('connecting', 'thinking', 'responding', 'retrying')
 _CURRENT_BY_PENDING = {'model': {'kind': 'model'}, 'model_returned': {'kind': 'model'}}
 _TOOL_BY_PENDING = {
-    'search': 'discover_sources',
+    'search': 'news_search',
     'acquire': 'acquire_sources',
     'historical_prices': 'historical_prices',
     'sec_company_concept': 'sec_company_concept',
@@ -89,7 +90,7 @@ def _sanitize_summary(tool_name: str | None, raw: Any) -> dict[str, Any] | None:
         return None
 
     clean: dict[str, Any] | None = None
-    if kind == 'discover_sources':
+    if kind == 'news_search':
         found = _nonneg_int(raw.get('found_count'))
         eligible = _nonneg_int(raw.get('eligible_count'))
         denied = _nonneg_int(raw.get('denied_count'))
@@ -110,11 +111,34 @@ def _sanitize_summary(tool_name: str | None, raw: Any) -> dict[str, Any] | None:
                 'published_at': _text(item.get('published_at'), TIMESTAMP_LIMIT),
             })
         clean = {
-            'kind': 'discover_sources',
+            'kind': 'news_search',
             'found_count': found,
             'eligible_count': eligible,
             'denied_count': denied,
             'leads_preview': leads_preview,
+        }
+        clusters = _nonneg_int(raw.get('cluster_count'))
+        if clusters is not None:
+            clean['cluster_count'] = clusters
+        attributions = raw.get('attributions')
+        if isinstance(attributions, list):
+            clean['attributions'] = [a for a in attributions if isinstance(a, str) and a in _ATTRIBUTION_IDS][:4]
+    elif kind == 'search_library':
+        hit_count = _nonneg_int(raw.get('hit_count'))
+        source_count = _nonneg_int(raw.get('source_count'))
+        unsearched = _nonneg_int(raw.get('unsearched_pages'))
+        previews = raw.get('hits_preview')
+        if hit_count is None or source_count is None or unsearched is None or not isinstance(previews, list):
+            return None
+        clean = {
+            'kind': 'search_library',
+            'query': _text(raw.get('query'), TITLE_LIMIT) or '',
+            'hit_count': hit_count,
+            'source_count': source_count,
+            'unsearched_pages': unsearched,
+            'complete': bool(raw.get('complete')),
+            'hits_preview': [{'title': _text(i.get('title'), TITLE_LIMIT) or '', 'page': _nonneg_int(i.get('page'))}
+                             for i in previews[:5] if isinstance(i, Mapping)],
         }
     elif kind == 'acquire_sources':
         acquired = _nonneg_int(raw.get('acquired_count'))
@@ -410,7 +434,7 @@ def _interim_counts(checkpoint: Mapping[str, Any] | None, saved_turn: Any) -> di
             if not isinstance(summary, Mapping):
                 continue
             s_kind = summary.get('kind')
-            if s_kind == 'discover_sources':
+            if s_kind == 'news_search':
                 previews = summary.get('leads_preview') if isinstance(summary.get('leads_preview'), list) else []
                 for item in previews:
                     if isinstance(item, Mapping):

@@ -1,6 +1,6 @@
 {
  "id": "macro_release",
- "version": "1.0.0",
+ "version": "1.1.0",
  "title_zh": "宏观数据解读",
  "title_en": "Macro data release",
  "applies_when": {
@@ -89,7 +89,7 @@
    "id": "official_release",
    "description": "Release value, prior value and revision from the official statistical agency or central bank.",
    "preferred_tools": [
-    "discover_sources",
+    "news_search",
     "acquire_sources",
     "read_pages",
     "search_library"
@@ -115,8 +115,7 @@
    "id": "expectations",
    "description": "Market expectations if published by a source; otherwise state they are unavailable.",
    "preferred_tools": [
-    "news_search",
-    "discover_sources"
+    "news_search"
    ],
    "required": false,
    "freshness": "before the release",

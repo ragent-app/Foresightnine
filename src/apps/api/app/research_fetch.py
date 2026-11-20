@@ -447,6 +447,7 @@ class FetchedText:
     content_type: str
     original_html_base64: str | None = None
     pages: dict | None = None
+    published_date: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -468,6 +469,34 @@ class FetchedDocument:
     original_pdf_base64: str | None = None
     redirect_count: int = 0
     pages: dict | None = None
+    published_date: dict | None = None
+
+
+# Publication metadata (JSON-LD, meta tags, <time>, bylines) sits in the head or near the top of the page, so only the
+# first bytes are parsed: a multi-megabyte HTML file never goes through the date extractor in full.
+PUBLISHED_DATE_HEAD_BYTES = 524_288
+
+
+def _published_date_info(raw: bytes | None, path: Path | None) -> dict | None:
+    from .news.published_date import extract_published_date
+    try:
+        if raw is None and path is not None:
+            with path.open("rb") as handle:
+                raw = handle.read(PUBLISHED_DATE_HEAD_BYTES)
+        if not raw:
+            return None
+        found = extract_published_date(raw[:PUBLISHED_DATE_HEAD_BYTES])
+    except Exception:
+        return None
+    if found.published is None and found.modified is None:
+        return None
+    info: dict = {}
+    if found.published is not None:
+        info.update(published_at=found.published.iso(), precision=found.published.precision, timezone=found.published.timezone,
+                    source=found.published.source, confidence=found.published.confidence)
+    if found.modified is not None:
+        info["modified_at"] = found.modified.iso()
+    return info
 
 
 class _HashingSink:
@@ -1041,6 +1070,7 @@ def _fetch_document_impl(
         raise FetchFailure("source_too_large", f"Response exceeded {download_cap:,} byte limit.")
     text, document_pages = extract_text_pages(source, content_type_header, is_html=is_html, deadline=parse_deadline)
     original_base64: str | None = None
+    date_info = _published_date_info(raw, spool_path) if is_html else None
     if is_html and size <= MAX_FETCH_BYTES:
         data = raw if raw is not None else spool_path.read_bytes()  # type: ignore[union-attr]
         original_base64 = base64.b64encode(data).decode("ascii")
@@ -1055,6 +1085,7 @@ def _fetch_document_impl(
         original_html_base64=original_base64,
         redirect_count=redirect_count,
         pages=document_pages,
+        published_date=date_info,
     )
 
 
@@ -1116,6 +1147,7 @@ def fetch_official_text(
         content_type=document.content_type,
         original_html_base64=document.original_html_base64,
         pages=document.pages,
+        published_date=document.published_date,
     )
 
 

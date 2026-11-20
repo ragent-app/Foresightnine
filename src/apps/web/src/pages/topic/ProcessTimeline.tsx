@@ -4,7 +4,8 @@ import type {
   CalculateFinancialsSummary,
   CreateChartSummary,
   CurrentActivity,
-  DiscoverSourcesSummary,
+  NewsSearchSummary,
+  SearchLibrarySummary,
   HistoricalPricesSummary,
   ProgressEvent,
   ReadSourcesSummary,
@@ -13,6 +14,7 @@ import type {
   ToolEventSummary,
 } from "../../api/types";
 import {
+  ATTRIBUTION_NOTE_LABEL,
   chartTypeLabel,
   formulaLabel,
   LIVE_STAGED_TAG,
@@ -36,9 +38,10 @@ function shortDate(iso: string | null): string | null {
   return formatted ? formatted.slice(0, 10) : iso.slice(0, 10);
 }
 
-function DiscoverSummaryView({ summary }: { summary: DiscoverSourcesSummary }) {
+function DiscoverSummaryView({ summary }: { summary: NewsSearchSummary }) {
   const [open, setOpen] = useState(false);
   const countParts = [`发现 ${formatInteger(summary.found_count)} 条线索`];
+  if (summary.cluster_count !== undefined && summary.cluster_count > 0) countParts.push(`，归并为 ${formatInteger(summary.cluster_count)} 组报道`);
   if (summary.eligible_count > 0 || summary.denied_count > 0) {
     const detail = [`可用 ${formatInteger(summary.eligible_count)}`];
     if (summary.denied_count > 0) detail.push(`受限 ${formatInteger(summary.denied_count)}`);
@@ -65,6 +68,29 @@ function DiscoverSummaryView({ summary }: { summary: DiscoverSourcesSummary }) {
               </li>
             );
           })}
+        </ul>
+      ) : null}
+      {summary.attributions?.includes("gdelt") ? (
+        <span className="meta pt-attribution">{`${ATTRIBUTION_NOTE_LABEL}：`}<a className="link" href="https://www.gdeltproject.org/" target="_blank" rel="noopener noreferrer">The GDELT Project</a></span>
+      ) : null}
+    </div>
+  );
+}
+
+function LibrarySummaryView({ summary }: { summary: SearchLibrarySummary }) {
+  const parts = [`命中 ${formatInteger(summary.hit_count)} 处`, `覆盖 ${formatInteger(summary.source_count)} 份资料`];
+  if (summary.unsearched_pages > 0) parts.push(`${formatInteger(summary.unsearched_pages)} 页尚未提取文字，未检索`);
+  return (
+    <div className="pt-summary">
+      <span className="pt-sub">{parts.join(" · ")}</span>
+      {summary.hits_preview.length > 0 ? (
+        <ul className="pt-items">
+          {summary.hits_preview.map((hit, idx) => (
+            <li key={`${hit.title}-${idx}`} className="pt-item">
+              <span className="pt-item-title">{hit.title}</span>
+              {hit.page !== null ? <span className="meta">{`第 ${hit.page} 页`}</span> : null}
+            </li>
+          ))}
         </ul>
       ) : null}
     </div>
@@ -210,8 +236,10 @@ function CreateChartSummaryView({ summary, live }: { summary: CreateChartSummary
 
 function ToolSummaryView({ summary, live }: { summary: ToolEventSummary; live: boolean }) {
   switch (summary.kind) {
-    case "discover_sources":
+    case "news_search":
       return <DiscoverSummaryView summary={summary} />;
+    case "search_library":
+      return <LibrarySummaryView summary={summary} />;
     case "acquire_sources":
       return <AcquireSummaryView summary={summary} />;
     case "sec_company_concept":

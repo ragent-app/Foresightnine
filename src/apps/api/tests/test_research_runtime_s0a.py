@@ -127,7 +127,7 @@ def test_acquire_with_unknown_and_success_continues_and_keeps_source():
             return None, {'status': 'failed', 'outcomes': [{'reason': 'source_timeout', 'external_state': 'unknown'}]}
         return good, {'outcomes': [{'reason': None, 'external_state': 'returned'}]}
 
-    m = Model([turn('discover_sources', {'query': 'q', 'rationale': 'r'}, 'd1'),
+    m = Model([turn('news_search', {'query': 'q', 'rationale': 'r'}, 'd1'),
                turn('acquire_sources', {'urls': ['https://a.example.com/x', 'https://b.example.com/y'], 'rationale': 'r'}, 'a1'),
                STOP])
     out = run_research_agent(question='Q', sources=[], model=m, context=context(), discover=lambda q: discover_hits, acquire=acquire)
@@ -160,7 +160,7 @@ def test_guidance_table_covers_required_codes():
 
 
 def test_search_no_results_gets_reason():
-    m = Model([turn('discover_sources', {'query': 'q', 'rationale': 'r'}, 'd1'), STOP])
+    m = Model([turn('news_search', {'query': 'q', 'rationale': 'r'}, 'd1'), STOP])
     run_research_agent(question='Q', sources=[], model=m, context=context(), discover=lambda q: [])
     assert feedback(m)['reason'] == 'search_no_results'
 
@@ -168,7 +168,7 @@ def test_search_no_results_gets_reason():
 def test_redirect_leads_report_unresolved_titles_without_resolving():
     hits = [{'title': f'Title {i} ' + 'x' * 200, 'url': f'https://www.google.com/goto?url=TOKEN{i}&gsessionid=x'} for i in range(7)]
     hits.append({'title': 'Ok', 'url': 'https://www.sec.gov/ok'})
-    m = Model([turn('discover_sources', {'query': 'q', 'rationale': 'r'}, 'd1'), STOP])
+    m = Model([turn('news_search', {'query': 'q', 'rationale': 'r'}, 'd1'), STOP])
     run_research_agent(question='Q', sources=[], model=m, context=context(), discover=lambda q: hits)
     fb = feedback(m)
     assert len(fb['unresolved_titles']) == 5 and all(len(t) <= 160 for t in fb['unresolved_titles'])
@@ -178,7 +178,7 @@ def test_redirect_leads_report_unresolved_titles_without_resolving():
 
 def test_acquired_but_unread_sources_enter_outcome_source_ids():
     src = make_source('unread', url='https://b.example.com/y', kind='official')
-    m = Model([turn('discover_sources', {'query': 'q', 'rationale': 'r'}, 'd1'),
+    m = Model([turn('news_search', {'query': 'q', 'rationale': 'r'}, 'd1'),
                turn('acquire_sources', {'urls': ['https://b.example.com/y'], 'rationale': 'r'}, 'a1'), STOP])
     out = run_research_agent(question='Q', sources=[], model=m, context=context(),
                              discover=lambda q: [{'title': 'B', 'url': 'https://b.example.com/y'}],

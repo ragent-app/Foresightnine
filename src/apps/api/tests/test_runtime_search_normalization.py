@@ -11,8 +11,8 @@ from tests.test_research_runtime import Model, context, turn
 
 
 def test_search_merges_leads_and_preserves_query_identity():
-    model = Model([turn('discover_sources', {'query': 'one', 'rationale': 'find'}, 'a'),
-                   turn('discover_sources', {'query': 'two', 'rationale': 'find more'}, 'b'),
+    model = Model([turn('news_search', {'query': 'one', 'rationale': 'find'}, 'a'),
+                   turn('news_search', {'query': 'two', 'rationale': 'find more'}, 'b'),
                    ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')])
     snapshots = []
     def discover(query):
@@ -26,8 +26,8 @@ def test_search_merges_leads_and_preserves_query_identity():
 
 
 def test_all_invalid_response_disables_connector_without_another_search():
-    model = Model([turn('discover_sources', {'query': 'one', 'rationale': 'find'}, 'a'),
-                   turn('discover_sources', {'query': 'two', 'rationale': 'try again'}, 'b'),
+    model = Model([turn('news_search', {'query': 'one', 'rationale': 'find'}, 'a'),
+                   turn('news_search', {'query': 'two', 'rationale': 'try again'}, 'b'),
                    ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')])
     calls = []
     def discover(query):
@@ -35,7 +35,7 @@ def test_all_invalid_response_disables_connector_without_another_search():
         return [{'bad': 'row'}]
     result = run_research_agent(question='Q', sources=[], model=model, context=context(), discover=discover)
     assert calls == ['one']
-    events = [e for e in result.events if e.get('name') == 'discover_sources']
+    events = [e for e in result.events if e.get('name') == 'news_search']
     assert [e['reason'] for e in events] == ['search_response_invalid', 'search_response_invalid']
 
 
@@ -117,8 +117,8 @@ def test_glm_opaque_goto_batch_does_not_poison_search_invalid_response():
 
     provider = GlmCodingMcpSearchEvidenceProvider('synthetic-secret', transport=lambda *_args: replies.pop(0), sleeper=lambda _delay: None)
     model = Model([
-        turn('discover_sources', {'query': 'first opaque batch', 'rationale': 'find'}, 'c1'),
-        turn('discover_sources', {'query': 'second mixed batch', 'rationale': 'find more'}, 'c2'),
+        turn('news_search', {'query': 'first opaque batch', 'rationale': 'find'}, 'c1'),
+        turn('news_search', {'query': 'second mixed batch', 'rationale': 'find more'}, 'c2'),
         ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
     ])
 
@@ -132,7 +132,7 @@ def test_glm_opaque_goto_batch_does_not_poison_search_invalid_response():
         checkpoint=lambda s: snapshots.append(json.loads(json.dumps(s))),
     )
 
-    events = [e for e in outcome.events if e.get('name') == 'discover_sources']
+    events = [e for e in outcome.events if e.get('name') == 'news_search']
     assert len(events) == 2
     assert events[0]['status'] == 'completed'
     assert events[0]['reason'] == 'search_sources_denied'
@@ -140,12 +140,12 @@ def test_glm_opaque_goto_batch_does_not_poison_search_invalid_response():
     assert events[1]['status'] == 'completed'
     assert events[1]['denied_reasons'] == {'source_not_authorized': 1, 'invalid_lead': 0, 'redirect_link': 1}
     assert [lead['url'] for lead in snapshots[-1]['leads']] == [
-        'https://www.sec.gov/nvda.htm',
         'https://investor.nvidia.com/news',
-    ]
+        'https://www.sec.gov/nvda.htm',
+    ]  # news_search lists the newest story cluster first
     assert [lead['published_at'] for lead in snapshots[-1]['leads']] == [
-        '2026-08-01T00:00:00+00:00',
         '2026-08-02T00:00:00+00:00',
+        '2026-08-01T00:00:00+00:00',
     ]
 
 

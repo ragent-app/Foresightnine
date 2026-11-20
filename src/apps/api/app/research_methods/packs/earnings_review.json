@@ -1,6 +1,6 @@
 {
  "id": "earnings_review",
- "version": "1.0.0",
+ "version": "1.1.0",
  "title_zh": "财报复盘",
  "title_en": "Earnings review",
  "applies_when": {
@@ -90,7 +90,7 @@
    "preferred_tools": [
     "company_financials",
     "filings",
-    "discover_sources"
+    "news_search"
    ],
    "required": true,
    "freshness": "latest filed period as of research_clock",
@@ -138,8 +138,7 @@
    "description": "Prior coverage and independent commentary on the results.",
    "preferred_tools": [
     "search_library",
-    "news_search",
-    "discover_sources"
+    "news_search"
    ],
    "required": false,
    "freshness": "dated before research_clock",

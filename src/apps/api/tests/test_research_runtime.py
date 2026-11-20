@@ -134,9 +134,9 @@ def test_tool_batch_cursor_resumes_without_model_replay():
 
 
 def test_same_action_with_changed_rationale_is_no_progress():
-    m = Model([turn('discover_sources', {'query': 'Q', 'rationale': 'first'}, 'a'),
-               turn('discover_sources', {'query': 'Q', 'rationale': 'different wording'}, 'b'),
-               turn('discover_sources', {'query': 'Q', 'rationale': 'third wording'}, 'c')])
+    m = Model([turn('news_search', {'query': 'Q', 'rationale': 'first'}, 'a'),
+               turn('news_search', {'query': 'Q', 'rationale': 'different wording'}, 'b'),
+               turn('news_search', {'query': 'Q', 'rationale': 'third wording'}, 'c')])
     result = run_research_agent(question='Q', sources=[], model=m, context=context())
     assert result.reason == 'no_progress'
 
@@ -203,7 +203,7 @@ def test_known_failed_response_is_saved_and_settled():
 
 def test_acquire_known_failure_details_are_model_feedback():
     lead = {'url': 'https://example.com/report', 'title': 'Report'}
-    m = Model([turn('discover_sources', {'query': 'report', 'rationale': 'find'}, 'a'),
+    m = Model([turn('news_search', {'query': 'report', 'rationale': 'find'}, 'a'),
                turn('acquire_sources', {'urls': [lead['url']], 'rationale': 'read'}, 'b'),
                ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')])
     result = run_research_agent(question='Q', sources=[], model=m, context=context(), discover=lambda _: [lead],
@@ -249,12 +249,12 @@ def test_fred_search_leads_are_removed_before_model_feedback_and_checkpoint():
              {'url': 'https://alfred.stlouisfed.org/series/GDP', 'snippet': 'ALFRED SECRET CONTENT'},
              {'url': 'https://api.stlouisfed.org/fred/series', 'snippet': 'API SECRET CONTENT'},
              {'url': 'https://example.com/report', 'title': 'Other'}]
-    m = Model([turn('discover_sources', {'query': 'economy', 'rationale': 'discover'}, 'a'),
+    m = Model([turn('news_search', {'query': 'economy', 'rationale': 'discover'}, 'a'),
                ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')])
     saved = []
     outcome = run_research_agent(question='Q', sources=[], model=m, context=context(), discover=lambda _: leads,
                                  checkpoint=lambda s: saved.append(json.loads(json.dumps(s))))
-    event = next(e for e in outcome.events if e.get('name') == 'discover_sources')
+    event = next(e for e in outcome.events if e.get('name') == 'news_search')
     assert event['denied_count'] == 3
     assert event['denied_reasons']['source_not_authorized'] == 3
     feedback = json.loads(m.inputs[-1][-1]['content'])
@@ -307,7 +307,7 @@ def test_neutral_provider_truncated_tool_call_never_runs():
         def estimate_turn_input(self, turn):
             return 10
         def complete_turn(self, turn, **kwargs):
-            return ModelResponse({'opaque': ['private']}, (ModelToolCall('a', 'discover_sources',
+            return ModelResponse({'opaque': ['private']}, (ModelToolCall('a', 'news_search',
                 {'query': 'q', 'rationale': 'r'}),), ModelUsage(1, 1, 2), 'max_tokens', 'truncated')
     seen = []
     result = run_research_agent(question='Q', sources=[], model=Neutral(), context=context(),
@@ -609,7 +609,8 @@ def test_available_capabilities_derived_and_overridden_in_initial_prompt():
     payload_default = json.loads(m_default.inputs[0][1]['content'])
     assert 'available_historical_price_instruments' not in payload_default
     assert payload_default['available_capabilities'] == {
-        'search_available': False, 'acquire_available': False, 'sec_available': False, **off}
+        'search_available': False, 'acquire_available': False, 'sec_available': False,
+        'search_library_available': True, 'news_search_available': False, **off}
 
     m_derived = Model([stop])
     run_research_agent(question='Q', sources=[], model=m_derived, context=context(),
@@ -617,7 +618,8 @@ def test_available_capabilities_derived_and_overridden_in_initial_prompt():
     assert json.loads(m_derived.inputs[0][1]['content'])['available_capabilities'] == {
         'search_available': True, 'acquire_available': True, 'sec_available': True,
         'market_data_available': True, 'market_data_key_required': False,
-        'sec_financials_available': True, 'filings_available': True}
+        'sec_financials_available': True, 'filings_available': True,
+        'search_library_available': True, 'news_search_available': True, 'news_search_providers': ['glm-coding-mcp-search']}
 
     m_nokey = Model([stop])
     run_research_agent(question='Q', sources=[], model=m_nokey, context=context(), fin_data=make_toolbox(market_key=None))
@@ -628,9 +630,9 @@ def test_available_capabilities_derived_and_overridden_in_initial_prompt():
     custom_caps = {'search_available': True, 'web_fetch_enabled': True, 'sec_available': False}
     run_research_agent(question='Q', sources=[], model=m_custom, context=context(), capabilities=custom_caps)
     payload_custom = json.loads(m_custom.inputs[0][1]['content'])
-    assert payload_custom['available_capabilities'] == {**custom_caps, **off}
+    assert payload_custom['available_capabilities'] == {**custom_caps, **off, 'search_library_available': True, 'news_search_available': False}
 
-    for token in ('available_capabilities', 'discover_sources', 'acquire_sources', 'resolve_entity', 'market_data',
+    for token in ('available_capabilities', 'news_search', 'acquire_sources', 'resolve_entity', 'market_data',
                   'company_financials', 'filings', 'market_data_key_required', 'sec_financials_available', 'partial'):
         assert token in SYSTEM
 
@@ -703,7 +705,7 @@ def test_acquire_sources_distinguishes_disabled_undiscovered_and_granular_failur
     fb_unsearched = json.loads(m_unsearched.inputs[1][-1]['content'])
     assert fb_unsearched['status'] == 'unavailable'
     assert fb_unsearched['reason'] == 'lead_not_discovered'
-    assert 'discover_sources' in fb_unsearched['hint']
+    assert 'news_search' in fb_unsearched['hint']
     assert fb_unsearched['results'][0]['reason'] == 'lead_not_discovered'
     assert 'search_candidates_not_acquired' not in [g['code'] for g in res_unsearched.gaps]
 
@@ -734,7 +736,7 @@ def test_acquire_sources_distinguishes_disabled_undiscovered_and_granular_failur
         }
 
     m_multi = Model([
-        turn('discover_sources', {'query': 'NVDA', 'rationale': 'search'}, 'd1'),
+        turn('news_search', {'query': 'NVDA', 'rationale': 'search'}, 'd1'),
         turn('acquire_sources', {'urls': [leads[0]['url'], leads[1]['url'], leads[2]['url']], 'rationale': 'fetch'}, 'a1'),
         ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
     ])
@@ -762,7 +764,7 @@ def test_acquire_sources_distinguishes_disabled_undiscovered_and_granular_failur
 
     # Single-URL granular failure surfaces that exact reason at top level too.
     m_single = Model([
-        turn('discover_sources', {'query': 'NVDA', 'rationale': 'search'}, 'd1'),
+        turn('news_search', {'query': 'NVDA', 'rationale': 'search'}, 'd1'),
         turn('acquire_sources', {'urls': [leads[1]['url']], 'rationale': 'fetch'}, 'a1'),
         ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
     ])
@@ -916,7 +918,7 @@ def test_acquire_sources_rate_limit_allows_one_retry_and_blocks_second_repeat():
         return acquired_src, {'status': 'completed', 'outcomes': [{'status': 'retrieved', 'external_state': 'returned'}]}
 
     m_ok = Model([
-        turn('discover_sources', {'query': 'NVDA 10-K', 'rationale': 'find filing'}, 'd1'),
+        turn('news_search', {'query': 'NVDA 10-K', 'rationale': 'find filing'}, 'd1'),
         turn('acquire_sources', {'urls': [lead['url']], 'rationale': 'fetch'}, 'a1'),
         turn('acquire_sources', {'urls': [lead['url']], 'rationale': 'retry after rate limit'}, 'a2'),
         turn('read_sources', {'reads': [{'source_id': 'source_acq_nvda'}], 'rationale': 'read'}, 'r1'),
@@ -952,7 +954,7 @@ def test_acquire_sources_rate_limit_allows_one_retry_and_blocks_second_repeat():
         }
 
     m_fail = Model([
-        turn('discover_sources', {'query': 'NVDA 10-K', 'rationale': 'find filing'}, 'd1'),
+        turn('news_search', {'query': 'NVDA 10-K', 'rationale': 'find filing'}, 'd1'),
         turn('acquire_sources', {'urls': [lead['url']], 'rationale': 'fetch'}, 'a1'),
         turn('acquire_sources', {'urls': [lead['url']], 'rationale': 'retry 1'}, 'a2'),
         turn('acquire_sources', {'urls': [lead['url']], 'rationale': 'retry 2'}, 'a3'),
@@ -1528,7 +1530,7 @@ def test_l1_compaction_triggers_under_tight_context_and_record_facts_still_locat
 
         def research_capacity(self):
             # Trigger watermark: ~39_000 * 3 * 0.58 - fixed (~23k, incl. the financial data tool schemas) ≈ ~44k chars.
-            return SimpleNamespace(context_tokens=39_000, output_tokens=1000, input_counter='chars_div_3')
+            return SimpleNamespace(context_tokens=40_000, output_tokens=1000, input_counter='chars_div_3')
 
         def estimate_turn_input(self, turn_obj):
             return 100

@@ -5,12 +5,24 @@ export type OperationStatus = "pending" | "running" | "completed" | "failed" | "
 
 export type ModelPhase = "connecting" | "thinking" | "responding" | "retrying";
 
-export interface DiscoverSourcesSummary {
-  kind: "discover_sources";
+export interface NewsSearchSummary {
+  kind: "news_search";
   found_count: number;
   eligible_count: number;
   denied_count: number;
+  cluster_count?: number;
+  attributions?: string[];
   leads_preview: { title: string; host: string; published_at: string | null }[];
+}
+
+export interface SearchLibrarySummary {
+  kind: "search_library";
+  query: string;
+  hit_count: number;
+  source_count: number;
+  unsearched_pages: number;
+  complete: boolean;
+  hits_preview: { title: string; page: number | null }[];
 }
 
 export interface AcquireSourcesSummary {
@@ -68,7 +80,8 @@ export interface CreateChartSummary {
 }
 
 export type ToolEventSummary =
-  | DiscoverSourcesSummary
+  | NewsSearchSummary
+  | SearchLibrarySummary
   | AcquireSourcesSummary
   | SecCompanyConceptSummary
   | HistoricalPricesSummary
@@ -282,4 +295,80 @@ export interface ResearchCapabilities {
   sec_financials_available: boolean;
   filings_available: boolean;
   sources: { name: string; output_type: string; permission: string; configured: boolean; hosts: string[]; coverage: string }[];
+}
+
+// apps/api/app/research_reconciliation.py ui_view (versioned; saved on ResearchTurn.reconciliation)
+export type ReconciliationBadge = "consistent" | "rounding_only" | "differs_minor" | "differs_material";
+
+export interface ReconciliationCell {
+  fact_id: string;
+  source_id: string;
+  source_class: string;
+  host: string | null;
+  display_value: string;
+  published_at: string | null;
+  as_of: string | null;
+  is_reference: boolean;
+  low_ocr_confidence: boolean;
+}
+
+export interface ReconciliationRow {
+  row_id: string;
+  title: { zh: string; en: string };
+  status: "consistent" | "rounding_only" | "differs";
+  severity: string | null;
+  badge: ReconciliationBadge;
+  cells: ReconciliationCell[];
+  reference: { value: string | null; source_class: string | null } | null;
+  independent_source_count: number;
+}
+
+export interface ReconciliationView {
+  version: number;
+  counts: Record<string, number>;
+  rows: ReconciliationRow[];
+}
+
+// apps/api/app/research_coverage_map.py ui_view (versioned; saved on ResearchTurn.coverage_map)
+export interface CoverageRow {
+  category: string;
+  label: { zh: string; en: string };
+  status: string;
+  status_label: { zh: string; en: string };
+  data_as_of: string | null;
+  is_stale: boolean | null;
+  trading_days_behind: number | null;
+  days_behind_clock: number | null;
+  not_established: string[];
+  sources_obtained: number;
+}
+
+export interface CoverageDocument {
+  source_id: string;
+  category: string;
+  title: string | null;
+  chars_total: number | null;
+  read_fraction: number | null;
+  pages: {
+    total: number;
+    by_status: Record<string, number>;
+    read: number;
+    unread_text_pages: number;
+    unsearched_count: number;
+    ocr_low_confidence_pages: number[];
+  } | null;
+}
+
+export interface CoverageMapView {
+  version: number;
+  run_status: string | null;
+  clock_date: string | null;
+  rows: CoverageRow[];
+  documents: CoverageDocument[];
+}
+
+export interface TurnAttributionView {
+  id: string;
+  text: string;
+  url: string | null;
 }

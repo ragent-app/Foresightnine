@@ -78,10 +78,10 @@ describe("parseTurnEvents", () => {
     const events = parseTurnEvents([
       {
         kind: "tool",
-        name: "discover_sources",
+        name: "news_search",
         status: "completed",
         summary: {
-          kind: "discover_sources",
+          kind: "news_search",
           found_count: 3,
           eligible_count: 2,
           denied_count: 1,
@@ -171,7 +171,7 @@ describe("parseTurnEvents", () => {
     ]);
     expect(events).toHaveLength(8);
     const discover = events[0];
-    expect(discover?.kind === "tool" && discover.summary?.kind === "discover_sources" && discover.summary.leads_preview[0]).toEqual({
+    expect(discover?.kind === "tool" && discover.summary?.kind === "news_search" && discover.summary.leads_preview[0]).toEqual({
       title: "10-K", host: "sec.gov", published_at: "2026-08-01",
     });
     const read = events[4];
@@ -190,7 +190,7 @@ describe("stepRows", () => {
     { index: 2, kind: "model", finish_reason: null, usage: null, input_tokens: null, output_tokens: null, settlement: null },
     { index: 3, kind: "model_failure", code: "timeout" },
     { index: 4, kind: "model_failure", code: null },
-    { index: 5, kind: "tool", name: "discover_sources", status: "unavailable", reason: "search_not_authorized_or_unavailable", rationale: "找线索", denied_count: null },
+    { index: 5, kind: "tool", name: "news_search", status: "unavailable", reason: "search_not_authorized_or_unavailable", rationale: "找线索", denied_count: null },
     { index: 6, kind: "tool", name: null, status: "weird", reason: null, rationale: null, denied_count: null },
     { index: 7, kind: "submission", status: "completed" },
   ];
@@ -211,7 +211,7 @@ describe("stepRows", () => {
   });
   it("describes tool and submission rows with tones", () => {
     expect(rows[5]).toEqual({
-      kind: "tool", index: 5, tool: "discover_sources", label: "搜索线索", status: "不可用", tone: "review", rationale: "找线索", reason: "搜索没有开启或不可用",
+      kind: "tool", index: 5, tool: "news_search", label: "搜索线索", status: "不可用", tone: "review", rationale: "找线索", reason: "搜索没有开启或不可用",
     });
     expect(rows[6]).toMatchObject({ tool: null, label: "工具", status: "weird", tone: "neutral", reason: null });
     expect(rows[7]).toEqual({ kind: "tool", index: 7, tool: "submit_research", label: "提交结论", status: "完成", tone: "support", rationale: null, reason: null });

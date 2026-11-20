@@ -97,7 +97,7 @@ def test_progress_reports_the_tool_in_flight(env, monkeypatch):
         return []
 
     monkeypatch.setattr(api, 'evidence_provider', SimpleNamespace(supports_project_search=True, search=blocked_search))
-    env.install(Scripted(lambda m, k: turn('discover_sources', {'query': 'revenue', 'rationale': 'look'}, 'd'), submit(sid)))
+    env.install(Scripted(lambda m, k: turn('news_search', {'query': 'revenue', 'rationale': 'look'}, 'd'), submit(sid)))
     try:
         response = env.start({'discover_sources': True, 'max_search_calls': 1})
         assert response.status_code == 202, response.text
@@ -105,7 +105,7 @@ def test_progress_reports_the_tool_in_flight(env, monkeypatch):
         assert started.wait(10)
         body = progress(env, operation_id)
         assert body['current']['kind'] == 'tool'
-        assert body['current']['name'] == 'discover_sources'
+        assert body['current']['name'] == 'news_search'
         assert body['current']['rationale'] == 'look'
         assert body['current']['target'] == 'revenue'
         assert isinstance(body['current']['started_at'], str) and body['current']['started_at']
@@ -132,7 +132,7 @@ def test_events_are_whitelisted_and_unknown_kinds_dropped(env):
         {'kind': 'model', 'finish_reason': 'tool_calls', 'usage': 2, 'usage_detail': {'input_tokens': 1, 'output_tokens': 1,
          'total_tokens': 2, 'cache_read_input_tokens': 5}, 'settlement': 'settled', 'external_state': 'returned', **hostile},
         {'kind': 'model_failure', 'code': 'provider_error', 'external_state': 'returned', **hostile},
-        {'kind': 'tool', 'name': 'discover_sources', 'status': 'completed', 'reason': 'search_no_results',
+        {'kind': 'tool', 'name': 'news_search', 'status': 'completed', 'reason': 'search_no_results',
          'rationale': 'x' * 500, 'denied_count': 2, 'denied_reasons': {'a': 1}, **hostile},
         {'kind': 'submission', 'status': 'completed', 'stopping_reason': 'SECRET-STOP', **hostile},
         {'kind': 'tool', 'name': 'read_sources', 'status': 'completed', 'rationale': 'read',
@@ -285,7 +285,7 @@ def test_all_eight_tools_current_activity_and_summaries():
         def complete(self, messages, tools, **kwargs):
             self.step += 1
             if self.step == 1:
-                return turn('discover_sources', {'query': 'NVDA FY2025 revenue', 'rationale': 'Find disclosures'}, 'c1')
+                return turn('news_search', {'query': 'NVDA FY2025 revenue', 'rationale': 'Find disclosures'}, 'c1')
             if self.step == 2:
                 return turn('acquire_sources', {'urls': [acq_url, ir_url], 'rationale': 'Fetch leads'}, 'c2')
             if self.step == 3:
@@ -349,8 +349,8 @@ def test_all_eight_tools_current_activity_and_summaries():
         assert secret not in serialized_activities
 
     tool_acts = {act['name']: act for act in recorded_activities if act['kind'] == 'tool'}
-    assert tool_acts['discover_sources']['target'] == 'NVDA FY2025 revenue'
-    assert tool_acts['discover_sources']['rationale'] == 'Find disclosures'
+    assert tool_acts['news_search']['target'] == 'NVDA FY2025 revenue'
+    assert tool_acts['news_search']['rationale'] == 'Find disclosures'
     assert tool_acts['acquire_sources']['target'] == 'www.sec.gov、nvidianews.nvidia.com'
     assert tool_acts['company_financials']['target'] == '1045810 · last_4_quarters'
     assert tool_acts['market_data']['target'] == 'SSE:ANT · 1day (2026-11-16 ~ 2026-11-19)'
@@ -364,14 +364,15 @@ def test_all_eight_tools_current_activity_and_summaries():
 
     sanitized = sanitize_events(outcome.events)
     tool_events = {ev['name']: ev for ev in sanitized if ev['kind'] == 'tool'}
-    assert tool_events['discover_sources']['summary'] == {
-        'kind': 'discover_sources',
+    assert tool_events['news_search']['summary'] == {
+        'kind': 'news_search',
         'found_count': 3,
         'eligible_count': 2,
         'denied_count': 1,
+        'cluster_count': 2,
         'leads_preview': [
-            {'title': 'NVDA 10-K Filing', 'host': 'www.sec.gov', 'published_at': '2025-02-26T00:00:00+00:00'},
             {'title': 'NVIDIA Q4 Release', 'host': 'nvidianews.nvidia.com', 'published_at': '2025-02-26T00:00:00+00:00'},
+            {'title': 'NVDA 10-K Filing', 'host': 'www.sec.gov', 'published_at': '2025-02-26T00:00:00+00:00'},
         ],
     }
     assert tool_events['acquire_sources']['summary'] == {
@@ -648,11 +649,11 @@ def test_legacy_checkpoint_and_events_backward_compatibility_and_2kb_cap():
     heavy_title = '中' * 160
     heavy_event = {
         'kind': 'tool',
-        'name': 'discover_sources',
+        'name': 'news_search',
         'status': 'completed',
         'rationale': '搜索',
         'summary': {
-            'kind': 'discover_sources',
+            'kind': 'news_search',
             'found_count': 5,
             'eligible_count': 5,
             'denied_count': 0,
@@ -752,10 +753,10 @@ def test_saved_turn_interim_deduplicates_repeat_leads_and_acquisitions():
     repeated_events = [
         {
             'kind': 'tool',
-            'name': 'discover_sources',
+            'name': 'news_search',
             'status': 'completed',
             'summary': {
-                'kind': 'discover_sources',
+                'kind': 'news_search',
                 'found_count': 1,
                 'eligible_count': 1,
                 'denied_count': 0,
@@ -764,10 +765,10 @@ def test_saved_turn_interim_deduplicates_repeat_leads_and_acquisitions():
         },
         {
             'kind': 'tool',
-            'name': 'discover_sources',
+            'name': 'news_search',
             'status': 'completed',
             'summary': {
-                'kind': 'discover_sources',
+                'kind': 'news_search',
                 'found_count': 1,
                 'eligible_count': 1,
                 'denied_count': 0,

@@ -1,13 +1,20 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
 import type {
+  CoverageDocument,
+  CoverageMapView,
+  CoverageRow,
   CurrentActivity,
   InterimSummary,
   ModelPhase,
   OperationStatus,
   ProgressEvent,
+  ReconciliationCell,
+  ReconciliationRow,
+  ReconciliationView,
   RunProgress,
   RunUsage,
   ToolEventSummary,
+  TurnAttributionView,
 } from "../api/types";
 import { gapText, MODEL_FAILURE_LABEL, toolLabel, toolReasonLabel, toolStatusLabel } from "./copy";
 import { formatInteger } from "./format";
@@ -44,7 +51,7 @@ function cleanNote(value: unknown): string | null {
 function parseToolSummary(raw: unknown): ToolEventSummary | null {
   if (!isRecord(raw)) return null;
   switch (raw["kind"]) {
-    case "discover_sources": {
+    case "news_search": {
       const found_count = nonNegInt(raw["found_count"]);
       const eligible_count = nonNegInt(raw["eligible_count"]);
       const denied_count = nonNegInt(raw["denied_count"]);
@@ -62,7 +69,30 @@ function parseToolSummary(raw: unknown): ToolEventSummary | null {
           published_at: text(item["published_at"], NAME_LIMIT),
         });
       }
-      return { kind: "discover_sources", found_count, eligible_count, denied_count, leads_preview };
+      const cluster_count = nonNegInt(raw["cluster_count"]);
+      const attributions = Array.isArray(raw["attributions"])
+        ? raw["attributions"].filter((x): x is string => typeof x === "string").slice(0, 4)
+        : [];
+      return {
+        kind: "news_search", found_count, eligible_count, denied_count, leads_preview,
+        ...(cluster_count !== null ? { cluster_count } : {}),
+        ...(attributions.length > 0 ? { attributions } : {}),
+      };
+    }
+    case "search_library": {
+      const hit_count = nonNegInt(raw["hit_count"]);
+      const source_count = nonNegInt(raw["source_count"]);
+      const unsearched_pages = nonNegInt(raw["unsearched_pages"]);
+      if (hit_count === null || source_count === null || unsearched_pages === null) return null;
+      const previewRaw = Array.isArray(raw["hits_preview"]) ? raw["hits_preview"].slice(0, PREVIEW_LIMIT) : [];
+      const hits_preview: { title: string; page: number | null }[] = [];
+      for (const item of previewRaw) {
+        if (isRecord(item)) hits_preview.push({ title: text(item["title"], TITLE_LIMIT) ?? "", page: nonNegInt(item["page"]) });
+      }
+      return {
+        kind: "search_library", query: text(raw["query"], TITLE_LIMIT) ?? "", hit_count, source_count, unsearched_pages,
+        complete: raw["complete"] === true, hits_preview,
+      };
     }
     case "acquire_sources": {
       const acquired_count = nonNegInt(raw["acquired_count"]);
@@ -592,4 +622,137 @@ export function suggestionsFor(content: ResearchContent): { key: "gap" | "counte
     result.push({ key: "counter", label: "寻找反方证据", prefill: "请寻找与当前主要结论相反的证据，并说明它们的强度。" });
   }
   return result;
+}
+
+// ---- run views saved on a turn (reconciliation, coverage map, attributions); parsed defensively, never trusted ----
+
+const BADGES = new Set(["consistent", "rounding_only", "differs_minor", "differs_material"]);
+
+function zhEn(value: unknown): { zh: string; en: string } {
+  if (isRecord(value)) return { zh: text(value["zh"], DETAIL_LIMIT) ?? "", en: text(value["en"], DETAIL_LIMIT) ?? "" };
+  return { zh: "", en: "" };
+}
+
+export function parseReconciliation(raw: unknown): ReconciliationView | null {
+  if (!isRecord(raw) || !Array.isArray(raw["rows"])) return null;
+  const rows: ReconciliationRow[] = [];
+  for (const item of raw["rows"].slice(0, 50)) {
+    if (!isRecord(item) || typeof item["row_id"] !== "string") continue;
+    const status = item["status"];
+    if (status !== "consistent" && status !== "rounding_only" && status !== "differs") continue;
+    const badgeRaw = item["badge"];
+    const badge = typeof badgeRaw === "string" && BADGES.has(badgeRaw)
+      ? (badgeRaw as ReconciliationRow["badge"])
+      : (status === "differs" ? "differs_minor" : status);
+    const cells: ReconciliationCell[] = [];
+    for (const cell of Array.isArray(item["cells"]) ? item["cells"].slice(0, 12) : []) {
+      if (!isRecord(cell)) continue;
+      cells.push({
+        fact_id: text(cell["fact_id"], NAME_LIMIT) ?? "",
+        source_id: text(cell["source_id"], NAME_LIMIT) ?? "",
+        source_class: text(cell["source_class"], NAME_LIMIT) ?? "other",
+        host: text(cell["host"], HOST_LIMIT),
+        display_value: text(cell["display_value"], NAME_LIMIT) ?? "",
+        published_at: text(cell["published_at"], NAME_LIMIT),
+        as_of: text(cell["as_of"], NAME_LIMIT),
+        is_reference: cell["is_reference"] === true,
+        low_ocr_confidence: cell["low_ocr_confidence"] === true,
+      });
+    }
+    const ref = isRecord(item["reference"]) ? item["reference"] : null;
+    rows.push({
+      row_id: item["row_id"],
+      title: zhEn(item["title"]),
+      status,
+      severity: text(item["severity"], NAME_LIMIT),
+      badge,
+      cells,
+      reference: ref
+        ? { value: ref["value"] === null || ref["value"] === undefined ? null : String(ref["value"]).slice(0, NAME_LIMIT), source_class: text(ref["source_class"], NAME_LIMIT) }
+        : null,
+      independent_source_count: nonNegInt(item["independent_source_count"]) ?? cells.length,
+    });
+  }
+  if (rows.length === 0) return null;
+  const counts: Record<string, number> = {};
+  if (isRecord(raw["counts"])) {
+    for (const [k, v] of Object.entries(raw["counts"])) {
+      const n = nonNegInt(v);
+      if (n !== null) counts[k] = n;
+    }
+  }
+  return { version: nonNegInt(raw["version"]) ?? 1, counts, rows };
+}
+
+export function parseCoverageMap(raw: unknown): CoverageMapView | null {
+  if (!isRecord(raw) || !Array.isArray(raw["rows"])) return null;
+  const rows: CoverageRow[] = [];
+  for (const item of raw["rows"].slice(0, 12)) {
+    if (!isRecord(item) || typeof item["category"] !== "string" || typeof item["status"] !== "string") continue;
+    rows.push({
+      category: item["category"],
+      label: zhEn(item["label"]),
+      status: item["status"],
+      status_label: zhEn(item["status_label"]),
+      data_as_of: text(item["data_as_of"], NAME_LIMIT),
+      is_stale: typeof item["is_stale"] === "boolean" ? item["is_stale"] : null,
+      trading_days_behind: nonNegInt(item["trading_days_behind"]),
+      days_behind_clock: nonNegInt(item["days_behind_clock"]),
+      not_established: Array.isArray(item["not_established"])
+        ? item["not_established"].filter((x): x is string => typeof x === "string").slice(0, 8).map((x) => x.slice(0, 300))
+        : [],
+      sources_obtained: nonNegInt(item["sources_obtained"]) ?? 0,
+    });
+  }
+  const documents: CoverageDocument[] = [];
+  for (const item of Array.isArray(raw["documents"]) ? raw["documents"].slice(0, 30) : []) {
+    if (!isRecord(item) || typeof item["source_id"] !== "string") continue;
+    const pages = isRecord(item["pages"]) ? item["pages"] : null;
+    const byStatus: Record<string, number> = {};
+    if (pages && isRecord(pages["by_status"])) {
+      for (const [k, v] of Object.entries(pages["by_status"])) {
+        const n = nonNegInt(v);
+        if (n !== null) byStatus[k] = n;
+      }
+    }
+    documents.push({
+      source_id: item["source_id"],
+      category: text(item["category"], NAME_LIMIT) ?? "other",
+      title: text(item["title"], TITLE_LIMIT),
+      chars_total: nonNegInt(item["chars_total"]),
+      read_fraction: typeof item["read_fraction"] === "number" ? item["read_fraction"] : null,
+      pages: pages
+        ? {
+            total: nonNegInt(pages["total"]) ?? 0,
+            by_status: byStatus,
+            read: nonNegInt(pages["read"]) ?? 0,
+            unread_text_pages: nonNegInt(pages["unread_text_pages"]) ?? 0,
+            unsearched_count: nonNegInt(pages["unsearched_count"]) ?? 0,
+            ocr_low_confidence_pages: Array.isArray(pages["ocr_low_confidence_pages"])
+              ? pages["ocr_low_confidence_pages"].filter((x): x is number => typeof x === "number").slice(0, 50)
+              : [],
+          }
+        : null,
+    });
+  }
+  const clock = isRecord(raw["research_clock"]) ? raw["research_clock"] : null;
+  const run = isRecord(raw["run"]) ? raw["run"] : null;
+  return {
+    version: nonNegInt(raw["version"]) ?? 1,
+    run_status: run ? text(run["status"], NAME_LIMIT) : null,
+    clock_date: clock ? text(clock["utc_date"], NAME_LIMIT) : null,
+    rows,
+    documents,
+  };
+}
+
+export function parseAttributions(raw: unknown): TurnAttributionView[] {
+  const out: TurnAttributionView[] = [];
+  for (const item of Array.isArray(raw) ? raw.slice(0, 8) : []) {
+    if (!isRecord(item)) continue;
+    const id = text(item["id"], NAME_LIMIT);
+    const label = text(item["text"], DETAIL_LIMIT);
+    if (id && label) out.push({ id, text: label, url: text(item["url"], 300) });
+  }
+  return out;
 }

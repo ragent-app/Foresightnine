@@ -212,7 +212,7 @@ def test_discovery_candidates_are_visible_without_restricted_excerpts(monkeypatc
         def complete(self, messages, tools, **kwargs):
             self.calls += 1
             if self.calls == 1:
-                return turn('discover_sources', {'query': 'revenue', 'rationale': 'find reports'}, 'search')
+                return turn('news_search', {'query': 'revenue', 'rationale': 'find reports'}, 'search')
             if self.calls == 2:
                 assert 'FRED SECRET' not in str(messages)
                 return turn('read_sources', {'reads': [{'source_id': source_id}], 'rationale': 'disclosure'}, 'read')
@@ -272,7 +272,7 @@ def test_question_only_run_can_discover_and_cite_market_data_with_users_own_key(
             if stage == 0:
                 caps = json.loads(messages[1]['content'])['available_capabilities']
                 assert caps['market_data_available'] is True and caps['market_data_key_required'] is False
-                return turn('discover_sources', {'query': 'DEMO index', 'rationale': 'Find context.'}, 'search')
+                return turn('news_search', {'query': 'DEMO index', 'rationale': 'Find context.'}, 'search')
             if stage == 1:
                 assert results[0]['leads'][0]['url'] == 'https://example.com/index'
                 return turn('market_data', {'entity_id': 'NYSE:DEMO', 'start_date': '2020-01-02',
@@ -493,7 +493,7 @@ def test_question_only_run_fetches_open_web_html_and_pdf_and_persists_partial_no
             if stage == 0:
                 payload = json.loads(messages[1]['content'])
                 seen_caps['value'] = payload['available_capabilities']
-                return turn('discover_sources', {'query': 'Example revenue', 'rationale': 'Find web sources.'}, 'd1')
+                return turn('news_search', {'query': 'Example revenue', 'rationale': 'Find web sources.'}, 'd1')
             if stage == 1:
                 return turn('acquire_sources', {'urls': [html_url, pdf_url], 'rationale': 'Fetch HTML and PDF.'}, 'a1')
             if stage == 2:
@@ -991,7 +991,7 @@ def test_company_financials_syncs_official_fetch_status_with_priority_guard(monk
         def complete(self, messages, tools, **kwargs):
             results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
             if len(results) == 0:
-                return turn('discover_sources', {'query': 'NVDA 10-K', 'rationale': 'Find 10-K.'}, 'd1')
+                return turn('news_search', {'query': 'NVDA 10-K', 'rationale': 'Find 10-K.'}, 'd1')
             if len(results) == 1:
                 return turn('acquire_sources', {'urls': [filing_url], 'rationale': 'Acquire 10-K.'}, 'a1')
             if len(results) == 2:
@@ -1162,7 +1162,7 @@ def test_multiturn_api_propagates_failed_source_accesses_to_prior_research(monke
             results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
             if self.turn_index == 1:
                 if len(results) == 0:
-                    return turn('discover_sources', {'query': 'Blocked 10-K', 'rationale': 'Find 10-K.'}, 'd1')
+                    return turn('news_search', {'query': 'Blocked 10-K', 'rationale': 'Find 10-K.'}, 'd1')
                 if len(results) == 1:
                     return turn('acquire_sources', {'urls': [blocked_url], 'rationale': 'Try fetching 10-K.'}, 'a1')
                 acq_res = results[1]['results'][0]
@@ -1276,7 +1276,7 @@ def test_web_html_acquisition_does_not_mark_official_fetch_status_completed_and_
             results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
             if self.turn_no == 1:
                 if len(results) == 0:
-                    return turn('discover_sources', {'query': 'Nasdaq quote', 'rationale': 'Find web page.'}, 'd1')
+                    return turn('news_search', {'query': 'Nasdaq quote', 'rationale': 'Find web page.'}, 'd1')
                 if len(results) == 1:
                     return turn('acquire_sources', {'urls': [yahoo_url], 'rationale': 'Fetch Yahoo quote.'}, 'a1')
                 if len(results) == 2:
@@ -1309,7 +1309,7 @@ def test_web_html_acquisition_does_not_mark_official_fetch_status_completed_and_
                     'status': 'partial',
                 }, 's2')
             if len(results) == 0:
-                return turn('discover_sources', {'query': 'Schwab update', 'rationale': 'Find Schwab.'}, 'd3')
+                return turn('news_search', {'query': 'Schwab update', 'rationale': 'Find Schwab.'}, 'd3')
             if len(results) == 1:
                 return turn('acquire_sources', {'urls': [schwab_url], 'rationale': 'Fetch Schwab HTML.'}, 'a3')
             return turn('submit_research', {
