@@ -488,7 +488,9 @@ def test_question_only_run_fetches_open_web_html_and_pdf_and_persists_partial_no
     assert seen_caps['value']['acquire_available'] is True
     assert seen_caps['value']['web_fetch_enabled'] is True
     assert seen_caps['value']['sec_available'] is False
-    assert seen_caps['value']['max_fetch_bytes'] == 5_000_000
+    # Large PDFs are streamed and read page by page; the cap is the large-document safety limit.
+    assert seen_caps['value']['max_fetch_bytes'] == 200_000_000
+    assert seen_caps['value']['pdf_paged_reading'] is True
 
     version = client.get(path, headers=headers).json()['versions'][-1]
     saved_turn = version['content']['turns'][-1]

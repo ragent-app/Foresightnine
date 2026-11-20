@@ -184,7 +184,7 @@ def test_supports_over_256kb_up_to_5mb_and_rejects_oversized(monkeypatch):
 
     monkeypatch.setattr(research_fetch, "_default_binary_transport", fake_binary_transport)
     doc = fetch_source_document(request("https://example.com/long-filing"))
-    assert seen_limits == [5_000_000]
+    assert seen_limits == [research_fetch.large_document_max_bytes()]
     assert len(doc.text) > 200_000
 
     # Near 5 MB boundary passes; >5 MB fails with source_too_large.

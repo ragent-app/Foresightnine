@@ -53,9 +53,10 @@ class SecIdentityRequest(BaseModel):
 
 
 class SecFailure(ValueError):
-    def __init__(self, code: str):
+    def __init__(self, code: str, available_units: list[str] | None = None):
         super().__init__(code)
         self.code = code
+        self.available_units = available_units
 
 
 @dataclass(frozen=True)
@@ -211,6 +212,8 @@ def fetch_sec_concept(request: SecConceptRequest, user_agent: str | None,
         raise SecFailure("source_unavailable") from error
     if response.status_code == 429:
         raise SecFailure("source_rate_limited")
+    if response.status_code == 404:
+        raise SecFailure("source_tag_not_found")
     if not 200 <= response.status_code < 300:
         raise SecFailure("source_unavailable")
     if response.headers.get("content-type", "").split(";", 1)[0].lower().strip() != "application/json":
@@ -255,7 +258,8 @@ def fetch_sec_concept(request: SecConceptRequest, user_agent: str | None,
     except (ValueError, TypeError, KeyError, OverflowError, InvalidOperation, json.JSONDecodeError) as error:
         raise SecFailure("source_invalid") from error
     if not records:
-        raise SecFailure("source_no_matching_facts")
+        reported = sorted(name for name, entries in units.items() if isinstance(name, str) and isinstance(entries, list) and entries)
+        raise SecFailure("source_no_matching_facts", reported or None)
     lines = [f"SEC company concept: {entity}; CIK {request.cik}; taxonomy {request.taxonomy}; tag {request.tag}; label {label}.",
              f"Most recent {min(len(records), request.max_records)} of {len(records)} matching observations; filing date is not exact public availability time."]
     if unsupported_precision:

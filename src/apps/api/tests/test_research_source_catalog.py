@@ -388,3 +388,54 @@ def test_non_filing_sec_hosts_fail_closed_without_open_web_fallback(
     assert [row['reason'] for row in result.outcomes[:2]] == [expected_reason, expected_reason]
     assert result.outcomes[2]['status'] == 'retrieved'
 
+
+
+def _structured_fixture(monkeypatch, rows=None, failure=None):
+    import json
+    import app.research_structured_connector as bridge
+    from app.research_sec import SecResult
+    query = bridge.StructuredQuery(source_kind='sec_company_concept', parameters={
+        'entity_query': 'EXAMPLE', 'taxonomy': 'us-gaap', 'tag': 'Revenue', 'unit': 'USD',
+        'period_start': '2023-01-01', 'period_end': '2023-12-31'})
+    monkeypatch.setattr(bridge, 'search_sec_identities', lambda *_: {'candidates': [
+        {'cik': '0000000001', 'ticker': 'EXAMPLE', 'name': 'Example Inc', 'exchange': None}],
+        'source_url': 'u', 'retrieved_at': 't', 'response_sha256': 'h'})
+    def concept(request, agent):
+        if failure:
+            raise failure
+        return SecResult(url='u', title='t', response_sha256='r',
+                         text='SEC data\n' + '\n'.join(json.dumps(r) for r in rows))
+    monkeypatch.setattr(bridge, 'fetch_sec_concept', concept)
+    created = []
+    class Store:
+        def create(self, *a, **k):
+            created.append(1)
+            raise AssertionError('must not persist')
+    kwargs = dict(owner_id='o', operation_id='op', store=Store(), sec_agent_config='agent test@example.com',
+                  reserve_sec=lambda: True, context=context(), permitted=True)
+    return bridge, query, kwargs, created
+
+
+def test_sec_period_mismatch_lists_available_periods(monkeypatch):
+    rows = [{'val': i, 'unit': 'USD', 'start': f'20{10+i}-01-01', 'end': f'20{10+i}-12-31', 'fy': 2010 + i,
+             'fp': 'FY', 'form': '10-K', 'filed': f'20{11+i}-02-01'} for i in range(13)]
+    rows.append({'val': 1, 'unit': 'USD', 'start': '2023-02-01', 'end': '2024-01-31', 'filed': '2024-03-01'})
+    bridge, query, kwargs, created = _structured_fixture(monkeypatch, rows)
+    result = bridge.execute_structured_query(query, **kwargs)
+    assert result.reason == 'unit_or_period_not_found_in_returned_records', result.reason
+    assert result.status == 'unknown'
+    assert len(result.available_periods) == 12 and not created
+    assert result.available_periods[0]['end'] == '2024-01-31'
+    assert 'fy' not in result.available_periods[0]
+    ends = [p['end'] for p in result.available_periods]
+    assert ends == sorted(ends, reverse=True)
+
+
+def test_sec_tag_not_reported_and_unit_absent(monkeypatch):
+    from app.research_sec import SecFailure
+    bridge, query, kwargs, _ = _structured_fixture(monkeypatch, failure=SecFailure('source_tag_not_found'))
+    result = bridge.execute_structured_query(query, **kwargs)
+    assert (result.status, result.reason) == ('unknown', 'tag_not_reported')
+    bridge, query, kwargs, _ = _structured_fixture(monkeypatch, failure=SecFailure('source_no_matching_facts', ['shares']))
+    result = bridge.execute_structured_query(query, **kwargs)
+    assert result.status == 'unknown' and result.available_units == ['shares']

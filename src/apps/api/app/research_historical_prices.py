@@ -6,7 +6,7 @@ Twelve Data period semantics: https://support.twelvedata.com/en/articles/5214728
 """
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 import json
@@ -21,8 +21,51 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from .market_provider import MAX_VENDOR_BYTES
 from .openai_compatible import _default_binary_transport, _TransportFailure
 from .phase3 import ProviderFailure
+from .research_clock import exchange_session, last_completed_session, session_status
 from .research_sources import ResearchSource, SourceInput, SourcePermissions
 from .transport_diagnostics import TransportDiagnostics
+
+
+LOOKBACK_VALUES = ('5d', '1m', '3m', '6m', 'ytd', '1y', '3y', '5y', '10y')
+
+
+def _previous_weekday_before(day: date) -> date:
+    day -= timedelta(days=1)
+    while day.weekday() >= 5:
+        day -= timedelta(days=1)
+    return day
+
+
+def _latest_completed(now: datetime, exchange: str | None, timezone_name: str) -> tuple[date, str | None]:
+    session = exchange_session(exchange)
+    if session is not None:
+        return last_completed_session(now, session), session_status(now, session)
+    return _previous_weekday_before(now.astimezone(ZoneInfo(timezone_name)).date()), None
+
+
+def _shift_months(day: date, months: int) -> date:
+    index = day.year * 12 + day.month - 1 - months
+    year, month = divmod(index, 12)
+    month += 1
+    first_next = date(year + (month == 12), month % 12 + 1, 1)
+    return date(year, month, min(day.day, (first_next - timedelta(days=1)).day))
+
+
+def resolve_lookback(lookback: str, *, now: datetime, exchange: str | None, timezone_name: str) -> tuple[date, date]:
+    """Resolve a named window to (start, end) with end = latest completed session."""
+    if lookback not in LOOKBACK_VALUES:
+        raise ValueError('Unknown lookback; use one of: ' + ', '.join(LOOKBACK_VALUES))
+    end, _ = _latest_completed(now, exchange, timezone_name)
+    if lookback == '5d':
+        start = end
+        for _ in range(4):
+            start = _previous_weekday_before(start)
+    elif lookback == 'ytd':
+        start = date(end.year, 1, 1)
+    else:
+        count = int(lookback[:-1])
+        start = _shift_months(end, count if lookback.endswith('m') else count * 12)
+    return start, end
 
 
 class HistoricalInstrument(BaseModel):
@@ -75,7 +118,8 @@ def fetch_historical_price_source(*, config: HistoricalPriceConfig, instrument_i
                                   start_date: date, end_date: date, api_key: str,
                                   persist: Callable[[SourceInput, dict], ResearchSource],
                                   timeout_seconds: float = 8.0, cancel_event: Event | None = None,
-                                  fetch: Callable[..., bytes] | None = None) -> ResearchSource | None:
+                                  fetch: Callable[..., bytes] | None = None,
+                                  now: datetime | None = None) -> ResearchSource | None:
     """Fetch and persist only declared, authorized coverage; no coverage is inferred.
 
     ``persist`` receives the source and provenance and must durably store them.
@@ -90,10 +134,19 @@ def fetch_historical_price_source(*, config: HistoricalPriceConfig, instrument_i
     if start_date > end_date:
         raise ValueError('Invalid historical price date range.')
     item = matches[0]
-    if end_date >= datetime.now(ZoneInfo(item.exchange_timezone)).date():
-        raise ProviderFailure('historical_price_session_unconfirmed', 'Choose an end date before the current exchange session date.', retryable=False)
+    clock_now = now if now is not None else datetime.now(timezone.utc)
+    latest_completed, status = _latest_completed(clock_now, item.exchange, item.exchange_timezone)
+    effective_end = min(end_date, latest_completed)
+    clamped = effective_end < end_date
+    if start_date > effective_end:
+        failure = ProviderFailure('historical_price_range_after_latest_session',
+                                  f'The requested range starts after the latest completed session; the latest allowed end date is {effective_end.isoformat()}.',
+                                  retryable=False)
+        failure.hints = {'latest_allowed_end_date': latest_completed.isoformat()}
+        raise failure
+    # Twelve Data treats end_date as exclusive.
     query = urlencode({'symbol': item.symbol, 'exchange': item.exchange, 'interval': '1day',
-                       'start_date': start_date.isoformat(), 'end_date': end_date.isoformat(),
+                       'start_date': start_date.isoformat(), 'end_date': (effective_end + timedelta(days=1)).isoformat(),
                        'order': 'ASC', 'adjust': item.adjustment})
     url = 'https://api.twelvedata.com/time_series?' + query
     headers = {'Authorization': 'apikey ' + api_key}
@@ -131,7 +184,9 @@ def fetch_historical_price_source(*, config: HistoricalPriceConfig, instrument_i
             close = Decimal(str(row['close']))
         except (KeyError, TypeError, ValueError, InvalidOperation) as error:
             raise ValueError('Historical price row is invalid.') from error
-        if session < start_date or session > end_date or session in rows or not close.is_finite() or close <= 0:
+        if session > effective_end:
+            continue
+        if session < start_date or session in rows or not close.is_finite() or close <= 0:
             raise ValueError('Historical price row has an invalid date or value.')
         rows[session] = close
     if not rows or len(rows) >= 5000:
@@ -139,13 +194,16 @@ def fetch_historical_price_source(*, config: HistoricalPriceConfig, instrument_i
     unit = f'{item.quote_unit} ({item.currency})' if item.quote_unit else item.currency
     text = '\n'.join(f'{item.instrument_id} | {session.isoformat()} | daily close | {close} {unit}'
                      for session, close in sorted(rows.items()))
-    request = SourceInput(title=f'{item.instrument_id} daily close ({start_date} to {end_date})', text=text,
+    request = SourceInput(title=f'{item.instrument_id} daily close ({min(rows)} to {max(rows)})', text=text,
                           kind='market_data', permissions=config.permissions)
     provenance = {'provider': 'twelve_data', 'endpoint': 'time_series', 'instrument_id': item.instrument_id,
                   'symbol': item.symbol, 'exchange': item.exchange, 'currency': item.currency, 'quote_unit': item.quote_unit,
                   'interval': '1day', 'exchange_timezone': item.exchange_timezone,
                   'adjustment': item.adjustment, 'start_date': start_date.isoformat(),
-                  'end_date': end_date.isoformat(), 'actual_first_date': min(rows).isoformat(),
+                  'end_date': end_date.isoformat(), 'requested_end_date': end_date.isoformat(),
+                  'effective_end_date': effective_end.isoformat(), 'clamped': clamped,
+                  'latest_completed_session': latest_completed.isoformat(), 'session_status': status,
+                  'clock_now': clock_now.isoformat(), 'actual_first_date': min(rows).isoformat(),
                   'actual_last_date': max(rows).isoformat(), 'row_count': len(rows),
                   'provider_response_sha256': sha256(payload).hexdigest(),
                   'limitation': 'Provider coverage and revisions are not independently verified; missing sessions are not filled.'}

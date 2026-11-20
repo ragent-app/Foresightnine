@@ -51,6 +51,8 @@ services:
       - /home/lxx/.config/foresightnine/purchase-token-encryption.key:/run/secrets/foresightnine-purchase-token-encryption.key:ro
       - /home/lxx/.config/foresightnine/market-credential-encryption.key:/run/secrets/foresightnine-market-credential-encryption.key:ro
       - /home/lxx/.config/foresightnine/model-credential-encryption.key:/run/secrets/foresightnine-model-credential-encryption.key:ro
+      # Content-addressed store for retained large PDF originals and the OCR cache.
+      - foresightnine-documents:/data/documents
     healthcheck:
       test: ["CMD-SHELL", "/app/apps/api/.venv/bin/python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=2)\" > /dev/null"]
       interval: 10s
@@ -68,6 +70,7 @@ services:
       - ./staging.env
     environment:
       # This Compose file is development-only and intentionally secret-free.
+      FORESIGHTNINE_DOCUMENT_STORE_DIR: /data/documents
       FORESIGHTNINE_ENV: development
       FORESIGHTNINE_STORAGE_MODE: postgres
       FORESIGHTNINE_POSTGRES_URL: ${FORESIGHTNINE_POSTGRES_URL:?FORESIGHTNINE_POSTGRES_URL must be supplied by the deployment secret file}
@@ -111,3 +114,4 @@ services:
 volumes:
   foresightnine-postgres-data:
   foresightnine-redis-data:
+  foresightnine-documents:

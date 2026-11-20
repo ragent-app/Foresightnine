@@ -8,7 +8,9 @@ from datetime import datetime
 from hashlib import sha256
 from html.parser import HTMLParser
 import os
+from pathlib import Path
 import re
+import tempfile
 from time import monotonic
 from typing import Callable, Mapping
 from urllib.parse import urljoin, urlsplit, urlunsplit
@@ -24,6 +26,16 @@ from .openai_compatible import (
     _validated_addresses,
     is_public_ip_address,
 )
+from .research_blob_store import configured_blob_store, is_valid_sha256
+from .research_documents import (
+    DEFAULT_MAX_TEXT_CHARS,
+    PdfPagesError,
+    merge_ocr_into_document,
+    extract_pdf_pages,
+    pdf_extract_budget_seconds,
+    pdf_page_count,
+    page_map_from_text,
+)
 from .phase3 import ClientSearchEvidenceProvider, ProviderFailure
 from .research_source_policy import is_fred_source
 from .research_sources import SourcePermissions
@@ -33,6 +45,27 @@ PUBLIC_DOMAIN_OFFICIAL_HOSTS = frozenset({"www.bea.gov", "www.federalreserve.gov
 MAX_FETCH_BYTES = 5_000_000
 MAX_EXTRACTED_TEXT_CHARS = 2_000_000
 MAX_REDIRECT_HOPS = 4
+_LARGE_MAX_BYTES_ENV = "FORESIGHTNINE_LARGE_DOCUMENT_MAX_BYTES"
+_LARGE_SECONDS_ENV = "FORESIGHTNINE_LARGE_DOCUMENT_DOWNLOAD_SECONDS"
+LARGE_DOCUMENT_MAX_BYTES = 200_000_000
+LARGE_DOCUMENT_DOWNLOAD_SECONDS = 120.0
+_HARD_LARGE_MAX_BYTES = 256_000_000
+
+
+def large_document_max_bytes() -> int:
+    try:
+        value = int(os.environ.get(_LARGE_MAX_BYTES_ENV, ""))
+    except ValueError:
+        return LARGE_DOCUMENT_MAX_BYTES
+    return value if 1 <= value <= _HARD_LARGE_MAX_BYTES else LARGE_DOCUMENT_MAX_BYTES
+
+
+def large_document_download_seconds() -> float:
+    try:
+        value = float(os.environ.get(_LARGE_SECONDS_ENV, ""))
+    except ValueError:
+        return LARGE_DOCUMENT_DOWNLOAD_SECONDS
+    return value if value > 0 else LARGE_DOCUMENT_DOWNLOAD_SECONDS
 
 _ALLOWED_HOSTS_ENV = "FORESIGHTNINE_FETCH_ALLOWED_HOSTS"
 _BLOCKED_HOSTS_ENV = "FORESIGHTNINE_FETCH_BLOCKED_HOSTS"
@@ -417,7 +450,8 @@ class FetchedPdf:
     text: str
     response_sha256: str
     content_type: str
-    original_pdf_base64: str
+    original_pdf_base64: str | None = None
+    pages: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -429,6 +463,41 @@ class FetchedDocument:
     original_html_base64: str | None = None
     original_pdf_base64: str | None = None
     redirect_count: int = 0
+    pages: dict | None = None
+
+
+class _HashingSink:
+    """File sink that counts bytes and hashes while the body streams in."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self._file = path.open("wb")
+        self._hash = sha256()
+        self.size = 0
+
+    def write(self, data: bytes) -> int:
+        if self._file is None:
+            raise _TransportFailure("sink closed")
+        self._file.write(data)
+        self._hash.update(data)
+        self.size += len(data)
+        return len(data)
+
+    def reset(self) -> None:
+        if self._file is None:
+            raise _TransportFailure("sink closed")
+        self._file.seek(0)
+        self._file.truncate()
+        self._hash = sha256()
+        self.size = 0
+
+    def hexdigest(self) -> str:
+        return self._hash.hexdigest()
+
+    def close(self) -> None:
+        file, self._file = self._file, None
+        if file is not None:
+            file.close()
 
 
 def _header(headers: Mapping[str, str], name: str) -> str:
@@ -525,7 +594,7 @@ def _extract_html_text(html: str) -> str:
 
 
 def _extract_pdf_document(request: FetchSourceRequest, raw: bytes, *, final_url: str,
-                          redirect_count: int, deadline: float) -> FetchedDocument:
+                          redirect_count: int, deadline: float, ocr_usage=None) -> FetchedDocument:
     from .research_uploads import MAX_PDF_BYTES, PdfFailure, PdfUploadRequest, extract_pdf
 
     limit = min(MAX_FETCH_BYTES, MAX_PDF_BYTES)
@@ -536,6 +605,7 @@ def _extract_pdf_document(request: FetchSourceRequest, raw: bytes, *, final_url:
     remaining = deadline - monotonic()
     if remaining <= 0:
         raise FetchFailure("source_timeout")
+    scanned_pages: int | None = None
     try:
         extracted = extract_pdf(
             PdfUploadRequest(
@@ -546,17 +616,126 @@ def _extract_pdf_document(request: FetchSourceRequest, raw: bytes, *, final_url:
             ),
             timeout_seconds=min(15.0, remaining),
         )
+        text = extracted.text
+        document_pages = page_map_from_text(text, original_retained=True)
     except (PdfFailure, ValidationError) as error:
         if isinstance(error, PdfFailure) and error.code == "pdf_timeout":
             raise FetchFailure("source_timeout") from error
-        raise FetchFailure("source_invalid", "PDF extraction failed.") from error
+        if isinstance(error, PdfFailure) and error.code == "pdf_extractor_unavailable":
+            raise FetchFailure("source_unavailable", "pdf_extractor_unavailable") from error
+        if isinstance(error, PdfFailure) and error.code == "pdf_no_extractable_text":
+            scanned_pages = _small_pdf_page_count(raw)
+            if not scanned_pages:
+                raise FetchFailure("ocr_required", _ocr_detail(None)) from error
+            text = "\f" * scanned_pages
+            document_pages = page_map_from_text(text, original_retained=True)
+        else:
+            raise FetchFailure("source_invalid", "PDF extraction failed.") from error
+    statuses = [entry[2] for entry in document_pages["pages"]]
+    if "needs_ocr" in statuses:
+        with tempfile.TemporaryDirectory(prefix="foresight-ocr-") as directory:
+            path = Path(directory) / "source.pdf"
+            path.write_bytes(raw)
+            text, document_pages = _ingest_ocr(path, text, document_pages, title=request.title, url=final_url,
+                                               usage=ocr_usage)
+    if not any(entry[2] in {"text", "ocr"} for entry in document_pages["pages"]):
+        raise FetchFailure("ocr_required", _ocr_detail(scanned_pages or document_pages["page_count"]))
     return FetchedDocument(
-        text=extracted.text,
-        response_sha256=extracted.original_sha256,
+        text=text,
+        response_sha256=sha256(raw).hexdigest(),
         content_type="application/pdf",
         final_url=final_url,
-        original_pdf_base64=extracted.original_base64,
+        original_pdf_base64=base64.b64encode(raw).decode("ascii"),
         redirect_count=redirect_count,
+        pages=document_pages,
+    )
+
+
+def _ingest_ocr(path: Path, text: str, document_pages: dict, *, title: str | None, url: str | None,
+                usage=None) -> tuple[str, dict]:
+    """OCR the earliest needs_ocr pages within the ingestion budget; unchanged when no engine is available.
+
+    The vision engine runs only through ``usage`` hooks (reserve/settle of the research run); without them
+    only local engines are used.
+    """
+    from .research_ocr import choose_ocr_languages, default_engines, ocr_pdf_pages
+
+    pending = [number for number, entry in enumerate(document_pages["pages"], 1)
+               if entry[2] == "needs_ocr" and entry[0] is not None]
+    pending = pending[:int(_env_int("FORESIGHTNINE_OCR_INGEST_MAX_PAGES", 30))]
+    engines = default_engines()
+    if not pending or not engines:
+        return text, document_pages
+    langs = choose_ocr_languages(title=title, url=url, sample_text=text[:4000])
+    deadline = monotonic() + _env_int("FORESIGHTNINE_OCR_INGEST_SECONDS", 90)
+    results = ocr_pdf_pages(path, pending, langs=langs, deadline=deadline, engines=engines, usage=usage)
+    if not results:
+        return text, document_pages
+    return merge_ocr_into_document(text, document_pages, results, max_text_chars=DEFAULT_MAX_TEXT_CHARS)
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        value = int(os.environ.get(name, ""))
+    except ValueError:
+        return default
+    return value if value >= 0 else default
+
+
+def _ocr_detail(page_count: int | None) -> str:
+    pages = f"{page_count} pages" if page_count else "unknown page count"
+    return f"PDF has no usable text layer ({pages}); it appears to be scanned and needs OCR."
+
+
+def _small_pdf_page_count(raw: bytes) -> int | None:
+    try:
+        with tempfile.TemporaryDirectory(prefix="foresight-pdfinfo-") as directory:
+            path = Path(directory) / "source.pdf"
+            path.write_bytes(raw)
+            return pdf_page_count(path, timeout_seconds=10.0)
+    except (PdfPagesError, OSError):
+        return None
+
+
+def _extract_large_pdf(path: Path, *, response_sha256: str, final_url: str,
+                       redirect_count: int, request: FetchSourceRequest | None = None,
+                       ocr_usage=None) -> FetchedDocument:
+    with path.open("rb") as handle:
+        if handle.read(5) != b"%PDF-":
+            raise FetchFailure("source_invalid", "Invalid PDF header.")
+    try:
+        result = extract_pdf_pages(path, deadline=monotonic() + pdf_extract_budget_seconds())
+    except PdfPagesError as error:
+        if error.code == "pdf_extractor_unavailable":
+            raise FetchFailure("source_unavailable", "pdf_extractor_unavailable") from error
+        if error.code == "pdf_timeout":
+            raise FetchFailure("source_invalid", "PDF text extraction timed out locally.") from error
+        raise FetchFailure("source_invalid", "PDF extraction failed.") from error
+    text, document_pages = result.text, result.document_pages
+    statuses = [entry[2] for entry in document_pages["pages"]]
+    if "failed" in statuses and "text" not in statuses:
+        raise FetchFailure("source_invalid", "PDF page extraction did not complete (local timeout or failure).")
+    if "needs_ocr" in statuses:
+        text, document_pages = _ingest_ocr(path, text, document_pages,
+                                           title=getattr(request, "title", None), url=final_url, usage=ocr_usage)
+    if not any(entry[2] in {"text", "ocr"} for entry in document_pages["pages"]):
+        raise FetchFailure("ocr_required", _ocr_detail(document_pages["page_count"]))
+    store = configured_blob_store()
+    if store is not None and (request is None or request.permissions.store):
+        try:
+            digest = store.put_file(path)
+        except OSError:
+            digest = None
+        if digest is not None and is_valid_sha256(digest):
+            document_pages = {**document_pages, "original_retained": True, "original_blob_sha256": digest}
+    return FetchedDocument(
+        text=text,
+        response_sha256=response_sha256,
+        content_type="application/pdf",
+        final_url=final_url,
+        original_pdf_base64=None,
+        redirect_count=redirect_count,
+        pages=document_pages,
     )
 
 
@@ -568,6 +747,33 @@ def _fetch_document(
     accepted_types: frozenset[str],
     accept_header: str,
     max_redirects: int,
+    ocr_usage=None,
+) -> FetchedDocument:
+    if transport is not None:
+        return _fetch_document_impl(request, transport=transport, timeout_seconds=timeout_seconds,
+                                    accepted_types=accepted_types, accept_header=accept_header,
+                                    max_redirects=max_redirects, spool=None, ocr_usage=ocr_usage)
+    # Default transport: stream the body to a temporary file so large PDFs never sit in memory.
+    with tempfile.TemporaryDirectory(prefix="foresight-fetch-") as directory:
+        spool = _HashingSink(Path(directory) / "download.bin")
+        try:
+            return _fetch_document_impl(request, transport=None, timeout_seconds=timeout_seconds,
+                                        accepted_types=accepted_types, accept_header=accept_header,
+                                        max_redirects=max_redirects, spool=spool, ocr_usage=ocr_usage)
+        finally:
+            spool.close()
+
+
+def _fetch_document_impl(
+    request: FetchSourceRequest,
+    *,
+    transport: Callable[..., object] | None,
+    timeout_seconds: float,
+    accepted_types: frozenset[str],
+    accept_header: str,
+    max_redirects: int,
+    spool: _HashingSink | None,
+    ocr_usage=None,
 ) -> FetchedDocument:
     if not request.permissions.store:
         raise FetchFailure("source_permission_unknown")
@@ -584,30 +790,39 @@ def _fetch_document(
     visited_urls = {current_url}
     using_default_transport = transport is None
     _check_fetch_target(current_url, is_redirect=False, check_dns=False)
-    deadline = monotonic() + timeout_seconds
-    send = transport or (
-        lambda method, address, headers, body, timeout: _default_binary_transport(
-            method, address, headers, body, timeout, max_response_bytes=MAX_FETCH_BYTES,
-        )
-    )
+    download_cap = large_document_max_bytes()
+    # Streaming downloads are bounded by the overall download budget; the per-hop
+    # timeout_seconds still bounds connect and response headers.
+    deadline = monotonic() + (large_document_download_seconds() if spool is not None else timeout_seconds)
+    if transport is not None:
+        send = transport
+    else:
+        def send(method, address, headers, body, timeout):
+            assert spool is not None
+            spool.reset()
+            return _default_binary_transport(
+                method, address, headers, body, timeout, max_response_bytes=download_cap,
+                response_timeout_seconds=min(timeout_seconds, timeout), sink=spool,
+            )
     headers = {"Accept": accept_header, "User-Agent": "ForesightNine-Research/1.0"}
     redirect_count = 0
     response: object | None = None
     for hop in range(max_redirects + 1):
         if hop == 0:
-            hop_timeout = timeout_seconds
+            hop_timeout = timeout_seconds if spool is None else min(deadline - monotonic(), large_document_download_seconds())
         else:
             remaining = deadline - monotonic()
             if remaining <= 0:
                 raise FetchFailure("source_timeout")
-            hop_timeout = min(timeout_seconds, remaining)
+            hop_timeout = remaining if spool is not None else min(timeout_seconds, remaining)
         try:
             response = send("GET", current_url, headers, b"", hop_timeout)
         except _TransportTimeout as error:
             raise FetchFailure("source_timeout") from error
         except (_TransportFailure, OSError) as error:
             if isinstance(error, _TransportFailure) and str(error) == "response too large":
-                raise FetchFailure("source_too_large", "Response exceeded 5 MB limit.") from error
+                limit = download_cap if spool is not None else MAX_FETCH_BYTES
+                raise FetchFailure("source_too_large", f"Response exceeded {limit:,} byte limit.") from error
             raise FetchFailure("source_unavailable") from error
         status_code = getattr(response, "status_code", 0)
         resp_headers = getattr(response, "headers", {})
@@ -644,17 +859,32 @@ def _fetch_document(
     if not 200 <= status_code < 300:
         raise FetchFailure("source_unavailable", f"HTTP {status_code}")
     content_length = _header(resp_headers, "content-length").strip()
-    if content_length.isdigit() and int(content_length) > MAX_FETCH_BYTES:
-        raise FetchFailure("source_too_large", "Response exceeded 5 MB limit.")
     content_type_header = _header(resp_headers, "content-type")
     content_type = content_type_header.split(";", 1)[0].lower().strip()
+    # A streamed body lives in the spool file; an in-memory body (e.g. a patched transport) takes precedence.
+    body = getattr(response, "body", None)
+    streamed = spool is not None and spool.size > 0 and not (isinstance(body, (bytes, str)) and len(body) > 0)
+    is_pdf = content_type == "application/pdf"
+    length_limit = download_cap if (spool is not None and is_pdf) else MAX_FETCH_BYTES
+    if content_length.isdigit() and int(content_length) > length_limit:
+        raise FetchFailure("source_too_large", f"Response of {int(content_length):,} bytes exceeded {length_limit:,} byte limit.")
     if content_type not in accepted_types:
         raise FetchFailure("source_format_unsupported", f"Unsupported content-type: {content_type or 'unknown'}")
-    body = getattr(response, "body", None)
+    if streamed:
+        assert spool is not None
+        spool.close()
+        if is_pdf and spool.size > MAX_FETCH_BYTES:
+            return _extract_large_pdf(spool.path, response_sha256=spool.hexdigest(),
+                                      final_url=current_url, redirect_count=redirect_count,
+                                      request=request, ocr_usage=ocr_usage)
+        if spool.size > MAX_FETCH_BYTES:
+            raise FetchFailure("source_too_large", f"Response of {spool.size:,} bytes exceeded 5 MB limit.")
+        body = spool.path.read_bytes()
     if content_type == "application/pdf":
         if not isinstance(body, bytes):
             raise FetchFailure("source_invalid", "PDF response must be binary.")
-        return _extract_pdf_document(request, body, final_url=current_url, redirect_count=redirect_count, deadline=deadline)
+        return _extract_pdf_document(request, body, final_url=current_url, redirect_count=redirect_count, deadline=deadline,
+                                     ocr_usage=ocr_usage)
     if isinstance(body, str):
         raw = body.encode("utf-8")
         decoded = body
@@ -687,8 +917,13 @@ def fetch_source_document(
     transport: Callable[..., HttpResponse | BinaryHttpResponse] | None = None,
     *,
     timeout_seconds: float = 15.0,
+    ocr_usage=None,
 ) -> FetchedDocument:
-    """Retrieve and extract a public HTTPS HTML, plain-text, or PDF document with bounded safe redirects."""
+    """Retrieve and extract a public HTTPS HTML, plain-text, or PDF document with bounded safe redirects.
+
+    ``ocr_usage`` (``research_ocr.OcrUsageHooks``) enables vision-model OCR of scanned pages through the
+    caller's reserve/settle accounting; without it only local OCR engines run.
+    """
     return _fetch_document(
         request,
         transport=transport,
@@ -696,6 +931,7 @@ def fetch_source_document(
         accepted_types=frozenset({"text/html", "text/plain", "application/pdf"}),
         accept_header="text/html, text/plain, application/pdf;q=0.9",
         max_redirects=MAX_REDIRECT_HOPS,
+        ocr_usage=ocr_usage,
     )
 
 
@@ -737,10 +973,10 @@ def fetch_official_pdf(
         accept_header="application/pdf",
         max_redirects=0,
     )
-    assert document.original_pdf_base64 is not None
     return FetchedPdf(
         text=document.text,
         response_sha256=document.response_sha256,
         content_type="application/pdf",
         original_pdf_base64=document.original_pdf_base64,
+        pages=document.pages,
     )

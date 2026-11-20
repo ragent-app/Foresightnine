@@ -135,7 +135,8 @@ def test_tool_batch_cursor_resumes_without_model_replay():
 
 def test_same_action_with_changed_rationale_is_no_progress():
     m = Model([turn('discover_sources', {'query': 'Q', 'rationale': 'first'}, 'a'),
-               turn('discover_sources', {'query': 'Q', 'rationale': 'different wording'}, 'b')])
+               turn('discover_sources', {'query': 'Q', 'rationale': 'different wording'}, 'b'),
+               turn('discover_sources', {'query': 'Q', 'rationale': 'third wording'}, 'c')])
     result = run_research_agent(question='Q', sources=[], model=m, context=context())
     assert result.reason == 'no_progress'
 
@@ -220,7 +221,8 @@ def test_repeated_facts_reuse_id_and_failed_batch_is_atomic():
                turn('record_facts', {'facts': [fact, invalid], 'rationale': 'bad batch'}, 'b'),
                turn('record_facts', {'facts': [fact, fact], 'rationale': 'first'}, 'c'),
                turn('record_facts', {'facts': [fact, fact], 'rationale': 'again'}, 'd'),
-               turn('record_facts', {'facts': [fact, fact], 'rationale': 'different'}, 'e')])
+               turn('record_facts', {'facts': [fact, fact], 'rationale': 'different'}, 'e'),
+               turn('record_facts', {'facts': [fact, fact], 'rationale': 'yet another'}, 'f')])
     result = run_research_agent(question='Q', sources=[source()], model=m, context=context())
     assert result.reason == 'no_progress'
     assert len(result.facts) == 1
@@ -265,9 +267,10 @@ def test_repeated_invalid_calls_stop_without_hidden_retry_limit():
     malformed = ModelToolCall('bad', 'read_sources', '{bad')
     bad_turn = ModelResponse({'role': 'assistant', 'content': None, 'tool_calls': [{'id': 'bad', 'type': 'function',
         'function': {'name': 'read_sources', 'arguments': '{bad'}}]}, (malformed,), ModelUsage(1, 1, 2), 'tool_calls')
-    for turns in ([bad_turn, bad_turn],
+    for turns in ([bad_turn, bad_turn, bad_turn],
                   [turn('read_sources', {'reads': [], 'rationale': 'first'}, 'a'),
-                   turn('read_sources', {'reads': [], 'rationale': 'changed'}, 'b')]):
+                   turn('read_sources', {'reads': [], 'rationale': 'changed'}, 'b'),
+                   turn('read_sources', {'reads': [], 'rationale': 'changed again'}, 'c')]):
         result = run_research_agent(question='Q', sources=[], model=Model(turns), context=context())
         assert result.reason == 'no_progress'
 
@@ -754,20 +757,23 @@ def test_sec_company_concept_success_unconfigured_restricted_and_unknown_recover
             external_state='returned',
         ),
     )
+    from app.research_runtime import TOOL_FAILURE_GUIDANCE
     assert json.loads(m_miss.inputs[1][-1]['content']) == {
         'status': 'unknown',
         'reason': 'unit_or_period_not_found_in_returned_records',
         'identity_receipt': receipt,
+        'message': TOOL_FAILURE_GUIDANCE['unit_or_period_not_found_in_returned_records'],
     }
 
-    # 3. Fail-closed external_result_unknown does not replay on checkpoint recovery.
+    # 3. A read-only SEC call with an unknown outcome is recorded as a failure, not retried, and the run continues.
     saved = []
     sec_attempts = []
     def sec_timeout(req):
         sec_attempts.append(req)
         return StructuredQueryResult('failed', 'source_timeout', external_state='unknown')
 
-    m_unknown = Model([turn('sec_company_concept', sec_args, 'sec_u')])
+    m_unknown = Model([turn('sec_company_concept', sec_args, 'sec_u'),
+                       ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')])
     res_unknown = run_research_agent(
         question='Q',
         sources=[],
@@ -776,29 +782,12 @@ def test_sec_company_concept_success_unconfigured_restricted_and_unknown_recover
         sec_concept=sec_timeout,
         checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
     )
-    assert res_unknown.status == 'partial'
-    assert res_unknown.reason == 'source_timeout'
-    assert [g['code'] for g in res_unknown.gaps] == ['external_result_unknown']
-    assert any(e.get('name') == 'sec_company_concept' and e.get('status') == 'unknown' for e in res_unknown.events)
-    assert saved[-1]['pending']['kind'] == 'sec_company_concept'
-    assert saved[-1]['pending']['call_id'] == 'sec_u'
-    assert saved[-1]['pending']['rationale'] == 'Get annual revenue from SEC XBRL.'
-    assert saved[-1]['pending']['target'] == 'NVDA · us-gaap:Revenues (USD)'
-    assert isinstance(saved[-1]['pending']['started_at'], str)
-
-    m_replay = Model([])
-    res_recovered = run_research_agent(
-        question='Q',
-        sources=[],
-        model=m_replay,
-        context=context(),
-        sec_concept=sec_timeout,
-        initial_state=saved[-1],
-    )
-    assert res_recovered.status == 'partial'
-    assert res_recovered.reason == 'external_result_unknown'
+    assert len(m_unknown.inputs) == 2
+    fed_back = json.loads(m_unknown.inputs[1][-1]['content'])
+    assert fed_back['status'] == 'failed' and fed_back['reason'] == 'source_timeout'
+    assert fed_back['external_state'] == 'unknown' and 'not retried' in fed_back['message']
+    assert any(e.get('name') == 'sec_company_concept' and e.get('status') == 'failed' for e in res_unknown.events)
     assert len(sec_attempts) == 1
-    assert not m_replay.inputs
 
 
 def test_acquire_sources_distinguishes_disabled_undiscovered_and_granular_failures():
@@ -1057,6 +1046,7 @@ def test_sec_company_concept_rate_limit_allows_one_retry_and_stops_on_second_rep
         turn('sec_company_concept', sec_args, 'sec_1'),
         turn('sec_company_concept', {**sec_args, 'rationale': 'Retry once.'}, 'sec_2'),
         turn('sec_company_concept', {**sec_args, 'rationale': 'Retry twice.'}, 'sec_3'),
+        turn('sec_company_concept', {**sec_args, 'rationale': 'Retry thrice.'}, 'sec_4'),
     ])
     res_fail = run_research_agent(
         question='NVDA revenue?',
@@ -1137,6 +1127,7 @@ def test_acquire_sources_rate_limit_allows_one_retry_and_blocks_second_repeat():
         turn('acquire_sources', {'urls': [lead['url']], 'rationale': 'fetch'}, 'a1'),
         turn('acquire_sources', {'urls': [lead['url']], 'rationale': 'retry 1'}, 'a2'),
         turn('acquire_sources', {'urls': [lead['url']], 'rationale': 'retry 2'}, 'a3'),
+        turn('acquire_sources', {'urls': [lead['url']], 'rationale': 'retry 3'}, 'a4'),
     ])
     res_fail = run_research_agent(
         question='NVDA revenue?',

@@ -1475,6 +1475,18 @@
             ],
             "title": "Currency Unspecified"
           },
+          "extraction_method": {
+            "anyOf": [
+              {
+                "const": "ocr",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extraction Method"
+          },
           "fact_id": {
             "maxLength": 200,
             "minLength": 1,
@@ -1488,6 +1500,28 @@
           },
           "location": {
             "$ref": "#/components/schemas/SourceLocation"
+          },
+          "ocr_engine": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Engine"
+          },
+          "ocr_mean_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Mean Confidence"
           },
           "period": {
             "minLength": 1,

@@ -90,6 +90,10 @@ class ResearchFact(BaseModel):
     currency_quote_missing: bool | None = None
     scale_quote_missing: bool | None = None
     currency_unspecified: bool | None = None
+    # Set when the quoted text lies on a page recognised by OCR (see research_runtime record_facts).
+    extraction_method: Literal["ocr"] | None = None
+    ocr_engine: str | None = None
+    ocr_mean_confidence: float | None = None
 
 
 class CalculationInput(BaseModel):

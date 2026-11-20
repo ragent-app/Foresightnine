@@ -25,7 +25,7 @@ import socket
 import ssl
 from time import monotonic, sleep
 from threading import BoundedSemaphore, Event, Lock, Thread
-from typing import Any, Callable, Mapping, NoReturn, Protocol
+from typing import Any, BinaryIO, Callable, Mapping, NoReturn, Protocol
 from .model_protocol import ModelResponse
 from urllib.parse import urlencode, urlsplit
 
@@ -483,6 +483,10 @@ def _open_and_send_connection(
         register_connection(None)
         connection.close()
         raise
+    except _TransportFailure:
+        register_connection(None)
+        connection.close()
+        raise
     except (TimeoutError, socket.timeout) as error:
         register_connection(None)
         connection.close()
@@ -507,8 +511,9 @@ def _execute_binary_transport(
     diagnostics: TransportDiagnostics | None = None, connect_timeout_seconds: float = 5.0,
     response_timeout_seconds: float | None = None, begin_submission: Callable[[], bool] | None = None,
     register_response_deadline: Callable[[float], None] | None = None,
+    sink: BinaryIO | None = None,
 ) -> BinaryHttpResponse:
-    if not 1 <= max_response_bytes <= 5_000_000:
+    if not 1 <= max_response_bytes <= (_MAX_SINK_RESPONSE_BYTES if sink is not None else 5_000_000):
         raise _TransportFailure("invalid response limit")
     connection = _open_and_send_connection(
         method,
@@ -542,16 +547,36 @@ def _execute_binary_transport(
             response = connection.getresponse()
         if diagnostics:
             diagnostics.record("response_headers", 0, status_code=response.status)
+        if sink is not None:
+            response_deadline = deadline
+            if register_response_deadline is not None:
+                register_response_deadline(response_deadline)
         current_timeout_kind = "stream_deadline_timeout" if deadline <= response_deadline else "response_timeout"
+        streamed = False
         with diagnostics.stage("response_body") if diagnostics else nullcontext():
-            apply_response_timeout(current_timeout_kind)
-            content = response.read(max_response_bytes + 1)
-        if len(content) > max_response_bytes:
+            if sink is not None and 200 <= response.status < 300:
+                streamed = True
+                content = b""
+                total = 0
+                while True:
+                    apply_response_timeout(current_timeout_kind)
+                    chunk = response.read(_SINK_CHUNK_BYTES)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > max_response_bytes:
+                        raise _TransportFailure("response too large")
+                    sink.write(chunk)
+            else:
+                apply_response_timeout(current_timeout_kind)
+                read_limit = 65_536 if sink is not None else max_response_bytes
+                content = response.read(read_limit + 1)
+        if not streamed and sink is None and len(content) > max_response_bytes:
             raise _TransportFailure("response too large")
         # http.client.read(amt) can return a short body without raising. Its
         # remaining length distinguishes a truncated Content-Length response.
         remaining_length = getattr(response, "length", None)
-        if type(remaining_length) is int and remaining_length > 0:
+        if type(remaining_length) is int and remaining_length > 0 and (sink is None or streamed):
             raise _TransportFailure("incomplete response body")
         if diagnostics:
             diagnostics.submission("response_received")
@@ -564,6 +589,8 @@ def _execute_binary_transport(
             {str(key).lower(): str(value) for key, value in response.headers.items()},
         )
     except _TransportTimeout:
+        raise
+    except _TransportFailure:
         raise
     except (TimeoutError, socket.timeout) as error:
         if stopped.is_set() and diagnostics is not None and diagnostics.timeout_kind is not None:
@@ -578,6 +605,8 @@ def _execute_binary_transport(
 
 
 _TRANSPORT_SLOTS = BoundedSemaphore(16)
+_MAX_SINK_RESPONSE_BYTES = 256_000_000
+_SINK_CHUNK_BYTES = 1 << 20
 
 
 def _default_binary_transport(
@@ -586,6 +615,7 @@ def _default_binary_transport(
     diagnostics: TransportDiagnostics | None = None, connect_timeout_seconds: float = 5.0,
     response_timeout_seconds: float | None = None, cancel_event: Event | None = None,
     on_submission: Callable[[], None] | None = None,
+    sink: BinaryIO | None = None,
 ) -> BinaryHttpResponse:
     """Bound DNS and network wall time, including slow headers and bodies.
 
@@ -595,7 +625,7 @@ def _default_binary_transport(
     """
     if not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
         _raise_timeout(diagnostics, "connect_timeout")
-    if not 1 <= max_response_bytes <= 5_000_000:
+    if not 1 <= max_response_bytes <= (_MAX_SINK_RESPONSE_BYTES if sink is not None else 5_000_000):
         raise _TransportFailure("invalid response limit")
     slots = _TRANSPORT_SLOTS
     if not slots.acquire(blocking=False):
@@ -624,7 +654,7 @@ def _default_binary_transport(
                 allow_private_network=allow_private_network, max_response_bytes=max_response_bytes,
                 deadline=deadline, stopped=stopped, register_connection=register, diagnostics=diagnostics,
                 connect_timeout_seconds=connect_timeout_seconds, response_timeout_seconds=response_timeout_seconds, begin_submission=begin_submission,
-                register_response_deadline=register_response_deadline)
+                register_response_deadline=register_response_deadline, sink=sink)
         except Exception as error:
             state["error"] = error
         finally:
@@ -911,6 +941,8 @@ def _execute_stream_worker(
                 for item in parser.feed_text(text):
                     events_q.put((item[0], (item[1], item[2])))
     except _TransportTimeout:
+        raise
+    except _TransportFailure:
         raise
     except (TimeoutError, socket.timeout) as error:
         if stopped.is_set() and diagnostics is not None and diagnostics.timeout_kind is not None:

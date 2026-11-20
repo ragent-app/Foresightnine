@@ -50,8 +50,12 @@ _FAILURE_DETAILS: dict[str, tuple[str, str]] = {
         'Upstream rate limit reached (HTTP 429).',
     ),
     'source_too_large': (
-        'The source exceeded the 5 MB download or 2,000,000-character text limit; the search result remains an unverified lead.',
+        'The source exceeded the download size limit (5 MB for web pages, a larger configured cap for PDFs) or the 2,000,000-character text limit; the search result remains an unverified lead.',
         'Response or extracted text exceeded size limits.',
+    ),
+    'ocr_required': (
+        'The PDF has no usable text layer (it appears to be scanned) and needs OCR; the search result remains an unverified lead.',
+        'PDF has no extractable text and needs OCR.',
     ),
     'source_format_unsupported': (
         'The response content type is unsupported; only HTML, plain text, and PDF are supported.',
@@ -146,8 +150,14 @@ def execute_official_retrieval(*, request: ResearchRunRequest, question: str | N
                                candidates: list[dict[str, Any]], sources: list[ResearchSource],
                                owner_id: str, operation_id: str, store: ResearchSources,
                                sec_agent_config: str | None, reserve_sec: Callable[[], bool],
-                               context: ResearchExecutionContext, batch_id: str | None = None) -> OfficialRetrievalResult:
-    """Retrieve eligible candidates from the bounded discovery batch under existing policy."""
+                               context: ResearchExecutionContext, batch_id: str | None = None,
+                               ocr_usage: Any = None) -> OfficialRetrievalResult:
+    """Retrieve eligible candidates from the bounded discovery batch under existing policy.
+
+    ``ocr_usage`` (``research_ocr.OcrUsageHooks``) lets scanned-PDF ingestion use the vision OCR engine through
+    the run's reserve/settle accounting; each call is recorded in ``ocr_usage.events``. Without it only local
+    OCR engines run.
+    """
     if not request.auto_fetch_official:
         return OfficialRetrievalResult('not_requested')
     if not question:
@@ -310,7 +320,12 @@ def execute_official_retrieval(*, request: ResearchRunRequest, question: str | N
                 content_type = fetched.content_type
                 retrieval = _retrieval_fields(is_official, content_type, fetched)
             else:
-                fetched = fetch_source_document(source_request, timeout_seconds=min(15.0, remaining))
+                fetch_kwargs: dict[str, Any] = {}
+                if ocr_usage is not None:
+                    identity = operation_id if batch_id is None else operation_id + ':batch:' + batch_id
+                    fetch_kwargs['ocr_usage'] = ocr_usage.for_source(
+                        operation_id, official_source_id(identity, created_count))
+                fetched = fetch_source_document(source_request, timeout_seconds=min(15.0, remaining), **fetch_kwargs)
                 final_url = canonical_source_url(fetched.final_url)
                 final_host = (urlsplit(final_url).hostname or '').lower().rstrip('.')
                 is_official = is_official_host and final_host in PUBLIC_DOMAIN_OFFICIAL_HOSTS
@@ -332,6 +347,9 @@ def execute_official_retrieval(*, request: ResearchRunRequest, question: str | N
                 }
             elif final_url != canonical_source_url(str(source_request.url)):
                 provenance = {'final_url': final_url}
+            document_pages = getattr(fetched, 'pages', None)
+            if isinstance(document_pages, dict) and document_pages:
+                provenance = {**provenance, 'document_pages': document_pages}
             context.ensure_running()
             # A URL alone is not a version: re-fetch and compare raw response
             # hashes, falling back to extracted text only where no raw hash exists.

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from copy import copy, deepcopy
-from dataclasses import asdict
+from dataclasses import asdict, replace as dataclass_replace
 from collections.abc import Callable, Mapping
 from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
@@ -99,6 +99,7 @@ from .services import (
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, _drop_legacy_null_fields, build_repository
 from .research_topics import (AttachSourcesInput, ReadRange, ResearchCalculation, ResearchFact, ResearchFullExport, ResearchInput, ResearchMetadataExport,
     ResearchTopic, ResearchTopics, ResearchTurn, TopicNotFound, TopicVersionConflict, TurnUsage, VersionInput)
+from .research_clock import build_research_clock
 from .research_progress import build_progress
 from .research_live_stream import ResearchLiveBroker, format_sse_frame, parse_last_event_id
 from .research_turns import gap_rows, merge_turn, prior_research_input
@@ -118,6 +119,7 @@ from .research_coordinator import ResearchExecutionContext, PlanningResult, exec
 from .research_lifecycle import ResearchVersionChain
 from .research_checkpoints import ResearchCheckpointPublisher
 from .research_official_retrieval import execute_official_retrieval, official_source_id
+from .research_ocr import OcrUsageHooks, build_ocr_pages_callback, vision_engine_configured
 from .research_workflow import ResearchWorkflow, StageReceipt
 from .research_orchestrator import CoordinationObservation, ResearchOrchestrator
 from .research_recovery import (prepare_recovery, recovered_content, RecoveryJournal, RecoverySnapshot, RecoveryBudget,
@@ -2798,14 +2800,34 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 cancel_event=context.cancel_event(),
                 deadline=context.budget.deadline,
             )
+        # Vision-model OCR is billed like any research model call: each page call is reserved and settled
+        # through this run's context (budget, abuse control, account ledger or personal model), keyed by a
+        # deterministic call id. Without a configured vision engine only local OCR runs.
+        ocr_vision_model = os.environ.get('FORESIGHTNINE_OCR_VISION_MODEL', '').strip() or None
+        ocr_before: dict[str, Any] = {}
+        def ocr_reserve(call_id: str, max_tokens: int) -> None:
+            saved_reserve = context.reserve
+            context.reserve = lambda cid, tokens: _reserve_model_call(
+                http_request, cid, token_budget=tokens, provider_model=ocr_vision_model)
+            try:
+                ocr_before[call_id] = context.start_model(call_id, max_tokens)
+            finally:
+                context.reserve = saved_reserve
+        def ocr_settle(call_id: str, tokens: int | None) -> None:
+            receipt = context.model_call_receipts.get(call_id)
+            if receipt is not None:
+                receipt['provider'] = 'returned' if tokens is not None else 'unknown'
+            context.finish_model(call_id, tokens, ocr_before.pop(call_id))
+        ocr_usage = OcrUsageHooks(ocr_reserve, ocr_settle) if vision_engine_configured() else None
         def acquire(url: str, title: str):
             nonlocal official_fetch_calls, official_fetch_status
+            acquire_ocr = dataclass_replace(ocr_usage, events=[]) if ocr_usage is not None else None
             result = execute_official_retrieval(request=request, question=user_question, as_of=topic.request.as_of,
                 available_count=len(sources), candidates=[{'url': url, 'title': title}], sources=sources,
                 owner_id=account.account_id, operation_id=operation_id, store=research_sources,
                 sec_agent_config=sec_agent_raw,
                 reserve_sec=reserve_sec_for_run, context=context,
-                batch_id=uuid4().hex)
+                batch_id=uuid4().hex, **({'ocr_usage': acquire_ocr} if acquire_ocr is not None else {}))
             official_fetch_calls += result.calls
             has_official = any(getattr(item, 'kind', None) == 'official' for item, _ in result.retrieved)
             merged_status: str | None = result.status
@@ -2820,7 +2842,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 merged_status,
                 auto_fetch_official=request.auto_fetch_official,
             )
-            return result.source, {'status': result.status, 'notes': result.notes, 'outcomes': result.outcomes}
+            return result.source, {'status': result.status, 'notes': result.notes, 'outcomes': result.outcomes,
+                                   'ocr_events': list(acquire_ocr.events) if acquire_ocr is not None else []}
         def query_sec_concept(tool_request):
             nonlocal official_fetch_calls, official_fetch_status
             result = execute_structured_query(
@@ -2844,6 +2867,18 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 auto_fetch_official=request.auto_fetch_official,
             )
             return result
+        def persist_ocr_version(old: ResearchSource, new_source_id: str, text: str, provenance: dict) -> ResearchSource:
+            return research_sources.create(
+                account.account_id,
+                SourceInput(title=old.title, text=text, url=str(old.url) if old.url is not None else None, kind=old.kind,
+                            is_simulated=old.is_simulated, published_at=old.published_at, event_at=old.event_at,
+                            revised_at=old.revised_at, permissions=old.permissions),
+                retrieval_method=old.retrieval_method, response_sha256=old.response_sha256,
+                response_content_type=old.response_content_type, original_pdf_base64=old.original_pdf_base64,
+                pdf_text_order=old.pdf_text_order, derived_from_source_id=old.source_id,
+                source_id=new_source_id, provenance=provenance)
+        ocr_pages_callback = build_ocr_pages_callback(
+            operation_id=operation_id, persist_version=persist_ocr_version, usage=ocr_usage)
         historical_config_for_run = historical_config if historical_available and retrieval_permitted else None
         allowed_hosts = fetch_allowed_hosts()
         retrieval_active = retrieval_permitted and topic.request.as_of is None and request.max_cost_usd is None
@@ -2853,7 +2888,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             'web_fetch_enabled': retrieval_active and allowed_hosts is None,
             'sec_available': sec_configured and retrieval_active,
             'historical_prices_available': historical_config_for_run is not None,
-            'max_fetch_bytes': MAX_FETCH_BYTES,
+            'max_fetch_bytes': int(os.environ.get('FORESIGHTNINE_LARGE_DOCUMENT_MAX_BYTES', '200000000') or 200_000_000),
+            'pdf_paged_reading': True,
             'supported_fetch_content_types': ['text/html', 'text/plain', 'application/pdf'],
         }
         if allowed_hosts is not None:
@@ -2868,7 +2904,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             except ApiProblem as error:
                 raise ProviderFailure('historical_price_rate_limited', 'Historical prices could not be fetched within the source service limit.', retryable=error.retryable) from None
             return fetch_historical_price_source(config=historical_config_for_run, instrument_id=query.instrument_id,
-                start_date=query.start_date, end_date=query.end_date, api_key=historical_key,
+                start_date=query.start_date, end_date=query.end_date, api_key=historical_key, now=lifecycle_clock.now(),
                 timeout_seconds=min(8.0, context.budget.deadline - context.now()), cancel_event=context.cancel_event(),
                 persist=lambda item, provenance: research_sources.create(account.account_id, item,
                     retrieval_method='historical_prices', response_sha256=provenance['provider_response_sha256'],
@@ -2952,6 +2988,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         if continuation_input is not None:
             save_runtime(admitted_continuation['runtime'])
         parent_now = research_topics.get(account.account_id, topic_id).versions[-1]
+        research_clock = build_research_clock(lifecycle_clock.now())
         outcome = run_research_agent(question=effective_question, sources=sources, model=provider,
             context=context, discover=discover, acquire=acquire if retrieval_permitted else None,
             historical_prices=load_historical_prices if historical_config_for_run is not None else None,
@@ -2961,6 +2998,11 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             on_submission=lambda: setattr(http_request.state, 'model_submission_started', True),
             on_stream_event=publish_stream_event,
             as_of=topic.request.as_of,
+            clock=research_clock if continuation_input is None else None,
+            historical_sessions=({item.instrument_id: (item.exchange, item.exchange_timezone)
+                                  for item in historical_config_for_run.instruments}
+                                 if historical_config_for_run is not None else None),
+            now=lifecycle_clock.now, ocr_pages=ocr_pages_callback,
             prior=_prior_with_failed_sources(parent_now) if continuation_input is None else None, focus=focus)
         _raise_if_operation_cancelled(operation_id)
         version_chain.source_ids = list(dict.fromkeys([*version_chain.source_ids, *outcome.source_ids]))
