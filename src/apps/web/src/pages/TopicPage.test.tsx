@@ -436,7 +436,7 @@ describe("TopicPage", () => {
       mockApi((url) => {
         if (url.pathname === "/v2/research/topics/t1") return jsonResponse(withLead);
         if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
-        if (url.pathname === "/v2/research/capabilities") return jsonResponse({ schema_version: "v1", search_available: true, sec_available: false, historical_prices_available: false, sources: [] });
+        if (url.pathname === "/v2/research/capabilities") return jsonResponse({ schema_version: "v1", search_available: true, sec_available: false, market_data_available: false, market_data_key_required: true, sec_financials_available: false, filings_available: false, sources: [] });
         return undefined;
       });
       renderTopic();
@@ -497,7 +497,7 @@ describe("TopicPage", () => {
         if (url.pathname === "/v2/research/topics/t1") return jsonResponse(withLeads);
         if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
         if (url.pathname === "/v2/research/capabilities") {
-          return jsonResponse({ schema_version: "v1", search_available: true, web_fetch_enabled: true, sec_available: true, historical_prices_available: false, sources: [] });
+          return jsonResponse({ schema_version: "v1", search_available: true, web_fetch_enabled: true, sec_available: true, market_data_available: false, market_data_key_required: true, sec_financials_available: false, filings_available: false, sources: [] });
         }
         if (url.pathname.endsWith("/versions/v2/sources")) {
           return jsonResponse([

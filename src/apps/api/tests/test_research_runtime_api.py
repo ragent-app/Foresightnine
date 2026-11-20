@@ -856,16 +856,16 @@ def test_start_research_run_uses_pace_sec_request_and_honors_reserve_override(mo
             break
         time.sleep(.01)
     assert op['status'] == 'completed', op
-    assert len(requested) == 2 and len(pace_calls) == 3  # one per SEC data request + 1 for SEC acquire_sources
+    assert len(requested) == 1 + 4 and len(pace_calls) == len(requested) + 1  # submissions + 4 revenue concept files, + 1 for SEC acquire_sources
     assert all(call['is_shared_repo'] and call['has_cancel_event'] and math.isfinite(call['deadline']) for call in pace_calls)
-    assert 'companyfacts' in requested[1] and 'submissions' in requested[0]
+    assert all('companyconcept' in u for u in requested[1:]) and 'submissions' in requested[0]
 
     # Monkeypatching api.reserve_sec_request overrides pace_sec_request for backward compatibility.
     reserve_calls = []
 
     def fake_reserve(repo):
         reserve_calls.append(repo is api.SOURCE_RATE_LIMITS)
-        return len(reserve_calls) == 1
+        return len(reserve_calls) <= 4  # the first financials call uses four concept requests
 
     monkeypatch.setattr(api, 'reserve_sec_request', fake_reserve)
     monkeypatch.setattr(api, 'pace_sec_request', lambda *a, **k: pytest.fail('pace_sec_request must not be called when reserve_sec_request is patched'))
@@ -935,7 +935,7 @@ def test_company_financials_syncs_official_fetch_status_with_priority_guard(monk
 
     monkeypatch.setattr(api, 'evidence_provider', Search())
     # Request plan: Turn 1 -> no facts (404) then facts; Turn 2 -> no facts (404).
-    monkeypatch.setattr('app.fin_data.adapters.base._default_binary_transport', sec_binary_transport([404, 200, 404]))
+    monkeypatch.setattr('app.fin_data.adapters.base._default_binary_transport', sec_binary_transport([404] * 5 + [200] * 4 + [404] * 5))  # revenue: 4 us-gaap concept tags (+1 ifrs-full fallback when empty)
     monkeypatch.setattr(retrieval, 'fetch_sec_filing', fake_filing)
 
     # Turn 1: unknown SEC tag first, then valid SEC tag -> official_fetch_status becomes 'completed'.
@@ -949,7 +949,7 @@ def test_company_financials_syncs_official_fetch_status_with_priority_guard(monk
                 return turn('company_financials', {'cik': '1', 'lines': ['revenue'], 'periods': 'last_4_quarters',
                                                     'rationale': 'First guess.'}, 's1')
             if len(results) == 1:
-                assert results[0]['status'] == 'empty' and results[0]['reason'] == 'no_xbrl_facts'
+                assert results[0]['status'] == 'empty' and results[0]['reason'] in ('no_xbrl_facts', 'no_matching_lines'), results[0]
                 return turn('company_financials', {'cik': '320193', 'lines': ['revenue'], 'periods': 'last_4_quarters',
                                                     'rationale': 'Correct issuer.'}, 's2')
             if len(results) == 2:

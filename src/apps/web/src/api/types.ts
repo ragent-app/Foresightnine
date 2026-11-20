@@ -277,6 +277,9 @@ export interface ResearchCapabilities {
   search_available: boolean;
   web_fetch_enabled?: boolean;
   sec_available: boolean;
-  historical_prices_available: boolean;
+  market_data_available: boolean;
+  market_data_key_required: boolean;
+  sec_financials_available: boolean;
+  filings_available: boolean;
   sources: { name: string; output_type: string; permission: string; configured: boolean; hosts: string[]; coverage: string }[];
 }

@@ -483,20 +483,22 @@ class FinDataToolbox:
                 + (f' | derived: {s.derivation}' if s.derived else ''))
         cik = info['cik']
         prov = res.provenance
+        endpoints = list(prov.endpoints) if prov and prov.endpoints else ([prov.endpoint] if prov and prov.endpoint else [])
         provenance = {
-            'provider': 'sec_edgar', 'endpoint': prov.endpoint if prov else None, 'credential_owner': 'platform_public_data',
+            'provider': 'sec_edgar', 'endpoint': endpoints[0] if endpoints else None, 'endpoints': endpoints,
+            'provider_calls': res.cost.provider_calls, 'credential_owner': 'platform_public_data',
             'entity_id': info['entity_id'], 'cik': cik, 'taxonomy': taxonomy, 'periods': req.periods,
             'lines': sorted({s.line for s in res.data}), 'derive_q4': req.derive_q4, 'row_count': len(lines),
             'provider_response_sha256': prov.response_sha256 if prov else None,
             'retrieved_at': prov.retrieved_at.isoformat() if prov else None,
             'coverage': res.coverage.model_dump(mode='json', exclude_none=True) if res.coverage else None,
             'permissions': res.permissions.model_dump(mode='json'),
-            'limitations': ['SEC companyfacts are standardized by a tag-priority mapping; check reported_tag per line.',
+            'limitations': ['SEC XBRL facts are standardized by a tag-priority mapping; check reported_tag per line.',
                             'Filing date is not exact public availability; restatements win (latest filed value).']}
         try:
             source = self._persist(
                 SourceInput(title=f'{label} SEC XBRL standardized financials ({req.periods})', text='\n'.join(lines),
-                            url=f'https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json', kind='official',
+                            url=endpoints[0] if endpoints else f'https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json', kind='official',
                             permissions=self._source_permissions(res.permissions)),
                 retrieval_method='sec_companyfacts', response_sha256=provenance['provider_response_sha256'],
                 response_content_type='application/json', provenance=provenance)

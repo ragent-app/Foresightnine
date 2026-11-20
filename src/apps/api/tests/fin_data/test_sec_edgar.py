@@ -6,7 +6,7 @@ import pytest
 
 from app.fin_data.adapters.sec_edgar import (STANDARD_LINES, SecEdgarAdapter, classify_duration, last_n_fiscal_years,
                                              last_n_quarters)
-from .helpers import FIX, NOW, UA, FakeTransport, Reply, efts_policy, json_reply, open_limiter
+from .helpers import FIX, NOW, UA, ConceptTransport, FakeTransport, Reply, efts_policy, json_reply, open_limiter
 
 
 def adapter(transport, ua=UA, policy=None, limiter=None):
@@ -69,7 +69,7 @@ def test_http_error_mapping():
 
 
 def test_companyfacts_tag_switch_per_period_and_restatement():
-    r = adapter(FakeTransport(json_reply("sec_companyfacts.json"))).statement_lines(
+    r = adapter(ConceptTransport()).statement_lines(
         320193, lines=["revenue"], period="quarter", n=5)
     by_end = {s.period_end: s for s in r.data}
     assert by_end[date(2018, 3, 31)].reported_tag == "SalesRevenueNet"
@@ -82,7 +82,7 @@ def test_companyfacts_tag_switch_per_period_and_restatement():
 
 
 def test_companyfacts_multi_line_partial_and_units():
-    r = adapter(FakeTransport(json_reply("sec_companyfacts.json"))).statement_lines(
+    r = adapter(ConceptTransport()).statement_lines(
         320193, lines=["net_income", "eps_diluted", "total_assets", "capex"], period="year", n=2)
     assert r.status == "partial" and r.reason == "missing_lines" and "capex" in r.message
     lines = {s.line: s for s in r.data}
@@ -90,7 +90,7 @@ def test_companyfacts_multi_line_partial_and_units():
     assert lines["eps_diluted"].value == Decimal("1.25")
     assert lines["total_assets"].statement == "balance" and lines["total_assets"].period_start is None
     assert len([s for s in r.data if s.line == "total_assets"]) == 1  # only FY-labelled instant for year
-    assert adapter(FakeTransport(json_reply("sec_companyfacts.json"))).statement_lines(1, lines=["nope"]).reason == "unknown_line"
+    assert adapter(ConceptTransport()).statement_lines(1, lines=["nope"]).reason == "unknown_line"
     assert set(STANDARD_LINES) >= {"revenue", "operating_income", "net_income", "eps_diluted", "total_assets",
                                    "total_liabilities", "equity", "operating_cash_flow", "capex", "cash"}
 
@@ -110,7 +110,7 @@ def test_last_n_quarters_distinct_and_q4_derived_only_on_request():
 
 
 def test_derived_q4_surfaces_in_statement_lines_marked():
-    r = adapter(FakeTransport(json_reply("sec_companyfacts.json"))).statement_lines(
+    r = adapter(ConceptTransport()).statement_lines(
         320193, lines=["revenue"], period="quarter", n=8, derive_q4=True)
     d = [s for s in r.data if s.derived]
     assert len(d) == 1 and d[0].period_end == date(2019, 12, 31) and d[0].value == Decimal("1400")
@@ -157,3 +157,80 @@ def test_company_identity_reuses_sec_ticker_search():
     assert r.status == "ok" and {e.symbol for e in r.data} == {"EXM", "EXMT"}
     assert r.data[0].identifiers["cik"] == "0000320193"
     assert adapter(FakeTransport(json_reply("sec_tickers.json"))).company_identity("zzzz").status == "empty"
+
+
+# ---- companyconcept per tag (specific lines) and the companyfacts size guard
+def test_specific_lines_fetch_all_candidate_companyconcept_tags_in_priority_order():
+    t = ConceptTransport()
+    r = adapter(t).statement_lines(320193, lines=["revenue"], period="quarter", n=2)
+    assert r.status == "ok" and len(r.data) == 2
+    # Every candidate tag is fetched (no early stop: a later tag may carry the newest periods).
+    tags = [u.rsplit("/", 1)[-1].removesuffix(".json") for u in t.concept_urls]
+    assert tags == [x for x in STANDARD_LINES["revenue"].tags["us-gaap"]]
+    assert t.concept_urls[0] == "https://data.sec.gov/api/xbrl/companyconcept/CIK0000320193/us-gaap/Revenues.json"
+    assert all("companyfacts" not in u for u, _ in t.calls) and all(h["User-Agent"] == UA for _, h in t.calls)
+    assert r.cost.provider_calls == len(tags) and r.provenance.response_sha256 and r.coverage.rows == 2
+    # Only files that exist (not the 404 for Revenues) are listed, in fetch order.
+    assert r.provenance.endpoints and r.provenance.endpoints[0] == t.concept_urls[1]
+    assert set(r.provenance.endpoints) <= set(t.concept_urls) and t.concept_urls[0] not in r.provenance.endpoints
+
+
+def test_tag_switch_newest_periods_come_from_lower_priority_tag():
+    t = ConceptTransport()
+    top, low = STANDARD_LINES["revenue"].tags["us-gaap"][:2]
+    row = lambda end, start, filed, fp: {"start": start, "end": end, "val": 100, "accn": "a-" + end, "fy": 2000,
+                                         "fp": fp, "form": "10-Q", "filed": filed}
+    old = [row("2018-06-30", "2018-04-01", "2018-08-01", "Q2"), row("2018-09-30", "2018-07-01", "2018-11-01", "Q3")]
+    new = [row("2024-06-30", "2024-04-01", "2024-08-01", "Q2"), row("2024-09-30", "2024-07-01", "2024-11-01", "Q3")]
+    t.doc["facts"]["us-gaap"] = {top: {"units": {"USD": old}}, low: {"units": {"USD": new}}}
+    r = adapter(t).statement_lines(320193, lines=["revenue"], period="quarter", n=2)
+    assert r.status == "ok"
+    assert sorted(s.period_end.isoformat() for s in r.data) == ["2024-06-30", "2024-09-30"]
+    assert {s.reported_tag for s in r.data} == {low}
+
+
+def test_concept_path_goes_through_the_pacing_limiter_per_request():
+    from app.fin_data.ratelimit import InProcessRateLimiter, ProviderLimit
+    lim = InProcessRateLimiter({"sec_edgar": ProviderLimit(1.0, 1.0)}, now=lambda: NOW)
+    t = ConceptTransport()
+    r = adapter(t, limiter=lim).statement_lines(320193, lines=["revenue"], period="quarter", n=5)
+    assert r.status == "rate_limited" and r.retryable and len(t.concept_urls) == 1
+
+
+def test_concept_path_all_tags_missing_is_empty_no_matching_lines_for_ifrs_fallback():
+    t = ConceptTransport("sec_companyfacts.json")
+    r = adapter(t).statement_lines(320193, lines=["capex"], period="year", n=2)
+    assert r.status == "empty" and r.reason == "no_matching_lines"
+    assert len(t.concept_urls) == 2  # both us-gaap capex tags tried
+
+
+def test_concept_failure_other_than_404_is_returned_not_swallowed():
+    t = FakeTransport(Reply(503))
+    r = adapter(t).statement_lines(320193, lines=["revenue"], period="quarter", n=2)
+    assert r.status == "failed" and r.reason == "source_unavailable" and r.retryable and len(t.calls) == 1
+
+
+def test_no_lines_falls_back_to_companyfacts_and_guards_parse_size(monkeypatch):
+    import app.fin_data.adapters.sec_edgar as mod
+    ok = adapter(FakeTransport(json_reply("sec_companyfacts.json"))).statement_lines(320193, period="year", n=1)
+    assert ok.status in ("ok", "partial") and ok.data
+    monkeypatch.setattr(mod, "MAX_COMPANYFACTS_BYTES", 1000)
+    big = adapter(FakeTransport(Reply(200, b"{" + b" " * 2000 + b"}"))).statement_lines(320193, period="year", n=1)
+    assert big.status == "failed" and big.reason == "source_too_large"
+    assert "lines" in big.message and big.suggested_actions[0].action == "company_financials"
+
+
+def test_companyfacts_size_guard_applies_to_the_streaming_path_and_stops_the_download(monkeypatch):
+    import app.fin_data.adapters.sec_edgar as mod
+    monkeypatch.setattr(mod, "MAX_COMPANYFACTS_BYTES", 5000)
+    written = []
+
+    def stream(method, url, headers, body, timeout, sink):
+        for _ in range(100):
+            sink.write(b" " * 1000)  # raises once the cap is crossed
+            written.append(1)
+        return Reply(200, b"")
+    a = SecEdgarAdapter(UA, transport=FakeTransport(Reply()), stream_transport=stream, limiter=open_limiter(),
+                        now_fn=lambda: NOW)
+    r = a.statement_lines(320193, period="year", n=1)
+    assert r.status == "failed" and r.reason == "source_too_large" and len(written) == 5

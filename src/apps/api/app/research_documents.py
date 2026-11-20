@@ -7,10 +7,11 @@ and the ``ocr`` page status)::
      "pages": [[start, end, status], ...],   # one entry per page, in order
      "text_limit_reached": bool,
      "original_retained": bool,
-     "method": "pdftotext_layout_paged" | "pdftotext_layout",
+     "method": "pdftotext_layout_paged" | "pdftotext_layout" | "html_paged",
      "version": 2,
      # optional keys, added by retention / ingestion OCR:
      "original_blob_sha256": "<hex>",
+     "page_count_complete": false,           # html_paged only: parsing stopped (deadline) after the text limit
      "ocr": {"<page>": {"engine", "engine_version", "langs", "mean_confidence", "low_confidence_count"}},
      "ocr_usage": {"pages", "engines": {name: n}, "cached_pages", "llm_input_tokens", "llm_output_tokens"}}
 
@@ -18,6 +19,11 @@ and the ``ocr`` page status)::
 ``text``, ``needs_ocr`` (start == end at the form-feed position),
 ``ocr`` (text recognised from the page image, offsets like ``text``), ``not_included`` or ``failed``
 (start = end = None).
+
+``html_paged`` documents (web pages, SEC filings, plain text) have no physical pages: the extracted text is split
+into ~``HTML_PAGE_CHARS``-character pseudo-pages on line (paragraph, heading, table-row) boundaries, never inside a
+line. Pages are joined with ``"\n"``, so ``text[start:end]`` is exactly the page text and the next page starts at
+``end + 1``. All included pages have status ``text``.
 """
 from __future__ import annotations
 
@@ -32,6 +38,7 @@ from time import monotonic
 import unicodedata
 
 PAGES_FORMAT_VERSION = 2
+HTML_PAGE_CHARS = 8_000
 TEXT_STATUSES = frozenset({"text", "ocr"})
 CHUNK_PAGES = 20
 CHUNK_TIMEOUT_SECONDS = 60.0
@@ -99,6 +106,73 @@ def page_map_from_text(text: str, *, original_retained: bool) -> dict:
     return {"page_count": len(pages), "pages": pages, "text_limit_reached": False,
             "original_retained": bool(original_retained), "method": "pdftotext_layout",
             "version": PAGES_FORMAT_VERSION}
+
+
+class TextPager:
+    """Incrementally split extracted text lines into ``html_paged`` pseudo-pages.
+
+    Feed one logical line at a time (no newlines inside). Memory holds only the included text (at most
+    ``max_text_chars``); lines past the limit are only counted so ``page_count`` stays truthful.
+    """
+
+    def __init__(self, *, max_text_chars: int = DEFAULT_MAX_TEXT_CHARS, page_chars: int = HTML_PAGE_CHARS) -> None:
+        self.max_text_chars = max_text_chars
+        self.page_chars = page_chars
+        self._page_texts: list[str] = []
+        self._pages: list[list] = []
+        self._offset = 0          # start offset of the next page (end of last page + 1 separator)
+        self._lines: list[str] = []
+        self._size = 0
+        self.limit_reached = False
+        self._excluded_pages = 0
+        self._excluded_size = 0
+        self.lines_seen = 0
+
+    @property
+    def included_pages(self) -> int:
+        return len(self._pages) + (1 if self._lines else 0)
+
+    def _close_page(self) -> None:
+        if not self._lines:
+            return
+        page = "\n".join(self._lines)
+        self._pages.append([self._offset, self._offset + len(page), "text"])
+        self._page_texts.append(page)
+        self._offset += len(page) + 1
+        self._lines, self._size = [], 0
+
+    def _count_excluded(self, line: str) -> None:
+        self._excluded_size += len(line) + 1
+        if self._excluded_size >= self.page_chars:
+            self._excluded_pages += 1
+            self._excluded_size = 0
+
+    def add_line(self, line: str) -> None:
+        self.lines_seen += 1
+        if self.limit_reached:
+            self._count_excluded(line)
+            return
+        grown = self._size + (1 if self._lines else 0) + len(line)
+        if self._offset + grown > self.max_text_chars:
+            self._close_page()
+            self.limit_reached = True
+            self._count_excluded(line)
+            return
+        self._lines.append(line)
+        self._size = grown
+        if grown >= self.page_chars:
+            self._close_page()
+
+    def finish(self, *, original_retained: bool = False, page_count_complete: bool = True) -> tuple[str, dict]:
+        self._close_page()
+        excluded = self._excluded_pages + (1 if self._excluded_size else 0)
+        pages = list(self._pages) + [[None, None, "not_included"] for _ in range(excluded)]
+        document_pages = {"page_count": len(pages), "pages": pages, "text_limit_reached": self.limit_reached,
+                          "original_retained": bool(original_retained), "method": "html_paged",
+                          "version": PAGES_FORMAT_VERSION}
+        if not page_count_complete:
+            document_pages["page_count_complete"] = False
+        return "\n".join(self._page_texts), document_pages
 
 
 def _valid_pages(document_pages: object) -> list | None:

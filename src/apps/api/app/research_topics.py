@@ -141,6 +141,11 @@ class TurnUsage(BaseModel):
     model_calls: int = Field(ge=0)
     search_calls: int = Field(ge=0)
     total_tokens: int = Field(ge=0)
+    # partial_unknown: some model call reported no usage. total_tokens is then the ledger total including
+    # the reserved estimate for those calls, not a lower bound.
+    usage_status: Literal['complete', 'partial_unknown'] | None = Field(default=None, description=(
+        "'partial_unknown': some call's usage is unknown; total_tokens is the ledger total including "
+        "reservations for those calls, not a lower bound."))
 
 
 class TurnFocusCitation(BaseModel):

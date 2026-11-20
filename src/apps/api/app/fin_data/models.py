@@ -197,6 +197,7 @@ class Provenance(_Frozen):
     endpoint: str
     retrieved_at: datetime
     response_sha256: str | None = None
+    endpoints: list[str] = Field(default_factory=list)
 
 
 class Cost(_Frozen):

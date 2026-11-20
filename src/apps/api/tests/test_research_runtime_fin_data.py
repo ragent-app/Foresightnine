@@ -10,7 +10,7 @@ from app.model_protocol import ModelResponse
 from app.research_runtime import SYSTEM, TOOLS, run_research_agent
 from app.research_sources import ResearchSource, SourcePermissions
 
-from tests.fin_data.helpers import NOW as TD_NOW
+from tests.fin_data.helpers import NOW as TD_NOW, ConceptTransport
 from tests.fin_runtime_helpers import (ACCOUNT, FakeTransport, Reply, fixture_bytes, json_reply, make_toolbox,
                                        memory_persist)
 from tests.test_research_runtime import Model, context, turn
@@ -122,7 +122,7 @@ def test_unknown_market_data_outcome_is_recorded_not_replayed():
 
 # ---------------------------------------------------------------- company_financials
 def test_company_financials_lines_are_quotable_by_record_facts():
-    t = FakeTransport(json_reply('sec_companyfacts.json'))
+    t = ConceptTransport()
     persist = memory_persist()
 
     def step(results):
@@ -146,17 +146,20 @@ def test_company_financials_lines_are_quotable_by_record_facts():
     assert len(facts) == 1 and facts[0]['currency'] == 'USD' and facts[0]['source_id'] == 'src_1'
     source = persist.store[0]
     assert source.kind == 'official' and source.retrieval_method == 'sec_companyfacts' and source.permissions.export is True
+    eps = source.provenance['endpoints']
+    assert eps and all('/companyconcept/' in u for u in eps) and str(source.url) == eps[0] and source.provenance['endpoint'] == eps[0]
+    assert 'companyfacts' not in str(source.url) and source.provenance['provider_calls'] >= len(eps)
     assert source.provenance['provider'] == 'sec_edgar' and len(source.provenance['provider_response_sha256']) == 64
 
 
 def test_company_financials_by_ticker_requires_unique_exact_match_and_counts_both_requests():
     calls = []
-    t = FakeTransport(json_reply('sec_tickers.json'), json_reply('sec_companyfacts.json'))
+    t = ConceptTransport(others={'company_tickers': json_reply('sec_tickers.json')})
     m = Model([turn('company_financials', {'ticker': 'EXM', 'lines': ['revenue'], 'periods': 'last_4_quarters',
                                            'rationale': 'by ticker'}, 'f1'), STOP])
     run(m, fin_data=make_toolbox(sec=t, reserve_call=lambda: calls.append(1)))
     fb = last_result(m)
-    assert fb['status'] in ('ok', 'partial') and fb['entity_id'] == 'cik:0000320193' and len(calls) == 2
+    assert fb['status'] in ('ok', 'partial') and fb['entity_id'] == 'cik:0000320193' and len(calls) == 1 + len(t.concept_urls)  # tickers + one per concept file
     t2 = FakeTransport(json_reply('sec_tickers.json'))
     m2 = Model([turn('company_financials', {'ticker': 'NOPE', 'rationale': 'x'}, 'f1'), STOP])
     run(m2, fin_data=make_toolbox(sec=t2))
@@ -164,14 +167,15 @@ def test_company_financials_by_ticker_requires_unique_exact_match_and_counts_bot
 
 
 def test_duplicate_company_financials_and_market_data_are_reused_not_refetched():
-    sec, td = FakeTransport(json_reply('sec_companyfacts.json')), FakeTransport(json_reply('td_time_series_ipo.json'))
+    sec, td = ConceptTransport(), FakeTransport(json_reply('td_time_series_ipo.json'))
     m = Model([turn('company_financials', FIN, 'a'), turn('company_financials', {**FIN, 'rationale': 'again'}, 'b'),
                turn('market_data', PX, 'c'), turn('market_data', {**PX, 'rationale': 'again'}, 'd'), STOP])
     run(m, fin_data=make_toolbox(sec=sec, twelve=td))
     for index in (2, 4):
         dup = last_result(m, index)
         assert dup['status'] == 'duplicate_action' and dup['reused'] is True and dup['source_id']
-    assert len(sec.calls) == 1 and len(td.calls) == 1
+    urls = [u for u, _ in sec.calls]
+    assert urls and len(urls) == len(set(urls)) and len(td.calls) == 1  # nothing fetched twice
 
 
 def test_sec_requests_use_global_pacing_and_rate_limit_without_calling_the_provider():
@@ -199,7 +203,7 @@ def test_large_companyfacts_stream_to_a_temp_file_and_parse():
 
     plain = FakeTransport(Reply(500))
     persist = memory_persist()
-    m = Model([turn('company_financials', FIN, 'a'), STOP])
+    m = Model([turn('company_financials', {k: v for k, v in FIN.items() if k != 'lines'}, 'a'), STOP])
     run(m, fin_data=make_toolbox(sec=plain, sec_stream=stream, persist=persist))
     fb = last_result(m)
     assert fb['status'] in ('ok', 'partial') and streamed and 'companyfacts' in streamed[0] and not plain.calls

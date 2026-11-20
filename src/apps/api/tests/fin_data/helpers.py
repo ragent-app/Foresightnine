@@ -51,3 +51,32 @@ def efts_policy() -> FinDataPolicy:
     base = default_policy()
     return FinDataPolicy(version="t", rules=[*base.rules, PolicyRule(provider="sec_edgar", category="filing_search",
                                                                     store=True, display=True, model_input=True)])
+
+
+class ConceptTransport:
+    """Serves SEC companyconcept files sliced from a companyfacts fixture (404 for tags the issuer never reported).
+
+    Any other URL is answered from ``others`` (``{substring: Reply}``) so identity lookups can share the transport.
+    """
+
+    def __init__(self, facts_fixture: str = "sec_companyfacts.json", others: dict | None = None):
+        self.doc = json.loads(fixture_bytes(facts_fixture))
+        self.others, self.calls = others or {}, []
+
+    def __call__(self, method, url, headers, body, timeout):
+        self.calls.append((url, dict(headers)))
+        if "/companyconcept/" in url:
+            taxonomy, tag = url.rsplit("/", 2)[-2], url.rsplit("/", 1)[-1].removesuffix(".json")
+            node = self.doc["facts"].get(taxonomy, {}).get(tag)
+            if node is None:
+                return Reply(404, b"{}")
+            payload = {"cik": self.doc["cik"], "taxonomy": taxonomy, "tag": tag, "entityName": self.doc["entityName"], **node}
+            return Reply(200, json.dumps(payload).encode())
+        for key, reply in self.others.items():
+            if key in url:
+                return reply
+        return Reply(404, b"{}")
+
+    @property
+    def concept_urls(self) -> list[str]:
+        return [u for u, _ in self.calls if "/companyconcept/" in u]

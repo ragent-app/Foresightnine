@@ -1,5 +1,5 @@
 /** GENERATED FILE — DO NOT EDIT. Source: openapi/v2/openapi.json
- * SHA-256: f8feaeb7f87c3ead895c14e3df1b64efe9e2ffcadfd0980ec225846521847a79
+ * SHA-256: 2062f5d43deb383bac20eb96ff811a3f5a2ee2d4068b766e7395196db4fa5869
  */
 export type AttachSourcesInput = { readonly "parent_version_id": string; readonly "source_ids": readonly (string)[]; };
 export type CalculationInput = { readonly "currency"?: string | null; readonly "fact_id": string; readonly "period": string; readonly "unit": string; readonly "value": string; };
@@ -45,6 +45,6 @@ export type SourceLocation = { readonly "character_end": number; readonly "chara
 export type SourcePermissions = { readonly "display"?: boolean; readonly "export"?: boolean; readonly "model_input"?: boolean; readonly "store"?: boolean; };
 export type SourceRef = { readonly "label": string; readonly "ref_id": string; readonly "source_type": "public" | "user_submitted" | "model_inference" | "market_data" | "registry" | "factor_library"; readonly "url"?: string; };
 export type TurnFocusCitation = { readonly "citation_index": number; readonly "claim_id": string; };
-export type TurnUsage = { readonly "model_calls": number; readonly "search_calls": number; readonly "total_tokens": number; };
+export type TurnUsage = { readonly "model_calls": number; readonly "search_calls": number; readonly "total_tokens": number; readonly "usage_status"?: "complete" | "partial_unknown" | null; };
 export type ValidationError = { readonly "ctx"?: {  }; readonly "input"?: unknown; readonly "loc": readonly (string | number)[]; readonly "msg": string; readonly "type": string; };
 export type VersionInput = { readonly "content": ResearchContent; readonly "note"?: string; readonly "parent_version_id": string; readonly "review"?: "draft" | "confirmed" | "reservation"; };

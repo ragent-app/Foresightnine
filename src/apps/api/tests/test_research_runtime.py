@@ -636,12 +636,13 @@ def test_available_capabilities_derived_and_overridden_in_initial_prompt():
 
 
 def test_company_financials_success_unconfigured_restricted_and_unknown_recovery():
+    from tests.fin_data.helpers import ConceptTransport
     from tests.fin_runtime_helpers import FakeTransport, Reply, json_reply, make_toolbox
     fin_args = {'cik': '320193', 'lines': ['revenue'], 'periods': 'last_4_quarters', 'rationale': 'Quarterly revenue.'}
     stop = ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')
 
     # 1. Success registers the source for read_sources and record_facts.
-    t = FakeTransport(json_reply('sec_companyfacts.json'))
+    t = ConceptTransport()
     m_ok = Model([turn('company_financials', fin_args, 'f1'), stop])
     sources_list = []
     res_ok = run_research_agent(question='Q', sources=sources_list, model=m_ok, context=context(), fin_data=make_toolbox(sec=t))
@@ -858,23 +859,24 @@ def test_web_retrieval_methods_and_turn_partial_notes_schema():
 
 
 def test_company_financials_rate_limit_allows_one_retry_and_stops_on_second_repeat():
+    from tests.fin_data.helpers import ConceptTransport
     from tests.fin_runtime_helpers import FakeTransport, Reply, json_reply, make_toolbox
     fin_args = {'cik': '320193', 'lines': ['revenue'], 'periods': 'last_4_quarters', 'rationale': 'Quarterly revenue.'}
     stop = ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')
 
     # 1. The first call is rate limited by the global SEC pacer; one retry is allowed and succeeds.
-    pace = iter([False, True])
-    t = FakeTransport(json_reply('sec_companyfacts.json'))
+    pace = iter([False])  # first SEC request is paced out; later ones (one per concept file) succeed
+    t = ConceptTransport()
     m_ok = Model([turn('company_financials', fin_args, 'f1'),
                   turn('company_financials', {**fin_args, 'rationale': 'Retry after 1s SEC rate limit.'}, 'f2'), stop])
     saved = []
     res_ok = run_research_agent(question='Q', sources=[], model=m_ok, context=context(),
-                                fin_data=make_toolbox(sec=t, reserve_sec=lambda: next(pace)),
+                                fin_data=make_toolbox(sec=t, reserve_sec=lambda: next(pace, True)),
                                 checkpoint=lambda s: saved.append(json.loads(json.dumps(s))))
     first = json.loads(m_ok.inputs[1][-1]['content'])
     assert first['status'] == 'rate_limited' and first['retryable'] is True
     assert json.loads(m_ok.inputs[2][-1]['content'])['status'] in ('ok', 'partial')
-    assert len(t.calls) == 1 and len(saved[-1]['rate_limit_retries']) == 1
+    assert len(t.concept_urls) == 4 and len(saved[-1]['rate_limit_retries']) == 1
 
     # 2. A second consecutive rate limit keeps the signature in seen, so repeating again stops with no_progress.
     t2 = FakeTransport(Reply())

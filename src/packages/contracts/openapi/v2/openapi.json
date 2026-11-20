@@ -2593,6 +2593,22 @@
             "minimum": 0.0,
             "title": "Total Tokens",
             "type": "integer"
+          },
+          "usage_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "complete",
+                  "partial_unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "'partial_unknown': some call's usage is unknown; total_tokens is the ledger total including reservations for those calls, not a lower bound.",
+            "title": "Usage Status"
           }
         },
         "required": [

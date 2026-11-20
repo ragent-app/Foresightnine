@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import codecs
+import io
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
@@ -29,6 +30,7 @@ from .openai_compatible import (
 from .research_blob_store import configured_blob_store, is_valid_sha256
 from .research_documents import (
     DEFAULT_MAX_TEXT_CHARS,
+    TextPager,
     PdfPagesError,
     merge_ocr_into_document,
     extract_pdf_pages,
@@ -443,6 +445,7 @@ class FetchedText:
     response_sha256: str
     content_type: str
     original_html_base64: str | None = None
+    pages: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -527,12 +530,12 @@ def _normalize_text_encoding(name: str | None) -> str | None:
     return cleaned
 
 
-def _decode_text_bytes(raw: bytes, content_type_header: str, *, is_html: bool) -> str:
-    """Decode HTTP bytes using declared header/meta charset with safe UTF-8/GB18030/Latin-1 fallback."""
+def _encoding_candidates(head: bytes, content_type_header: str, *, is_html: bool) -> list[str]:
+    """Candidate encodings in priority order from BOM, header charset, meta charset (first 8 KB) and fallbacks."""
     candidates: list[str] = []
-    if raw.startswith(codecs.BOM_UTF8):
+    if head.startswith(codecs.BOM_UTF8):
         candidates.append("utf-8-sig")
-    elif raw.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+    elif head.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
         candidates.append("utf-16")
     header_match = _CHARSET_HEADER_RE.search(content_type_header)
     if header_match:
@@ -540,23 +543,153 @@ def _decode_text_bytes(raw: bytes, content_type_header: str, *, is_html: bool) -
         if normalized:
             candidates.append(normalized)
     if is_html:
-        meta_match = _META_CHARSET_RE.search(raw[:8192].decode("ascii", errors="ignore"))
+        meta_match = _META_CHARSET_RE.search(head[:8192].decode("ascii", errors="ignore"))
         if meta_match:
             normalized = _normalize_text_encoding(meta_match.group(1))
             if normalized:
                 candidates.append(normalized)
-    for fallback in ("utf-8-sig", "gb18030", "latin-1"):
-        candidates.append(fallback)
-    seen: set[str] = set()
-    for encoding in candidates:
-        if encoding in seen:
-            continue
-        seen.add(encoding)
+    candidates.extend(("utf-8-sig", "gb18030", "latin-1"))
+    return list(dict.fromkeys(candidates))
+
+
+def _decode_text_bytes(raw: bytes, content_type_header: str, *, is_html: bool) -> str:
+    """Decode HTTP bytes using declared header/meta charset with safe UTF-8/GB18030/Latin-1 fallback."""
+    for encoding in _encoding_candidates(raw[:8192], content_type_header, is_html=is_html):
         try:
             return raw.decode(encoding)
         except UnicodeDecodeError:
             continue
     return raw.decode("latin-1")
+
+
+_TEXT_READ_CHUNK = 1 << 20
+HTML_PARSE_SECONDS = 120.0
+_MAX_UNDRAINED_PARTS = 1_000_000
+_LINE_BREAKS = "\r\n\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029"
+
+
+def _iter_text_chunks(source: Path | bytes | str, encoding: str | None):
+    """Yield decoded text chunks; strict incremental decoding so a bad byte aborts this encoding attempt."""
+    if isinstance(source, str):
+        yield source
+        return
+    decoder = codecs.getincrementaldecoder(encoding or "utf-8-sig")(errors="strict")
+    handle = io.BytesIO(source) if isinstance(source, bytes) else source.open("rb")
+    try:
+        while chunk := handle.read(_TEXT_READ_CHUNK):
+            text = decoder.decode(chunk)
+            if text:
+                yield text
+        tail = decoder.decode(b"", final=True)
+        if tail:
+            yield tail
+    finally:
+        handle.close()
+
+
+def _extract_text_once(source: Path | bytes | str, encoding: str | None, *, is_html: bool,
+                       deadline: float) -> tuple[TextPager, bool]:
+    """Return ``(pager, truncated_scan)``; the scan stops early only after the text limit when time runs out."""
+    truncated = False
+    pager = TextPager(max_text_chars=MAX_EXTRACTED_TEXT_CHARS)
+    parser = _SafeHtmlParser() if is_html else None
+    carry = ""
+    leading = True
+    blanks = 0
+
+    def emit(text: str, *, final: bool) -> None:
+        nonlocal carry, leading, blanks
+        pieces = (carry + text).splitlines(keepends=True)
+        carry = ""
+        if pieces and not final and pieces[-1][-1] not in _LINE_BREAKS:
+            carry = pieces.pop()
+        for piece in pieces:
+            line = piece.strip() if is_html else piece.rstrip()
+            if is_html:
+                if line:
+                    pager.add_line(line)
+                continue
+            if not line.strip():
+                blanks += 0 if leading else 1
+                continue
+            if leading:
+                line, leading = line.lstrip(), False
+            for _ in range(blanks):
+                pager.add_line("")
+            blanks = 0
+            pager.add_line(line)
+
+    def over_deadline() -> bool:
+        return monotonic() > deadline
+
+    for chunk in _iter_text_chunks(source, encoding):
+        if parser is None:
+            emit(chunk, final=False)
+        else:
+            try:
+                parser.feed(chunk)
+            except (ValueError, RecursionError) as error:
+                raise FetchFailure("source_invalid", "HTML parsing failed.") from error
+            # Rows and cells keep indexes into ``parts``; flush only between them so memory stays bounded.
+            if parser.parts and not parser._row_stack and not parser._cell_stack:
+                text = "".join(parser.parts)
+                parser.parts.clear()
+                emit(text, final=False)
+            elif len(parser.parts) > _MAX_UNDRAINED_PARTS:
+                # Everything is nested inside one open table cell, so nothing can be flushed safely.
+                raise FetchFailure("source_too_large", "HTML text is nested inside one table cell and cannot be paged.")
+        if over_deadline():
+            if pager.limit_reached:
+                truncated = True
+                break
+            raise FetchFailure("source_timeout", "Document text extraction exceeded its time budget.")
+    if not truncated:
+        if parser is not None:
+            try:
+                parser.close()
+            except (ValueError, RecursionError) as error:
+                raise FetchFailure("source_invalid", "HTML parsing failed.") from error
+            emit("".join(parser.parts), final=True)
+        else:
+            emit("", final=True)
+    return pager, truncated
+
+
+def extract_text_pages(source: Path | bytes | str, content_type_header: str, *, is_html: bool,
+                       deadline: float | None = None, original_retained: bool = False) -> tuple[str, dict]:
+    """Extract HTML or plain text incrementally and return ``(text, document_pages)`` (``html_paged``).
+
+    ``source`` is a file path (streamed in 1 MB chunks), raw bytes, or an already decoded string. Memory is
+    bounded by the 2,000,000-character text limit plus one chunk, not by the document size. HTML hidden-subtree
+    protections persist across chunk boundaries because one parser instance consumes all chunks.
+    """
+    if deadline is None:
+        deadline = monotonic() + HTML_PARSE_SECONDS
+    if isinstance(source, str):
+        attempts: list[str | None] = [None]
+    else:
+        if isinstance(source, bytes):
+            head = source[:8192]
+        else:
+            with source.open("rb") as handle:
+                head = handle.read(8192)
+        attempts = list(_encoding_candidates(head, content_type_header, is_html=is_html))
+    pager: TextPager | None = None
+    truncated = False
+    for encoding in attempts:
+        try:
+            pager, truncated = _extract_text_once(source, encoding, is_html=is_html, deadline=deadline)
+            break
+        except UnicodeDecodeError:
+            continue
+    if pager is None:  # latin-1 never fails; defensive
+        raise FetchFailure("source_invalid", "Document could not be decoded.")
+    if pager.included_pages == 0:
+        if pager.limit_reached:
+            raise FetchFailure("source_too_large", "Extracted text exceeded 2,000,000 characters.")
+        raise FetchFailure("source_invalid", "Document contained no extractable text.")
+    return pager.finish(original_retained=original_retained,
+                        page_count_complete=not truncated)
 
 
 def _check_fetch_target(url: str, *, is_redirect: bool, check_dns: bool) -> str:
@@ -821,8 +954,7 @@ def _fetch_document_impl(
             raise FetchFailure("source_timeout") from error
         except (_TransportFailure, OSError) as error:
             if isinstance(error, _TransportFailure) and str(error) == "response too large":
-                limit = download_cap if spool is not None else MAX_FETCH_BYTES
-                raise FetchFailure("source_too_large", f"Response exceeded {limit:,} byte limit.") from error
+                raise FetchFailure("source_too_large", f"Response exceeded {download_cap:,} byte limit.") from error
             raise FetchFailure("source_unavailable") from error
         status_code = getattr(response, "status_code", 0)
         resp_headers = getattr(response, "headers", {})
@@ -865,11 +997,12 @@ def _fetch_document_impl(
     body = getattr(response, "body", None)
     streamed = spool is not None and spool.size > 0 and not (isinstance(body, (bytes, str)) and len(body) > 0)
     is_pdf = content_type == "application/pdf"
-    length_limit = download_cap if (spool is not None and is_pdf) else MAX_FETCH_BYTES
+    length_limit = download_cap
     if content_length.isdigit() and int(content_length) > length_limit:
         raise FetchFailure("source_too_large", f"Response of {int(content_length):,} bytes exceeded {length_limit:,} byte limit.")
     if content_type not in accepted_types:
         raise FetchFailure("source_format_unsupported", f"Unsupported content-type: {content_type or 'unknown'}")
+    spool_path: Path | None = None
     if streamed:
         assert spool is not None
         spool.close()
@@ -877,39 +1010,62 @@ def _fetch_document_impl(
             return _extract_large_pdf(spool.path, response_sha256=spool.hexdigest(),
                                       final_url=current_url, redirect_count=redirect_count,
                                       request=request, ocr_usage=ocr_usage)
-        if spool.size > MAX_FETCH_BYTES:
-            raise FetchFailure("source_too_large", f"Response of {spool.size:,} bytes exceeded 5 MB limit.")
-        body = spool.path.read_bytes()
+        if is_pdf or spool.size <= MAX_FETCH_BYTES:
+            body = spool.path.read_bytes()
+        else:
+            spool_path = spool.path  # large HTML/text: parsed from the file, never read whole into memory
     if content_type == "application/pdf":
         if not isinstance(body, bytes):
             raise FetchFailure("source_invalid", "PDF response must be binary.")
         return _extract_pdf_document(request, body, final_url=current_url, redirect_count=redirect_count, deadline=deadline,
                                      ocr_usage=ocr_usage)
-    if isinstance(body, str):
+    is_html = content_type == "text/html"
+    parse_deadline = monotonic() + HTML_PARSE_SECONDS
+    if spool_path is not None:
+        assert spool is not None
+        size, digest, source = spool.size, spool.hexdigest(), spool_path
+        raw: bytes | None = None
+    elif isinstance(body, str):
         raw = body.encode("utf-8")
-        decoded = body
+        size, digest, source = len(raw), sha256(raw).hexdigest(), body
     elif isinstance(body, bytes):
         raw = body
-        decoded = None
+        size, digest, source = len(raw), sha256(raw).hexdigest(), body
     else:
         raise FetchFailure("source_invalid")
-    if len(raw) > MAX_FETCH_BYTES:
-        raise FetchFailure("source_too_large", "Response exceeded 5 MB limit.")
-    if decoded is None:
-        decoded = _decode_text_bytes(raw, content_type_header, is_html=(content_type == "text/html"))
-    text = decoded.strip() if content_type == "text/plain" else _extract_html_text(decoded)
-    if not text:
-        raise FetchFailure("source_invalid", "Document contained no extractable text.")
-    if len(text) > MAX_EXTRACTED_TEXT_CHARS:
-        raise FetchFailure("source_too_large", "Extracted text exceeded 2,000,000 characters.")
+    if size > download_cap:
+        raise FetchFailure("source_too_large", f"Response exceeded {download_cap:,} byte limit.")
+    text, document_pages = extract_text_pages(source, content_type_header, is_html=is_html, deadline=parse_deadline)
+    original_base64: str | None = None
+    if is_html and size <= MAX_FETCH_BYTES:
+        data = raw if raw is not None else spool_path.read_bytes()  # type: ignore[union-attr]
+        original_base64 = base64.b64encode(data).decode("ascii")
+        document_pages = {**document_pages, "original_retained": True}
+    elif size > MAX_FETCH_BYTES:
+        document_pages = _retain_original_blob(document_pages, spool_path, raw)
     return FetchedDocument(
         text=text,
-        response_sha256=sha256(raw).hexdigest(),
+        response_sha256=digest,
         content_type=content_type,
         final_url=current_url,
-        original_html_base64=base64.b64encode(raw).decode("ascii") if content_type == "text/html" else None,
+        original_html_base64=original_base64,
         redirect_count=redirect_count,
+        pages=document_pages,
     )
+
+
+def _retain_original_blob(document_pages: dict, path: Path | None, raw: bytes | None) -> dict:
+    """Store a >5 MB original in the content-addressed blob store when one is configured."""
+    store = configured_blob_store()
+    digest: str | None = None
+    if store is not None:
+        try:
+            digest = store.put_file(path) if path is not None else store.put_bytes(raw or b"")
+        except OSError:
+            digest = None
+    if digest is not None and is_valid_sha256(digest):
+        return {**document_pages, "original_retained": True, "original_blob_sha256": digest}
+    return {**document_pages, "original_retained": False}
 
 
 def fetch_source_document(
@@ -955,6 +1111,7 @@ def fetch_official_text(
         response_sha256=document.response_sha256,
         content_type=document.content_type,
         original_html_base64=document.original_html_base64,
+        pages=document.pages,
     )
 
 

@@ -51,6 +51,15 @@ def sec_binary_transport(plan=None, calls=None):
         status = plan.pop(0) if plan else 200
         if status != 200:
             return BinaryHttpResponse(status, b'', {})
+        if '/companyconcept/' in url:
+            import json as _json
+            doc = _json.loads(fixture_bytes('sec_companyfacts.json'))
+            taxonomy, tag = url.rsplit('/', 2)[-2], url.rsplit('/', 1)[-1].removesuffix('.json')
+            node = doc['facts'].get(taxonomy, {}).get(tag)
+            if node is None:
+                return BinaryHttpResponse(404, b'', {})
+            data = _json.dumps({'cik': doc['cik'], 'taxonomy': taxonomy, 'tag': tag, **node}).encode()
+            return BinaryHttpResponse(200, data, {'content-type': 'application/json'})
         name = ('sec_companyfacts.json' if 'companyfacts' in url else 'sec_submissions.json' if 'submissions' in url
                 else 'sec_tickers.json')
         data = fixture_bytes(name)

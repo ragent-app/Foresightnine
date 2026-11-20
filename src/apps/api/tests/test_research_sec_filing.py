@@ -94,14 +94,14 @@ def test_sec_filing_timeout_includes_html_extraction(monkeypatch):
     from threading import Event
     from time import monotonic
     entered, release, finished = Event(), Event(), Event()
-    def slow_extract(upload):
+    def slow_extract(source, content_type_header, **kwargs):
         entered.set()
         try:
             release.wait(2)
-            return ('Revenue 100', 'a' * 64)
+            return ('Revenue 100', {'pages': []})
         finally:
             finished.set()
-    monkeypatch.setattr('app.research_sec.extract_uploaded_html', slow_extract)
+    monkeypatch.setattr('app.research_sec.extract_text_pages', slow_extract)
     calls = []
     def transport(*args):
         calls.append(1)

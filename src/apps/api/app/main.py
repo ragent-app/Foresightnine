@@ -2483,8 +2483,8 @@ def fetch_research_source(request: FetchSourceRequest, http_request: Request) ->
 @app.get("/v2/research/capabilities", include_in_schema=False)
 def get_research_capabilities(authorization: str | None = Header(default=None)) -> dict:
     """Which source capabilities this deployment has configured; no configuration values or secrets."""
-    from .research_historical_prices import configured_historical_prices
-    _authenticated_account(authorization)
+    from .research_fin_tools import FinDataToolbox
+    account = _authenticated_account(authorization)
     _, sec_available = _configured_sec_user_agent()
     search_available = bool(getattr(evidence_provider, "supports_project_search", False))
     allowed_hosts = fetch_allowed_hosts()
@@ -2493,7 +2493,11 @@ def get_research_capabilities(authorization: str | None = Header(default=None)) 
         "search_available": search_available,
         "web_fetch_enabled": not bool(allowed_hosts),
         "sec_available": sec_available,
-        "historical_prices_available": configured_historical_prices()[0] is not None,
+        # Structured data tools for this account: market_data needs the account's own Twelve Data key
+        # (the platform key is never consulted); SEC tools follow the configured SEC contact.
+        **FinDataToolbox(account_id=account.account_id, market_key=_account_market_key(account.account_id),
+                         sec_user_agent=os.environ.get("FORESIGHTNINE_SEC_USER_AGENT") or os.environ.get("SEC_USER_AGENT"),
+                         persist=lambda *_a, **_k: None).capabilities(),
         "sources": [asdict(item) for item in source_capabilities(search_available=search_available, sec_available=sec_available)],
     }
 
@@ -2586,7 +2590,6 @@ def _runtime_provider_binding(provider: Any, request: Request) -> str:
                'credential_revision': str(getattr(config, 'updated_at', None)),
                'credential_hint': getattr(personal, 'key_hint', None),
                'platform_credential_revision': os.environ.get('FORESIGHTNINE_RESEARCH_LLM_CREDENTIAL_REVISION') if getattr(provider, 'name', None) == 'anthropic_messages' else os.environ.get('FORESIGHTNINE_LLM_CREDENTIAL_REVISION'),
-               'historical_prices': os.environ.get('FORESIGHTNINE_RESEARCH_HISTORICAL_PRICES'),
                'system': SYSTEM, 'tools': [asdict(tool) for tool in TOOLS]}
     return sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
@@ -3024,6 +3027,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         if any(not fully_read(item.source_id, len(item.text)) for item, code in source_eligibility(sources, topic.request.as_of)
                if code == 'eligible'):
             gaps.append(runtime_gap('source_selection_partial'))
+        # Best known total: the settled ledger total is a lower bound when some call's usage is unknown.
+        known_total = max(context.usage or 0, context.accounted_tokens or 0)
+        usage_status = 'partial_unknown' if context.usage is None and context.calls > 0 else 'complete'
         turn = ResearchTurn(
             turn_id=turn_meta['turn_id'], index=turn_meta['index'], question=turn_meta['question'],
             question_origin=turn_meta['question_origin'], focus_citation=turn_meta.get('focus_citation'),
@@ -3035,7 +3041,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             calculation_ids=[item['calculation_id'] for item in outcome.calculations],
             chart_ids=[item['chart_id'] for item in outcome.charts],
             gaps=gap_rows(gaps),
-            usage=TurnUsage(model_calls=context.calls, search_calls=context.search_calls, total_tokens=context.usage or 0),
+            usage=TurnUsage(model_calls=context.calls, search_calls=context.search_calls, total_tokens=known_total, usage_status=usage_status),
             search_status=search_status, official_fetch_status=official_fetch_status,
             read_ranges=[ReadRange.model_validate(item) for item in ranges], events=outcome.events)
         content = merge_turn(parent_now.content, turn, claims=outcome.claims, facts=outcome.facts,

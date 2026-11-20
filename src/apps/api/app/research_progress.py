@@ -507,8 +507,13 @@ def build_progress(*, operation_id: str, operation_status: str, inputs: Mapping[
     turn_meta = inputs.get('turn') if isinstance(inputs.get('turn'), Mapping) else {}
     if checkpoint:
         accounting = checkpoint.get('_accounting') if isinstance(checkpoint.get('_accounting'), Mapping) else {}
-        usage = {'model_calls': _int(accounting.get('calls')) or 0, 'search_calls': _int(accounting.get('search_calls')) or 0,
-                 'total_tokens': _int(accounting.get('usage')) or 0}
+        # Same rule as the saved turn (main.py): when any call's usage is unknown the
+        # ledger total (including reservations) is reported and flagged.
+        calls = _int(accounting.get('calls')) or 0
+        known_usage = _int(accounting.get('usage'))
+        usage = {'model_calls': calls, 'search_calls': _int(accounting.get('search_calls')) or 0,
+                 'total_tokens': max(known_usage or 0, _int(accounting.get('accounted_tokens')) or 0),
+                 'usage_status': 'partial_unknown' if known_usage is None and calls > 0 else 'complete'}
         events = checkpoint.get('events')
         updated_at = checkpoint.get('_saved_at') if isinstance(checkpoint.get('_saved_at'), str) else None
     elif saved_turn is not None:

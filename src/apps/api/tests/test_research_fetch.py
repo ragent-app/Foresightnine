@@ -187,7 +187,7 @@ def test_supports_over_256kb_up_to_5mb_and_rejects_oversized(monkeypatch):
     assert seen_limits == [research_fetch.large_document_max_bytes()]
     assert len(doc.text) > 200_000
 
-    # Near 5 MB boundary passes; >5 MB fails with source_too_large.
+    # Bodies are capped by the large-document limit; an unbroken line above the text limit is still too large.
     near_cap = b"A" * 4_999_000
     # Extracted text limit is 2,000,000 chars; pad with HTML comments/whitespace so raw is ~4.99 MB and text is < 2M chars.
     near_cap_html = b"<p>OK</p><!--" + (b"x" * 4_998_000) + b"-->"

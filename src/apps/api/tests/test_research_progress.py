@@ -17,6 +17,7 @@ from app.research_sources import ResearchSource, SourcePermissions
 from app.research_structured_connector import StructuredQueryResult
 from app.research_topics import ReadRange, ResearchTurn, TurnUsage
 from tests.test_research_multiturn import (Q1, Q2, TEXT, Scripted, env, read_all, submit)  # noqa: F401
+from tests.fin_data.helpers import ConceptTransport
 from tests.fin_runtime_helpers import FakeTransport, json_reply, make_toolbox
 from tests.test_research_runtime import Model, context, source, turn
 
@@ -339,7 +340,7 @@ def test_all_eight_tools_current_activity_and_summaries():
         discover=lambda q: leads,
         acquire=acquire_fn,
         fin_data=make_toolbox(twelve=FakeTransport(json_reply('td_time_series_ipo.json')),
-                              sec=FakeTransport(json_reply('sec_companyfacts.json'))),
+                              sec=ConceptTransport()),
         checkpoint=save_and_record,
     )
     assert outcome.status == 'completed'

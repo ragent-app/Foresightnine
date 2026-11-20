@@ -274,9 +274,14 @@ def test_sink_streams_body_and_non_2xx_writes_nothing(server):
     assert response.status_code == 500 and failed_sink.getvalue() == b""
 
 
-def test_non_pdf_body_above_five_mb_is_too_large(server, local_transport):
+def test_non_pdf_body_above_five_mb_is_paged_not_rejected(server, local_transport):
+    # The 5 MB cap now applies only to in-memory originals; larger text streams to disk and is paged.
     server["type"] = "text/plain"
-    server["body"] = b"a" * 5_500_000
+    server["body"] = b"a" * 5_500_000  # one unbroken line far above the text limit still cannot be paged
     with pytest.raises(FetchFailure) as error:
         fetch_source_document(req("https://docs.example.com/big.txt"))
-    assert error.value.code == "source_too_large"
+    assert error.value.code == "source_too_large" and "2,000,000 characters" in (error.value.detail or "")
+    server["body"] = b"".join(b"line %07d of the document\n" % i for i in range(200_000))
+    assert len(server["body"]) > research_fetch.MAX_FETCH_BYTES
+    doc = fetch_source_document(req("https://docs.example.com/big.txt"))
+    assert doc.pages["method"] == "html_paged" and doc.pages["page_count"] > 100

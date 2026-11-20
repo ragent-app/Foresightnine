@@ -1,5 +1,6 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { useCallback, useMemo, useState, type Ref } from "react";
+import { Link } from "react-router-dom";
 import type { ProgressEvent, RecoveryStatus } from "../../api/types";
 import { formatInterimParts, formulaLabel, gapText, recoveryReasonLabel, turnReasonLabel, TURN_STATUS_LABEL, VERIFY_NOTE } from "../../lib/copy";
 import { displayTurnNumber, formatClock, formatDuration, formatInteger, formatQuantity, turnStamp } from "../../lib/format";
@@ -39,10 +40,13 @@ export function calculationTitle(calc: ResearchV2.ResearchCalculation): string {
   return periods.length > 0 ? `${name} · ${periods.join(" 对 ")}` : name;
 }
 
-function usageMeta(turn: ResearchV2.ResearchTurn): string {
+export function usageMeta(turn: ResearchV2.ResearchTurn): string {
   const parts = [`${turn.usage.model_calls} 次模型调用`];
   if (turn.usage.search_calls > 0) parts.push(`${turn.usage.search_calls} 次搜索`);
-  parts.push(`${formatInteger(turn.usage.total_tokens)} Token`);
+  // partial_unknown: some call reported no usage, so the total includes reserved estimates for those calls.
+  parts.push(turn.usage.usage_status === "partial_unknown"
+    ? `约 ${formatInteger(turn.usage.total_tokens)} Token（部分调用用量未知，已按预留额度计入）`
+    : `${formatInteger(turn.usage.total_tokens)} Token`);
   const ms = turnDurationMs(turn);
   if (ms !== null && ms >= 0) parts.push(formatDuration(ms));
   return parts.join(" · ");
@@ -111,11 +115,12 @@ function CalloutActions({ actions }: { actions: TurnActions }) {
   );
 }
 
-function GapCallout({ turn, actions, tone }: { turn: ResearchV2.ResearchTurn; actions: TurnActions | null; tone: "partial" | "completed" }) {
+export function GapCallout({ turn, actions, tone }: { turn: ResearchV2.ResearchTurn; actions: TurnActions | null; tone: "partial" | "completed" }) {
   const gaps = turn.gaps ?? [];
   if (tone === "completed" && gaps.length === 0) return null;
   const shown = gaps.slice(0, 2);
   const hidden = gaps.length - shown.length;
+  const needsMarketKey = gaps.some((gap) => gap.code === "market_data_key_required");
   const recoveryReason = tone === "partial" && actions?.recovery?.reason
     ? recoveryReasonLabel(actions.recovery.reason)
     : null;
@@ -128,6 +133,11 @@ function GapCallout({ turn, actions, tone }: { turn: ResearchV2.ResearchTurn; ac
         </ul>
       ) : null}
       {hidden > 0 ? <span className="why">另有 {hidden} 项缺口，在研究记录里查看。</span> : null}
+      {needsMarketKey ? (
+        <span className="why" data-hint="market-data-key">
+          想要行情数据？<Link className="link" to="/settings?tab=data">前往设置，添加自己的 Twelve Data key</Link>
+        </span>
+      ) : null}
       {tone === "partial" ? <span className="why">停止原因：{turnReasonLabel(turn.reason, turn.stopping_note)}</span> : null}
       {recoveryReason ? <span className="why">恢复检查：{recoveryReason}</span> : null}
       {tone === "partial" && actions ? <CalloutActions actions={actions} /> : null}

@@ -14,12 +14,16 @@ from time import monotonic, sleep
 from typing import Callable, Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .openai_compatible import HttpResponse, _TransportFailure, _TransportTimeout, _default_transport
+import tempfile
+from pathlib import Path
+
+from .openai_compatible import (HttpResponse, _TransportFailure, _TransportTimeout, _default_binary_transport,
+                                _default_transport)
 from .research_sources import SourcePermissions
-from .research_fetch import FetchSourceRequest
-from .research_uploads import HtmlUploadRequest, PdfFailure, extract_uploaded_html
+from .research_fetch import (MAX_FETCH_BYTES, FetchFailure, FetchSourceRequest, _HashingSink, _retain_original_blob,
+                             extract_text_pages, large_document_download_seconds, large_document_max_bytes)
 
 
 class SecConceptRequest(BaseModel):
@@ -71,13 +75,21 @@ class SecResult:
 class SecFilingResult:
     text: str
     response_sha256: str
-    original_base64: str
+    original_base64: str | None
+    pages: dict | None = None
 
 
 def fetch_sec_filing(request: FetchSourceRequest, user_agent: str | None,
                      transport: Callable[..., HttpResponse] | None = None, *,
                      timeout_seconds: float = 15.0) -> SecFilingResult:
-    """Retrieve one validated SEC HTML filing, preserving the exact UTF-8 body."""
+    """Retrieve one validated SEC HTML filing and extract paged text.
+
+    Without an injected transport the body streams to a temporary file (cap
+    ``FORESIGHTNINE_LARGE_DOCUMENT_MAX_BYTES``, default 200 MB) and is parsed incrementally, so large S-1/10-K
+    documents never sit in memory. Originals up to 5 MB are returned as base64; larger originals go to the
+    blob store when configured (``pages['original_blob_sha256']``), otherwise ``original_base64`` is None and
+    ``pages['original_retained']`` is False. The request headers, redirect refusal and caller's pacing are unchanged.
+    """
     if not request.permissions.store:
         raise SecFailure("source_permission_unknown")
     if not 0 < timeout_seconds <= 15:
@@ -85,55 +97,85 @@ def fetch_sec_filing(request: FetchSourceRequest, user_agent: str | None,
     if urlsplit(str(request.url)).hostname != "www.sec.gov":
         raise SecFailure("source_invalid")
     agent = validate_user_agent(user_agent)
-    deadline = monotonic() + timeout_seconds
-    send = transport or (lambda method, address, headers, body, timeout:
-                         _default_transport(method, address, headers, body, timeout,
-                                            max_response_bytes=5_000_000))
-    try:
-        response = send("GET", str(request.url), {"User-Agent": agent, "Accept": "text/html"}, b"", timeout_seconds)
-    except _TransportTimeout as error:
-        raise SecFailure("source_timeout") from error
-    except (_TransportFailure, OSError) as error:
-        raise SecFailure("source_unavailable") from error
-    if response.status_code == 429:
-        raise SecFailure("source_rate_limited")
-    if not 200 <= response.status_code < 300:
-        raise SecFailure("source_unavailable")
-    if response.headers.get("content-type", "").split(";", 1)[0].lower().strip() != "text/html":
-        raise SecFailure("source_format_unsupported")
-    raw = response.body.encode("utf-8")
-    if len(raw) > 5_000_000:
-        raise SecFailure("source_invalid")
-    encoded = base64.b64encode(raw).decode("ascii")
-    try:
-        upload = HtmlUploadRequest(title=request.title, html_base64=encoded, permissions=request.permissions)
-    except ValidationError as error:
-        raise SecFailure("source_invalid") from error
-    remaining = deadline - monotonic()
-    if remaining <= 0:
-        raise SecFailure("source_timeout")
-    done = Event()
-    state: dict[str, object] = {}
-    def parse() -> None:
+    streaming = transport is None
+    # An injected transport (tests) keeps the caller's single time budget; the real streaming path may need
+    # the large-document download budget, which covers download and incremental parsing.
+    budget = max(timeout_seconds, large_document_download_seconds()) if streaming else timeout_seconds
+    deadline = monotonic() + budget
+    headers = {"User-Agent": agent, "Accept": "text/html"}
+    with tempfile.TemporaryDirectory(prefix="foresight-sec-") as directory:
+        spool = _HashingSink(Path(directory) / "filing.html") if streaming else None
         try:
-            state["result"] = extract_uploaded_html(upload)
-        except Exception as error:
-            state["error"] = error
+            try:
+                if streaming:
+                    assert spool is not None
+                    response = _default_binary_transport(
+                        "GET", str(request.url), headers, b"", budget, max_response_bytes=large_document_max_bytes(),
+                        response_timeout_seconds=timeout_seconds, sink=spool)
+                else:
+                    response = transport("GET", str(request.url), headers, b"", timeout_seconds)
+            except _TransportTimeout as error:
+                raise SecFailure("source_timeout") from error
+            except (_TransportFailure, OSError) as error:
+                if str(error) == "response too large":
+                    raise SecFailure("source_invalid") from error
+                raise SecFailure("source_unavailable") from error
+            if response.status_code == 429:
+                raise SecFailure("source_rate_limited")
+            if not 200 <= response.status_code < 300:
+                raise SecFailure("source_unavailable")
+            if response.headers.get("content-type", "").split(";", 1)[0].lower().strip() != "text/html":
+                raise SecFailure("source_format_unsupported")
+            content_type_header = response.headers.get("content-type", "")
+            if spool is not None:
+                spool.close()
+                if spool.size == 0:
+                    raise SecFailure("source_invalid")
+                raw: bytes | None = spool.path.read_bytes() if spool.size <= MAX_FETCH_BYTES else None
+                size, digest, source = spool.size, spool.hexdigest(), spool.path
+            else:
+                body = response.body
+                raw = body.encode("utf-8") if isinstance(body, str) else bytes(body)
+                if not raw or len(raw) > large_document_max_bytes():
+                    raise SecFailure("source_invalid")
+                size, digest, source = len(raw), sha256(raw).hexdigest(), (body if isinstance(body, str) else raw)
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise SecFailure("source_timeout")
+            done = Event()
+            state: dict[str, object] = {}
+
+            def parse() -> None:
+                try:
+                    state["result"] = extract_text_pages(source, content_type_header, is_html=True, deadline=deadline)
+                except Exception as error:
+                    state["error"] = error
+                finally:
+                    done.set()
+            Thread(target=parse, name="foresight-sec-html", daemon=True).start()
+            if not done.wait(remaining):
+                # The parser checks the same deadline between chunks and stops by itself; a timed-out parse
+                # cannot submit another external request.
+                raise SecFailure("source_timeout")
+            error = state.get("error")
+            if error is not None:
+                if isinstance(error, FetchFailure) and error.code == "source_timeout":
+                    raise SecFailure("source_timeout") from error
+                raise SecFailure("source_invalid") from error
+            result = state.get("result")
+            if not isinstance(result, tuple) or len(result) != 2:
+                raise SecFailure("source_invalid")
+            text, document_pages = result
+            encoded: str | None = None
+            if raw is not None and size <= MAX_FETCH_BYTES:
+                encoded = base64.b64encode(raw).decode("ascii")
+                document_pages = {**document_pages, "original_retained": True}
+            else:
+                document_pages = _retain_original_blob(document_pages, spool.path if spool is not None else None, raw)
+            return SecFilingResult(text=text, response_sha256=digest, original_base64=encoded, pages=document_pages)
         finally:
-            done.set()
-    Thread(target=parse, name="foresight-sec-html", daemon=True).start()
-    if not done.wait(remaining):
-        # HTML extraction uses a shared bounded semaphore. A timed-out parse
-        # may finish later but cannot submit another external request.
-        raise SecFailure("source_timeout")
-    error = state.get("error")
-    if error is not None:
-        raise SecFailure("source_unavailable" if isinstance(error, PdfFailure) and error.code == "html_busy" else "source_invalid") from error
-    result = state.get("result")
-    if not isinstance(result, tuple) or len(result) != 2:
-        raise SecFailure("source_invalid")
-    text, raw_hash = result
-    return SecFilingResult(text=text, response_sha256=raw_hash, original_base64=encoded)
+            if spool is not None:
+                spool.close()
 
 
 def search_sec_identities(request: SecIdentityRequest, user_agent: str | None,

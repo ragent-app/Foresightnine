@@ -12,12 +12,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, replace
+from hashlib import sha256
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Iterable
 from urllib.parse import quote, urlencode
 
-from ...openai_compatible import HttpResponse
+from ...openai_compatible import HttpResponse, _TransportFailure
 from ...research_sec import SecFailure, SecIdentityRequest, search_sec_identities, validate_user_agent
 from ..models import (Coverage, EntityRef, Filing, FrameRow, FullTextHit, Permissions, StatementLine,
                       SuggestedAction, ToolResult)
@@ -28,6 +29,26 @@ from .base import StopWith, StreamTransport, Transport, default_stream_transport
 PROVIDER = "sec_edgar"
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 EFTS_URL = "https://efts.sec.gov/LATEST/search-index"
+CONCEPT_URL = "https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}/{taxonomy}/{tag}.json"
+# json.load of a whole companyfacts document costs several times its size in Python objects; refuse above this
+# size so a large issuer cannot exhaust the 512 MB API container. Specific lines use small companyconcept files.
+MAX_COMPANYFACTS_BYTES = 60_000_000
+
+
+class _CappedSink:
+    """Sink wrapper that aborts the download once more than ``limit`` bytes arrive."""
+
+    def __init__(self, sink, limit: int) -> None:
+        self._sink, self._limit, self._size = sink, limit, 0
+
+    def write(self, data: bytes) -> int:
+        self._size += len(data)
+        if self._size > self._limit:
+            raise _TransportFailure("response too large")
+        return self._sink.write(data)
+
+    def __getattr__(self, name):
+        return getattr(self._sink, name)
 
 
 def cik10(value: str | int) -> str:
@@ -221,7 +242,10 @@ def select_line(facts: dict, spec: LineSpec, kind: str, n: int, *, derive_q4: bo
             continue
         for p in _collect(units[unit], kind, flow=spec.flow, derive_q4=derive_q4 and spec.unit_kind == "money",
                           tag=tag, unit=unit):
-            chosen.setdefault(p.end, p)
+            cur = chosen.get(p.end)
+            # Same period under several tags: the latest filing wins; ties keep tag priority.
+            if cur is None or (p.filed or date.min) > (cur.filed or date.min):
+                chosen[p.end] = p
     return sorted(chosen.values(), key=lambda p: p.end, reverse=True)[:n]
 
 
@@ -252,14 +276,29 @@ class SecEdgarAdapter:
             return ToolResult.failure("failed", error.code, "SEC requires a declared User-Agent with contact details.")
         return decision
 
-    def _get(self, url: str, category: str, not_found_reason: str = "not_found", *, large: bool = False):
+    def _get(self, url: str, category: str, not_found_reason: str = "not_found", *, large: bool = False,
+             max_bytes: int | None = None):
         gate = self._gate(category)
         if isinstance(gate, ToolResult):
             raise StopWith(gate)
+        transport, stream = self._transport, (self._stream if large else None)
+        if max_bytes is not None:
+            if stream is not None:
+                inner_stream = stream
+                stream = lambda method, address, headers, body, timeout, sink: inner_stream(
+                    method, address, headers, body, timeout, _CappedSink(sink, max_bytes))
+            else:
+                inner = self._transport
+
+                def transport(method, address, headers, body, timeout):
+                    reply = inner(method, address, headers, body, timeout)
+                    if len(reply.body or b"") > max_bytes:
+                        raise _TransportFailure("response too large")
+                    return reply
         doc, prov, cost = request_json(provider=PROVIDER, url=url, headers={"User-Agent": self._ua or ""},
-                                       transport=self._transport, timeout=self._timeout, limiter=self._limiter,
+                                       transport=transport, timeout=self._timeout, limiter=self._limiter,
                                        now_fn=self._now, not_found_reason=not_found_reason,
-                                       stream_transport=self._stream if large else None)
+                                       stream_transport=stream)
         return doc, prov, cost, gate
 
     # -- identity
@@ -356,6 +395,50 @@ class SecEdgarAdapter:
         return ToolResult(status=status, reason=reason, coverage=cov, permissions=perms, provenance=prov, cost=cost, data=rows)
 
     # -- companyfacts
+    def _concept_facts(self, c: str, wanted: list[str], *, period: str, n: int, derive_q4: bool, taxonomy: str):
+        """Build a companyfacts-shaped ``facts`` dict from per-tag companyconcept files (small, in priority order).
+
+        Per line, ALL candidate tags are fetched (a few per line; a company may switch tags over time, so
+        stopping early could return stale periods); each tag is fetched at most once. Returns
+        ``(facts, provenance, cost, permissions)`` or a failing ``ToolResult``. A 404 for a tag only means
+        the issuer never reported it.
+        """
+        from ..models import Cost, Provenance
+        facts: dict[str, dict] = {taxonomy: {}}
+        tried: set[str] = set()
+        hashes: list[str] = []
+        urls: list[str] = []
+        calls = 0
+        perms: Permissions | None = None
+        for name in wanted:
+            spec = STANDARD_LINES[name]
+            for tag in spec.tags.get(taxonomy, ()):
+                if tag in tried:
+                    continue
+                tried.add(tag)
+                url = CONCEPT_URL.format(cik=c, taxonomy=taxonomy, tag=tag)
+                calls += 1
+                try:
+                    doc, prov, cost, perms = self._get(url, "financials", "no_xbrl_facts")
+                except StopWith as stop:
+                    if stop.result.reason == "no_xbrl_facts":
+                        continue
+                    return stop.result
+                units = doc.get("units") if isinstance(doc, dict) else None
+                if not isinstance(units, dict):
+                    return ToolResult.failure("failed", "invalid_response", "Unexpected companyconcept shape.",
+                                              provenance=prov, cost=Cost(provider_calls=calls))
+                facts[taxonomy][tag] = doc
+                hashes.append(prov.response_sha256 or "")
+                urls.append(url)
+        gate = perms or self._gate("financials")
+        if isinstance(gate, ToolResult):
+            return gate
+        digest = sha256("\n".join(sorted(hashes)).encode()).hexdigest() if hashes else None
+        prov = Provenance(provider=PROVIDER, endpoint=urls[0] if urls else CONCEPT_URL.format(cik=c, taxonomy=taxonomy, tag="*"),
+                          retrieved_at=self._now(), response_sha256=digest, endpoints=urls)
+        return facts, prov, Cost(provider_calls=calls), gate
+
     def statement_lines(self, cik: str | int, *, lines: Iterable[str] | None = None, period: str = "quarter",
                         n: int = 8, derive_q4: bool = False, taxonomy: str = "us-gaap",
                         entity_id: str | None = None) -> ToolResult:
@@ -369,14 +452,31 @@ class SecEdgarAdapter:
                                                                          hint="lines in " + ",".join(STANDARD_LINES))])
         c = cik10(cik)
         eid = entity_id or cik_entity_id(c)
-        try:
-            doc, prov, cost, perms = self._get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{c}.json", "financials",
-                                               "no_xbrl_facts", large=True)
-        except StopWith as stop:
-            return stop.result
-        facts = doc.get("facts") if isinstance(doc, dict) else None
-        if not isinstance(facts, dict):
-            return ToolResult.failure("failed", "invalid_response", "Unexpected companyfacts shape.", provenance=prov, cost=cost)
+        if lines:
+            loaded = self._concept_facts(c, wanted, period=period, n=n, derive_q4=derive_q4, taxonomy=taxonomy)
+            if isinstance(loaded, ToolResult):
+                return loaded
+            facts, prov, cost, perms = loaded
+            if not facts.get(taxonomy):
+                return ToolResult(status="empty", reason="no_matching_lines", permissions=perms, provenance=prov, cost=cost,
+                                  coverage=Coverage(entity_id=eid, rows=0),
+                                  message="No requested line was reported under the standard tag mapping.")
+        else:
+            try:
+                doc, prov, cost, perms = self._get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{c}.json", "financials",
+                                                   "no_xbrl_facts", large=True, max_bytes=MAX_COMPANYFACTS_BYTES)
+            except StopWith as stop:
+                if stop.result.reason == "source_too_large":
+                    return ToolResult.failure(
+                        "failed", "source_too_large",
+                        f"The full companyfacts document exceeds {MAX_COMPANYFACTS_BYTES // 1_000_000} MB; request specific "
+                        "lines (for example lines=['revenue','net_income']) to use the small per-concept files.",
+                        cost=stop.result.cost,
+                        suggested_actions=[SuggestedAction(action="company_financials", hint="pass lines=[...] from " + ",".join(STANDARD_LINES))])
+                return stop.result
+            facts = doc.get("facts") if isinstance(doc, dict) else None
+            if not isinstance(facts, dict):
+                return ToolResult.failure("failed", "invalid_response", "Unexpected companyfacts shape.", provenance=prov, cost=cost)
         out: list[StatementLine] = []
         short, missing = [], []
         for name in wanted:
