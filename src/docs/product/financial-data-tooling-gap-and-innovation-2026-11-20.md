@@ -761,6 +761,27 @@ Alpha Vantage、Stooq 等其他免费行情来源，也要按同样标准逐一�
 - 视觉 OCR 的计费预留使用固定的输入 token 估计值（6000）。
 - 并发时同一页图像可能被重复识别，计费会如实记录。
 
+### 13.2 2026-11-20：真实模型复验与 S1 第一步（分支 `feat/s0-timeliness-retrieval-ocr`，未部署）
+
+- **真实模型复验 365**（提交 `191e2a4`，详见 [evaluation](phase-a/365-s0-real-model-revalidation/evaluation.md)）：
+  - C1、C3、C6 通过；C2 未通过，原因是模型在 IPO 问题上没有主动取大盘对照；C4、C5 未被触发。
+  - 6 次运行中有 3 次提前中断：两次是模型服务的流式错误或超时；两次是我方在同一台主机上并行跑测试造成的资源争用，已记为执行偏差。
+- **复验后的修复**：
+  - 提交被拒时列出每条失败的引文，并给出可直接照抄的建议文本（`9c053f9`）。
+  - 大型网页和 SEC 申报文件改为流式下载、按页读取。
+  - 用量未知时如实标注，不再显示为 0（`c1bcb7c`）。
+- **S1 数据层**：
+  - 独立模块（`011ca56`）：标准数据模型、许可策略（含 key 归属）、限流、SEC EDGAR 与 Twelve Data 适配器、实体解析。
+  - 接入运行时（`d2cdcf2`、`c1bcb7c`）：新工具 `resolve_entity`、`market_data`（只用用户自带 key）、`company_financials`（逐科目查询并按期间合并，避免更换标签后取到过时数据）、`filings`，取代 `historical_prices` 和 `sec_company_concept`。研究能力接口按账户反映 key 的状态，工作台提示用户添加 key。
+- **验证**：
+  - 全量 API 测试与修改前的基线逐项一致，312 项原有失败，没有新增；通过项从约 1,200 增至 1,422。
+  - 契约生成检查和 Web 类型检查通过。
+- **尚未完成**：
+  - 新工具（`market_data` 用户自带 key、`company_financials`、`filings`）还没有用真实模型验证过。
+  - S1 中国内地和香港的公告适配器，需先核验 cninfo、HKEXnews 的使用条款。
+  - S2 的检索层、口径核对表（I1）、覆盖与缺口地图（I4）、方法包。
+  - 部署（需单独授权；部署时一并关闭线上的平台 Twelve Data key）。
+
 ## 14. 参考来源（2026-11-20 检索）
 
 - Anthropic, [Agents for financial services](https://www.anthropic.com/news/finance-agents)、[Advancing Claude for Financial Services](https://anthropic.com/news/advancing-claude-for-financial-services)
