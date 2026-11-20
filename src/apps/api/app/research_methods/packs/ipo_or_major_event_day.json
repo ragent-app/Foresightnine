@@ -1,0 +1,189 @@
+{
+ "id": "ipo_or_major_event_day",
+ "version": "1.0.0",
+ "title_zh": "IPO 与重大事件首日",
+ "title_en": "IPO or major event day",
+ "applies_when": {
+  "question_types": [
+   "IPO or listing-day trading",
+   "first day of trading",
+   "single-day major market event"
+  ],
+  "triggers": [
+   {
+    "term": "ipo",
+    "weight": 2
+   },
+   {
+    "term": "上市首日",
+    "weight": 2
+   },
+   {
+    "term": "首日",
+    "weight": 1
+   },
+   {
+    "term": "第一天",
+    "weight": 1
+   },
+   {
+    "term": "debut",
+    "weight": 2
+   },
+   {
+    "term": "first day of trading",
+    "weight": 3
+   },
+   {
+    "term": "first trading day",
+    "weight": 3
+   },
+   {
+    "term": "opening day",
+    "weight": 1
+   },
+   {
+    "term": "上市",
+    "weight": 1
+   },
+   {
+    "term": "发行价",
+    "weight": 1
+   },
+   {
+    "term": "招股",
+    "weight": 1
+   },
+   {
+    "term": "offer price",
+    "weight": 1
+   },
+   {
+    "term": "重大事件",
+    "weight": 1
+   }
+  ]
+ },
+ "evidence_requirements": [
+  {
+   "id": "clock_event_date",
+   "description": "Event date compared with research_clock: is the event today, yesterday or older; is the session complete.",
+   "preferred_tools": [],
+   "required": true,
+   "freshness": "research_clock",
+   "acceptance": "explicit date and session status",
+   "fallback": "State the assumption and that the date is unverified."
+  },
+  {
+   "id": "offer_terms",
+   "description": "Offer price, shares, venue, ticker and pricing date from the issuer or regulator filing.",
+   "preferred_tools": [
+    "filings",
+    "discover_sources",
+    "acquire_sources",
+    "read_pages"
+   ],
+   "required": true,
+   "freshness": "latest filing before event",
+   "acceptance": "quoted from filing text",
+   "fallback": "Use news for terms and label them secondary."
+  },
+  {
+   "id": "first_trade",
+   "description": "First trade time and price, open, high, low, close and volume of the event session.",
+   "preferred_tools": [
+    "market_data",
+    "news_search",
+    "discover_sources"
+   ],
+   "required": true,
+   "freshness": "through last_completed_session",
+   "acceptance": "bars with timestamps and currency",
+   "fallback": "Use news figures, label them NOT market data, say they are unverified and that the market-data key is needed to verify."
+  },
+  {
+   "id": "benchmark",
+   "description": "MARKET BENCHMARK: a broad index or index ETF for the same session and window.",
+   "preferred_tools": [
+    "market_data"
+   ],
+   "required": true,
+   "freshness": "through last_completed_session; same session",
+   "acceptance": "same dates as the event series",
+   "fallback": "State that no benchmark could be fetched and why; do not infer market direction from news alone."
+  },
+  {
+   "id": "after_hours",
+   "description": "After-hours or next-session information if the session is not complete.",
+   "preferred_tools": [
+    "market_data",
+    "news_search",
+    "discover_sources"
+   ],
+   "required": false,
+   "freshness": "research_clock",
+   "acceptance": "labelled as extended-hours",
+   "fallback": "Note that extended-hours data was not obtained."
+  }
+ ],
+ "counter_evidence": {
+  "look_for": [
+   "whether the move was market-wide rather than event-specific",
+   "conflicting price figures across outlets",
+   "whether the listing actually occurred when claimed",
+   "supply or lock-up and valuation concerns"
+  ],
+  "min_search_actions": 1,
+  "if_none_found": "State what was searched and that no contrary evidence was found."
+ },
+ "unit_and_period_checks": [
+  "exchange time zone vs reader time zone",
+  "price currency and share class",
+  "session boundaries and whether the close is final",
+  "split or adjustment basis",
+  "event-day change vs offer price vs previous close are different baselines"
+ ],
+ "reconciliation": [
+  {
+   "metric": "open, high, low, close, volume",
+   "source_classes": [
+    "news",
+    "market data"
+   ],
+   "note": "report differences and prefer market data"
+  },
+  {
+   "metric": "offer terms",
+   "source_classes": [
+    "filing text",
+    "news"
+   ],
+   "note": "prefer the filing"
+  }
+ ],
+ "stopping_conditions": [
+  "offer terms, session figures and benchmark obtained or each gap explained",
+  "the event is not yet in a completed session: report the status and stop"
+ ],
+ "report_structure": {
+  "sections": [
+   "Event status vs research clock",
+   "Offer terms",
+   "Trading session figures",
+   "Benchmark comparison",
+   "Reconciliation of figures",
+   "Counter-evidence",
+   "Open items"
+  ],
+  "must_state": [
+   "as-of date and session of each series",
+   "coverage gaps, especially missing market data or benchmark",
+   "which numbers come from news and are not market data"
+  ]
+ },
+ "limits": [
+  "market_data needs the user's own key; without it session figures stay secondary and must be labelled",
+  "a newly listed instrument may be missing from market-data coverage",
+  "no order-book or tick data"
+ ]
+}

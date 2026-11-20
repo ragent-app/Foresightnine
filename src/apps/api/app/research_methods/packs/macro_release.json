@@ -1,0 +1,200 @@
+{
+ "id": "macro_release",
+ "version": "1.0.0",
+ "title_zh": "宏观数据解读",
+ "title_en": "Macro data release",
+ "applies_when": {
+  "question_types": [
+   "economic data release interpretation",
+   "central bank decision",
+   "market reaction to a release"
+  ],
+  "triggers": [
+   {
+    "term": "cpi",
+    "weight": 2
+   },
+   {
+    "term": "pce",
+    "weight": 2
+   },
+   {
+    "term": "pmi",
+    "weight": 2
+   },
+   {
+    "term": "gdp",
+    "weight": 2
+   },
+   {
+    "term": "非农",
+    "weight": 2
+   },
+   {
+    "term": "nonfarm",
+    "weight": 2
+   },
+   {
+    "term": "payrolls",
+    "weight": 2
+   },
+   {
+    "term": "央行",
+    "weight": 2
+   },
+   {
+    "term": "利率决议",
+    "weight": 2
+   },
+   {
+    "term": "议息",
+    "weight": 2
+   },
+   {
+    "term": "fomc",
+    "weight": 2
+   },
+   {
+    "term": "rate decision",
+    "weight": 2
+   },
+   {
+    "term": "失业率",
+    "weight": 2
+   },
+   {
+    "term": "unemployment rate",
+    "weight": 2
+   },
+   {
+    "term": "通胀",
+    "weight": 1
+   },
+   {
+    "term": "inflation",
+    "weight": 1
+   },
+   {
+    "term": "美联储",
+    "weight": 1
+   },
+   {
+    "term": "central bank",
+    "weight": 1
+   }
+  ]
+ },
+ "evidence_requirements": [
+  {
+   "id": "official_release",
+   "description": "Release value, prior value and revision from the official statistical agency or central bank.",
+   "preferred_tools": [
+    "discover_sources",
+    "acquire_sources",
+    "read_pages",
+    "search_library"
+   ],
+   "required": true,
+   "freshness": "latest release before research_clock",
+   "acceptance": "figures quoted from the official page",
+   "fallback": "State that the official source was not reached and label values secondary."
+  },
+  {
+   "id": "revision",
+   "description": "Revisions to prior periods and the measure definition (headline vs core, seasonally adjusted, annualized).",
+   "preferred_tools": [
+    "read_pages",
+    "search_source"
+   ],
+   "required": true,
+   "freshness": "same release",
+   "acceptance": "definition stated",
+   "fallback": "State that revisions were not checked."
+  },
+  {
+   "id": "expectations",
+   "description": "Market expectations if published by a source; otherwise state they are unavailable.",
+   "preferred_tools": [
+    "news_search",
+    "discover_sources"
+   ],
+   "required": false,
+   "freshness": "before the release",
+   "acceptance": "dated and attributed",
+   "fallback": "State that consensus is not available in free sources."
+  },
+  {
+   "id": "market_reaction",
+   "description": "Price reaction window around the release in rates, equities or currency proxies.",
+   "preferred_tools": [
+    "market_data"
+   ],
+   "required": false,
+   "freshness": "through last_completed_session",
+   "acceptance": "window spans before and after the release",
+   "fallback": "Use dated news moves, label them NOT market data."
+  },
+  {
+   "id": "calc",
+   "description": "Change vs prior and annualized rates computed deterministically.",
+   "preferred_tools": [
+    "calculate_financials"
+   ],
+   "required": true,
+   "freshness": "same as official_release",
+   "acceptance": "figures from calculations",
+   "fallback": "Show formulas and mark them unaudited."
+  }
+ ],
+ "counter_evidence": {
+  "look_for": [
+   "components that offset the headline",
+   "revision patterns in earlier releases",
+   "alternative measures that disagree",
+   "one-off or seasonal distortions"
+  ],
+  "min_search_actions": 1,
+  "if_none_found": "State what was searched and that no contrary evidence was found."
+ },
+ "unit_and_period_checks": [
+  "reference period vs release date",
+  "seasonal adjustment and annualization",
+  "percent vs percentage points vs basis points",
+  "headline vs core",
+  "index base period"
+ ],
+ "reconciliation": [
+  {
+   "metric": "release value and prior value",
+   "source_classes": [
+    "official release",
+    "news"
+   ],
+   "note": "prefer the official page; explain differences"
+  }
+ ],
+ "stopping_conditions": [
+  "official value, prior and revision obtained",
+  "market window covered or the gap stated"
+ ],
+ "report_structure": {
+  "sections": [
+   "Release in one line",
+   "Value, prior and revision",
+   "Components",
+   "Market reaction",
+   "Counter-evidence",
+   "Open items"
+  ],
+  "must_state": [
+   "as-of date and release time of each figure",
+   "coverage gaps",
+   "that expectations are unavailable when no source gives them"
+  ]
+ },
+ "limits": [
+  "no consensus estimates in free sources: say so and do not describe the release as a beat or miss; infer only from prior-period change and label it",
+  "market reaction needs the user's own market-data key",
+  "correlation in a window is not causation"
+ ]
+}

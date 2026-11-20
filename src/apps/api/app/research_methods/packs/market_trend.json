@@ -1,0 +1,196 @@
+{
+ "id": "market_trend",
+ "version": "1.0.0",
+ "title_zh": "指数与行情走势",
+ "title_en": "Market or index trend",
+ "applies_when": {
+  "question_types": [
+   "recent trend of a market, index or asset class",
+   "drawdown and return analysis",
+   "forward outlook scenarios"
+  ],
+  "triggers": [
+   {
+    "term": "走势",
+    "weight": 2
+   },
+   {
+    "term": "行情",
+    "weight": 2
+   },
+   {
+    "term": "大盘",
+    "weight": 2
+   },
+   {
+    "term": "trend",
+    "weight": 2
+   },
+   {
+    "term": "trends",
+    "weight": 2
+   },
+   {
+    "term": "market outlook",
+    "weight": 2
+   },
+   {
+    "term": "index",
+    "weight": 1
+   },
+   {
+    "term": "指数",
+    "weight": 1
+   },
+   {
+    "term": "回撤",
+    "weight": 1
+   },
+   {
+    "term": "drawdown",
+    "weight": 1
+   },
+   {
+    "term": "涨跌",
+    "weight": 1
+   },
+   {
+    "term": "performance",
+    "weight": 1
+   },
+   {
+    "term": "rally",
+    "weight": 1
+   },
+   {
+    "term": "selloff",
+    "weight": 1
+   },
+   {
+    "term": "sell-off",
+    "weight": 1
+   },
+   {
+    "term": "预测",
+    "weight": 1
+   },
+   {
+    "term": "outlook",
+    "weight": 1
+   }
+  ]
+ },
+ "evidence_requirements": [
+  {
+   "id": "clock",
+   "description": "Anchor to research_clock: the last completed session is the latest valid data date.",
+   "preferred_tools": [],
+   "required": true,
+   "freshness": "research_clock",
+   "acceptance": "explicit as-of date",
+   "fallback": "State the as-of date you assumed."
+  },
+  {
+   "id": "price_series",
+   "description": "Daily price series for the index or a tradable proxy with a stated lookback (recent days plus longer context).",
+   "preferred_tools": [
+    "market_data"
+   ],
+   "required": true,
+   "freshness": "through last_completed_session",
+   "acceptance": "dated bars with currency",
+   "fallback": "Use dated figures from news or filings, label them NOT market data, and say the market-data key is needed for the series."
+  },
+  {
+   "id": "returns",
+   "description": "Period returns, high-to-date drawdown and volatility computed deterministically.",
+   "preferred_tools": [
+    "calculate_financials"
+   ],
+   "required": true,
+   "freshness": "same window as price_series",
+   "acceptance": "every figure from a calculation",
+   "fallback": "State figures as approximate and unaudited."
+  },
+  {
+   "id": "benchmark_breadth",
+   "description": "Comparison with a broader benchmark and a breadth or constituent view.",
+   "preferred_tools": [
+    "market_data",
+    "news_search",
+    "discover_sources"
+   ],
+   "required": false,
+   "freshness": "through last_completed_session",
+   "acceptance": "same window",
+   "fallback": "State that breadth was not assessed."
+  },
+  {
+   "id": "drivers",
+   "description": "Dated macro and news drivers: releases, policy, earnings of heavy constituents.",
+   "preferred_tools": [
+    "search_library",
+    "news_search",
+    "discover_sources",
+    "acquire_sources",
+    "read_pages"
+   ],
+   "required": true,
+   "freshness": "dated within the lookback",
+   "acceptance": "each driver has a date and source",
+   "fallback": "State that drivers are unverified leads."
+  }
+ ],
+ "counter_evidence": {
+  "look_for": [
+   "evidence the trend is not a trend (range, mean reversion)",
+   "drivers that point the other way",
+   "measures that disagree (breadth vs index level)",
+   "periods where similar signals failed"
+  ],
+  "min_search_actions": 1,
+  "if_none_found": "State what was searched and that no contrary evidence was found."
+ },
+ "unit_and_period_checks": [
+  "index level vs price return vs total return",
+  "proxy ETF vs index differences",
+  "window start and end dates and trading calendar",
+  "intraday vs close",
+  "currency"
+ ],
+ "reconciliation": [
+  {
+   "metric": "period change and latest level",
+   "source_classes": [
+    "news",
+    "market data"
+   ],
+   "note": "report differences and prefer market data"
+  }
+ ],
+ "stopping_conditions": [
+  "series, calculations and dated drivers collected",
+  "a data source is missing: report the gap and stop"
+ ],
+ "report_structure": {
+  "sections": [
+   "Where the market is (as-of)",
+   "Returns and drawdown",
+   "Drivers",
+   "Benchmark and breadth",
+   "Counter-evidence",
+   "Scenarios (inference)",
+   "Open items"
+  ],
+  "must_state": [
+   "as-of date of each series",
+   "coverage gaps",
+   "that scenarios are inference with event and time-horizon definitions"
+  ]
+ },
+ "limits": [
+  "scenarios are inference, not forecasts; define each event and horizon; probabilities optional and, if given, state basis (subjective, historical base rate or calibrated) and keep joint and conditional values consistent; normalize only for mutually exclusive, exhaustive branches",
+  "market_data needs the user's own key",
+  "no intraday or constituent weights without a source"
+ ]
+}

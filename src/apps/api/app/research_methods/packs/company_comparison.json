@@ -1,0 +1,170 @@
+{
+ "id": "company_comparison",
+ "version": "1.0.0",
+ "title_zh": "公司比较",
+ "title_en": "Company comparison",
+ "applies_when": {
+  "question_types": [
+   "peer comparison",
+   "relative valuation or performance of two or more companies",
+   "segment or margin comparison"
+  ],
+  "triggers": [
+   {
+    "term": "比较",
+    "weight": 2
+   },
+   {
+    "term": "对比",
+    "weight": 2
+   },
+   {
+    "term": "相比",
+    "weight": 1
+   },
+   {
+    "term": "compare",
+    "weight": 2
+   },
+   {
+    "term": "comparison",
+    "weight": 2
+   },
+   {
+    "term": "versus",
+    "weight": 2
+   },
+   {
+    "term": "vs",
+    "weight": 2
+   },
+   {
+    "term": "peers",
+    "weight": 1
+   },
+   {
+    "term": "同行",
+    "weight": 1
+   },
+   {
+    "term": "哪个更",
+    "weight": 1
+   },
+   {
+    "term": "differences between",
+    "weight": 1
+   }
+  ]
+ },
+ "evidence_requirements": [
+  {
+   "id": "entities",
+   "description": "Resolve every company to an entity id; confirm listing, currency and fiscal year-end.",
+   "preferred_tools": [
+    "resolve_entity"
+   ],
+   "required": true,
+   "freshness": "n/a",
+   "acceptance": "one id per company",
+   "fallback": "State which identifiers are assumed."
+  },
+  {
+   "id": "aligned_statements",
+   "description": "Same standard lines for each company over aligned periods (trailing twelve months or matched fiscal frames).",
+   "preferred_tools": [
+    "company_financials",
+    "filings",
+    "discover_sources"
+   ],
+   "required": true,
+   "freshness": "latest filed period of each company as of research_clock",
+   "acceptance": "same line items, period and unit across companies",
+   "fallback": "Use filing text and mark the lines non-standardized."
+  },
+  {
+   "id": "derived_ratios",
+   "description": "Margins, growth and returns computed by one formula for all companies.",
+   "preferred_tools": [
+    "calculate_financials"
+   ],
+   "required": true,
+   "freshness": "same as aligned_statements",
+   "acceptance": "one calculation per company and metric",
+   "fallback": "Show formulas in the report and mark them unaudited."
+  },
+  {
+   "id": "prices",
+   "description": "Price or return series over the same window, if market comparison is asked.",
+   "preferred_tools": [
+    "market_data"
+   ],
+   "required": false,
+   "freshness": "through last_completed_session",
+   "acceptance": "same dates and adjustment basis",
+   "fallback": "Omit; label any quoted prices as not market data."
+  },
+  {
+   "id": "qualitative",
+   "description": "Business-mix or strategy differences from filings or reports.",
+   "preferred_tools": [
+    "filings",
+    "read_pages",
+    "search_library",
+    "discover_sources"
+   ],
+   "required": false,
+   "freshness": "latest filing",
+   "acceptance": "quoted passages",
+   "fallback": "State that qualitative differences were not researched."
+  }
+ ],
+ "counter_evidence": {
+  "look_for": [
+   "differences in accounting policy that distort the comparison",
+   "a company or period where the ranking reverses",
+   "one-offs in either company",
+   "segment mix that makes the pair not comparable"
+  ],
+  "min_search_actions": 1,
+  "if_none_found": "State what was searched and that no reversal was found."
+ },
+ "unit_and_period_checks": [
+  "fiscal calendars differ: align by period end date, state offsets",
+  "currency conversion rate, date and source stated",
+  "units and scale identical",
+  "GAAP vs IFRS or adjusted vs reported labelled",
+  "share-class and per-share basis"
+ ],
+ "reconciliation": [
+  {
+   "metric": "shared line items",
+   "source_classes": [
+    "structured financials",
+    "filing text"
+   ],
+   "note": "spot-check at least one line per company"
+  }
+ ],
+ "stopping_conditions": [
+  "all companies have the same lines for aligned periods",
+  "a company lacks data: compare the rest and list the gap"
+ ],
+ "report_structure": {
+  "sections": [
+   "Comparison table",
+   "Alignment choices",
+   "Where they differ and why",
+   "Counter-evidence",
+   "Open items"
+  ],
+  "must_state": [
+   "as-of date and period of every column",
+   "coverage gaps per company",
+   "currency and unit conventions"
+  ]
+ },
+ "limits": [
+  "frames and standardized lines may not exist for non-US filers",
+  "ratios are not valuation or recommendations"
+ ]
+}

@@ -1,0 +1,210 @@
+{
+ "id": "earnings_review",
+ "version": "1.0.0",
+ "title_zh": "财报复盘",
+ "title_en": "Earnings review",
+ "applies_when": {
+  "question_types": [
+   "periodic results review",
+   "quarterly or annual report analysis",
+   "guidance and prior-period comparison"
+  ],
+  "triggers": [
+   {
+    "term": "财报",
+    "weight": 2
+   },
+   {
+    "term": "业绩",
+    "weight": 2
+   },
+   {
+    "term": "季报",
+    "weight": 2
+   },
+   {
+    "term": "年报",
+    "weight": 2
+   },
+   {
+    "term": "earnings",
+    "weight": 2
+   },
+   {
+    "term": "10-q",
+    "weight": 2
+   },
+   {
+    "term": "10-k",
+    "weight": 2
+   },
+   {
+    "term": "quarterly results",
+    "weight": 2
+   },
+   {
+    "term": "annual results",
+    "weight": 2
+   },
+   {
+    "term": "营收",
+    "weight": 1
+   },
+   {
+    "term": "revenue",
+    "weight": 1
+   },
+   {
+    "term": "guidance",
+    "weight": 1
+   },
+   {
+    "term": "业绩指引",
+    "weight": 1
+   },
+   {
+    "term": "利润",
+    "weight": 1
+   },
+   {
+    "term": "eps",
+    "weight": 1
+   }
+  ]
+ },
+ "evidence_requirements": [
+  {
+   "id": "entity",
+   "description": "Resolve the issuer and its reporting currency and fiscal calendar.",
+   "preferred_tools": [
+    "resolve_entity"
+   ],
+   "required": true,
+   "freshness": "n/a",
+   "acceptance": "one unambiguous entity id",
+   "fallback": "State the identifier you assumed and that it is unverified."
+  },
+  {
+   "id": "statements",
+   "description": "Income statement, balance sheet and cash-flow lines for the latest period and the comparable prior period.",
+   "preferred_tools": [
+    "company_financials",
+    "filings",
+    "discover_sources"
+   ],
+   "required": true,
+   "freshness": "latest filed period as of research_clock",
+   "acceptance": "lines carry period, unit, currency",
+   "fallback": "Use filed document text only; label figures non-standardized."
+  },
+  {
+   "id": "filing_text",
+   "description": "Earnings release or MD&A: drivers, segment notes, guidance, accounting-policy notes.",
+   "preferred_tools": [
+    "filings",
+    "acquire_sources",
+    "read_pages",
+    "search_source"
+   ],
+   "required": true,
+   "freshness": "latest filing before research_clock",
+   "acceptance": "quoted passages recorded with record_facts",
+   "fallback": "Say primary text was not obtained; no memory-based figures."
+  },
+  {
+   "id": "prior_compare",
+   "description": "Prior-period and year-ago comparison computed deterministically.",
+   "preferred_tools": [
+    "calculate_financials"
+   ],
+   "required": true,
+   "freshness": "same lines as statements",
+   "acceptance": "every change and margin comes from a calculation",
+   "fallback": "Compute in the report; mark unaudited."
+  },
+  {
+   "id": "market_reaction",
+   "description": "Price move around the release, versus a broad benchmark, if the question asks.",
+   "preferred_tools": [
+    "market_data"
+   ],
+   "required": false,
+   "freshness": "through last_completed_session",
+   "acceptance": "same-window benchmark included",
+   "fallback": "Omit; label any news price NOT market data."
+  },
+  {
+   "id": "context",
+   "description": "Prior coverage and independent commentary on the results.",
+   "preferred_tools": [
+    "search_library",
+    "news_search",
+    "discover_sources"
+   ],
+   "required": false,
+   "freshness": "dated before research_clock",
+   "acceptance": "independent of the issuer release",
+   "fallback": "Note that commentary was not searched."
+  }
+ ],
+ "counter_evidence": {
+  "look_for": [
+   "one-off or non-recurring items",
+   "accounting or segment-definition changes",
+   "restatements",
+   "quality of cash conversion vs earnings",
+   "guidance cuts or withdrawn guidance"
+  ],
+  "min_search_actions": 1,
+  "if_none_found": "List where you searched and say no contrary evidence was found there."
+ },
+ "unit_and_period_checks": [
+  "fiscal vs calendar period and quarter label",
+  "units (thousands/millions) and currency",
+  "GAAP vs adjusted measures kept separate",
+  "year-ago vs sequential comparison named",
+  "shares and per-share basis (basic/diluted)"
+ ],
+ "reconciliation": [
+  {
+   "metric": "revenue, net income, EPS",
+   "source_classes": [
+    "structured financials",
+    "filing text"
+   ],
+   "note": "must agree after unit normalization; explain any gap"
+  },
+  {
+   "metric": "headline figures in news",
+   "source_classes": [
+    "news",
+    "filing text"
+   ],
+   "note": "prefer the filing; flag differences"
+  }
+ ],
+ "stopping_conditions": [
+  "statements and filing text for both periods obtained and calculations done",
+  "counter-evidence search done and recorded",
+  "primary filing unobtainable after fallbacks: report the gap and stop"
+ ],
+ "report_structure": {
+  "sections": [
+   "Result summary",
+   "Period-over-period table",
+   "Drivers and segments",
+   "Guidance",
+   "Counter-evidence",
+   "Open items"
+  ],
+  "must_state": [
+   "as-of date of each data series and the research clock",
+   "coverage gaps and missing sources",
+   "which figures are calculated vs quoted"
+  ]
+ },
+ "limits": [
+  "no consensus estimates in free sources: do not claim beat or miss; derive implied metrics (growth, margin change) and label them as inferred",
+  "call transcripts may be unavailable"
+ ]
+}
