@@ -1,0 +1,20 @@
+{"cik":320193,"entityName":"Example Corp","facts":{"us-gaap":{
+ "SalesRevenueNet":{"label":"Sales","units":{"USD":[
+  {"start":"2018-01-01","end":"2018-03-31","val":1000,"accn":"A-18-1","fy":2018,"fp":"Q1","form":"10-Q","filed":"2018-05-01"},
+  {"start":"2018-01-01","end":"2018-12-31","val":4400,"accn":"A-18-4","fy":2018,"fp":"FY","form":"10-K","filed":"2019-02-01"}]}},
+ "RevenueFromContractWithCustomerExcludingAssessedTax":{"label":"Revenue","units":{"USD":[
+  {"start":"2019-01-01","end":"2019-03-31","val":1100,"accn":"A-19-1","fy":2019,"fp":"Q1","form":"10-Q","filed":"2019-05-01"},
+  {"start":"2019-04-01","end":"2019-06-30","val":1200,"accn":"A-19-2","fy":2019,"fp":"Q2","form":"10-Q","filed":"2019-08-01"},
+  {"start":"2019-01-01","end":"2019-06-30","val":2300,"accn":"A-19-2","fy":2019,"fp":"Q2","form":"10-Q","filed":"2019-08-01"},
+  {"start":"2019-07-01","end":"2019-09-30","val":1300,"accn":"A-19-3","fy":2019,"fp":"Q3","form":"10-Q","filed":"2019-11-01"},
+  {"start":"2019-01-01","end":"2019-12-31","val":5000,"accn":"A-19-4","fy":2019,"fp":"FY","form":"10-K","filed":"2020-02-01"},
+  {"start":"2020-01-01","end":"2020-03-31","val":1400,"accn":"A-20-1","fy":2020,"fp":"Q1","form":"10-Q","filed":"2020-05-01"},
+  {"start":"2020-01-01","end":"2020-03-31","val":1450,"accn":"A-21-1","fy":2021,"fp":"Q1","form":"10-Q","filed":"2021-05-01","frame":"CY2020Q1"}]}},
+ "NetIncomeLoss":{"label":"Net income","units":{"USD":[
+  {"start":"2019-01-01","end":"2019-12-31","val":900,"accn":"A-19-4","fy":2019,"fp":"FY","form":"10-K","filed":"2020-02-01"}]}},
+ "EarningsPerShareDiluted":{"label":"EPS","units":{"USD/shares":[
+  {"start":"2019-01-01","end":"2019-12-31","val":1.25,"accn":"A-19-4","fy":2019,"fp":"FY","form":"10-K","filed":"2020-02-01"}]}},
+ "Assets":{"label":"Assets","units":{"USD":[
+  {"end":"2019-12-31","val":9000,"accn":"A-19-4","fy":2019,"fp":"FY","form":"10-K","filed":"2020-02-01"},
+  {"end":"2020-03-31","val":9500,"accn":"A-20-1","fy":2020,"fp":"Q1","form":"10-Q","filed":"2020-05-01"}]}}
+}}}

@@ -1,0 +1,5 @@
+{"took":5,"timed_out":false,"hits":{"total":{"value":120,"relation":"eq"},"hits":[
+ {"_id":"0001193125-24-000123:d12345dex991.htm","_source":{"ciks":["0000320193"],"display_names":["Example Corp  (EXM)  (CIK 0000320193)"],
+  "adsh":"0001193125-24-000123","form":"8-K","file_date":"2024-02-01","period_ending":"2023-12-30","file_type":"EX-99.1","file_description":"Earnings release","root_forms":["8-K"]}},
+ {"_id":"0001193125-24-000200:main.htm","_source":{"ciks":["0000111111","0000222222"],"display_names":["Other Inc (OTH)"],
+  "adsh":"0001193125-24-000200","form":"10-K","file_date":"2024-03-01","period_ending":"2023-12-31","file_type":"10-K","file_description":"Annual report"}}]}}

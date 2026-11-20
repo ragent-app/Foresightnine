@@ -1,0 +1,54 @@
+{
+ "meta": {
+  "symbol": "ANT",
+  "interval": "1day",
+  "currency": "CNY",
+  "exchange_timezone": "Asia/Shanghai",
+  "exchange": "SSE",
+  "mic_code": "XSHG",
+  "type": "Common Stock"
+ },
+ "values": [
+  {
+   "datetime": "2026-11-16",
+   "open": "68.88",
+   "high": "95.00",
+   "low": "68.88",
+   "close": "93.10",
+   "volume": "185000000"
+  },
+  {
+   "datetime": "2026-11-17",
+   "open": "93.10",
+   "high": "99.00",
+   "low": "90.00",
+   "close": "97.50",
+   "volume": "90000000"
+  },
+  {
+   "datetime": "2026-11-18",
+   "open": "97.50",
+   "high": "98.20",
+   "low": "95.10",
+   "close": "96.00",
+   "volume": "60000000"
+  },
+  {
+   "datetime": "2026-11-19",
+   "open": "96.00",
+   "high": "97.00",
+   "low": "94.00",
+   "close": "95.00",
+   "volume": "40000000"
+  },
+  {
+   "datetime": "2026-11-20",
+   "open": "95.00",
+   "high": "96.00",
+   "low": "94.50",
+   "close": "95.50",
+   "volume": "10000000"
+  }
+ ],
+ "status": "ok"
+}

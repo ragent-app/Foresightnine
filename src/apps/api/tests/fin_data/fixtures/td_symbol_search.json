@@ -1,0 +1,5 @@
+{"data":[
+ {"symbol":"EXM","instrument_name":"Example Corp","exchange":"NASDAQ","mic_code":"XNGS","exchange_timezone":"America/New_York","instrument_type":"Common Stock","country":"United States","currency":"USD"},
+ {"symbol":"EXM","instrument_name":"Example Mining","exchange":"HKEX","mic_code":"XHKG","exchange_timezone":"Asia/Hong_Kong","instrument_type":"Common Stock","country":"Hong Kong","currency":"HKD"},
+ {"symbol":"EXM","instrument_name":"Example Fund","exchange":"OTC","mic_code":"OTCM","exchange_timezone":"America/New_York","instrument_type":"ETF","country":"United States","currency":"USD"}],
+ "status":"ok"}

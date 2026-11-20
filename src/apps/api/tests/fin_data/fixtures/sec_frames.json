@@ -1,0 +1,4 @@
+{"taxonomy":"us-gaap","tag":"Revenues","ccp":"CY2023Q4","uom":"USD","label":"Revenues","pts":3,
+ "data":[{"accn":"0000000001-24-000001","cik":1111,"entityName":"Small Co","loc":"US-CA","start":"2023-10-01","end":"2023-12-31","val":500},
+         {"accn":"0000000002-24-000002","cik":2222,"entityName":"Big Co","loc":"US-NY","start":"2023-10-01","end":"2023-12-31","val":9000},
+         {"accn":"0000000003-24-000003","cik":3333,"entityName":"Mid Co","loc":"US-TX","start":"2023-10-01","end":"2023-12-31","val":2500}]}
