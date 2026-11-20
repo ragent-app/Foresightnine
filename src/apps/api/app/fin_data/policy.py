@@ -8,6 +8,16 @@ the policy grants (``decide(..., requested=...)`` intersects).
 Credential owners: ``platform`` is the operator's key (the operator is the
 licensee for a public product); ``user_byok`` is the end user's own key (the
 user is the licensee, personal use) and its data is owner-scoped.
+
+The runtime uses the account's own Twelve Data key first. It falls back to the platform key
+(FORESIGHTNINE_TWELVEDATA_API_KEY) only when this policy allows provider twelve_data for
+credential_owner "platform" (identity / bars_daily / bars_intraday); the default policy denies it.
+
+Example for personal development use (env FORESIGHTNINE_FIN_DATA_POLICY replaces the whole default
+policy, so SEC rules are repeated). REMOVE IT BEFORE ANY PUBLIC RELEASE: Twelve Data free/individual
+plans are personal, non-commercial use and forbid redistribution:
+
+    {"version":"dev-personal-platform-key","rules":[{"provider":"sec_edgar","category":"identity","store":true,"display":true,"model_input":true,"export":true},{"provider":"sec_edgar","category":"filings","store":true,"display":true,"model_input":true,"export":true},{"provider":"sec_edgar","category":"financials","store":true,"display":true,"model_input":true,"export":true},{"provider":"sec_edgar","category":"ownership","store":true,"display":true,"model_input":true,"export":true},{"provider":"twelve_data","category":"identity","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"twelve_data","category":"identity","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"twelve_data","category":"bars_daily","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"twelve_data","category":"bars_daily","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"twelve_data","category":"bars_intraday","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"twelve_data","category":"bars_intraday","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true}]}
 """
 from __future__ import annotations
 

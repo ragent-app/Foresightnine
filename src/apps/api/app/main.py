@@ -172,13 +172,28 @@ def _configured_sec_user_agent() -> tuple[str | None, bool]:
         return None, False
 
 
-def _account_market_key(account_id: str) -> str | None:
-    """The account's own Twelve Data key, or None. Never falls back to the platform environment key."""
+def _resolve_market_key(account_id: str, policy=None) -> tuple[str | None, str | None]:
+    """(api_key, credential_owner) for Twelve Data market data, or (None, None).
+
+    The account's own key always wins ('user_byok'). The platform environment key is used
+    ('platform') only when the fin_data policy explicitly allows twelve_data for credential_owner
+    'platform' for identity or bars; with the default policy it is never read.
+    """
     try:
         _order, credentials = market_data_settings.runtime(account_id)
     except MarketCredentialError:
-        return None
-    return credentials.get("twelve_data") or None
+        credentials = {}
+    own = credentials.get("twelve_data") or None
+    if own:
+        return own, "user_byok"
+    policy = policy or load_fin_data_policy()
+    allowed = any(not isinstance(policy.decide("twelve_data", category, credential_owner="platform"), FinDataDenied)
+                  for category in ("identity", "bars_daily", "bars_intraday"))
+    if allowed:
+        platform = os.environ.get("FORESIGHTNINE_TWELVEDATA_API_KEY", "").strip()
+        if platform:
+            return platform, "platform"
+    return None, None
 
 
 oauth_trace_logger = logging.getLogger("foresightnine.oauth")
@@ -187,6 +202,7 @@ from .oauth_foundation import OAuthConfigurationError, OAuthExchangeTicketError,
 from .oauth_identity import OAuthIdentity, OAuthSessionResponse
 from .oauth_provider import OAuthProviderClient, OAuthProviderError
 from .market_provider import MarketSnapshotRequest, build_snapshot_response
+from .fin_data.policy import Denied as FinDataDenied, load_policy as load_fin_data_policy
 from .market_credentials import (
     AccountMarketDataSettings,
     MarketCredentialCipher,
@@ -2606,14 +2622,15 @@ def get_research_capabilities(authorization: str | None = Header(default=None)) 
     _, sec_available = _configured_sec_user_agent()
     search_available = bool(getattr(evidence_provider, "supports_project_search", False))
     allowed_hosts = fetch_allowed_hosts()
+    _market = _resolve_market_key(account.account_id)
     return {
         "schema_version": "v1",
         "search_available": search_available,
         "web_fetch_enabled": not bool(allowed_hosts),
         "sec_available": sec_available,
-        # Structured data tools for this account: market_data needs the account's own Twelve Data key
-        # (the platform key is never consulted); SEC tools follow the configured SEC contact.
-        **FinDataToolbox(account_id=account.account_id, market_key=_account_market_key(account.account_id),
+        # Structured data tools for this account: market_data uses the account's own Twelve Data key, or the
+        # platform key only when the fin_data policy allows it; SEC tools follow the configured SEC contact.
+        **FinDataToolbox(account_id=account.account_id, market_key=_market[0], credential_owner=_market[1] or 'user_byok',
                          sec_user_agent=os.environ.get("FORESIGHTNINE_SEC_USER_AGENT") or os.environ.get("SEC_USER_AGENT"),
                          persist=lambda *_a, **_k: None).capabilities(),
         "sources": [asdict(item) for item in source_capabilities(search_available=search_available, sec_available=sec_available)],
@@ -2802,8 +2819,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     # operation persists the resolved policy. A continuation always retains
     # its original server-owned policy rather than applying today's defaults.
     # Structured data tools: the account's own market-data key (BYOK) and/or the SEC contact. The platform
-    # price key is never used by the runtime (licence decision 2026-11-20, option a).
-    market_key = _account_market_key(account.account_id)
+    # price key is used only when the fin_data policy explicitly allows it (default policy denies it).
+    market_key, market_owner = _resolve_market_key(account.account_id)
     historical_available = (market_key is not None or _configured_sec_user_agent()[1]) and topic.request.as_of is None
     if continuation_input is None:
         request = resolve_automatic_research_request(request,
@@ -3007,7 +3024,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                else 'cost_unknown' if request.max_cost_usd is not None
                                else None if retrieval_permitted else 'permission_denied')
         fin_data = FinDataToolbox(
-            account_id=account.account_id, market_key=market_key, sec_user_agent=sec_agent_raw,
+            account_id=account.account_id, market_key=market_key, credential_owner=market_owner or 'user_byok',
+            sec_user_agent=sec_agent_raw,
             persist=lambda item, **kwargs: research_sources.create(account.account_id, item, **kwargs),
             reserve_call=context.reserve_search, reserve_sec=reserve_sec_for_run,
             remaining_seconds=lambda: context.budget.deadline - context.now(), ensure_running=context.ensure_running,

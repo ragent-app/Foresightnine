@@ -5,8 +5,9 @@ external call (run budget, abuse quota, SEC global pacing, per-account Twelve Da
 results as research sources and returns W6-shaped results. It holds no per-run mutable state; the
 runtime keeps the entity candidate cache in its checkpoint and passes it in.
 
-Credentials: market prices use ONLY the account's own Twelve Data key (``credential_owner='user_byok'``).
-The platform environment key is never read here, and the default policy denies it anyway.
+Credentials: market prices use the account's own Twelve Data key (``credential_owner='user_byok'``) or, only when
+the fin_data policy explicitly allows it, the platform key (``'platform'``); the caller resolves which one.
+The default policy denies the platform key.
 """
 from __future__ import annotations
 
@@ -202,7 +203,7 @@ class _GatedLimiter:
 
 
 class FinDataToolbox:
-    def __init__(self, *, account_id: str, market_key: str | None, sec_user_agent: str | None,
+    def __init__(self, *, account_id: str, market_key: str | None, credential_owner: str = 'user_byok', sec_user_agent: str | None,
                  persist: Callable[..., ResearchSource], reserve_call: Callable[[], None] = lambda: None,
                  reserve_sec: Callable[[], bool] = lambda: True, remaining_seconds: Callable[[], float] = lambda: float('inf'),
                  ensure_running: Callable[[], None] = lambda: None, now: Callable[[], datetime] | None = None,
@@ -210,6 +211,7 @@ class FinDataToolbox:
                  sec_transport=None, sec_stream_transport=None, twelve_transport=None, cancel_event=None,
                  on_result: Callable[[str, dict[str, Any]], None] | None = None) -> None:
         self.account_id, self._market_key = account_id, market_key or None
+        self._owner = credential_owner if credential_owner in ('platform', 'user_byok') else 'user_byok'
         try:
             self._sec_ua: str | None = validate_user_agent(sec_user_agent)
         except SecFailure:
@@ -257,8 +259,7 @@ class FinDataToolbox:
                 return _default_binary_transport(method, url, headers, body, tmo, max_response_bytes=2_000_000,
                                                  cancel_event=self._cancel)
             kwargs['transport'] = send
-        # Never the platform key: the key comes from the account and the owner is user_byok.
-        return TwelveDataAdapter(api_key=self._market_key, credential_owner='user_byok', account_id=self.account_id,
+        return TwelveDataAdapter(api_key=self._market_key, credential_owner=self._owner, account_id=self.account_id,
                                  limiter=self._limiter, policy=self._policy, now_fn=self._now, timeout=timeout, **kwargs)
 
     def _blocked(self) -> dict[str, Any] | None:
@@ -307,7 +308,7 @@ class FinDataToolbox:
         td = self._td(min(BYOK_MAX_TIMEOUT_SECONDS, max(1.0, self._remaining()))) if self._market_key else None
         res = _resolve_entity(req.query, req.market, req.asset_type,
                               sec=self._sec() if self._sec_ua else None, twelve=td,
-                              twelve_kwargs={'api_key': self._market_key, 'credential_owner': 'user_byok',
+                              twelve_kwargs={'api_key': self._market_key, 'credential_owner': self._owner,
                                              'account_id': self.account_id} if td else None)
         cands, cache = [], {}
         for c in res.data:
@@ -364,7 +365,7 @@ class FinDataToolbox:
         adapter = self._td(min(BYOK_MAX_TIMEOUT_SECONDS, remaining))
         res = adapter.bars(spec.symbol, exchange=spec.provider_exchange or spec.exchange, interval=spec.interval,
                            start=spec.start, end=spec.end, entity_id=spec.entity_id, account_id=self.account_id,
-                           credential_owner='user_byok')
+                           credential_owner=self._owner)
         if res.status not in ('ok', 'partial') or not res.data:
             return FinToolOutcome(wire(res))
         bars, cov, prov = res.data, res.coverage, res.provenance
@@ -380,8 +381,9 @@ class FinDataToolbox:
                          f'C {_fmt(b.close)} V {vol}' + (f' {currency}' if currency else ''))
         first, last = lines[0].split(' | ')[1], lines[-1].split(' | ')[1]
         provenance = {
-            'provider': 'twelve_data', 'endpoint': 'time_series', 'credential_owner': 'user_byok',
-            'owner_account_id': self.account_id, 'owner_scoped': True, 'entity_id': spec.entity_id,
+            'provider': 'twelve_data', 'endpoint': 'time_series', 'credential_owner': self._owner,
+            'owner_account_id': self.account_id if res.permissions.owner_scoped else None,
+            'owner_scoped': bool(res.permissions.owner_scoped), 'entity_id': spec.entity_id,
             'symbol': spec.symbol, 'exchange': ex_label, 'currency': currency, 'interval': spec.interval,
             'adjustment': bars[0].adjustment, 'requested_start_date': spec.start.isoformat() if spec.start else None,
             'requested_end_date': spec.end.isoformat() if spec.end else None, 'actual_first': first, 'actual_last': last,
@@ -390,8 +392,12 @@ class FinDataToolbox:
             'retrieved_at': prov.retrieved_at.isoformat() if prov else None,
             'coverage': cov.model_dump(mode='json', exclude_none=True) if cov else None,
             'permissions': res.permissions.model_dump(mode='json'),
-            'limitation': 'Provider data under the user\'s own Twelve Data key, personal use only; not shared across '
-                          'accounts and not exportable. Provider coverage and revisions are not independently verified.'}
+            'limitation': (
+                'Provider data under the user\'s own Twelve Data key, personal use only; not shared across '
+                'accounts and not exportable. Provider coverage and revisions are not independently verified.'
+                if self._owner == 'user_byok' else
+                'Provider data under the operator\'s platform Twelve Data key, allowed by the configured data policy '
+                '(personal development use). Provider coverage and revisions are not independently verified.')}
         try:
             source = self._persist(
                 SourceInput(title=f'{label} {spec.interval} bars ({first} to {last})', text='\n'.join(lines),

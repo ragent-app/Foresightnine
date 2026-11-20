@@ -310,3 +310,71 @@ def test_capabilities_flags_follow_key_and_sec_contact():
     assert make_toolbox(user_agent=None, market_key=None).capabilities() == {
         'market_data_available': False, 'market_data_key_required': True,
         'sec_financials_available': False, 'filings_available': False}
+
+
+# ---------------------------------------------------------------- platform key fallback (policy gated)
+def _permissive_policy():
+    from app.fin_data.policy import FinDataPolicy, PolicyRule
+    rules = [PolicyRule(provider='twelve_data', category=c, credential_owner=o, store=True, display=True,
+                        model_input=True, owner_scoped=(o == 'user_byok'))
+             for c in ('identity', 'bars_daily', 'bars_intraday') for o in ('platform', 'user_byok')]
+    return FinDataPolicy(rules=rules)
+
+
+class _Settings:
+    def __init__(self, key):
+        self.key = key
+
+    def runtime(self, _account):
+        return [], ({'twelve_data': self.key} if self.key else {})
+
+
+def _resolve(monkeypatch, own_key, policy, platform_key='platform-key'):
+    import app.main as api
+    monkeypatch.setenv('FORESIGHTNINE_TWELVEDATA_API_KEY', platform_key)
+    monkeypatch.setattr(api, 'market_data_settings', _Settings(own_key))
+    return api._resolve_market_key('acct', policy=policy)
+
+
+def test_resolver_default_policy_ignores_platform_key(monkeypatch):
+    from app.fin_data.policy import default_policy
+    assert _resolve(monkeypatch, None, default_policy()) == (None, None)
+    assert _resolve(monkeypatch, 'own-key', default_policy()) == ('own-key', 'user_byok')
+
+
+def test_resolver_permissive_policy_falls_back_to_platform_and_prefers_account_key(monkeypatch):
+    assert _resolve(monkeypatch, None, _permissive_policy()) == ('platform-key', 'platform')
+    assert _resolve(monkeypatch, 'own-key', _permissive_policy()) == ('own-key', 'user_byok')
+    assert _resolve(monkeypatch, None, _permissive_policy(), platform_key='') == (None, None)
+
+
+def test_platform_key_market_data_uses_platform_owner_and_shared_bucket():
+    from app.fin_data.policy import FinDataPolicy
+    t = FakeTransport(json_reply('td_time_series_ipo.json'))
+    persist = memory_persist()
+    m = Model([turn('market_data', PX, 'p1'), STOP])
+    box = make_toolbox(market_key='platform-key', credential_owner='platform', twelve=t, persist=persist,
+                       policy=_permissive_policy())
+    run(m, fin_data=box)
+    assert t.calls[0][1]['Authorization'] == 'apikey platform-key'
+    fb = last_result(m)
+    assert fb['status'] == 'ok' and fb['permissions']['owner_scoped'] is False
+    prov = persist.store[0].provenance
+    assert prov['credential_owner'] == 'platform' and prov['owner_scoped'] is False and prov['owner_account_id'] is None
+    assert 'platform-key' not in persist.store[0].model_dump_json()
+    assert box.capabilities()['market_data_available'] is True and box.capabilities()['market_data_key_required'] is False
+    # the default policy still denies a platform-owned call even if a caller passes one
+    t2 = FakeTransport(json_reply('td_time_series_ipo.json'))
+    m2 = Model([turn('market_data', PX, 'p1'), STOP])
+    run(m2, fin_data=make_toolbox(market_key='platform-key', credential_owner='platform', twelve=t2))
+    assert last_result(m2)['status'] == 'denied' and last_result(m2)['reason'] == 'license_platform_key_not_permitted' and not t2.calls
+
+
+def test_capabilities_follow_resolved_market_key(monkeypatch):
+    import app.main as api
+    from app.fin_data.policy import default_policy
+    for own, policy, expected in ((None, default_policy(), (False, True)), (None, _permissive_policy(), (True, False)),
+                                  ('own-key', default_policy(), (True, False))):
+        key, owner = _resolve(monkeypatch, own, policy)
+        caps = make_toolbox(market_key=key, credential_owner=owner or 'user_byok').capabilities()
+        assert (caps['market_data_available'], caps['market_data_key_required']) == expected
