@@ -812,6 +812,29 @@ Alpha Vantage、Stooq 等其他免费行情来源，也要按同样标准逐一�
   - S2 的检索层、口径核对表（I1）、覆盖与缺口地图（I4）、方法包。
   - 部署（需单独授权；部署时一并关闭线上的平台 Twelve Data key）。
 
+### 13.3 2026-11-20：第 2、3 步完成并部署上线
+
+- **第 2 步**（`9b983b1`）：港交所、巨潮资讯、上交所、深交所的条款不允许自动访问，或尚未取得授权，所以改为由来源条款登记表拦截；用户上传改为流式处理，可以上传大文件。
+- **第 3 步（S2）**：
+  - 独立模块：`bb583e0` 资料检索，`4a501b8` 新闻发现，`2da3025` 方法包，`37f398a` 口径核对与覆盖地图。
+  - 接入运行时和工作台：`32e81de`。
+  - 平台行情 key 按许可策略有条件启用：`a11291d`。
+- **验证**：全量 API 测试 312 项原有失败，与修改前的基线一致，没有新增；通过 1664 项。Web 测试 287 项全部通过。
+- **部署**（`a11291d`）：
+  - API 镜像换为 `foresightnine-api:a11291d`，120 个应用文件与提交逐一比对一致。
+  - 新增文档存储卷 `/data/documents`；API 内存上限从 512 MB 调到 768 MB。
+  - 加入供个人开发使用的平台行情许可策略。
+  - 前端已更新。
+  - 部署前的备份在 `~/.local/state/foresightnine/predeploy-20261120T144937Z`（数据库导出、配置、前端）；可回滚的旧镜像标签为 `foresightnine-api:rollback-20261120T144937Z`。
+- **线上冒烟测试**：
+  - 用户注册、登录、研究能力查询都正常。
+  - 用真实问题“微软最近两个季度的营收和股价表现”跑了一轮研究，正常完成：15 次模型调用，约 40 万 token。报告正确处理了财年口径，从 10-Q 取得 FY2027 Q1 营收，并标注了推算值和数据截止日期。
+- **冒烟测试发现的问题**：
+  - `news_search` 4 次全部失败。根本原因是 GLM 搜索的每周或每月额度已用完（2026-11-23 21:28 重置），GDELT 也对本机限流（HTTP 429）。但代码把这两种情况都误报成 `search_response_invalid`。
+  - 方法包的选择过于保守。
+  - 以上两点正在修复。
+- **已知限制**：Cloudflare 和 nginx 的请求体上限都是 100 MB，所以线上实际能上传的文件最大约 100 MB。
+
 ## 14. 参考来源（2026-11-20 检索）
 
 - Anthropic, [Agents for financial services](https://www.anthropic.com/news/finance-agents)、[Advancing Claude for Financial Services](https://anthropic.com/news/advancing-claude-for-financial-services)

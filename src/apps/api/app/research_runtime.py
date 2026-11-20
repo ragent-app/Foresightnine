@@ -444,6 +444,8 @@ GAP_CODES = {
     'no_cited_claims': 'No source-backed claims with verified locations were submitted; add or read relevant authorized material and continue research.',
     'claims_omitted_unverified_location': 'Some submitted claims were omitted because their source location could not be verified.',
     'search_response_invalid': 'Search returned results in an invalid format; the connector must be repaired before it can provide leads.',
+    'search_quota_exhausted': 'The search service usage limit is reached, so no new leads could be discovered until it resets.',
+    'search_rate_limited': 'The search services were rate limited, so no new leads could be discovered; a later retry may succeed.',
     'search_candidates_not_acquired': 'Search found candidate links, but their original material could not be acquired through the configured sources.',
     'historical_prices_unavailable': 'No authorized historical price series was available for the requested instrument and period.',
     'market_data_key_required': 'Market price data was unavailable because no personal Twelve Data key is saved for this account; prices cited from filings or news are not market data.',
@@ -585,6 +587,11 @@ TOOL_FAILURE_GUIDANCE: dict[str, str] = {
     'not_found': 'The page does not exist at this URL. Discover another source instead of guessing URLs.',
     'source_rate_limited': 'The source rate limit was reached. Wait for other work or use another source.',
     'lead_not_discovered': 'Only pass URLs returned by news_search or filings. Run one of them first.',
+    'search_quota_exhausted': 'The search usage limit is reached (see the message for the reset time). Do not repeat news_search; continue with already acquired sources and structured data, and report the gap.',
+    'search_rate_limited': 'Search services are rate limited right now. Do not repeat the same search immediately; continue with other evidence and report the gap.',
+    'search_provider_rate_limited': 'The search service rate limit was reached. Do not repeat the same search immediately; continue with other evidence.',
+    'gdelt_rate_limited': 'GDELT is rate limited (the service is reachable). Do not repeat the same search immediately; continue with other evidence.',
+    'search_provider_error': 'The search provider reported an error (see the message). Try a different query once, otherwise continue with other evidence.',
     'search_no_results': 'The search returned no results. Retry with a different, more specific query.',
     'search_sources_denied': 'All results were denied or unusable. Retry with a different query or publisher name.',
 }
@@ -2725,6 +2732,9 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
         if status == 'partial':
             if state.get('search_invalid_response'):
                 derived.append(gap('search_response_invalid'))
+            for limited_code in ('search_quota_exhausted', 'search_rate_limited'):
+                if any(event.get('name') == 'news_search' and event.get('reason') == limited_code for event in state['events']):
+                    derived.append(gap(limited_code))
             if any(event.get('name') == 'market_data' and event.get('reason') == 'market_data_key_required' for event in state['events']):
                 derived.append(gap('market_data_key_required'))
             if not state['read_ranges'] and any(

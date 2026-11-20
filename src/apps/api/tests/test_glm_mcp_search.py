@@ -275,3 +275,79 @@ def test_glm_mcp_search_parses_iso_timestamps_and_date_fallback_fields() -> None
         (date(2026, 8, 4), True),
         (None, False),
     ]
+
+
+_QUOTA_TEXT = 'MCP error -429: {"error":{"code":"1310","message":"您已达到每周/每月使用上限，您的限额将在 2026-11-23 21:28:02 重置。"}}'
+
+
+def _call_result_transport(call_result: dict[str, object], *, calls: list[bytes] | None = None):
+    replies = [
+        response({"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-03-26"}}, session="safe-session-err"),
+        HttpResponse(202, ""),
+        response({"jsonrpc": "2.0", "id": 2, "result": {"tools": [{"name": "web_search_prime", "inputSchema": {"type": "object", "properties": {"search_query": {"type": "string"}}}}]}}),
+        response({"jsonrpc": "2.0", "id": 3, "result": call_result}),
+    ]
+
+    def transport(_method: str, _url: str, _headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
+        if calls is not None:
+            calls.append(body)
+        return replies.pop(0)
+
+    return transport
+
+
+def _search_failure(call_result: dict[str, object]) -> ProviderFailure:
+    provider = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=_call_result_transport(call_result), sleeper=lambda _d: None)
+    with pytest.raises(ProviderFailure) as raised:
+        provider.search("微软 营收", limit=3)
+    return raised.value
+
+
+def test_mcp_quota_error_text_is_search_quota_exhausted_with_reset_time() -> None:
+    failure = _search_failure({"isError": True, "content": [{"type": "text", "text": _QUOTA_TEXT}]})
+    assert failure.code == "search_quota_exhausted" and failure.retryable is False
+    assert failure.provider_response_received is True
+    assert "每周/每月使用上限" in str(failure) and "2026-11-23 21:28:02" in str(failure)
+    assert failure.reset_at == "2026-11-23T21:28:02+08:00"
+    assert _SECRET not in str(failure)
+
+
+def test_mcp_quota_error_without_is_error_flag_and_json_error_object() -> None:
+    assert _search_failure({"content": [{"type": "text", "text": _QUOTA_TEXT}]}).code == "search_quota_exhausted"
+    as_json = json.dumps({"error": {"code": "1310", "message": "weekly usage limit reached, resets 2026-11-23 21:28:02"}})
+    failure = _search_failure({"content": [{"type": "text", "text": as_json}]})
+    assert failure.code == "search_quota_exhausted" and failure.reset_at == "2026-11-23T21:28:02+08:00"
+
+
+def test_mcp_transient_429_and_other_errors_are_distinguished() -> None:
+    limited = _search_failure({"isError": True, "content": [{"type": "text", "text": 'MCP error -429: {"error":{"code":"1302","message":"Too many requests, slow down"}}'}]})
+    assert limited.code == "search_rate_limited" and limited.retryable is True and limited.provider_response_received is True
+    other = _search_failure({"isError": True, "content": [{"type": "text", "text": "MCP error -32602: invalid params Bearer abcdefghijklmnopqrstuvwxyz0123456789ABCDEF"}]})
+    assert other.code == "search_provider_error" and other.provider_response_received is True
+    assert "abcdefghijklmnop" not in str(other) and "invalid params" in str(other)
+    flagged = _search_failure({"isError": True, "content": [{"type": "text", "text": "something went wrong"}]})
+    assert flagged.code == "search_provider_error"
+
+
+def test_http_429_with_quota_body_does_not_retry_and_plain_429_is_marked_received() -> None:
+    attempts: list[int] = []
+
+    def quota_transport(*_args: object) -> HttpResponse:
+        attempts.append(1)
+        return HttpResponse(429, json.dumps({"error": {"code": "1310", "message": "usage limit reached, resets 2026-11-23 21:28:02"}}), {})
+
+    provider = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=quota_transport, sleeper=lambda _d: None)
+    with pytest.raises(ProviderFailure) as raised:
+        provider.search("query")
+    assert raised.value.code == "search_quota_exhausted" and len(attempts) == 1
+
+    plain = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=lambda *_a: HttpResponse(429, "", {}), sleeper=lambda _d: None)
+    with pytest.raises(ProviderFailure) as raised:
+        plain.search("query")
+    assert raised.value.code == "search_provider_rate_limited" and raised.value.provider_response_received is True
+
+
+def test_ordinary_search_payload_is_not_mistaken_for_an_error() -> None:
+    payload = json.dumps({"search_result": [{"title": "T", "link": "https://example.com/a", "content": "c", "publish_date": "2026-08-01"}]})
+    provider = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=_call_result_transport({"content": [{"type": "text", "text": payload}]}), sleeper=lambda _d: None)
+    assert provider.search("q", limit=1)[0].url == "https://example.com/a"

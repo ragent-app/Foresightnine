@@ -116,3 +116,50 @@ def test_gdelt_provider_wraps_client():
         def search(self, query, **kw):
             return ToolResult(status="empty", reason="gdelt_no_articles")
     assert GdeltNewsProvider(C()).search("q").status == "empty"
+
+
+def failed(status, reason, message="", retryable=True):
+    return ToolResult.failure(status, reason, message, retryable=retryable, cost=Cost(provider_calls=1))
+
+
+QUOTA_MSG = "您已达到每周/每月使用上限，您的限额将在 2026-11-23 21:28:02 重置。 (quota resets at 2026-11-23T21:28:02+08:00)"
+
+
+def test_all_providers_limited_reports_quota_with_each_provider_and_reset():
+    glm = Fake("glm", failed("failed", "search_quota_exhausted", QUOTA_MSG, retryable=False))
+    gd = Fake("gdelt", failed("rate_limited", "gdelt_rate_limited", "GDELT answered HTTP 429", retryable=True), supports=True)
+    r = news_search("微软 营收", providers=[glm, gd])
+    assert r.reason == "search_quota_exhausted" and r.status == "rate_limited" and r.retryable
+    assert "glm: search_quota_exhausted" in r.message and "2026-11-23" in r.message and "gdelt: gdelt_rate_limited" in r.message
+    assert r.reason != "all_providers_failed"
+
+
+def test_only_quota_is_failed_not_retryable_and_only_rate_is_search_rate_limited():
+    quota = news_search("q", providers=[Fake("glm", failed("failed", "search_quota_exhausted", QUOTA_MSG, retryable=False))])
+    assert (quota.status, quota.reason, quota.retryable) == ("failed", "search_quota_exhausted", False)
+    rate = news_search("q", providers=[Fake("glm", failed("rate_limited", "search_rate_limited", "slow down")),
+                                       Fake("gdelt", failed("rate_limited", "gdelt_rate_limited", "429"), supports=True)])
+    assert (rate.status, rate.reason) == ("rate_limited", "search_rate_limited")
+
+
+def test_mixed_limit_and_unavailable_keeps_all_providers_failed_with_messages_in_notes():
+    r = news_search("q", providers=[Fake("glm", failed("failed", "search_quota_exhausted", QUOTA_MSG, retryable=False)),
+                                    Fake("gdelt", failed("failed", "gdelt_unavailable", "down"), supports=True)])
+    assert r.reason == "all_providers_failed"
+    assert "search_quota_exhausted" in r.message and "2026-11-23" in r.message
+
+
+def test_glm_adapter_keeps_quota_failure_code_message_and_reset():
+    from app.phase3 import ProviderFailure
+    error = ProviderFailure("search_quota_exhausted", "limit reached", retryable=False)
+    error.reset_at = "2026-11-23T21:28:02+08:00"
+
+    class Boom:
+        supports_project_search = True
+
+        def search(self, *a, **k):
+            raise error
+
+    r = GlmNewsProvider(Boom()).search("q")
+    assert r.status == "failed" and r.reason == "search_quota_exhausted" and not r.retryable
+    assert "limit reached" in r.message and "2026-11-23T21:28:02+08:00" in r.message

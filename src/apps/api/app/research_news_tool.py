@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .fin_data.models import Cost, Permissions, Provenance, ToolResult
 from .news.gdelt import GDELT_ATTRIBUTION, GdeltClient, NewsLead
-from .news.search import GdeltNewsProvider, NewsProvider, guess_language, news_search
+from .news.search import GdeltNewsProvider, LIMIT_REASONS, NewsProvider, guess_language, limited_failure_result, news_search
 from .phase3 import ProviderFailure
 from .research_discovery import RedirectLead, normalize_search_lead, search_lead_url
 from .research_source_catalog import canonical_source_url
@@ -34,7 +34,7 @@ MAX_NOTES = 6
 GLM_PROVIDER_NAME = 'glm-coding-mcp-search'
 ATTRIBUTIONS = {'gdelt': {'id': 'gdelt', 'text': GDELT_ATTRIBUTION, 'url': GDELT_URL}}
 _BENIGN_SEARCH_FAILURES = frozenset({'search_query_invalid', 'search_provider_unconfigured', 'search_query_provider_limit',
-                                     'search_response_invalid'})
+                                     'search_response_invalid', 'search_provider_error', *LIMIT_REASONS})
 
 
 class NewsSearchRequest(BaseModel):
@@ -104,9 +104,7 @@ class DiscoverCallableProvider:
             found = self.discover(query)
         except ProviderFailure as error:
             self.failure = error
-            status = 'rate_limited' if error.code == 'search_provider_rate_limited' else 'failed'
-            return ToolResult.failure(status, error.code, str(error)[:200], retryable=bool(error.retryable) or status == 'rate_limited',
-                                      provenance=prov, cost=cost)
+            return limited_failure_result(error, prov, cost)
         if not isinstance(found, (list, tuple)):
             found = [None]
         self.found_count = len(found)
@@ -208,10 +206,15 @@ def run_news_search(req: NewsSearchRequest, *, providers: Sequence[NewsProvider]
                                         and failure.code not in _BENIGN_SEARCH_FAILURES):
                 outcome.unknown_failure = failure
         failure = next((a.failure for a in adapters if a.failure is not None), None)
-        reason = 'search_response_invalid' if outcome.invalid_response else (failure.code if failure is not None else tr.reason)
-        outcome.result = {'status': 'failed', 'reason': reason}
-        if tr.message and not outcome.invalid_response and failure is None:
-            outcome.result['message'] = tr.message[:400]
+        limited = tr.reason in LIMIT_REASONS
+        reason = ('search_response_invalid' if outcome.invalid_response else
+                  tr.reason if limited else (failure.code if failure is not None else tr.reason))
+        limited_failure = limited or (failure is not None and failure.code in LIMIT_REASONS)
+        outcome.result = {'status': 'rate_limited' if (limited_failure and tr.status == 'rate_limited') else 'failed', 'reason': reason}
+        if tr.message and not outcome.invalid_response and (failure is None or limited_failure):
+            outcome.result['message'] = tr.message[:600]
+        elif failure is not None and failure.code == 'search_provider_error' and str(failure):
+            outcome.result['message'] = str(failure)[:400]
         if outcome.invalid_response:
             outcome.denied_count, outcome.denied_reasons = sum(denied.values()), denied
             outcome.result.update(denied_count=outcome.denied_count, denied_reasons=denied)

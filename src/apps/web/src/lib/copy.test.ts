@@ -4,7 +4,7 @@ import {
   CREATED_BY_LABEL, INVALID_NOTE, MODEL_FAILURE_LABEL, MODEL_PHASE_LABEL, OPERATION_STATUS_LABEL, PERMISSION_LABEL, PERMISSION_ORDER, RECOVERY_REASON_LABEL,
   RETRIEVAL_METHOD_LABEL, REVIEW_LABEL, SOURCE_KIND_LABEL, TURN_REASON_LABEL, TURN_STATUS_LABEL, VERIFICATION_LABEL,
   calcChecks, formatInterimParts, formatInterimSummary, formulaLabel, gapText, modelFailureLabel, modelPhaseLabel, recoveryReasonLabel, retrievalMethodLabel, toolLabel, toolReasonLabel, toolStatusLabel, turnReasonLabel,
-  CALC_NOTE, LEAD_NOTE, LIVE_STAGED_TAG, PROCESS_NOTE_LABEL, VERIFY_NOTE, GAP_LABEL,
+  CALC_NOTE, LEAD_NOTE, TOOL_REASON_LABEL, LIVE_STAGED_TAG, PROCESS_NOTE_LABEL, VERIFY_NOTE, GAP_LABEL,
 } from "./copy";
 
 describe("labels", () => {
@@ -31,6 +31,13 @@ describe("labels", () => {
     expect(toolStatusLabel("weird")).toBe("weird");
     expect(toolReasonLabel("search_response_invalid")).toBe("搜索服务返回的格式有误");
     expect(toolReasonLabel("search_query_provider_limit")).toBe("搜索词过长，超出服务商限制");
+    for (const reason of ["search_quota_exhausted", "search_rate_limited", "gdelt_rate_limited"]) {
+      expect(TOOL_REASON_LABEL[reason]).toBeTruthy();
+      expect(toolReasonLabel(reason)).not.toContain(reason);
+    }
+    expect(toolReasonLabel("search_quota_exhausted")).toContain("额度");
+    expect(GAP_LABEL.search_quota_exhausted).toContain("重置");
+    expect(GAP_LABEL.search_rate_limited).toContain("限流");
     for (const reason of [
       "lead_not_discovered",
       "acquisition_not_authorized_or_disabled",
@@ -126,7 +133,7 @@ describe("gapText", () => {
     expect(timeoutGap).not.toContain("provider_timeout");
     expect(timeoutGap).not.toContain("Provider timed out");
     expect(timeoutGap).not.toBe(gapText({ code: "provider_no_result", message: "x" }));
-    expect(Object.keys(GAP_LABEL)).toHaveLength(21);
+    expect(Object.keys(GAP_LABEL)).toHaveLength(23);
     expect(GAP_LABEL).toHaveProperty("market_data_key_required");
   });
   it("handles provider_error, model_reported and unknown codes", () => {

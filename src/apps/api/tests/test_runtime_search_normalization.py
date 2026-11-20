@@ -197,3 +197,69 @@ def test_redirect_target_validation_rejects_nat64_and_discard_resolved_addresses
         with pytest.raises(ProviderFailure) as error:
             provider.validate_redirect_target('https://public.example/next', resolver=lambda _host, _port, addr=address: [addr])
         assert error.value.code == 'unsafe_evidence_url'
+
+
+def _quota_failure():
+    error = ProviderFailure('search_quota_exhausted', '您已达到每周/每月使用上限，您的限额将在 2026-11-23 21:28:02 重置。', retryable=False)
+    error.reset_at = '2026-11-23T21:28:02+08:00'
+    error.provider_response_received = True
+    return error
+
+
+def test_search_quota_surfaces_reason_message_and_reset_not_invalid_response():
+    model = Model([turn('news_search', {'query': 'one', 'rationale': 'find'}, 'a'),
+                   ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')])
+
+    def discover(query):
+        raise _quota_failure()
+    result = run_research_agent(question='Q', sources=[], model=model, context=context(), discover=discover)
+    event = [e for e in result.events if e.get('name') == 'news_search'][0]
+    assert event['reason'] == 'search_quota_exhausted' and event['reason'] != 'search_response_invalid'
+    assert event['status'] == 'failed'
+
+
+def test_search_quota_result_payload_carries_message_with_reset_time():
+    from app.research_news_tool import NewsSearchRequest, DiscoverCallableProvider, run_news_search
+    from app.news.search import GdeltNewsProvider
+    from app.news.gdelt import GdeltClient, RequestPacer
+    from app.openai_compatible import BinaryHttpResponse
+
+    def discover(query):
+        raise _quota_failure()
+    glm = DiscoverCallableProvider(discover)
+    gdelt = GdeltNewsProvider(GdeltClient(transport=lambda *a, **k: BinaryHttpResponse(429, b'', {}, {}), min_interval_seconds=0,
+                                          pacer=RequestPacer(sleeper=lambda s: None)))
+    outcome = run_news_search(NewsSearchRequest(query='微软 营收', rationale='find'), providers=[glm, gdelt])
+    assert outcome.result['reason'] == 'search_quota_exhausted'
+    assert outcome.result['status'] == 'rate_limited' and outcome.result.get('retryable') is True
+    assert '2026-11-23' in outcome.result['message'] and 'gdelt_rate_limited' in outcome.result['message']
+    assert outcome.unknown_failure is None and outcome.invalid_response is False
+
+    only_glm = run_news_search(NewsSearchRequest(query='q', rationale='find'), providers=[DiscoverCallableProvider(discover)])
+    assert only_glm.result['reason'] == 'search_quota_exhausted' and only_glm.result['status'] == 'failed'
+    assert '2026-11-23' in only_glm.result['message'] and only_glm.unknown_failure is None
+
+
+def test_search_rate_limited_and_provider_error_are_not_unknown_outcomes():
+    from app.research_news_tool import NewsSearchRequest, DiscoverCallableProvider, run_news_search
+    for code, retryable in (('search_rate_limited', True), ('search_provider_error', False)):
+        def discover(query, code=code, retryable=retryable):
+            error = ProviderFailure(code, 'provider said no', retryable=retryable)
+            error.provider_response_received = True
+            raise error
+        outcome = run_news_search(NewsSearchRequest(query='q', rationale='find'), providers=[DiscoverCallableProvider(discover)])
+        assert outcome.result['reason'] == code and outcome.unknown_failure is None
+        assert 'provider said no' in outcome.result['message']
+
+
+def test_turn_search_status_reflects_quota_reason(tmp_path=None):
+    model = Model([turn('news_search', {'query': 'one', 'rationale': 'find'}, 'a'),
+                   ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')])
+
+    def discover(query):
+        raise _quota_failure()
+    result = run_research_agent(question='Q', sources=[], model=model, context=context(), discover=discover)
+    # main.py derives the turn's search_status from the last news_search event's reason.
+    events = [e for e in result.events if e.get('name') == 'news_search']
+    assert (events[-1]['reason'] if events[-1].get('reason') else events[-1]['status']) == 'search_quota_exhausted'
+    assert events[-1]['status'] == 'failed'

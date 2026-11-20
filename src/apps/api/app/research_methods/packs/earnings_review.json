@@ -1,6 +1,6 @@
 {
  "id": "earnings_review",
- "version": "1.1.0",
+ "version": "1.2.0",
  "title_zh": "财报复盘",
  "title_en": "Earnings review",
  "applies_when": {
@@ -68,6 +68,30 @@
    },
    {
     "term": "eps",
+    "weight": 1
+   },
+   {
+    "term": "季度",
+    "weight": 1
+   },
+   {
+    "term": "quarter",
+    "weight": 1
+   },
+   {
+    "term": "quarters",
+    "weight": 1
+   },
+   {
+    "term": "quarterly",
+    "weight": 1
+   },
+   {
+    "term": "收入",
+    "weight": 1
+   },
+   {
+    "term": "sales",
     "weight": 1
    }
   ]

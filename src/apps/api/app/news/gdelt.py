@@ -202,9 +202,14 @@ class GdeltClient:
         cost = Cost(provider_calls=1)
         text = body[:_MAX_RESPONSE_BYTES].decode("utf-8", errors="replace").strip()
         if status == 429 or (status < 300 and self._looks_rate_limited(text)):
-            self._pacer.penalize(max(self._interval, 5.0) * 2)
-            return ToolResult.failure("rate_limited", "gdelt_rate_limited", "GDELT asked for fewer requests; retry later.",
-                                      retryable=True, suggested_actions=[SuggestedAction(action="retry", retry_after_seconds=max(self._interval, 5.0) * 2)],
+            backoff = max(self._interval, 5.0) * 2
+            retry_header = {str(k).lower(): v for k, v in (getattr(response, "headers", None) or {}).items()}.get("retry-after", "")
+            if isinstance(retry_header, str) and retry_header.strip().isdigit():
+                backoff = max(backoff, min(float(retry_header.strip()), 3600.0))
+            self._pacer.penalize(backoff)
+            return ToolResult.failure("rate_limited", "gdelt_rate_limited",
+                                      f"GDELT answered HTTP 429 (too many requests); the service is reachable but asked for fewer requests. Retry after about {int(backoff)} seconds.",
+                                      retryable=True, suggested_actions=[SuggestedAction(action="retry", retry_after_seconds=backoff)],
                                       provenance=prov, cost=cost)
         if status >= 500:
             return ToolResult.failure("failed", "gdelt_unavailable", f"GDELT returned HTTP {status}.", retryable=True, provenance=prov, cost=cost)

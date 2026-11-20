@@ -9,7 +9,7 @@ any result becomes challenge evidence or is supplied to an LLM prompt.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import json
 import os
 import re
@@ -43,6 +43,90 @@ _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 _SESSION_VALUE = re.compile(r"^[\x21-\x7e]{1,256}$")
 _URL_FIELDS = ("link", "url", "target_url", "real_url", "origin_url")
 _DATE_FIELDS = ("publish_date", "published_at", "date")
+
+
+# --- MCP tool-error detection -------------------------------------------------------------------------------
+# The provider reports usage caps and rate limits as an MCP tool result whose text is, for example,
+# ``MCP error -429: {"error":{"code":"1310","message":"..."}}``.  Those are not malformed responses.
+_MCP_ERROR_PREFIX = re.compile(r"^\s*MCP error\s*(-?\d+)?\s*:?\s*(.*)$", re.I | re.S)
+_QUOTA_PROVIDER_CODES = frozenset({"1308", "1309", "1310"})
+_RATE_PROVIDER_CODES = frozenset({"1302", "1303", "1305"})
+_QUOTA_WORDS = re.compile(r"使用上限|用量上限|额度|限额|已用尽|已耗尽|每周|每月|usage limit|quota|exhaust|weekly|monthly|balance", re.I)
+_RATE_WORDS = re.compile(r"too many requests|rate limit|频率|速率|请求过多|请求过于频繁|稍后", re.I)
+_RESET_TIME = re.compile(r"(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?")
+# bigmodel.cn reports local (China Standard Time) timestamps without an offset.
+_PROVIDER_TZ = timezone(timedelta(hours=8))
+_SECRET_LIKE = re.compile(r"(Bearer\s+\S+|sk-[A-Za-z0-9_\-]{8,}|[A-Za-z0-9_\-.]{32,})")
+_MAX_ERROR_MESSAGE = 300
+
+
+def _safe_provider_text(text: str) -> str:
+    return _SECRET_LIKE.sub("[redacted]", " ".join(text.split()))[:_MAX_ERROR_MESSAGE]
+
+
+def _parse_reset_at(text: str) -> datetime | None:
+    match = _RESET_TIME.search(text)
+    if match is None:
+        return None
+    year, month, day, hour, minute, second = (int(part) if part else 0 for part in match.groups())
+    try:
+        return datetime(year, month, day, hour, minute, second, tzinfo=_PROVIDER_TZ)
+    except ValueError:
+        return None
+
+
+def mcp_error_failure(text: str, *, http_status: int | None = None) -> ProviderFailure | None:
+    """Classify an MCP/provider error payload; ``None`` when the text is not an error payload.
+
+    Quota (a usage cap with an optional reset time) is ``search_quota_exhausted`` and not retryable; transient
+    429s are ``search_rate_limited``; any other error is ``search_provider_error``.  The provider's message is kept
+    (credential-like tokens redacted).  The failure is marked as a received provider response.
+    """
+    if not isinstance(text, str):
+        return None
+    stripped = text.strip()
+    rpc_code: int | None = None
+    body = stripped
+    prefixed = _MCP_ERROR_PREFIX.match(stripped)
+    if prefixed is not None:
+        rpc_code = int(prefixed.group(1)) if prefixed.group(1) else None
+        body = prefixed.group(2).strip()
+    provider_code: str | None = None
+    message = body
+    parsed: Any = None
+    start = body.find("{")
+    if start != -1:
+        try:
+            parsed = json.loads(body[start:])
+        except json.JSONDecodeError:
+            parsed = None
+    if isinstance(parsed, dict):
+        error = parsed.get("error") if isinstance(parsed.get("error"), dict) else None
+        if error is None and prefixed is None:
+            return None   # an ordinary JSON payload, not an error
+        if isinstance(error, dict):
+            code = error.get("code")
+            provider_code = str(code).strip() if isinstance(code, (str, int)) and not isinstance(code, bool) else None
+            if isinstance(error.get("message"), str) and error["message"].strip():
+                message = error["message"].strip()
+    elif prefixed is None:
+        return None
+    if provider_code is not None and provider_code.lstrip("-").isdigit() and rpc_code is None and provider_code in ("429", "-429"):
+        rpc_code = -429
+    safe = _safe_provider_text(message)
+    is_429 = http_status == 429 or rpc_code in (429, -429) or (provider_code or "") in ("429", "-429")
+    if provider_code in _QUOTA_PROVIDER_CODES or ((is_429 or provider_code in _RATE_PROVIDER_CODES) and _QUOTA_WORDS.search(message)):
+        failure = ProviderFailure("search_quota_exhausted", safe or "Search usage limit reached.", retryable=False)
+        reset_at = _parse_reset_at(message)
+        failure.reset_at = reset_at.isoformat() if reset_at is not None else None
+    elif is_429 or provider_code in _RATE_PROVIDER_CODES or _RATE_WORDS.search(message):
+        failure = ProviderFailure("search_rate_limited", safe or "Search provider rate limit reached.", retryable=True)
+        failure.reset_at = None
+    else:
+        failure = ProviderFailure("search_provider_error", safe or "Search provider reported an error.", retryable=False)
+        failure.reset_at = None
+    failure.provider_response_received = True
+    return failure
 
 
 @dataclass(frozen=True)
@@ -134,6 +218,11 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
         for message in messages:
             if not isinstance(message, dict) or message.get("jsonrpc") != "2.0" or message.get("id") != expected_id:
                 continue
+            if "error" in message and isinstance(message["error"], dict):
+                error_object = message["error"]
+                classified = mcp_error_failure(json.dumps({"error": {"code": error_object.get("code"), "message": error_object.get("message")}}, ensure_ascii=False))
+                if classified is not None and classified.code in ("search_quota_exhausted", "search_rate_limited"):
+                    raise classified
             if "error" in message or not isinstance(message.get("result"), dict):
                 raise ProviderFailure("search_response_invalid", "Search provider rejected its own protocol request.", retryable=False)
             return message["result"]
@@ -171,6 +260,10 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
                     if received_session is not None and not _SESSION_VALUE.fullmatch(received_session):
                         raise ProviderFailure("search_response_invalid", "Search provider returned an invalid session identifier.", retryable=False)
                     return result, received_session or session_id
+                if response.status_code == 429:
+                    classified = mcp_error_failure(response.body, http_status=429) if response.body else None
+                    if classified is not None and classified.code == "search_quota_exhausted":
+                        raise classified   # a usage cap does not clear by retrying
                 if response.status_code not in _RETRYABLE_STATUS_CODES:
                     raise ProviderFailure("search_provider_rejected", "Search provider rejected the request.", retryable=False)
                 last_failure = ProviderFailure(
@@ -178,6 +271,8 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
                     "Search provider is temporarily unavailable.",
                     retryable=True,
                 )
+                if response.status_code == 429:
+                    last_failure.provider_response_received = True
             if attempt + 1 < self._max_attempts:
                 delay = 0.05 * (2**attempt)
                 if deadline is not None and monotonic() + delay >= deadline:
@@ -310,6 +405,17 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
         content = result.get("content")
         if not isinstance(content, list) or len(content) > _MAX_CONTENT_BLOCKS:
             raise ProviderFailure("search_response_invalid", "Search provider returned invalid result content.", retryable=False)
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str):
+                error_failure = mcp_error_failure(block["text"])
+                if error_failure is not None:
+                    raise error_failure
+        if result.get("isError") is True:
+            first_text = next((b["text"] for b in content if isinstance(b, dict) and isinstance(b.get("text"), str)), "")
+            error_failure = ProviderFailure("search_provider_error", _safe_provider_text(first_text) or "Search provider reported an error.", retryable=False)
+            error_failure.provider_response_received = True
+            error_failure.reset_at = None
+            raise error_failure
         rows: list[Mapping[str, Any]] = []
         structured_content = result.get("structuredContent")
         if structured_content is not None:

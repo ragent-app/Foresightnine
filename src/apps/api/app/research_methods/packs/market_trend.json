@@ -1,6 +1,6 @@
 {
  "id": "market_trend",
- "version": "1.1.0",
+ "version": "1.2.0",
  "title_zh": "指数与行情走势",
  "title_en": "Market or index trend",
  "applies_when": {
@@ -77,6 +77,26 @@
    {
     "term": "outlook",
     "weight": 1
+   },
+   {
+    "term": "股价",
+    "weight": 2
+   },
+   {
+    "term": "股价表现",
+    "weight": 2
+   },
+   {
+    "term": "stock price",
+    "weight": 2
+   },
+   {
+    "term": "share price performance",
+    "weight": 2
+   },
+   {
+    "term": "share price",
+    "weight": 2
    }
   ]
  },

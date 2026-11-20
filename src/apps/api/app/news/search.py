@@ -22,6 +22,25 @@ _OFFICIAL_HOSTS = ("sec.gov", "federalreserve.gov", "ecb.europa.eu", "boj.or.jp"
                    "bankofengland.co.uk", "imf.org", "worldbank.org", "oecd.org", "bis.org")
 
 
+QUOTA_REASONS = frozenset({"search_quota_exhausted"})
+RATE_REASONS = frozenset({"search_rate_limited", "search_provider_rate_limited", "gdelt_rate_limited"})
+LIMIT_REASONS = QUOTA_REASONS | RATE_REASONS
+
+
+def limited_failure_result(error: Any, prov: Provenance, cost: Cost) -> ToolResult:
+    """Convert a search ``ProviderFailure`` into a ``ToolResult`` keeping its code, message and reset time."""
+    code = str(getattr(error, "code", "search_provider_unavailable"))
+    retryable = bool(getattr(error, "retryable", True))
+    message = str(error)[:300] if hasattr(error, "code") else "Search provider failed."
+    reset_at = getattr(error, "reset_at", None)
+    if code in QUOTA_REASONS and isinstance(reset_at, str) and reset_at:
+        message = f"{message} (quota resets at {reset_at})"[:400]
+    status = "rate_limited" if code in RATE_REASONS else "failed"
+    if code in QUOTA_REASONS:
+        retryable = False
+    return ToolResult.failure(status, code, message, retryable=retryable or status == "rate_limited", provenance=prov, cost=cost)
+
+
 class NewsProvider(Protocol):
     name: str
     supports_time_filter: bool
@@ -75,11 +94,7 @@ class GlmNewsProvider:
         try:
             candidates = self.provider.search(query, limit=max(1, min(int(limit), 10)))
         except Exception as error:   # ProviderFailure carries safe code/retryable; anything else is opaque
-            code = getattr(error, "code", "search_provider_unavailable")
-            retryable = bool(getattr(error, "retryable", True))
-            status = "rate_limited" if code == "search_provider_rate_limited" else "failed"
-            return ToolResult.failure(status, str(code), str(error)[:200] if hasattr(error, "code") else "Search provider failed.",
-                                      retryable=retryable or status == "rate_limited", provenance=prov, cost=Cost(provider_calls=1))
+            return limited_failure_result(error, prov, Cost(provider_calls=1))
         leads: list[NewsLead] = []
         for c in candidates or ():
             published = getattr(c, "published_at", None)
@@ -197,7 +212,7 @@ def news_search(query: str, *, since: datetime | date | None = None, until: date
         until_utc = until_utc.replace(hour=23, minute=59, second=59)
 
     answered: list[str] = []
-    failed: list[tuple[str, str, bool, str]] = []
+    failed: list[tuple[str, str, bool, str, str]] = []
     leads: list[NewsLead] = []
     calls = 0
     provider_filtered: list[str] = []
@@ -205,7 +220,7 @@ def news_search(query: str, *, since: datetime | date | None = None, until: date
         try:
             result = provider.search(full_query, since=since, until=until, languages=languages, limit=min(250, limit * 2))
         except Exception:
-            failed.append((provider.name, "provider_exception", True, "failed"))
+            failed.append((provider.name, "provider_exception", True, "failed", ""))
             continue
         calls += result.cost.provider_calls or 1
         if result.status in ("ok", "partial", "empty"):
@@ -216,12 +231,13 @@ def news_search(query: str, *, since: datetime | date | None = None, until: date
                 if isinstance(lead, NewsLead):
                     leads.append(lead.model_copy(update={"time_filter": "provider_seen_at" if provider.supports_time_filter and (since or until) and lead.published_at is None else lead.time_filter}))
         else:
-            failed.append((provider.name, result.reason, result.retryable, result.status))
+            failed.append((provider.name, result.reason, result.retryable, result.status, result.message))
 
     notes: list[str] = []
     notes.append("Providers answered: " + (", ".join(answered) or "none") + ".")
-    for name, reason, retryable, status in failed:
-        notes.append(f"Provider {name} {status} ({reason}{'; retryable' if retryable else ''}).")
+    for name, reason, retryable, status, detail in failed:
+        notes.append(f"Provider {name} {status} ({reason}{'; retryable' if retryable else ''})"
+                     + (f": {detail[:300]}" if detail and reason in LIMIT_REASONS else "") + ".")
     gdelt_used = any(p.name == "gdelt" for p in chosen)
     if gdelt_used:
         notes.append(GDELT_ATTRIBUTION)
@@ -230,9 +246,19 @@ def news_search(query: str, *, since: datetime | date | None = None, until: date
     cost = Cost(provider_calls=calls)
     requested = {"start": since_utc.isoformat() if since_utc else None, "end": until_utc.isoformat() if until_utc else None}
     if not answered:
-        statuses = {s for *_, s in failed}
+        reasons = {reason for _, reason, *_ in failed}
+        if failed and reasons <= LIMIT_REASONS:
+            # Every provider is quota/rate limited: say so (with each provider's reason, message and reset time).
+            reason = "search_quota_exhausted" if reasons & QUOTA_REASONS else "search_rate_limited"
+            retryable = any(r for _, _, r, _, _ in failed)
+            status = "rate_limited" if retryable else "failed"
+            detail = "; ".join(f"{name}: {why}" + (f" - {msg[:300]}" if msg else "") for name, why, _, _, msg in failed)
+            return ToolResult.failure(status, reason, "Search is limited: " + detail, retryable=retryable,
+                                      suggested_actions=[SuggestedAction(action="retry", retry_after_seconds=5.0)] if retryable else [],
+                                      provenance=prov, cost=cost, coverage=Coverage(requested=requested, notes=notes))
+        statuses = {s for _, _, _, s, _ in failed}
         status = "rate_limited" if statuses == {"rate_limited"} else "failed"
-        return ToolResult.failure(status, "all_providers_failed", " ".join(notes), retryable=any(r for _, _, r, _ in failed),
+        return ToolResult.failure(status, "all_providers_failed", " ".join(notes), retryable=any(r for _, _, r, _, _ in failed),
                                   suggested_actions=[SuggestedAction(action="retry", retry_after_seconds=5.0)] if status == "rate_limited" else [],
                                   provenance=prov, cost=cost, coverage=Coverage(requested=requested, notes=notes))
 

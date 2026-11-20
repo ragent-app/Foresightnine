@@ -63,6 +63,19 @@ def test_selector_the_two_365_questions():
     assert [r.pack_id for r in select_packs(Q_IPO)] == ['ipo_or_major_event_day']
 
 
+def test_selector_revenue_with_quarter_and_stock_price_question():
+    q = '微软最近两个季度的营收和股价表现'
+    assert {r.pack_id for r in select_packs(q)} == {'earnings_review', 'market_trend'}
+    assert len(select_packs(q)) <= 2 and len(select_packs(q, max_packs=1)) == 1
+    assert {r.pack_id for r in select_packs('How did sales and share price performance look over the last two quarters?')} == {
+        'earnings_review', 'market_trend'}
+    assert 'earnings_review' in {r.pack_id for r in select_packs('Apple revenue in the last quarter')}
+    # a single weak word is not enough
+    assert select_packs('last quarter') == []
+    assert select_packs('季度') == []
+    assert select_packs('收入') == []
+
+
 @pytest.mark.parametrize('question,expected', [
     ('Review the latest quarterly earnings and the 10-Q', 'earnings_review'),
     ('这家公司最新财报怎么样', 'earnings_review'),

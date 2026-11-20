@@ -59,6 +59,25 @@ def test_rate_limit_text_and_http_429():
     assert client(Recorder(status=429, body="x")).search("fed rates").status == "rate_limited"
 
 
+def test_http_429_is_rate_limited_not_unavailable_and_backs_off_pacer():
+    sleeps: list[float] = []
+    now = [0.0]
+    pacer = RequestPacer(clock=lambda: now[0], sleeper=lambda s: sleeps.append(s))
+
+    class Retry429(Recorder):
+        def __call__(self, method, url, headers, body, timeout, **kw):
+            self.urls.append(url)
+            return BinaryHttpResponse(429, b"", {"retry-after": "60"}, {})
+
+    c = GdeltClient(transport=Retry429(), min_interval_seconds=1, pacer=pacer, now=lambda: datetime(2026, 11, 20, tzinfo=timezone.utc))
+    r = c.search("fed rates")
+    assert r.status == "rate_limited" and r.reason == "gdelt_rate_limited" and r.retryable
+    assert "429" in r.message and r.reason != "gdelt_unavailable"
+    assert r.suggested_actions[0].retry_after_seconds == 60.0
+    c.search("fed rates")          # the pacer waits out the back-off before the next request
+    assert sleeps and sleeps[0] >= 59.0
+
+
 def test_plain_text_query_rejection_malformed_and_http_errors():
     r = client(Recorder(body="The specified phrase is too short.")).search("ab")
     assert r.status == "failed" and r.reason == "gdelt_query_rejected" and not r.retryable
