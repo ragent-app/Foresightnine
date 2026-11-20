@@ -272,6 +272,120 @@ def presend_retry_settings() -> tuple[int, float]:
     return retries, base
 
 
+class QuotationLocateError(ValueError):
+    """A quotation could not be located; carries a machine-readable kind for per-item reporting."""
+
+    def __init__(self, message: str, kind: str, detail: dict[str, Any] | None = None):
+        super().__init__(message)
+        self.kind = kind
+        self.detail = detail or {}
+
+
+class QuotationBatchError(ValueError):
+    """Several items of one submission failed validation; nothing from the batch is committed."""
+
+    def __init__(self, message: str, failures: list[dict[str, Any]], total_failed: int):
+        super().__init__(message)
+        self.failures = failures
+        self.total_failed = total_failed
+
+
+MAX_LISTED_QUOTATION_FAILURES = 20
+_QUOTE_HINT_CHARS = 300
+_FOLD_MAP = {
+    **{ord(c): "'" for c in '\u2018\u2019\u201a\u201b\u2032\u02bc'},
+    **{ord(c): '"' for c in '\u201c\u201d\u201e\u201f\u2033'},
+    **{ord(c): '-' for c in '\u2010\u2011\u2012\u2013\u2014\u2212'},
+    **{cp: chr(cp - 0xFEE0) for cp in range(0xFF01, 0xFF5F)},
+    0x3000: ' ',
+}
+
+
+def _fold_char(ch: str) -> str:
+    return _FOLD_MAP.get(ord(ch), ch)
+
+_NORMALIZE_MAX_SOURCE_CHARS = 8_000_000
+
+
+def _normalize_with_map(text: str) -> tuple[str, list[int], list[int]]:
+    """Collapse whitespace and drop trailing zeros after a decimal point, mapping back to source offsets."""
+    out: list[str] = []
+    starts: list[int] = []
+    ends: list[int] = []
+    pos = 0
+    for match in re.finditer(r'\s+|(\d+)(\.\d*?)0+(?!\d)', text):
+        for i in range(pos, match.start()):
+            out.append(_fold_char(text[i])); starts.append(i); ends.append(i + 1)
+        if match.group(1) is None:
+            out.append(' '); starts.append(match.start()); ends.append(match.end())
+        else:
+            kept = match.group(1) + (match.group(2) if match.group(2) != '.' else '')
+            for j, ch in enumerate(kept):
+                out.append(_fold_char(ch)); starts.append(match.start() + j)
+                ends.append(match.end() if j == len(kept) - 1 else match.start() + j + 1)
+        pos = match.end()
+    for i in range(pos, len(text)):
+        out.append(_fold_char(text[i])); starts.append(i); ends.append(i + 1)
+    return ''.join(out), starts, ends
+
+
+def _quotation_failure(index: int, label: str, source: ResearchSource | None, source_id: str, quotation: str,
+                       error: ValueError, ranges: list[dict[str, Any]]) -> dict[str, Any]:
+    """Describe one failing item: index, source, quotation prefix, failure kind and a bounded repair hint."""
+    failure: dict[str, Any] = {'item': f'{label}[{index}]', 'index': index, 'source_id': source_id,
+                               'quotation_start': quotation[:80]}
+    if not isinstance(error, QuotationLocateError):
+        failure['kind'] = 'source_unavailable' if 'source is unavailable' in str(error) else 'invalid_item'
+        failure['message'] = str(error)[:200]
+        failure['_message'] = str(error)
+        return failure
+    failure['kind'] = error.kind
+    failure['_message'] = str(error)
+    failure.update(error.detail)
+    if error.kind != 'not_found_anywhere' or source is None:
+        return failure
+    text = source.text
+    lo, hi = 0, min(len(quotation), 1000)
+    while lo < hi:  # longest prefix present in the source; bounded binary search
+        mid = (lo + hi + 1) // 2
+        if quotation[:mid] in text:
+            lo = mid
+        else:
+            hi = mid - 1
+    if lo >= 4:
+        at = text.find(quotation[:lo])
+        snippet_start = at if lo <= _QUOTE_HINT_CHARS - 80 else at + lo - 100
+        failure['closest_source_text'] = text[snippet_start:snippet_start + min(len(quotation) + 20, _QUOTE_HINT_CHARS)]
+        failure['closest_source_offset'] = snippet_start
+        failure['diverges_at'] = lo
+    if len(text) <= _NORMALIZE_MAX_SOURCE_CHARS:
+        norm_quote = _normalize_with_map(quotation.strip())[0]
+        if norm_quote:
+            norm_text, starts, ends = _normalize_with_map(text)
+            first = norm_text.find(norm_quote)
+            if first >= 0 and norm_text.find(norm_quote, first + 1) < 0:
+                s0, e0 = starts[first], ends[first + len(norm_quote) - 1]
+                if text[s0:e0] != quotation:
+                    failure['suggested_span'] = [s0, e0]
+                    if e0 - s0 <= _QUOTE_HINT_CHARS:
+                        failure['suggested_quotation'] = text[s0:e0]
+                    failure['suggestion_in_read_ranges'] = any(r['start'] <= s0 and e0 <= r['end'] for r in ranges)
+    return failure
+
+
+def _quotation_batch_error(label: str, failures: list[dict[str, Any]], total_items: int) -> QuotationBatchError:
+    first_message = str(failures[0].get('_message') or '')[:400] if failures else ''
+    failures = [{k: v for k, v in f.items() if k != '_message'} for f in failures]
+    listed = failures[:MAX_LISTED_QUOTATION_FAILURES]
+    more = len(failures) - len(listed)
+    message = (f'{len(failures)} of {total_items} {label} failed validation and nothing was committed; '
+               f'every {label} not listed in `failures` passed. Fix each listed item and resubmit the full set. '
+               'Where suggested_quotation is given, copy it exactly; it differs from your text only in whitespace or '
+               'trailing decimal zeros.' + (f' {more} more failures not listed.' if more > 0 else '') +
+               (f' First failure ({listed[0]["item"]}): {first_message}' if first_message else ''))
+    return QuotationBatchError(message, listed, len(failures))
+
+
 def invalid_reason(error: Exception) -> str:
     """A compact, field-level explanation the model can act on (no library URLs or input dumps)."""
     if isinstance(error, ValidationError):
@@ -2645,7 +2759,7 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                     break
                 matches.add((offset, offset + len(quotation)))
                 offset += 1
-        def outside_hint() -> str:
+        def outside_hint() -> tuple[str, str, list[dict[str, Any]]]:
             # The quotation may exist in the source but outside what has been read so far.
             elsewhere: list[tuple[int, int]] = []
             pos = 0
@@ -2657,29 +2771,45 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                 pos += 1
             if not elsewhere:
                 return (' The quotation text does not occur verbatim anywhere in this source; check whitespace, line breaks '
-                        'and escaped characters (copy the text exactly as returned by the read tool).')
+                        'and escaped characters (copy the text exactly as returned by the read tool).',
+                        'not_found_anywhere', [])
             pages = _document_pages(source)
             where = []
+            found_at = []
             for first, last in elsewhere:
                 number = page_for_offset(pages, first) if pages is not None else None
                 where.append(f'[{first}, {last})' + (f' (page {number})' if number is not None else ''))
+                found_at.append({'start': first, 'end': last, **({'page': number} if number is not None else {})})
             return (' The quotation exists in this source at ' + ', '.join(where) + ' OUTSIDE the ranges read so far; '
                     'read that range with read_sources' + (' or read_pages' if pages is not None else '') +
-                    ' before citing it. Do not change the quotation text.')
+                    ' before citing it. Do not change the quotation text.', 'not_in_read_ranges', found_at)
         if start is not None or end is not None:
             # Tell the model where the quotation actually is, so one retry can succeed.
+            outside_text, outside_kind, outside_at = outside_hint() if not matches else ('', 'offset_mismatch', [])
             found = ('The quotation occurs at ' + json.dumps(sorted(matches)) + ' within read ranges; '
                      if matches else 'The quotation was not found verbatim within read ranges; ')
-            hint = found + 'omit both offsets to let the system locate it.' + ('' if matches else outside_hint())
+            hint = found + 'omit both offsets to let the system locate it.' + outside_text
+            kind = 'offset_mismatch' if matches else outside_kind
+            detail = {'offsets': [list(m) for m in sorted(matches)[:5]]} if matches else {'found_at': outside_at}
             if start is None or end is None or not any(r['start'] <= start < end <= r['end'] for r in ranges):
-                raise ValueError('Both offsets must lie within a previously read range. ' + hint)
+                raise QuotationLocateError('Both offsets must lie within a previously read range. ' + hint, kind, detail)
             if source.text[start:end] != quotation:
-                raise ValueError('Quotation does not match the specified location. ' + hint)
+                raise QuotationLocateError('Quotation does not match the specified location. ' + hint, kind, detail)
             return start, end
         if len(matches) != 1:
-            raise ValueError('Quotation must match uniquely within read ranges; candidate offsets: ' +
-                             json.dumps(sorted(matches)) + ('' if matches else '.' + outside_hint()))
+            if matches:
+                raise QuotationLocateError('Quotation must match uniquely within read ranges; candidate offsets: ' +
+                                           json.dumps(sorted(matches)), 'not_unique',
+                                           {'offsets': [list(m) for m in sorted(matches)[:5]]})
+            outside_text, outside_kind, outside_at = outside_hint()
+            raise QuotationLocateError('Quotation must match uniquely within read ranges; candidate offsets: [].' + outside_text,
+                                       outside_kind, {'found_at': outside_at})
         return next(iter(matches))
+    def quotation_failure(index: int, label: str, source: ResearchSource | None, source_id: str, quotation: str,
+                          error: ValueError) -> dict[str, Any]:
+        return _quotation_failure(index, label, source, source_id, quotation, error,
+                                  [r for r in [*state['read_ranges'], *state.get('prior_read_ranges', []), *state.get('focus_ranges', [])]
+                                   if r['source_id'] == source_id])
     if not callable(getattr(model, 'complete_turn', None)) and callable(getattr(model, 'complete', None)):
         model = ChatResearchAdapter(model)
     presend_retries, presend_base = presend_retry_settings()
@@ -3599,13 +3729,19 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                     staged = []
                     ocr_warnings: list[dict[str, Any]] = []
                     existing = [*state.get('prior_facts', []), *state.get('facts', [])]
-                    for fact in req.facts:
+                    fact_failures: list[dict[str, Any]] = []
+                    for fact_index, fact in enumerate(req.facts):
                         source = source_by_id.get(fact.source_id)
-                        if source is None or source_eligibility([source], as_of)[0][1] != 'eligible':
-                            raise ValueError('Fact source is unavailable or unauthorized.')
-                        start, end = locate(source, fact.quotation, fact.character_start, fact.character_end)
-                        if fact.value not in _quoted_numbers(fact.quotation):
-                            raise ValueError('Fact value does not match source quotation.')
+                        try:
+                            if source is None or source_eligibility([source], as_of)[0][1] != 'eligible':
+                                raise ValueError('Fact source is unavailable or unauthorized.')
+                            start, end = locate(source, fact.quotation, fact.character_start, fact.character_end)
+                            if fact.value not in _quoted_numbers(fact.quotation):
+                                raise ValueError('Fact value does not match source quotation.')
+                        except ValueError as item_error:
+                            fact_failures.append(quotation_failure(fact_index, 'facts', source, fact.source_id,
+                                                                   fact.quotation, item_error))
+                            continue
                         candidate = {**fact.model_dump(mode='json'), 'character_start': start, 'character_end': end}
                         if (not candidate.get('currency') and _ISO_CURRENCY_LIKE_RE.match(fact.unit or '')
                                 and (source.kind == 'market_data'
@@ -3638,6 +3774,8 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                             staged.append(row)
                         rows.append(row)
                     # Validate the entire batch before changing durable state.
+                    if fact_failures:
+                        raise _quotation_batch_error('facts', fact_failures, len(req.facts))
                     state.setdefault('facts', []).extend(staged)
                     result = {'facts': rows}
                     if ocr_warnings:
@@ -3765,21 +3903,26 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                         if unknown_ids:
                             raise ValueError('challenges_claim_ids must name claims listed in prior_research; unknown: ' +
                                              json.dumps(unknown_ids))
-                    for claim in req.claims:
+                    claim_failures: list[dict[str, Any]] = []
+                    for claim_index, claim in enumerate(req.claims):
                         source = source_by_id.get(claim.source_id)
                         try:
                             if source is None or source_eligibility([source], as_of)[0][1] != 'eligible':
                                 raise ValueError('Claim source is unavailable or unauthorized.')
                             start, end = locate(source, claim.quotation, claim.character_start, claim.character_end)
-                        except ValueError:
+                        except ValueError as item_error:
                             if req.status == 'completed':
-                                raise
+                                claim_failures.append(quotation_failure(claim_index, 'claims', source, claim.source_id,
+                                                                        claim.quotation, item_error))
+                                continue
                             rejected_claims += 1
                             continue
                         claims.append({'claim_id': 'claim-' + uuid4().hex, 'role': claim.role, 'text': claim.text,
                                        'citations': [{'source_id': claim.source_id, 'quotation': claim.quotation,
                                                       'location': {'character_start': start, 'character_end': end}}],
                                        'challenges_claim_ids': list(dict.fromkeys(claim.challenges_claim_ids))})
+                    if claim_failures:
+                        raise _quotation_batch_error('claims', claim_failures, len(req.claims))
                     if not claims and req.status == 'completed' and not state.get('prior_cited_claims'):
                         raise ValueError('At least one source-backed claim is required for completed research.')
                     gaps = []
@@ -3826,6 +3969,8 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                     sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()
                 invalid_seen = state.setdefault('invalid_seen', [])
                 result = {'status': 'invalid', 'reason': invalid_reason(error)}
+                if isinstance(error, QuotationBatchError):
+                    result['failures'] = error.failures
                 if invalid_signature in invalid_seen:
                     duplicate_kind = 'invalid'
                     result['message'] = 'This invalid call was already rejected with the same arguments; change the arguments instead of resending them.'
