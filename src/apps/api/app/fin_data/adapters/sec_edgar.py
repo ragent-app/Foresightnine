@@ -23,7 +23,7 @@ from ..models import (Coverage, EntityRef, Filing, FrameRow, FullTextHit, Permis
                       SuggestedAction, ToolResult)
 from ..policy import Denied, FinDataPolicy, load_policy
 from ..ratelimit import default_limiter
-from .base import StopWith, Transport, default_transport, request_json, utcnow
+from .base import StopWith, StreamTransport, Transport, default_stream_transport, default_transport, request_json, utcnow
 
 PROVIDER = "sec_edgar"
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
@@ -229,9 +229,13 @@ def select_line(facts: dict, spec: LineSpec, kind: str, n: int, *, derive_q4: bo
 class SecEdgarAdapter:
     def __init__(self, user_agent: str | None, *, transport: Transport | None = None, limiter=None,
                  policy: FinDataPolicy | None = None, now_fn: Callable[[], datetime] = utcnow,
-                 timeout: float = 15.0) -> None:
+                 timeout: float = 15.0, stream_transport: StreamTransport | None = None) -> None:
         self._ua = user_agent
         self._transport = transport or default_transport()
+        # Large JSON (companyfacts for big issuers exceeds 5 MB) streams to a temp file. An injected plain
+        # transport without a stream transport keeps the old in-memory behaviour (tests, fakes).
+        self._stream = stream_transport if stream_transport is not None else (
+            default_stream_transport() if transport is None else None)
         self._limiter = limiter or default_limiter()
         self._policy = policy or load_policy()
         self._now = now_fn
@@ -248,13 +252,14 @@ class SecEdgarAdapter:
             return ToolResult.failure("failed", error.code, "SEC requires a declared User-Agent with contact details.")
         return decision
 
-    def _get(self, url: str, category: str, not_found_reason: str = "not_found"):
+    def _get(self, url: str, category: str, not_found_reason: str = "not_found", *, large: bool = False):
         gate = self._gate(category)
         if isinstance(gate, ToolResult):
             raise StopWith(gate)
         doc, prov, cost = request_json(provider=PROVIDER, url=url, headers={"User-Agent": self._ua or ""},
                                        transport=self._transport, timeout=self._timeout, limiter=self._limiter,
-                                       now_fn=self._now, not_found_reason=not_found_reason)
+                                       now_fn=self._now, not_found_reason=not_found_reason,
+                                       stream_transport=self._stream if large else None)
         return doc, prov, cost, gate
 
     # -- identity
@@ -293,7 +298,8 @@ class SecEdgarAdapter:
         c = cik10(cik)
         eid = entity_id or cik_entity_id(c)
         try:
-            doc, prov, cost, perms = self._get(f"https://data.sec.gov/submissions/CIK{c}.json", "filings", "cik_not_found")
+            doc, prov, cost, perms = self._get(f"https://data.sec.gov/submissions/CIK{c}.json", "filings", "cik_not_found",
+                                              large=True)
         except StopWith as stop:
             return stop.result
         recent = (doc.get("filings") or {}).get("recent") if isinstance(doc, dict) else None
@@ -365,7 +371,7 @@ class SecEdgarAdapter:
         eid = entity_id or cik_entity_id(c)
         try:
             doc, prov, cost, perms = self._get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{c}.json", "financials",
-                                               "no_xbrl_facts")
+                                               "no_xbrl_facts", large=True)
         except StopWith as stop:
             return stop.result
         facts = doc.get("facts") if isinstance(doc, dict) else None
@@ -418,7 +424,7 @@ class SecEdgarAdapter:
                                       "Use taxonomy, tag, unit (e.g. USD, USD-per-shares) and period like CY2023Q4I.")
         url = f"https://data.sec.gov/api/xbrl/frames/{taxonomy}/{tag}/{unit}/{period}.json"
         try:
-            doc, prov, cost, perms = self._get(url, "financials", "frame_not_found")
+            doc, prov, cost, perms = self._get(url, "financials", "frame_not_found", large=True)
         except StopWith as stop:
             return stop.result
         data = doc.get("data") if isinstance(doc, dict) else None

@@ -179,6 +179,7 @@ class Coverage(_Frozen):
     actual: dict[str, str | None] = Field(default_factory=dict)
     rows: int = 0
     data_as_of: date | datetime | None = None
+    currency: str | None = None
     session_status: str | None = None
     is_final: bool | None = None
     truncated: bool = False

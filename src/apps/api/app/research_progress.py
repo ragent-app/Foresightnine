@@ -32,6 +32,10 @@ _TOOL_BY_PENDING = {
     'acquire': 'acquire_sources',
     'historical_prices': 'historical_prices',
     'sec_company_concept': 'sec_company_concept',
+    'resolve_entity': 'resolve_entity',
+    'market_data': 'market_data',
+    'company_financials': 'company_financials',
+    'filings': 'filings',
 }
 
 
@@ -76,7 +80,12 @@ def _sanitize_summary(tool_name: str | None, raw: Any) -> dict[str, Any] | None:
     if not isinstance(raw, Mapping):
         return None
     kind = raw.get('kind')
-    if not isinstance(kind, str) or not tool_name or kind != tool_name:
+    if not isinstance(kind, str) or not tool_name:
+        return None
+    if kind == 'data_tool':
+        if raw.get('tool') != tool_name:
+            return None
+    elif kind != tool_name:
         return None
 
     clean: dict[str, Any] | None = None
@@ -147,6 +156,19 @@ def _sanitize_summary(tool_name: str | None, raw: Any) -> dict[str, Any] | None:
             'taxonomy': taxonomy,
             'tag': tag,
             'unit': unit,
+            'status': status,
+            'title': _text(raw.get('title'), TITLE_LIMIT),
+            'total_characters': _nonneg_int(raw.get('total_characters')),
+        }
+    elif kind == 'data_tool':
+        tool = _text(raw.get('tool'), NAME_LIMIT)
+        status = _text(raw.get('status'), NAME_LIMIT)
+        if not (tool and status):
+            return None
+        clean = {
+            'kind': 'data_tool',
+            'tool': tool,
+            'target': _text(raw.get('target'), 200),
             'status': status,
             'title': _text(raw.get('title'), TITLE_LIMIT),
             'total_characters': _nonneg_int(raw.get('total_characters')),
@@ -408,6 +430,8 @@ def _interim_counts(checkpoint: Mapping[str, Any] | None, saved_turn: Any) -> di
                     acquired_overflow += acq_count - preview_acquired
             elif s_kind == 'sec_company_concept' and summary.get('status') == 'acquired':
                 acquired_keys.add(('sec', summary.get('entity'), summary.get('taxonomy'), summary.get('tag'), summary.get('unit'), summary.get('title')))
+            elif s_kind == 'data_tool' and summary.get('status') in ('ok', 'partial') and summary.get('title'):
+                acquired_keys.add(('data', summary.get('tool'), summary.get('target'), summary.get('title')))
             elif s_kind == 'historical_prices' and summary.get('status') == 'acquired':
                 acquired_keys.add(('price', summary.get('instrument_id'), summary.get('start_date'), summary.get('end_date')))
         read_ranges = getattr(saved_turn, 'read_ranges', None)

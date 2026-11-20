@@ -7,9 +7,11 @@ import pytest
 from app.model_protocol import ModelResponse
 from app.phase3 import ProviderFailure
 from app.research_clock import build_research_clock
-from app.research_runtime import SYSTEM, TOOL_FAILURE_GUIDANCE, HistoricalPriceRequest, run_research_agent
+from app.research_fin_tools import MarketDataRequest
+from app.research_runtime import SYSTEM, TOOL_FAILURE_GUIDANCE, run_research_agent
 from app.research_sources import ResearchSource, SourcePermissions
 
+from tests.fin_runtime_helpers import FakeTransport, Reply, json_reply, make_toolbox
 from tests.test_research_runtime import Model, context, turn
 
 STOP = ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')
@@ -23,7 +25,7 @@ def make_source(source_id='p1', text='Revenue was 100 USD.', provenance=None, ur
 
 
 def price_args(**extra):
-    return {'instrument_id': 'AAPL', 'rationale': 'prices', **extra}
+    return {'entity_id': 'SSE:ANT', 'rationale': 'prices', **extra}
 
 
 def feedback(model, index=1):
@@ -56,69 +58,64 @@ def test_no_clock_means_no_field():
     assert 'research_clock' not in json.loads(saved[-1]['user'])
 
 
-def test_price_request_requires_lookback_or_both_dates():
+def test_price_request_requires_lookback_or_start_date_and_an_instrument():
     with pytest.raises(ValueError):
-        HistoricalPriceRequest(instrument_id='A', rationale='r')
+        MarketDataRequest(entity_id='SSE:ANT', rationale='r')
     with pytest.raises(ValueError):
-        HistoricalPriceRequest(instrument_id='A', rationale='r', start_date=date(2026, 1, 1))
+        MarketDataRequest(rationale='r', lookback='1y')
     with pytest.raises(ValueError):
-        HistoricalPriceRequest(instrument_id='A', rationale='r', lookback='1y', start_date=date(2026, 1, 1), end_date=date(2026, 2, 1))
-    assert HistoricalPriceRequest(instrument_id='A', rationale='r', lookback='1y').lookback == '1y'
+        MarketDataRequest(entity_id='A', rationale='r', lookback='1y', start_date=date(2026, 1, 1), end_date=date(2026, 2, 1))
+    assert MarketDataRequest(entity_id='A', rationale='r', lookback='1y').lookback == '1y'
+    assert MarketDataRequest(symbol='A', exchange='NYSE', rationale='r', start_date=date(2026, 1, 1)).interval == '1day'
 
 
 def test_lookback_is_resolved_with_instrument_exchange_and_coverage_is_returned():
-    seen = []
-    coverage = {'requested_end_date': '2026-11-19', 'effective_end_date': '2026-11-19', 'clamped': False,
-                'actual_first_date': '2026-11-13', 'actual_last_date': '2026-11-19', 'row_count': 5,
-                'latest_completed_session': '2026-11-19', 'session_status': 'pre_open'}
-
-    def loader(req):
-        seen.append(req)
-        return make_source(provenance={**coverage, 'unrelated': 1})
-
-    m = Model([turn('historical_prices', price_args(lookback='5d'), 'h1'), STOP])
-    out = run_research_agent(question='Q', sources=[], model=m, context=context(), historical_prices=loader,
-                             historical_instruments=('AAPL',), historical_sessions={'AAPL': ('NASDAQ', 'America/New_York')},
-                             now=lambda: NOW)
-    assert seen[0].end_date == date(2026, 11, 19) and seen[0].start_date < seen[0].end_date
+    t = FakeTransport(json_reply('td_time_series_ipo.json'))
+    m = Model([turn('market_data', price_args(lookback='5d'), 'h1'), STOP])
+    out = run_research_agent(question='Q', sources=[], model=m, context=context(), fin_data=make_toolbox(twelve=t))
+    assert 'start_date=2026-11-13' in t.calls[0][0] and 'end_date=2026-11-20' in t.calls[0][0]
     fb = feedback(m)
-    assert fb['status'] == 'acquired' and fb['source_id'] == 'p1'
-    assert fb['coverage'] == coverage and 'content_sha256' in fb and fb['total_characters'] == 20
-    assert 'p1' in out.source_ids  # acquired but unread
+    assert fb['status'] == 'ok' and fb['source_id'] and fb['coverage']['actual']['last'].startswith('2026-11-19')
+    assert fb['coverage']['rows'] == 4 and fb['permissions']['export'] is False
+    assert fb['source_id'] in out.source_ids  # acquired but unread
 
 
-def test_future_end_date_allowed_without_cutoff_and_range_error_has_message_and_hints_and_run_continues():
-    def loader(req):
-        err = ProviderFailure('historical_price_range_after_latest_session', 'End date is after the latest session.', retryable=False)
-        err.hints = {'latest_allowed_end_date': '2026-11-19'}
-        raise err
-
-    m = Model([turn('historical_prices', price_args(start_date='2026-11-01', end_date='2027-01-01'), 'h1'), STOP])
-    out = run_research_agent(question='Q', sources=[], model=m, context=context(), historical_prices=loader,
-                             historical_instruments=('AAPL',))
+def test_future_end_date_is_clamped_with_suggested_action_and_run_continues():
+    m = Model([turn('market_data', price_args(start_date='2026-11-01', end_date='2027-01-01'), 'h1'), STOP])
+    out = run_research_agent(question='Q', sources=[], model=m, context=context(),
+                             fin_data=make_toolbox(twelve=FakeTransport(json_reply('td_time_series_ipo.json'))))
     fb = feedback(m)
-    assert fb['status'] == 'failed' and fb['reason'] == 'historical_price_range_after_latest_session'
-    assert fb['hints'] == {'latest_allowed_end_date': '2026-11-19'} and fb['message']
-    assert out.reason != 'historical_price_range_after_latest_session'
+    assert fb['status'] == 'partial' and fb['reason'] == 'range_clamped' and fb['message']
+    assert fb['suggested_actions'][0]['hint'] == 'end_date<=2026-11-19'
+    assert out.reason != 'range_clamped'
 
 
-def test_research_cutoff_still_rejects_later_end_date():
-    m = Model([turn('historical_prices', price_args(start_date='2024-01-01', end_date='2024-12-31'), 'h1'), STOP])
-    run_research_agent(question='Q', sources=[], model=m, context=context(), historical_prices=lambda r: None,
-                       historical_instruments=('AAPL',), as_of=datetime(2024, 6, 1, tzinfo=timezone.utc))
-    assert feedback(m)['status'] == 'invalid'
-
-
-def test_unknown_price_outcome_is_failed_not_aborting():
-    def loader(req):
-        err = ProviderFailure('historical_price_transport_error', 'timeout', retryable=True)
-        err.external_result_unknown = True
-        raise err
-
-    m = Model([turn('historical_prices', price_args(start_date='2026-11-01', end_date='2026-11-10'), 'h1'), STOP])
-    run_research_agent(question='Q', sources=[], model=m, context=context(), historical_prices=loader, historical_instruments=('AAPL',))
+def test_start_after_latest_session_is_empty_with_guidance():
+    m = Model([turn('market_data', price_args(start_date='2026-11-20'), 'h1'), STOP])
+    run_research_agent(question='Q', sources=[], model=m, context=context(),
+                       fin_data=make_toolbox(twelve=FakeTransport(Reply())))
     fb = feedback(m)
-    assert fb['status'] == 'failed' and fb['external_state'] == 'unknown' and 'not retried' in fb['message']
+    assert fb['status'] == 'empty' and fb['reason'] == 'range_after_latest_session' and '2026-11-19' in fb['message']
+
+
+def test_research_cutoff_disables_data_tools():
+    m = Model([turn('market_data', price_args(start_date='2024-01-01', end_date='2024-12-31'), 'h1'), STOP])
+    t = FakeTransport(Reply())
+    run_research_agent(question='Q', sources=[], model=m, context=context(),
+                       fin_data=make_toolbox(twelve=t, disabled_reason='historical_cutoff'),
+                       as_of=datetime(2024, 6, 1, tzinfo=timezone.utc))
+    fb = feedback(m)
+    assert fb['status'] == 'restricted' and fb['reason'] == 'historical_cutoff' and not t.calls
+
+
+def test_unknown_price_outcome_is_unknown_not_aborting():
+    from app.openai_compatible import _TransportTimeout
+    m = Model([turn('market_data', price_args(start_date='2026-11-01', end_date='2026-11-10'), 'h1'), STOP])
+    out = run_research_agent(question='Q', sources=[], model=m, context=context(),
+                             fin_data=make_toolbox(twelve=FakeTransport(OSError('boom'))))
+    fb = feedback(m)
+    assert fb['status'] == 'unknown' and fb['external_state'] == 'unknown' and 'not retried' in fb['message']
+    assert out.reason != 'external_result_unknown'
 
 
 def test_acquire_with_unknown_and_success_continues_and_keeps_source():
@@ -154,32 +151,18 @@ def test_failure_rows_get_table_guidance():
 
 
 def test_guidance_table_covers_required_codes():
-    for code in ('historical_price_range_after_latest_session', 'historical_price_source_not_authorized_or_unavailable',
-                 'historical_price_rate_limited', 'historical_price_budget_unavailable', 'historical_price_transport_error',
-                 'historical_price_provider_rejected', 'unit_or_period_not_found_in_returned_records', 'tag_not_reported',
+    for code in ('market_data_key_required', 'range_after_latest_session', 'no_bars', 'symbol_not_found',
+                 'daily_quota_exhausted', 'provider_rate_limited', 'entity_ambiguous', 'no_xbrl_facts',
+                 'unit_or_period_not_found_in_returned_records', 'tag_not_reported',
                  'source_too_large', 'ocr_required', 'source_timeout', 'source_unavailable', 'http_forbidden_or_challenge',
                  'not_found', 'source_rate_limited', 'lead_not_discovered', 'search_no_results', 'search_sources_denied'):
         assert TOOL_FAILURE_GUIDANCE[code]
 
 
-def test_search_no_results_gets_message_and_sec_extras_pass_through():
-    from app.research_structured_connector import StructuredQueryResult
+def test_search_no_results_gets_reason():
     m = Model([turn('discover_sources', {'query': 'q', 'rationale': 'r'}, 'd1'), STOP])
     run_research_agent(question='Q', sources=[], model=m, context=context(), discover=lambda q: [])
     assert feedback(m)['reason'] == 'search_no_results'
-    # reason + status 'completed' is not a failure status, so no message is forced there.
-
-    res = StructuredQueryResult('unknown', 'unit_or_period_not_found_in_returned_records', external_state='returned')
-    res.available_periods = ['2024-01-29/2025-01-26']
-    res.available_units = ['USD']
-    res.coverage = {'first': '2020'}
-    sec_args = {'entity_query': 'NVDA', 'tag': 'Revenues', 'unit': 'USD', 'period_start': '2024-01-29',
-                'period_end': '2025-01-26', 'rationale': 'r'}
-    m2 = Model([turn('sec_company_concept', sec_args, 's1'), STOP])
-    run_research_agent(question='Q', sources=[], model=m2, context=context(), sec_concept=lambda r: res)
-    fb = feedback(m2)
-    assert fb['available_periods'] == ['2024-01-29/2025-01-26'] and fb['available_units'] == ['USD']
-    assert fb['coverage'] == {'first': '2020'} and 'available_periods' in fb['message']
 
 
 def test_redirect_leads_report_unresolved_titles_without_resolving():

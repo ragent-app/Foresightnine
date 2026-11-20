@@ -205,7 +205,8 @@ class TwelveDataAdapter:
         all_final = all(b.is_final for b in bars)
         cov = Coverage(entity_id=eid, requested=self._req(start, end),
                        actual={"first": bars[0].ts_start.isoformat(), "last": last.ts_start.isoformat()},
-                       rows=len(bars), data_as_of=last.ts_start, session_status=status, is_final=all_final,
+                       rows=len(bars), data_as_of=last.ts_start, currency=(str(meta["currency"]) if meta.get("currency") else None),
+                       session_status=status, is_final=all_final,
                        truncated=n_trunc, notes=notes)
         reason = "truncated" if n_trunc else "range_clamped" if clamped else "ok"
         return ToolResult(status="ok" if reason == "ok" else "partial", reason=reason, coverage=cov, permissions=gate,

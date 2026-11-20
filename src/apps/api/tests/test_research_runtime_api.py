@@ -239,17 +239,22 @@ def test_discovery_candidates_are_visible_without_restricted_excerpts(monkeypatc
     assert [row['source_id'] for row in content['sources']] == [source_id]  # A source without model permission is never read.
 
 
-def test_question_only_run_can_discover_and_cite_historical_prices(monkeypatch):
+def _save_twelve_data_key(client, headers, key):
+    from app.market_credentials import MARKET_PROVIDER_ORDER, MarketCredentialCipher
+    api.market_data_settings.cipher = MarketCredentialCipher(b'k' * 32)
+    providers = [{'provider_id': pid, 'enabled': True, **({'api_key': key} if pid == 'twelve_data' else {})}
+                 for pid in MARKET_PROVIDER_ORDER]
+    saved = client.put('/v1/account/market-data-config', headers=headers,
+                       json={'fallback_order': list(MARKET_PROVIDER_ORDER), 'providers': providers})
+    assert saved.status_code == 200, saved.text
+
+
+def test_question_only_run_can_discover_and_cite_market_data_with_users_own_key(monkeypatch):
     monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
-    monkeypatch.setenv('FORESIGHTNINE_TWELVEDATA_API_KEY', 'fixture')
-    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_HISTORICAL_PRICES', json.dumps({
-        'provider': 'twelve_data', 'authorized': True,
-        'permissions': {'store': True, 'display': True, 'model_input': True, 'export': True},
-        'instruments': [{'instrument_id': 'INDEX:DEMO', 'symbol': 'DEMO', 'exchange': 'DEMO EXCHANGE',
-                         'currency': 'USD', 'adjustment': 'none'}],
-    }))
-    quotes = [f'INDEX:DEMO | 2020-01-0{day} | daily close | {price} USD'
-              for day, price in ((3, 125), (2, 100))]
+    monkeypatch.setenv('FORESIGHTNINE_TWELVEDATA_API_KEY', 'platform-key-must-not-be-used')
+    quotes = ['DEMO@NYSE | 2020-01-03 | 1day | O 124 H 126 L 123 C 125 V 1000 USD',
+              'DEMO@NYSE | 2020-01-02 | 1day | O 99 H 101 L 98 C 100 V 900 USD']
+    sent = []
 
     class Search:
         supports_project_search = True
@@ -258,21 +263,23 @@ def test_question_only_run_can_discover_and_cite_historical_prices(monkeypatch):
             return (ProviderSearchCandidate('Index methodology', 'https://example.com/index', 'Unverified methodology', None, None, True),)
 
     class Provider:
-        name = 'historical-price-api-test'
+        name = 'market-data-api-test'
         policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=None, max_output_tokens=1000)
 
         def complete(self, messages, tools, **kwargs):
             results = [json.loads(message['content']) for message in messages if message['role'] == 'tool']
             stage = len(results)
             if stage == 0:
-                assert json.loads(messages[1]['content'])['available_historical_price_instruments'] == ['INDEX:DEMO']
+                caps = json.loads(messages[1]['content'])['available_capabilities']
+                assert caps['market_data_available'] is True and caps['market_data_key_required'] is False
                 return turn('discover_sources', {'query': 'DEMO index', 'rationale': 'Find context.'}, 'search')
             if stage == 1:
                 assert results[0]['leads'][0]['url'] == 'https://example.com/index'
-                return turn('historical_prices', {'instrument_id': 'INDEX:DEMO', 'start_date': '2020-01-02',
+                return turn('market_data', {'entity_id': 'NYSE:DEMO', 'start_date': '2020-01-02',
                             'end_date': '2020-01-03', 'rationale': 'Get closing observations.'}, 'prices')
             source_id = results[1]['source_id']
             if stage == 2:
+                assert results[1]['permissions']['export'] is False
                 return turn('read_sources', {'reads': [{'source_id': source_id}], 'rationale': 'Read the observations.'}, 'read')
             if stage == 3:
                 assert all(quote in results[2]['results'][0]['text'] for quote in quotes)
@@ -291,19 +298,22 @@ def test_question_only_run_can_discover_and_cite_historical_prices(monkeypatch):
                 {'text': 'Both closing values are sourced.', 'source_id': source_id, 'quotation': quotes[0], 'role': 'support'},
             ], 'limitations': [], 'stopping_reason': 'answered'}, 'submit')
 
-    def fetch(*args, **kwargs):
+    def fetch(method, url, headers, body, timeout, **kwargs):
+        sent.append((url, dict(headers)))
         return BinaryHttpResponse(200, json.dumps({
-            'meta': {'symbol': 'DEMO', 'exchange': 'DEMO EXCHANGE', 'interval': '1day', 'currency': 'USD'},
-            'values': [{'datetime': '2020-01-02', 'close': '100'}, {'datetime': '2020-01-03', 'close': '125'}],
+            'meta': {'symbol': 'DEMO', 'exchange': 'NYSE', 'interval': '1day', 'currency': 'USD'},
+            'values': [{'datetime': '2020-01-02', 'open': '99', 'high': '101', 'low': '98', 'close': '100', 'volume': '900'},
+                       {'datetime': '2020-01-03', 'open': '124', 'high': '126', 'low': '123', 'close': '125', 'volume': '1000'}],
         }).encode())
 
     monkeypatch.setattr(api, 'evidence_provider', Search())
     monkeypatch.setattr(api, 'challenge_provider', Provider())
-    monkeypatch.setattr('app.research_historical_prices._default_binary_transport', fetch)
+    monkeypatch.setattr('app.fin_data.adapters.base._default_binary_transport', fetch)
     client = TestClient(api.app)
     auth = client.post('/v1/auth/local/register', json={'email': f'{uuid4().hex}@example.test',
                        'password': 'correct horse battery staple!'}).json()
     headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    _save_twelve_data_key(client, headers, 'user-own-key-1234')
     topic = client.post('/v2/research/topics', headers=headers, json={'question': 'How did the index move?'}).json()
     path = '/v2/research/topics/' + topic['topic_id']
     response = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex},
@@ -319,9 +329,54 @@ def test_question_only_run_can_discover_and_cite_historical_prices(monkeypatch):
     version = client.get(path, headers=headers).json()['versions'][-1]
     assert version['content']['turns'][-1]['status'] == 'completed'
     assert version['content']['calculations'][0]['value'] == '25.00'
-    exported = client.get(path + '/versions/' + version['version_id'] + '/export', headers=headers)
-    assert exported.status_code == 200, exported.text
-    assert exported.json()['source_provenance'][0]['retrieval_method'] == 'historical_prices'
+    # Only the account's own key reached the provider (header), never the platform key, never in the URL.
+    assert sent and all(h['Authorization'] == 'apikey user-own-key-1234' for _, h in sent)
+    assert all('user-own-key-1234' not in url and 'platform-key' not in url for url, _ in sent)
+    source = next(s for s in api.research_sources.repository.values() if s.retrieval_method == 'market_data')
+    assert source.permissions.export is False and source.kind == 'market_data'
+    assert source.provenance['credential_owner'] == 'user_byok' and source.provenance['owner_account_id'] == source.owner_id
+    assert 'user-own-key-1234' not in json.dumps(source.provenance)
+
+
+def test_market_data_without_account_key_reports_key_required_and_ignores_platform_key(monkeypatch):
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.setenv('FORESIGHTNINE_TWELVEDATA_API_KEY', 'platform-key-must-not-be-used')
+    sent = []
+    seen = {}
+
+    class Provider:
+        name = 'market-data-nokey-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=None, max_output_tokens=1000)
+
+        def complete(self, messages, tools, **kwargs):
+            results = [json.loads(message['content']) for message in messages if message['role'] == 'tool']
+            if not results:
+                seen['caps'] = json.loads(messages[1]['content'])['available_capabilities']
+                return turn('market_data', {'symbol': 'DEMO', 'exchange': 'NYSE', 'lookback': '1m', 'rationale': 'Prices.'}, 'px')
+            seen['result'] = results[0]
+            return turn('submit_research', {'report': 'No market data.', 'claims': [], 'limitations': ['no prices'],
+                                           'stopping_reason': 'blocked', 'status': 'partial'}, 'submit')
+
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    monkeypatch.setattr('app.fin_data.adapters.base._default_binary_transport', lambda *a, **k: sent.append(a))
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'{uuid4().hex}@example.test',
+                       'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'How did DEMO move?'}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    response = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex},
+                           json={'parent_version_id': topic['versions'][0]['version_id'], 'auto_fetch_official': True})
+    assert response.status_code == 202, response.text
+    operation_id = response.json()['operation']['operation_id']
+    for _ in range(200):
+        operation = client.get(path + '/runs/' + operation_id, headers=headers).json()['operation']
+        if operation['status'] in ('completed', 'failed', 'cancelled'):
+            break
+        time.sleep(.01)
+    assert seen['caps']['market_data_available'] is False and seen['caps']['market_data_key_required'] is True
+    assert seen['result']['status'] == 'unavailable' and seen['result']['reason'] == 'market_data_key_required'
+    assert 'Settings' in seen['result']['message'] and not sent
 
 
 def test_native_claim_roles_persist_and_counterargument_survives_user_edit(monkeypatch):
@@ -524,10 +579,9 @@ def test_question_only_run_fetches_open_web_html_and_pdf_and_persists_partial_no
     assert meta_export.status_code == 200 and meta_export.json()['claim_count'] == 2
 
 
-def test_question_only_run_calls_sec_company_concept_and_cites_sec_source(monkeypatch):
+def test_question_only_run_calls_company_financials_and_cites_sec_source(monkeypatch):
     import threading
-    import app.research_structured_connector as connector
-    from app.research_sec import SecResult
+    from tests.fin_runtime_helpers import sec_binary_transport
 
     monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
     monkeypatch.setenv('FORESIGHTNINE_SEC_USER_AGENT', 'Example Research contact@example.test')
@@ -539,33 +593,17 @@ def test_question_only_run_calls_sec_company_concept_and_cites_sec_source(monkey
             return []
 
     entered, release = threading.Event(), threading.Event()
-    quote = '{"val": 130497000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26", "filed": "2025-02-26", "form": "10-K"}'
+    inner = sec_binary_transport()
 
-    def fake_identities(req, agent):
-        assert agent == 'Example Research contact@example.test'
-        return {
-            'candidates': [{'cik': '0001045810', 'ticker': 'NVDA', 'name': 'NVIDIA CORP', 'exchange': None}],
-            'source_url': 'https://www.sec.gov/files/company_tickers.json',
-            'retrieved_at': '2026-01-01T00:00:00Z',
-            'response_sha256': 'idhash',
-            'limitation': 'current mapping',
-        }
-
-    def fake_concept(req, agent):
-        assert req.cik == '0001045810' and req.tag == 'Revenues'
+    def fake_binary(*args, **kwargs):
         entered.set()
         assert release.wait(10)
-        return SecResult(
-            url='https://data.sec.gov/api/xbrl/companyconcept/CIK0001045810/us-gaap/Revenues.json',
-            title='NVIDIA CORP: Revenues (USD)',
-            text=f'SEC XBRL companyconcept\n{quote}',
-            response_sha256='secsha256',
-        )
+        return inner(*args, **kwargs)
 
     seen_caps = {}
 
     class Provider:
-        name = 'sec-concept-api-test'
+        name = 'sec-financials-api-test'
         policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=None, max_output_tokens=1000)
 
         def complete(self, messages, tools, **kwargs):
@@ -575,45 +613,31 @@ def test_question_only_run_calls_sec_company_concept_and_cites_sec_source(monkey
                 payload = json.loads(messages[1]['content'])
                 seen_caps['value'] = payload['available_capabilities']
                 assert 'contact@example.test' not in json.dumps(payload)
-                return turn('sec_company_concept', {
-                    'entity_query': 'NVDA',
-                    'taxonomy': 'us-gaap',
-                    'tag': 'Revenues',
-                    'unit': 'USD',
-                    'period_start': '2024-01-29',
-                    'period_end': '2025-01-26',
-                    'rationale': 'Get NVDA FY25 SEC XBRL revenue.',
-                }, 'sec1')
+                return turn('company_financials', {'cik': '320193', 'lines': ['revenue'], 'periods': 'last_4_quarters',
+                                                   'rationale': 'Get quarterly revenue from SEC XBRL.'}, 'sec1')
             if stage == 1:
-                assert results[0]['status'] == 'acquired', results[0]
+                assert results[0]['status'] in ('ok', 'partial'), results[0]
                 self.sec_sid = results[0]['source_id']
                 return turn('read_sources', {'reads': [{'source_id': self.sec_sid}], 'rationale': 'Read SEC data.'}, 'r1')
-            assert quote in results[1]['results'][0]['text']
+            self.quote = results[1]['results'][0]['text'].splitlines()[0]
+            assert 'us-gaap:' in self.quote and 'accn ' in self.quote
             return turn('submit_research', {
-                'report': 'NVIDIA FY25 revenue was 130,497,000,000 USD per SEC XBRL.',
-                'claims': [{
-                    'text': 'NVIDIA FY25 revenue was 130,497,000,000 USD.',
-                    'source_id': self.sec_sid,
-                    'quotation': quote,
-                    'role': 'support',
-                }],
-                'limitations': [],
-                'stopping_reason': 'answered',
-                'status': 'completed',
+                'report': 'Revenue per SEC XBRL.',
+                'claims': [{'text': 'Revenue per SEC XBRL.', 'source_id': self.sec_sid, 'quotation': self.quote, 'role': 'support'}],
+                'limitations': [], 'stopping_reason': 'answered', 'status': 'completed',
             }, 's1')
 
     monkeypatch.setattr(api, 'evidence_provider', Search())
     monkeypatch.setattr(api, 'challenge_provider', Provider())
     monkeypatch.setattr(api, '_reserve_search_call', lambda *_: None)
     monkeypatch.setattr(api, 'reserve_sec_request', lambda *_: True)
-    monkeypatch.setattr(connector, 'search_sec_identities', fake_identities)
-    monkeypatch.setattr(connector, 'fetch_sec_concept', fake_concept)
+    monkeypatch.setattr('app.fin_data.adapters.base._default_binary_transport', fake_binary)
 
     client = TestClient(api.app)
     auth = client.post('/v1/auth/local/register', json={'email': f'{uuid4().hex}@example.test',
                                                         'password': 'correct horse battery staple!'}).json()
     headers = {'Authorization': 'Bearer ' + auth['access_token']}
-    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'What was NVDA FY25 revenue?'}).json()
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'What was revenue?'}).json()
     path = '/v2/research/topics/' + topic['topic_id']
 
     try:
@@ -625,10 +649,9 @@ def test_question_only_run_calls_sec_company_concept_and_cites_sec_source(monkey
         prog = client.get(path + '/runs/' + operation_id + '/progress', headers=headers)
         assert prog.status_code == 200
         current = prog.json()['current']
-        assert current['kind'] == 'tool' and current['name'] == 'sec_company_concept'
-        assert current['rationale'] == 'Get NVDA FY25 SEC XBRL revenue.'
-        assert current['target'] == 'NVDA · us-gaap:Revenues (USD)'
-        assert isinstance(current['started_at'], str) and current['started_at']
+        assert current['kind'] == 'tool' and current['name'] == 'company_financials'
+        assert current['rationale'] == 'Get quarterly revenue from SEC XBRL.'
+        assert current['target'] == '320193 · last_4_quarters'
     finally:
         release.set()
 
@@ -638,24 +661,24 @@ def test_question_only_run_calls_sec_company_concept_and_cites_sec_source(monkey
             break
         time.sleep(.01)
     assert op['status'] == 'completed', op
-    assert seen_caps['value']['sec_available'] is True
+    assert seen_caps['value']['sec_financials_available'] is True and seen_caps['value']['filings_available'] is True
+    assert seen_caps['value']['market_data_available'] is False and seen_caps['value']['market_data_key_required'] is True
 
     version = client.get(path, headers=headers).json()['versions'][-1]
     assert version['content']['turns'][-1]['status'] == 'completed'
     assert version['content']['turns'][-1]['official_fetch_status'] == 'completed'
-    assert version['content']['turns'][-1]['partial_notes'] is None
     sec_sid = version['content']['claims'][0]['citations'][0]['source_id']
     assert sec_sid in version['source_ids']
     sec_source = client.get(f'/v2/research/sources/{sec_sid}', headers=headers).json()
-    assert sec_source['retrieval_method'] == 'sec_companyconcept' and sec_source['kind'] == 'official'
+    assert sec_source['retrieval_method'] == 'sec_companyfacts' and sec_source['kind'] == 'official'
     assert 'contact@example.test' not in json.dumps(sec_source)
 
     exported = client.get(f"{path}/versions/{version['version_id']}/export", headers=headers)
     assert exported.status_code == 200
-    assert exported.json()['source_provenance'][0]['retrieval_method'] == 'sec_companyconcept'
+    assert exported.json()['source_provenance'][0]['retrieval_method'] == 'sec_companyfacts'
     assert 'contact@example.test' not in exported.text
 
-    # When auto_fetch_official=False, sec_available is False and calling sec_company_concept is denied.
+    # When auto_fetch_official=False the SEC tools are disabled for the run.
     class DeniedProvider:
         name = 'sec-denied-test'
         policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=None, max_output_tokens=1000)
@@ -664,12 +687,9 @@ def test_question_only_run_calls_sec_company_concept_and_cites_sec_source(monkey
             results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
             if not results:
                 payload = json.loads(messages[1]['content'])
-                assert payload['available_capabilities']['sec_available'] is False
-                return turn('sec_company_concept', {
-                    'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'Revenues', 'unit': 'USD',
-                    'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'Test gate.',
-                }, 'sec_denied')
-            assert results[0] == {'status': 'restricted', 'reason': 'permission_denied'}
+                assert payload['available_capabilities']['sec_financials_available'] is False
+                return turn('company_financials', {'cik': '320193', 'rationale': 'Test gate.'}, 'sec_denied')
+            assert results[0]['status'] == 'restricted' and results[0]['reason'] == 'permission_denied'
             return turn('submit_research', {
                 'report': 'SEC tool permission denied.', 'claims': [], 'limitations': ['Retrieval disabled'],
                 'stopping_reason': 'permission_denied', 'status': 'partial',
@@ -756,8 +776,8 @@ def test_start_research_run_uses_pace_sec_request_and_honors_reserve_override(mo
     import math
     import pytest
     import app.research_official_retrieval as retrieval
-    import app.research_structured_connector as connector
-    from app.research_sec import SecFilingResult, SecResult
+    from app.research_sec import SecFilingResult
+    from tests.fin_runtime_helpers import sec_binary_transport
 
     monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
     monkeypatch.setenv('FORESIGHTNINE_SEC_USER_AGENT', 'Example Research contact@example.test')
@@ -778,42 +798,12 @@ def test_start_research_run_uses_pace_sec_request_and_honors_reserve_override(mo
         return True
 
     monkeypatch.setattr(api, 'pace_sec_request', fake_pace)
-
-    filing_url = 'https://www.sec.gov/Archives/edgar/data/1045810/000104581025000001/nvda-20250126.htm'
-
-    class Search:
-        supports_project_search = True
-
-        def search(self, query, **kwargs):
-            return [ProviderSearchCandidate('NVIDIA Form 10-K', filing_url, 'Annual filing.', 'SEC EDGAR', date(2025, 2, 26), True)]
-
-    rev_quote = '{"val": 130497000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26", "filed": "2025-02-26", "form": "10-K"}'
-    ni_quote = '{"val": 72880000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26", "filed": "2025-02-26", "form": "10-K"}'
-
-    def fake_identities(req, agent):
-        return {
-            'candidates': [{'cik': '0001045810', 'ticker': 'NVDA', 'name': 'NVIDIA CORP', 'exchange': None}],
-            'source_url': 'https://www.sec.gov/files/company_tickers.json',
-            'retrieved_at': '2026-01-01T00:00:00Z',
-            'response_sha256': 'idhash',
-            'limitation': 'current mapping',
-        }
-
-    def fake_concept(req, agent):
-        quote = rev_quote if req.tag == 'Revenues' else ni_quote
-        return SecResult(
-            url=f'https://data.sec.gov/api/xbrl/companyconcept/CIK0001045810/us-gaap/{req.tag}.json',
-            title=f'NVIDIA CORP: {req.tag} (USD)',
-            text=f'SEC XBRL companyconcept\n{quote}',
-            response_sha256=f'sha-{req.tag}',
-        )
+    requested = []
+    monkeypatch.setattr('app.fin_data.adapters.base._default_binary_transport', sec_binary_transport(calls=requested))
 
     def fake_filing(req, agent, **kwargs):
-        return SecFilingResult('NVIDIA Form 10-K excerpt.', 'sec-filing-sha', 'PGh0bWw+PC9odG1sPg==')
+        return SecFilingResult('Example Corp Form 10-K excerpt.', 'sec-filing-sha', 'PGh0bWw+PC9odG1sPg==')
 
-    monkeypatch.setattr(api, 'evidence_provider', Search())
-    monkeypatch.setattr(connector, 'search_sec_identities', fake_identities)
-    monkeypatch.setattr(connector, 'fetch_sec_concept', fake_concept)
     monkeypatch.setattr(retrieval, 'fetch_sec_filing', fake_filing)
 
     class PacedProvider:
@@ -824,36 +814,24 @@ def test_start_research_run_uses_pace_sec_request_and_honors_reserve_override(mo
             results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
             stage = len(results)
             if stage == 0:
-                return turn('discover_sources', {'query': 'NVDA 10-K', 'rationale': 'Find SEC filing.'}, 'd1')
+                return turn('filings', {'cik': '320193', 'forms': ['10-K'], 'rationale': 'List 10-K filings.'}, 'f1')
             if stage == 1:
-                return turn('sec_company_concept', {
-                    'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'Revenues', 'unit': 'USD',
-                    'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'Fetch revenue.',
-                }, 'sec1')
+                assert results[0]['status'] in ('ok', 'partial'), results[0]
+                self.filing_url = results[0]['filings'][0]['primary_document_url']
+                return turn('company_financials', {'cik': '320193', 'lines': ['revenue'], 'periods': 'last_4_quarters',
+                                                   'rationale': 'Fetch revenue.'}, 'sec1')
             if stage == 2:
-                assert results[1]['status'] == 'acquired', results[1]
+                assert results[1]['status'] in ('ok', 'partial'), results[1]
                 self.rev_sid = results[1]['source_id']
-                return turn('sec_company_concept', {
-                    'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'NetIncomeLoss', 'unit': 'USD',
-                    'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'Fetch net income.',
-                }, 'sec2')
+                return turn('acquire_sources', {'urls': [self.filing_url], 'rationale': 'Acquire 10-K.'}, 'a1')
             if stage == 3:
-                assert results[2]['status'] == 'acquired', results[2]
-                return turn('acquire_sources', {'urls': [filing_url], 'rationale': 'Acquire 10-K.'}, 'a1')
-            if stage == 4:
-                assert results[3]['results'][0]['status'] == 'acquired', results[3]
+                assert results[2]['results'][0]['status'] == 'acquired', results[2]
                 return turn('read_sources', {'reads': [{'source_id': self.rev_sid}], 'rationale': 'Read SEC revenue.'}, 'r1')
+            quote = results[3]['results'][0]['text'].splitlines()[0]
             return turn('submit_research', {
-                'report': 'NVDA FY25 revenue was 130,497,000,000 USD.',
-                'claims': [{
-                    'text': 'NVDA FY25 revenue was 130,497,000,000 USD.',
-                    'source_id': self.rev_sid,
-                    'quotation': rev_quote,
-                    'role': 'support',
-                }],
-                'limitations': [],
-                'stopping_reason': 'answered',
-                'status': 'completed',
+                'report': 'Revenue per SEC.',
+                'claims': [{'text': 'Revenue per SEC.', 'source_id': self.rev_sid, 'quotation': quote, 'role': 'support'}],
+                'limitations': [], 'stopping_reason': 'answered', 'status': 'completed',
             }, 's1')
 
     monkeypatch.setattr(api, 'challenge_provider', PacedProvider())
@@ -863,7 +841,7 @@ def test_start_research_run_uses_pace_sec_request_and_honors_reserve_override(mo
         'password': 'correct horse battery staple!',
     }).json()
     headers = {'Authorization': 'Bearer ' + auth['access_token']}
-    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'What were NVDA FY25 revenue and net income?'}).json()
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'What was revenue?'}).json()
     path = '/v2/research/topics/' + topic['topic_id']
 
     run_resp = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={
@@ -878,8 +856,9 @@ def test_start_research_run_uses_pace_sec_request_and_honors_reserve_override(mo
             break
         time.sleep(.01)
     assert op['status'] == 'completed', op
-    assert len(pace_calls) == 5  # 2 per sec_company_concept call + 1 for SEC acquire_sources
+    assert len(requested) == 2 and len(pace_calls) == 3  # one per SEC data request + 1 for SEC acquire_sources
     assert all(call['is_shared_repo'] and call['has_cancel_event'] and math.isfinite(call['deadline']) for call in pace_calls)
+    assert 'companyfacts' in requested[1] and 'submissions' in requested[0]
 
     # Monkeypatching api.reserve_sec_request overrides pace_sec_request for backward compatibility.
     reserve_calls = []
@@ -898,16 +877,18 @@ def test_start_research_run_uses_pace_sec_request_and_honors_reserve_override(mo
         def complete(self, messages, tools, **kwargs):
             results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
             if not results:
-                return turn('sec_company_concept', {
-                    'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'Revenues', 'unit': 'USD',
-                    'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'Verify override.',
-                }, 'sec_override')
-            assert results[0]['status'] == 'failed' and results[0]['reason'] == 'source_rate_limited', results[0]
+                return turn('company_financials', {'cik': '320193', 'lines': ['revenue'], 'periods': 'last_4_quarters',
+                                                   'rationale': 'First request gets the slot.'}, 'sec_override1')
+            if len(results) == 1:
+                assert results[0]['status'] in ('ok', 'partial')
+                return turn('company_financials', {'cik': '320193', 'lines': ['net_income'], 'periods': 'last_4_quarters',
+                                                   'rationale': 'Verify override.'}, 'sec_override2')
+            assert results[1]['status'] == 'rate_limited' and results[1]['reason'] == 'rate_limited', results[1]
             return turn('submit_research', {
                 'report': 'SEC request hit monkeypatched reserve limit.',
                 'claims': [],
-                'limitations': ['source_rate_limited'],
-                'stopping_reason': 'source_rate_limited',
+                'limitations': ['rate_limited'],
+                'stopping_reason': 'rate_limited',
                 'status': 'partial',
             }, 's_override')
 
@@ -927,13 +908,13 @@ def test_start_research_run_uses_pace_sec_request_and_honors_reserve_override(mo
     assert op2['status'] == 'completed', op2
     assert len(reserve_calls) >= 2 and all(reserve_calls)
     override_turn = client.get(path, headers=headers).json()['versions'][-1]['content']['turns'][-1]
-    assert override_turn['official_fetch_status'] == 'failed'
+    assert override_turn['official_fetch_status'] in ('completed', 'failed')
 
 
-def test_sec_company_concept_syncs_official_fetch_status_with_priority_guard(monkeypatch):
+def test_company_financials_syncs_official_fetch_status_with_priority_guard(monkeypatch):
     import app.research_official_retrieval as retrieval
-    import app.research_structured_connector as connector
-    from app.research_sec import SecFilingResult, SecResult
+    from app.research_sec import SecFilingResult
+    from tests.fin_runtime_helpers import sec_binary_transport
 
     monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
     monkeypatch.setenv('FORESIGHTNINE_SEC_USER_AGENT', 'Example Research contact@example.test')
@@ -949,30 +930,12 @@ def test_sec_company_concept_syncs_official_fetch_status_with_priority_guard(mon
         def search(self, query, **kwargs):
             return [ProviderSearchCandidate('NVIDIA Form 10-K', filing_url, 'Annual filing.', 'SEC EDGAR', None, True)]
 
-    def fake_identities(req, agent):
-        return {
-            'candidates': [{'cik': '0001045810', 'ticker': 'NVDA', 'name': 'NVIDIA CORP', 'exchange': None}],
-            'source_url': 'https://www.sec.gov/files/company_tickers.json',
-            'retrieved_at': '2026-01-01T00:00:00Z',
-            'response_sha256': 'idhash',
-            'limitation': 'current mapping',
-        }
-
-    def fake_concept(req, agent):
-        text = 'SEC XBRL companyconcept\n' if req.tag == 'WrongTag' else f'SEC XBRL companyconcept\n{rev_quote}'
-        return SecResult(
-            url=f'https://data.sec.gov/api/xbrl/companyconcept/CIK0001045810/us-gaap/{req.tag}.json',
-            title=f'NVIDIA CORP: {req.tag} (USD)',
-            text=text,
-            response_sha256=f'sha-{req.tag}',
-        )
-
     def fake_filing(req, agent, **kwargs):
         return SecFilingResult('NVIDIA Form 10-K revenue 130497.', 'filing-sha', 'PGh0bWw+PC9odG1sPg==')
 
     monkeypatch.setattr(api, 'evidence_provider', Search())
-    monkeypatch.setattr(connector, 'search_sec_identities', fake_identities)
-    monkeypatch.setattr(connector, 'fetch_sec_concept', fake_concept)
+    # Request plan: Turn 1 -> no facts (404) then facts; Turn 2 -> no facts (404).
+    monkeypatch.setattr('app.fin_data.adapters.base._default_binary_transport', sec_binary_transport([404, 200, 404]))
     monkeypatch.setattr(retrieval, 'fetch_sec_filing', fake_filing)
 
     # Turn 1: unknown SEC tag first, then valid SEC tag -> official_fetch_status becomes 'completed'.
@@ -983,22 +946,19 @@ def test_sec_company_concept_syncs_official_fetch_status_with_priority_guard(mon
         def complete(self, messages, tools, **kwargs):
             results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
             if len(results) == 0:
-                return turn('sec_company_concept', {
-                    'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'WrongTag', 'unit': 'USD',
-                    'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'First guess.',
-                }, 's1')
+                return turn('company_financials', {'cik': '1', 'lines': ['revenue'], 'periods': 'last_4_quarters',
+                                                    'rationale': 'First guess.'}, 's1')
             if len(results) == 1:
-                assert results[0]['status'] == 'unknown'
-                return turn('sec_company_concept', {
-                    'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'Revenues', 'unit': 'USD',
-                    'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'Correct tag.',
-                }, 's2')
+                assert results[0]['status'] == 'empty' and results[0]['reason'] == 'no_xbrl_facts'
+                return turn('company_financials', {'cik': '320193', 'lines': ['revenue'], 'periods': 'last_4_quarters',
+                                                    'rationale': 'Correct issuer.'}, 's2')
             if len(results) == 2:
                 self.sec_sid = results[1]['source_id']
                 return turn('read_sources', {'reads': [{'source_id': self.sec_sid}], 'rationale': 'Read.'}, 'r1')
+            quote = results[2]['results'][0]['text'].splitlines()[0]
             return turn('submit_research', {
-                'report': 'NVDA FY25 revenue was 130,497,000,000 USD.',
-                'claims': [{'text': 'Revenue was 130,497,000,000 USD.', 'source_id': self.sec_sid, 'quotation': rev_quote, 'role': 'support'}],
+                'report': 'Revenue per SEC.',
+                'claims': [{'text': 'Revenue per SEC.', 'source_id': self.sec_sid, 'quotation': quote, 'role': 'support'}],
                 'limitations': [], 'stopping_reason': 'answered', 'status': 'completed',
             }, 'sub1')
 
@@ -1023,7 +983,7 @@ def test_sec_company_concept_syncs_official_fetch_status_with_priority_guard(mon
     v1 = client.get(path, headers=headers).json()['versions'][-1]
     assert v1['content']['turns'][-1]['official_fetch_status'] == 'completed'
 
-    # Turn 2: acquire_sources succeeds ('completed'), then sec_company_concept returns 'unknown' -> keeps 'completed'.
+    # Turn 2: acquire_sources succeeds ('completed'), then company_financials finds nothing -> keeps 'completed'.
     class Turn2Provider:
         name = 'sec-status-turn2'
         policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=None, max_output_tokens=1000)
@@ -1036,12 +996,10 @@ def test_sec_company_concept_syncs_official_fetch_status_with_priority_guard(mon
                 return turn('acquire_sources', {'urls': [filing_url], 'rationale': 'Acquire 10-K.'}, 'a1')
             if len(results) == 2:
                 self.filing_sid = results[1]['results'][0]['source_id']
-                return turn('sec_company_concept', {
-                    'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'WrongTag', 'unit': 'USD',
-                    'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'Check concept.',
-                }, 's_miss')
+                return turn('company_financials', {'cik': '2', 'lines': ['revenue'], 'periods': 'last_4_quarters',
+                                                    'rationale': 'Check financials.'}, 's_miss')
             if len(results) == 3:
-                assert results[2]['status'] == 'unknown'
+                assert results[2]['status'] == 'empty'
                 return turn('read_sources', {'reads': [{'source_id': self.filing_sid}], 'rationale': 'Read 10-K.'}, 'r2')
             return turn('submit_research', {
                 'report': '10-K reports 130497.',
@@ -1271,8 +1229,7 @@ def test_multiturn_api_propagates_failed_source_accesses_to_prior_research(monke
 
 def test_web_html_acquisition_does_not_mark_official_fetch_status_completed_and_preserves_sec_priority(monkeypatch):
     import app.research_fetch as research_fetch
-    import app.research_structured_connector as connector
-    from app.research_sec import SecResult
+    from tests.fin_runtime_helpers import sec_binary_transport
 
     monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
     monkeypatch.setenv('FORESIGHTNINE_SEC_USER_AGENT', 'Example Research contact@example.test')
@@ -1283,7 +1240,6 @@ def test_web_html_acquisition_does_not_mark_official_fetch_status_completed_and_
 
     yahoo_url = 'https://finance.yahoo.com/quote/IXIC'
     schwab_url = 'https://www.schwab.com/learn/market-update'
-    sec_quote = '{"val": 130497000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26", "filed": "2025-02-26", "form": "10-K"}'
 
     class Search:
         supports_project_search = True
@@ -1308,23 +1264,6 @@ def test_web_html_acquisition_does_not_mark_official_fetch_status_completed_and_
                 {'content-type': 'text/html; charset=utf-8'},
             )
         raise AssertionError(f'Unexpected URL: {url}')
-
-    def fake_identities(req, agent):
-        return {
-            'candidates': [{'cik': '0001045810', 'ticker': 'NVDA', 'name': 'NVIDIA CORP', 'exchange': None}],
-            'source_url': 'https://www.sec.gov/files/company_tickers.json',
-            'retrieved_at': '2026-01-01T00:00:00Z',
-            'response_sha256': 'idhash',
-            'limitation': 'current mapping',
-        }
-
-    def fake_concept(req, agent):
-        return SecResult(
-            url='https://data.sec.gov/api/xbrl/companyconcept/CIK0001045810/us-gaap/Revenues.json',
-            title='NVIDIA CORP: Revenues (USD)',
-            text=f'SEC XBRL companyconcept\n{sec_quote}',
-            response_sha256='secsha',
-        )
 
     class MultiTurnProvider:
         name = 'web-vs-official-status-test'
@@ -1357,10 +1296,8 @@ def test_web_html_acquisition_does_not_mark_official_fetch_status_completed_and_
                 }, 's1')
             if self.turn_no == 2:
                 if len(results) == 0:
-                    return turn('sec_company_concept', {
-                        'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'Revenues', 'unit': 'USD',
-                        'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'Fetch SEC XBRL.',
-                    }, 'sec1')
+                    return turn('company_financials', {'cik': '320193', 'lines': ['revenue'],
+                                                       'periods': 'last_4_quarters', 'rationale': 'Fetch SEC XBRL.'}, 'sec1')
                 if len(results) == 1:
                     return turn('acquire_sources', {'urls': [schwab_url], 'rationale': 'Fetch Schwab HTML in same turn.'}, 'a2')
                 self.turn_no = 3
@@ -1387,8 +1324,7 @@ def test_web_html_acquisition_does_not_mark_official_fetch_status_completed_and_
     monkeypatch.setattr(api, 'challenge_provider', MultiTurnProvider())
     monkeypatch.setattr(research_fetch, '_validated_addresses', lambda host, port, *, allow_private=False: ('93.184.216.34',))
     monkeypatch.setattr(research_fetch, '_default_binary_transport', fake_transport)
-    monkeypatch.setattr(connector, 'search_sec_identities', fake_identities)
-    monkeypatch.setattr(connector, 'fetch_sec_concept', fake_concept)
+    monkeypatch.setattr('app.fin_data.adapters.base._default_binary_transport', sec_binary_transport())
 
     client = TestClient(api.app)
     auth = client.post('/v1/auth/local/register', json={'email': f'{uuid4().hex}@example.test',

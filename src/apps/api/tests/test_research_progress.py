@@ -17,6 +17,7 @@ from app.research_sources import ResearchSource, SourcePermissions
 from app.research_structured_connector import StructuredQueryResult
 from app.research_topics import ReadRange, ResearchTurn, TurnUsage
 from tests.test_research_multiturn import (Q1, Q2, TEXT, Scripted, env, read_all, submit)  # noqa: F401
+from tests.fin_runtime_helpers import FakeTransport, json_reply, make_toolbox
 from tests.test_research_runtime import Model, context, source, turn
 
 PROGRESS_KEYS = {'operation_id', 'operation_status', 'turn', 'usage', 'current', 'interim', 'context_receipts', 'events', 'event_count',
@@ -264,29 +265,6 @@ def test_all_eight_tools_current_activity_and_summaries():
         content_sha256='h-acq',
         permissions=SourcePermissions(store=True, model_input=True, display=True, export=True),
     )
-    sec_source = ResearchSource(
-        source_id='s_sec',
-        owner_id='owner',
-        title='NVIDIA CORP: Revenues (USD)',
-        text='{"val": 130, "unit": "USD"}',
-        url='https://data.sec.gov/api/xbrl/companyconcept/CIK0001045810/us-gaap/Revenues.json',
-        kind='official',
-        obtained_at=datetime.now(timezone.utc),
-        content_sha256='h-sec',
-        retrieval_method='sec_companyconcept',
-        permissions=SourcePermissions(store=True, model_input=True, display=True, export=True),
-    )
-    price_source = ResearchSource(
-        source_id='s_px',
-        owner_id='owner',
-        title='NVDA daily close (2025-01-02 to 2025-01-10)',
-        text='NVDA | 2025-01-02 | daily close | 140.00 USD',
-        kind='market_data',
-        obtained_at=datetime.now(timezone.utc),
-        content_sha256='h-px',
-        retrieval_method='historical_prices',
-        permissions=SourcePermissions(store=True, model_input=True, display=True, export=True),
-    )
     leads = [
         {'url': 'https://www.sec.gov/Archives/edgar/data/1/a.htm?api_key=SECRET-KEY', 'title': 'NVDA 10-K Filing', 'published_at': '2025-02-26T00:00:00Z'},
         {'url': ir_url, 'title': 'NVIDIA Q4 Release', 'published_at': '2025-02-26T00:00:00Z'},
@@ -310,13 +288,12 @@ def test_all_eight_tools_current_activity_and_summaries():
             if self.step == 2:
                 return turn('acquire_sources', {'urls': [acq_url, ir_url], 'rationale': 'Fetch leads'}, 'c2')
             if self.step == 3:
-                return turn('sec_company_concept', {
-                    'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'Revenues', 'unit': 'USD',
-                    'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'Get SEC XBRL',
+                return turn('company_financials', {
+                    'cik': '1045810', 'lines': ['revenue'], 'periods': 'last_4_quarters', 'rationale': 'Get SEC XBRL',
                 }, 'c3')
             if self.step == 4:
-                return turn('historical_prices', {
-                    'instrument_id': 'NVDA', 'start_date': '2025-01-02', 'end_date': '2025-01-10', 'rationale': 'Get prices',
+                return turn('market_data', {
+                    'entity_id': 'SSE:ANT', 'start_date': '2026-11-16', 'end_date': '2026-11-19', 'rationale': 'Get prices',
                 }, 'c4')
             if self.step == 5:
                 return turn('read_sources', {'reads': [{'source_id': 's_acq', 'start': 0, 'end': len(acq_source.text)}], 'rationale': 'Read 10-K'}, 'c5')
@@ -361,8 +338,8 @@ def test_all_eight_tools_current_activity_and_summaries():
         context=context(),
         discover=lambda q: leads,
         acquire=acquire_fn,
-        sec_concept=lambda req: StructuredQueryResult('completed', source=sec_source, external_state='returned'),
-        historical_prices=lambda req: price_source,
+        fin_data=make_toolbox(twelve=FakeTransport(json_reply('td_time_series_ipo.json')),
+                              sec=FakeTransport(json_reply('sec_companyfacts.json'))),
         checkpoint=save_and_record,
     )
     assert outcome.status == 'completed'
@@ -374,8 +351,8 @@ def test_all_eight_tools_current_activity_and_summaries():
     assert tool_acts['discover_sources']['target'] == 'NVDA FY2025 revenue'
     assert tool_acts['discover_sources']['rationale'] == 'Find disclosures'
     assert tool_acts['acquire_sources']['target'] == 'www.sec.gov、nvidianews.nvidia.com'
-    assert tool_acts['sec_company_concept']['target'] == 'NVDA · us-gaap:Revenues (USD)'
-    assert tool_acts['historical_prices']['target'] == 'NVDA (2025-01-02 ~ 2025-01-10)'
+    assert tool_acts['company_financials']['target'] == '1045810 · last_4_quarters'
+    assert tool_acts['market_data']['target'] == 'SSE:ANT · 1day (2026-11-16 ~ 2026-11-19)'
     assert tool_acts['read_sources']['target'] == f'《NVDA 10-K Filing》0–{len(acq_source.text)} 字'
     assert tool_acts['record_facts']['target'] == '总收入、上年收入（2 项）'
     assert tool_acts['calculate_financials']['target'] == '增长率（1 项）'
@@ -405,24 +382,11 @@ def test_all_eight_tools_current_activity_and_summaries():
             {'title': 'NVIDIA Q4 Release', 'host': 'nvidianews.nvidia.com', 'status': 'failed', 'reason': 'http_forbidden_or_challenge', 'total_characters': None},
         ],
     }
-    assert tool_events['sec_company_concept']['summary'] == {
-        'kind': 'sec_company_concept',
-        'entity': 'NVDA',
-        'taxonomy': 'us-gaap',
-        'tag': 'Revenues',
-        'unit': 'USD',
-        'status': 'acquired',
-        'title': 'NVIDIA CORP: Revenues (USD)',
-        'total_characters': len(sec_source.text),
-    }
-    assert tool_events['historical_prices']['summary'] == {
-        'kind': 'historical_prices',
-        'instrument_id': 'NVDA',
-        'start_date': '2025-01-02',
-        'end_date': '2025-01-10',
-        'status': 'acquired',
-        'title': 'NVDA daily close (2025-01-02 to 2025-01-10)',
-    }
+    for tool, target in (('company_financials', '1045810 · last_4_quarters'),
+                         ('market_data', 'SSE:ANT · 1day (2026-11-16 ~ 2026-11-19)')):
+        summary = tool_events[tool]['summary']
+        assert summary['kind'] == 'data_tool' and summary['tool'] == tool and summary['target'] == target
+        assert summary['status'] in ('ok', 'partial') and summary['title'] and summary['total_characters'] > 0
     assert tool_events['read_sources']['summary'] == {
         'kind': 'read_sources',
         'read_count': 1,

@@ -263,6 +263,32 @@ def test_build_chart_calculations_combo_dual_axis():
     assert calc_pt.provenance.source_id == "s1"
 
 
+def test_market_data_bar_lines_bind_for_charts_with_exact_line_provenance():
+    text = (
+        "NVDA@NASDAQ | 2025-01-02 | 1day | O 104 H 106 L 103 C 105.00 V 1000 USD\n"
+        "NVDA@NASDAQ | 2025-01-03 | 1day | O 106 H 111 L 105 C 110.00 V 2000 USD\n"
+    )
+    src = _make_source("md-1", text, kind="market_data", provenance={"currency": "USD"})
+    req = CreateChartRequest.model_validate({
+        "chart_type": "price_series", "title": "NVDA close",
+        "y_axes": [{"id": "left", "label": "Price"}],
+        "series": [{"name": "NVDA", "mark": "line", "binding": {"kind": "historical_prices", "source_id": "md-1"}}],
+        "rationale": "Plot closes from the market_data source."})
+    chart = build_research_chart(req, facts=[], calculations=[], sources={"md-1": src})
+    pts = chart.series[0].points
+    assert [p.x for p in pts] == ["2025-01-02", "2025-01-03"] and [p.y for p in pts] == ["105", "110"]
+    assert chart.axes[0].currency == "USD"
+    first = pts[0].provenance
+    assert text[first.character_start:first.character_end] == text.splitlines()[0]
+    # A non-price line is still rejected: charts bind only to recognised source lines.
+    bad = _make_source("md-2", "NVDA@NASDAQ | 2025-01-02 | 1day | free text", kind="market_data", provenance={"currency": "USD"})
+    with pytest.raises(ChartBuildError):
+        build_research_chart(CreateChartRequest.model_validate({
+            "chart_type": "price_series", "title": "x", "y_axes": [{"id": "left", "label": "Price"}],
+            "series": [{"name": "N", "mark": "line", "binding": {"kind": "historical_prices", "source_id": "md-2"}}],
+            "rationale": "Should fail on a malformed line."}), facts=[], calculations=[], sources={"md-2": bad})
+
+
 def test_historical_prices_raw_and_normalize_base_100():
     usd_text = (
         "NVDA | 2025-01-03 | daily close | 110.00 USD\n"

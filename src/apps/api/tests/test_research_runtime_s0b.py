@@ -8,6 +8,7 @@ from app.research_runtime import (MIN_COMPACTION_SAVINGS_CHARS, TOOLS, SYSTEM, c
                                   run_research_agent)
 from app.research_sources import ResearchSource, SourcePermissions
 
+from tests.fin_runtime_helpers import FakeTransport, json_reply, make_toolbox, memory_persist
 from tests.test_research_runtime import Model, context, turn
 
 STOP = ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')
@@ -119,87 +120,74 @@ def test_outline_includes_page_map_summary_and_entry_pages():
     assert by_title['Item 1. Business'] == 2 and by_title['Item 7. Management Discussion'] == 4
 
 
-def price_loader(loads, fail_first=False):
-    from app.phase3 import ProviderFailure
-
-    def loader(req):
-        loads.append(req)
-        if fail_first and len(loads) == 1:
-            raise ProviderFailure('historical_price_transport_error', 'down', retryable=False)
-        return make_source('px', 'AAPL close 1.', kind='market_data', retrieval_method='historical_prices')
-    return loader
+def price_toolbox(fail_first=False, persist=None):
+    replies = ([OSError('down')] if fail_first else []) + [json_reply('td_time_series_ipo.json')]
+    transport = FakeTransport(*replies) if len(replies) > 1 else FakeTransport(replies[0])
+    return make_toolbox(twelve=transport, persist=persist), transport
 
 
-PRICE = {'instrument_id': 'AAPL', 'lookback': '1m', 'rationale': 'p'}
+PRICE = {'entity_id': 'SSE:ANT', 'lookback': '1m', 'rationale': 'p'}
 
 
 def test_successful_acquisition_repeat_in_next_turn_is_reused_without_a_second_fetch():
-    loads = []
-    m = Model([turn('historical_prices', PRICE, 'a'),
-               multi([('historical_prices', {**PRICE, 'rationale': 'again'}, 'b'),
-                      ('read_sources', {'reads': [{'source_id': 'px'}], 'rationale': 'read'}, 'e')]),
-               multi([('historical_prices', PRICE, 'c'),
-                      ('read_sources', {'reads': [{'source_id': 'px', 'end': 5}], 'rationale': 'read'}, 'd')]),
+    box, transport = price_toolbox()
+    m = Model([turn('market_data', PRICE, 'a'),
+               multi([('market_data', {**PRICE, 'rationale': 'again'}, 'b'),
+                      ('read_sources', {'reads': [{'source_id': 'src_1'}], 'rationale': 'read'}, 'e')]),
+               multi([('market_data', PRICE, 'c'),
+                      ('read_sources', {'reads': [{'source_id': 'src_1', 'end': 5}], 'rationale': 'read'}, 'd')]),
                STOP])
-    out = run(m, [], historical_prices=price_loader(loads), historical_instruments=('AAPL',), now=lambda: NOW)
-    assert len(loads) == 1
+    out = run(m, [], fin_data=box, now=lambda: NOW)
+    assert len(transport.calls) == 1
     second = tool_messages(m, 2)[-2]
-    assert second['status'] == 'duplicate_action' and second['reused'] is True and second['source_id'] == 'px'
+    assert second['status'] == 'duplicate_action' and second['reused'] is True and second['source_id'] == 'src_1'
     third = tool_messages(m, 3)[-2:]
     dup = next(r for r in third if r.get('status') == 'duplicate_action')
-    assert dup['reused'] is True and dup['source_ids'] == ['px'] and any('results' in r for r in third)
+    assert dup['reused'] is True and dup['source_ids'] == ['src_1'] and any('results' in r for r in third)
     assert out.reason != 'no_progress'
-    assert any(e.get('duplicate') == 'action' and e['name'] == 'historical_prices' for e in out.events)
+    assert any(e.get('duplicate') == 'action' and e['name'] == 'market_data' for e in out.events)
 
 
 def test_successful_acquisition_repeat_in_same_batch_is_reused():
-    loads = []
-    m = Model([multi([('historical_prices', PRICE, 'a'), ('historical_prices', {**PRICE, 'rationale': 'x'}, 'b')]), STOP])
-    run(m, [], historical_prices=price_loader(loads), historical_instruments=('AAPL',), now=lambda: NOW)
+    box, transport = price_toolbox()
+    m = Model([multi([('market_data', PRICE, 'a'), ('market_data', {**PRICE, 'rationale': 'x'}, 'b')]), STOP])
+    run(m, [], fin_data=box)
     first, second = tool_messages(m, 1)[-2:]
-    assert len(loads) == 1 and first['status'] == 'acquired'
-    assert second['status'] == 'duplicate_action' and second['reused'] is True and second['source_id'] == 'px'
+    assert len(transport.calls) == 1 and first['status'] == 'ok'
+    assert second['status'] == 'duplicate_action' and second['reused'] is True and second['source_id'] == 'src_1'
 
 
 def test_lookback_and_explicit_dates_with_same_resolved_range_are_duplicates():
-    loads = []
-    holder = {}
-    loader = price_loader(loads)
-
-    def capture(req):
-        holder['req'] = req
-        return loader(req)
-
-    m = Model([turn('historical_prices', PRICE, 'a'), STOP])
+    persist = memory_persist()
+    box, transport = price_toolbox(persist=persist)
+    m = Model([turn('market_data', PRICE, 'a'), STOP])
     state = []
-    run(m, [], historical_prices=capture, historical_instruments=('AAPL',), now=lambda: NOW,
-        checkpoint=lambda st: state.append(json.loads(json.dumps(st))))
-    req = holder['req']
-    explicit = {'instrument_id': 'AAPL', 'start_date': req.start_date.isoformat(), 'end_date': req.end_date.isoformat(),
-                'rationale': 'explicit'}
+    run(m, [], fin_data=box, checkpoint=lambda st: state.append(json.loads(json.dumps(st))))
+    url = transport.calls[0][0]
+    start = url.split('start_date=')[1].split('&')[0]
+    explicit = {'entity_id': 'SSE:ANT', 'start_date': start, 'end_date': '2026-11-19', 'rationale': 'explicit'}
     assert state[-1]['acquired_actions']  # persisted in checkpointed state
     # Resume from the persisted state: the explicit-date call resolves to the same range and is reused.
     saved = state[-1]
     saved['history'] = []
-    m2 = Model([multi([('historical_prices', explicit, 'z'),
-                       ('read_sources', {'reads': [{'source_id': 'px'}], 'rationale': 'r'}, 'y')]), STOP])
-    loads2 = []
-    out = run(m2, [make_source('px', 'AAPL close 1.', kind='market_data', retrieval_method='historical_prices')],
-              historical_prices=price_loader(loads2), historical_instruments=('AAPL',), now=lambda: NOW, initial_state=saved)
+    m2 = Model([multi([('market_data', explicit, 'z'),
+                       ('read_sources', {'reads': [{'source_id': 'src_1'}], 'rationale': 'r'}, 'y')]), STOP])
+    box2, transport2 = price_toolbox()
+    run(m2, list(persist.store), fin_data=box2, initial_state=saved)
     fb = tool_messages(m2, 1)[-2]
-    assert not loads2 and fb['status'] == 'duplicate_action' and fb['reused'] is True and fb['source_id'] == 'px'
+    assert not transport2.calls and fb['status'] == 'duplicate_action' and fb['reused'] is True and fb['source_id'] == 'src_1'
 
 
 def test_failed_acquisition_is_not_cached_and_repeat_follows_general_rules():
-    loads = []
-    other = {'instrument_id': 'AAPL', 'lookback': '3m', 'rationale': 'p'}
-    m = Model([turn('historical_prices', PRICE, 'a'),
-               multi([('historical_prices', PRICE, 'b'), ('historical_prices', other, 'c')]), STOP])
-    out = run(m, [], historical_prices=price_loader(loads, fail_first=True), historical_instruments=('AAPL',), now=lambda: NOW)
-    assert tool_messages(m, 1)[-1]['status'] == 'failed'
+    box, transport = price_toolbox(fail_first=True)
+    other = {'entity_id': 'SSE:ANT', 'lookback': '3m', 'rationale': 'p'}
+    m = Model([turn('market_data', PRICE, 'a'),
+               multi([('market_data', PRICE, 'b'), ('market_data', other, 'c')]), STOP])
+    out = run(m, [], fin_data=box)
+    assert tool_messages(m, 1)[-1]['status'] == 'unknown'
     rep, new = tool_messages(m, 2)[-2:]
     assert rep['status'] == 'duplicate_action' and 'reused' not in rep  # general signature rule, not the success cache
-    assert new['status'] == 'acquired' and len(loads) == 2
+    assert new['status'] == 'ok' and len(transport.calls) == 2
     assert out.reason != 'no_progress'
 
 
@@ -305,7 +293,7 @@ def test_compaction_with_tiny_saving_is_skipped_without_receipt():
 
 
 def test_record_facts_fills_currency_from_unit_for_structured_sources_only():
-    px = make_source('px', 'Close on 2026-11-19 was 100 USD.', kind='market_data', retrieval_method='historical_prices')
+    px = make_source('px', 'Close on 2026-11-19 was 100 USD.', kind='market_data', retrieval_method='market_data')
     plain = make_source('doc', 'Revenue was 100 USD.')
     def fact(sid, text):
         return {'label': 'close', 'value': 100, 'unit': 'USD', 'period': '2026-11-19', 'source_id': sid, 'quotation': text}

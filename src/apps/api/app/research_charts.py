@@ -93,6 +93,8 @@ _CURRENCY_WORDS: dict[str, str] = {
 }
 
 _MAX_HISTORICAL_PRICE_POINTS = 1000
+_BAR_INTERVALS = frozenset({"1min", "5min", "15min", "30min", "1h", "1day", "1week", "1month"})
+_BAR_LINE_RE = re.compile(r"^O (\S+) H (\S+) L (\S+) C (\S+) V (\S+)(?: ([A-Za-z]{3}))?$")
 _HIST_PRICE_LINE_RE = re.compile(
     r"^\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s+(.+?)\s*$"
 )
@@ -646,8 +648,9 @@ def _parse_historical_prices_source(
 ) -> list[_RawPoint]:
     if not source.text.strip():
         raise ChartBuildError(f"Historical price source {source.source_id!r} is empty.")
-    rows: list[tuple[date, Decimal, str, int, int]] = []
+    rows: list[tuple[str, Decimal, str, int, int]] = []
     offset = 0
+    prov_ccy = source.provenance.get("currency") if isinstance(source.provenance, dict) else None
     for raw_line in source.text.splitlines(keepends=True):
         line = raw_line.rstrip("\r\n")
         line_start = offset
@@ -656,6 +659,21 @@ def _parse_historical_prices_source(
         if not line.strip():
             continue
         parts = [part.strip() for part in line.split(" | ")]
+        bar = _BAR_LINE_RE.match(parts[3]) if len(parts) == 4 else None
+        if bar is not None and parts[2] in _BAR_INTERVALS and "@" in parts[0]:
+            # market_data format: <SYMBOL>@<EXCHANGE> | <ts> | <interval> | O .. H .. L .. C .. V .. <currency>
+            try:
+                datetime.fromisoformat(parts[1])
+            except ValueError as error:
+                raise ChartBuildError(f"Invalid timestamp {parts[1]!r} in market data source.") from error
+            close = _to_decimal(bar.group(4), what=f"{source.source_id} close")
+            if close <= 0:
+                raise ChartBuildError(f"Historical price close must be positive in {source.source_id!r}.")
+            ccy = bar.group(6) or (prov_ccy.strip().upper() if isinstance(prov_ccy, str) and prov_ccy.strip() else None)
+            if not ccy:
+                raise ChartBuildError(f"Market data source {source.source_id!r} has no currency.")
+            rows.append((parts[1], close, ccy, line_start, line_end))
+            continue
         if len(parts) != 4 or parts[2].casefold() != "daily close":
             raise ChartBuildError(f"Source {source.source_id!r} is not in historical price line format.")
         try:
@@ -669,7 +687,7 @@ def _parse_historical_prices_source(
         if close <= 0:
             raise ChartBuildError(f"Historical price close must be positive in {source.source_id!r}.")
         raw_unit = match.group(2).strip()
-        rows.append((session, close, raw_unit, line_start, line_end))
+        rows.append((session.isoformat(), close, raw_unit, line_start, line_end))
 
     if not rows:
         raise ChartBuildError(f"Historical price source {source.source_id!r} contains no observations.")
@@ -711,7 +729,7 @@ def _parse_historical_prices_source(
             val = close
         raw_points.append(
             _RawPoint(
-                x=session.isoformat(),
+                x=session,
                 value=val,
                 unit_spec=first_unit_spec,
                 provenance=ChartProvenance(

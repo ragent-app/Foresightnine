@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from datetime import datetime, timezone
 from decimal import Decimal
 from hashlib import sha256
-from typing import Any, Callable, Mapping, Protocol
+from typing import Any, BinaryIO, Callable, Mapping, Protocol
 
 from ...openai_compatible import _TransportFailure, _TransportTimeout, _default_binary_transport
 from ..models import Cost, Provenance, SuggestedAction, ToolResult
@@ -18,7 +19,19 @@ class HttpReply(Protocol):
 
 
 Transport = Callable[[str, str, Mapping[str, str], bytes, float], HttpReply]
+StreamTransport = Callable[[str, str, Mapping[str, str], bytes, float, BinaryIO], HttpReply]
 MAX_BYTES = 5_000_000
+
+
+def default_stream_transport(max_response_bytes: int | None = None, *, cancel_event=None) -> StreamTransport:
+    """Streaming GET into a caller supplied sink, bounded by the large-document cap (not the 5 MB in-memory cap)."""
+    from ...research_fetch import large_document_max_bytes
+    cap = max_response_bytes or large_document_max_bytes()
+
+    def send(method, url, headers, body, timeout, sink):
+        return _default_binary_transport(method, url, headers, body, timeout, max_response_bytes=cap,
+                                         sink=sink, cancel_event=cancel_event)
+    return send
 
 
 def default_transport(max_response_bytes: int = MAX_BYTES) -> Transport:
@@ -68,22 +81,43 @@ def request_json(*, provider: str, url: str, headers: Mapping[str, str], transpo
                  limiter, now_fn: Callable[[], datetime], credits: int | None = None,
                  unknown_on_transport_error: bool = False, secrets: tuple[str, ...] = (),
                  not_found_reason: str = "not_found",
-                 limiter_key: str | None = None) -> tuple[Any, Provenance, Cost]:
+                 limiter_key: str | None = None,
+                 stream_transport: StreamTransport | None = None) -> tuple[Any, Provenance, Cost]:
     """Rate-limit, GET and parse JSON; raise ``StopWith`` carrying the failure envelope."""
     decision = limiter.acquire(limiter_key or provider, 1)
     if not decision.allowed:
         raise StopWith(rate_limited_result(decision, provider))
     cost = Cost(provider_calls=1, credits=credits)
+    sink = tempfile.TemporaryFile() if stream_transport is not None else None
     try:
-        response = transport("GET", url, {**headers, "Accept": "application/json"}, b"", timeout)
+        if sink is not None:
+            response = stream_transport("GET", url, {**headers, "Accept": "application/json"}, b"", timeout, sink)
+        else:
+            response = transport("GET", url, {**headers, "Accept": "application/json"}, b"", timeout)
     except _TransportTimeout:
+        if sink is not None:
+            sink.close()
         status, retry = ("unknown", False) if unknown_on_transport_error else ("failed", True)
         raise StopWith(ToolResult.failure(status, "source_timeout", f"{provider} request timed out.",
                                           retryable=retry, cost=cost)) from None
-    except (_TransportFailure, OSError):
+    except (_TransportFailure, OSError) as error:
+        if sink is not None:
+            sink.close()
+        if str(error) == "response too large":
+            raise StopWith(ToolResult.failure("failed", "source_too_large",
+                                              f"{provider} response exceeded the size limit.", cost=cost)) from None
         status, retry = ("unknown", False) if unknown_on_transport_error else ("failed", True)
         raise StopWith(ToolResult.failure(status, "source_unavailable", f"{provider} request failed.",
                                           retryable=retry, cost=cost)) from None
+    try:
+        return _finish_json(response, sink, provider=provider, url=url, now_fn=now_fn, cost=cost,
+                            not_found_reason=not_found_reason)
+    finally:
+        if sink is not None:
+            sink.close()
+
+
+def _finish_json(response, sink, *, provider, url, now_fn, cost, not_found_reason):
     code = response.status_code
     if code == 429:
         wait = retry_after(response.headers) or 60.0
@@ -97,10 +131,21 @@ def request_json(*, provider: str, url: str, headers: Mapping[str, str], transpo
     if not 200 <= code < 300:
         raise StopWith(ToolResult.failure("failed", "source_unavailable", f"{provider} returned HTTP {code}.",
                                           retryable=code >= 500, cost=cost))
-    body = response.body
-    prov = Provenance(provider=provider, endpoint=url, retrieved_at=now_fn(), response_sha256=sha256(body).hexdigest())
+    if sink is not None:
+        sink.flush()
+        sink.seek(0)
+        digest = sha256()
+        for chunk in iter(lambda: sink.read(1 << 20), b""):
+            digest.update(chunk)
+        sink.seek(0)
+        prov = Provenance(provider=provider, endpoint=url, retrieved_at=now_fn(), response_sha256=digest.hexdigest())
+        loader = lambda: json.load(sink, parse_float=Decimal)
+    else:
+        body = response.body
+        prov = Provenance(provider=provider, endpoint=url, retrieved_at=now_fn(), response_sha256=sha256(body).hexdigest())
+        loader = lambda: json.loads(body, parse_float=Decimal)
     try:
-        doc = json.loads(body, parse_float=Decimal)
+        doc = loader()
     except (ValueError, UnicodeDecodeError):
         raise StopWith(ToolResult.failure("failed", "invalid_response", f"{provider} returned invalid JSON.",
                                           provenance=prov, cost=cost)) from None

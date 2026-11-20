@@ -167,6 +167,15 @@ def _configured_sec_user_agent() -> tuple[str | None, bool]:
         return None, False
 
 
+def _account_market_key(account_id: str) -> str | None:
+    """The account's own Twelve Data key, or None. Never falls back to the platform environment key."""
+    try:
+        _order, credentials = market_data_settings.runtime(account_id)
+    except MarketCredentialError:
+        return None
+    return credentials.get("twelve_data") or None
+
+
 oauth_trace_logger = logging.getLogger("foresightnine.oauth")
 from .operation_store import build_operation_store
 from .oauth_foundation import OAuthConfigurationError, OAuthExchangeTicketError, OAuthFoundation, OAuthTransactionError, SUPPORTED_PROVIDERS
@@ -2671,9 +2680,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     # Idempotency uses the caller's original request, while a newly admitted
     # operation persists the resolved policy. A continuation always retains
     # its original server-owned policy rather than applying today's defaults.
-    from .research_historical_prices import configured_historical_prices, fetch_historical_price_source
-    historical_config, historical_key = configured_historical_prices()
-    historical_available = historical_config is not None and topic.request.as_of is None
+    # Structured data tools: the account's own market-data key (BYOK) and/or the SEC contact. The platform
+    # price key is never used by the runtime (licence decision 2026-11-20, option a).
+    market_key = _account_market_key(account.account_id)
+    historical_available = (market_key is not None or _configured_sec_user_agent()[1]) and topic.request.as_of is None
     if continuation_input is None:
         request = resolve_automatic_research_request(request,
             search_available=bool(getattr(evidence_provider, 'supports_project_search', False)),
@@ -2783,7 +2793,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
 
         # The native tool loop is the default research execution path. Its
         # private checkpoint is persisted before each external request.
-        from .research_runtime import HistoricalPriceRequest, gap as runtime_gap, run_research_agent
+        from .research_fin_tools import FinDataToolbox
+        from .research_runtime import gap as runtime_gap, run_research_agent
         search = getattr(evidence_provider, 'search', None)
         discover = None
         if request.discover_sources and callable(search) and getattr(evidence_provider, 'supports_project_search', False):
@@ -2844,29 +2855,6 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             )
             return result.source, {'status': result.status, 'notes': result.notes, 'outcomes': result.outcomes,
                                    'ocr_events': list(acquire_ocr.events) if acquire_ocr is not None else []}
-        def query_sec_concept(tool_request):
-            nonlocal official_fetch_calls, official_fetch_status
-            result = execute_structured_query(
-                StructuredQuery(
-                    source_kind='sec_company_concept',
-                    parameters=tool_request.model_dump(mode='json', exclude={'rationale'}),
-                ),
-                owner_id=account.account_id,
-                operation_id=operation_id,
-                store=research_sources,
-                sec_agent_config=sec_agent_raw,
-                reserve_sec=reserve_sec_for_run,
-                context=context,
-                permitted=retrieval_permitted,
-                as_of=topic.request.as_of,
-            )
-            official_fetch_calls += getattr(result, 'calls', 0) or 0
-            official_fetch_status = _merge_official_fetch_status(
-                official_fetch_status,
-                getattr(result, 'status', None),
-                auto_fetch_official=request.auto_fetch_official,
-            )
-            return result
         def persist_ocr_version(old: ResearchSource, new_source_id: str, text: str, provenance: dict) -> ResearchSource:
             return research_sources.create(
                 account.account_id,
@@ -2879,7 +2867,6 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 source_id=new_source_id, provenance=provenance)
         ocr_pages_callback = build_ocr_pages_callback(
             operation_id=operation_id, persist_version=persist_ocr_version, usage=ocr_usage)
-        historical_config_for_run = historical_config if historical_available and retrieval_permitted else None
         allowed_hosts = fetch_allowed_hosts()
         retrieval_active = retrieval_permitted and topic.request.as_of is None and request.max_cost_usd is None
         capabilities: dict[str, Any] = {
@@ -2887,28 +2874,35 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             'acquire_available': retrieval_active,
             'web_fetch_enabled': retrieval_active and allowed_hosts is None,
             'sec_available': sec_configured and retrieval_active,
-            'historical_prices_available': historical_config_for_run is not None,
             'max_fetch_bytes': int(os.environ.get('FORESIGHTNINE_LARGE_DOCUMENT_MAX_BYTES', '200000000') or 200_000_000),
             'pdf_paged_reading': True,
             'supported_fetch_content_types': ['text/html', 'text/plain', 'application/pdf'],
         }
         if allowed_hosts is not None:
             capabilities['fetch_allowed_hosts'] = sorted(allowed_hosts)
-        def load_historical_prices(query: HistoricalPriceRequest):
-            if historical_config_for_run is None or query.instrument_id not in {item.instrument_id for item in historical_config_for_run.instruments}:
-                return None
-            if context.cost_limited or context.now() >= context.budget.deadline:
-                raise ProviderFailure('historical_price_budget_unavailable', 'Historical prices cannot be fetched within the configured budget.', retryable=False)
-            try:
-                context.reserve_search()
-            except ApiProblem as error:
-                raise ProviderFailure('historical_price_rate_limited', 'Historical prices could not be fetched within the source service limit.', retryable=error.retryable) from None
-            return fetch_historical_price_source(config=historical_config_for_run, instrument_id=query.instrument_id,
-                start_date=query.start_date, end_date=query.end_date, api_key=historical_key, now=lifecycle_clock.now(),
-                timeout_seconds=min(8.0, context.budget.deadline - context.now()), cancel_event=context.cancel_event(),
-                persist=lambda item, provenance: research_sources.create(account.account_id, item,
-                    retrieval_method='historical_prices', response_sha256=provenance['provider_response_sha256'],
-                    response_content_type='application/json', provenance=provenance))
+        fin_disabled_reason = ('historical_cutoff' if topic.request.as_of is not None
+                               else 'cost_unknown' if request.max_cost_usd is not None
+                               else None if retrieval_permitted else 'permission_denied')
+        fin_data = FinDataToolbox(
+            account_id=account.account_id, market_key=market_key, sec_user_agent=sec_agent_raw,
+            persist=lambda item, **kwargs: research_sources.create(account.account_id, item, **kwargs),
+            reserve_call=context.reserve_search, reserve_sec=reserve_sec_for_run,
+            remaining_seconds=lambda: context.budget.deadline - context.now(), ensure_running=context.ensure_running,
+            now=lifecycle_clock.now, disabled_reason=fin_disabled_reason, cancel_event=context.cancel_event())
+        capabilities.update(fin_data.capabilities())
+        def note_fin_result(name: str, result: dict[str, Any]) -> None:
+            # SEC based tools count as official retrieval for the turn's official_fetch_status, like the old SEC tool.
+            nonlocal official_fetch_calls, official_fetch_status
+            if name not in ('company_financials', 'filings'):
+                return
+            cost = result.get('cost') if isinstance(result.get('cost'), dict) else {}
+            official_fetch_calls += int(cost.get('provider_calls') or 0)
+            raw = result.get('status')
+            mapped = {'ok': 'completed', 'partial': 'completed', 'empty': 'unknown', 'failed': 'failed',
+                      'rate_limited': 'failed', 'unknown': 'unknown', 'denied': 'restricted'}.get(raw, raw)
+            official_fetch_status = _merge_official_fetch_status(
+                official_fetch_status, mapped, auto_fetch_official=request.auto_fetch_official)
+        fin_data.on_result = note_fin_result
         last_runtime_state: dict[str, Any] = {}
         def save_runtime(state: dict) -> None:
             snapshot = deepcopy(state)
@@ -2991,17 +2985,12 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         research_clock = build_research_clock(lifecycle_clock.now())
         outcome = run_research_agent(question=effective_question, sources=sources, model=provider,
             context=context, discover=discover, acquire=acquire if retrieval_permitted else None,
-            historical_prices=load_historical_prices if historical_config_for_run is not None else None,
-            historical_instruments=tuple(item.instrument_id for item in historical_config_for_run.instruments) if historical_config_for_run is not None else (),
-            sec_concept=query_sec_concept, capabilities=capabilities,
+            fin_data=fin_data, capabilities=capabilities,
             checkpoint=save_runtime, initial_state=admitted_continuation.get('runtime'),
             on_submission=lambda: setattr(http_request.state, 'model_submission_started', True),
             on_stream_event=publish_stream_event,
             as_of=topic.request.as_of,
             clock=research_clock if continuation_input is None else None,
-            historical_sessions=({item.instrument_id: (item.exchange, item.exchange_timezone)
-                                  for item in historical_config_for_run.instruments}
-                                 if historical_config_for_run is not None else None),
             now=lifecycle_clock.now, ocr_pages=ocr_pages_callback,
             prior=_prior_with_failed_sources(parent_now) if continuation_input is None else None, focus=focus)
         _raise_if_operation_cancelled(operation_id)

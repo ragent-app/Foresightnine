@@ -599,195 +599,78 @@ def test_messages_transport_uses_the_configured_connect_timeout(monkeypatch):
 
 def test_available_capabilities_derived_and_overridden_in_initial_prompt():
     from app.research_runtime import SYSTEM
+    from tests.fin_runtime_helpers import make_toolbox
     stop = ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')
+    off = {'market_data_available': False, 'market_data_key_required': False,
+           'sec_financials_available': False, 'filings_available': False}
 
     m_default = Model([stop])
     run_research_agent(question='Q', sources=[], model=m_default, context=context())
     payload_default = json.loads(m_default.inputs[0][1]['content'])
-    assert payload_default['available_historical_price_instruments'] == []
+    assert 'available_historical_price_instruments' not in payload_default
     assert payload_default['available_capabilities'] == {
-        'search_available': False,
-        'acquire_available': False,
-        'sec_available': False,
-        'historical_prices_available': False,
-    }
+        'search_available': False, 'acquire_available': False, 'sec_available': False, **off}
 
     m_derived = Model([stop])
-    run_research_agent(
-        question='Q',
-        sources=[],
-        model=m_derived,
-        context=context(),
-        discover=lambda _: [],
-        acquire=lambda *_: (None, {}),
-        sec_concept=lambda _: None,
-        historical_instruments=('NVDA',),
-    )
-    payload_derived = json.loads(m_derived.inputs[0][1]['content'])
-    assert payload_derived['available_historical_price_instruments'] == ['NVDA']
-    assert payload_derived['available_capabilities'] == {
-        'search_available': True,
-        'acquire_available': True,
-        'sec_available': True,
-        'historical_prices_available': True,
-    }
+    run_research_agent(question='Q', sources=[], model=m_derived, context=context(),
+                       discover=lambda _: [], acquire=lambda *_: (None, {}), fin_data=make_toolbox())
+    assert json.loads(m_derived.inputs[0][1]['content'])['available_capabilities'] == {
+        'search_available': True, 'acquire_available': True, 'sec_available': True,
+        'market_data_available': True, 'market_data_key_required': False,
+        'sec_financials_available': True, 'filings_available': True}
+
+    m_nokey = Model([stop])
+    run_research_agent(question='Q', sources=[], model=m_nokey, context=context(), fin_data=make_toolbox(market_key=None))
+    caps = json.loads(m_nokey.inputs[0][1]['content'])['available_capabilities']
+    assert caps['market_data_available'] is False and caps['market_data_key_required'] is True
 
     m_custom = Model([stop])
     custom_caps = {'search_available': True, 'web_fetch_enabled': True, 'sec_available': False}
     run_research_agent(question='Q', sources=[], model=m_custom, context=context(), capabilities=custom_caps)
     payload_custom = json.loads(m_custom.inputs[0][1]['content'])
-    assert payload_custom['available_capabilities'] == custom_caps
+    assert payload_custom['available_capabilities'] == {**custom_caps, **off}
 
-    for token in ('available_capabilities', 'discover_sources', 'acquire_sources', 'sec_company_concept', 'sec_available', 'partial'):
+    for token in ('available_capabilities', 'discover_sources', 'acquire_sources', 'resolve_entity', 'market_data',
+                  'company_financials', 'filings', 'market_data_key_required', 'sec_financials_available', 'partial'):
         assert token in SYSTEM
 
 
-def test_sec_company_concept_success_unconfigured_restricted_and_unknown_recovery():
-    from app.research_structured_connector import StructuredQueryResult
+def test_company_financials_success_unconfigured_restricted_and_unknown_recovery():
+    from tests.fin_runtime_helpers import FakeTransport, Reply, json_reply, make_toolbox
+    fin_args = {'cik': '320193', 'lines': ['revenue'], 'periods': 'last_4_quarters', 'rationale': 'Quarterly revenue.'}
+    stop = ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')
 
-    sec_args = {
-        'entity_query': 'NVDA',
-        'taxonomy': 'us-gaap',
-        'tag': 'Revenues',
-        'unit': 'USD',
-        'period_start': '2024-01-29',
-        'period_end': '2025-01-26',
-        'rationale': 'Get annual revenue from SEC XBRL.',
-    }
-    sec_source = ResearchSource(
-        source_id='source_sec_nvda',
-        owner_id='owner',
-        title='NVDA Revenues (USD)',
-        text='SEC data\n{"val": 130497000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26"}',
-        url='https://data.sec.gov/api/xbrl/companyconcept/CIK0001045810/us-gaap/Revenues.json',
-        kind='official',
-        obtained_at=datetime.now(timezone.utc),
-        content_sha256='sec-hash',
-        retrieval_method='sec_companyconcept',
-        permissions=SourcePermissions(store=True, model_input=True, display=True, export=True),
-    )
-    receipt = {'source_url': 'https://www.sec.gov/files/company_tickers.json', 'match': {'cik': '0001045810', 'ticker': 'NVDA'}}
-
-    # 1. Success path registers source so subsequent read_sources and submit_research succeed.
-    calls = []
-    def sec_ok(req):
-        calls.append(req)
-        return StructuredQueryResult(
-            'completed',
-            source=sec_source,
-            identity_receipt=receipt,
-            semantic_status='not_verified',
-            calls=2,
-            external_state='returned',
-        )
-
-    m_ok = Model([
-        turn('sec_company_concept', sec_args, 'sec1'),
-        turn('read_sources', {'reads': [{'source_id': 'source_sec_nvda'}], 'rationale': 'read XBRL'}, 'read1'),
-        turn('submit_research', {
-            'report': 'NVDA revenue was 130497000000 USD.',
-            'claims': [{
-                'text': 'NVDA revenue was 130497000000 USD.',
-                'source_id': 'source_sec_nvda',
-                'quotation': '{"val": 130497000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26"}',
-                'role': 'support',
-            }],
-            'limitations': [],
-            'stopping_reason': 'answered',
-        }, 'sub1'),
-    ])
+    # 1. Success registers the source for read_sources and record_facts.
+    t = FakeTransport(json_reply('sec_companyfacts.json'))
+    m_ok = Model([turn('company_financials', fin_args, 'f1'), stop])
     sources_list = []
-    res_ok = run_research_agent(question='NVDA revenue?', sources=sources_list, model=m_ok, context=context(), sec_concept=sec_ok)
-    assert res_ok.status == 'completed'
-    assert res_ok.source_ids == ['source_sec_nvda']
-    assert len(sources_list) == 1
-    assert calls[0].entity_query == 'NVDA' and calls[0].taxonomy == 'us-gaap'
-    sec_feedback = json.loads(m_ok.inputs[1][-1]['content'])
-    assert sec_feedback == {
-        'status': 'acquired',
-        'source_id': 'source_sec_nvda',
-        'title': 'NVDA Revenues (USD)',
-        'total_characters': len(sec_source.text),
-        'content_sha256': 'sec-hash',
-        'identity_receipt': receipt,
-        'semantic_status': 'not_verified',
-    }
+    res_ok = run_research_agent(question='Q', sources=sources_list, model=m_ok, context=context(), fin_data=make_toolbox(sec=t))
+    fb = json.loads(m_ok.inputs[1][-1]['content'])
+    assert fb['status'] in ('ok', 'partial') and fb['source_id'] == 'src_1' and res_ok.source_ids == ['src_1']
+    assert len(sources_list) == 1 and sources_list[0].retrieval_method == 'sec_companyfacts' and sources_list[0].kind == 'official'
 
-    # 2. Unconfigured (sec_concept=None), historical cutoff (as_of), and non-completed StructuredQueryResult statuses.
-    m_unconf = Model([
-        turn('sec_company_concept', sec_args, 'sec1'),
-        ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
-    ])
-    res_unconf = run_research_agent(question='Q', sources=[], model=m_unconf, context=context(), sec_concept=None)
-    assert res_unconf.status == 'partial'
+    # 2. Unconfigured SEC contact, and research cutoff / cost limit restrictions make no request.
+    t2 = FakeTransport(Reply())
+    m_unconf = Model([turn('company_financials', fin_args, 'f1'), stop])
+    run_research_agent(question='Q', sources=[], model=m_unconf, context=context(), fin_data=make_toolbox(sec=t2, user_agent=None))
     assert json.loads(m_unconf.inputs[1][-1]['content']) == {
-        'status': 'unavailable',
-        'reason': 'sec_contact_unconfigured_or_unavailable',
-    }
-
-    called_on_cutoff = []
-    m_cutoff = Model([
-        turn('sec_company_concept', sec_args, 'sec1'),
-        ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
-    ])
-    run_research_agent(
-        question='Q',
-        sources=[],
-        model=m_cutoff,
-        context=context(),
-        as_of=datetime(2025, 2, 1, tzinfo=timezone.utc),
-        sec_concept=lambda req: called_on_cutoff.append(req),
-    )
-    assert called_on_cutoff == []
+        'status': 'unavailable', 'reason': 'sec_contact_unconfigured_or_unavailable'}
+    m_cutoff = Model([turn('company_financials', fin_args, 'f1'), stop])
+    run_research_agent(question='Q', sources=[], model=m_cutoff, context=context(),
+                       as_of=datetime(2025, 2, 1, tzinfo=timezone.utc),
+                       fin_data=make_toolbox(sec=t2, disabled_reason='historical_cutoff'))
     assert json.loads(m_cutoff.inputs[1][-1]['content']) == {'status': 'restricted', 'reason': 'historical_cutoff'}
+    assert not t2.calls
 
-    m_miss = Model([
-        turn('sec_company_concept', sec_args, 'sec1'),
-        ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
-    ])
-    run_research_agent(
-        question='Q',
-        sources=[],
-        model=m_miss,
-        context=context(),
-        sec_concept=lambda _: StructuredQueryResult(
-            'unknown',
-            'unit_or_period_not_found_in_returned_records',
-            identity_receipt=receipt,
-            external_state='returned',
-        ),
-    )
-    from app.research_runtime import TOOL_FAILURE_GUIDANCE
-    assert json.loads(m_miss.inputs[1][-1]['content']) == {
-        'status': 'unknown',
-        'reason': 'unit_or_period_not_found_in_returned_records',
-        'identity_receipt': receipt,
-        'message': TOOL_FAILURE_GUIDANCE['unit_or_period_not_found_in_returned_records'],
-    }
-
-    # 3. A read-only SEC call with an unknown outcome is recorded as a failure, not retried, and the run continues.
-    saved = []
-    sec_attempts = []
-    def sec_timeout(req):
-        sec_attempts.append(req)
-        return StructuredQueryResult('failed', 'source_timeout', external_state='unknown')
-
-    m_unknown = Model([turn('sec_company_concept', sec_args, 'sec_u'),
-                       ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')])
-    res_unknown = run_research_agent(
-        question='Q',
-        sources=[],
-        model=m_unknown,
-        context=context(),
-        sec_concept=sec_timeout,
-        checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
-    )
+    # 3. An unknown SEC outcome is recorded as a failure, not retried, and the run continues.
+    t3 = FakeTransport(OSError('boom'))
+    m_unknown = Model([turn('company_financials', fin_args, 'f_u'), stop])
+    res_unknown = run_research_agent(question='Q', sources=[], model=m_unknown, context=context(), fin_data=make_toolbox(sec=t3))
     assert len(m_unknown.inputs) == 2
     fed_back = json.loads(m_unknown.inputs[1][-1]['content'])
-    assert fed_back['status'] == 'failed' and fed_back['reason'] == 'source_timeout'
-    assert fed_back['external_state'] == 'unknown' and 'not retried' in fed_back['message']
-    assert any(e.get('name') == 'sec_company_concept' and e.get('status') == 'failed' for e in res_unknown.events)
-    assert len(sec_attempts) == 1
+    assert fed_back['status'] == 'failed' and fed_back['reason'] == 'source_unavailable'
+    assert any(e.get('name') == 'company_financials' and e.get('status') == 'failed' for e in res_unknown.events)
+    assert len(t3.calls) == 1
 
 
 def test_acquire_sources_distinguishes_disabled_undiscovered_and_granular_failures():
@@ -974,91 +857,35 @@ def test_web_retrieval_methods_and_turn_partial_notes_schema():
     assert turn_with_notes.partial_notes == 'Unverified note'
 
 
-def test_sec_company_concept_rate_limit_allows_one_retry_and_stops_on_second_repeat():
-    from app.research_structured_connector import StructuredQueryResult
+def test_company_financials_rate_limit_allows_one_retry_and_stops_on_second_repeat():
+    from tests.fin_runtime_helpers import FakeTransport, Reply, json_reply, make_toolbox
+    fin_args = {'cik': '320193', 'lines': ['revenue'], 'periods': 'last_4_quarters', 'rationale': 'Quarterly revenue.'}
+    stop = ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')
 
-    sec_args = {
-        'entity_query': 'NVDA',
-        'taxonomy': 'us-gaap',
-        'tag': 'Revenues',
-        'unit': 'USD',
-        'period_start': '2024-01-29',
-        'period_end': '2025-01-26',
-        'rationale': 'Get annual revenue from SEC XBRL.',
-    }
-    sec_source = ResearchSource(
-        source_id='source_sec_nvda_retry',
-        owner_id='owner',
-        title='NVDA Revenues (USD)',
-        text='SEC data\n{"val": 130497000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26"}',
-        url='https://data.sec.gov/api/xbrl/companyconcept/CIK0001045810/us-gaap/Revenues.json',
-        kind='official',
-        obtained_at=datetime.now(timezone.utc),
-        content_sha256='sec-retry-hash',
-        retrieval_method='sec_companyconcept',
-        permissions=SourcePermissions(store=True, model_input=True, display=True, export=True),
-    )
-
-    # 1. First call gets source_rate_limited; one retry is allowed and succeeds.
-    attempts_ok = []
-    def sec_flaky(req):
-        attempts_ok.append(req)
-        if len(attempts_ok) == 1:
-            return StructuredQueryResult('failed', 'source_rate_limited', external_state='returned')
-        return StructuredQueryResult('completed', source=sec_source, external_state='returned')
-
-    m_ok = Model([
-        turn('sec_company_concept', sec_args, 'sec_1'),
-        turn('sec_company_concept', {**sec_args, 'rationale': 'Retry after 1s SEC rate limit.'}, 'sec_2'),
-        turn('read_sources', {'reads': [{'source_id': 'source_sec_nvda_retry'}], 'rationale': 'read XBRL'}, 'read_1'),
-        turn('submit_research', {
-            'report': 'NVDA revenue was 130497000000 USD.',
-            'claims': [{
-                'text': 'NVDA revenue was 130497000000 USD.',
-                'source_id': 'source_sec_nvda_retry',
-                'quotation': '{"val": 130497000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26"}',
-                'role': 'support',
-            }],
-            'limitations': [],
-            'stopping_reason': 'answered',
-        }, 'sub_1'),
-    ])
+    # 1. The first call is rate limited by the global SEC pacer; one retry is allowed and succeeds.
+    pace = iter([False, True])
+    t = FakeTransport(json_reply('sec_companyfacts.json'))
+    m_ok = Model([turn('company_financials', fin_args, 'f1'),
+                  turn('company_financials', {**fin_args, 'rationale': 'Retry after 1s SEC rate limit.'}, 'f2'), stop])
     saved = []
-    res_ok = run_research_agent(
-        question='NVDA revenue?',
-        sources=[],
-        model=m_ok,
-        context=context(),
-        sec_concept=sec_flaky,
-        checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
-    )
-    assert res_ok.status == 'completed'
-    assert len(attempts_ok) == 2
-    assert len(saved[-1]['rate_limit_retries']) == 1
+    res_ok = run_research_agent(question='Q', sources=[], model=m_ok, context=context(),
+                                fin_data=make_toolbox(sec=t, reserve_sec=lambda: next(pace)),
+                                checkpoint=lambda s: saved.append(json.loads(json.dumps(s))))
+    first = json.loads(m_ok.inputs[1][-1]['content'])
+    assert first['status'] == 'rate_limited' and first['retryable'] is True
+    assert json.loads(m_ok.inputs[2][-1]['content'])['status'] in ('ok', 'partial')
+    assert len(t.calls) == 1 and len(saved[-1]['rate_limit_retries']) == 1
 
-    # 2. Second consecutive source_rate_limited keeps signature in seen, so repeating again stops with no_progress.
-    attempts_fail = []
-    def sec_always_rate_limited(req):
-        attempts_fail.append(req)
-        return StructuredQueryResult('failed', 'source_rate_limited', external_state='returned')
-
-    m_fail = Model([
-        turn('sec_company_concept', sec_args, 'sec_1'),
-        turn('sec_company_concept', {**sec_args, 'rationale': 'Retry once.'}, 'sec_2'),
-        turn('sec_company_concept', {**sec_args, 'rationale': 'Retry twice.'}, 'sec_3'),
-        turn('sec_company_concept', {**sec_args, 'rationale': 'Retry thrice.'}, 'sec_4'),
-    ])
-    res_fail = run_research_agent(
-        question='NVDA revenue?',
-        sources=[],
-        model=m_fail,
-        context=context(),
-        sec_concept=sec_always_rate_limited,
-    )
-    assert res_fail.status == 'partial'
-    assert res_fail.reason == 'no_progress'
-    assert [g['code'] for g in res_fail.gaps] == ['no_progress']
-    assert len(attempts_fail) == 2
+    # 2. A second consecutive rate limit keeps the signature in seen, so repeating again stops with no_progress.
+    t2 = FakeTransport(Reply())
+    m_fail = Model([turn('company_financials', fin_args, 'f1'),
+                    turn('company_financials', {**fin_args, 'rationale': 'Retry once.'}, 'f2'),
+                    turn('company_financials', {**fin_args, 'rationale': 'Retry twice.'}, 'f3'),
+                    turn('company_financials', {**fin_args, 'rationale': 'Retry thrice.'}, 'f4')])
+    res_fail = run_research_agent(question='Q', sources=[], model=m_fail, context=context(),
+                                  fin_data=make_toolbox(sec=t2, reserve_sec=lambda: False))
+    assert res_fail.status == 'partial' and res_fail.reason == 'no_progress'
+    assert [g['code'] for g in res_fail.gaps] == ['no_progress'] and not t2.calls
 
 
 def test_acquire_sources_rate_limit_allows_one_retry_and_blocks_second_repeat():
@@ -1698,8 +1525,8 @@ def test_l1_compaction_triggers_under_tight_context_and_record_facts_still_locat
             self.step = 0
 
         def research_capacity(self):
-            # Trigger watermark: ~36_000 * 3 * 0.58 - fixed (~19k) ≈ ~44k chars.
-            return SimpleNamespace(context_tokens=36_000, output_tokens=1000, input_counter='chars_div_3')
+            # Trigger watermark: ~39_000 * 3 * 0.58 - fixed (~23k, incl. the financial data tool schemas) ≈ ~44k chars.
+            return SimpleNamespace(context_tokens=39_000, output_tokens=1000, input_counter='chars_div_3')
 
         def estimate_turn_input(self, turn_obj):
             return 100

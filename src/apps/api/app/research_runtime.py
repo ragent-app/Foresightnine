@@ -26,7 +26,8 @@ from .research_analysis import _quoted_numbers
 from .phase3 import ProviderFailure
 from .research_documents import page_for_offset, page_range_to_chars
 from .research_ocr import MAX_ONDEMAND_PAGES, OcrOutcome
-from .research_historical_prices import resolve_lookback as _resolve_lookback
+from .research_fin_tools import (CompanyFinancialsRequest, FilingsRequest, FinDataToolbox, MarketDataRequest,
+                                 MarketSpec, ResolveEntityRequest)
 from .research_discovery import RedirectLead, normalize_search_lead, search_lead_url
 from .research_live_stream import DeltaCoalescer
 from .research_source_catalog import canonical_source_url
@@ -139,45 +140,6 @@ class AcquireRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     urls: list[str] = Field(min_length=1)
     rationale: str = Field(min_length=1)
-
-
-class HistoricalPriceRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    instrument_id: str = Field(min_length=1, max_length=128)
-    start_date: date | None = Field(default=None, description='Inclusive start; give together with end_date, or use lookback instead.')
-    end_date: date | None = Field(default=None, description='Inclusive end; may be later than the latest completed session (it is clamped).')
-    lookback: Literal['5d', '1m', '3m', '6m', 'ytd', '1y', '3y', '5y', '10y'] | None = Field(
-        default=None, description='Named window ending at the latest completed session; alternative to start_date/end_date.')
-    rationale: str = Field(min_length=1)
-
-    @model_validator(mode='after')
-    def dates_or_lookback(self) -> HistoricalPriceRequest:
-        if self.lookback is not None:
-            if self.start_date is not None or self.end_date is not None:
-                raise ValueError('Give either lookback or start_date/end_date, not both.')
-        elif self.start_date is None or self.end_date is None:
-            raise ValueError('Give lookback, or both start_date and end_date.')
-        return self
-
-
-class SecConceptToolRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
-    entity_query: str = Field(min_length=1, max_length=100,
-                              description='Exact issuer name, ticker symbol, or CIK, e.g. NVDA or NVIDIA CORP.')
-    taxonomy: Literal['us-gaap', 'ifrs-full', 'dei'] = 'us-gaap'
-    tag: str = Field(min_length=1, max_length=128, pattern=r'^[A-Za-z][A-Za-z0-9_]*$',
-                     description='XBRL concept tag, e.g. Revenues or OperatingIncomeLoss.')
-    unit: str = Field(min_length=1, max_length=64, pattern=r'^[A-Za-z0-9-]+$',
-                      description='Measurement unit, e.g. USD or shares.')
-    period_start: date
-    period_end: date
-    rationale: str = Field(min_length=1)
-
-    @model_validator(mode='after')
-    def ordered_period(self) -> SecConceptToolRequest:
-        if self.period_start > self.period_end:
-            raise ValueError('Period start is after period end.')
-        return self
 
 
 _OFFSET_HELP = ('Optional. Omit both offsets to let the system locate the exact quotation within ranges already read; '
@@ -421,11 +383,13 @@ TOOLS = [
     ),
     _tool('discover_sources', 'Search for unverified leads, not evidence.', DiscoverRequest),
     _tool('acquire_sources', 'Acquire previously discovered leads when authorized.', AcquireRequest),
-    _tool('historical_prices', 'Request authorized daily close observations for a configured instrument and date range.', HistoricalPriceRequest),
-    _tool('sec_company_concept', 'Request authorized SEC XBRL company concept observations (US GAAP/IFRS/DEI) for an issuer, tag, unit, and exact period.', SecConceptToolRequest),
+    _tool('resolve_entity', 'Resolve a company or security name, ticker, CIK or ISIN to candidate entity_ids with exchange, currency and identifiers. Returns every plausible candidate and never picks one for you; choose explicitly.', ResolveEntityRequest),
+    _tool('market_data', "Fetch OHLCV bars (daily by default; intraday sizes for event-day analysis) for an entity_id or symbol+exchange over a date range or lookback, using the account's own market-data key. Returns a source whose lines are <SYMBOL>@<EXCHANGE> | <ts> | <interval> | O .. H .. L .. C .. V .. <currency>; quote them with record_facts.", MarketDataRequest),
+    _tool('company_financials', 'Fetch standardized SEC XBRL financial statement lines (revenue, operating income, net income, EPS, assets, liabilities, equity, operating cash flow, capex, cash) for recent quarters or fiscal years of a US-registered issuer. Returns a source with one line per period (tag, period, fiscal label, form, filing date, accession); quote lines with record_facts.', CompanyFinancialsRequest),
+    _tool('filings', "List a company's SEC filings (action='list', optional forms and dates) with primary_document_url values that can be passed to acquire_sources; action='search' is EDGAR full-text search where enabled.", FilingsRequest),
     _tool('record_facts', 'Record quoted numeric observations; source match does not establish semantic accuracy.', FactsRequest),
     _tool('calculate_financials', 'Calculate comparable financial quantities; input values remain unverified.', CalculateRequest),
-    _tool('create_chart', 'Build a verified, evidence-bound chart or causal transmission graph (chart_type="causal_graph") from recorded fact IDs, calculation IDs, historical_prices / sec_company_concept sources, or prior claim IDs.', CreateChartRequest),
+    _tool('create_chart', 'Build a verified, evidence-bound chart or causal transmission graph (chart_type="causal_graph") from recorded fact IDs, calculation IDs, market_data sources, or prior claim IDs.', CreateChartRequest),
     _tool(
         'read_pages',
         f'Read whole pages of an authorized PDF source that has a page map (same limits as read_sources: max {MAX_READ_SOURCE_SPAN_CHARS} characters per slice and {MAX_READ_SOURCES_BATCH_CHARS} per call; continue from next_page). Pages without extractable text are reported with a status.',
@@ -446,18 +410,21 @@ SYSTEM = ("You are a financial research coordinator. Identify evidence needs, ch
           "(research_as_of, when set, is a cutoff for evidence and not the current time); never infer the current date from training knowledge. "
           "State in the report the as-of date of each data series used. "
           "When a tool result carries message, suggested_actions or hints, follow them before giving up on a path. "
-          "Discovery returns leads, not evidence. Only pass URLs returned by discover_sources into acquire_sources; "
-          "never invent or guess URLs. When sec_available is true, use sec_company_concept for structured US GAAP/IFRS/DEI "
-          "figures when needed. Read sources before citing them. For sources longer than 25000 characters (such as filings "
+          "Discovery returns leads, not evidence. Only pass URLs returned by discover_sources or filings into acquire_sources; "
+          "never invent or guess URLs. For a security or company, call resolve_entity first and pass the chosen entity_id onward. "
+          "Use company_financials (when sec_financials_available) for structured US-registered issuer statement lines, filings (when filings_available) to list "
+          "filings and obtain document URLs for acquire_sources, and market_data (when market_data_available) for price history. "
+          "If market_data_key_required is true, market prices are unavailable until the user adds their own market-data key in Settings: "
+          "say so, and label any price taken from filings or news as not market data. Read sources before citing them. For sources longer than 25000 characters (such as filings "
           "or long reports), call outline_source or search_source first to locate relevant sections or terms by character "
           "offset, then call read_sources on targeted [start, end] slices rather than blind sequential chunks "
           "(hard limits: max 25000 characters per slice and max 40000 characters total per read_sources call). "
           "For PDFs whose outline_source result has page_count, use outline_source then read_pages for targeted pages. "
           "Pages with status needs_ocr are recognised on demand (request_ocr, or automatically by read_pages) into a new source_id that replaces the old one for later reads; treat numbers from pages with status ocr as needing a check against the original page when a warning says so. "
-          "For historical market performance, identify the instrument and use a usable price series or authorized dated observations. "
-          "The input lists available historical price instruments. If required prices are missing, explain the gap without inventing prices. "
+          "For historical market performance, resolve the instrument and use a market_data series or authorized dated observations. "
+          "If required prices are missing, explain the gap without inventing prices. "
           "Use deterministic calculation where needed. "
-          "Use create_chart only when a visual comparison, trend, waterfall, price series, or causal transmission graph materially improves clarity; bind numeric series strictly to recorded fact_ids, calculation_ids, or acquired historical_prices / sec_company_concept source_ids and never supply raw numeric arrays. For chart_type='causal_graph' (macro -> industry -> company -> asset transmission chains or scenario branches), populate causal_graph without y_axes/series, bind edges to known claim_ids from prior_research when available, and mark unsupported links as assumptions. When referencing a created chart in report, place [[chart:chart_id]] on its own line. "
+          "Use create_chart only when a visual comparison, trend, waterfall, price series, or causal transmission graph materially improves clarity; bind numeric series strictly to recorded fact_ids, calculation_ids, or acquired market_data source_ids and never supply raw numeric arrays. For chart_type='causal_graph' (macro -> industry -> company -> asset transmission chains or scenario branches), populate causal_graph without y_axes/series, bind edges to known claim_ids from prior_research when available, and mark unsupported links as assumptions. When referencing a created chart in report, place [[chart:chart_id]] on its own line. "
           "Submit exact source quotations; offsets are optional when the quotation is unique in read ranges; "
           "do not claim semantic verification from a quotation match. Submit status partial promptly when the question remains unanswered, "
           "including when no claim can be cited or when available paths are blocked or exhausted, without retrying failed paths; "
@@ -478,6 +445,7 @@ GAP_CODES = {
     'search_response_invalid': 'Search returned results in an invalid format; the connector must be repaired before it can provide leads.',
     'search_candidates_not_acquired': 'Search found candidate links, but their original material could not be acquired through the configured sources.',
     'historical_prices_unavailable': 'No authorized historical price series was available for the requested instrument and period.',
+    'market_data_key_required': 'Market price data was unavailable because no personal Twelve Data key is saved for this account; prices cited from filings or news are not market data.',
     'provider_no_result': 'Provider request ended without a usable result.',
     'provider_timeout': 'The model request timed out before completing a response.',
     'provider_error': 'The model provider reported an error.',
@@ -575,12 +543,26 @@ def _build_acquire_result(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 TOOL_FAILURE_GUIDANCE: dict[str, str] = {
-    'historical_price_range_after_latest_session': 'The requested end date is after the latest completed trading session. Retry with end_date no later than hints.latest_allowed_end_date, or use lookback.',
-    'historical_price_source_not_authorized_or_unavailable': 'No authorized price series exists for this instrument and period. Choose an instrument from available_historical_price_instruments or report the gap.',
-    'historical_price_rate_limited': 'The price provider rate limit was reached. Do not retry immediately; continue with other evidence or report the gap.',
-    'historical_price_budget_unavailable': 'The run budget does not allow another price request. Continue with available evidence and report the gap.',
-    'historical_price_transport_error': 'The price provider request failed in transit and was not retried automatically. A later narrower request may work, otherwise report the gap.',
-    'historical_price_provider_rejected': 'The price provider rejected the request. Check the instrument and date range; otherwise report the gap.',
+    'market_data_key_required': 'No personal Twelve Data key is saved for this account. Tell the user to add one in Settings; use prices from filings or news and label them as not market data.',
+    'license_platform_key_not_permitted': 'Market data from the platform key is not permitted; only the user\'s own key is used.',
+    'range_after_latest_session': 'The requested range starts after the latest completed session. Retry with end_date no later than the suggested end_date, or use lookback.',
+    'no_bars': 'No bars were returned for this symbol, interval and range. Check the entity_id and exchange with resolve_entity, or widen the range.',
+    'symbol_not_found': 'The provider does not know this symbol on that exchange. Run resolve_entity and pass its entity_id.',
+    'provider_plan_restriction': 'The user\'s market-data plan does not include this request. Report the gap or use another interval or market.',
+    'invalid_api_key': 'The saved market-data key was rejected. Tell the user to check it in Settings.',
+    'daily_quota_exhausted': 'The daily market-data quota is exhausted. Continue with other evidence and report the gap.',
+    'provider_rate_limited': 'The data provider rate limit was reached. Do not retry immediately; continue with other evidence.',
+    'rate_limited': 'The data provider rate limit was reached. Wait for other work or use another source.',
+    'entity_ambiguous': 'More than one issuer matched. Call resolve_entity and pass the chosen entity_id.',
+    'entity_not_found': 'No exact match. Call resolve_entity with the company name.',
+    'entity_not_resolved': 'This entity has no known symbol or CIK in this run. Call resolve_entity first.',
+    'no_sec_filings_for_entity': 'SEC data covers US-registered issuers only. Use discover_sources and acquire_sources for the official disclosures of this company.',
+    'no_xbrl_facts': 'The SEC has no XBRL facts for this company. Read its filings with filings and acquire_sources.',
+    'no_matching_lines': 'No requested line was reported under the standard tag mapping. Read the filing itself.',
+    'cik_not_found': 'The SEC has no such CIK. Call resolve_entity.',
+    'no_matching_filings': 'No filings matched. Widen the dates or forms, or check the entity.',
+    'not_in_policy': 'This data category is not enabled in this deployment. Use another path.',
+    'time_budget': 'The remaining run time is too short for another request of this kind.',
     'unit_or_period_not_found_in_returned_records': 'The company has data but not for this unit or period. Pick a period from available_periods and a unit from available_units when present.',
     'tag_not_reported': 'The entity does not report this tag. Try alternative common tags such as Revenues, RevenueFromContractWithCustomerExcludingAssessedTax or SalesRevenueNet, and check available_units.',
     'source_too_large': 'The source exceeds the size limit and was not stored. Use another source for the same facts or a more specific page.',
@@ -594,13 +576,12 @@ TOOL_FAILURE_GUIDANCE: dict[str, str] = {
     'http_forbidden_or_challenge': 'The site refused automated access. Use another source for the same facts.',
     'not_found': 'The page does not exist at this URL. Discover another source instead of guessing URLs.',
     'source_rate_limited': 'The source rate limit was reached. Wait for other work or use another source.',
-    'lead_not_discovered': 'Only pass URLs returned by discover_sources. Run discover_sources first.',
+    'lead_not_discovered': 'Only pass URLs returned by discover_sources or filings. Run one of them first.',
     'search_no_results': 'The search returned no results. Retry with a different, more specific query.',
     'search_sources_denied': 'All results were denied or unusable. Retry with a different query or publisher name.',
 }
-_PRICE_COVERAGE_KEYS = ('requested_end_date', 'effective_end_date', 'clamped', 'actual_first_date', 'actual_last_date',
-                        'row_count', 'latest_completed_session', 'session_status')
-_GUIDED_STATUSES = frozenset({'failed', 'unavailable', 'unknown', 'denied_or_unavailable', 'ocr_unavailable'})
+_GUIDED_STATUSES = frozenset({'failed', 'unavailable', 'unknown', 'denied_or_unavailable', 'ocr_unavailable',
+                              'denied', 'rate_limited', 'empty', 'restricted'})
 
 
 def _duplicate_acquisition_result(ids: list[str]) -> dict[str, Any]:
@@ -616,7 +597,7 @@ def _duplicate_acquisition_result(ids: list[str]) -> dict[str, Any]:
 
 def _result_source_ids(result: Mapping[str, Any]) -> list[str]:
     ids: list[str] = []
-    if isinstance(result.get('source_id'), str) and result.get('status') == 'acquired':
+    if isinstance(result.get('source_id'), str) and result.get('status') in ('acquired', 'ok', 'partial'):
         ids.append(result['source_id'])
     rows = result.get('results')
     if isinstance(rows, list):
@@ -1366,12 +1347,15 @@ _BULK_COMPACT_TOOLS = frozenset({
     'read_pages',
     'discover_sources',
     'acquire_sources',
-    'historical_prices',
-    'sec_company_concept',
+    'resolve_entity',
+    'market_data',
+    'company_financials',
+    'filings',
 })
 _ISO_CURRENCY_LIKE_RE = re.compile(r'^[A-Z]{3}$')
-_STRUCTURED_RETRIEVAL_METHODS = frozenset({'historical_prices', 'sec_companyconcept', 'sec_company_concept'})
-_ACQUISITION_TOOLS = frozenset({'historical_prices', 'sec_company_concept', 'acquire_sources'})
+_STRUCTURED_RETRIEVAL_METHODS = frozenset({'market_data', 'sec_companyfacts', 'sec_companyconcept'})
+_FIN_TOOLS = frozenset({'resolve_entity', 'market_data', 'company_financials', 'filings'})
+_ACQUISITION_TOOLS = frozenset({'market_data', 'company_financials', 'acquire_sources'})
 _PROTECTED_COMPACT_TOOLS = frozenset({
     'submit_research',
     'record_facts',
@@ -2504,9 +2488,7 @@ def _prior_research(
 def run_research_agent(*, question: str, sources: list[ResearchSource], model: Any, context: Any,
                        discover: Callable[[str], Any] | None = None,
                        acquire: Callable[[str, str], Any] | None = None,
-                       historical_prices: Callable[[HistoricalPriceRequest], ResearchSource | None] | None = None,
-                       historical_instruments: tuple[str, ...] = (),
-                       sec_concept: Callable[[Any], Any] | None = None,
+                       fin_data: FinDataToolbox | None = None,
                        capabilities: dict[str, Any] | None = None,
                        checkpoint: Callable[[dict], None] | None = None,
                        on_submission: Callable[[], None] | None = None,
@@ -2514,7 +2496,6 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                        initial_state: dict | None = None, as_of: datetime | None = None,
                        prior: dict | None = None, focus: dict | None = None,
                        clock: dict | None = None,
-                       historical_sessions: Mapping[str, tuple[str | None, str]] | None = None,
                        now: Callable[[], datetime] | None = None,
                        ocr_pages: Callable[[ResearchSource, list[int]], OcrOutcome] | None = None) -> RuntimeOutcome:
     """Execute serially; a pending external call is never replayed on recovery.
@@ -2545,15 +2526,17 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
         available_capabilities = (dict(capabilities) if capabilities is not None else {
             'search_available': discover is not None,
             'acquire_available': acquire is not None,
-            'sec_available': sec_concept is not None,
-            'historical_prices_available': bool(historical_instruments),
         })
+        for flag, value in (fin_data.capabilities() if fin_data is not None else
+                            {'market_data_available': False, 'market_data_key_required': False,
+                             'sec_financials_available': False, 'filings_available': False}).items():
+            available_capabilities.setdefault(flag, value)
+        available_capabilities.setdefault('sec_available', bool(available_capabilities.get('sec_financials_available')))
         if ocr_pages is not None:
             available_capabilities.setdefault('pdf_ocr_on_demand', True)
         payload: dict[str, Any] = {'question': question, 'sources': inventory,
                  'research_as_of': as_of.isoformat() if as_of is not None else None,
                  **({'research_clock': clock} if clock is not None else {}),
-                 'available_historical_price_instruments': historical_instruments,
                  'available_capabilities': available_capabilities}
         prior_state: dict[str, Any] = {}
         focus_ranges: list[dict[str, Any]] = []
@@ -2592,21 +2575,23 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                 hosts = list(dict.fromkeys(h for h in (_safe_host(u) for u in urls) if h))
                 if hosts:
                     target = ('、'.join(hosts[:3]) + (f' 等 {len(hosts)} 个' if len(hosts) > 3 else ''))[:200]
-        elif name == 'sec_company_concept':
-            entity, tag, unit = tool_args.get('entity_query'), tool_args.get('tag'), tool_args.get('unit')
-            raw_tax = tool_args.get('taxonomy')
-            taxonomy = raw_tax.strip() if isinstance(raw_tax, str) and raw_tax.strip() else 'us-gaap'
-            if all(isinstance(v, str) and v.strip() for v in (entity, tag, unit)):
-                target = f'{entity.strip()} · {taxonomy}:{tag.strip()} ({unit.strip()})'[:200]
-        elif name == 'historical_prices':
-            inst, start_d, end_d = tool_args.get('instrument_id'), tool_args.get('start_date'), tool_args.get('end_date')
-            s_txt = start_d.isoformat() if isinstance(start_d, date) else (start_d.strip() if isinstance(start_d, str) else '')
-            e_txt = end_d.isoformat() if isinstance(end_d, date) else (end_d.strip() if isinstance(end_d, str) else '')
-            look = tool_args.get('lookback')
-            if isinstance(inst, str) and inst.strip() and s_txt and e_txt:
-                target = f'{inst.strip()} ({s_txt} ~ {e_txt})'[:200]
-            elif isinstance(inst, str) and inst.strip() and isinstance(look, str) and look.strip():
-                target = f'{inst.strip()} (lookback {look.strip()})'[:200]
+        elif name == 'resolve_entity':
+            query = tool_args.get('query')
+            if isinstance(query, str) and query.strip():
+                target = query.strip()[:200]
+        elif name == 'market_data':
+            who = next((v.strip() for v in (tool_args.get('entity_id'), tool_args.get('symbol')) if isinstance(v, str) and v.strip()), '')
+            window = tool_args.get('lookback') or ' ~ '.join(
+                str(v) for v in (tool_args.get('start_date'), tool_args.get('end_date')) if v)
+            if who:
+                target = f"{who} · {tool_args.get('interval') or '1day'}" + (f' ({window})' if window else '')
+                target = target[:200]
+        elif name in ('company_financials', 'filings'):
+            who = next((v.strip() for v in (tool_args.get('entity_id'), tool_args.get('ticker'), tool_args.get('cik'),
+                                            tool_args.get('query')) if isinstance(v, str) and v.strip()), '')
+            detail = tool_args.get('periods') if name == 'company_financials' else tool_args.get('action')
+            if who:
+                target = f"{who} · {detail}"[:200] if isinstance(detail, str) and detail else who[:200]
         elif name == 'outline_source':
             sid = tool_args.get('source_id')
             if isinstance(sid, str) and sid.strip():
@@ -2713,8 +2698,8 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
         if status == 'partial':
             if state.get('search_invalid_response'):
                 derived.append(gap('search_response_invalid'))
-            if any(event.get('reason') == 'historical_price_source_not_authorized_or_unavailable' for event in state['events']):
-                derived.append(gap('historical_prices_unavailable'))
+            if any(event.get('name') == 'market_data' and event.get('reason') == 'market_data_key_required' for event in state['events']):
+                derived.append(gap('market_data_key_required'))
             if not state['read_ranges'] and any(
                 event.get('name') == 'acquire_sources'
                 and event.get('status') in ('unavailable', 'failed')
@@ -2944,6 +2929,73 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
         if returned.message:
             result['message'] = returned.message
         return result, None
+
+    def _run_fin_tool(call: Any, req: Any, args: dict[str, Any], call_id: str, calls: list[Any], index: int,
+                      started_at: str) -> tuple[dict[str, Any], dict[str, Any] | None, str | None, bool]:
+        """Run one financial data tool. Read-only, quota-limited calls: an unknown outcome is recorded, never replayed."""
+        if fin_data is None:
+            return {'status': 'unavailable', 'reason': 'fin_data_unavailable'}, None, None, False
+        name = call.name
+        entities = state.setdefault('entity_candidates', {})
+        key: str | None = None
+        spec: Any = None
+        if name == 'market_data':
+            spec = fin_data.market_spec(req, entities)
+            if isinstance(spec, dict):
+                return spec, None, None, False
+            key = spec.key
+        elif name == 'company_financials':
+            key = fin_data.financials_key(req)
+        if key is not None:
+            ids = _reusable_ids(key)
+            if ids:
+                return _duplicate_acquisition_result(ids), None, 'action', False
+        t_rationale, t_target = _tool_activity_meta(name, args)
+        state['pending'] = {'kind': name, 'call_id': call.id, 'rationale': t_rationale, 'target': t_target,
+                            'started_at': started_at}
+        save()
+        if name == 'resolve_entity':
+            produced = fin_data.resolve_entity(req, entities)
+        elif name == 'market_data':
+            produced = fin_data.market_data(spec)
+        elif name == 'company_financials':
+            produced = fin_data.company_financials(req, entities)
+        else:
+            produced = fin_data.filings(req, entities)
+        state['pending'] = _tool_batch_pending(call_id, [vars(c) for c in calls], index, started_at=started_at)
+        result = produced.result
+        if fin_data.on_result is not None:
+            fin_data.on_result(name, result)
+        for entity_id, info in produced.entities.items():
+            entities[entity_id] = info
+        while len(entities) > 200:
+            del entities[next(iter(entities))]
+        existing_leads = {lead['url'] for lead in state.get('leads', []) if isinstance(lead, dict) and isinstance(lead.get('url'), str)}
+        for lead in produced.leads:
+            if lead['url'] not in existing_leads and not is_fred_source(lead['url']):
+                state.setdefault('leads', []).append(lead)
+                existing_leads.add(lead['url'])
+            references = state.setdefault('lead_discovery_calls', {}).setdefault(lead['url'], [])
+            if call.id not in references:
+                references.append(call.id)
+        source = produced.source
+        if source is not None:
+            if source_eligibility([source], as_of)[0][1] != 'eligible':
+                result = {'status': 'unavailable', 'reason': 'source_not_authorized_or_unavailable'}
+            else:
+                if source.source_id not in source_by_id:
+                    sources.append(source)
+                source_by_id[source.source_id] = source
+                acquired_list = state.setdefault('acquired_source_ids', [])
+                if source.source_id not in acquired_list:
+                    acquired_list.append(source.source_id)
+                actions = state.setdefault('acquired_actions', {})
+                for action_key in [k for k in [key, *produced.extra_keys] if k]:
+                    actions[action_key] = [source.source_id]
+        summary = {'kind': 'data_tool', 'tool': name, 'target': t_target, 'status': _clip(result.get('status', 'completed'), 100),
+                   'title': _clip(result['title'], 160) if isinstance(result.get('title'), str) else None,
+                   'total_characters': result['total_characters'] if type(result.get('total_characters')) is int else None}
+        return result, summary, None, result.get('status') == 'rate_limited'
 
     stream_call_seq = sum(
         1 for ev in state.get('events', [])
@@ -3254,8 +3306,9 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                 args = call.arguments
                 model_cls = {'read_sources': ReadRequest, 'read_pages': ReadPagesRequest, 'outline_source': OutlineSourceRequest,
                              'search_source': SearchSourceRequest, 'discover_sources': DiscoverRequest,
-                             'acquire_sources': AcquireRequest, 'historical_prices': HistoricalPriceRequest,
-                             'sec_company_concept': SecConceptToolRequest, 'record_facts': FactsRequest,
+                             'acquire_sources': AcquireRequest, 'resolve_entity': ResolveEntityRequest,
+                             'market_data': MarketDataRequest, 'company_financials': CompanyFinancialsRequest,
+                             'filings': FilingsRequest, 'record_facts': FactsRequest,
                              'request_ocr': RequestOcrRequest,
                              'calculate_financials': CalculateRequest, 'create_chart': CreateChartRequest,
                              'submit_research': SubmitRequest}.get(call.name)
@@ -3480,7 +3533,7 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                         if lead is None:
                             rows.append({'url': url, 'status': 'denied_or_unavailable',
                                          'reason': 'lead_not_discovered',
-                                         'hint': 'Only pass URLs returned by discover_sources.'})
+                                         'hint': 'Only pass URLs returned by discover_sources or filings.'})
                             summary_rows.append({'title': host or '未命名来源', 'host': host, 'status': 'denied_or_unavailable',
                                                  'reason': 'lead_not_discovered', 'total_characters': None})
                             continue
@@ -3572,158 +3625,9 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                         any(r.get('status') != 'acquired' and r.get('reason') == 'source_rate_limited' for r in rows)
                         and not any(r.get('status') == 'acquired' and not r.get('reused') for r in rows)
                     )
-                elif call.name == 'sec_company_concept':
-                    if as_of is not None:
-                        result = {'status': 'restricted', 'reason': 'historical_cutoff'}
-                    elif sec_concept is None:
-                        result = {'status': 'unavailable', 'reason': 'sec_contact_unconfigured_or_unavailable'}
-                    elif _reusable_ids(sec_key := 'sec|' + json.dumps(
-                            req.model_dump(mode='json', exclude={'rationale'}), sort_keys=True, ensure_ascii=False)):
-                        duplicate_kind = 'action'
-                        result = _duplicate_acquisition_result(_reusable_ids(sec_key))
-                    else:
-                        t_rationale, t_target = _tool_activity_meta(call.name, args)
-                        state['pending'] = {'kind': 'sec_company_concept', 'call_id': call.id,
-                                            'rationale': t_rationale, 'target': t_target, 'started_at': tool_started_at}
-                        save()
-                        failure = None
-                        sec_result = None
-                        try:
-                            sec_result = sec_concept(req)
-                        except ProviderFailure as error:
-                            failure = error
-                        sec_unknown = (failure is not None and getattr(failure, 'external_result_unknown', False)) or (
-                            sec_result is not None and getattr(sec_result, 'external_state', None) == 'unknown')
-                        state['pending'] = _tool_batch_pending(call_id, [vars(c) for c in calls], index,
-                                                               started_at=tool_started_at)
-                        if sec_unknown:
-                            # SEC public APIs are read-only: record the failure, never retry, keep going.
-                            result = {'status': 'failed',
-                                      'reason': (failure.code if failure is not None
-                                                 else getattr(sec_result, 'reason', None) or 'source_unavailable'),
-                                      'external_state': 'unknown', 'message': _UNKNOWN_READ_MESSAGE}
-                        elif failure is not None:
-                            result = {'status': 'failed', 'reason': failure.code}
-                        elif sec_result is None:
-                            result = {'status': 'unavailable', 'reason': 'sec_contact_unconfigured_or_unavailable'}
-                        else:
-                            sec_status = getattr(sec_result, 'status', None)
-                            source = getattr(sec_result, 'source', None)
-                            if sec_status == 'completed' and source is not None and source_eligibility([source], as_of)[0][1] == 'eligible':
-                                if source.source_id not in source_by_id:
-                                    sources.append(source)
-                                source_by_id[source.source_id] = source
-                                acquired_source_list = state.setdefault('acquired_source_ids', [])
-                                if source.source_id not in acquired_source_list:
-                                    acquired_source_list.append(source.source_id)
-                                state.setdefault('acquired_actions', {})[sec_key] = [source.source_id]
-                                result = {
-                                    'status': 'acquired',
-                                    'source_id': source.source_id,
-                                    'title': source.title,
-                                    'total_characters': len(source.text),
-                                    'content_sha256': source.content_sha256,
-                                    'identity_receipt': getattr(sec_result, 'identity_receipt', None),
-                                    'semantic_status': getattr(sec_result, 'semantic_status', 'not_verified'),
-                                }
-                            elif sec_status == 'completed':
-                                result = {
-                                    'status': 'unavailable',
-                                    'reason': getattr(sec_result, 'reason', None) or 'source_not_authorized_or_unavailable',
-                                }
-                            else:
-                                result = {
-                                    'status': sec_status or 'failed',
-                                    'reason': getattr(sec_result, 'reason', None) or sec_status or 'sec_query_failed',
-                                }
-                                if getattr(sec_result, 'identity_receipt', None) is not None:
-                                    result['identity_receipt'] = sec_result.identity_receipt
-                                for extra in ('available_periods', 'available_units', 'coverage'):
-                                    value = getattr(sec_result, extra, None)
-                                    if value:
-                                        result[extra] = value
-                    tool_summary = {
-                        'kind': 'sec_company_concept',
-                        'entity': _clip(req.entity_query, 100),
-                        'taxonomy': _clip(req.taxonomy, 40),
-                        'tag': _clip(req.tag, 128),
-                        'unit': _clip(req.unit, 64),
-                        'status': _clip(result.get('status', 'completed'), 100),
-                        'title': _clip(result['title'], 160) if isinstance(result.get('title'), str) else None,
-                        'total_characters': result['total_characters'] if type(result.get('total_characters')) is int else None,
-                    }
-                    transient_rate_limited = (
-                        result.get('status') == 'failed' and result.get('reason') == 'source_rate_limited'
-                    )
-                elif call.name == 'historical_prices':
-                    if req.lookback is not None:
-                        exchange_code, tz_name = (historical_sessions or {}).get(req.instrument_id, (None, 'UTC'))
-                        start_resolved, end_resolved = _resolve_lookback(
-                            req.lookback, now=(now or (lambda: datetime.now(timezone.utc)))(),
-                            exchange=exchange_code, timezone_name=tz_name or 'UTC')
-                        if as_of is not None and end_resolved > as_of.date():
-                            end_resolved = as_of.date()
-                        req = req.model_copy(update={'start_date': start_resolved, 'end_date': end_resolved})
-                    if req.start_date > req.end_date or (as_of is not None and req.end_date > as_of.date()):
-                        raise ValueError('Invalid historical price date range or after research cutoff.')
-                    hist_key = f'historical_prices|{req.instrument_id}|{req.start_date.isoformat()}|{req.end_date.isoformat()}'
-                    if historical_prices is None:
-                        result = {'status': 'unavailable', 'reason': 'historical_price_source_not_authorized_or_unavailable'}
-                    elif _reusable_ids(hist_key):
-                        duplicate_kind = 'action'
-                        result = _duplicate_acquisition_result(_reusable_ids(hist_key))
-                    else:
-                        t_rationale, t_target = _tool_activity_meta(call.name, args)
-                        state['pending'] = {'kind': 'historical_prices', 'call_id': call.id,
-                                            'rationale': t_rationale, 'target': t_target, 'started_at': tool_started_at}
-                        save()
-                        failure = None
-                        try:
-                            source = historical_prices(req)
-                        except ProviderFailure as error:
-                            failure, source = error, None
-                        state['pending'] = _tool_batch_pending(call_id, [vars(c) for c in calls], index,
-                                                               started_at=tool_started_at)
-                        if failure is not None:
-                            result = {'status': 'failed', 'reason': failure.code}
-                            if getattr(failure, 'external_result_unknown', False):
-                                # A free-tier price GET has no side effects: no automatic retry, run continues.
-                                result.update(external_state='unknown', message=_UNKNOWN_READ_MESSAGE)
-                            else:
-                                text = str(failure)
-                                if text:
-                                    result['message'] = text[:300]
-                            hints = getattr(failure, 'hints', None)
-                            if isinstance(hints, Mapping) and hints:
-                                result['hints'] = dict(hints)
-                        elif source is None or source_eligibility([source], as_of)[0][1] != 'eligible':
-                            result = {'status': 'unavailable', 'reason': 'historical_price_source_not_authorized_or_unavailable'}
-                        else:
-                            source_by_id[source.source_id] = source
-                            sources.append(source)
-                            acquired_source_list = state.setdefault('acquired_source_ids', [])
-                            if source.source_id not in acquired_source_list:
-                                acquired_source_list.append(source.source_id)
-                            result = {'status': 'acquired', 'source_id': source.source_id, 'title': source.title,
-                                      'total_characters': len(source.text), 'content_sha256': source.content_sha256}
-                            actions = state.setdefault('acquired_actions', {})
-                            actions[hist_key] = [source.source_id]
-                            provenance = getattr(source, 'provenance', None)
-                            effective_end = provenance.get('effective_end_date') if isinstance(provenance, Mapping) else None
-                            if isinstance(effective_end, str) and effective_end:
-                                actions[f'historical_prices|{req.instrument_id}|{req.start_date.isoformat()}|{effective_end}'] = [source.source_id]
-                            if isinstance(provenance, Mapping):
-                                coverage = {k: provenance[k] for k in _PRICE_COVERAGE_KEYS if k in provenance}
-                                if coverage:
-                                    result['coverage'] = coverage
-                    tool_summary = {
-                        'kind': 'historical_prices',
-                        'instrument_id': _clip(req.instrument_id, 128),
-                        'start_date': req.start_date.isoformat(),
-                        'end_date': req.end_date.isoformat(),
-                        'status': _clip(result.get('status', 'completed'), 100),
-                        'title': _clip(result['title'], 160) if isinstance(result.get('title'), str) else None,
-                    }
+                elif call.name in _FIN_TOOLS:
+                    result, tool_summary, duplicate_kind, transient_rate_limited = _run_fin_tool(
+                        call, req, args, call_id, calls, index, tool_started_at)
                 elif call.name == 'record_facts':
                     rows = []
                     staged = []
@@ -4003,7 +3907,7 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                 if type(result.get('denied_count')) is int:
                     event['denied_count'] = result['denied_count']
                     event['denied_reasons'] = result['denied_reasons']
-            if call.name in {'discover_sources', 'acquire_sources', 'historical_prices', 'sec_company_concept'}:
+            if call.name in {'discover_sources', 'acquire_sources'} | _FIN_TOOLS:
                 reason = result.get('reason')
                 if isinstance(reason, str) and len(reason) <= 100 and all(c.isalnum() or c == '_' for c in reason):
                     event['reason'] = reason
