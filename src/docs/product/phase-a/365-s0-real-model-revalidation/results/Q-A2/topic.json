@@ -1,0 +1,106 @@
+{
+ "schema_version": "1",
+ "topic_id": "topic_bf45a29d7a6a4ef6a7698fdd4f56722c",
+ "owner_id": "account_fc90580ce4d443849cae579c0340a50e",
+ "request": {
+  "question": "分析纳斯达克最近走势，并分析预测未来的可能",
+  "source_ids": [],
+  "scope": "",
+  "as_of": null
+ },
+ "created_at": "2026-11-20T07:05:19.614262Z",
+ "updated_at": "2026-11-20T07:06:15.114642Z",
+ "versions": [
+  {
+   "version_id": "version_a40b0d4abd844852a70e3b6bfc69f596",
+   "parent_version_id": null,
+   "created_at": "2026-11-20T07:05:19.614262Z",
+   "content": {
+    "summary": "",
+    "sources": [],
+    "source_candidates": [],
+    "facts": [],
+    "calculations": [],
+    "claims": [],
+    "charts": [],
+    "gaps": [],
+    "turns": []
+   },
+   "review": "draft",
+   "note": "",
+   "source_ids": [],
+   "created_by": "user"
+  },
+  {
+   "version_id": "version_4907dcdd277d4b838470a79e69f4f437",
+   "parent_version_id": "version_a40b0d4abd844852a70e3b6bfc69f596",
+   "created_at": "2026-11-20T07:06:15.114642Z",
+   "content": {
+    "summary": "",
+    "sources": [],
+    "source_candidates": [],
+    "facts": [],
+    "calculations": [],
+    "claims": [],
+    "charts": [],
+    "gaps": [
+     {
+      "code": "provider_timeout",
+      "message": "Provider request ended without a usable result."
+     }
+    ],
+    "turns": [
+     {
+      "turn_id": "turn-5c7585361f2f498ebe838b9594a5323e",
+      "index": 1,
+      "question": "分析纳斯达克最近走势，并分析预测未来的可能",
+      "question_origin": "user",
+      "focus_citation": null,
+      "operation_ids": [
+       "operation:5bee4eb53bfa0b261861cb14"
+      ],
+      "parent_version_id": "version_a40b0d4abd844852a70e3b6bfc69f596",
+      "started_at": "2026-11-20T07:05:20.094554Z",
+      "finished_at": "2026-11-20T07:06:14.981410Z",
+      "status": "partial",
+      "reason": "provider_timeout",
+      "report": "",
+      "partial_notes": "部分结果已保留：停止原因：模型服务请求超时（provider_timeout）；已收集资料 0 份，已读片段 0 段，已记录事实 0 条，已完成计算 0 项。",
+      "stopping_note": null,
+      "claim_ids": [],
+      "fact_ids": [],
+      "calculation_ids": [],
+      "chart_ids": [],
+      "gaps": [
+       {
+        "code": "provider_timeout",
+        "message": "Provider request ended without a usable result."
+       }
+      ],
+      "usage": {
+       "model_calls": 1,
+       "search_calls": 0,
+       "total_tokens": 0
+      },
+      "search_status": "not_requested",
+      "official_fetch_status": "no_eligible_source",
+      "read_ranges": [],
+      "events": [
+       {
+        "code": "provider_timeout",
+        "kind": "model_failure",
+        "call_id": "operation:5bee4eb53bfa0b261861cb14:research-agent:68fcb971a6354436a4d470a2c8731db8",
+        "settlement": "unknown",
+        "external_state": "returned"
+       }
+      ]
+     }
+    ]
+   },
+   "review": "draft",
+   "note": "",
+   "source_ids": [],
+   "created_by": "agent"
+  }
+ ]
+}

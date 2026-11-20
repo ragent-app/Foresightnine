@@ -1,0 +1,35 @@
+{
+ "schema_version": "1",
+ "topic_id": "topic_0efec0387f2c4796957171b0f5942320",
+ "owner_id": "account_feda2fe6874f4e9485a3a50b00b34809",
+ "request": {
+  "question": "分析纳斯达克最近走势，并分析预测未来的可能",
+  "source_ids": [],
+  "scope": "",
+  "as_of": null
+ },
+ "created_at": "2026-11-20T07:16:12.233960Z",
+ "updated_at": "2026-11-20T07:16:12.233960Z",
+ "versions": [
+  {
+   "version_id": "version_1dd85c2bc52b4e8ba7f08217d1327fa0",
+   "parent_version_id": null,
+   "created_at": "2026-11-20T07:16:12.233960Z",
+   "content": {
+    "summary": "",
+    "sources": [],
+    "source_candidates": [],
+    "facts": [],
+    "calculations": [],
+    "claims": [],
+    "charts": [],
+    "gaps": [],
+    "turns": []
+   },
+   "review": "draft",
+   "note": "",
+   "source_ids": [],
+   "created_by": "user"
+  }
+ ]
+}

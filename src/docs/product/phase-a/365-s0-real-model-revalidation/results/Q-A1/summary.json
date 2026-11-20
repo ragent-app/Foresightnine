@@ -1,0 +1,18 @@
+{
+ "label": "Q-A1",
+ "topic_id": "topic_87810f16d50a48d593389a3aa0b300e8",
+ "operation_ids": [
+  "operation:5db4c93d9617a6ec3fcab204"
+ ],
+ "operation_status": "completed",
+ "turn_status": "partial",
+ "reason": "provider_unavailable",
+ "gap_codes": [
+  "provider_error"
+ ],
+ "model_calls": 17,
+ "search_calls": 1,
+ "total_tokens": 0,
+ "wall_seconds": 1573.602855,
+ "cancelled_reason": null
+}

@@ -1,0 +1,23 @@
+[
+ {
+  "status": "completed",
+  "endpoint": "/v1/research/topics/topic_8d559720a7c44a5786c1ed6e61f11097/runs",
+  "created_at": "2026-11-20T06:42:54.597734Z",
+  "updated_at": "2026-11-20T06:58:06.165715Z",
+  "source_refs": [
+   {
+    "label": "Deterministic operation controller",
+    "ref_id": "mock:operation",
+    "source_type": "model_inference"
+   }
+  ],
+  "cancel_token": "28d6a0885cad5214b4260897ff27c4480c066af3f75af00d876735228c4b9391",
+  "content_hash": "023c597edc39c299df494f0e874ba0b00a4d4f5453c6c6c0d051a621eba11a31",
+  "operation_id": "operation:e635250f8afd20286eb3f1b7",
+  "resume_token": "6b7c1e8c2655b898afc2b736a14ac2a993c154013778c7aa3e7288c56d3f0428",
+  "last_event_id": "operation:e635250f8afd20286eb3f1b7:4",
+  "owner_subject": "account:account_565134cae9cb47948bcf5e78d5c88d27",
+  "schema_version": "v1",
+  "idempotency_key_hash": "95a21d8880bb27de2a7a267030948e5d60d74fc188dc70911e54cd518ae70685"
+ }
+]

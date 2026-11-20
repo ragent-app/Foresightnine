@@ -1,0 +1,22 @@
+{
+ "label": "Q-B1",
+ "topic_id": "topic_8d559720a7c44a5786c1ed6e61f11097",
+ "operation_ids": [
+  "operation:e635250f8afd20286eb3f1b7"
+ ],
+ "operation_status": "completed",
+ "turn_status": "completed",
+ "reason": "submitted",
+ "gap_codes": [
+  "model_reported",
+  "model_reported",
+  "model_reported",
+  "model_reported",
+  "source_selection_partial"
+ ],
+ "model_calls": 19,
+ "search_calls": 3,
+ "total_tokens": 479215,
+ "wall_seconds": 1293.451999,
+ "cancelled_reason": null
+}

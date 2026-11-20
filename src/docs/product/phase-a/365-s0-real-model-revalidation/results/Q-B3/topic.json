@@ -1,0 +1,35 @@
+{
+ "schema_version": "1",
+ "topic_id": "topic_6237eb5ab66e4704a6a3d52123c66fe3",
+ "owner_id": "account_d6d916af8cd74a25b44435198ee82099",
+ "request": {
+  "question": "收集今天anthropic IPO第一天交易的相关信息",
+  "source_ids": [],
+  "scope": "",
+  "as_of": null
+ },
+ "created_at": "2026-11-20T07:31:40.324691Z",
+ "updated_at": "2026-11-20T07:31:40.324691Z",
+ "versions": [
+  {
+   "version_id": "version_ef08b328c52c406e8bc6fd7077bd2b99",
+   "parent_version_id": null,
+   "created_at": "2026-11-20T07:31:40.324691Z",
+   "content": {
+    "summary": "",
+    "sources": [],
+    "source_candidates": [],
+    "facts": [],
+    "calculations": [],
+    "claims": [],
+    "charts": [],
+    "gaps": [],
+    "turns": []
+   },
+   "review": "draft",
+   "note": "",
+   "source_ids": [],
+   "created_by": "user"
+  }
+ ]
+}

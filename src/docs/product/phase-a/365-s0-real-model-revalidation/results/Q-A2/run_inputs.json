@@ -1,0 +1,197 @@
+[
+ {
+  "turn": {
+   "index": 1,
+   "turn_id": "turn-5c7585361f2f498ebe838b9594a5323e",
+   "question": "分析纳斯达克最近走势，并分析预测未来的可能",
+   "started_at": "2026-11-20T07:05:20.094554+00:00",
+   "operation_ids": [
+    "operation:5bee4eb53bfa0b261861cb14"
+   ],
+   "question_origin": "user",
+   "parent_version_id": "version_a40b0d4abd844852a70e3b6bfc69f596"
+  },
+  "model": "glm-5.3-flash",
+  "budget": {
+   "source_ids": [],
+   "discover_sources": true,
+   "parent_version_id": "version_a40b0d4abd844852a70e3b6bfc69f596",
+   "auto_fetch_official": true
+  },
+  "sources": [],
+  "owner_id": "account_fc90580ce4d443849cae579c0340a50e",
+  "provider": "anthropic_messages",
+  "question": "分析纳斯达克最近走势，并分析预测未来的可能",
+  "topic_id": "topic_bf45a29d7a6a4ef6a7698fdd4f56722c",
+  "captured_at": "2026-11-20T07:05:20.199781+00:00",
+  "operation_id": "operation:5bee4eb53bfa0b261861cb14",
+  "schema_version": "1",
+  "provider_limits": {
+   "timeout_seconds": 300.0,
+   "max_output_tokens": 16384
+  },
+  "question_origin": "user",
+  "question_sha256": "d35db00eddeb6ad809f3d770a6b27a330799d66734d8ebddc967755151ed464e",
+  "runtime_binding": "11bb30cf4bfca0b6fa7fd2ecd8fbfe00eccd9e3c3444ccd81d0690abbb08317f",
+  "runtime_request": {
+   "source_ids": [],
+   "discover_sources": true,
+   "parent_version_id": "version_a40b0d4abd844852a70e3b6bfc69f596",
+   "auto_fetch_official": true
+  },
+  "recovery_pending": [],
+  "selection_method": "global_idf_evidence_v60_incremental_gap",
+  "parent_version_id": "version_a40b0d4abd844852a70e3b6bfc69f596",
+  "runtime_checkpoint": {
+   "user": "{\"question\": \"分析纳斯达克最近走势，并分析预测未来的可能\", \"sources\": [], \"research_as_of\": null, \"research_clock\": {\"captured_at\": \"2026-11-20T07:05:00Z\", \"utc_date\": \"2026-11-20\", \"exchange_registry_version\": \"2026-11-20\", \"note\": \"Regular sessions only; exchange holidays are not modelled.\", \"exchanges\": [{\"exchange\": \"NYSE\", \"local_date\": \"2026-11-20\", \"session_status\": \"pre_open\", \"last_completed_session\": \"2026-11-19\"}, {\"exchange\": \"NASDAQ\", \"local_date\": \"2026-11-20\", \"session_status\": \"pre_open\", \"last_completed_session\": \"2026-11-19\"}, {\"exchange\": \"TSX\", \"local_date\": \"2026-11-20\", \"session_status\": \"pre_open\", \"last_completed_session\": \"2026-11-19\"}, {\"exchange\": \"LSE\", \"local_date\": \"2026-11-20\", \"session_status\": \"pre_open\", \"last_completed_session\": \"2026-11-19\"}, {\"exchange\": \"XETRA\", \"local_date\": \"2026-11-20\", \"session_status\": \"pre_open\", \"last_completed_session\": \"2026-11-19\"}, {\"exchange\": \"EURONEXT\", \"local_date\": \"2026-11-20\", \"session_status\": \"pre_open\", \"last_completed_session\": \"2026-11-19\"}, {\"exchange\": \"SSE\", \"local_date\": \"2026-11-20\", \"session_status\": \"closed\", \"last_completed_session\": \"2026-11-19\"}, {\"exchange\": \"SZSE\", \"local_date\": \"2026-11-20\", \"session_status\": \"closed\", \"last_completed_session\": \"2026-11-19\"}, {\"exchange\": \"HKEX\", \"local_date\": \"2026-11-20\", \"session_status\": \"open\", \"last_completed_session\": \"2026-11-19\"}, {\"exchange\": \"TSE\", \"local_date\": \"2026-11-20\", \"session_status\": \"closed\", \"last_completed_session\": \"2026-11-20\"}, {\"exchange\": \"KRX\", \"local_date\": \"2026-11-20\", \"session_status\": \"closed\", \"last_completed_session\": \"2026-11-20\"}, {\"exchange\": \"TWSE\", \"local_date\": \"2026-11-20\", \"session_status\": \"closed\", \"last_completed_session\": \"2026-11-20\"}, {\"exchange\": \"NSE\", \"local_date\": \"2026-11-20\", \"session_status\": \"open\", \"last_completed_session\": \"2026-11-19\"}, {\"exchange\": \"ASX\", \"local_date\": \"2026-11-20\", \"session_status\": \"closed\", \"last_completed_session\": \"2026-11-20\"}]}, \"available_historical_price_instruments\": [\"ETF:QQQ\", \"ETF:ONEQ\", \"ETF:SPY\"], \"available_capabilities\": {\"search_available\": true, \"acquire_available\": true, \"web_fetch_enabled\": true, \"sec_available\": true, \"historical_prices_available\": true, \"max_fetch_bytes\": 200000000, \"pdf_paged_reading\": true, \"supported_fetch_content_types\": [\"text/html\", \"text/plain\", \"application/pdf\"], \"pdf_ocr_on_demand\": true}}",
+   "facts": [],
+   "leads": [],
+   "charts": [],
+   "events": [
+    {
+     "code": "provider_timeout",
+     "kind": "model_failure",
+     "usage": null,
+     "call_id": "operation:5bee4eb53bfa0b261861cb14:research-agent:68fcb971a6354436a4d470a2c8731db8",
+     "settlement": "unknown",
+     "external_state": "returned"
+    }
+   ],
+   "history": [],
+   "pending": null,
+   "_sources": [],
+   "_saved_at": "2026-11-20T07:06:14.899560+00:00",
+   "_accounting": {
+    "calls": 1,
+    "usage": null,
+    "search_calls": 0,
+    "accounted_tokens": 42974,
+    "model_call_receipts": {
+     "operation:5bee4eb53bfa0b261861cb14:research-agent:68fcb971a6354436a4d470a2c8731db8": {
+      "provider": "returned",
+      "settlement": "unknown",
+      "processing_error": "stream_timeout"
+     }
+    }
+   },
+   "read_ranges": [],
+   "calculations": [],
+   "focus_ranges": [],
+   "model_receipts": [
+    {
+     "call_id": "operation:5bee4eb53bfa0b261861cb14:research-agent:68fcb971a6354436a4d470a2c8731db8",
+     "provider": "returned",
+     "settlement": "unknown"
+    }
+   ],
+   "failed_attempts": [
+    {
+     "at": "2026-11-20T07:06:14.899424+00:00",
+     "usage": null,
+     "reason": "provider_timeout",
+     "call_id": "operation:5bee4eb53bfa0b261861cb14:research-agent:68fcb971a6354436a4d470a2c8731db8",
+     "elapsed_ms": 53922,
+     "wire_bytes": 26540,
+     "timeout_kind": "stream_idle_timeout",
+     "finish_reason": "unknown",
+     "history_chars": 0,
+     "streamed_bytes": 347
+    }
+   ],
+   "acquired_source_ids": []
+  },
+  "system_prompt_sha256": "a0bd993210d2daeedc7bc9933a0db29d66733933ca84abbdf35415fc70644693",
+  "planned_official_source_id": "source_4342e2a1dcb6e497f8de8831293ae2ed",
+  "runtime_origin_captured_at": "2026-11-20T07:05:20.199763+00:00",
+  "private_validation_diagnostics": {
+   "operation:5bee4eb53bfa0b261861cb14:research-agent:68fcb971a6354436a4d470a2c8731db8": {
+    "finish": "unknown",
+    "context": {
+     "model": "glm-5.3-flash",
+     "stream": true,
+     "call_id": "operation:5bee4eb53bfa0b261861cb14:research-agent:68fcb971a6354436a4d470a2c8731db8",
+     "contract": "none",
+     "provider": "anthropic_messages",
+     "parameters": {
+      "max_tokens": 16384
+     },
+     "request_id": "operation:5bee4eb53bfa0b261861cb14",
+     "wire_bytes": 26540,
+     "output_mode": "tool",
+     "operation_id": "operation:5bee4eb53bfa0b261861cb14"
+    },
+    "exception": {
+     "location": {
+      "file": "anthropic_messages.py",
+      "line": 667
+     },
+     "exception_class": "ProviderFailure"
+    },
+    "transport": {
+     "stages": [
+      {
+       "stage": "dns",
+       "result": "ok",
+       "elapsed_ms": 502
+      },
+      {
+       "stage": "tcp",
+       "result": "ok",
+       "elapsed_ms": 63
+      },
+      {
+       "stage": "tls",
+       "result": "ok",
+       "elapsed_ms": 67
+      },
+      {
+       "stage": "request_write",
+       "result": "ok",
+       "elapsed_ms": 0
+      },
+      {
+       "stage": "response_headers",
+       "result": "ok",
+       "elapsed_ms": 7936
+      },
+      {
+       "stage": "response_headers",
+       "result": "ok",
+       "elapsed_ms": 0,
+       "status_code": 200
+      },
+      {
+       "stage": "response_body",
+       "result": "timeout",
+       "elapsed_ms": 45233
+      }
+     ],
+     "timeout_kind": "stream_idle_timeout",
+     "submission_state": "response_received"
+    },
+    "stream_metrics": {
+     "ttft_ms": 8766,
+     "frames_received": 99,
+     "active_tool_names": [],
+     "reassembled_bytes": 347,
+     "block_bytes_by_type": {
+      "text": 0,
+      "thinking": 347,
+      "tool_use": 0,
+      "redacted_thinking": 0
+     },
+     "last_frame_elapsed_ms": 10543
+    },
+    "budget_estimate": {
+     "method": "utf8_wire_estimate",
+     "output_limit": 16384,
+     "reserved_tokens": 42974,
+     "heuristic_method": "ceil_chars_div_3",
+     "estimated_input_tokens": 26590,
+     "estimated_input_tokens_heuristic": 8864,
+     "estimated_input_bytes_upper_bound": 26590
+    }
+   }
+  }
+ }
+]

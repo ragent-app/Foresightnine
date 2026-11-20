@@ -1,0 +1,16 @@
+{
+ "label": "Q-A3",
+ "topic_id": "topic_0efec0387f2c4796957171b0f5942320",
+ "operation_ids": [
+  "operation:596d678434e705502686593a"
+ ],
+ "operation_status": "failed",
+ "turn_status": null,
+ "reason": null,
+ "gap_codes": [],
+ "model_calls": 9,
+ "search_calls": 2,
+ "total_tokens": 0,
+ "wall_seconds": 2530.01833,
+ "cancelled_reason": null
+}

@@ -1,0 +1,79 @@
+# 365 isolated revalidation stack. Secrets are referenced by path only (never copied here).
+# Usage: sudo -n docker compose -p foresightnine-revalidation-365 \
+#   --env-file /home/ubuntu/.local/state/foresightnine/revalidation-365/.env -f compose.yaml up -d --wait
+name: foresightnine-revalidation-365
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: foresightnine_reval
+      POSTGRES_USER: foresightnine
+      POSTGRES_PASSWORD: ${REVAL_PG_PASSWORD:?password required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - /home/ubuntu/Foresightnine/src/infra/migrations/001_research_state.sql:/docker-entrypoint-initdb.d/001_research_state.sql:ro
+      - /home/ubuntu/Foresightnine/src/infra/migrations/002_operation_state.sql:/docker-entrypoint-initdb.d/002_operation_state.sql:ro
+    healthcheck:
+      test: [CMD, pg_isready, -U, foresightnine, -d, foresightnine_reval]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+  redis:
+    image: redis:7-alpine
+    command: [redis-server, --appendonly, 'yes']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+  api:
+    image: foresightnine-api:s0-9434192
+    init: true
+    # Default dotenv parsing (same as production compose): api.env values are single-quoted,
+    # and `format: raw` would keep the quotes literally and break the key-file paths.
+    env_file:
+      - /home/ubuntu/.local/state/foresightnine/aws-runtime/api.env
+    environment:
+      FORESIGHTNINE_ENV: development
+      FORESIGHTNINE_STORAGE_MODE: postgres
+      FORESIGHTNINE_POSTGRES_URL: postgresql://foresightnine:${REVAL_PG_PASSWORD}@postgres:5432/foresightnine_reval
+      FORESIGHTNINE_POSTGRES_PASSWORD: ${REVAL_PG_PASSWORD}
+      FORESIGHTNINE_ABUSE_MODE: redis
+      FORESIGHTNINE_REDIS_URL: redis://redis:6379/0
+      FORESIGHTNINE_LOCAL_AUTH_MODE: mock
+      FORESIGHTNINE_CORS_ORIGINS: http://127.0.0.1:8005
+      FORESIGHTNINE_DOCUMENT_STORE_DIR: /data/documents
+      FORESIGHTNINE_PROXY_MODE: direct
+      FORESIGHTNINE_TRUSTED_PROXY_CIDRS: ""
+      FORESIGHTNINE_OAUTH_CALLBACK_BASE_URL: ""
+      FORESIGHTNINE_OAUTH_GITHUB_CALLBACK_URL: ""
+      FORESIGHTNINE_OAUTH_GITHUB_CLIENT_ID: ""
+      FORESIGHTNINE_OAUTH_GITHUB_CLIENT_SECRET: ""
+      FORESIGHTNINE_OAUTH_GOOGLE_CALLBACK_URL: ""
+      FORESIGHTNINE_OAUTH_GOOGLE_CLIENT_ID: ""
+      FORESIGHTNINE_OAUTH_GOOGLE_CLIENT_SECRET: ""
+      FORESIGHTNINE_OAUTH_RETURN_URI_ALLOWLIST: ""
+    volumes:
+      - documents:/data/documents
+      - /home/ubuntu/.config/foresightnine/google-play-service-account.json:/run/secrets/google-play-service-account.json:ro
+      - /home/ubuntu/.config/foresightnine/purchase-token-encryption.key:/run/secrets/foresightnine-purchase-token-encryption.key:ro
+      - /home/ubuntu/.config/foresightnine/market-credential-encryption.key:/run/secrets/foresightnine-market-credential-encryption.key:ro
+      - /home/ubuntu/.config/foresightnine/model-credential-encryption.key:/run/secrets/foresightnine-model-credential-encryption.key:ro
+    ports:
+      - "127.0.0.1:8005:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, /app/apps/api/.venv/bin/python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=2)"]
+      interval: 3s
+      timeout: 4s
+      retries: 12
+volumes:
+  postgres-data:
+  redis-data:
+  documents:
