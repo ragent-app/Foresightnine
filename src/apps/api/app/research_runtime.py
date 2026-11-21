@@ -36,7 +36,8 @@ from .research_library_tool import (SearchLibraryRequest, head_source_id, run_se
 from .research_news_tool import NewsSearchRequest, NewsOutcome, DiscoverCallableProvider, run_news_search
 from . import research_run_insights as insights
 from .research_source_policy import is_fred_source, source_eligibility
-from .research_source_terms import terms_decision
+from .research_source_terms import terms_decision, user_initiated_scope
+from .issuer_documents import IssuerDocuments, IssuerDocumentsRequest, call_signature as issuer_call_signature, known_hosts_from_text
 from .research_sources import ResearchSource
 
 
@@ -387,6 +388,7 @@ TOOLS = [
     _tool('market_data', "Fetch OHLCV bars (daily by default; intraday sizes for event-day analysis) for an entity_id or symbol+exchange over a date range or lookback, using the account's own market-data key. Returns a source whose lines are <SYMBOL>@<EXCHANGE> | <ts> | <interval> | O .. H .. L .. C .. V .. <currency>; quote them with record_facts.", MarketDataRequest),
     _tool('company_financials', 'Fetch standardized SEC XBRL financial statement lines (revenue, operating income, net income, EPS, assets, liabilities, equity, operating cash flow, capex, cash) for recent quarters or fiscal years of a US-registered issuer. Returns a source with one line per period (tag, period, fiscal label, form, filing date, accession); quote lines with record_facts.', CompanyFinancialsRequest),
     _tool('filings', "List a company's SEC filings (action='list', optional forms and dates) with primary_document_url values that can be passed to acquire_sources; action='search' is EDGAR full-text search where enabled.", FilingsRequest),
+    _tool('issuer_documents', "Find a company's own official website (Wikidata) and list its investor-relations document links (announcements, annual and interim reports, circulars, results) from a bounded, robots-aware crawl of that site; pass the returned URLs to acquire_sources. Use it for Hong Kong and mainland China disclosures that HKEXnews and cninfo do not allow to be fetched automatically.", IssuerDocumentsRequest),
     _tool('record_facts', 'Record quoted numeric observations; source match does not establish semantic accuracy.', FactsRequest),
     _tool('calculate_financials', 'Calculate comparable financial quantities; input values remain unverified.', CalculateRequest),
     _tool('create_chart', 'Build a verified, evidence-bound chart or causal transmission graph (chart_type="causal_graph") from recorded fact IDs, calculation IDs, market_data sources, or prior claim IDs.', CreateChartRequest),
@@ -410,10 +412,14 @@ SYSTEM = ("You are a financial research coordinator. Identify evidence needs, ch
           "(research_as_of, when set, is a cutoff for evidence and not the current time); never infer the current date from training knowledge. "
           "State in the report the as-of date of each data series used. "
           "When a tool result carries message, suggested_actions or hints, follow them before giving up on a path. "
-          "Discovery returns leads, not evidence. Only pass URLs returned by news_search or filings into acquire_sources; "
+          "Discovery returns leads, not evidence. Only pass URLs returned by news_search, filings or issuer_documents, or a URL the user wrote, into acquire_sources; "
           "never invent or guess URLs. For a security or company, call resolve_entity first and pass the chosen entity_id onward. "
           "Use company_financials (when sec_financials_available) for structured US-registered issuer statement lines, filings (when filings_available) to list "
           "filings and obtain document URLs for acquire_sources, and market_data (when market_data_available) for price history. "
+          "For Hong Kong and mainland China disclosures prefer issuer_documents (when issuer_documents_available), which lists the issuer's own website documents; "
+          "HKEXnews and cninfo are not automatically accessible. "
+          "When cn_market_data_available or cn_financials_available is true, A-share data is available through resolve_entity, market_data and company_financials; "
+          "A-share statements are year-to-date cumulative (Q1/H1/9M/FY), so derive single quarters explicitly. "
           "If market_data_key_required is true, market prices are unavailable until the user adds their own market-data key in Settings: "
           "say so, and label any price taken from filings or news as not market data. Read sources before citing them. For sources longer than 25000 characters (such as filings "
           "or long reports), call outline_source or search_source first to locate relevant sections or terms by character "
@@ -582,11 +588,23 @@ TOOL_FAILURE_GUIDANCE: dict[str, str] = {
     'version_not_stored': 'The recognised text could not be stored as a new source version. Use other sources or other pages.',
     'source_timeout': 'The source timed out. The outcome is not retried automatically; use another source or report the gap.',
     'source_unavailable': 'The source could not be reached. Use another source or report the gap.',
+    'issuer_website_not_found': "Wikidata has no official website for this company. Use news_search to find the investor-relations page; pass a website_url only if it was supplied by the user or a lead.",
+    'issuer_website_ambiguous': 'Several companies match. Call issuer_documents again with ticker and market, or with website_url set to one candidate website from this result.',
+    'issuer_site_robots_disallow': "The issuer website's robots.txt does not allow automated access. Use news_search for other copies, or ask the user to upload the document.",
+    'issuer_site_unreachable': 'The issuer website could not be reached. The outcome is not retried; use news_search or ask the user to upload the document.',
+    'issuer_site_not_html': 'The issuer website did not return a web page. Use news_search or ask the user to upload the document.',
+    'issuer_no_documents_found': 'No document links were found within the crawl budget. The site may list documents through scripts; use news_search or ask the user to upload the document.',
+    'website_not_known': 'website_url must be a site already seen in this run. Resolve the issuer by name or ticker instead.',
+    'issuer_documents_unavailable': 'issuer_documents is not available in this run (retrieval is disabled or the run has a cutoff or cost cap). Use news_search or user uploads.',
+    'wikidata_unavailable': 'Wikidata could not be reached. Do not repeat the call immediately; use news_search to find the issuer website.',
+    'wikidata_timeout': 'Wikidata did not answer in time. Do not repeat the call immediately; use news_search to find the issuer website.',
+    'wikidata_rate_limited': 'Wikidata asked for fewer requests. Do not repeat the call immediately; use news_search to find the issuer website.',
+    'source_user_initiated_only': 'This site is available only for single documents the user supplies themselves. Ask the user to paste the exact document link or upload the file.',
     'source_blocked_terms': "This site's terms do not permit automated access. Use the issuer's own investor-relations website copy, an SEC filing if the company files with the SEC, or ask the user to upload the document.",
     'http_forbidden_or_challenge': 'The site refused automated access. Use another source for the same facts.',
     'not_found': 'The page does not exist at this URL. Discover another source instead of guessing URLs.',
     'source_rate_limited': 'The source rate limit was reached. Wait for other work or use another source.',
-    'lead_not_discovered': 'Only pass URLs returned by news_search or filings. Run one of them first.',
+    'lead_not_discovered': 'Only pass URLs returned by news_search, filings or issuer_documents, or a URL the user wrote. Run one of them first.',
     'search_quota_exhausted': 'The search usage limit is reached (see the message for the reset time). Do not repeat news_search; continue with already acquired sources and structured data, and report the gap.',
     'search_rate_limited': 'Search services are rate limited right now. Do not repeat the same search immediately; continue with other evidence and report the gap.',
     'search_provider_rate_limited': 'The search service rate limit was reached. Do not repeat the same search immediately; continue with other evidence.',
@@ -597,6 +615,38 @@ TOOL_FAILURE_GUIDANCE: dict[str, str] = {
 }
 _GUIDED_STATUSES = frozenset({'failed', 'unavailable', 'unknown', 'denied_or_unavailable', 'ocr_unavailable',
                               'denied', 'rate_limited', 'empty', 'restricted'})
+
+
+_QUESTION_URL_RE = re.compile(r'https?://[A-Za-z0-9\-._~:/?#\[\]@!$&*+,;=%()]+', re.I)
+MAX_QUESTION_LEADS = 10
+
+
+def _user_question_leads(question: str) -> list[dict[str, Any]]:
+    """HTTPS URLs the user wrote in the question become user-provided leads (initiator user), acquirable once by the agent.
+
+    Whether a host may be fetched is still decided by the terms registry; personal mode ('user_initiated_only') releases
+    exactly these leads and the manual fetch form.
+    """
+    leads: list[dict[str, Any]] = []
+    for match in _QUESTION_URL_RE.finditer(question or ''):
+        raw = match.group(0).rstrip('.,;:!?)]}')
+        try:
+            url = canonical_source_url(raw)
+        except ValueError:
+            continue
+        parts = urlsplit(url)
+        if parts.scheme != 'https' or not parts.hostname or len(url) > 500 or is_fred_source(url):
+            continue
+        if any(lead['url'] == url for lead in leads):
+            continue
+        decision = terms_decision(url, initiator='user')
+        leads.append({'url': url, 'title': (parts.hostname + parts.path)[:200], 'published_at': None,
+                      'domain': parts.hostname, 'source_type': 'user_supplied', 'initiator': 'user',
+                      'discovered_by': 'user_question',
+                      **({} if decision.allowed else {'acquirable': False, 'terms_status': decision.status})})
+        if len(leads) >= MAX_QUESTION_LEADS:
+            break
+    return leads
 
 
 def _duplicate_acquisition_result(ids: list[str]) -> dict[str, Any]:
@@ -1367,9 +1417,10 @@ _BULK_COMPACT_TOOLS = frozenset({
     'market_data',
     'company_financials',
     'filings',
+    'issuer_documents',
 })
 _ISO_CURRENCY_LIKE_RE = re.compile(r'^[A-Z]{3}$')
-_STRUCTURED_RETRIEVAL_METHODS = frozenset({'market_data', 'sec_companyfacts', 'sec_companyconcept'})
+_STRUCTURED_RETRIEVAL_METHODS = frozenset({'market_data', 'sec_companyfacts', 'sec_companyconcept', 'structured_financials'})
 _FIN_TOOLS = frozenset({'resolve_entity', 'market_data', 'company_financials', 'filings'})
 _ACQUISITION_TOOLS = frozenset({'market_data', 'company_financials', 'acquire_sources'})
 _PROTECTED_COMPACT_TOOLS = frozenset({
@@ -1464,6 +1515,8 @@ def _infer_tool_name(parsed: Mapping[str, Any] | None) -> str:
         return 'outline_source'
     if 'leads' in parsed:
         return 'news_search'
+    if 'documents' in parsed and 'issuer' in parsed:
+        return 'issuer_documents'
     if 'facts' in parsed:
         return 'record_facts'
     if 'calculations' in parsed:
@@ -2516,7 +2569,8 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                        clock: dict | None = None,
                        now: Callable[[], datetime] | None = None,
                        ocr_pages: Callable[[ResearchSource, list[int]], OcrOutcome] | None = None,
-                       news_providers: list[Any] | None = None) -> RuntimeOutcome:
+                       news_providers: list[Any] | None = None,
+                       issuer_docs: IssuerDocuments | None = None) -> RuntimeOutcome:
     """Execute serially; a pending external call is never replayed on recovery.
 
     Checkpoint callbacks must durably save the provided complete state before returning.
@@ -2550,7 +2604,9 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
         })
         for flag, value in (fin_data.capabilities() if fin_data is not None else
                             {'market_data_available': False, 'market_data_key_required': False,
-                             'sec_financials_available': False, 'filings_available': False}).items():
+                             'sec_financials_available': False, 'filings_available': False,
+                             'cn_market_data_available': False, 'cn_financials_available': False,
+                             'cn_financials_limited': False, 'cn_data_provider': None}).items():
             available_capabilities.setdefault(flag, value)
         available_capabilities.setdefault('sec_available', bool(available_capabilities.get('sec_financials_available')))
         available_capabilities.setdefault('search_library_available', True)
@@ -2559,6 +2615,7 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
             available_capabilities.setdefault('news_search_providers', [str(getattr(p, 'name', 'unknown')) for p in news_provider_list])
         if ocr_pages is not None:
             available_capabilities.setdefault('pdf_ocr_on_demand', True)
+        available_capabilities.setdefault('issuer_documents_available', issuer_docs is not None)
         # Method packs go right after the research clock in the first user message, never into SYSTEM/TOOLS.
         pack_texts, pack_records = insights.method_pack_texts(question, available_capabilities)
         payload: dict[str, Any] = {'question': question, 'sources': inventory,
@@ -2579,7 +2636,7 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                 token_budget=_prior_research_token_budget(model),
             )
         state = {'user': json.dumps(payload, ensure_ascii=False), 'history': [],
-                 'events': [], 'read_ranges': [], 'facts': [], 'calculations': [], 'charts': [], 'leads': [],
+                 'events': [], 'read_ranges': [], 'facts': [], 'calculations': [], 'charts': [], 'leads': _user_question_leads(question),
                  'acquired_source_ids': [], 'failed_attempts': [], 'pending': None,
                  'focus_ranges': focus_ranges, 'method_packs': pack_records, **prior_state}
     def save() -> None:
@@ -2611,6 +2668,11 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
             query = tool_args.get('query')
             if isinstance(query, str) and query.strip():
                 target = query.strip()[:200]
+        elif name == 'issuer_documents':
+            who = next((v.strip() for v in (tool_args.get('entity_name'), tool_args.get('ticker'), tool_args.get('entity_id'),
+                                            tool_args.get('website_url')) if isinstance(v, str) and v.strip()), '')
+            if who:
+                target = f'{who} · 官网文档'[:200]
         elif name == 'market_data':
             who = next((v.strip() for v in (tool_args.get('entity_id'), tool_args.get('symbol')) if isinstance(v, str) and v.strip()), '')
             window = tool_args.get('lookback') or ' ~ '.join(
@@ -3047,6 +3109,48 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                    'total_characters': result['total_characters'] if type(result.get('total_characters')) is int else None}
         return result, summary, None, result.get('status') == 'rate_limited'
 
+    def _run_issuer_documents(call: Any, req: IssuerDocumentsRequest, args: dict[str, Any], call_id: str,
+                              calls: list[Any], index: int, started_at: str):
+        """Issuer website discovery and bounded IR crawl. Read-only GETs; an unknown outcome is recorded, never replayed."""
+        if issuer_docs is None:
+            return {'status': 'unavailable', 'reason': 'issuer_documents_unavailable'}, None, None, False
+        key = issuer_call_signature(req)
+        done = state.setdefault('issuer_documents_calls', {})
+        if key in done:
+            return ({'status': 'duplicate_action', 'reused': True, 'document_count': done[key],
+                     'message': ('This exact issuer_documents call already ran; its document leads are already in this run. '
+                                 'Pass those URLs to acquire_sources instead of repeating the crawl.')}, None, 'action', False)
+        t_rationale, t_target = _tool_activity_meta('issuer_documents', args)
+        state['pending'] = {'kind': 'issuer_documents', 'call_id': call.id, 'rationale': t_rationale, 'target': t_target,
+                            'started_at': started_at}
+        save()
+        known = list(known_hosts_from_text(question))
+        known += [lead.get('domain') or (urlsplit(lead['url']).hostname or '') for lead in state.get('leads', [])
+                  if isinstance(lead, dict) and isinstance(lead.get('url'), str)]
+        known += [h for h in state.get('issuer_site_hosts', []) if isinstance(h, str)]
+        produced = issuer_docs.run(req, state.setdefault('entity_candidates', {}), known)
+        state['pending'] = _tool_batch_pending(call_id, [vars(c) for c in calls], index, started_at=started_at)
+        result = produced.result
+        hosts = state.setdefault('issuer_site_hosts', [])
+        for host in produced.site_hosts:
+            if host and host not in hosts:
+                hosts.append(host)
+        del hosts[:-50]
+        existing_leads = {lead['url'] for lead in state.get('leads', []) if isinstance(lead, dict) and isinstance(lead.get('url'), str)}
+        for lead in produced.leads:
+            if lead['url'] not in existing_leads and not is_fred_source(lead['url']):
+                state.setdefault('leads', []).append(lead)
+                existing_leads.add(lead['url'])
+            references = state.setdefault('lead_discovery_calls', {}).setdefault(lead['url'], [])
+            if call.id not in references:
+                references.append(call.id)
+        if result.get('status') in ('ok', 'partial', 'empty', 'denied') or result.get('external_state') == 'unknown':
+            done[key] = len(result.get('documents') or [])
+        summary = {'kind': 'data_tool', 'tool': 'issuer_documents', 'target': t_target,
+                   'status': _clip(result.get('status', 'completed'), 100),
+                   'title': _clip(produced.summary_title, 160) if produced.summary_title else None, 'total_characters': None}
+        return result, summary, None, result.get('status') == 'rate_limited'
+
     stream_call_seq = sum(
         1 for ev in state.get('events', [])
         if isinstance(ev, Mapping) and ev.get('kind') in ('model', 'model_failure')
@@ -3359,7 +3463,7 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                              'news_search': NewsSearchRequest,
                              'acquire_sources': AcquireRequest, 'resolve_entity': ResolveEntityRequest,
                              'market_data': MarketDataRequest, 'company_financials': CompanyFinancialsRequest,
-                             'filings': FilingsRequest, 'record_facts': FactsRequest,
+                             'filings': FilingsRequest, 'issuer_documents': IssuerDocumentsRequest, 'record_facts': FactsRequest,
                              'request_ocr': RequestOcrRequest,
                              'calculate_financials': CalculateRequest, 'create_chart': CreateChartRequest,
                              'submit_research': SubmitRequest}.get(call.name)
@@ -3546,15 +3650,19 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                         if lead is None:
                             rows.append({'url': url, 'status': 'denied_or_unavailable',
                                          'reason': 'lead_not_discovered',
-                                         'hint': 'Only pass URLs returned by news_search or filings.'})
+                                         'hint': 'Only pass URLs returned by news_search, filings or issuer_documents, or a URL the user wrote.'})
                             summary_rows.append({'title': host or '未命名来源', 'host': host, 'status': 'denied_or_unavailable',
                                                  'reason': 'lead_not_discovered', 'total_characters': None})
                             continue
-                        if lead.get('acquirable') is False or not terms_decision(requested_url).allowed:
-                            rows.append({'url': url, 'status': 'denied_or_unavailable', 'reason': 'source_blocked_terms',
+                        user_lead = lead.get('initiator') == 'user'
+                        terms = terms_decision(requested_url, initiator='user' if user_lead else None)
+                        if not terms.allowed or (lead.get('acquirable') is False and not user_lead):
+                            blocked_reason = ('source_user_initiated_only' if terms.status == 'user_initiated_only'
+                                              else 'source_blocked_terms')
+                            rows.append({'url': url, 'status': 'denied_or_unavailable', 'reason': blocked_reason,
                                          'external_state': 'not_started'})
                             summary_rows.append({'title': host or '未命名来源', 'host': host, 'status': 'denied_or_unavailable',
-                                                 'reason': 'source_blocked_terms', 'total_characters': None})
+                                                 'reason': blocked_reason, 'total_characters': None})
                             continue
                         acquired_ids = state.setdefault('acquired_lead_sources', {})
                         prior_source = source_by_id.get(acquired_ids.get(requested_url))
@@ -3568,7 +3676,12 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                         state['pending'] = {'kind': 'acquire', 'call_id': call.id,
                                             'rationale': t_rationale, 'target': t_target, 'started_at': tool_started_at}
                         save()
-                        acquired = acquire(requested_url, str(lead.get('title') or ''))
+                        if user_lead:
+                            # The user wrote this URL: one single-document retrieval, no crawling (terms personal mode).
+                            with user_initiated_scope(requested_url):
+                                acquired = acquire(requested_url, str(lead.get('title') or ''))
+                        else:
+                            acquired = acquire(requested_url, str(lead.get('title') or ''))
                         if isinstance(acquired, tuple) and len(acquired) == 2:
                             source, details = acquired
                         else:
@@ -3646,6 +3759,9 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                         any(r.get('status') != 'acquired' and r.get('reason') == 'source_rate_limited' for r in rows)
                         and not any(r.get('status') == 'acquired' and not r.get('reused') for r in rows)
                     )
+                elif call.name == 'issuer_documents':
+                    result, tool_summary, duplicate_kind, transient_rate_limited = _run_issuer_documents(
+                        call, req, args, call_id, calls, index, tool_started_at)
                 elif call.name in _FIN_TOOLS:
                     result, tool_summary, duplicate_kind, transient_rate_limited = _run_fin_tool(
                         call, req, args, call_id, calls, index, tool_started_at)
@@ -3931,7 +4047,7 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                 if type(result.get('denied_count')) is int:
                     event['denied_count'] = result['denied_count']
                     event['denied_reasons'] = result['denied_reasons']
-            if call.name in {'news_search', 'acquire_sources'} | _FIN_TOOLS:
+            if call.name in {'news_search', 'acquire_sources', 'issuer_documents'} | _FIN_TOOLS:
                 reason = result.get('reason')
                 if isinstance(reason, str) and len(reason) <= 100 and all(c.isalnum() or c == '_' for c in reason):
                     event['reason'] = reason

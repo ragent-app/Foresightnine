@@ -47,6 +47,7 @@ EXCHANGES: dict[str, ExchangeSession] = {item.code: item for item in (
     ExchangeSession('EURONEXT', 'Euronext Paris/Amsterdam', 'Europe/Paris', time(9, 0), time(17, 30)),
     ExchangeSession('SSE', 'Shanghai Stock Exchange', 'Asia/Shanghai', time(9, 30), time(15, 0), (time(11, 30), time(13, 0))),
     ExchangeSession('SZSE', 'Shenzhen Stock Exchange', 'Asia/Shanghai', time(9, 30), time(15, 0), (time(11, 30), time(13, 0))),
+    ExchangeSession('BJSE', 'Beijing Stock Exchange', 'Asia/Shanghai', time(9, 30), time(15, 0), (time(11, 30), time(13, 0))),
     ExchangeSession('HKEX', 'Hong Kong Exchanges', 'Asia/Hong_Kong', time(9, 30), time(16, 0), (time(12, 0), time(13, 0))),
     ExchangeSession('TSE', 'Tokyo Stock Exchange', 'Asia/Tokyo', time(9, 0), time(15, 30), (time(11, 30), time(12, 30))),
     ExchangeSession('KRX', 'Korea Exchange', 'Asia/Seoul', time(9, 0), time(15, 30)),

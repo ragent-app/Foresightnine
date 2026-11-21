@@ -24,7 +24,7 @@ _EXCHANGE_ALIASES = {
     "NYSE": "NYSE", "XNYS": "NYSE",
     "TSX": "TSX", "XTSE": "TSX", "LSE": "LSE", "XLON": "LSE",
     "XETRA": "XETRA", "XETR": "XETRA", "EURONEXT": "EURONEXT", "XPAR": "EURONEXT", "XAMS": "EURONEXT",
-    "SSE": "SSE", "XSHG": "SSE", "SZSE": "SZSE", "XSHE": "SZSE",
+    "SSE": "SSE", "XSHG": "SSE", "SZSE": "SZSE", "XSHE": "SZSE", "XBSE": "BJSE", "BJSE": "BJSE",
     "HKEX": "HKEX", "XHKG": "HKEX", "SEHK": "HKEX",
     "TSE": "TSE", "XTKS": "TSE", "JPX": "TSE", "KRX": "KRX", "XKRX": "KRX",
     "TWSE": "TWSE", "XTAI": "TWSE", "NSE": "NSE", "XNSE": "NSE", "ASX": "ASX", "XASX": "ASX",
@@ -105,6 +105,8 @@ class Bar(_Frozen):
     low: Decimal
     close: Decimal
     volume: Decimal | None = None
+    # Provider's cumulative adjustment factor on this day (A-share sources); prices stay as traded.
+    adj_factor: Decimal | None = None
     adjustment: str = "none"
     session: str | None = None
     is_final: bool = True
@@ -135,6 +137,12 @@ class StatementLine(_Frozen):
     frame: str | None = None
     derived: bool = False
     derivation: str | None = None
+    # Non-SEC sources: reporting basis ("ytd_cumulative", "single_quarter_derived", "point_in_time"), accounting
+    # standard, and restatements: the latest revision wins; earlier values are kept as "<filed>:<value>".
+    basis: str | None = None
+    accounting_standard: str | None = None
+    revision_count: int = 0
+    superseded: list[str] = Field(default_factory=list)
 
 
 class Filing(_Frozen):

@@ -12,23 +12,25 @@ from typing import Any, Literal, Mapping
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-MarketProviderId = Literal["market_data", "alpha_vantage", "twelve_data", "finnhub", "yahoo"]
+MarketProviderId = Literal["market_data", "alpha_vantage", "twelve_data", "finnhub", "yahoo", "tushare"]
 MARKET_PROVIDER_ORDER: tuple[MarketProviderId, ...] = (
-    "market_data", "alpha_vantage", "twelve_data", "finnhub", "yahoo",
+    "market_data", "alpha_vantage", "twelve_data", "finnhub", "yahoo", "tushare",
 )
-KEYED_MARKET_PROVIDERS = frozenset({"market_data", "alpha_vantage", "twelve_data", "finnhub"})
+KEYED_MARKET_PROVIDERS = frozenset({"market_data", "alpha_vantage", "twelve_data", "finnhub", "tushare"})
 PROVIDER_LABELS: Mapping[str, str] = {
     "market_data": "Market Data",
     "alpha_vantage": "Alpha Vantage",
     "twelve_data": "Twelve Data",
     "finnhub": "Finnhub",
     "yahoo": "Yahoo Finance",
+    "tushare": "Tushare Pro (A-shares)",
 }
 PROVIDER_ENV: Mapping[str, str] = {
     "market_data": "FORESIGHTNINE_MARKETDATA_API_KEY",
     "alpha_vantage": "FORESIGHTNINE_ALPHAVANTAGE_API_KEY",
     "twelve_data": "FORESIGHTNINE_TWELVEDATA_API_KEY",
     "finnhub": "FORESIGHTNINE_FINNHUB_API_KEY",
+    "tushare": "FORESIGHTNINE_TUSHARE_TOKEN",
 }
 
 
@@ -55,6 +57,22 @@ class StoredMarketDataConfig(BaseModel):
     fallback_order: list[MarketProviderId]
     providers: list[StoredMarketProvider]
     updated_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def add_missing_providers(cls, data: Any) -> Any:
+        """A provider added after the config was saved (e.g. tushare) is appended enabled and without a key."""
+        if not isinstance(data, dict):
+            return data
+        providers = list(data.get("providers") or [])
+        order = list(data.get("fallback_order") or [])
+        have = {(p.get("provider_id") if isinstance(p, dict) else getattr(p, "provider_id", None)) for p in providers}
+        for provider_id in MARKET_PROVIDER_ORDER:
+            if provider_id not in have:
+                providers.append({"provider_id": provider_id, "enabled": True})
+            if provider_id not in order:
+                order.append(provider_id)
+        return {**data, "providers": providers, "fallback_order": order}
 
     @model_validator(mode="after")
     def validate_provider_set(self) -> "StoredMarketDataConfig":

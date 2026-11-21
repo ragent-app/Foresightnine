@@ -49,7 +49,7 @@ export interface ModelConfigUpdate {
 
 export type ConnectionStatus = "ready" | "unavailable";
 
-export type MarketProviderId = "market_data" | "alpha_vantage" | "twelve_data" | "finnhub" | "yahoo";
+export type MarketProviderId = "market_data" | "alpha_vantage" | "twelve_data" | "finnhub" | "yahoo" | "tushare";
 
 export interface MarketProviderSummary {
   provider_id: MarketProviderId;

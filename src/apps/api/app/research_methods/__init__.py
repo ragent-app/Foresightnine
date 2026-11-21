@@ -29,7 +29,7 @@ KNOWN_TOOLS = frozenset({
     'resolve_entity', 'market_data', 'company_financials', 'filings',
     'acquire_sources', 'read_sources', 'read_pages', 'outline_source', 'search_source',
     'request_ocr', 'record_facts', 'calculate_financials', 'create_chart', 'submit_research',
-    'search_library', 'news_search',
+    'search_library', 'news_search', 'issuer_documents',
 })
 OPTIONAL_TOOLS = frozenset({'search_library', 'news_search'})
 # tool -> capability flag in the run's available_capabilities dict
@@ -40,6 +40,7 @@ CAPABILITY_FLAG = {
     'acquire_sources': 'acquire_available',
     'search_library': 'search_library_available',
     'news_search': 'news_search_available',
+    'issuer_documents': 'issuer_documents_available',
 }
 
 

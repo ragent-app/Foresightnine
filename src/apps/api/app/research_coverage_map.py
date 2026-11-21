@@ -51,7 +51,7 @@ STATUS_LABELS = {
 TOOL_CATEGORY: dict[str, str] = {
     "historical_prices": "market_prices", "market_data": "market_prices",
     "company_financials": "financial_statements", "sec_company_concept": "financial_statements", "sec_company_facts": "financial_statements",
-    "filings": "filings", "sec_filings": "filings", "sec_full_text_search": "filings",
+    "filings": "filings", "issuer_documents": "filings", "sec_filings": "filings", "sec_full_text_search": "filings",
     "news_search": "news_web", "acquire_sources": "news_web",
 }
 _MACRO_TOOL = re.compile(r"^(?:macro|fred|world_?bank|imf|ecb|oecd|bls|census)", re.I)
@@ -236,7 +236,7 @@ def _category_of_source(src: Mapping[str, Any], action_tool: str | None) -> str:
         return "market_prices"
     if kind is None and method is None and not host and re.search(r"daily close|\bbars\b", title, re.I):
         return "market_prices"
-    if method in ("sec_companyconcept", "sec_companyfacts") or action_tool in ("company_financials", "sec_company_concept", "sec_company_facts"):
+    if method in ("sec_companyconcept", "sec_companyfacts", "structured_financials") or action_tool in ("company_financials", "sec_company_concept", "sec_company_facts"):
         return "financial_statements"
     if method == "sec_filing_html" or action_tool in ("filings", "sec_filings") or _host_in(host, PRIMARY_HOSTS):
         return "filings"

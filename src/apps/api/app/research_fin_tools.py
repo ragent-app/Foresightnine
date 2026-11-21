@@ -12,14 +12,18 @@ The default policy denies the platform key.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from datetime import date, datetime, timezone
 from typing import Any, Callable, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from .fin_data import cn as cn_helpers
+from .fin_data.adapters.baostock import BaoStockAdapter, default_runner as baostock_default_runner
 from .fin_data.adapters.sec_edgar import STANDARD_LINES, SecEdgarAdapter, cik10
+from .fin_data.adapters.tushare import TushareAdapter
 from .fin_data.adapters.twelve_data import TwelveDataAdapter
-from .fin_data.entity import MARKETS, parse_entity_id, resolve_entity as _resolve_entity
+from .fin_data.entity import MARKETS, parse_entity_id, resolve_cn, resolve_entity as _resolve_entity, wants_cn
 from .fin_data.models import INTERVALS, INTRADAY_INTERVALS, Permissions, ToolResult, normalize_exchange
 from .fin_data.policy import FinDataPolicy, load_policy
 from .fin_data.ratelimit import RateDecision, default_limiter
@@ -41,6 +45,13 @@ PERIODS = {'last_8_quarters': ('quarter', 8), 'last_4_quarters': ('quarter', 4),
 US_EXCHANGES = MARKETS['US']
 SEC_MIN_REMAINING_SECONDS = 15.0
 BYOK_MAX_TIMEOUT_SECONDS = 8.0
+TUSHARE_TIMEOUT_SECONDS = 15.0
+BAOSTOCK_TIMEOUT_SECONDS = 45.0
+CN_KEY_MESSAGE = (
+    'No A-share data source is available: the user can add their own Tushare token in Settings (Market data), '
+    'or the operator can enable the keyless BaoStock source. Meanwhile use prices and figures stated in the issuer\'s '
+    'reports or news and label them as not coming from market data.')
+_AUTO = object()
 
 
 # --------------------------------------------------------------------------- requests
@@ -88,7 +99,7 @@ class CompanyFinancialsRequest(BaseModel):
     lines: list[Literal[LINE_NAMES]] | None = Field(  # type: ignore[valid-type]
         default=None, max_length=len(LINE_NAMES), description='Standard line names; omit for all.')
     periods: Literal['last_8_quarters', 'last_4_quarters', 'last_3_fiscal_years', 'last_5_fiscal_years'] = 'last_8_quarters'
-    derive_q4: bool = Field(default=False, description='Derive Q4 flow values as FY minus Q1-Q3 (marked derived).')
+    derive_q4: bool = Field(default=False, description='Derive single-quarter flow values from cumulative figures (US: Q4 = FY minus Q1-Q3; A-shares: Q2/Q3/Q4 from year-to-date figures); rows are marked derived.')
     rationale: str = Field(min_length=1)
 
     @model_validator(mode='after')
@@ -209,6 +220,8 @@ class FinDataToolbox:
                  ensure_running: Callable[[], None] = lambda: None, now: Callable[[], datetime] | None = None,
                  disabled_reason: str | None = None, policy: FinDataPolicy | None = None, limiter=None,
                  sec_transport=None, sec_stream_transport=None, twelve_transport=None, cancel_event=None,
+                 tushare_key: str | None = None, tushare_owner: str = 'user_byok', tushare_transport=None,
+                 baostock_runner: Any = _AUTO,
                  on_result: Callable[[str, dict[str, Any]], None] | None = None) -> None:
         self.account_id, self._market_key = account_id, market_key or None
         self._owner = credential_owner if credential_owner in ('platform', 'user_byok') else 'user_byok'
@@ -223,6 +236,10 @@ class FinDataToolbox:
         self._limiter = _GatedLimiter(reserve_call, reserve_sec, limiter or default_limiter())
         self._sec_transport, self._sec_stream, self._td_transport = sec_transport, sec_stream_transport, twelve_transport
         self._cancel = cancel_event
+        self._ts_key = tushare_key or None
+        self._ts_owner = tushare_owner if tushare_owner in ('platform', 'user_byok') else 'user_byok'
+        self._ts_transport = tushare_transport
+        self._bs_runner = baostock_default_runner() if baostock_runner is _AUTO else baostock_runner
         self.on_result = on_result  # (tool name, model-visible result) for run level accounting
 
     # -- capability flags (first user message; tools stay static)
@@ -230,11 +247,16 @@ class FinDataToolbox:
     def enabled(self) -> bool:
         return self.disabled_reason is None
 
-    def capabilities(self) -> dict[str, bool]:
+    def capabilities(self) -> dict[str, Any]:
         sec = self.enabled and self._sec_ua is not None
+        provider = self.cn_provider() if self.enabled else None
         return {'market_data_available': self.enabled and self._market_key is not None,
                 'market_data_key_required': self.enabled and self._market_key is None,
-                'sec_financials_available': sec, 'filings_available': sec}
+                'sec_financials_available': sec, 'filings_available': sec,
+                'cn_market_data_available': provider is not None,
+                'cn_financials_available': provider is not None,
+                'cn_financials_limited': provider == 'baostock',
+                'cn_data_provider': provider}
 
     # -- adapters
     def _sec(self) -> SecEdgarAdapter:
@@ -261,6 +283,45 @@ class FinDataToolbox:
             kwargs['transport'] = send
         return TwelveDataAdapter(api_key=self._market_key, credential_owner=self._owner, account_id=self.account_id,
                                  limiter=self._limiter, policy=self._policy, now_fn=self._now, timeout=timeout, **kwargs)
+
+    # -- A-share providers: Tushare with the account's token first, keyless BaoStock as the fallback
+    def _tushare(self, timeout: float = TUSHARE_TIMEOUT_SECONDS) -> TushareAdapter:
+        kwargs: dict[str, Any] = {}
+        if self._ts_transport is not None:
+            kwargs['transport'] = self._ts_transport
+        else:
+            from .fin_data.adapters.base import _default_binary_transport
+
+            def send(method, url, headers, body, tmo):
+                return _default_binary_transport(method, url, headers, body, tmo, max_response_bytes=8_000_000,
+                                                 cancel_event=self._cancel)
+            kwargs['transport'] = send
+        return TushareAdapter(token=self._ts_key, credential_owner=self._ts_owner, account_id=self.account_id,
+                              limiter=self._limiter, policy=self._policy, now_fn=self._now, timeout=timeout, **kwargs)
+
+    def _baostock(self, timeout: float = BAOSTOCK_TIMEOUT_SECONDS) -> BaoStockAdapter:
+        return BaoStockAdapter(runner=self._bs_runner, limiter=self._limiter, policy=self._policy, now_fn=self._now,
+                               timeout=timeout)
+
+    def cn_provider(self, category: str = 'bars_daily') -> str | None:
+        if self._ts_key is not None and self._tushare().available(category):
+            return 'tushare'
+        if self._bs_runner is not None and self._baostock().available(category):
+            return 'baostock'
+        return None
+
+    def _cn_chain(self, category: str) -> list[tuple[str, Any]]:
+        remaining = self._remaining()
+        chain: list[tuple[str, Any]] = []
+        if self._ts_key is not None:
+            ts = self._tushare(min(TUSHARE_TIMEOUT_SECONDS, max(1.0, remaining)))
+            if ts.available(category):
+                chain.append(('tushare', ts))
+        if self._bs_runner is not None:
+            bs = self._baostock(min(BAOSTOCK_TIMEOUT_SECONDS, max(1.0, remaining)))
+            if bs.available(category):
+                chain.append(('baostock', bs))
+        return chain
 
     def _blocked(self) -> dict[str, Any] | None:
         if self.disabled_reason is not None:
@@ -297,7 +358,8 @@ class FinDataToolbox:
     # -- resolve_entity
     def resolve_entity(self, req: ResolveEntityRequest, entities: Mapping[str, Mapping[str, Any]]) -> FinToolOutcome:
         blocked = self._blocked()
-        if blocked is None and self._sec_ua is None and self._market_key is None:
+        cn_chain = self._cn_chain('identity') if (blocked is None and wants_cn(req.query, req.market)) else []
+        if blocked is None and self._sec_ua is None and self._market_key is None and not cn_chain:
             blocked = {'status': 'unavailable', 'reason': 'no_identity_source_available'}
         if blocked is None and self._sec_ua is not None:
             self._ensure_running()
@@ -306,7 +368,8 @@ class FinDataToolbox:
         if blocked:
             return FinToolOutcome(blocked)
         td = self._td(min(BYOK_MAX_TIMEOUT_SECONDS, max(1.0, self._remaining()))) if self._market_key else None
-        res = _resolve_entity(req.query, req.market, req.asset_type,
+        cn_res = resolve_cn(req.query, [(name, adapter.stock_list) for name, adapter in cn_chain]) if cn_chain else None
+        res = _resolve_entity(req.query, req.market, req.asset_type, cn=cn_res,
                               sec=self._sec() if self._sec_ua else None, twelve=td,
                               twelve_kwargs={'api_key': self._market_key, 'credential_owner': self._owner,
                                              'account_id': self.account_id} if td else None)
@@ -324,14 +387,27 @@ class FinDataToolbox:
                                   'currency': e.currency, 'asset_type': e.asset_type, 'identifiers': dict(e.identifiers)}
         notes = []
         if self._market_key is None:
-            notes.append('No Twelve Data key on this account: only SEC-registered US issuers can be matched; other '
-                         'markets need the user to add their own Twelve Data key in Settings.')
+            notes.append('No Twelve Data key on this account: only SEC-registered US issuers%s can be matched; other '
+                         'markets need the user to add their own Twelve Data key in Settings.'
+                         % (' and A-shares (Tushare/BaoStock)' if self.cn_provider('identity') else ''))
         out = wire(res, candidates=cands[:20])
         if notes:
             out['notes'] = notes
         return FinToolOutcome(out, entities=cache)
 
     # -- market_data
+    @staticmethod
+    def _cn_code(symbol: str | None, exchange: str | None) -> cn_helpers.CnCode | None:
+        """A-share code from a symbol (6 digits, or with a suffix/prefix) and an optional CN exchange."""
+        if not symbol:
+            return None
+        parsed = cn_helpers.parse_cn_code(symbol)
+        if parsed is None:
+            return None
+        if exchange and cn_helpers.is_cn_exchange(exchange) and re.fullmatch(r'\d{6}', symbol.strip()):
+            return cn_helpers.CnCode(parsed.code, exchange.upper(), False)
+        return parsed
+
     def market_spec(self, req: MarketDataRequest, entities: Mapping[str, Mapping[str, Any]]) -> MarketSpec | dict[str, Any]:
         info = self._info(req.entity_id, entities) if req.entity_id else {
             'entity_id': None, 'symbol': req.symbol, 'exchange': req.exchange, 'exchange_raw': None,
@@ -344,17 +420,31 @@ class FinDataToolbox:
         ex_code = normalize_exchange(info['exchange']) if info['exchange'] else (normalize_exchange(req.exchange) if req.exchange else None)
         entity_id = info['entity_id'] if info['entity_id'] and not str(info['entity_id']).startswith('cik:') else (
             f'{ex_code}:{symbol.upper()}' if ex_code else None)
+        currency = info['currency']
+        if ex_code is None or cn_helpers.is_cn_exchange(ex_code):
+            cn_code = self._cn_code(symbol, ex_code)
+            if cn_code is not None:
+                symbol, ex_code, entity_id, currency = cn_code.code, cn_code.exchange, cn_code.entity_id, cn_helpers.CN_CURRENCY
+                raw_ex = raw_ex if cn_helpers.is_cn_exchange(raw_ex) else cn_code.exchange
         start, end = req.start_date, req.end_date
         if req.lookback is not None:
             session = exchange_session(ex_code)
             start, end = resolve_lookback(req.lookback, now=self._now(), exchange=ex_code,
                                           timezone_name=session.timezone if session else 'UTC')
-        return MarketSpec(entity_id, symbol, ex_code, raw_ex, info['currency'], req.interval, start, end)
+        return MarketSpec(entity_id, symbol, ex_code, raw_ex, currency, req.interval, start, end)
 
     def market_data(self, spec: MarketSpec) -> FinToolOutcome:
         blocked = self._blocked()
         if blocked:
             return FinToolOutcome(blocked)
+        cn_code = self._cn_code(spec.symbol, spec.exchange) if cn_helpers.is_cn_exchange(spec.exchange) else None
+        if cn_code is not None:
+            chain = self._cn_chain('bars_daily')
+            if chain:
+                return self._cn_market_data(spec, cn_code, chain)
+            if self._market_key is None:
+                return FinToolOutcome({'status': 'unavailable', 'reason': 'cn_market_data_unavailable',
+                                       'message': CN_KEY_MESSAGE})
         if self._market_key is None:
             return FinToolOutcome({'status': 'unavailable', 'reason': 'market_data_key_required',
                                    'message': MARKET_KEY_REQUIRED_MESSAGE})
@@ -368,6 +458,43 @@ class FinDataToolbox:
                            credential_owner=self._owner)
         if res.status not in ('ok', 'partial') or not res.data:
             return FinToolOutcome(wire(res))
+        return self._bars_outcome(res, spec, provider='twelve_data', endpoint='time_series', owner=self._owner)
+
+    def _cn_market_data(self, spec: MarketSpec, code: cn_helpers.CnCode, chain: list[tuple[str, Any]]) -> FinToolOutcome:
+        if spec.interval in INTRADAY_INTERVALS:
+            return FinToolOutcome({'status': 'unavailable', 'reason': 'intraday_not_supported_cn',
+                                   'message': 'Free A-share sources provide daily, weekly and monthly bars only; use '
+                                              'interval 1day, 1week or 1month.'})
+        self._ensure_running()
+        if self._remaining() <= 0:
+            return FinToolOutcome({'status': 'unavailable', 'reason': 'time_budget'})
+        failures: list[str] = []
+        last: ToolResult | None = None
+        for name, adapter in chain:
+            res = adapter.bars(code, interval=spec.interval, start=spec.start, end=spec.end, entity_id=spec.entity_id)
+            if res.status in ('ok', 'partial') and res.data:
+                if failures:
+                    res = res.model_copy(update={'coverage': res.coverage.model_copy(
+                        update={'notes': [*res.coverage.notes, *failures]}) if res.coverage else res.coverage})
+                owner = self._ts_owner if name == 'tushare' else 'keyless_public_source'
+                note = ('Third-party A-share data under the account\'s own Tushare token, personal use only; not shared '
+                        'across accounts and not exportable. Prices are as traded; adj_factor carries the adjustment.'
+                        if name == 'tushare' else
+                        'BaoStock public source (no terms of use found; personal development use assumed, review before '
+                        'public release); not exportable. Prices are as traded; adj_factor is derived.')
+                return self._bars_outcome(res, spec, provider=name, endpoint='daily' if name == 'tushare' else 'query_history_k_data_plus',
+                                          owner=owner, note=note)
+            last = res
+            if res.status == 'empty':
+                break
+            failures.append(f'{name} failed ({res.reason}); next source tried.' if (name, adapter) != chain[-1] else f'{name} failed ({res.reason}).')
+        out = wire(last) if last is not None else {'status': 'unavailable', 'reason': 'cn_market_data_unavailable'}
+        if failures:
+            out['source_failures'] = failures
+        return FinToolOutcome(out)
+
+    def _bars_outcome(self, res: ToolResult, spec: MarketSpec, *, provider: str, endpoint: str, owner: str,
+                      note: str | None = None) -> FinToolOutcome:
         bars, cov, prov = res.data, res.coverage, res.provenance
         currency = (cov.currency if cov else None) or spec.currency
         ex_label = spec.exchange or spec.provider_exchange or '?'
@@ -378,10 +505,11 @@ class FinDataToolbox:
             ts = b.ts_start.date().isoformat() if daily else b.ts_start.isoformat()
             vol = _fmt(b.volume) if b.volume is not None else '-'
             lines.append(f'{label} | {ts} | {spec.interval} | O {_fmt(b.open)} H {_fmt(b.high)} L {_fmt(b.low)} '
-                         f'C {_fmt(b.close)} V {vol}' + (f' {currency}' if currency else ''))
+                         f'C {_fmt(b.close)} V {vol}' + (f' {currency}' if currency else '')
+                         + (f' ADJF {_fmt(b.adj_factor)}' if b.adj_factor is not None else ''))
         first, last = lines[0].split(' | ')[1], lines[-1].split(' | ')[1]
         provenance = {
-            'provider': 'twelve_data', 'endpoint': 'time_series', 'credential_owner': self._owner,
+            'provider': provider, 'endpoint': endpoint, 'credential_owner': owner,
             'owner_account_id': self.account_id if res.permissions.owner_scoped else None,
             'owner_scoped': bool(res.permissions.owner_scoped), 'entity_id': spec.entity_id,
             'symbol': spec.symbol, 'exchange': ex_label, 'currency': currency, 'interval': spec.interval,
@@ -392,10 +520,10 @@ class FinDataToolbox:
             'retrieved_at': prov.retrieved_at.isoformat() if prov else None,
             'coverage': cov.model_dump(mode='json', exclude_none=True) if cov else None,
             'permissions': res.permissions.model_dump(mode='json'),
-            'limitation': (
+            'limitation': note or (
                 'Provider data under the user\'s own Twelve Data key, personal use only; not shared across '
                 'accounts and not exportable. Provider coverage and revisions are not independently verified.'
-                if self._owner == 'user_byok' else
+                if owner == 'user_byok' else
                 'Provider data under the operator\'s platform Twelve Data key, allowed by the configured data policy '
                 '(personal development use). Provider coverage and revisions are not independently verified.')}
         try:
@@ -409,8 +537,9 @@ class FinDataToolbox:
                                    'message': 'The data policy does not permit storing this series.'})
         out = wire(res, source_id=source.source_id, title=source.title, total_characters=len(source.text),
                    content_sha256=source.content_sha256, rows=len(bars),
-                   line_format='<SYMBOL>@<EXCHANGE> | <ts> | <interval> | O <o> H <h> L <l> C <c> V <v> <currency>')
-        out['usage_note'] = 'Quote exact lines with read_sources and record_facts. Data is owner-scoped and not exportable.'
+                   line_format='<SYMBOL>@<EXCHANGE> | <ts> | <interval> | O <o> H <h> L <l> C <c> V <v> <currency> [ADJF <adjustment factor>]')
+        out['usage_note'] = ('Quote exact lines with read_sources and record_facts. '
+                             + ('Data is owner-scoped and not exportable.' if res.permissions.owner_scoped else 'Data is not exportable.'))
         extra = []
         if cov and cov.actual.get('last') and spec.start is not None:
             extra.append(MarketSpec(spec.entity_id, spec.symbol, spec.exchange, spec.provider_exchange, spec.currency,
@@ -460,6 +589,9 @@ class FinDataToolbox:
 
     # -- company_financials
     def company_financials(self, req: CompanyFinancialsRequest, entities: Mapping[str, Mapping[str, Any]]) -> FinToolOutcome:
+        cn_code = self._cn_target(req)
+        if cn_code is not None:
+            return self._cn_company_financials(req, cn_code, entities)
         blocked = self._sec_blocked()
         if blocked:
             return FinToolOutcome(blocked)
@@ -516,6 +648,92 @@ class FinDataToolbox:
                    usage_note='Quote exact lines with read_sources and record_facts; period, tag, form and accession are in each line.')
         return FinToolOutcome(out, source=source, entities={info['entity_id']: {'company': info['name'], 'symbol': info['symbol'],
                                                                               'identifiers': {'cik': cik}}})
+
+    # -- A-share financials
+    def _cn_target(self, req: CompanyFinancialsRequest) -> cn_helpers.CnCode | None:
+        if req.cik:
+            return None
+        if req.entity_id:
+            return cn_helpers.parse_cn_code(req.entity_id.strip()) if not req.entity_id.lower().startswith('cik:') else None
+        return cn_helpers.parse_cn_code(req.ticker)
+
+    def _cn_company_financials(self, req: CompanyFinancialsRequest, code: cn_helpers.CnCode,
+                               entities: Mapping[str, Mapping[str, Any]]) -> FinToolOutcome:
+        blocked = self._blocked()
+        if blocked:
+            return FinToolOutcome(blocked)
+        chain = self._cn_chain('financials')
+        if not chain:
+            return FinToolOutcome({'status': 'unavailable', 'reason': 'cn_financials_unavailable', 'message': CN_KEY_MESSAGE})
+        self._ensure_running()
+        if self._remaining() <= 0:
+            return FinToolOutcome({'status': 'unavailable', 'reason': 'time_budget'})
+        period, n = PERIODS[req.periods]
+        derive = req.derive_q4 and period == 'quarter'
+        failures: list[str] = []
+        last: ToolResult | None = None
+        name = ''
+        res: ToolResult | None = None
+        for name, adapter in chain:
+            res = adapter.statement_lines(code, lines=req.lines, period=period, n=n, derive_quarters=derive,
+                                          entity_id=code.entity_id)
+            if res.status in ('ok', 'partial') and res.data:
+                break
+            last = res
+            failures.append(f'{name} failed ({res.reason}).')
+            res = None
+        if res is None:
+            out = wire(last) if last is not None else {'status': 'unavailable', 'reason': 'cn_financials_unavailable'}
+            if failures:
+                out['source_failures'] = failures
+            return FinToolOutcome(out)
+        if failures:
+            res = res.model_copy(update={'coverage': res.coverage.model_copy(
+                update={'notes': [*res.coverage.notes, *[f + ' Fell back to the next source.' for f in failures]]}) if res.coverage else res.coverage})
+        info = self._info(code.entity_id, entities)
+        label = code.code
+        lines = []
+        for s in sorted(res.data, key=lambda x: (x.statement, x.line, x.period_end, x.derived)):
+            lines.append(
+                f"{label} | {s.statement}.{s.line} | {s.taxonomy}:{s.reported_tag} | "
+                f"{s.period_start.isoformat() if s.period_start else ''}..{s.period_end.isoformat()} | "
+                f"fiscal {s.fiscal_label or '-'} | form {s.form or '-'} filed {s.filed_at.isoformat() if s.filed_at else '-'} | "
+                f"basis {s.basis or '-'} | value {_fmt(s.value)} {s.unit}"
+                + (f' | derived: {s.derivation}' if s.derived else '')
+                + (f" | superseded: {'; '.join(s.superseded)}" if s.superseded else ''))
+        prov = res.provenance
+        endpoints = list(prov.endpoints) if prov and prov.endpoints else ([prov.endpoint] if prov and prov.endpoint else [])
+        owner = self._ts_owner if name == 'tushare' else 'keyless_public_source'
+        provenance = {
+            'provider': name, 'endpoint': endpoints[0] if endpoints else None, 'endpoints': endpoints,
+            'provider_calls': res.cost.provider_calls, 'credential_owner': owner,
+            'owner_account_id': self.account_id if res.permissions.owner_scoped else None,
+            'owner_scoped': bool(res.permissions.owner_scoped), 'entity_id': code.entity_id, 'taxonomy': res.data[0].taxonomy,
+            'accounting_standard': cn_helpers.ACCOUNTING_STANDARD, 'currency': cn_helpers.CN_CURRENCY,
+            'periods': req.periods, 'lines': sorted({s.line for s in res.data}), 'derive_quarters': derive,
+            'row_count': len(lines), 'provider_response_sha256': prov.response_sha256 if prov else None,
+            'retrieved_at': prov.retrieved_at.isoformat() if prov else None,
+            'coverage': res.coverage.model_dump(mode='json', exclude_none=True) if res.coverage else None,
+            'permissions': res.permissions.model_dump(mode='json'),
+            'limitations': [
+                'Third-party structured data, not the filed report itself; check key figures against the issuer\'s report.',
+                'Q1/H1/9M/FY flow values are cumulative year-to-date as reported; single quarters only when marked derived.',
+                'Where a period was restated the latest revision is shown; filing date is the provider\'s announcement date.']}
+        try:
+            source = self._persist(
+                SourceInput(title=f'{label} A-share financials via {name} ({req.periods})', text='\n'.join(lines),
+                            kind='official', permissions=self._source_permissions(res.permissions)),
+                retrieval_method='structured_financials', response_sha256=provenance['provider_response_sha256'],
+                response_content_type='application/json', provenance=provenance)
+        except (ValueError, ValidationError):
+            return FinToolOutcome({'status': 'denied', 'reason': 'source_not_storable'})
+        out = wire(res, source_id=source.source_id, title=source.title, total_characters=len(source.text),
+                   content_sha256=source.content_sha256, rows=len(lines), entity_id=code.entity_id,
+                   line_format='<code> | <statement>.<line> | <taxonomy>:<provider_field> | <start>..<end> | fiscal <label> | form <report> filed <date> | basis <ytd_cumulative|single_quarter_derived|point_in_time|period_ratio|ttm> | value <v> <unit> [| derived: ...] [| superseded: <filed>:<value>]',
+                   usage_note='Quote exact lines with read_sources and record_facts. Flow values are year-to-date cumulative unless basis says single_quarter_derived.',
+                   provider=name)
+        return FinToolOutcome(out, source=source, entities={code.entity_id: {
+            'company': info['name'], 'symbol': code.code, 'exchange': code.exchange, 'currency': cn_helpers.CN_CURRENCY}})
 
     # -- filings
     def filings_key(self, req: FilingsRequest) -> str:

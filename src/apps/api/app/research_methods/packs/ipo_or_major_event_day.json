@@ -1,6 +1,6 @@
 {
  "id": "ipo_or_major_event_day",
- "version": "1.1.0",
+ "version": "1.2.0",
  "title_zh": "IPO 与重大事件首日",
  "title_en": "IPO or major event day",
  "applies_when": {
@@ -79,6 +79,7 @@
    "description": "Offer price, shares, venue, ticker and pricing date from the issuer or regulator filing.",
    "preferred_tools": [
     "filings",
+    "issuer_documents",
     "news_search",
     "acquire_sources",
     "read_pages"
@@ -86,7 +87,7 @@
    "required": true,
    "freshness": "latest filing before event",
    "acceptance": "quoted from filing text",
-   "fallback": "Use news for terms and label them secondary."
+   "fallback": "Use news for terms and label them secondary. Where filings do not cover the issuer, use issuer_documents for its own offer announcements."
   },
   {
    "id": "first_trade",

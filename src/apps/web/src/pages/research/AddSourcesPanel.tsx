@@ -64,7 +64,7 @@ function addError(tab: AddSourceTab, kind: UploadKind | null, error: unknown): s
         return kind === "pdf" ? "PDF 无效、已加密，或没有可提取的文字。" : "文件无效、过大，或没有可提取的文字。";
       }
       if (tab === "url") {
-        if (/terms do not permit automated access/i.test(error.message)) return "这个网站的条款不允许自动访问。请下载文件后在“文件”中上传，或使用公司官网投资者关系页面上的副本。";
+        if (/terms do not permit automated access/i.test(error.message)) return "这个网站的条款不允许自动访问。请下载文件后在“文件”中上传，或使用公司官网投资者关系页面上的副本。巨潮资讯、上交所、深交所的单个文档链接，需运营方开启个人使用模式后才能获取。";
         if (/blocked by fetch policy/i.test(error.message)) return "这个网站或跳转目标不在允许获取的范围内，可以保存后按文件添加。";
         if (/rejected the request/i.test(error.message)) return "目标网站拒绝了自动访问（可能需要登录或触发了防爬验证），可以保存后按文件添加。";
         if (/not found/i.test(error.message)) return "找不到该网址对应的页面（404/410）。";

@@ -72,6 +72,7 @@ RetrievalMethod = Literal[
     "historical_prices",
     "market_data",
     "sec_companyfacts",
+    "structured_financials",
     "web_html",
     "web_pdf",
 ]

@@ -1,6 +1,6 @@
 {
  "id": "company_comparison",
- "version": "1.1.0",
+ "version": "1.2.0",
  "title_zh": "公司比较",
  "title_en": "Company comparison",
  "applies_when": {
@@ -74,12 +74,13 @@
    "preferred_tools": [
     "company_financials",
     "filings",
+    "issuer_documents",
     "news_search"
    ],
    "required": true,
    "freshness": "latest filed period of each company as of research_clock",
    "acceptance": "same line items, period and unit across companies",
-   "fallback": "Use filing text and mark the lines non-standardized."
+   "fallback": "Use filing text and mark the lines non-standardized. For non-SEC issuers, obtain their periodic reports with issuer_documents."
   },
   {
    "id": "derived_ratios",

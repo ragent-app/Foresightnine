@@ -30,6 +30,10 @@ class Script:
         return self.fn([json.loads(m['content']) for m in messages if m.get('role') == 'tool'])
 
 
+def core_caps(box):
+    return {k: v for k, v in box.capabilities().items() if not k.startswith('cn_')}
+
+
 def last_result(model, index=1):
     return json.loads(model.inputs[index][-1]['content'])
 
@@ -43,7 +47,7 @@ def test_tools_are_static_and_replace_the_old_ones():
     names = [t.name for t in TOOLS]
     assert 'historical_prices' not in names and 'sec_company_concept' not in names
     assert names[names.index('acquire_sources') + 1:names.index('record_facts')] == [
-        'resolve_entity', 'market_data', 'company_financials', 'filings']
+        'resolve_entity', 'market_data', 'company_financials', 'filings', 'issuer_documents']
     dumped = json.dumps([t.__dict__ for t in TOOLS], default=str) + SYSTEM
     assert '2026' not in dumped and '2025' not in dumped  # static, date free
     fin = next(t for t in TOOLS if t.name == 'company_financials').input_schema
@@ -80,7 +84,7 @@ def test_market_data_without_account_key_is_unavailable_and_platform_key_is_igno
     fb = last_result(m)
     assert fb['status'] == 'unavailable' and fb['reason'] == 'market_data_key_required'
     assert 'Settings' in fb['message'] and 'not coming from market data' in fb['message'] and not t.calls
-    assert box.capabilities() == {'market_data_available': False, 'market_data_key_required': True,
+    assert core_caps(box) == {'market_data_available': False, 'market_data_key_required': True,
                                   'sec_financials_available': True, 'filings_available': True}
     assert any(g['code'] == 'market_data_key_required' for g in out.gaps)
 
@@ -300,14 +304,14 @@ def test_disabled_runs_make_no_requests_and_report_the_reason():
     for index in (1, 2, 3, 4):
         assert last_result(m, index) == {'status': 'restricted', 'reason': 'historical_cutoff'}
     assert not sec.calls and not td.calls
-    assert box.capabilities() == {'market_data_available': False, 'market_data_key_required': False,
+    assert core_caps(box) == {'market_data_available': False, 'market_data_key_required': False,
                                   'sec_financials_available': False, 'filings_available': False}
 
 
 def test_capabilities_flags_follow_key_and_sec_contact():
-    assert make_toolbox().capabilities() == {'market_data_available': True, 'market_data_key_required': False,
+    assert core_caps(make_toolbox()) == {'market_data_available': True, 'market_data_key_required': False,
                                              'sec_financials_available': True, 'filings_available': True}
-    assert make_toolbox(user_agent=None, market_key=None).capabilities() == {
+    assert core_caps(make_toolbox(user_agent=None, market_key=None)) == {
         'market_data_available': False, 'market_data_key_required': True,
         'sec_financials_available': False, 'filings_available': False}
 

@@ -19,8 +19,8 @@ const provider = (id: string, name: string, extra: Record<string, unknown> = {})
   provider_id: id, display_name: name, enabled: true, requires_key: id !== "yahoo", personal_key_configured: false, platform_available: id === "yahoo", key_hint: null, ...extra,
 });
 const MARKET = {
-  schema_version: "v1", updated_at: null, fallback_order: ["market_data", "alpha_vantage", "twelve_data", "finnhub", "yahoo"],
-  providers: [provider("market_data", "Market Data"), provider("alpha_vantage", "Alpha Vantage"), provider("twelve_data", "Twelve Data"), provider("finnhub", "Finnhub"), provider("yahoo", "Yahoo Finance")],
+  schema_version: "v1", updated_at: null, fallback_order: ["market_data", "alpha_vantage", "twelve_data", "finnhub", "yahoo", "tushare"],
+  providers: [provider("market_data", "Market Data"), provider("alpha_vantage", "Alpha Vantage"), provider("twelve_data", "Twelve Data"), provider("finnhub", "Finnhub"), provider("yahoo", "Yahoo Finance"), provider("tushare", "Tushare Pro (A-shares)")],
 };
 
 type Handler = (url: URL, init: RequestInit) => Response | undefined;
@@ -150,10 +150,29 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "下移 Market Data" }));
     await waitFor(() => expect(bodyOf(fetchMock, "/v1/account/market-data-config", "PUT")).toBeTruthy());
     const body = bodyOf(fetchMock, "/v1/account/market-data-config", "PUT")!;
-    expect(body.fallback_order).toEqual(["alpha_vantage", "market_data", "twelve_data", "finnhub", "yahoo"]);
+    expect(body.fallback_order).toEqual(["alpha_vantage", "market_data", "twelve_data", "finnhub", "yahoo", "tushare"]);
     expect((body.providers as unknown[]).every((item) => !("api_key" in (item as object)))).toBe(true);
     const yahoo = screen.getByRole("switch", { name: "启用 Yahoo Finance" });
     expect(within(yahoo.closest(".prow") as HTMLElement).getByText("无需密钥")).toBeTruthy();
-    expect(screen.getAllByText("未设置密钥，暂不可用").length).toBe(4);
+    expect(screen.getAllByText("未设置密钥，暂不可用").length).toBe(5);
+  });
+
+  it("saves a Tushare token for A-share data", async () => {
+    const fetchMock = mockApi((url) => {
+      if (url.pathname === "/v1/account/market-data-config/test") return jsonResponse({ provider_id: "tushare", status: "ready" });
+      if (url.pathname === "/v1/account/market-data-config") return jsonResponse(MARKET);
+      return undefined;
+    });
+    renderSettings("/settings?tab=data");
+    const row = (await screen.findByText("Tushare Pro (A-shares)")).closest(".prow") as HTMLElement;
+    expect(screen.getByText(/A 股会改用免费的 BaoStock/)).toBeTruthy();
+    fireEvent.click(within(row).getByRole("button", { name: "设置密钥" }));
+    fireEvent.change(await screen.findByLabelText("Token"), { target: { value: "tushare-token-0123456789" } });
+    expect(screen.getByText(/A 股（上交所、深交所、北交所）日线行情和财务数据/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(bodyOf(fetchMock, "/v1/account/market-data-config", "PUT")).toBeTruthy());
+    const body = bodyOf(fetchMock, "/v1/account/market-data-config", "PUT")!;
+    const sent = (body.providers as Array<Record<string, unknown>>).find((item) => item.provider_id === "tushare")!;
+    expect(sent.api_key).toBe("tushare-token-0123456789");
   });
 });

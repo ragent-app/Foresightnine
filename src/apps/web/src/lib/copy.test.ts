@@ -21,6 +21,7 @@ describe("labels", () => {
     expect(toolLabel("sec_company_concept")).toBe("查询 SEC 结构化数据");
     expect(toolLabel("submit_research")).toBe("提交结论");
     expect(toolLabel("calculate_financials")).toBe("计算");
+    expect(toolLabel("issuer_documents")).toBe("查询公司官网文档");
     expect(toolLabel("mystery")).toBe("mystery");
     expect(toolLabel(null)).toBe("工具");
   });
@@ -30,6 +31,8 @@ describe("labels", () => {
     expect(toolStatusLabel("denied_or_unavailable")).toBe("无权限或不可用");
     expect(toolStatusLabel("weird")).toBe("weird");
     expect(toolReasonLabel("search_response_invalid")).toBe("搜索服务返回的格式有误");
+    expect(toolReasonLabel("source_user_initiated_only")).toContain("个人使用模式");
+    expect(toolReasonLabel("issuer_site_robots_disallow")).toContain("robots.txt");
     expect(toolReasonLabel("search_query_provider_limit")).toBe("搜索词过长，超出服务商限制");
     for (const reason of ["search_quota_exhausted", "search_rate_limited", "gdelt_rate_limited"]) {
       expect(TOOL_REASON_LABEL[reason]).toBeTruthy();

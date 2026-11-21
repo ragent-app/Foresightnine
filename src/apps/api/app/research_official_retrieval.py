@@ -30,7 +30,7 @@ from .research_runs import ResearchRunRequest
 from .research_sec import SecFailure, fetch_sec_filing, validate_user_agent
 from .research_source_catalog import canonical_source_url, official_document_capability
 from .research_source_policy import is_fred_source
-from .research_source_terms import terms_decision
+from .research_source_terms import terms_decision, user_initiated_basis
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourcePermissions
 
 # Keep module-level names patchable by existing tests while dispatching unpatched calls through fetch_source_document.
@@ -365,6 +365,9 @@ def execute_official_retrieval(*, request: ResearchRunRequest, question: str | N
                 provenance = {'final_url': final_url}
             if provenance_dates:
                 provenance = {**provenance, **provenance_dates}
+            initiated = user_initiated_basis(address)
+            if initiated is not None:
+                provenance = {**provenance, **initiated}
             document_pages = getattr(fetched, 'pages', None)
             if isinstance(document_pages, dict) and document_pages:
                 provenance = {**provenance, 'document_pages': document_pages}

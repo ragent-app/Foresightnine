@@ -95,7 +95,7 @@ const SEC_FILING_PATH = /^\/Archives\/edgar\/data\/\d{1,10}\/\d{18}\/[A-Za-z0-9]
 const NON_PUBLIC_SUFFIXES = [".localhost", ".local", ".internal", ".test", ".invalid", ".arpa"] as const;
 const MAX_FETCH_URL_LENGTH = 2048;
 
-export const FETCH_HELP = "支持公开 HTTPS 网页（HTML、纯文本、PDF）以及 SEC EDGAR 申报文件页面，暂不支持 FRED；如果目标网站拦截自动访问，可以保存后按文件添加。";
+export const FETCH_HELP = "支持公开 HTTPS 网页（HTML、纯文本、PDF）以及 SEC EDGAR 申报文件页面，暂不支持 FRED；如果目标网站拦截自动访问，可以保存后按文件添加。巨潮资讯、上交所、深交所的链接仅在运营方开启个人使用模式时，才能按你粘贴的单个文档获取；港交所披露易始终不可用，可改用公司官网的副本。";
 
 export const SEC_UNAVAILABLE = "这个环境还没有配置 SEC 联系信息，暂时无法获取 SEC 资料。";
 

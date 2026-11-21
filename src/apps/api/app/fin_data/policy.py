@@ -17,7 +17,7 @@ Example for personal development use (env FORESIGHTNINE_FIN_DATA_POLICY replaces
 policy, so SEC rules are repeated). REMOVE IT BEFORE ANY PUBLIC RELEASE: Twelve Data free/individual
 plans are personal, non-commercial use and forbid redistribution:
 
-    {"version":"dev-personal-platform-key","rules":[{"provider":"sec_edgar","category":"identity","store":true,"display":true,"model_input":true,"export":true},{"provider":"sec_edgar","category":"filings","store":true,"display":true,"model_input":true,"export":true},{"provider":"sec_edgar","category":"financials","store":true,"display":true,"model_input":true,"export":true},{"provider":"sec_edgar","category":"ownership","store":true,"display":true,"model_input":true,"export":true},{"provider":"twelve_data","category":"identity","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"twelve_data","category":"identity","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"twelve_data","category":"bars_daily","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"twelve_data","category":"bars_daily","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"twelve_data","category":"bars_intraday","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"twelve_data","category":"bars_intraday","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true}]}
+    {"version":"dev-personal-platform-key","rules":[{"provider":"sec_edgar","category":"identity","store":true,"display":true,"model_input":true,"export":true},{"provider":"sec_edgar","category":"filings","store":true,"display":true,"model_input":true,"export":true},{"provider":"sec_edgar","category":"financials","store":true,"display":true,"model_input":true,"export":true},{"provider":"sec_edgar","category":"ownership","store":true,"display":true,"model_input":true,"export":true},{"provider":"twelve_data","category":"identity","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"twelve_data","category":"identity","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"twelve_data","category":"bars_daily","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"twelve_data","category":"bars_daily","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"twelve_data","category":"bars_intraday","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"twelve_data","category":"bars_intraday","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"tushare","category":"identity","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"tushare","category":"bars_daily","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"tushare","category":"financials","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"tushare","category":"identity","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"tushare","category":"bars_daily","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"tushare","category":"financials","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"baostock","category":"identity","store":true,"display":true,"model_input":true},{"provider":"baostock","category":"bars_daily","store":true,"display":true,"model_input":true},{"provider":"baostock","category":"financials","store":true,"display":true,"model_input":true}]}
 """
 from __future__ import annotations
 
@@ -138,6 +138,19 @@ _TD_NOTES = (
     "commercial plan. A user's own key (user_byok) lets that user store/display/model-input their own data; "
     "export is off and cache keys must include the owner account. Terms still to be re-verified before enabling."
 )
+# (A-share sources, same pattern) see _TS_NOTES / _BS_NOTES below.
+
+
+_TS_NOTES = (
+    "Tushare Pro (checked 2026-11-21 against the public service description only; terms still to be re-verified): "
+    "a user's own token is for that user's own use. The platform token is denied by default like twelve_data; an "
+    "operator enables it by policy (personal development use only, remove before public release)."
+)
+_BS_NOTES = (
+    "BaoStock (baostock.com, keyless): no terms of use were found when this rule was written. Personal "
+    "development use is assumed; export is off. NEEDS REVIEW BEFORE ANY PUBLIC RELEASE."
+)
+CN_CATEGORIES = ("identity", "bars_daily", "financials")
 
 
 def default_policy() -> FinDataPolicy:
@@ -164,6 +177,13 @@ def default_policy() -> FinDataPolicy:
                          model_input=True, export=False, owner_scoped=True,
                          notes="Twelve Data ASX data is internal-use only on all tiers: no display.")
               for cat in ("bars_daily", "bars_intraday")],
+            *[PolicyRule(provider="tushare", category=cat, credential_owner="platform", deny=True,
+                         deny_reason="license_platform_key_not_permitted", notes=_TS_NOTES) for cat in CN_CATEGORIES],
+            *[PolicyRule(provider="tushare", category=cat, credential_owner="user_byok", store=True, display=True,
+                         model_input=True, export=False, owner_scoped=True,
+                         notes="User's own Tushare token, personal use; owner-scoped, no export.") for cat in CN_CATEGORIES],
+            *[PolicyRule(provider="baostock", category=cat, store=True, display=True, model_input=True, export=False,
+                         notes=_BS_NOTES) for cat in CN_CATEGORIES],
         ])
 
 

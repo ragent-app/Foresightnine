@@ -1,6 +1,6 @@
 {
  "id": "earnings_review",
- "version": "1.2.0",
+ "version": "1.3.0",
  "title_zh": "财报复盘",
  "title_en": "Earnings review",
  "applies_when": {
@@ -114,6 +114,7 @@
    "preferred_tools": [
     "company_financials",
     "filings",
+    "issuer_documents",
     "news_search"
    ],
    "required": true,
@@ -126,6 +127,7 @@
    "description": "Earnings release or MD&A: drivers, segment notes, guidance, accounting-policy notes.",
    "preferred_tools": [
     "filings",
+    "issuer_documents",
     "acquire_sources",
     "read_pages",
     "search_source"
@@ -133,7 +135,7 @@
    "required": true,
    "freshness": "latest filing before research_clock",
    "acceptance": "quoted passages recorded with record_facts",
-   "fallback": "Say primary text was not obtained; no memory-based figures."
+   "fallback": "Say primary text was not obtained; no memory-based figures. For issuers outside SEC coverage, list the issuer's own announcements and periodic reports with issuer_documents."
   },
   {
    "id": "prior_compare",

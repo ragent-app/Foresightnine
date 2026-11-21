@@ -104,3 +104,27 @@ def test_authenticated_config_route_never_returns_key_and_delete_cleans_it(monke
     deleted = client.delete("/v1/auth/account", headers=headers)
     assert deleted.status_code == 200
     assert MARKET_DATA_CONFIGS.get(account_id) is None
+
+
+def test_tushare_token_is_encrypted_masked_and_old_configs_gain_the_provider() -> None:
+    from app.market_credentials import StoredMarketDataConfig, StoredMarketProvider
+    repository = InMemoryDocumentRepository()
+    service = AccountMarketDataSettings(repository, MarketCredentialCipher(b"t" * 32))
+    providers = [{"provider_id": pid, "enabled": True, **({"api_key": "tushare-token-0123456789"} if pid == "tushare" else {})}
+                 for pid in MARKET_PROVIDER_ORDER]
+    response = service.update("account_123456", MarketDataConfigUpdate.model_validate(
+        {"fallback_order": list(MARKET_PROVIDER_ORDER), "providers": providers}))
+    summary = next(item for item in response.providers if item.provider_id == "tushare")
+    assert summary.requires_key and summary.personal_key_configured and summary.key_hint == "••••6789"
+    assert "tushare-token-0123456789" not in repository["account_123456"].model_dump_json()
+    assert service.runtime("account_123456")[1] == {"tushare": "tushare-token-0123456789"}
+    with pytest.raises(ValueError):
+        MarketDataConfigUpdate.model_validate({"fallback_order": list(MARKET_PROVIDER_ORDER), "providers": [
+            {"provider_id": pid, "enabled": True, **({"api_key": "x" * 8} if pid == "yahoo" else {})} for pid in MARKET_PROVIDER_ORDER]})
+    # a config saved before tushare existed (stored as a plain document) is still valid and gains the new provider
+    old_ids = [pid for pid in MARKET_PROVIDER_ORDER if pid != "tushare"]
+    legacy = StoredMarketDataConfig.model_validate({
+        "account_id": "account_654321", "fallback_order": old_ids, "updated_at": datetime(2026, 9, 1, tzinfo=timezone.utc),
+        "providers": [{"provider_id": pid, "enabled": True} for pid in old_ids]})
+    assert [p.provider_id for p in legacy.providers][-1] == "tushare" and legacy.fallback_order[-1] == "tushare"
+    assert isinstance(legacy.providers[-1], StoredMarketProvider) and legacy.providers[-1].enabled

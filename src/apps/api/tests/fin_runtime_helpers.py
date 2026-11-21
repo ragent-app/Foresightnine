@@ -30,12 +30,13 @@ def memory_persist(store: list[ResearchSource] | None = None, owner: str = ACCOU
 def make_toolbox(*, market_key: str | None = 'byok-secret-123', twelve: FakeTransport | None = None,
                  sec: FakeTransport | None = None, sec_stream=None, persist=None, user_agent: str | None = UA,
                  disabled_reason: str | None = None, reserve_call=lambda: None, reserve_sec=lambda: True,
-                 policy=None, limiter=None, **kwargs: Any) -> FinDataToolbox:
+                 policy=None, limiter=None, baostock_runner=None, **kwargs: Any) -> FinDataToolbox:
     return FinDataToolbox(
         account_id=ACCOUNT, market_key=market_key, sec_user_agent=user_agent, persist=persist or memory_persist(),
         reserve_call=reserve_call, reserve_sec=reserve_sec, now=lambda: NOW, disabled_reason=disabled_reason,
         limiter=limiter or open_limiter(), twelve_transport=twelve or FakeTransport(Reply()),
-        sec_transport=sec or FakeTransport(Reply()), sec_stream_transport=sec_stream, policy=policy, **kwargs)
+        sec_transport=sec or FakeTransport(Reply()), sec_stream_transport=sec_stream, policy=policy,
+        baostock_runner=baostock_runner, **kwargs)
 
 
 def sec_binary_transport(plan=None, calls=None):

@@ -155,6 +155,8 @@ from .research_fetch import (
 )
 from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fetch_sec_concept, fetch_sec_filing, pace_sec_request, search_sec_identities, reserve_sec_request, validate_user_agent
 from .research_source_catalog import canonical_source_url, source_capabilities
+from .research_source_terms import user_initiated_basis, user_initiated_scope
+from .issuer_documents import IssuerDocuments
 from .research_structured_connector import StructuredQuery, execute_structured_query
 from .research_uploads import HtmlUploadRequest, PdfFailure, PdfReextractRequest, PdfUploadRequest, extract_pdf, extract_uploaded_html
 
@@ -194,6 +196,35 @@ def _resolve_market_key(account_id: str, policy=None) -> tuple[str | None, str |
         if platform:
             return platform, "platform"
     return None, None
+
+
+def _resolve_tushare_key(account_id: str, policy=None) -> tuple[str | None, str | None]:
+    """(token, credential_owner) for Tushare A-share data, or (None, None).
+
+    Same rule as Twelve Data: the account's own token wins ('user_byok'); the platform token
+    (FORESIGHTNINE_TUSHARE_TOKEN) is used ('platform') only when the fin_data policy explicitly allows tushare for
+    credential_owner 'platform'. The default policy denies it.
+    """
+    try:
+        _order, credentials = market_data_settings.runtime(account_id)
+    except MarketCredentialError:
+        credentials = {}
+    own = credentials.get("tushare") or None
+    if own:
+        return own, "user_byok"
+    policy = policy or load_fin_data_policy()
+    allowed = any(not isinstance(policy.decide("tushare", category, credential_owner="platform"), FinDataDenied)
+                  for category in ("identity", "bars_daily", "financials"))
+    if allowed:
+        platform = os.environ.get("FORESIGHTNINE_TUSHARE_TOKEN", "").strip()
+        if platform:
+            return platform, "platform"
+    return None, None
+
+
+def _cn_data_possible(tushare_key: str | None) -> bool:
+    from .fin_data.adapters.baostock import baostock_installed
+    return tushare_key is not None or baostock_installed()
 
 
 oauth_trace_logger = logging.getLogger("foresightnine.oauth")
@@ -2542,14 +2573,16 @@ def fetch_research_source(request: FetchSourceRequest, http_request: Request) ->
     try:
         requested_url = canonical_source_url(str(request.url))
         requested_host = (urlsplit(requested_url).hostname or "").lower().rstrip(".")
-        if fetch_official_text is not _DEFAULT_FETCH_OFFICIAL_TEXT:
-            fetched = fetch_official_text(request)
-            final_url = requested_url
-            redirect_count = 0
-        else:
-            fetched = fetch_source_document(request)
-            final_url = canonical_source_url(fetched.final_url)
-            redirect_count = fetched.redirect_count
+        # The user pasted this URL: a personal-mode host (terms 'user_initiated_only') may be fetched as this single document.
+        with user_initiated_scope(requested_url):
+            if fetch_official_text is not _DEFAULT_FETCH_OFFICIAL_TEXT:
+                fetched = fetch_official_text(request)
+                final_url = requested_url
+                redirect_count = 0
+            else:
+                fetched = fetch_source_document(request)
+                final_url = canonical_source_url(fetched.final_url)
+                redirect_count = fetched.redirect_count
         final_host = (urlsplit(final_url).hostname or "").lower().rstrip(".")
         is_official = requested_host in PUBLIC_DOMAIN_OFFICIAL_HOSTS and final_host in PUBLIC_DOMAIN_OFFICIAL_HOSTS
         content_type = fetched.content_type
@@ -2577,6 +2610,9 @@ def fetch_research_source(request: FetchSourceRequest, http_request: Request) ->
             }
         elif final_url != requested_url:
             provenance = {"final_url": final_url}
+        initiated = user_initiated_basis(requested_url, "user")
+        if initiated is not None:
+            provenance = {**provenance, **initiated}
         source = research_sources.create(
             account.account_id,
             SourceInput(
@@ -2623,6 +2659,7 @@ def get_research_capabilities(authorization: str | None = Header(default=None)) 
     search_available = bool(getattr(evidence_provider, "supports_project_search", False))
     allowed_hosts = fetch_allowed_hosts()
     _market = _resolve_market_key(account.account_id)
+    _tushare = _resolve_tushare_key(account.account_id)
     return {
         "schema_version": "v1",
         "search_available": search_available,
@@ -2632,6 +2669,7 @@ def get_research_capabilities(authorization: str | None = Header(default=None)) 
         # platform key only when the fin_data policy allows it; SEC tools follow the configured SEC contact.
         **FinDataToolbox(account_id=account.account_id, market_key=_market[0], credential_owner=_market[1] or 'user_byok',
                          sec_user_agent=os.environ.get("FORESIGHTNINE_SEC_USER_AGENT") or os.environ.get("SEC_USER_AGENT"),
+                         tushare_key=_tushare[0], tushare_owner=_tushare[1] or 'user_byok',
                          persist=lambda *_a, **_k: None).capabilities(),
         "sources": [asdict(item) for item in source_capabilities(search_available=search_available, sec_available=sec_available)],
     }
@@ -2821,7 +2859,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     # Structured data tools: the account's own market-data key (BYOK) and/or the SEC contact. The platform
     # price key is used only when the fin_data policy explicitly allows it (default policy denies it).
     market_key, market_owner = _resolve_market_key(account.account_id)
-    historical_available = (market_key is not None or _configured_sec_user_agent()[1]) and topic.request.as_of is None
+    tushare_key, tushare_owner = _resolve_tushare_key(account.account_id)
+    historical_available = (market_key is not None or _configured_sec_user_agent()[1]
+                            or _cn_data_possible(tushare_key)) and topic.request.as_of is None
     if continuation_input is None:
         request = resolve_automatic_research_request(request,
             search_available=bool(getattr(evidence_provider, 'supports_project_search', False)),
@@ -3025,6 +3065,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                else None if retrieval_permitted else 'permission_denied')
         fin_data = FinDataToolbox(
             account_id=account.account_id, market_key=market_key, credential_owner=market_owner or 'user_byok',
+            tushare_key=tushare_key, tushare_owner=tushare_owner or 'user_byok',
             sec_user_agent=sec_agent_raw,
             persist=lambda item, **kwargs: research_sources.create(account.account_id, item, **kwargs),
             reserve_call=context.reserve_search, reserve_sec=reserve_sec_for_run,
@@ -3035,6 +3076,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             # SEC based tools count as official retrieval for the turn's official_fetch_status, like the old SEC tool.
             nonlocal official_fetch_calls, official_fetch_status
             if name not in ('company_financials', 'filings'):
+                return
+            # A-share structured financials come from third-party aggregators (Tushare/BaoStock), not the issuer's
+            # filed report: they are structured data, so they neither count as an official fetch nor change its status.
+            if result.get('provider') in ('tushare', 'baostock'):
                 return
             cost = result.get('cost') if isinstance(result.get('cost'), dict) else {}
             official_fetch_calls += int(cost.get('provider_calls') or 0)
@@ -3128,6 +3173,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             context=context, discover=discover, acquire=acquire if retrieval_permitted else None,
             fin_data=fin_data, capabilities=capabilities,
             news_providers=default_news_providers(discover) if discover is not None else [],
+            issuer_docs=(IssuerDocuments(remaining_seconds=lambda: context.budget.deadline - context.now(),
+                                         ensure_running=context.ensure_running, reserve_call=context.reserve_search,
+                                         now=lifecycle_clock.now) if retrieval_active else None),
             checkpoint=save_runtime, initial_state=admitted_continuation.get('runtime'),
             on_submission=lambda: setattr(http_request.state, 'model_submission_started', True),
             on_stream_event=publish_stream_event,
@@ -3696,6 +3744,18 @@ def _market_credential_problem(error: MarketCredentialError) -> ApiProblem:
     )
 
 
+def _test_tushare_token(account_id: str, token: str | None) -> str:
+    """One bounded daily-bar read through the account's own Tushare token; no diagnostics are returned."""
+    if not token:
+        return "unavailable"
+    from .fin_data.adapters.tushare import TushareAdapter
+    from .fin_data.cn import CnCode
+    end = lifecycle_clock.now().date()
+    adapter = TushareAdapter(token=token, credential_owner="user_byok", account_id=account_id, timeout=10.0, now_fn=lifecycle_clock.now)
+    result = adapter.bars(CnCode("600519", "SSE", False), start=end - timedelta(days=10), end=end)
+    return "ready" if result.status in ("ok", "partial", "empty") else "unavailable"
+
+
 @app.get("/v1/account/market-data-config", response_model=MarketDataConfigResponse, include_in_schema=False)
 def get_market_data_config(
     response: Response,
@@ -3735,6 +3795,8 @@ def test_market_data_provider(
         _order, credentials = market_data_settings.runtime(account.account_id)
     except MarketCredentialError as error:
         raise _market_credential_problem(error) from error
+    if request.provider_id == "tushare":
+        return MarketProviderTestResponse(provider_id="tushare", status=_test_tushare_token(account.account_id, credentials.get("tushare")))
     cutoff = lifecycle_clock.now().date() - timedelta(days=1)
     month_start = cutoff.replace(day=1)
     year_start = cutoff.replace(month=1, day=1)

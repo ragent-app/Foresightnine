@@ -96,6 +96,7 @@ const TOOL_ICON: Record<string, IconName> = {
   market_data: "chart",
   company_financials: "database",
   filings: "fetch",
+  issuer_documents: "globe",
   record_facts: "pen",
   calculate_financials: "sum",
   create_chart: "barChart",

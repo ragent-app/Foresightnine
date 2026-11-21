@@ -37,6 +37,7 @@ _TOOL_BY_PENDING = {
     'market_data': 'market_data',
     'company_financials': 'company_financials',
     'filings': 'filings',
+    'issuer_documents': 'issuer_documents',
 }
 
 

@@ -34,6 +34,8 @@ function KeyPanel({ provider, config, onClose }: { provider: MarketProviderSumma
   const [apiKey, setApiKey] = useState("");
   const [touched, setTouched] = useState(false);
   const problem = apiKeyProblem(apiKey, true);
+  const isTushare = provider.provider_id === "tushare";
+  const credentialLabel = isTushare ? "Token" : "API Key";
   const submit = () => {
     setTouched(true);
     if (problem || save.isPending) return;
@@ -42,7 +44,7 @@ function KeyPanel({ provider, config, onClose }: { provider: MarketProviderSumma
   const clear = () => save.mutate(marketUpdateFrom(config, { key: { providerId: provider.provider_id, clear: true } }), { onSuccess: onClose });
   return (
     <Panel
-      title={`${provider.display_name} 的 API Key`}
+      title={`${provider.display_name} 的 ${credentialLabel}`}
       onClose={onClose}
       footerClassName="split"
       footer={
@@ -57,10 +59,10 @@ function KeyPanel({ provider, config, onClose }: { provider: MarketProviderSumma
     >
       <form className="add-source" onSubmit={(event) => { event.preventDefault(); submit(); }} noValidate>
         <div className="field">
-          <label htmlFor={`${ids}-key`}>API Key</label>
+          <label htmlFor={`${ids}-key`}>{credentialLabel}</label>
           <input id={`${ids}-key`} type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} autoComplete="off" autoFocus
-            placeholder={provider.personal_key_configured ? `已保存 ${provider.key_hint ?? ""} · 输入新值即可替换` : "输入 API Key"} aria-invalid={touched && problem ? true : undefined} />
-          {touched && problem ? <span className="err">{problem}</span> : <span className="help">密钥加密保存，只用于向 {provider.display_name} 请求历史行情。</span>}
+            placeholder={provider.personal_key_configured ? `已保存 ${provider.key_hint ?? ""} · 输入新值即可替换` : `输入 ${credentialLabel}`} aria-invalid={touched && problem ? true : undefined} />
+          {touched && problem ? <span className="err">{problem}</span> : <span className="help">{isTushare ? "Token 加密保存，只用于向 Tushare 请求 A 股（上交所、深交所、北交所）日线行情和财务数据，仅限你本人的研究使用。" : `密钥加密保存，只用于向 ${provider.display_name} 请求历史行情。`}</span>}
         </div>
         {provider.platform_available ? <p className="note">删除你的密钥后，会改用平台提供的密钥。</p> : null}
         {save.isError ? <span className="inline-error" role="alert">{dataErrorText(save.error)}</span> : null}
@@ -143,6 +145,7 @@ export function DataSection() {
         ))}
       </div>
       <p className="note inset">研究需要历史行情时，按上面的顺序依次尝试，前一个不可用时使用下一个。只在研究没有设置截止时间，并且开启了联网搜索和自动获取官方资料时使用。</p>
+      <p className="note inset">Tushare Pro 用于 A 股的日线行情和财务报表，不参与上面的顺序；没有 Token 时，A 股会改用免费的 BaoStock（若已启用，仅提供净利润、主营收入和比率类指标）。</p>
       {save.isError && keyFor === null ? <p className="inline-error" role="alert">{dataErrorText(save.error)}</p> : null}
       {keyProvider && config ? <KeyPanel provider={keyProvider} config={config} onClose={() => setKeyFor(null)} /> : null}
     </section>
