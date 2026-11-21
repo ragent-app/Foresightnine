@@ -155,6 +155,20 @@ def build_query(query: str, *, languages: Sequence[str] | None = None, domains: 
     return " ".join(parts)
 
 
+def _default_transport_ref():
+    from ..openai_compatible import _default_binary_transport
+    return _default_binary_transport
+
+
+def _configured_connect_timeout() -> float:
+    """Connect/TLS timeout for GDELT (env FORESIGHTNINE_GDELT_CONNECT_TIMEOUT_SECONDS, default 20, 1-60)."""
+    try:
+        value = float(os.environ.get("FORESIGHTNINE_GDELT_CONNECT_TIMEOUT_SECONDS", "20"))
+    except ValueError:
+        return 20.0
+    return value if 1.0 <= value <= 60.0 else 20.0
+
+
 class GdeltClient:
     name = "gdelt"
 
@@ -168,6 +182,10 @@ class GdeltClient:
         self._interval = configured_min_interval() if min_interval_seconds is None else max(0.0, float(min_interval_seconds))
         self._pacer = pacer or _PROCESS_PACER
         self._timeout = timeout_seconds
+        # GDELT's TLS handshake regularly takes ~10 s from some hosts (measured 2026-11-20),
+        # longer than the transport's default 5 s connect timeout.
+        self._connect_timeout = _configured_connect_timeout()
+        self._custom_transport = transport is not _default_transport_ref()
         self._now = now or (lambda: datetime.now(timezone.utc))
 
     def _provenance(self, url: str, body: bytes | None) -> Provenance:
@@ -191,10 +209,15 @@ class GdeltClient:
         requested = {"start": start, "end": end}
         self._pacer.wait(self._interval)
         try:
+            extra = {} if self._custom_transport else {"connect_timeout_seconds": self._connect_timeout}
             response = self._transport("GET", url, {"Accept": "application/json", "User-Agent": "ForesightNine/1.0"},
-                                       b"", self._timeout, max_response_bytes=_MAX_RESPONSE_BYTES)
-        except Exception:  # transport errors are deliberately opaque
-            return ToolResult.failure("failed", "gdelt_unavailable", "GDELT could not be reached.", retryable=True,
+                                       b"", self._timeout, max_response_bytes=_MAX_RESPONSE_BYTES, **extra)
+        except Exception as error:  # transport errors stay opaque apart from their kind
+            timed_out = type(error).__name__ == "_TransportTimeout" or isinstance(error, TimeoutError)
+            reason = "gdelt_timeout" if timed_out else "gdelt_unavailable"
+            message = ("GDELT did not complete the connection in time (its TLS handshake can be slow)."
+                       if timed_out else "GDELT could not be reached.")
+            return ToolResult.failure("failed", reason, message, retryable=True,
                                       provenance=self._provenance(url, None), cost=Cost(provider_calls=1))
         body: bytes = response.body if isinstance(response.body, bytes) else str(response.body).encode("utf-8")
         status = response.status_code

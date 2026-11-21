@@ -108,6 +108,7 @@ export const TOOL_REASON_LABEL: Readonly<Record<string, string>> = {
   search_provider_error: "搜索服务返回了错误",
   gdelt_rate_limited: "新闻数据源 GDELT 请求过于频繁，请稍后重试",
   gdelt_unavailable: "新闻数据源 GDELT 暂时无法连接",
+  gdelt_timeout: "新闻数据源 GDELT 连接超时（其 TLS 握手较慢）",
   all_providers_failed: "所有搜索来源均未能返回结果",
   search_no_results: "搜索没有找到相关结果",
   search_sources_denied: "搜索到的线索均不符合研究来源限制",

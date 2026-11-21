@@ -108,3 +108,37 @@ def test_helpers():
     assert parse_seendate("20261119T210500Z").hour == 21 and parse_seendate("bad") is None
     q = build_query("fed", languages=["en", "zh", "xx"], domains=["reuters.com"])
     assert "sourcelang:english" in q and "sourcelang:chinese" in q and "domain:reuters.com" in q and "xx" not in q
+
+
+def test_transport_timeout_is_reported_as_gdelt_timeout():
+    from app.news.gdelt import GdeltClient
+
+    class _TransportTimeout(Exception):
+        pass
+
+    def transport(*args, **kwargs):
+        raise _TransportTimeout()
+
+    result = GdeltClient(transport=transport, min_interval_seconds=0).search("microsoft").to_wire()
+    assert result["status"] == "failed"
+    assert result["reason"] == "gdelt_timeout"
+    assert result["retryable"] is True
+
+
+def test_default_transport_receives_longer_connect_timeout(monkeypatch):
+    from app.news import gdelt as module
+    seen = {}
+
+    class _Response:
+        status_code = 200
+        body = b'{"articles": []}'
+        headers = {}
+
+    def fake_default(method, url, headers, body, timeout, **kwargs):
+        seen.update(kwargs)
+        return _Response()
+
+    monkeypatch.setattr(module, "_default_transport_ref", lambda: fake_default)
+    monkeypatch.setenv("FORESIGHTNINE_GDELT_CONNECT_TIMEOUT_SECONDS", "25")
+    module.GdeltClient(transport=fake_default, min_interval_seconds=0).search("microsoft")
+    assert seen.get("connect_timeout_seconds") == 25.0
