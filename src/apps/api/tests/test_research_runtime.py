@@ -604,7 +604,8 @@ def test_available_capabilities_derived_and_overridden_in_initial_prompt():
     off = {'market_data_available': False, 'market_data_key_required': False,
            'sec_financials_available': False, 'filings_available': False, 'issuer_documents_available': False,
            'cn_market_data_available': False, 'cn_financials_available': False,
-           'cn_financials_limited': False, 'cn_data_provider': None}
+           'cn_financials_limited': False, 'cn_data_provider': None,
+           'cn_market_data_provider': None, 'cn_providers_unreachable': [], 'hk_market_data_available': False}
 
     m_default = Model([stop])
     run_research_agent(question='Q', sources=[], model=m_default, context=context())
@@ -624,7 +625,8 @@ def test_available_capabilities_derived_and_overridden_in_initial_prompt():
         'search_library_available': True, 'news_search_available': True, 'news_search_providers': ['glm-coding-mcp-search'],
         'issuer_documents_available': False,
         'cn_market_data_available': False, 'cn_financials_available': False,
-        'cn_financials_limited': False, 'cn_data_provider': None}
+        'cn_financials_limited': False, 'cn_data_provider': None,
+        'cn_market_data_provider': None, 'cn_providers_unreachable': [], 'hk_market_data_available': True}
 
     m_nokey = Model([stop])
     run_research_agent(question='Q', sources=[], model=m_nokey, context=context(), fin_data=make_toolbox(market_key=None))
@@ -1535,7 +1537,7 @@ def test_l1_compaction_triggers_under_tight_context_and_record_facts_still_locat
 
         def research_capacity(self):
             # Trigger watermark: ~40_500 * 3 * 0.58 - fixed (~25k, incl. the financial data and issuer_documents tool schemas) ≈ ~44k chars.
-            return SimpleNamespace(context_tokens=42_000, output_tokens=1000, input_counter='chars_div_3')
+            return SimpleNamespace(context_tokens=43_100, output_tokens=1000, input_counter='chars_div_3')
 
         def estimate_turn_input(self, turn_obj):
             return 100

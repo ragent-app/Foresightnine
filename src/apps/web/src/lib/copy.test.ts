@@ -22,6 +22,7 @@ describe("labels", () => {
     expect(toolLabel("submit_research")).toBe("提交结论");
     expect(toolLabel("calculate_financials")).toBe("计算");
     expect(toolLabel("issuer_documents")).toBe("查询公司官网文档");
+    expect(toolLabel("extract_statements")).toBe("抽取财务报表");
     expect(toolLabel("mystery")).toBe("mystery");
     expect(toolLabel(null)).toBe("工具");
   });

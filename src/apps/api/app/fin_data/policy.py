@@ -13,11 +13,15 @@ The runtime uses the account's own Twelve Data key first. It falls back to the p
 (FORESIGHTNINE_TWELVEDATA_API_KEY) only when this policy allows provider twelve_data for
 credential_owner "platform" (identity / bars_daily / bars_intraday); the default policy denies it.
 
+Yahoo Finance daily bars (A-shares and Hong Kong, provider ``yahoo``, category bars_daily): the default policy
+denies them (license_terms_restrict_commercial_use); Yahoo's terms do not allow commercial or automated use. The
+personal-development example below allows them (store/display/model_input, no export).
+
 Example for personal development use (env FORESIGHTNINE_FIN_DATA_POLICY replaces the whole default
 policy, so SEC rules are repeated). REMOVE IT BEFORE ANY PUBLIC RELEASE: Twelve Data free/individual
 plans are personal, non-commercial use and forbid redistribution:
 
-    {"version":"dev-personal-platform-key","rules":[{"provider":"sec_edgar","category":"identity","store":true,"display":true,"model_input":true,"export":true},{"provider":"sec_edgar","category":"filings","store":true,"display":true,"model_input":true,"export":true},{"provider":"sec_edgar","category":"financials","store":true,"display":true,"model_input":true,"export":true},{"provider":"sec_edgar","category":"ownership","store":true,"display":true,"model_input":true,"export":true},{"provider":"twelve_data","category":"identity","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"twelve_data","category":"identity","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"twelve_data","category":"bars_daily","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"twelve_data","category":"bars_daily","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"twelve_data","category":"bars_intraday","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"twelve_data","category":"bars_intraday","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"tushare","category":"identity","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"tushare","category":"bars_daily","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"tushare","category":"financials","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"tushare","category":"identity","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"tushare","category":"bars_daily","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"tushare","category":"financials","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"baostock","category":"identity","store":true,"display":true,"model_input":true},{"provider":"baostock","category":"bars_daily","store":true,"display":true,"model_input":true},{"provider":"baostock","category":"financials","store":true,"display":true,"model_input":true}]}
+    {"version":"dev-personal-platform-key","rules":[{"provider":"sec_edgar","category":"identity","store":true,"display":true,"model_input":true,"export":true},{"provider":"sec_edgar","category":"filings","store":true,"display":true,"model_input":true,"export":true},{"provider":"sec_edgar","category":"financials","store":true,"display":true,"model_input":true,"export":true},{"provider":"sec_edgar","category":"ownership","store":true,"display":true,"model_input":true,"export":true},{"provider":"twelve_data","category":"identity","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"twelve_data","category":"identity","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"twelve_data","category":"bars_daily","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"twelve_data","category":"bars_daily","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"twelve_data","category":"bars_intraday","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"twelve_data","category":"bars_intraday","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"tushare","category":"identity","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"tushare","category":"bars_daily","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"tushare","category":"financials","credential_owner":"platform","store":true,"display":true,"model_input":true},{"provider":"tushare","category":"identity","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"tushare","category":"bars_daily","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"tushare","category":"financials","credential_owner":"user_byok","store":true,"display":true,"model_input":true,"owner_scoped":true},{"provider":"baostock","category":"identity","store":true,"display":true,"model_input":true},{"provider":"baostock","category":"bars_daily","store":true,"display":true,"model_input":true},{"provider":"baostock","category":"financials","store":true,"display":true,"model_input":true},{"provider":"yahoo","category":"bars_daily","store":true,"display":true,"model_input":true,"export":false}]}
 """
 from __future__ import annotations
 
@@ -150,6 +154,11 @@ _BS_NOTES = (
     "BaoStock (baostock.com, keyless): no terms of use were found when this rule was written. Personal "
     "development use is assumed; export is off. NEEDS REVIEW BEFORE ANY PUBLIC RELEASE."
 )
+_YAHOO_NOTES = (
+    "Yahoo Finance (checked 2026-11-21): the terms do not allow commercial use or automated/bulk access of the "
+    "data. Only an operator running a personal development deployment may enable it by policy; remove before any "
+    "public release. Export stays off."
+)
 CN_CATEGORIES = ("identity", "bars_daily", "financials")
 
 
@@ -184,6 +193,8 @@ def default_policy() -> FinDataPolicy:
                          notes="User's own Tushare token, personal use; owner-scoped, no export.") for cat in CN_CATEGORIES],
             *[PolicyRule(provider="baostock", category=cat, store=True, display=True, model_input=True, export=False,
                          notes=_BS_NOTES) for cat in CN_CATEGORIES],
+            PolicyRule(provider="yahoo", category="bars_daily", deny=True, deny_reason="license_terms_restrict_commercial_use",
+                       notes=_YAHOO_NOTES),
         ])
 
 

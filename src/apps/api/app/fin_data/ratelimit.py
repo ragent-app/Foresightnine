@@ -50,6 +50,7 @@ def default_limits(env=None) -> dict[str, ProviderLimit]:
     return {"sec_edgar": ProviderLimit(rate_per_sec=10.0, burst=10.0),
             "tushare": ProviderLimit(rate_per_sec=tushare_min / 60.0, burst=float(min(tushare_min, 10))),
             "baostock": ProviderLimit(rate_per_sec=1.0, burst=3.0),
+            "yahoo": ProviderLimit(rate_per_sec=0.5, burst=3.0),
             "twelve_data": ProviderLimit(rate_per_sec=per_min / 60.0, burst=float(per_min), daily_quota=daily)}
 
 

@@ -23,6 +23,16 @@ def clean_in_memory_state() -> None:
 
 
 @pytest.fixture(autouse=True)
+def hermetic_cn_probe(monkeypatch):
+    """Tushare/BaoStock reachability is probed over TCP in production; tests never open sockets for it."""
+    from app.fin_data import reachability
+    monkeypatch.setattr(reachability, "tcp_connect", lambda host, port, timeout: None)
+    reachability.default_probe().clear()
+    yield
+    reachability.default_probe().clear()
+
+
+@pytest.fixture(autouse=True)
 def enforce_optional_offline_network(monkeypatch):
     """For offline acceptance, fail even if application code catches a blocked request."""
     if os.getenv('FORESIGHTNINE_OFFLINE_TESTS') != '1':

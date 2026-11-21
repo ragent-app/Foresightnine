@@ -31,7 +31,7 @@ class Script:
 
 
 def core_caps(box):
-    return {k: v for k, v in box.capabilities().items() if not k.startswith('cn_')}
+    return {k: v for k, v in box.capabilities().items() if not k.startswith(('cn_', 'hk_'))}
 
 
 def last_result(model, index=1):

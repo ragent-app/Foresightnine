@@ -115,12 +115,13 @@
     "company_financials",
     "filings",
     "issuer_documents",
+    "extract_statements",
     "news_search"
    ],
    "required": true,
    "freshness": "latest filed period as of research_clock",
    "acceptance": "lines carry period, unit, currency",
-   "fallback": "Use filed document text only; label figures non-standardized."
+   "fallback": "Use filed document text only; label figures non-standardized. For non-SEC issuers, acquire the periodic report found with issuer_documents and use extract_statements for statement rows."
   },
   {
    "id": "filing_text",

@@ -23,6 +23,16 @@ def fresh_cache():
     cn.clear_list_cache()
 
 
+@pytest.fixture
+def mainland_reachable(monkeypatch):
+    """Real-transport tests: the mainland-only hosts count as reachable (no network in tests)."""
+    from app.fin_data import reachability
+    monkeypatch.setattr(reachability, "tcp_connect", lambda host, port, timeout: None)
+    reachability.default_probe().clear()
+    yield
+    reachability.default_probe().clear()
+
+
 def box(*, tushare=None, baostock=None, market_key=None, persist=None, policy=None, **kw):
     return make_toolbox(market_key=market_key, user_agent=None, persist=persist or memory_persist(), policy=policy,
                         tushare_key=TOKEN if tushare is not None else None, tushare_transport=tushare,
@@ -277,7 +287,7 @@ def test_tushare_resolver_is_policy_gated_like_twelve_data(monkeypatch):
     assert api._resolve_tushare_key('acct', policy=_perm_policy()) == (None, None)
 
 
-def test_capabilities_endpoint_reports_cn_flags_per_account(monkeypatch):
+def test_capabilities_endpoint_reports_cn_flags_per_account(monkeypatch, mainland_reachable):
     from uuid import uuid4
 
     from fastapi.testclient import TestClient
@@ -305,7 +315,7 @@ def test_capabilities_endpoint_reports_cn_flags_per_account(monkeypatch):
     assert client.get('/v2/research/capabilities', headers=plain).json()['cn_data_provider'] is None
 
 
-def test_tushare_connection_test_helper_never_returns_diagnostics(monkeypatch):
+def test_tushare_connection_test_helper_never_returns_diagnostics(monkeypatch, mainland_reachable):
     import app.main as api
     from app.fin_data.adapters import tushare as module
     real = module.TushareAdapter

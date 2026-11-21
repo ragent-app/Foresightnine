@@ -115,7 +115,8 @@ def request(pages, rationale='ocr', source_id='pdf'):
 
 def test_request_ocr_tool_registered_before_submit_and_system_stays_static():
     names = [t.name for t in TOOLS]
-    assert names.index('request_ocr') == len(names) - 2 and names[-1] == 'submit_research'
+    # Later tools are also inserted before submit_research; only the relative order matters.
+    assert 'request_ocr' in names and names[-1] == 'submit_research'
     schema = next(t for t in TOOLS if t.name == 'request_ocr').input_schema
     assert set(schema['required']) == {'source_id', 'pages', 'rationale'}
     assert schema['properties']['pages']['maxItems'] == 20 and schema['properties']['pages']['minItems'] == 1

@@ -109,7 +109,7 @@ def report_periods(now: date, period: str, n: int, extra_back: int) -> list[tupl
 
 class BaoStockAdapter:
     def __init__(self, *, runner: BaoStockRunner | None = None, limiter=None, policy: FinDataPolicy | None = None,
-                 now_fn: Callable[[], datetime] = utcnow, timeout: float = 40.0) -> None:
+                 now_fn: Callable[[], datetime] = utcnow, timeout: float = 15.0) -> None:
         self._runner = runner if runner is not None else default_runner()
         self._limiter = limiter or default_limiter()
         self._policy = policy or load_policy()

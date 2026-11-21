@@ -29,6 +29,7 @@ export const TOOL_LABEL: Readonly<Record<string, string>> = {
   company_financials: "查询财务报表数据",
   filings: "查询申报文件",
   issuer_documents: "查询公司官网文档",
+  extract_statements: "抽取财务报表",
   record_facts: "记录数字",
   calculate_financials: "计算",
   create_chart: "生成图表",

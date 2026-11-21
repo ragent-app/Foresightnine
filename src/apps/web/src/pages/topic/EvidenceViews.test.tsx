@@ -78,6 +78,7 @@ describe("EvidenceViews", () => {
     expect(toolIcon("search_library")).toBe("library");
     expect(toolIcon("news_search")).toBe("news");
     expect(toolIcon("issuer_documents")).toBe("globe");
+    expect(toolIcon("extract_statements")).toBe("table");
     render(
       <ProcessTimeline
         events={[

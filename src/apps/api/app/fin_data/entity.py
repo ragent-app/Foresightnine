@@ -143,6 +143,15 @@ def resolve_entity(query: str, market: str | None = None, asset_type: str | None
                                                                "listing_date": item["entity"].listing_date or e.listing_date})
             item["sources"].extend(c.sources)
             item["basis"] = c.match_basis if c.match_basis == "ticker_exact" else item["basis"]
+    hk = cn_helpers.parse_hk_code(q, market_key) if (exchanges is None or "HKEX" in exchanges) and want_type in (None, "equity") else None
+    if hk is not None and not any(v["entity"].exchange == "HKEX" and (v["entity"].symbol or "").lstrip("0") == hk.code.lstrip("0")
+                                  for v in merged.values()):
+        ref = EntityRef(entity_id=hk.entity_id, symbol=hk.code, exchange="HKEX", currency="HKD", asset_type="equity",
+                        identifiers={"yahoo_symbol": hk.yahoo_symbol})
+        merged[ref.entity_id] = {"entity": ref, "basis": "ticker_exact", "sources": ["hk_code_format"]}
+        notes_local = ["HK code normalised locally to the 4-digit form (not verified against a listing; no company name)."]
+    else:
+        notes_local = []
     for e in (sec_res.data if sec_res and sec_res.status == "ok" else []):
         if want_type not in (None, "equity"):
             continue
@@ -169,7 +178,7 @@ def resolve_entity(query: str, market: str | None = None, asset_type: str | None
     for r in oks[1:]:
         perms = perms.narrow(r.permissions)
     prov = next((r.provenance for r in (sec_res, td_res, cn) if r is not None and r.status == "ok"), None)
-    cov = Coverage(rows=len(cands), notes=notes + ["Candidates are never auto-selected; pass an entity_id explicitly."])
+    cov = Coverage(rows=len(cands), notes=notes + notes_local + ["Candidates are never auto-selected; pass an entity_id explicitly."])
     if not cands:
         if not (sec_res or td_res or cn) or all(r is None or r.status not in ("ok", "empty", "partial") for r in (sec_res, td_res, cn)):
             return ToolResult.failure("failed", "no_source_available", "No identity source answered. " + " ".join(notes), retryable=True)

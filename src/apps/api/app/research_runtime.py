@@ -26,6 +26,7 @@ from .research_analysis import _quoted_numbers
 from .phase3 import ProviderFailure
 from .research_documents import page_for_offset, page_range_to_chars
 from .research_ocr import MAX_ONDEMAND_PAGES, OcrOutcome
+from .research_statement_extraction import ExtractStatementsRequest, extract_statements
 from .research_fin_tools import (CompanyFinancialsRequest, FilingsRequest, FinDataToolbox, MarketDataRequest,
                                  MarketSpec, ResolveEntityRequest)
 from .research_discovery import RedirectLead, normalize_search_lead, search_lead_url
@@ -402,6 +403,11 @@ TOOLS = [
         'Recognise (OCR) specific needs_ocr pages of an authorized PDF source whose original is retained. The result is a NEW source version (new source_id) in which those pages have text; read it with read_pages. read_pages also does this automatically for needs_ocr pages it is asked to read.',
         RequestOcrRequest,
     ),
+    _tool(
+        'extract_statements',
+        'Locate and parse the consolidated income statement, balance sheet and cash-flow statement of an acquired annual or interim report (Chinese or English; for issuers without SEC XBRL, such as mainland China and Hong Kong). Returns table rows with standard line names, unit, currency, period columns, exact quotations with character offsets and warnings; the pages it uses count as read. Rows are not recorded: cite them with record_facts.',
+        ExtractStatementsRequest,
+    ),
     _tool('submit_research', 'Submit research with exact quotations and explicit gaps.', SubmitRequest),
 ]
 SYSTEM = ("You are a financial research coordinator. Identify evidence needs, choose actions, observe results, "
@@ -420,6 +426,8 @@ SYSTEM = ("You are a financial research coordinator. Identify evidence needs, ch
           "HKEXnews and cninfo are not automatically accessible. "
           "When cn_market_data_available or cn_financials_available is true, A-share data is available through resolve_entity, market_data and company_financials; "
           "A-share statements are year-to-date cumulative (Q1/H1/9M/FY), so derive single quarters explicitly. "
+          "When hk_market_data_available is true, Hong Kong daily prices are available through market_data; cn_market_data_provider and "
+          "the source provenance tell which provider served prices (a fallback provider may be used when others are unreachable). "
           "If market_data_key_required is true, market prices are unavailable until the user adds their own market-data key in Settings: "
           "say so, and label any price taken from filings or news as not market data. Read sources before citing them. For sources longer than 25000 characters (such as filings "
           "or long reports), call outline_source or search_source first to locate relevant sections or terms by character "
@@ -428,6 +436,7 @@ SYSTEM = ("You are a financial research coordinator. Identify evidence needs, ch
           "For PDFs whose outline_source result has page_count, use outline_source then read_pages for targeted pages. "
           "search_library ranks passages across all authorized sources and maps hits to read locations; search_source is the exact literal search within one source. "
           "Pages with status needs_ocr are recognised on demand (request_ocr, or automatically by read_pages) into a new source_id that replaces the old one for later reads; treat numbers from pages with status ocr as needing a check against the original page when a warning says so. "
+          "For annual or interim reports of issuers without SEC XBRL (mainland China, Hong Kong), after acquire_sources call extract_statements on the report source to get statement rows with unit, period columns and exact quotations (it reads the statement pages itself); record the needed rows with record_facts, check warnings, and derive single quarters explicitly from year-to-date figures. "
           "For historical market performance, resolve the instrument and use a market_data series or authorized dated observations. "
           "If required prices are missing, explain the gap without inventing prices. "
           "Use deterministic calculation where needed. "
@@ -609,6 +618,7 @@ TOOL_FAILURE_GUIDANCE: dict[str, str] = {
     'search_rate_limited': 'Search services are rate limited right now. Do not repeat the same search immediately; continue with other evidence and report the gap.',
     'search_provider_rate_limited': 'The search service rate limit was reached. Do not repeat the same search immediately; continue with other evidence.',
     'gdelt_rate_limited': 'GDELT is rate limited (the service is reachable). Do not repeat the same search immediately; continue with other evidence.',
+    'statements_not_found': 'No statement table was recognised in this source. Use search_library for the statement titles, read_pages for the pages, or acquire the separate financial report.',
     'search_provider_error': 'The search provider reported an error (see the message). Try a different query once, otherwise continue with other evidence.',
     'search_no_results': 'The search returned no results. Retry with a different, more specific query.',
     'search_sources_denied': 'All results were denied or unusable. Retry with a different query or publisher name.',
@@ -1418,6 +1428,7 @@ _BULK_COMPACT_TOOLS = frozenset({
     'company_financials',
     'filings',
     'issuer_documents',
+    'extract_statements',
 })
 _ISO_CURRENCY_LIKE_RE = re.compile(r'^[A-Z]{3}$')
 _STRUCTURED_RETRIEVAL_METHODS = frozenset({'market_data', 'sec_companyfacts', 'sec_companyconcept', 'structured_financials'})
@@ -1509,6 +1520,8 @@ def _infer_tool_name(parsed: Mapping[str, Any] | None) -> str:
         return 'unknown'
     if 'library_coverage' in parsed:
         return 'search_library'
+    if 'statements' in parsed and 'page_basis' in parsed:
+        return 'extract_statements'
     if 'hits' in parsed and 'query' in parsed:
         return 'search_source'
     if 'entries' in parsed and 'total_detected_entries' in parsed:
@@ -1548,7 +1561,7 @@ def _extract_compaction_coverage(
         sid, start, end = row.get('source_id'), row.get('start'), row.get('end')
         add_source_id(sid)
         if (
-            tool_name in ('read_sources', 'read_pages')
+            tool_name in ('read_sources', 'read_pages', 'extract_statements')
             and isinstance(sid, str) and sid
             and type(start) is int and type(end) is int
             and len(source_spans) < 20
@@ -1559,7 +1572,7 @@ def _extract_compaction_coverage(
 
     if isinstance(parsed, Mapping):
         add_source_id(parsed.get('source_id'))
-        for list_key in ('results', 'reads', 'hits'):
+        for list_key in ('results', 'reads', 'hits', 'read_spans'):
             rows = parsed.get(list_key)
             if isinstance(rows, list):
                 for row in rows:
@@ -2257,6 +2270,10 @@ def _turn_batch_usage(state: Mapping[str, Any]) -> tuple[int, int]:
             tool_name = _infer_tool_name(parsed)
         if tool_name in _BULK_COMPACT_TOOLS and not res.get('is_error'):
             bulk_result_chars += content_len
+        if tool_name == 'extract_statements' and not res.get('is_error') and isinstance(parsed, Mapping):
+            for sp in parsed.get('read_spans') or []:
+                if isinstance(sp, Mapping) and type(sp.get('start')) is int and type(sp.get('end')) is int:
+                    read_chars += max(0, sp['end'] - sp['start'])
         if tool_name in ('read_sources', 'read_pages') and not res.get('is_error') and isinstance(parsed, Mapping):
             rows = parsed.get('results')
             if isinstance(rows, list):
@@ -2606,7 +2623,9 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                             {'market_data_available': False, 'market_data_key_required': False,
                              'sec_financials_available': False, 'filings_available': False,
                              'cn_market_data_available': False, 'cn_financials_available': False,
-                             'cn_financials_limited': False, 'cn_data_provider': None}).items():
+                             'cn_financials_limited': False, 'cn_data_provider': None,
+                             'cn_market_data_provider': None, 'cn_providers_unreachable': [],
+                             'hk_market_data_available': False}).items():
             available_capabilities.setdefault(flag, value)
         available_capabilities.setdefault('sec_available', bool(available_capabilities.get('sec_financials_available')))
         available_capabilities.setdefault('search_library_available', True)
@@ -2700,6 +2719,12 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                     target = f'{src_label} · {query.strip()[:80]}'[:200]
                 else:
                     target = src_label[:200]
+        elif name == 'extract_statements':
+            sid = tool_args.get('source_id')
+            if isinstance(sid, str) and sid.strip():
+                src = source_by_id.get(sid.strip())
+                src_label = f'《{_clip(src.title, 80)}》' if _is_source_eligible(src, as_of) else _clip(sid.strip(), 80)
+                target = f'{src_label} · 财务报表'[:200]
         elif name == 'read_pages':
             sid, first_p, last_p = tool_args.get('source_id'), tool_args.get('first_page'), tool_args.get('last_page')
             if isinstance(sid, str) and sid.strip():
@@ -3464,7 +3489,7 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                              'acquire_sources': AcquireRequest, 'resolve_entity': ResolveEntityRequest,
                              'market_data': MarketDataRequest, 'company_financials': CompanyFinancialsRequest,
                              'filings': FilingsRequest, 'issuer_documents': IssuerDocumentsRequest, 'record_facts': FactsRequest,
-                             'request_ocr': RequestOcrRequest,
+                             'request_ocr': RequestOcrRequest, 'extract_statements': ExtractStatementsRequest,
                              'calculate_financials': CalculateRequest, 'create_chart': CreateChartRequest,
                              'submit_research': SubmitRequest}.get(call.name)
                 if model_cls is None:
@@ -3558,6 +3583,21 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                     if ocr_note is not None:
                         result['ocr'] = {key: ocr_note[key] for key in
                                          ('status', 'reason', 'message', 'source_id', 'previous_source_id', 'pages') if key in ocr_note}
+                elif call.name == 'extract_statements':
+                    head_id = _head_source_id(req.source_id)
+                    ext_source = source_by_id.get(head_id)
+                    if not _is_source_eligible(ext_source, as_of):
+                        result = {'source_id': req.source_id, 'status': 'denied_or_unavailable'}
+                    else:
+                        bulk_left = max(0, MAX_TURN_TOOL_RESULT_CHARS - turn_bulk_result_chars)
+                        result, tool_summary = extract_statements(
+                            req.model_copy(update={'source_id': head_id}), ext_source,
+                            document_pages=_document_pages(ext_source), read_ranges=state['read_ranges'],
+                            read_budget_chars=max(0, min(MAX_READ_SOURCES_TURN_CHARS - turn_read_chars, bulk_left - 8_000)),
+                            result_budget_chars=min(30_000, max(2_000, bulk_left - 2_000)),
+                            needs_check=_ocr_page_needs_check, ocr_available=ocr_pages is not None)
+                        if head_id != req.source_id and result.get('status') != 'denied_or_unavailable':
+                            result['source_version'] = _version_note(req.source_id, head_id)
                 elif call.name == 'outline_source':
                     head_id = _head_source_id(req.source_id)
                     result = _outline_source(req if head_id == req.source_id else req.model_copy(update={'source_id': head_id}),

@@ -75,12 +75,13 @@
     "company_financials",
     "filings",
     "issuer_documents",
+    "extract_statements",
     "news_search"
    ],
    "required": true,
    "freshness": "latest filed period of each company as of research_clock",
    "acceptance": "same line items, period and unit across companies",
-   "fallback": "Use filing text and mark the lines non-standardized. For non-SEC issuers, obtain their periodic reports with issuer_documents."
+   "fallback": "Use filing text and mark the lines non-standardized. For non-SEC issuers, obtain their periodic reports with issuer_documents and read statement rows with extract_statements (check unit and period per company)."
   },
   {
    "id": "derived_ratios",

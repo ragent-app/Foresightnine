@@ -21,6 +21,7 @@ ACCOUNTING_STANDARD = "中国企业会计准则 (PRC CAS)"
 _SUFFIX = {"SH": "SSE", "SS": "SSE", "SSE": "SSE", "SZ": "SZSE", "SZSE": "SZSE", "BJ": "BJSE", "BJSE": "BJSE"}
 _TS_SUFFIX = {"SSE": "SH", "SZSE": "SZ", "BJSE": "BJ"}
 _BS_PREFIX = {"SSE": "sh", "SZSE": "sz", "BJSE": "bj"}
+_YAHOO_SUFFIX = {"SSE": "SS", "SZSE": "SZ", "BJSE": "BJ"}
 _FORMS = (re.compile(r"^(?P<c>\d{6})\s*[.:]\s*(?P<x>[A-Za-z]{2,4})$"),
           re.compile(r"^(?P<x>[A-Za-z]{2,4})\s*[.:]?\s*(?P<c>\d{6})$"),
           re.compile(r"^(?P<c>\d{6})$"))
@@ -43,6 +44,26 @@ class CnCode:
     @property
     def baostock_code(self) -> str:
         return f"{_BS_PREFIX[self.exchange]}.{self.code}"
+
+    @property
+    def yahoo_symbol(self) -> str:
+        return f"{self.code}.{_YAHOO_SUFFIX[self.exchange]}"
+
+
+@dataclass(frozen=True)
+class HkCode:
+    """Hong Kong stock code; ``code`` is the 4-digit-padded form Yahoo uses (0700, 9988, 02318 -> 2318)."""
+    code: str
+    exchange: str = "HKEX"
+    inferred: bool = False
+
+    @property
+    def entity_id(self) -> str:
+        return f"HKEX:{self.code}"
+
+    @property
+    def yahoo_symbol(self) -> str:
+        return f"{self.code}.HK"
 
 
 def exchange_for_code(code: str) -> str | None:
@@ -72,6 +93,30 @@ def parse_cn_code(text: str | None) -> CnCode | None:
         exchange = exchange_for_code(code)
         return CnCode(code, exchange, True) if exchange else None
     return None
+
+
+_HK_FORMS = (re.compile(r"^(?P<c>\d{1,5})\s*[.:]\s*(?:HK|HKEX|SEHK)$", re.I),
+             re.compile(r"^(?:HK|HKEX|SEHK)\s*[.:]?\s*(?P<c>\d{1,5})$", re.I))
+
+
+def parse_hk_code(text: str | None, market: str | None = None) -> HkCode | None:
+    """HK code from ``700.HK``, ``0700.HK``, ``HK:700``, ``HKEX:0700``; a bare 4-5 digit number only when it starts
+    with 0 or the caller states market HK (so a year or an ID is not mistaken for a stock). Code 1..99999."""
+    if not text:
+        return None
+    raw = text.strip()
+    digits = None
+    for pattern in _HK_FORMS:
+        match = pattern.match(raw)
+        if match:
+            digits = match.group("c")
+            break
+    if digits is None and re.fullmatch(r"\d{1,5}", raw) and (
+            (market or "").upper() == "HK" or (len(raw) >= 4 and raw.startswith("0"))):
+        digits = raw
+    if digits is None or not 1 <= int(digits) <= 99999:
+        return None
+    return HkCode(str(int(digits)).zfill(4), "HKEX", False)
 
 
 def is_cn_exchange(exchange: str | None) -> bool:

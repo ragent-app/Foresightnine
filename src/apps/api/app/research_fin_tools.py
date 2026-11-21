@@ -23,6 +23,8 @@ from .fin_data.adapters.baostock import BaoStockAdapter, default_runner as baost
 from .fin_data.adapters.sec_edgar import STANDARD_LINES, SecEdgarAdapter, cik10
 from .fin_data.adapters.tushare import TushareAdapter
 from .fin_data.adapters.twelve_data import TwelveDataAdapter
+from .fin_data.adapters.yahoo import YahooAdapter
+from .fin_data.reachability import UNREACHABLE_REASON, ReachabilityProbe, default_probe, unreachable_message
 from .fin_data.entity import MARKETS, parse_entity_id, resolve_cn, resolve_entity as _resolve_entity, wants_cn
 from .fin_data.models import INTERVALS, INTRADAY_INTERVALS, Permissions, ToolResult, normalize_exchange
 from .fin_data.policy import FinDataPolicy, load_policy
@@ -46,11 +48,16 @@ US_EXCHANGES = MARKETS['US']
 SEC_MIN_REMAINING_SECONDS = 15.0
 BYOK_MAX_TIMEOUT_SECONDS = 8.0
 TUSHARE_TIMEOUT_SECONDS = 15.0
-BAOSTOCK_TIMEOUT_SECONDS = 45.0
+BAOSTOCK_TIMEOUT_SECONDS = 15.0  # second line of defence behind the reachability probe
+YAHOO_TIMEOUT_SECONDS = 10.0
 CN_KEY_MESSAGE = (
     'No A-share data source is available: the user can add their own Tushare token in Settings (Market data), '
     'or the operator can enable the keyless BaoStock source. Meanwhile use prices and figures stated in the issuer\'s '
     'reports or news and label them as not coming from market data.')
+CN_NAME_LOOKUP_MESSAGE = (
+    'A-share name lookup needs a Tushare or BaoStock listing, and none is reachable or enabled from this server '
+    '(they are reachable only from mainland China networks or through a proxy). Pass the 6-digit code (for example '
+    '600519 or 000001.SZ) to resolve_entity or market_data, or use issuer_documents / Wikidata to find the listing code.')
 _AUTO = object()
 
 
@@ -221,7 +228,7 @@ class FinDataToolbox:
                  disabled_reason: str | None = None, policy: FinDataPolicy | None = None, limiter=None,
                  sec_transport=None, sec_stream_transport=None, twelve_transport=None, cancel_event=None,
                  tushare_key: str | None = None, tushare_owner: str = 'user_byok', tushare_transport=None,
-                 baostock_runner: Any = _AUTO,
+                 baostock_runner: Any = _AUTO, cn_probe: ReachabilityProbe | None = None, yahoo_transport=None,
                  on_result: Callable[[str, dict[str, Any]], None] | None = None) -> None:
         self.account_id, self._market_key = account_id, market_key or None
         self._owner = credential_owner if credential_owner in ('platform', 'user_byok') else 'user_byok'
@@ -239,7 +246,9 @@ class FinDataToolbox:
         self._ts_key = tushare_key or None
         self._ts_owner = tushare_owner if tushare_owner in ('platform', 'user_byok') else 'user_byok'
         self._ts_transport = tushare_transport
+        self._bs_injected = baostock_runner is not _AUTO
         self._bs_runner = baostock_default_runner() if baostock_runner is _AUTO else baostock_runner
+        self._cn_probe, self._yahoo_transport = cn_probe, yahoo_transport
         self.on_result = on_result  # (tool name, model-visible result) for run level accounting
 
     # -- capability flags (first user message; tools stay static)
@@ -250,13 +259,20 @@ class FinDataToolbox:
     def capabilities(self) -> dict[str, Any]:
         sec = self.enabled and self._sec_ua is not None
         provider = self.cn_provider() if self.enabled else None
+        fin_provider = self.cn_provider('financials') if self.enabled else None
+        unreachable = self.cn_unreachable() if self.enabled else []
+        yahoo_cn = self.enabled and self._yahoo().available('bars_daily', 'SSE')
+        yahoo_hk = self.enabled and self._yahoo().available('bars_daily', 'HKEX')
         return {'market_data_available': self.enabled and self._market_key is not None,
                 'market_data_key_required': self.enabled and self._market_key is None,
                 'sec_financials_available': sec, 'filings_available': sec,
-                'cn_market_data_available': provider is not None,
-                'cn_financials_available': provider is not None,
-                'cn_financials_limited': provider == 'baostock',
-                'cn_data_provider': provider}
+                'cn_market_data_available': provider is not None or yahoo_cn,
+                'cn_market_data_provider': provider or ('yahoo' if yahoo_cn else None),
+                'cn_financials_available': fin_provider is not None,
+                'cn_financials_limited': fin_provider == 'baostock',
+                'cn_data_provider': provider,
+                'cn_providers_unreachable': unreachable,
+                'hk_market_data_available': yahoo_hk or (self.enabled and self._market_key is not None)}
 
     # -- adapters
     def _sec(self) -> SecEdgarAdapter:
@@ -303,25 +319,60 @@ class FinDataToolbox:
         return BaoStockAdapter(runner=self._bs_runner, limiter=self._limiter, policy=self._policy, now_fn=self._now,
                                timeout=timeout)
 
-    def cn_provider(self, category: str = 'bars_daily') -> str | None:
-        if self._ts_key is not None and self._tushare().available(category):
-            return 'tushare'
-        if self._bs_runner is not None and self._baostock().available(category):
-            return 'baostock'
-        return None
+    def _yahoo(self) -> YahooAdapter:
+        if self._yahoo_transport is not None:
+            transport = self._yahoo_transport
+        else:
+            from .fin_data.adapters.base import _default_binary_transport
 
-    def _cn_chain(self, category: str) -> list[tuple[str, Any]]:
+            def transport(method, url, headers, body, tmo):
+                return _default_binary_transport(method, url, headers, body, tmo, max_response_bytes=5_000_000,
+                                                 cancel_event=self._cancel)
+        return YahooAdapter(transport=transport, limiter=self._limiter, policy=self._policy, now_fn=self._now,
+                            timeout=min(YAHOO_TIMEOUT_SECONDS, max(1.0, self._remaining())))
+
+    def _reachable(self, provider: str) -> bool:
+        """Cached TCP reachability of a mainland-only provider; injected transports/runners (tests) are not probed."""
+        if self._cn_probe is None:
+            if (provider == 'tushare' and self._ts_transport is not None) or (provider == 'baostock' and self._bs_injected):
+                return True
+            return default_probe().reachable(provider)
+        return self._cn_probe.reachable(provider)
+
+    def _cn_providers(self, category: str) -> list[tuple[str, Any, bool]]:
+        """Policy/credential-available A-share providers in routing order with their reachability."""
         remaining = self._remaining()
-        chain: list[tuple[str, Any]] = []
+        out: list[tuple[str, Any, bool]] = []
         if self._ts_key is not None:
             ts = self._tushare(min(TUSHARE_TIMEOUT_SECONDS, max(1.0, remaining)))
             if ts.available(category):
-                chain.append(('tushare', ts))
+                out.append(('tushare', ts, self._reachable('tushare')))
         if self._bs_runner is not None:
             bs = self._baostock(min(BAOSTOCK_TIMEOUT_SECONDS, max(1.0, remaining)))
             if bs.available(category):
-                chain.append(('baostock', bs))
-        return chain
+                out.append(('baostock', bs, self._reachable('baostock')))
+        return out
+
+    def cn_provider(self, category: str = 'bars_daily') -> str | None:
+        return next((name for name, _a, ok in self._cn_providers(category) if ok), None)
+
+    def cn_unreachable(self) -> list[str]:
+        names: list[str] = []
+        for category in ('bars_daily', 'financials'):
+            names.extend(n for n, _a, ok in self._cn_providers(category) if not ok and n not in names)
+        return names
+
+    def _cn_chain_info(self, category: str) -> tuple[list[tuple[str, Any]], list[str]]:
+        providers = self._cn_providers(category)
+        return [(n, a) for n, a, ok in providers if ok], [n for n, _a, ok in providers if not ok]
+
+    def _cn_chain(self, category: str) -> list[tuple[str, Any]]:
+        return self._cn_chain_info(category)[0]
+
+    @staticmethod
+    def _unreachable_outcome(unreachable: list[str]) -> FinToolOutcome:
+        return FinToolOutcome({'status': 'unavailable', 'reason': UNREACHABLE_REASON,
+                               'message': unreachable_message(unreachable), 'unreachable_providers': list(unreachable)})
 
     def _blocked(self) -> dict[str, Any] | None:
         if self.disabled_reason is not None:
@@ -358,9 +409,17 @@ class FinDataToolbox:
     # -- resolve_entity
     def resolve_entity(self, req: ResolveEntityRequest, entities: Mapping[str, Mapping[str, Any]]) -> FinToolOutcome:
         blocked = self._blocked()
-        cn_chain = self._cn_chain('identity') if (blocked is None and wants_cn(req.query, req.market)) else []
-        if blocked is None and self._sec_ua is None and self._market_key is None and not cn_chain:
-            blocked = {'status': 'unavailable', 'reason': 'no_identity_source_available'}
+        cn_wanted = blocked is None and wants_cn(req.query, req.market)
+        cn_chain, cn_down = self._cn_chain_info('identity') if cn_wanted else ([], [])
+        code_query = cn_helpers.parse_cn_code(req.query) is not None
+        hk_query = req.market in (None, 'HK') and cn_helpers.parse_hk_code(req.query, req.market) is not None
+        cn_name_gap = cn_wanted and not code_query and not hk_query and not cn_chain
+        unverified_code = cn_wanted and code_query and not cn_chain and bool(cn_down)  # unreachable listing: code format only
+        if blocked is None and self._sec_ua is None and self._market_key is None and not cn_chain and not hk_query \
+                and not unverified_code:
+            blocked = ({'status': 'unavailable', 'reason': 'cn_name_lookup_unavailable', 'message': CN_NAME_LOOKUP_MESSAGE,
+                        **({'unreachable_providers': cn_down} if cn_down else {})} if cn_name_gap
+                       else {'status': 'unavailable', 'reason': 'no_identity_source_available'})
         if blocked is None and self._sec_ua is not None:
             self._ensure_running()
             if self._remaining() < SEC_MIN_REMAINING_SECONDS:
@@ -368,7 +427,8 @@ class FinDataToolbox:
         if blocked:
             return FinToolOutcome(blocked)
         td = self._td(min(BYOK_MAX_TIMEOUT_SECONDS, max(1.0, self._remaining()))) if self._market_key else None
-        cn_res = resolve_cn(req.query, [(name, adapter.stock_list) for name, adapter in cn_chain]) if cn_chain else None
+        cn_res = (resolve_cn(req.query, [(name, adapter.stock_list) for name, adapter in cn_chain]) if cn_chain
+                  else resolve_cn(req.query, []) if unverified_code else None)
         res = _resolve_entity(req.query, req.market, req.asset_type, cn=cn_res,
                               sec=self._sec() if self._sec_ua else None, twelve=td,
                               twelve_kwargs={'api_key': self._market_key, 'credential_owner': self._owner,
@@ -390,6 +450,12 @@ class FinDataToolbox:
             notes.append('No Twelve Data key on this account: only SEC-registered US issuers%s can be matched; other '
                          'markets need the user to add their own Twelve Data key in Settings.'
                          % (' and A-shares (Tushare/BaoStock)' if self.cn_provider('identity') else ''))
+        if cn_name_gap:
+            if res.status in ('empty', 'failed'):
+                return FinToolOutcome({'status': 'unavailable', 'reason': 'cn_name_lookup_unavailable',
+                                       'message': CN_NAME_LOOKUP_MESSAGE, 'cost': wire(res)['cost'],
+                                       **({'unreachable_providers': cn_down} if cn_down else {})})
+            notes.append(CN_NAME_LOOKUP_MESSAGE)
         out = wire(res, candidates=cands[:20])
         if notes:
             out['notes'] = notes
@@ -426,6 +492,11 @@ class FinDataToolbox:
             if cn_code is not None:
                 symbol, ex_code, entity_id, currency = cn_code.code, cn_code.exchange, cn_code.entity_id, cn_helpers.CN_CURRENCY
                 raw_ex = raw_ex if cn_helpers.is_cn_exchange(raw_ex) else cn_code.exchange
+            elif ex_code is None:
+                hk = cn_helpers.parse_hk_code(symbol)
+                if hk is not None:
+                    symbol, ex_code, entity_id, currency = hk.code, 'HKEX', hk.entity_id, 'HKD'
+                    raw_ex = raw_ex or 'HKEX'
         start, end = req.start_date, req.end_date
         if req.lookback is not None:
             session = exchange_session(ex_code)
@@ -433,21 +504,46 @@ class FinDataToolbox:
                                           timezone_name=session.timezone if session else 'UTC')
         return MarketSpec(entity_id, symbol, ex_code, raw_ex, currency, req.interval, start, end)
 
+    @staticmethod
+    def _hk_code(spec: MarketSpec) -> cn_helpers.HkCode | None:
+        return cn_helpers.parse_hk_code(spec.symbol, 'HK') if spec.exchange == 'HKEX' else None
+
     def market_data(self, spec: MarketSpec) -> FinToolOutcome:
         blocked = self._blocked()
         if blocked:
             return FinToolOutcome(blocked)
         cn_code = self._cn_code(spec.symbol, spec.exchange) if cn_helpers.is_cn_exchange(spec.exchange) else None
         if cn_code is not None:
-            chain = self._cn_chain('bars_daily')
+            chain, unreachable = self._cn_chain_info('bars_daily')
+            yahoo = self._yahoo()
+            if yahoo.available('bars_daily', cn_code.exchange):
+                chain = [*chain, ('yahoo', yahoo)]  # last resort: unofficial keyless source, personal-dev policy only
             if chain:
                 return self._cn_market_data(spec, cn_code, chain)
             if self._market_key is None:
+                if unreachable:
+                    return self._unreachable_outcome(unreachable)
                 return FinToolOutcome({'status': 'unavailable', 'reason': 'cn_market_data_unavailable',
                                        'message': CN_KEY_MESSAGE})
+        hk_code = self._hk_code(spec)
+        if hk_code is not None:
+            yahoo = self._yahoo()
+            yahoo_ok = yahoo.available('bars_daily', 'HKEX')
+            if self._market_key is None and yahoo_ok:
+                return self._cn_market_data(spec, hk_code, [('yahoo', yahoo)])
+            if self._market_key is not None:
+                out = self._td_market_data(spec)
+                if out.result.get('status') in ('ok', 'partial') or not yahoo_ok:
+                    return out
+                fallback = self._cn_market_data(spec, hk_code, [('yahoo', yahoo)],
+                                                [f"twelve_data failed ({out.result.get('reason')}); Yahoo Finance tried next."])
+                return fallback
         if self._market_key is None:
             return FinToolOutcome({'status': 'unavailable', 'reason': 'market_data_key_required',
                                    'message': MARKET_KEY_REQUIRED_MESSAGE})
+        return self._td_market_data(spec)
+
+    def _td_market_data(self, spec: MarketSpec) -> FinToolOutcome:
         self._ensure_running()
         remaining = self._remaining()
         if remaining <= 0:
@@ -460,15 +556,16 @@ class FinDataToolbox:
             return FinToolOutcome(wire(res))
         return self._bars_outcome(res, spec, provider='twelve_data', endpoint='time_series', owner=self._owner)
 
-    def _cn_market_data(self, spec: MarketSpec, code: cn_helpers.CnCode, chain: list[tuple[str, Any]]) -> FinToolOutcome:
+    def _cn_market_data(self, spec: MarketSpec, code: Any, chain: list[tuple[str, Any]],
+                        prior_failures: list[str] | None = None) -> FinToolOutcome:
         if spec.interval in INTRADAY_INTERVALS:
             return FinToolOutcome({'status': 'unavailable', 'reason': 'intraday_not_supported_cn',
-                                   'message': 'Free A-share sources provide daily, weekly and monthly bars only; use '
+                                   'message': 'Free A-share and Hong Kong sources provide daily, weekly and monthly bars only; use '
                                               'interval 1day, 1week or 1month.'})
         self._ensure_running()
         if self._remaining() <= 0:
             return FinToolOutcome({'status': 'unavailable', 'reason': 'time_budget'})
-        failures: list[str] = []
+        failures: list[str] = list(prior_failures or [])
         last: ToolResult | None = None
         for name, adapter in chain:
             res = adapter.bars(code, interval=spec.interval, start=spec.start, end=spec.end, entity_id=spec.entity_id)
@@ -477,13 +574,15 @@ class FinDataToolbox:
                     res = res.model_copy(update={'coverage': res.coverage.model_copy(
                         update={'notes': [*res.coverage.notes, *failures]}) if res.coverage else res.coverage})
                 owner = self._ts_owner if name == 'tushare' else 'keyless_public_source'
-                note = ('Third-party A-share data under the account\'s own Tushare token, personal use only; not shared '
-                        'across accounts and not exportable. Prices are as traded; adj_factor carries the adjustment.'
-                        if name == 'tushare' else
+                note = {'tushare': 'Third-party A-share data under the account\'s own Tushare token, personal use only; not shared '
+                                   'across accounts and not exportable. Prices are as traded; adj_factor carries the adjustment.',
+                        'yahoo': 'Yahoo Finance daily bars via its unofficial keyless chart endpoint, allowed by the configured data '
+                                 'policy for personal development use only (Yahoo terms do not allow commercial use); not '
+                                 'exportable. close is split-adjusted; adj_factor = adjclose / close.'}.get(name) or (
                         'BaoStock public source (no terms of use found; personal development use assumed, review before '
                         'public release); not exportable. Prices are as traded; adj_factor is derived.')
-                return self._bars_outcome(res, spec, provider=name, endpoint='daily' if name == 'tushare' else 'query_history_k_data_plus',
-                                          owner=owner, note=note)
+                endpoint = {'tushare': 'daily', 'yahoo': 'v8/finance/chart'}.get(name, 'query_history_k_data_plus')
+                return self._bars_outcome(res, spec, provider=name, endpoint=endpoint, owner=owner, note=note)
             last = res
             if res.status == 'empty':
                 break
@@ -662,8 +761,10 @@ class FinDataToolbox:
         blocked = self._blocked()
         if blocked:
             return FinToolOutcome(blocked)
-        chain = self._cn_chain('financials')
+        chain, unreachable = self._cn_chain_info('financials')
         if not chain:
+            if unreachable:
+                return self._unreachable_outcome(unreachable)
             return FinToolOutcome({'status': 'unavailable', 'reason': 'cn_financials_unavailable', 'message': CN_KEY_MESSAGE})
         self._ensure_running()
         if self._remaining() <= 0:

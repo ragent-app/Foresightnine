@@ -222,9 +222,15 @@ def _resolve_tushare_key(account_id: str, policy=None) -> tuple[str | None, str 
     return None, None
 
 
-def _cn_data_possible(tushare_key: str | None) -> bool:
+def _cn_data_possible(tushare_key: str | None, policy=None) -> bool:
+    """A-share/HK price data may be possible: a Tushare token, BaoStock, or Yahoo allowed by policy. Reachability is
+    not probed here (admission must stay fast); the tools report cn_provider_unreachable per call."""
     from .fin_data.adapters.baostock import baostock_installed
-    return tushare_key is not None or baostock_installed()
+    if tushare_key is not None or baostock_installed():
+        return True
+    policy = policy or load_fin_data_policy()
+    return not isinstance(policy.decide("yahoo", "bars_daily", "SSE", credential_owner="platform"), FinDataDenied) or \
+        not isinstance(policy.decide("yahoo", "bars_daily", "HKEX", credential_owner="platform"), FinDataDenied)
 
 
 oauth_trace_logger = logging.getLogger("foresightnine.oauth")
@@ -3747,6 +3753,9 @@ def _market_credential_problem(error: MarketCredentialError) -> ApiProblem:
 def _test_tushare_token(account_id: str, token: str | None) -> str:
     """One bounded daily-bar read through the account's own Tushare token; no diagnostics are returned."""
     if not token:
+        return "unavailable"
+    from .fin_data.reachability import default_probe
+    if not default_probe().reachable("tushare"):  # mainland-only host: fail fast instead of waiting for a timeout
         return "unavailable"
     from .fin_data.adapters.tushare import TushareAdapter
     from .fin_data.cn import CnCode
