@@ -1408,3 +1408,66 @@ def test_causal_graph_runtime_tool_progress_and_export_permissions(monkeypatch):
         VersionInput(parent_version_id=pvid, content=content_with_cg, review="draft", note=""),
     ).versions[-1].version_id
     assert client.get(f"/v2/research/topics/{tid}/versions/{v_cg}/export", headers=headers).status_code == 403
+
+
+def _price_chart(source, normalize=False):
+    req = CreateChartRequest.model_validate({
+        "chart_type": "price_series", "title": "close", "y_axes": [{"id": "left", "label": "Price"}],
+        "series": [{"name": "S", "mark": "line",
+                    "binding": {"kind": "historical_prices", "source_id": source.source_id, "normalize_base_100": normalize}}],
+        "rationale": "Plot closes."})
+    return build_research_chart(req, facts=[], calculations=[], sources={source.source_id: source})
+
+
+@pytest.mark.parametrize("provider_lines, closes, currency", [
+    # twelve_data: decimals, volume, ISO currency, no adjustment
+    (["AAPL@NASDAQ | 2026-11-19 | 1day | O 270.1 H 273 L 269.5 C 272.25 V 41000000 USD",
+      "AAPL@NASDAQ | 2026-11-20 | 1day | O 272 H 275 L 271 C 274.5 V 39000000 USD"], ["272.25", "274.5"], "USD"),
+    # tushare: unadjusted prices, ADJF suffix after the currency
+    (["600519@SSE | 2026-11-19 | 1day | O 1450.00 H 1470.00 L 1440.00 C 1460.50 V 2300000 CNY ADJF 8.123",
+      "600519@SSE | 2026-11-20 | 1day | O 1460.00 H 1475.00 L 1455.00 C 1470.00 V 2100000 CNY ADJF 8.123"], ["1460.5", "1470"], "CNY"),
+    # yahoo: split-adjusted close, adj_factor = adjclose / close, missing volume
+    (["0700@HKEX | 2026-11-19 | 1day | O 520 H 525 L 518 C 523.5 V - HKD ADJF 0.9876",
+      "0700@HKEX | 2026-11-20 | 1day | O 523 H 530 L 521 C 528 V - HKD ADJF 0.9876"], ["523.5", "528"], "HKD"),
+    # baostock: derived adj_factor, scientific notation volume
+    (["000001@SZSE | 2026-11-19 | 1day | O 11.2 H 11.4 L 11.1 C 11.3 V 1.5E+8 CNY ADJF 1.25",
+      "000001@SZSE | 2026-11-20 | 1day | O 11.3 H 11.5 L 11.2 C 11.45 V 1.4E+8 CNY ADJF 1.25"], ["11.3", "11.45"], "CNY"),
+])
+def test_market_data_provider_line_formats_chart_close(provider_lines, closes, currency):
+    src = _make_source("md-p", "\n".join(provider_lines) + "\n", kind="market_data", provenance={"currency": currency})
+    chart = _price_chart(src)
+    assert [p.y for p in chart.series[0].points] == closes and chart.axes[0].currency == currency
+
+
+def test_market_data_without_line_currency_uses_provenance_and_adjf():
+    text = "600519@SSE | 2026-11-19 | 1day | O 1 H 2 L 1 C 1.5 V 10 ADJF 2.0\n600519@SSE | 2026-11-20 | 1day | O 1 H 2 L 1 C 1.6 V 10 ADJF 2.0\n"
+    chart = _price_chart(_make_source("md-n", text, kind="market_data", provenance={"currency": "CNY"}))
+    assert chart.axes[0].currency == "CNY" and len(chart.series[0].points) == 2
+    with pytest.raises(ChartBuildError):
+        _price_chart(_make_source("md-n2", text, kind="market_data", provenance={}))
+
+
+def test_market_data_strict_validation_rejects_bad_sources():
+    good = "A@SSE | 2026-11-19 | 1day | O 1 H 2 L 1 C 1.5 V 10 CNY"
+    cases = {
+        "two instruments": good + "\nB@SSE | 2026-11-20 | 1day | O 1 H 2 L 1 C 1.5 V 10 CNY",
+        "mixed currency": good + "\nA@SSE | 2026-11-20 | 1day | O 1 H 2 L 1 C 1.5 V 10 USD",
+        "bad date": "A@SSE | 2026-13-40 | 1day | O 1 H 2 L 1 C 1.5 V 10 CNY",
+        "bad number": "A@SSE | 2026-11-19 | 1day | O 1 H 2 L 1 C abc V 10 CNY",
+        "bad adjf": good + " ADJF x",
+        "zero close": "A@SSE | 2026-11-19 | 1day | O 1 H 2 L 1 C 0 V 10 CNY",
+        "duplicate date": good + "\n" + good,
+        "mixed interval": good + "\nA@SSE | 2026-11-26 | 1week | O 1 H 2 L 1 C 1.5 V 10 CNY",
+    }
+    for name, text in cases.items():
+        with pytest.raises(ChartBuildError):
+            _price_chart(_make_source("md-bad", text + "\n", kind="market_data", provenance={"currency": "CNY"}))
+
+
+def test_market_data_normalize_base_100_and_legacy_daily_close_still_work():
+    text = "A@SSE | 2026-11-19 | 1day | O 1 H 2 L 1 C 50 V 10 CNY ADJF 2\nA@SSE | 2026-11-20 | 1day | O 1 H 2 L 1 C 55 V 10 CNY ADJF 2\n"
+    chart = _price_chart(_make_source("md-b", text, kind="market_data", provenance={"currency": "CNY"}), normalize=True)
+    assert [p.y for p in chart.series[0].points] == ["100", "110"]
+    legacy = "NVDA | 2025-01-02 | daily close | 105.00 USD\nNVDA | 2025-01-03 | daily close | 110.00 USD\n"
+    chart = _price_chart(_make_source("hp-l", legacy, kind="market_data", provenance={"currency": "USD"}))
+    assert [p.y for p in chart.series[0].points] == ["105", "110"]

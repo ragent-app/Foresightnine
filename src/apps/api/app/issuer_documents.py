@@ -36,6 +36,8 @@ CRAWL_USER_AGENT = 'ForesightNine-Research/1.0 (financial research tool; honors 
 MAX_PAGES_ENV = 'FORESIGHTNINE_ISSUER_CRAWL_MAX_PAGES'
 SECONDS_ENV = 'FORESIGHTNINE_ISSUER_CRAWL_SECONDS'
 DELAY_ENV = 'FORESIGHTNINE_ISSUER_CRAWL_DELAY_SECONDS'
+CONNECT_TIMEOUT_ENV = 'FORESIGHTNINE_ISSUER_CONNECT_TIMEOUT_SECONDS'
+DEFAULT_CONNECT_TIMEOUT = 8.0
 DEFAULT_MAX_PAGES = 12
 HARD_MAX_PAGES = 40
 DEFAULT_SECONDS = 45.0
@@ -48,6 +50,8 @@ MAX_DEPTH = 2
 MAX_ANCHORS = 3000
 ROBOTS_TTL = 24 * 3600
 ROBOTS_FAILURE_TTL = 600
+UNREACHABLE_MESSAGE = ('The issuer website could not be reached from the server network (many mainland China sites are only '
+                      'reachable from mainland networks). Ask the user to upload the document, or use a mainland relay.')
 DOC_TYPES: tuple[str, ...] = ('announcement', 'annual_report', 'interim_report', 'circular', 'results')
 _PUBLIC_SUFFIX_2 = frozenset({'co.uk', 'org.uk', 'com.cn', 'net.cn', 'org.cn', 'gov.cn', 'edu.cn', 'com.hk', 'org.hk',
                               'edu.hk', 'com.tw', 'org.tw', 'co.jp', 'or.jp', 'co.kr', 'or.kr', 'com.au', 'co.in',
@@ -103,6 +107,8 @@ class RobotsPolicy:
     disallow_all: bool = False
     rules: list[tuple[bool, re.Pattern[str], int]] = field(default_factory=list)   # (allow, pattern, specificity)
     crawl_delay: float | None = None
+    failure: str | None = None          # robots_unreachable | robots_unavailable: not crawled because robots.txt could not be read
+    failure_status: int | None = None
 
     def can_fetch(self, url: str) -> bool:
         if self.disallow_all:
@@ -345,9 +351,10 @@ class _Response:
 
 
 class _Blocked(Exception):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, status: int | None = None) -> None:
         super().__init__(code)
         self.code = code
+        self.status = status
 
 
 class IssuerCrawler:
@@ -366,6 +373,7 @@ class IssuerCrawler:
         self._delay = _env_float(DELAY_ENV, DEFAULT_DELAY, 0.0, 30.0) if delay_seconds is None else max(0.0, delay_seconds)
         self.max_pages = max_pages if max_pages is not None else _env_int(MAX_PAGES_ENV, DEFAULT_MAX_PAGES, 1, HARD_MAX_PAGES)
         self._ensure_running = ensure_running
+        self._connect_timeout = _env_float(CONNECT_TIMEOUT_ENV, DEFAULT_CONNECT_TIMEOUT, 1.0, 10.0)
         self._last_request: dict[str, float] = {}
         self._policies: dict[str, RobotsPolicy] = {}
         self.requests = 0
@@ -415,7 +423,8 @@ class IssuerCrawler:
             self._pace(host, crawl_delay)
             self.requests += 1
             response = self._transport('GET', current, {'Accept': accept, 'User-Agent': CRAWL_USER_AGENT}, b'',
-                                       min(10.0, max(1.0, self.remaining())), max_response_bytes=max_bytes)
+                                       min(10.0, max(1.0, self.remaining())), max_response_bytes=max_bytes,
+                                       connect_timeout_seconds=self._connect_timeout)
             status = int(getattr(response, 'status_code', 0))
             headers = {str(k).lower(): str(v) for k, v in (getattr(response, 'headers', None) or {}).items()}
             if status in (301, 302, 303, 307, 308) and headers.get('location'):
@@ -439,17 +448,15 @@ class IssuerCrawler:
             if response.status == 200:
                 policy = parse_robots(response.body.decode('utf-8', errors='replace'))
             elif response.status in (401, 403) or response.status == 429 or response.status >= 500:
-                policy, ttl = RobotsPolicy(disallow_all=True), ROBOTS_FAILURE_TTL    # refusal or unreachable: do not crawl
+                policy, ttl = RobotsPolicy(disallow_all=True, failure='robots_unavailable', failure_status=response.status), ROBOTS_FAILURE_TTL
             else:
                 policy = RobotsPolicy(allow_all=True)                                   # 404/410 etc.: no restrictions
         except _Blocked as error:
             if error.code == 'time_budget':
                 raise
-            policy, ttl = RobotsPolicy(disallow_all=True), ROBOTS_FAILURE_TTL
-        except OSError:
-            policy, ttl = RobotsPolicy(disallow_all=True), ROBOTS_FAILURE_TTL
-        except Exception:
-            policy, ttl = RobotsPolicy(disallow_all=True), ROBOTS_FAILURE_TTL
+            policy, ttl = RobotsPolicy(disallow_all=True, failure='robots_unreachable'), ROBOTS_FAILURE_TTL
+        except Exception:       # network failure or timeout: conservatively do not crawl, but not a robots refusal
+            policy, ttl = RobotsPolicy(disallow_all=True, failure='robots_unreachable'), ROBOTS_FAILURE_TTL
         self._policies[host] = policy
         if len(_ROBOTS_CACHE) > 512:
             _ROBOTS_CACHE.clear()
@@ -460,12 +467,12 @@ class IssuerCrawler:
         self.check_url(url)
         policy = self.policy(url)
         if not policy.can_fetch(url):
-            raise _Blocked('robots_disallow')
+            raise _Blocked(policy.failure or 'robots_disallow', policy.failure_status)
         response = self._get(url, max_bytes=MAX_PAGE_BYTES, accept='text/html, application/xhtml+xml;q=0.9',
                              crawl_delay=policy.crawl_delay)
         final_policy = self.policy(response.final_url) if urlsplit(response.final_url).hostname != urlsplit(url).hostname else policy
         if not final_policy.can_fetch(response.final_url):
-            raise _Blocked('robots_disallow')
+            raise _Blocked(final_policy.failure or 'robots_disallow', final_policy.failure_status)
         return response
 
 
@@ -492,8 +499,9 @@ class CrawlReport:
     robots_skipped: int = 0
     blocked_hosts: list[str] = field(default_factory=list)
     errors: int = 0
-    home_status: str = 'ok'          # ok | robots_disallow | unreachable | blocked | not_html
+    home_status: str = 'ok'          # ok | robots_disallow | robots_unavailable | robots_unreachable | unreachable | blocked | not_html
     home_reason: str | None = None
+    home_http_status: int | None = None
     time_exhausted: bool = False
     filtered_by_date: int = 0
     budget_exhausted: bool = False
@@ -536,14 +544,15 @@ def crawl_issuer_site(site_url: str, crawler: IssuerCrawler, *, doc_types: Itera
             if error.code == 'time_budget':
                 report.time_exhausted = True
                 break
-            if error.code == 'robots_disallow':
+            if error.code in ('robots_disallow', 'robots_unavailable', 'robots_unreachable'):
                 report.robots_skipped += 1
             else:
                 report.errors += 1
                 blocked_hosts.add(urlsplit(page_url).hostname or '')
             if is_home:
-                report.home_status = 'robots_disallow' if error.code == 'robots_disallow' else 'blocked'
+                report.home_status = error.code if error.code.startswith('robots_') else 'blocked'
                 report.home_reason = error.code
+                report.home_http_status = error.status
                 break
             continue
         except Exception:
@@ -766,12 +775,24 @@ class IssuerDocuments:
             return IssuerOutcome({'status': 'denied', 'reason': 'issuer_site_robots_disallow', **base, 'coverage': coverage,
                                   'message': f'{host} robots.txt does not allow automated access; nothing was fetched from it.'},
                                  site_hosts=[host])
+        if report.home_status == 'robots_unreachable':
+            return IssuerOutcome({'status': 'failed', 'reason': 'issuer_site_unreachable', 'retryable': True, **base,
+                                  'coverage': coverage, 'message': UNREACHABLE_MESSAGE}, site_hosts=[host])
+        if report.home_status == 'robots_unavailable':
+            code = report.home_http_status
+            return IssuerOutcome({'status': 'failed', 'reason': 'issuer_site_robots_unavailable', 'retryable': True,
+                                  'http_status': code, **base, 'coverage': coverage,
+                                  'message': (f'{host} answered its robots.txt request with HTTP {code}, so access rules could not be '
+                                              'confirmed and nothing was fetched from it.')}, site_hosts=[host])
         if report.home_status == 'blocked':
             return IssuerOutcome({'status': 'denied', 'reason': 'source_blocked_terms', **base, 'coverage': coverage},
                                  site_hosts=[host])
         if report.home_status in ('unreachable', 'not_html'):
+            unreachable = (report.home_reason or 'issuer_site_unreachable') == 'issuer_site_unreachable'
             return IssuerOutcome({'status': 'failed', 'reason': report.home_reason or 'issuer_site_unreachable', **base,
-                                  'coverage': coverage, 'external_state': 'unknown'}, site_hosts=[host])
+                                  'coverage': coverage, 'external_state': 'unknown',
+                                  **({'retryable': True, 'message': UNREACHABLE_MESSAGE} if unreachable else {})},
+                                 site_hosts=[host])
         docs = report.documents
         specific = [d for d in docs if not req.doc_types or d.doc_type in req.doc_types or d.doc_type == 'other']
         shown = specific[:req.limit]

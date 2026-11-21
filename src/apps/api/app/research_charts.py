@@ -94,7 +94,7 @@ _CURRENCY_WORDS: dict[str, str] = {
 
 _MAX_HISTORICAL_PRICE_POINTS = 1000
 _BAR_INTERVALS = frozenset({"1min", "5min", "15min", "30min", "1h", "1day", "1week", "1month"})
-_BAR_LINE_RE = re.compile(r"^O (\S+) H (\S+) L (\S+) C (\S+) V (\S+)(?: ([A-Za-z]{3}))?$")
+_BAR_LINE_RE = re.compile(r"^O (\S+) H (\S+) L (\S+) C (\S+) V (\S+)(?: ([A-Za-z]{3}))?(?: ADJF (\S+))?$")
 _HIST_PRICE_LINE_RE = re.compile(
     r"^\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s+(.+?)\s*$"
 )
@@ -649,6 +649,8 @@ def _parse_historical_prices_source(
     if not source.text.strip():
         raise ChartBuildError(f"Historical price source {source.source_id!r} is empty.")
     rows: list[tuple[str, Decimal, str, int, int]] = []
+    bar_labels: set[str] = set()
+    bar_intervals: set[str] = set()
     offset = 0
     prov_ccy = source.provenance.get("currency") if isinstance(source.provenance, dict) else None
     for raw_line in source.text.splitlines(keepends=True):
@@ -666,9 +668,19 @@ def _parse_historical_prices_source(
                 datetime.fromisoformat(parts[1])
             except ValueError as error:
                 raise ChartBuildError(f"Invalid timestamp {parts[1]!r} in market data source.") from error
+            for idx, name in ((1, "open"), (2, "high"), (3, "low"), (4, "close")):
+                if _to_decimal(bar.group(idx), what=f"{source.source_id} {name}") <= 0:
+                    raise ChartBuildError(f"Market data {name} must be positive in {source.source_id!r}.")
+            if bar.group(5) != "-" and _to_decimal(bar.group(5), what=f"{source.source_id} volume") < 0:
+                raise ChartBuildError(f"Market data volume must not be negative in {source.source_id!r}.")
+            if bar.group(7) is not None and _to_decimal(bar.group(7), what=f"{source.source_id} adjustment factor") <= 0:
+                raise ChartBuildError(f"Market data adjustment factor must be positive in {source.source_id!r}.")
             close = _to_decimal(bar.group(4), what=f"{source.source_id} close")
-            if close <= 0:
-                raise ChartBuildError(f"Historical price close must be positive in {source.source_id!r}.")
+            bar_labels.add(parts[0].upper())
+            bar_intervals.add(parts[2])
+            if len(bar_labels) > 1 or len(bar_intervals) > 1:
+                raise ChartBuildError(
+                    f"Market data source {source.source_id!r} must hold a single instrument and interval to chart.")
             ccy = bar.group(6) or (prov_ccy.strip().upper() if isinstance(prov_ccy, str) and prov_ccy.strip() else None)
             if not ccy:
                 raise ChartBuildError(f"Market data source {source.source_id!r} has no currency.")

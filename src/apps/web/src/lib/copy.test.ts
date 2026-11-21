@@ -34,6 +34,8 @@ describe("labels", () => {
     expect(toolReasonLabel("search_response_invalid")).toBe("搜索服务返回的格式有误");
     expect(toolReasonLabel("source_user_initiated_only")).toContain("个人使用模式");
     expect(toolReasonLabel("issuer_site_robots_disallow")).toContain("robots.txt");
+    expect(toolReasonLabel("issuer_site_unreachable")).toContain("大陆");
+    expect(toolReasonLabel("issuer_site_robots_unavailable")).toContain("robots.txt");
     expect(toolReasonLabel("search_query_provider_limit")).toBe("搜索词过长，超出服务商限制");
     for (const reason of ["search_quota_exhausted", "search_rate_limited", "gdelt_rate_limited"]) {
       expect(TOOL_REASON_LABEL[reason]).toBeTruthy();

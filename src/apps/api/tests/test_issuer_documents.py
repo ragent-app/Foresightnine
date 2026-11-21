@@ -260,11 +260,55 @@ def test_robots_disallow_all_and_unreachable_fetch_nothing_but_robots():
     issuer_documents.clear_robots_cache()
     server_error = FakeSite(robots_status=503)
     report, _ = crawl(server_error)
-    assert report.home_status == "robots_disallow" and server_error.requests == ["https://www.example-co.com/robots.txt"]
+    assert report.home_status == "robots_unavailable" and report.home_http_status == 503 and server_error.requests == ["https://www.example-co.com/robots.txt"]
     issuer_documents.clear_robots_cache()
     missing = FakeSite(robots_status=404)
     report, _ = crawl(missing)
     assert report.home_status == "ok" and report.documents
+
+
+def _outcome_for(transport):
+    crawler = IssuerCrawler(transport=transport, delay_seconds=0, sleeper=lambda s: None)
+    report = crawl_issuer_site("https://www.example-co.com/", crawler, today=TODAY)
+    tool = IssuerDocuments(wikidata=None)
+    issuer = {"website": "https://www.example-co.com/"}
+    return tool._outcome(IssuerDocumentsRequest(website_url="https://www.example-co.com/", rationale="r"),
+                         issuer, "https://www.example-co.com/", report).result
+
+
+def test_unreachable_robots_is_reported_as_unreachable_not_robots_disallow():
+    seen = []
+
+    def transport(method, url, headers, body, timeout, **kwargs):
+        seen.append((url, kwargs.get("connect_timeout_seconds")))
+        raise OSError("connect timeout")
+
+    result = _outcome_for(transport)
+    assert result["status"] == "failed" and result["reason"] == "issuer_site_unreachable" and result["retryable"] is True
+    assert "mainland" in result["message"] and seen == [("https://www.example-co.com/robots.txt", 8.0)]
+
+
+def test_robots_http_refusal_reports_status_and_real_disallow_stays_denied():
+    for status in (401, 403, 429, 503):
+        issuer_documents.clear_robots_cache()
+        result = _outcome_for(FakeSite(robots_status=status))
+        assert result["status"] == "failed" and result["reason"] == "issuer_site_robots_unavailable"
+        assert result["http_status"] == status and result["retryable"] is True
+    issuer_documents.clear_robots_cache()
+    result = _outcome_for(FakeSite(robots="User-agent: *\nDisallow: /\n"))
+    assert result["status"] == "denied" and result["reason"] == "issuer_site_robots_disallow"
+
+
+def test_connect_timeout_env_is_applied(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_ISSUER_CONNECT_TIMEOUT_SECONDS", "3")
+    seen = []
+
+    def transport(method, url, headers, body, timeout, **kwargs):
+        seen.append(kwargs.get("connect_timeout_seconds"))
+        raise OSError("x")
+
+    _outcome_for(transport)
+    assert seen == [3.0]
 
 
 def test_blocked_issuer_site_is_never_fetched():
