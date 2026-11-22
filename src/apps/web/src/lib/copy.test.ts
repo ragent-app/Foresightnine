@@ -253,6 +253,12 @@ describe("L1 streaming labels", () => {
     expect(formulaLabel("growth_percent")).toBe("增长率");
     expect(formulaLabel("margin_percent")).toBe("利润率");
     expect(formulaLabel("difference")).toBe("差额");
+    expect(formulaLabel("ratio")).toBe("比率");
+    expect(formulaLabel("cagr")).toBe("复合年增长率");
+    expect(formulaLabel("sum")).toBe("合计");
+    expect(formulaLabel("subtract")).toBe("净差额");
+    expect(formulaLabel("weighted_average")).toBe("加权平均");
+    expect(formulaLabel("ttm_sum")).toBe("滚动十二个月合计");
     expect(formulaLabel("custom")).toBe("custom");
     expect(PROCESS_NOTE_LABEL).toBe("思路 · 过程说明（非正式结论）");
     expect(LIVE_STAGED_TAG).toBe("运行中暂存");

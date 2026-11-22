@@ -579,3 +579,61 @@ def test_same_currency_scale_alignment_and_cross_currency_fail_closed():
     with pytest.raises(CalculationError, match='must match'):
         calculate(CalculationRequest(formula='sum', facts=[f_bn, f_eur]))
 
+
+def test_calculation_result_status_handles_all_nine_formulas_and_tampering():
+    from app.research_calculations import calculate, calculation_input_status, calculation_result_status
+    from app.research_topics import ResearchCalculation
+
+    f0 = fact('f0', '100', 'FY2022')
+    f1 = fact('f1', '133.1', 'FY2025')
+    f2 = fact('f2', '40', 'FY2025')
+    f3 = fact('f3', '160', 'FY2025')
+    q1 = fact('q1', '10', '2025-Q1')
+    q2 = fact('q2', '12', '2025-Q2')
+    q3 = fact('q3', '15', '2025-Q3')
+    q4 = fact('q4', '23', '2025-Q4')
+    f_bn = fact('f_bn', '2', 'FY2025', unit='USD billions', currency='USD')
+
+    calcs = [
+        calculate(CalculationRequest(formula='growth_percent', first=f1, second=f0)),
+        calculate(CalculationRequest(formula='margin_percent', first=f2, second=f3)),
+        calculate(CalculationRequest(formula='difference', first=f1, second=f0)),
+        calculate(CalculationRequest(formula='cagr', first=f1, second=f0, periods=Decimal('3'))),
+        calculate(CalculationRequest(formula='ratio', first=f3, second=f2)),
+        calculate(CalculationRequest(formula='sum', facts=[q1, q2, q3])),
+        calculate(CalculationRequest(formula='subtract', facts=[q4, q1, q2])),
+        calculate(CalculationRequest(formula='weighted_average', facts=[q1, q4], weights=[Decimal('1'), Decimal('3')])),
+        calculate(CalculationRequest(formula='ttm_sum', facts=[q1, q2, q3, q4])),
+        calculate(CalculationRequest(formula='sum', facts=[f_bn, q1])),
+    ]
+    for idx, row in enumerate(calcs):
+        assert calculation_result_status(row) == 'matched', row['formula_id']
+        dumped = ResearchCalculation.model_validate({**row, 'calculation_id': f'calc-{idx}'}).model_dump(mode='json')
+        assert calculation_result_status(dumped) == 'matched', row['formula_id']
+
+    cagr_calc = calcs[3]
+    assert calculation_result_status({**cagr_calc, 'periods': None}) == 'unverifiable'
+    assert calculation_result_status({**cagr_calc, 'periods': '3.0'}) == 'mismatch'
+
+    wavg_calc = calcs[7]
+    assert calculation_result_status({**wavg_calc, 'weights': None}) == 'unverifiable'
+    assert calculation_result_status({**wavg_calc, 'weights': ['1']}) == 'unverifiable'
+
+    growth_calc = calcs[0]
+    assert calculation_result_status({**growth_calc, 'periods': '3'}) == 'mismatch'
+
+    sum_calc = calcs[5]
+    assert calculation_result_status({**sum_calc, 'weights': ['1', '1', '1']}) == 'mismatch'
+    assert calculation_result_status({**sum_calc, 'scale_adjustments': [{'fact_id': 'q1'}]}) == 'mismatch'
+
+    scaled_sum = calcs[9]
+    assert calculation_result_status({**scaled_sum, 'scale_adjustments': None}) == 'mismatch'
+    tampered_adj = [{**scaled_sum['scale_adjustments'][0], 'multiplier': '100'}]
+    assert calculation_result_status({**scaled_sum, 'scale_adjustments': tampered_adj}) == 'mismatch'
+
+    ttm_calc = calcs[8]
+    assert calculation_result_status({**ttm_calc, 'inputs': ttm_calc['inputs'][:3]}) == 'unverifiable'
+    assert calculation_result_status({**growth_calc, 'formula_id': 'unknown'}) == 'unverifiable'
+    assert calculation_input_status({**growth_calc, 'formula_id': 'unknown'}, [f0, f1]) == 'unverifiable'
+
+

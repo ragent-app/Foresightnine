@@ -100,18 +100,19 @@ from .services import (
     validate_worldline_bundle_semantics,
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, _drop_legacy_null_fields, build_repository
-from .research_topics import (AttachSourcesInput, ReadRange, ResearchCalculation, ResearchFact, ResearchFullExport, ResearchInput, ResearchMetadataExport,
-    ResearchTopic, ResearchTopics, ResearchTurn, TopicNotFound, TopicVersionConflict, TurnUsage, VersionInput)
+from .research_topics import (AttachSourcesInput, ResearchCalculation, ResearchFact, ResearchFullExport, ResearchInput, ResearchMetadataExport,
+    ResearchTopic, ResearchTopics, ResearchTurn, TopicNotFound, TopicVersionConflict, VersionInput)
 from .research_clock import build_research_clock
 from .research_progress import build_progress
 from .research_live_stream import ResearchLiveBroker, format_sse_frame, parse_last_event_id
-from .research_turns import gap_rows, merge_turn, prior_research_input
-from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, verified_direction_proof, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
+from .research_turns import merge_turn, prior_research_input
+from .research_turn_persister import ResearchTurnPersister, record_failed_checkpoint_version
+from .research_calculations import BINARY_FORMULAS, CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, MULTI_FACT_FORMULAS, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, verified_direction_proof, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
 from .research_table_provenance import bounded_table_trace
 from .research_analysis import SELECTION_METHOD as RESEARCH_SELECTION_METHOD, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
 from .research_runs import DOCUMENT_OVERVIEW_QUESTION, ResearchRunRequest, ResearchRunResult, resolve_automatic_research_request
-from .research_source_policy import prepare_sources, source_eligibility, summarize_sources
+from .research_source_policy import prepare_sources, summarize_sources
 from .research_budget import ResearchExecutionBudget
 from .research_coordinator import ResearchExecutionContext
 from .research_lifecycle import ResearchVersionChain
@@ -120,7 +121,9 @@ from .research_news_tool import default_news_providers
 from .research_run_insights import method_pack_records
 from .research_ocr import OcrUsageHooks, build_ocr_pages_callback, vision_engine_configured
 from .research_workflow import ResearchWorkflow
-from .research_recovery import (RecoveryJournal, runtime_truncation_loop_blocked, _REPEATED_TRUNCATION_MESSAGE,
+from .research_recovery import (RecoveryJournal, RUNTIME_CHECKPOINT_SCHEMA_VERSION,
+    runtime_poison_pill_blocked, _POISON_PILL_MESSAGE,
+    runtime_truncation_loop_blocked, _REPEATED_TRUNCATION_MESSAGE,
     runtime_timeout_loop_blocked, _REPEATED_TIMEOUT_MESSAGE)
 from .research_topics import ResearchContent
 from .research_fetch import (
@@ -2213,11 +2216,31 @@ def recalculate_research(topic_id: str, request: RecalculateRequest,
         if request.calculation_index >= len(previous.content.calculations):
             raise ApiProblem(422, "invalid_request", "Calculation does not exist in this version.")
         old = previous.content.calculations[request.calculation_index]
-        if old.formula_version not in {"1", "2"} or len(old.inputs) != 2:
+        if old.formula_version not in {"1", "2"}:
+            raise ApiProblem(422, "invalid_request", "Calculation inputs or formula version are unavailable.")
+        if old.formula_id in BINARY_FORMULAS:
+            if len(old.inputs) != 2:
+                raise ApiProblem(422, "invalid_request", "Calculation inputs or formula version are unavailable.")
+        elif old.formula_id in MULTI_FACT_FORMULAS:
+            if not (2 <= len(old.inputs) <= 50):
+                raise ApiProblem(422, "invalid_request", "Calculation inputs or formula version are unavailable.")
+        else:
             raise ApiProblem(422, "invalid_request", "Calculation inputs or formula version are unavailable.")
         facts = _research_calculation_inputs(previous.content, [item.fact_id for item in old.inputs])
-        spec = CalculationRequest.model_validate({"formula": old.formula_id, "first": facts[0],
-            "second": facts[1], "decimal_places": old.decimal_places})
+        spec_payload: dict[str, Any] = {
+            "formula": old.formula_id,
+            "decimal_places": old.decimal_places,
+        }
+        if old.formula_id in BINARY_FORMULAS:
+            spec_payload["first"] = facts[0]
+            spec_payload["second"] = facts[1]
+        else:
+            spec_payload["facts"] = facts
+        if old.periods is not None:
+            spec_payload["periods"] = old.periods
+        if old.weights is not None:
+            spec_payload["weights"] = old.weights
+        spec = CalculationRequest.model_validate(spec_payload)
         result = calculate(spec)
         if calculation_input_status(result, [fact.model_dump(mode="json") for fact in previous.content.facts]) != "matched":
             raise ApiProblem(422, "invalid_request", "Calculation input evidence requires review.")
@@ -2920,6 +2943,18 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         return summarize_sources(sources, analyzed_ids, segments)
 
     admitted_continuation: dict[str, Any] = {}
+    last_runtime_state: dict[str, Any] = {}
+    persister = ResearchTurnPersister(
+        topic_id=topic_id,
+        parent_version_id=request.parent_version_id,
+        as_of=topic.request.as_of,
+        sources=sources,
+        version_chain=version_chain,
+        turn_meta=turn_meta,
+        merge_turn_fn=lambda *args, **kwargs: merge_turn(*args, **kwargs),
+        source_summaries_fn=source_summaries,
+        record_failure_fn=lambda op_id, state: _record_failed_checkpoint_version(op_id, state),
+    )
 
     def build(operation_id: str) -> tuple[ResearchRunResult, str]:
         started = monotonic()
@@ -2990,7 +3025,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         # The native tool loop is the default research execution path. Its
         # private checkpoint is persisted before each external request.
         from .research_fin_tools import FinDataToolbox
-        from .research_runtime import gap as runtime_gap, run_research_agent
+        from .research_runtime import run_research_agent
         search = getattr(evidence_provider, 'search', None)
         discover = None
         if request.discover_sources and callable(search) and getattr(evidence_provider, 'supports_project_search', False):
@@ -3108,9 +3143,11 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             official_fetch_status = _merge_official_fetch_status(
                 official_fetch_status, mapped, auto_fetch_official=request.auto_fetch_official)
         fin_data.on_result = note_fin_result
-        last_runtime_state: dict[str, Any] = {}
+        last_runtime_state.clear()
         def save_runtime(state: dict) -> None:
             snapshot = deepcopy(state)
+            if snapshot.get('checkpoint_schema_version') is None:
+                snapshot['checkpoint_schema_version'] = RUNTIME_CHECKPOINT_SCHEMA_VERSION
             snapshot['_accounting'] = {'calls': context.calls, 'search_calls': context.search_calls,
                 'usage': context.usage, 'accounted_tokens': context.accounted_tokens,
                 'model_call_receipts': deepcopy(context.model_call_receipts)}
@@ -3186,87 +3223,48 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
 
         if continuation_input is not None:
             save_runtime(admitted_continuation['runtime'])
-        parent_now = research_topics.get(account.account_id, topic_id).versions[-1]
-        research_clock = build_research_clock(lifecycle_clock.now())
-        outcome = run_research_agent(question=effective_question, sources=sources, model=provider,
-            context=context, discover=discover, acquire=acquire if retrieval_permitted else None,
-            fin_data=fin_data, capabilities=capabilities,
-            news_providers=run_news_providers,
-            issuer_docs=(IssuerDocuments(remaining_seconds=lambda: context.budget.deadline - context.now(),
-                                         ensure_running=context.ensure_running, reserve_call=context.reserve_search,
-                                         now=lifecycle_clock.now) if retrieval_active else None),
-            checkpoint=save_runtime, initial_state=admitted_continuation.get('runtime'),
-            on_submission=lambda: setattr(http_request.state, 'model_submission_started', True),
-            on_stream_event=publish_stream_event,
-            as_of=topic.request.as_of,
-            clock=research_clock if continuation_input is None else None,
-            now=lifecycle_clock.now, ocr_pages=ocr_pages_callback,
-            prior=_prior_with_failed_sources(parent_now) if continuation_input is None else None, focus=focus)
-        _raise_if_operation_cancelled(operation_id)
-        version_chain.source_ids = list(dict.fromkeys([*version_chain.source_ids, *outcome.source_ids]))
-        candidates = []
-        for lead in last_runtime_state.get('leads', []):
-            if not isinstance(lead, dict) or not isinstance(lead.get('url'), str):
-                continue
-            parsed = urlsplit(lead['url'])
-            if parsed.scheme not in {'http', 'https'} or not parsed.hostname or parsed.username or parsed.password:
-                continue
-            candidates.append({'title': str(lead.get('title') or '')[:500], 'url': lead['url'],
-                               'status': 'unverified', 'published_at': lead.get('published_at')})
-        ranges = [{'source_id': item['source_id'], 'character_start': item['start'], 'character_end': item['end']}
-                  for item in last_runtime_state.get('read_ranges', [])]
-        search_events = [event for event in outcome.events if event.get('name') == 'news_search']
-        if search_events:
-            search_status = search_events[-1]['reason'] if search_events[-1].get('reason') else search_events[-1]['status']
-        # Eligible material that is not fully read (counting earlier turns) limits what absence can mean.
-        covered: dict[str, list[tuple[int, int]]] = {}
-        for item in [*ranges, *(r.model_dump() for t in parent_now.content.turns for r in t.read_ranges)]:
-            covered.setdefault(item['source_id'], []).append((item['character_start'], item['character_end']))
-        def fully_read(source_id: str, length: int) -> bool:
-            position = 0
-            for start, end in sorted(covered.get(source_id, [])):
-                if start > position:
-                    break
-                position = max(position, end)
-            return position >= length
-        gaps = list(outcome.gaps)
-        if any(not fully_read(item.source_id, len(item.text)) for item, code in source_eligibility(sources, topic.request.as_of)
-               if code == 'eligible'):
-            gaps.append(runtime_gap('source_selection_partial'))
-        # Best known total: the settled ledger total is a lower bound when some call's usage is unknown.
-        known_total = max(context.usage or 0, context.accounted_tokens or 0)
-        usage_status = 'partial_unknown' if context.usage is None and context.calls > 0 else 'complete'
-        turn = ResearchTurn(
-            turn_id=turn_meta['turn_id'], index=turn_meta['index'], question=turn_meta['question'],
-            question_origin=turn_meta['question_origin'], focus_citation=turn_meta.get('focus_citation'),
-            operation_ids=[*turn_meta['operation_ids'], operation_id], parent_version_id=turn_meta['parent_version_id'],
-            started_at=datetime.fromisoformat(turn_meta['started_at']), finished_at=lifecycle_clock.now(),
-            status=outcome.status, reason=outcome.reason, report=outcome.report,
-            partial_notes=outcome.partial_notes, stopping_note=outcome.stopping_note,
-            claim_ids=[item['claim_id'] for item in outcome.claims], fact_ids=[item['fact_id'] for item in outcome.facts],
-            calculation_ids=[item['calculation_id'] for item in outcome.calculations],
-            chart_ids=[item['chart_id'] for item in outcome.charts],
-            gaps=gap_rows(gaps),
-            usage=TurnUsage(model_calls=context.calls, search_calls=context.search_calls, total_tokens=known_total, usage_status=usage_status),
-            search_status=search_status, official_fetch_status=official_fetch_status,
-            read_ranges=[ReadRange.model_validate(item) for item in ranges], events=outcome.events,
-            reconciliation=outcome.reconciliation, coverage_map=outcome.coverage_map,
-            method_packs=outcome.method_packs, attributions=outcome.attributions)
-        content = merge_turn(parent_now.content, turn, claims=outcome.claims, facts=outcome.facts,
-                             calculations=outcome.calculations, charts=outcome.charts,
-                             sources=source_summaries(outcome.source_ids, ranges),
-                             source_candidates=candidates)
-        return ResearchRunResult(operation_id=operation_id, topic_id=topic_id,
-            parent_version_id=request.parent_version_id, status=outcome.status, content=content), topic_id
+        try:
+            parent_now = research_topics.get(account.account_id, topic_id).versions[-1]
+            research_clock = build_research_clock(lifecycle_clock.now())
+            outcome = run_research_agent(question=effective_question, sources=sources, model=provider,
+                context=context, discover=discover, acquire=acquire if retrieval_permitted else None,
+                fin_data=fin_data, capabilities=capabilities,
+                news_providers=run_news_providers,
+                issuer_docs=(IssuerDocuments(remaining_seconds=lambda: context.budget.deadline - context.now(),
+                                             ensure_running=context.ensure_running, reserve_call=context.reserve_search,
+                                             now=lifecycle_clock.now) if retrieval_active else None),
+                checkpoint=save_runtime, initial_state=admitted_continuation.get('runtime'),
+                on_submission=lambda: setattr(http_request.state, 'model_submission_started', True),
+                on_stream_event=publish_stream_event,
+                as_of=topic.request.as_of,
+                clock=research_clock if continuation_input is None else None,
+                now=lifecycle_clock.now, ocr_pages=ocr_pages_callback,
+                prior=_prior_with_failed_sources(parent_now) if continuation_input is None else None, focus=focus)
+            _raise_if_operation_cancelled(operation_id)
+            result = persister.finalize_turn(
+                operation_id=operation_id,
+                parent_version=parent_now,
+                outcome=outcome,
+                runtime_state=last_runtime_state,
+                context=context,
+                finished_at=lifecycle_clock.now(),
+                default_search_status=search_status,
+                official_fetch_status=official_fetch_status,
+            )
+            return result, topic_id
+        except (ProviderFailure, ApiProblem):
+            raise
+        except Exception:
+            persister.record_failed_checkpoint(operation_id, last_runtime_state)
+            raise
 
     def commit(_operation_id: str, result: BaseModel) -> None:
         assert isinstance(result, ResearchRunResult)
-        # Refuse to save a stale result over a user's intervening edit.
-        try:
-            parent = version_chain.current()
-            version_chain.save(parent, result.content)
-        except (TopicNotFound, TopicVersionConflict) as error:
-            raise ApiProblem(409, "lifecycle_conflict", "Research changed before the result was saved.") from error
+        persister.commit_result(
+            operation_id=_operation_id,
+            result=result,
+            runtime_state=last_runtime_state,
+        )
 
     def record_inputs(operation_id: str) -> None:
         # Write before any external call, within operation admission. Replays do
@@ -3363,6 +3361,11 @@ def _agent_turn_for(version: Any, operation_id: str) -> ResearchTurn | None:
     return turn if turn.operation_ids[-1] == operation_id else None
 
 
+def _record_failed_checkpoint_version(operation_id: str, runtime_state: Mapping[str, Any]) -> None:
+    """Record the checkpoint version that failed locally so recovery requires explicit migration."""
+    record_failed_checkpoint_version(RESEARCH_RUN_INPUTS, operation_id, runtime_state)
+
+
 @app.get("/v2/research/topics/{topic_id}/runs/{operation_id}/recovery-status", include_in_schema=False)
 def get_research_recovery_status(topic_id: str, operation_id: str, http_request: Request) -> dict:
     """Read eligibility without consuming the checkpoint; admission rechecks it."""
@@ -3405,11 +3408,25 @@ def get_research_recovery_status(topic_id: str, operation_id: str, http_request:
         elif inputs.get('runtime_continuation_operation_id'): reason = 'already_used'
         elif unknown: reason = 'unknown_external'
         elif checkpoint.get('submission') and getattr(saved_turn, 'status', None) == 'completed': reason = 'unavailable'
+        elif reason is None and runtime_poison_pill_blocked(
+            checkpoint,
+            operation=operation,
+            operation_events=operations.store.get_events(operation_id),
+            inputs=inputs,
+        ):
+            reason = 'non_retryable_local_error'
         elif reason is None and runtime_truncation_loop_blocked(checkpoint, saved_turn=saved_turn): reason = 'repeated_truncation'
         elif reason is None and runtime_timeout_loop_blocked(checkpoint, saved_turn=saved_turn): reason = 'repeated_timeout'
-        return {'can_continue': reason is None and not checkpoint.get('submission'),
-                'can_deliver': reason is None and bool(checkpoint.get('submission')),
-                'reason': reason, 'checkpoint': pending.get('kind') or 'runtime', 'version_id': latest.version_id}
+        payload: dict[str, Any] = {
+            'can_continue': reason is None and not checkpoint.get('submission'),
+            'can_deliver': reason is None and bool(checkpoint.get('submission')),
+            'reason': reason,
+            'checkpoint': pending.get('kind') or 'runtime',
+            'version_id': latest.version_id,
+        }
+        if reason == 'non_retryable_local_error':
+            payload['recoverable'] = False
+        return payload
     # Only native runtime checkpoints can be continued or delivered.
     return {'can_continue': False, 'can_deliver': False,
             'reason': 'running' if operation.get('status') in {'pending', 'running'} else 'no_checkpoint',
@@ -3444,6 +3461,13 @@ def continue_research_run(topic_id: str, operation_id: str, response: Response,
     saved_turn = _agent_turn_for(parent, operation_id)
     if checkpoint.get('submission') and saved_turn is not None and saved_turn.status == 'completed':
         raise ApiProblem(409, 'lifecycle_conflict', 'This research submission was already saved.')
+    if runtime_poison_pill_blocked(
+        checkpoint,
+        operation=operations.store.get_operation(operation_id) or {},
+        operation_events=operations.store.get_events(operation_id),
+        inputs=inputs,
+    ):
+        raise ApiProblem(409, 'lifecycle_conflict', _POISON_PILL_MESSAGE)
     if runtime_truncation_loop_blocked(checkpoint, saved_turn=saved_turn):
         raise ApiProblem(409, 'lifecycle_conflict', _REPEATED_TRUNCATION_MESSAGE)
     if runtime_timeout_loop_blocked(checkpoint, saved_turn=saved_turn):
@@ -3516,7 +3540,7 @@ def get_research_run_inputs(topic_id: str, operation_id: str, http_request: Requ
     record = RESEARCH_RUN_INPUTS.get(operation_id)
     if not record or record.get("owner_id") != account.account_id or record.get("topic_id") != topic_id:
         raise ApiProblem(404, "not_found", "Research run inputs not found.")
-    return {key: value for key, value in record.items() if key not in {"owner_id", "recovery_snapshot", "recovery_pending", "recovery_continuation_operation_id", "recovery_terminal_checkpoint_version_id", "recovery_terminal_stage_receipts", "private_validation_diagnostics", "private_acquisition_decisions", "runtime_checkpoint", "runtime_request", "runtime_binding", "runtime_continuation_operation_id"}}
+    return {key: value for key, value in record.items() if key not in {"owner_id", "recovery_snapshot", "recovery_pending", "recovery_continuation_operation_id", "recovery_terminal_checkpoint_version_id", "recovery_terminal_stage_receipts", "private_validation_diagnostics", "private_acquisition_decisions", "runtime_checkpoint", "runtime_request", "runtime_binding", "runtime_continuation_operation_id", "failed_checkpoint_schema_version", "checkpoint_migrated", "checkpoint_repaired"}}
 
 
 def _authorize_research_run_progress(

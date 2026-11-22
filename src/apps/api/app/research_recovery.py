@@ -6,7 +6,7 @@ of calls made after it, so it cannot authorize their automatic replay.
 from __future__ import annotations
 
 from dataclasses import MISSING, asdict, dataclass, fields
-from typing import Any, Callable, Literal, Mapping
+from typing import Any, Callable, Literal, Mapping, Sequence
 from copy import deepcopy
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -22,6 +22,7 @@ from .storage import JsonDocumentRepository, _drop_legacy_null_fields
 MAX_TRUNCATION_CONTINUATIONS = 2
 MAX_TIMEOUT_CONTINUATIONS = 2
 L2_COMPACT_AFTER_CHARS = 80_000
+RUNTIME_CHECKPOINT_SCHEMA_VERSION = 1
 TRUNCATION_FAILURE_REASONS = frozenset({
     'provider_output_truncated',
     'provider_context_limit',
@@ -46,6 +47,27 @@ _REPEATED_TRUNCATION_MESSAGE = (
 _REPEATED_TIMEOUT_MESSAGE = (
     'Research continuation is blocked after repeated model timeout failures.'
 )
+_POISON_PILL_MESSAGE = (
+    'Research recovery is blocked because the run failed with a non-retryable internal error '
+    'and the checkpoint has not been upgraded.'
+)
+_PROVIDER_FAILURE_MESSAGE = 'Provider request could not produce an accepted result.'
+_NON_POISON_PILL_ERROR_CODES = frozenset({
+    'lifecycle_conflict',
+    'rate_limited',
+    'quota_exceeded',
+    'budget_exhausted',
+    'abuse_backend_unavailable',
+    'timeout',
+    'request_timeout',
+    'provider_timeout',
+    'provider_error',
+    'provider_unavailable',
+    'provider_output_truncated',
+    'provider_context_limit',
+    'provider_budget_exhausted',
+})
+_NON_POISON_PILL_PREFIXES = ('provider_', 'rate_limit', 'budget_', 'quota_')
 
 
 def _checkpoint_failure_reasons(checkpoint: Mapping[str, Any], *, saved_turn: Any = None) -> list[str]:
@@ -150,6 +172,118 @@ def runtime_timeout_loop_blocked(
     return False
 
 
+def _parse_checkpoint_schema_version(value: object) -> int:
+    if type(value) is int and value >= 0:
+        return value
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if cleaned.startswith(('v', 'V')):
+            cleaned = cleaned[1:]
+        if cleaned.isdigit():
+            return int(cleaned)
+    return 0
+
+
+def _extract_operation_error(
+    operation: Mapping[str, Any] | None,
+    *,
+    operation_events: Sequence[Mapping[str, Any]] | None = None,
+    inputs: Mapping[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    if isinstance(operation, Mapping):
+        for key in ('error', 'last_error'):
+            err = operation.get(key)
+            if isinstance(err, Mapping):
+                merged = dict(err)
+                if 'retryable' not in merged and isinstance(operation.get('retryable'), bool):
+                    merged['retryable'] = operation['retryable']
+                return merged
+    if operation_events:
+        for event in reversed(operation_events):
+            if not isinstance(event, Mapping) or event.get('event') != 'operation.error':
+                continue
+            err = dict(event.get('error')) if isinstance(event.get('error'), Mapping) else {}
+            if 'retryable' not in err and isinstance(event.get('retryable'), bool):
+                err['retryable'] = event['retryable']
+            if err:
+                return err
+    if isinstance(inputs, Mapping):
+        for key in ('operation_error', 'last_error'):
+            err = inputs.get(key)
+            if isinstance(err, Mapping):
+                return dict(err)
+    return None
+
+
+def _is_non_retryable_local_error(
+    error: Mapping[str, Any] | None,
+    *,
+    operation: Mapping[str, Any] | None = None,
+) -> bool:
+    if isinstance(operation, Mapping) and operation.get('status') != 'failed':
+        return False
+    if not isinstance(error, Mapping) or error.get('retryable') is not False:
+        return False
+    message = error.get('message')
+    if isinstance(message, str) and message == _PROVIDER_FAILURE_MESSAGE:
+        return False
+    domain = error.get('domain') or error.get('failure_domain')
+    if isinstance(domain, str) and domain.strip().lower() in {'provider', 'rate_limit', 'budget', 'timeout'}:
+        return False
+    for key in ('error_code', 'code', 'reason', 'category'):
+        val = error.get(key)
+        if isinstance(val, str):
+            low = val.strip().lower()
+            if low in _NON_POISON_PILL_ERROR_CODES or low.startswith(_NON_POISON_PILL_PREFIXES):
+                return False
+    return True
+
+
+def _checkpoint_explicitly_upgraded(
+    checkpoint: Mapping[str, Any] | None,
+    *,
+    inputs: Mapping[str, Any] | None = None,
+    baseline_version: int = RUNTIME_CHECKPOINT_SCHEMA_VERSION,
+) -> bool:
+    if not isinstance(checkpoint, Mapping):
+        return False
+    if checkpoint.get('checkpoint_migrated') is True or checkpoint.get('checkpoint_repaired') is True:
+        return True
+    if isinstance(inputs, Mapping) and (
+        inputs.get('checkpoint_migrated') is True or inputs.get('checkpoint_repaired') is True
+    ):
+        return True
+    if (
+        isinstance(checkpoint.get('migrated_from_schema_version'), (int, str))
+        and checkpoint.get('checkpoint_schema_version') is not None
+    ):
+        return True
+    cp_version = _parse_checkpoint_schema_version(checkpoint.get('checkpoint_schema_version'))
+    failed_raw: object = None
+    if isinstance(inputs, Mapping) and 'failed_checkpoint_schema_version' in inputs:
+        failed_raw = inputs.get('failed_checkpoint_schema_version')
+    elif 'failed_checkpoint_schema_version' in checkpoint:
+        failed_raw = checkpoint.get('failed_checkpoint_schema_version')
+    failed_version = _parse_checkpoint_schema_version(failed_raw) if failed_raw is not None else 0
+    return cp_version > max(baseline_version, failed_version)
+
+
+def runtime_poison_pill_blocked(
+    checkpoint: Mapping[str, Any] | None,
+    *,
+    operation: Mapping[str, Any] | None = None,
+    operation_events: Sequence[Mapping[str, Any]] | None = None,
+    inputs: Mapping[str, Any] | None = None,
+) -> bool:
+    """Return True when a failed run ended with a non-retryable local error and an un-upgraded checkpoint."""
+    if not isinstance(checkpoint, Mapping):
+        return False
+    error = _extract_operation_error(operation, operation_events=operation_events, inputs=inputs)
+    if not _is_non_retryable_local_error(error, operation=operation):
+        return False
+    return not _checkpoint_explicitly_upgraded(checkpoint, inputs=inputs)
+
+
 def _should_compact_continuation(state: Mapping[str, Any], reasons: list[str]) -> bool:
     if any(reason in CONTINUATION_COMPACTION_REASONS for reason in reasons):
         return True
@@ -197,6 +331,9 @@ def prepare_runtime_continuation(
         state['consecutive_timeout_continuations'] = 0
     if state.get('stopped') in (TRUNCATION_FAILURE_REASONS | TIMEOUT_FAILURE_REASONS):
         state.pop('stopped', None)
+    state.pop('checkpoint_migrated', None)
+    state.pop('checkpoint_repaired', None)
+    state.pop('failed_checkpoint_schema_version', None)
 
     effective_limit = (
         min(L2_COMPACT_AFTER_CHARS, max(2_000, int(max_history_chars)))
@@ -745,10 +882,32 @@ def continuation_context(continuation: Continuation, *,
         accounted_tokens=saved.accounted_tokens, search_calls=saved.search_calls)
 
 
+def _turn_matches_operation(version: Any, operation_id: str) -> bool:
+    turns = getattr(getattr(version, 'content', None), 'turns', None)
+    if not turns:
+        return False
+    op_ids = getattr(turns[-1], 'operation_ids', None) or ()
+    return bool(op_ids) and op_ids[-1] == operation_id
+
+
+def _checkpoint_label(runtime_cp: Mapping[str, Any], *, same_checkpoint: bool, latest: Any) -> str:
+    pending = runtime_cp.get('pending')
+    if isinstance(pending, Mapping):
+        kind = pending.get('kind')
+        if isinstance(kind, str) and kind:
+            return kind
+    if same_checkpoint:
+        cp_name = latest.content.run.get('checkpoint')
+        if isinstance(cp_name, str) and cp_name:
+            return cp_name
+    return 'runtime'
+
+
 def recovery_status(*, topic: ResearchTopic, operation: dict[str, Any], inputs: dict[str, Any] | None,
                     owner_id: str, operation_id: str, now: datetime,
                     source_fingerprints: list[dict[str, Any]] | None,
-                    provider_matches: bool) -> dict[str, Any]:
+                    provider_matches: bool,
+                    operation_events: Sequence[Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """Report a read-only eligibility estimate; admission rechecks atomically."""
     if (topic.owner_id != owner_id or operation.get('owner_subject') != f'account:{owner_id}'
             or operation.get('operation_id') != operation_id
@@ -771,24 +930,74 @@ def recovery_status(*, topic: ResearchTopic, operation: dict[str, Any], inputs: 
     if not inputs or inputs.get('owner_id') != owner_id or inputs.get('topic_id') != topic.topic_id or inputs.get('operation_id') != operation_id:
         result['reason'] = 'no_checkpoint'
         return result
+    raw = inputs.get('recovery_snapshot')
+    runtime_cp = inputs.get('runtime_checkpoint')
+    has_runtime_cp = isinstance(runtime_cp, Mapping) and bool(runtime_cp) and not raw
+    if has_runtime_cp:
+        result['checkpoint'] = _checkpoint_label(runtime_cp, same_checkpoint=same_checkpoint, latest=latest)
+        parent_vid = inputs.get('parent_version_id')
+        turn_matched = (
+            getattr(latest, 'created_by', None) == 'agent'
+            and getattr(latest, 'review', None) == 'draft'
+            and _turn_matches_operation(latest, operation_id)
+        )
+        if parent_vid is not None:
+            version_matches = (latest.version_id == parent_vid) or turn_matched or same_checkpoint
+        else:
+            version_matches = (
+                same_checkpoint
+                or turn_matched
+                or (len(topic.versions) == 1 and getattr(latest, 'created_by', None) == 'user')
+            )
+        if not version_matches:
+            result['reason'] = 'changed'
+            return result
+        result['version_id'] = latest.version_id
+        if inputs.get('runtime_continuation_operation_id'):
+            result['reason'] = 'already_used'
+            return result
+        pending = runtime_cp.get('pending') if isinstance(runtime_cp.get('pending'), Mapping) else {}
+        if inputs.get('recovery_pending') or pending.get('kind') not in (None, 'tool_batch', 'model_returned'):
+            result['reason'] = 'unknown_external'
+            return result
+        if runtime_poison_pill_blocked(runtime_cp, operation=operation, operation_events=operation_events, inputs=inputs):
+            result['recoverable'] = False
+            result['reason'] = 'non_retryable_local_error'
+            return result
+        saved_turn = latest.content.turns[-1] if turn_matched else None
+        if runtime_truncation_loop_blocked(runtime_cp, saved_turn=saved_turn):
+            result['reason'] = 'repeated_truncation'
+            return result
+        if runtime_timeout_loop_blocked(runtime_cp, saved_turn=saved_turn):
+            result['reason'] = 'repeated_timeout'
+            return result
+        if runtime_cp.get('submission') and getattr(saved_turn, 'status', None) == 'completed':
+            result['reason'] = 'unavailable'
+            return result
+        if not provider_matches:
+            result['reason'] = 'unavailable'
+            return result
+        if source_fingerprints is not None and isinstance(runtime_cp.get('_sources'), list):
+            if _drop_legacy_null_fields(source_fingerprints) != _drop_legacy_null_fields(runtime_cp['_sources']):
+                result['reason'] = 'changed'
+                return result
+        result['can_continue'] = not bool(runtime_cp.get('submission'))
+        result['can_deliver'] = bool(runtime_cp.get('submission'))
+        return result
     if not same_checkpoint:
         result['reason'] = 'changed'
+        return result
+    if isinstance(raw, Mapping) and runtime_poison_pill_blocked(
+        raw, operation=operation, operation_events=operation_events, inputs=inputs
+    ):
+        result['recoverable'] = False
+        result['reason'] = 'non_retryable_local_error'
         return result
     result['can_deliver'] = True
     if inputs.get('recovery_pending'):
         result['reason'] = 'unknown_external'
         return result
-    raw = inputs.get('recovery_snapshot')
     if not raw:
-        runtime_cp = inputs.get('runtime_checkpoint')
-        if runtime_cp and runtime_truncation_loop_blocked(runtime_cp):
-            result['can_deliver'] = False
-            result['reason'] = 'repeated_truncation'
-            return result
-        if runtime_cp and runtime_timeout_loop_blocked(runtime_cp):
-            result['can_deliver'] = False
-            result['reason'] = 'repeated_timeout'
-            return result
         result['reason'] = 'no_checkpoint'
         return result
     if inputs.get('recovery_continuation_operation_id'):
@@ -889,7 +1098,10 @@ class RecoveryJournal:
             if previous and previous.get('kind') != 'tool_batch' and (not pending or pending.get('kind') == 'tool_batch' or previous.get('call_id') != pending.get('call_id')):
                 call_id = previous.get('call_id')
                 entries[:] = [item for item in entries if item.get('call_id') != call_id]
-            record['runtime_checkpoint'] = deepcopy(state)
+            stored = deepcopy(state)
+            if stored.get('checkpoint_schema_version') is None:
+                stored['checkpoint_schema_version'] = RUNTIME_CHECKPOINT_SCHEMA_VERSION
+            record['runtime_checkpoint'] = stored
         self._update(change)
 
     def claim_continuation(self, new_operation_id: str) -> None:
@@ -923,6 +1135,10 @@ class RecoveryJournal:
                 raise ApiProblem(409, 'lifecycle_conflict', 'The runtime checkpoint has unresolved external work.')
             if record.get('runtime_continuation_operation_id'):
                 raise ApiProblem(409, 'lifecycle_conflict', 'This checkpoint has already been consumed.')
+            if record.get('failed_checkpoint_schema_version') is not None and not _checkpoint_explicitly_upgraded(
+                checkpoint, inputs=record
+            ):
+                raise ApiProblem(409, 'lifecycle_conflict', _POISON_PILL_MESSAGE)
             prepared = prepare_runtime_continuation(
                 checkpoint,
                 max_history_chars=max_history_chars,

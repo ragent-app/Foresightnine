@@ -1111,6 +1111,181 @@ describe("mock research API", () => {
       assert.equal(again.json.versions.at(-1).content.calculations[0].calculation_id, "C-growth");
     });
   });
+
+  test("versions and recalculate: all 9 FormulaId values, multi-fact inputs, optional fields and contract rejections", async () => {
+    const text = [
+      "FY2022 rev 100; FY2025 rev 133.1; FY2025 rev_hi 200.",
+      "EPS 35; shares_den 2.5.",
+      "2025-Q1 10; 2025-Q2 12; 2025-Q3 15; 2025-Q4 23.",
+      "Scale bn 2; Scale mn 500; Growth base 100; Margin num 25.",
+    ].join(" ");
+    const source = await textSource({ title: "9-formula sheet", text });
+    const topic = await newTopic([source.source_id], "9 公式契约测试");
+    const mkFact = (id, token, value, unit, currency, period) => {
+      const start = text.indexOf(token);
+      assert.ok(start >= 0, token);
+      const location = { character_start: start, character_end: start + token.length };
+      return { fact_id: id, label: id, value, unit, currency, period, source_id: source.source_id, quotation: token, ...location, location, verification: "x" };
+    };
+    const facts = [
+      mkFact("f0", "FY2022 rev 100", "100", "USD millions", "USD", "FY2022"),
+      mkFact("f3", "FY2025 rev 133.1", "133.1", "USD millions", "USD", "FY2025"),
+      mkFact("num", "EPS 35", "35", "USD per share", "USD", "FY2025"),
+      mkFact("den", "shares_den 2.5", "2.5", "USD per share", "USD", "FY2025"),
+      mkFact("q1", "2025-Q1 10", "10", "USD millions", "USD", "2025-Q1"),
+      mkFact("q2", "2025-Q2 12", "12", "USD millions", "USD", "2025-Q2"),
+      mkFact("q3", "2025-Q3 15", "15", "USD millions", "USD", "2025-Q3"),
+      mkFact("q4", "2025-Q4 23", "23", "USD millions", "USD", "2025-Q4"),
+      mkFact("fb", "Scale bn 2", "2", "USD billions", "USD", "FY2025"),
+      mkFact("fm", "Scale mn 500", "500", "USD millions", "USD", "FY2025"),
+      mkFact("mnum", "Margin num 25", "25", "USD millions", "USD", "FY2022"),
+    ];
+    const factMap = Object.fromEntries(facts.map((f) => [f.fact_id, f]));
+    const snap = (id) => {
+      const f = factMap[id];
+      return { fact_id: f.fact_id, value: f.value, unit: f.unit, currency: f.currency, period: f.period };
+    };
+    const baseCalc = (id, formula_id, inputIds, extra) => ({
+      calculation_id: id,
+      formula_id,
+      formula_version: "1",
+      input_verification: "not_verified_by_calculator",
+      input_precision_status: "not_established",
+      inputs: inputIds.map(snap),
+      rounding: "half_up",
+      decimal_places: 2,
+      ...extra,
+    });
+    const calculations = [
+      baseCalc("c-growth", "growth_percent", ["f3", "f0"], { expression: "(first / second - 1) * 100", value: "33.10", unit: "percent", currency: null, period_order_check: "recognized_formats_only", period_granularity_check: "not_established" }),
+      baseCalc("c-margin", "margin_percent", ["mnum", "f0"], { expression: "first / second * 100", value: "25.00", unit: "percent", currency: null }),
+      baseCalc("c-diff", "difference", ["f3", "f0"], { expression: "first - second", value: "33.10", unit: "USD millions", currency: "USD" }),
+      baseCalc("c-cagr", "cagr", ["f3", "f0"], { expression: "((first / second) ** (1 / periods) - 1) * 100", value: "10.00", unit: "percent", currency: null, periods: "3", period_order_check: "recognized_formats_only", period_granularity_check: "not_established" }),
+      baseCalc("c-ratio", "ratio", ["num", "den"], { expression: "first / second", value: "14.00", unit: "ratio", currency: null }),
+      baseCalc("c-sum", "sum", ["q1", "q2", "q3"], { expression: "sum(inputs)", value: "37.00", unit: "USD millions", currency: "USD" }),
+      baseCalc("c-sub", "subtract", ["q4", "q1", "q2"], { expression: "inputs[0] - sum(inputs[1:])", value: "1.00", unit: "USD millions", currency: "USD" }),
+      baseCalc("c-wavg", "weighted_average", ["q1", "q4"], { expression: "sum(w_i * x_i) / sum(w_i)", value: "19.75", unit: "USD millions", currency: "USD", weights: ["1", "3"] }),
+      baseCalc("c-ttm", "ttm_sum", ["q1", "q2", "q3", "q4"], { expression: "sum(ttm_quarters)", value: "60.00", unit: "USD millions", currency: "USD", period_order_check: "recognized_formats_only" }),
+      baseCalc("c-scale", "sum", ["fb", "fm"], {
+        expression: "sum(inputs)",
+        value: "2500.00",
+        unit: "USD millions",
+        currency: "USD",
+        scale_adjustments: [{ fact_id: "fb", from_unit: "USD billions", to_unit: "USD millions", from_scale: "billions", to_scale: "millions", multiplier: "1000", original_value: "2", aligned_value: "2000" }],
+      }),
+    ];
+
+    const saved = await saveVersion(topic, topic.versions[0], { facts, calculations });
+    assert.equal(saved.status, 201);
+    const v1 = saved.json.versions.at(-1);
+    assert.equal(v1.content.calculations.length, 10);
+    for (const calc of v1.content.calculations) {
+      assert.equal(calc.input_status, "matched", calc.calculation_id);
+      assert.equal(calc.result_status, "matched", calc.calculation_id);
+    }
+
+    // Saving an unrelated summary edit preserves optional fields untouched without altering calculation identity.
+    const summaryOnly = await saveVersion(saved.json, v1, { ...v1.content, summary: "保留计算" });
+    assert.equal(summaryOnly.status, 201);
+    const v2 = summaryOnly.json.versions.at(-1);
+    assert.deepEqual(v2.content.calculations, v1.content.calculations);
+
+    // Invalid calculation contracts fail with 422 validation_error.
+    const badPayloads = [
+      baseCalc("bad-formula", "median", ["q1", "q2"], { expression: "x", value: "1", unit: "USD millions", currency: "USD" }),
+      baseCalc("bad-cagr-len", "cagr", ["f3", "f0", "q1"], { expression: "x", value: "10.00", unit: "percent", currency: null, periods: "3" }),
+      baseCalc("bad-sum-1", "sum", ["q1"], { expression: "sum(inputs)", value: "10.00", unit: "USD millions", currency: "USD" }),
+      baseCalc("bad-sum-51", "sum", Array.from({ length: 51 }, (_, i) => i % 2 === 0 ? "q1" : "q2"), { expression: "sum(inputs)", value: "10.00", unit: "USD millions", currency: "USD" }),
+      baseCalc("bad-weights-type", "weighted_average", ["q1", "q4"], { expression: "sum(w_i * x_i) / sum(w_i)", value: "19.75", unit: "USD millions", currency: "USD", weights: [1, 3] }),
+      baseCalc("bad-scale-extra", "sum", ["fb", "fm"], {
+        expression: "sum(inputs)",
+        value: "2500.00",
+        unit: "USD millions",
+        currency: "USD",
+        scale_adjustments: [{ fact_id: "fb", from_unit: "USD billions", to_unit: "USD millions", from_scale: "billions", to_scale: "millions", multiplier: "1000", original_value: "2", aligned_value: "2000", extra: "1" }],
+      }),
+      baseCalc("bad-scale-missing", "sum", ["fb", "fm"], {
+        expression: "sum(inputs)",
+        value: "2500.00",
+        unit: "USD millions",
+        currency: "USD",
+        scale_adjustments: [{ fact_id: "fb" }],
+      }),
+    ];
+    for (const bad of badPayloads) {
+      const res = await saveVersion(summaryOnly.json, v2, { ...v2.content, calculations: [bad] });
+      assert.equal(res.status, 422, bad.calculation_id);
+      assert.equal(res.json.error_code, "validation_error", bad.calculation_id);
+    }
+
+    // Update f3 value (still in source text) and recalculate cagr, weighted_average, ttm_sum, and scale-adjusted sum.
+    const editedFacts = facts.map((f) => f.fact_id === "f3" ? mkFact("f3", "FY2025 rev_hi 200", "200", "USD millions", "USD", "FY2025") : f);
+    const withUpdatedFact = await saveVersion(summaryOnly.json, v2, { ...v2.content, facts: editedFacts });
+    assert.equal(withUpdatedFact.status, 201);
+    let currentTopic = withUpdatedFact.json;
+    let currentVer = currentTopic.versions.at(-1);
+    assert.equal(currentVer.content.calculations[3].input_status, "changed");
+
+    const recalcAt = async (index) => {
+      const res = await call("POST", `${topicPath(currentTopic.topic_id)}/calculations/recalculate`, {
+        body: { parent_version_id: currentVer.version_id, calculation_index: index },
+      });
+      assert.equal(res.status, 201, `recalc index ${index}`);
+      currentTopic = res.json;
+      currentVer = currentTopic.versions.at(-1);
+      return currentVer.content.calculations[index];
+    };
+
+    const recalcCagr = await recalcAt(3);
+    assert.equal(recalcCagr.value, "25.99");
+    assert.equal(recalcCagr.periods, "3");
+    assert.equal(recalcCagr.input_status, "matched");
+    assert.equal(recalcCagr.result_status, "matched");
+
+    const recalcWavg = await recalcAt(7);
+    assert.equal(recalcWavg.value, "19.75");
+    assert.deepEqual(recalcWavg.weights, ["1", "3"]);
+    assert.equal(recalcWavg.result_status, "matched");
+
+    const recalcTtm = await recalcAt(8);
+    assert.equal(recalcTtm.value, "60.00");
+    assert.equal(recalcTtm.inputs.length, 4);
+    assert.equal(recalcTtm.result_status, "matched");
+
+    const recalcScale = await recalcAt(9);
+    assert.equal(recalcScale.value, "2500.00");
+    assert.equal(recalcScale.scale_adjustments.length, 1);
+    assert.equal(recalcScale.scale_adjustments[0].multiplier, "1000");
+    assert.equal(recalcScale.result_status, "matched");
+
+    // Unexpected optional metadata (e.g., spurious periods/scale_adjustments on growth_percent) marks result_status mismatch.
+    const spurious = baseCalc("c-spurious", "growth_percent", ["f3", "f0"], {
+      expression: "(first / second - 1) * 100",
+      value: "33.10",
+      unit: "percent",
+      currency: null,
+      periods: "3",
+      period_order_check: "recognized_formats_only",
+      period_granularity_check: "not_established",
+    });
+    const savedSpurious = await saveVersion(currentTopic, currentVer, { ...currentVer.content, calculations: [spurious] });
+    assert.equal(savedSpurious.status, 201);
+    assert.equal(savedSpurious.json.versions.at(-1).content.calculations[0].result_status, "mismatch");
+    currentTopic = savedSpurious.json;
+    currentVer = currentTopic.versions.at(-1);
+
+    // Recalculating cagr without periods fails closed with 422.
+    const cagrNoPeriods = baseCalc("c-cagr-missing", "cagr", ["f3", "f0"], { expression: "((first / second) ** (1 / periods) - 1) * 100", value: "25.99", unit: "percent", currency: null });
+    const savedMissingPeriods = await saveVersion(currentTopic, currentVer, { ...currentVer.content, calculations: [cagrNoPeriods] });
+    assert.equal(savedMissingPeriods.status, 201);
+    const vMissing = savedMissingPeriods.json.versions.at(-1);
+    assert.equal(vMissing.content.calculations[0].result_status, "unverifiable");
+    const recalcFail = await call("POST", `${topicPath(currentTopic.topic_id)}/calculations/recalculate`, {
+      body: { parent_version_id: vMissing.version_id, calculation_index: 0 },
+    });
+    assert.equal(recalcFail.status, 422);
+    assert.equal(recalcFail.json.message, "Calculation cannot be performed with the current facts.");
+  });
 });
 
 describe("account, model and market-data settings", () => {

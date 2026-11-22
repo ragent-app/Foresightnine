@@ -100,6 +100,43 @@ _EVENT_MODELS: dict[str, type[BaseModel]] = {
 }
 
 
+_PROVIDER_FAILURE_MESSAGE = "Provider request could not produce an accepted result."
+_LOCAL_INTERNAL_FAILURE_MESSAGE = "An internal validation or persistence error prevented saving the result."
+
+
+def _log_operation_failure(operation_id: str, failure: Exception) -> None:
+    from .research_diagnostics import safe_diagnostic_context, safe_exception_diagnostic
+    logging.getLogger(__name__).error('operation_failure metadata=%s', {
+        **safe_diagnostic_context(operation_id=operation_id), **safe_exception_diagnostic(failure)
+    })
+
+
+def _classify_operation_failure(failure: Exception, *, endpoint: str, operation_id: str) -> ApiProblem:
+    """Separate provider outages from local deterministic validation/persistence failures."""
+    _log_operation_failure(operation_id, failure)
+    if isinstance(failure, ProviderFailure):
+        record_provider_failure(endpoint=endpoint)
+        return ApiProblem(
+            503 if failure.retryable else 500,
+            "internal_error",
+            _PROVIDER_FAILURE_MESSAGE,
+            retryable=failure.retryable,
+            retry_after=15 if failure.retryable else None,
+        )
+    if isinstance(failure, ApiProblem):
+        # Preserve typed lifecycle/idempotency semantics from
+        # terminal admission callbacks. In particular, a
+        # stale concurrent challenge mutation must surface as
+        # lifecycle_conflict instead of a synthetic 500.
+        return failure
+    return ApiProblem(
+        500,
+        "internal_error",
+        _LOCAL_INTERNAL_FAILURE_MESSAGE,
+        retryable=False,
+    )
+
+
 class OperationManager:
     def __init__(self, clock: FixedClock | None = None, *, store: OperationStore | None = None, lease_seconds: int = 300) -> None:
         self.clock = clock or FixedClock(); self.store = store or InMemoryOperationStore()
@@ -278,25 +315,13 @@ class OperationManager:
         self._pending_provider_executions[operation_id] = PendingProviderExecution(endpoint, key_hash, request_hash)
         try:
             try: result, result_ref = build_result(operation_id)
-            except ProviderFailure as failure:
-                status_code = 503 if failure.retryable else 500
-                error_code = "internal_error"
-                record_provider_failure(endpoint=endpoint); error = ApiProblem(
-                    status_code,
-                    error_code,
-                    "Provider request could not produce an accepted result.",
-                    retryable=failure.retryable,
-                    retry_after=15 if failure.retryable else None,
-                )
-                self._remember(endpoint, key_hash, request_hash, error)
-                self._finish_failure(operation_id=operation_id, endpoint=endpoint, key_hash=key_hash, error=error, async_mode=False); raise error from failure
-            except ApiProblem as error:
-                self._remember(endpoint, key_hash, request_hash, error)
-                self._finish_failure(operation_id=operation_id, endpoint=endpoint, key_hash=key_hash, error=error, async_mode=False); raise
             except Exception as failure:
-                record_provider_failure(endpoint=endpoint); error = ApiProblem(500, "internal_error", "Provider request could not produce an accepted result.", retryable=True)
+                error = _classify_operation_failure(failure, endpoint=endpoint, operation_id=operation_id)
                 self._remember(endpoint, key_hash, request_hash, error)
-                self._finish_failure(operation_id=operation_id, endpoint=endpoint, key_hash=key_hash, error=error, async_mode=False); raise error from failure
+                self._finish_failure(operation_id=operation_id, endpoint=endpoint, key_hash=key_hash, error=error, async_mode=False)
+                if isinstance(failure, ApiProblem):
+                    raise
+                raise error from failure
             try:
                 committed = False
                 with self._transition_lock(operation_id):
@@ -325,17 +350,13 @@ class OperationManager:
                     self._cache_operation(operation_id, actual)
                     if not won and committed and rollback_result is not None:
                         rollback_result(operation_id, result)
-            except ApiProblem as error:
-                self._remember(endpoint, key_hash, request_hash, error)
-                if self._cache_operation(operation_id).status not in {"cancelled", "completed", "failed"}:
-                    self._finish_failure(operation_id=operation_id, endpoint=endpoint, key_hash=key_hash, error=error, async_mode=False)
-                raise
             except Exception as failure:
-                record_provider_failure(endpoint=endpoint)
-                error = ApiProblem(500, "internal_error", "Provider request could not produce an accepted result.", retryable=True)
+                error = _classify_operation_failure(failure, endpoint=endpoint, operation_id=operation_id)
                 self._remember(endpoint, key_hash, request_hash, error)
                 if self._cache_operation(operation_id).status not in {"cancelled", "completed", "failed"}:
                     self._finish_failure(operation_id=operation_id, endpoint=endpoint, key_hash=key_hash, error=error, async_mode=False)
+                if isinstance(failure, ApiProblem):
+                    raise
                 raise error from failure
             if not won:
                 claim = self.store.get_claim(endpoint, key_hash, request_hash)
@@ -430,29 +451,11 @@ class OperationManager:
                         if not won and committed and rollback_result is not None:
                             rollback_result(operation_id, result)
                 except Exception as failure:
-                    from .research_diagnostics import safe_diagnostic_context, safe_exception_diagnostic
-                    logging.getLogger(__name__).error('operation_failure metadata=%s', {
-                        **safe_diagnostic_context(operation_id=operation_id), **safe_exception_diagnostic(failure)
-                    })
                     current = self._cache_operation(operation_id)
-                    if current.status in {"cancelled", "completed", "failed"}: return
-                    if isinstance(failure, ProviderFailure):
-                        error = ApiProblem(
-                            503 if failure.retryable else 500,
-                            "internal_error",
-                            "Provider request could not produce an accepted result.",
-                            retryable=failure.retryable,
-                            retry_after=15 if failure.retryable else None,
-                        )
-                    elif isinstance(failure, ApiProblem):
-                        # Preserve typed lifecycle/idempotency semantics from
-                        # terminal admission callbacks. In particular, a
-                        # stale concurrent challenge mutation must surface as
-                        # lifecycle_conflict instead of a synthetic 500.
-                        error = failure
-                    else:
-                        error = ApiProblem(500, "internal_error", "Provider request could not produce an accepted result.", retryable=True)
-                    record_provider_failure(endpoint=endpoint)
+                    if current.status in {"cancelled", "completed", "failed"}:
+                        _log_operation_failure(operation_id, failure)
+                        return
+                    error = _classify_operation_failure(failure, endpoint=endpoint, operation_id=operation_id)
                     self._finish_failure(operation_id=operation_id, endpoint=endpoint, key_hash=key_hash, error=error, async_mode=True)
             finally:
                 heartbeat_stop.set()

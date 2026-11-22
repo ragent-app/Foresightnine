@@ -14,7 +14,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .storage import JsonDocumentRepository, StorageConflictError, owner_items
-from .research_calculations import calculation_result_status
+from .research_calculations import BINARY_FORMULAS, FormulaId, MULTI_FACT_FORMULAS, calculation_result_status
 from .research_charts import ResearchChart
 
 
@@ -105,28 +105,51 @@ class CalculationInput(BaseModel):
     period: str
 
 
+class CalculationScaleAdjustment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    fact_id: str
+    from_unit: str
+    to_unit: str
+    from_scale: str
+    to_scale: str
+    multiplier: str
+    original_value: str
+    aligned_value: str
+
+
 class ResearchCalculation(BaseModel):
     model_config = ConfigDict(extra="forbid")
     calculation_id: str = Field(min_length=1, max_length=200)
     turn_id: str | None = None
-    formula_id: Literal["growth_percent", "margin_percent", "difference"]
+    formula_id: FormulaId
     formula_version: str
     expression: str
     input_verification: str
     input_precision_status: str
     period_order_check: str | None = None
     period_granularity_check: str | None = None
-    inputs: list[CalculationInput] = Field(min_length=2, max_length=2)
+    inputs: list[CalculationInput] = Field(min_length=2, max_length=50)
     value: str
     unit: str
     currency: str | None = None
     rounding: str
     decimal_places: int = Field(ge=0, le=8)
+    periods: str | None = None
+    weights: list[str] | None = None
+    scale_adjustments: list[CalculationScaleAdjustment] | None = None
     result_status: str | None = None
     input_status: str | None = None
     legacy_unit_warning: str | None = None
     authorship: str | None = None
     verification: str | None = None
+
+    @model_validator(mode="after")
+    def validate_inputs_for_formula(self) -> ResearchCalculation:
+        if self.formula_id in BINARY_FORMULAS and len(self.inputs) != 2:
+            raise ValueError(f"Formula {self.formula_id!r} requires exactly 2 inputs.")
+        if self.formula_id in MULTI_FACT_FORMULAS and not (2 <= len(self.inputs) <= 50):
+            raise ValueError(f"Formula {self.formula_id!r} requires between 2 and 50 inputs.")
+        return self
 
 
 class ResearchGap(BaseModel):

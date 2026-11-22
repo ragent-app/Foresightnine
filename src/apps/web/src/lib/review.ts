@@ -181,7 +181,7 @@ export function diffIsEmpty(diff: VersionDiff): boolean {
 // New calculation form (spec §4.4 数字 页签). The engine computes first versus second:
 // research_calculations.calculate — first is current/numerator, second is baseline/denominator.
 
-export type FormulaId = ResearchV2.ResearchCalculation["formula_id"];
+export type FormulaId = ResearchV2.CreateResearchCalculationRequest["formula"];
 
 export const FORMULAS: { id: FormulaId; label: string; first: string; second: string; hint: string }[] = [
   { id: "growth_percent", label: "增长率", first: "本期数字", second: "基期数字", hint: "（本期 ÷ 基期 − 1）× 100，两个数字的期间必须不同。" },

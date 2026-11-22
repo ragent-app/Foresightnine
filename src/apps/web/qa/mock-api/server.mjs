@@ -294,79 +294,478 @@ const tupleCompare = (x, y) => {
   return 0;
 };
 
-/**
- * `first` is current/numerator, `second` baseline/denominator. Inputs are
- * {fact_id, value, unit, currency, period}. Returns the calculation fields the backend derives.
- */
-function calculateEngine(formula, first, second, places) {
-  const a = parseDecimal(first.value);
-  const b = parseDecimal(second.value);
-  if (first.fact_id === second.fact_id) throw new CalcError("Inputs must identify distinct facts.");
-  if (first.unit !== second.unit || (first.currency ?? null) !== (second.currency ?? null)) throw new CalcError("Input units and currencies must match.");
-  if (formula === "margin_percent" && first.period !== second.period) throw new CalcError("Margin inputs must have the same period.");
-  if (formula === "growth_percent" && first.period === second.period) throw new CalcError("Growth inputs must refer to different periods.");
-  let orderCheck = "not_checked";
-  if (formula === "growth_percent") {
-    const current = comparablePeriod(first.period);
-    const baseline = comparablePeriod(second.period);
-    if (current && baseline && current[0] === baseline[0]) {
-      if (tupleCompare(current[1], baseline[1]) <= 0) throw new CalcError("Growth current period must be later than its baseline.");
-      orderCheck = "recognized_formats_only";
-    }
-    if (b.n <= 0n) throw new CalcError("Growth requires a positive baseline.");
+const TTM_QUARTER_RE = /^(?:FY\s*)?((?:19|20)\d{2})\s*[- ]?\s*Q([1-4])$/i;
+const TTM_ZH_QUARTER_NUM = { "1": 1, "2": 2, "3": 3, "4": 4, "一": 1, "二": 2, "三": 3, "四": 4 };
+const TTM_ZH_QUARTER_RE = /^((?:19|20)\d{2})\s*年?\s*第?\s*([1-4一二三四])\s*季(?:度)?$/;
+
+function parseQuarterIndex(period) {
+  const text = period.trim();
+  const match = TTM_QUARTER_RE.exec(text);
+  if (match) return { isFy: text.toUpperCase().startsWith("FY"), index: Number(match[1]) * 4 + (Number(match[2]) - 1) };
+  const zh = TTM_ZH_QUARTER_RE.exec(text);
+  if (zh) return { isFy: false, index: Number(zh[1]) * 4 + (TTM_ZH_QUARTER_NUM[zh[2]] - 1) };
+  return null;
+}
+
+function plainDecimalStr({ n, s }) {
+  if (n === 0n) return "0";
+  const sign = n < 0n ? "-" : "";
+  const abs = (n < 0n ? -n : n).toString();
+  if (s === 0) return `${sign}${abs}`;
+  const padded = abs.padStart(s + 1, "0");
+  const whole = padded.slice(0, -s);
+  const frac = padded.slice(-s).replace(/0+$/, "");
+  return frac ? `${sign}${whole}.${frac}` : `${sign}${whole}`;
+}
+
+const EN_SCALE_TO_SPEC = {
+  one: ["ones", 0], ones: ["ones", 0], "1": ["ones", 0], unit: ["ones", 0], units: ["ones", 0],
+  thousand: ["thousands", 3], thousands: ["thousands", 3], k: ["thousands", 3],
+  million: ["millions", 6], millions: ["millions", 6], m: ["millions", 6], mn: ["millions", 6], mm: ["millions", 6],
+  billion: ["billions", 9], billions: ["billions", 9], b: ["billions", 9], bn: ["billions", 9],
+  trillion: ["trillions", 12], trillions: ["trillions", 12], t: ["trillions", 12], tn: ["trillions", 12],
+};
+const ZH_SCALE_PATTERN = /(万亿元|万亿|萬億元|萬億|十亿元|十亿|十億元|十億|百万元|百万|百萬元|百萬|亿元|亿|億元|億|万元|万|萬元|萬|千元|千|元)/g;
+const ZH_SCALE_TO_SPEC = {
+  "元": ["元", 0, true], "千元": ["千元", 3, true], "千": ["thousands", 3, false],
+  "万元": ["万元", 4, true], "萬元": ["万元", 4, true], "万": ["万元", 4, false], "萬": ["万元", 4, false],
+  "百万元": ["百万元", 6, true], "百萬元": ["百万元", 6, true], "百万": ["millions", 6, false], "百萬": ["millions", 6, false],
+  "亿元": ["亿元", 8, true], "億元": ["亿元", 8, true], "亿": ["亿元", 8, false], "億": ["亿元", 8, false],
+  "十亿元": ["十亿元", 9, true], "十億元": ["十亿元", 9, true], "十亿": ["billions", 9, false], "十億": ["billions", 9, false],
+  "万亿元": ["万亿元", 12, true], "萬億元": ["万亿元", 12, true], "万亿": ["trillions", 12, false], "萬億": ["trillions", 12, false],
+};
+const KNOWN_ISO_CURRENCIES = new Set([
+  "USD", "EUR", "GBP", "JPY", "KRW", "CNY", "RMB", "HKD", "TWD",
+  "CHF", "CAD", "AUD", "NZD", "SGD", "INR", "BRL", "MXN", "SEK",
+  "NOK", "DKK", "ZAR", "SAR", "AED",
+]);
+const CURRENCY_PHRASES = {
+  dollar: "USD", dollars: "USD", "us dollar": "USD", "us dollars": "USD", us$: "USD",
+  euro: "EUR", euros: "EUR", won: "KRW", "korean won": "KRW", yen: "JPY", "japanese yen": "JPY",
+  yuan: "CNY", renminbi: "CNY", pound: "GBP", pounds: "GBP", sterling: "GBP",
+  "人民币": "CNY", "人民幣": "CNY", "美元": "USD", "美金": "USD",
+  "港元": "HKD", "港币": "HKD", "港幣": "HKD", "欧元": "EUR", "歐元": "EUR",
+  "日元": "JPY", "日圆": "JPY", "韩元": "KRW", "韓元": "KRW",
+};
+const ZH_CURRENCIES = ["人民币", "人民幣", "美元", "美金", "港元", "港币", "港幣", "欧元", "歐元", "日元", "日圆", "韩元", "韓元"];
+const ZH_YUAN_UNITS = new Set(["元", "千元", "万元", "百万元", "亿元", "十亿元", "万亿元"]);
+
+function parseUnitScale(unit, currency = null) {
+  const norm = String(unit ?? "").trim().split(/\s+/).filter(Boolean).join(" ");
+  if (!norm) throw new CalcError("Unit must not be empty.");
+  const normCurr = typeof currency === "string" && currency.trim() ? currency.trim().toUpperCase() : null;
+  if (isPercentUnit(norm)) {
+    if (normCurr !== null) throw new CalcError("Percentage inputs cannot have a currency.");
+    return { family: "percent", currency: null, scaleName: "ones", exponent: 0, canonicalUnit: "percent", isChineseYuan: false };
   }
-  if (formula === "margin_percent" && b.n <= 0n) throw new CalcError("Margin requires a positive denominator.");
-  const { A, B, s } = alignDecimals(a, b);
+  const lowered = norm.toLowerCase();
+  if (/^(?:percentage\s+points?|百分点|百分點|pp)$/.test(lowered)) {
+    if (normCurr !== null) throw new CalcError("Percentage-point inputs cannot have a currency.");
+    return { family: "percentage_points", currency: null, scaleName: "ones", exponent: 0, canonicalUnit: "percentage points", isChineseYuan: false };
+  }
+  if (/^(?:basis\s+points?|bps|基点|基點)$/.test(lowered)) {
+    if (normCurr !== null) throw new CalcError("Basis-point inputs cannot have a currency.");
+    return { family: "bps", currency: null, scaleName: "ones", exponent: 0, canonicalUnit: "bps", isChineseYuan: false };
+  }
+  if (/(?:per\s+share|\/\s*shares?\b|每股)/.test(lowered)) {
+    let foundCurr = null;
+    for (const token of norm.toUpperCase().match(/[A-Za-z]{3}/g) ?? []) {
+      if (KNOWN_ISO_CURRENCIES.has(token)) {
+        foundCurr = token === "RMB" ? "CNY" : token;
+        break;
+      }
+    }
+    const normCurrCanon = normCurr === "RMB" ? "CNY" : normCurr;
+    if (foundCurr && normCurrCanon && foundCurr !== normCurrCanon) {
+      throw new CalcError("Input unit currency conflicts with declared currency.");
+    }
+    return { family: "price_per_share", currency: normCurr ?? foundCurr, scaleName: "ones", exponent: 0, canonicalUnit: norm, isChineseYuan: false };
+  }
+
+  let spaced = lowered.replaceAll(" of ", " ");
+  for (const zhCurr of ZH_CURRENCIES) {
+    if (spaced.includes(zhCurr)) spaced = spaced.replaceAll(zhCurr, ` ${zhCurr} `);
+  }
+  spaced = spaced.replace(ZH_SCALE_PATTERN, " $1 ");
+  const tokens = spaced.split(/[\s,/()]+/).filter(Boolean);
+  if (tokens.length === 0) throw new CalcError(`Invalid unit ${unit}.`);
+
+  let unitCurrency = null;
+  let scaleName = null;
+  let exponent = 0;
+  let isYuan = false;
+  let isShares = false;
+  const unmatched = [];
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    const two = i + 1 < tokens.length ? `${tokens[i]} ${tokens[i + 1]}` : "";
+    if (two && Object.hasOwn(CURRENCY_PHRASES, two)) {
+      const mapped = CURRENCY_PHRASES[two];
+      if (unitCurrency && unitCurrency !== mapped) throw new CalcError("Multiple currencies found in unit.");
+      unitCurrency = mapped;
+      i += 1;
+      continue;
+    }
+    const tok = tokens[i];
+    const upperTok = tok.toUpperCase();
+    if (tok === "share" || tok === "shares" || tok === "股") {
+      isShares = true;
+    } else if (KNOWN_ISO_CURRENCIES.has(upperTok)) {
+      const mapped = upperTok === "RMB" ? "CNY" : upperTok;
+      if (unitCurrency && unitCurrency !== mapped) throw new CalcError("Multiple currencies found in unit.");
+      unitCurrency = mapped;
+    } else if (Object.hasOwn(CURRENCY_PHRASES, tok)) {
+      const mapped = CURRENCY_PHRASES[tok];
+      if (unitCurrency && unitCurrency !== mapped) throw new CalcError("Multiple currencies found in unit.");
+      unitCurrency = mapped;
+    } else if (Object.hasOwn(EN_SCALE_TO_SPEC, tok)) {
+      const [sName, sExp] = EN_SCALE_TO_SPEC[tok];
+      if (scaleName !== null && (scaleName !== sName || exponent !== sExp)) throw new CalcError("Multiple scales found in unit.");
+      scaleName = sName;
+      exponent = sExp;
+    } else if (Object.hasOwn(ZH_SCALE_TO_SPEC, tok)) {
+      const [sName, sExp, sYuan] = ZH_SCALE_TO_SPEC[tok];
+      if (scaleName !== null && (scaleName !== sName || exponent !== sExp)) throw new CalcError("Multiple scales found in unit.");
+      scaleName = sName;
+      exponent = sExp;
+      isYuan = isYuan || sYuan;
+    } else {
+      unmatched.push(tok);
+    }
+  }
+
+  if (unmatched.length === 0 && isShares && unitCurrency === null) {
+    const resolvedScale = scaleName ?? "ones";
+    const canonicalUnit = resolvedScale === "ones" ? "shares" : `${resolvedScale} shares`;
+    return { family: "shares", currency: null, scaleName: resolvedScale, exponent, canonicalUnit, isChineseYuan: false };
+  }
+  if (unmatched.length === 0 && !isShares && (unitCurrency !== null || scaleName !== null)) {
+    const normCurrCanon = normCurr === "RMB" ? "CNY" : normCurr;
+    if (unitCurrency !== null && normCurrCanon !== null && unitCurrency !== normCurrCanon) {
+      throw new CalcError("Input unit currency conflicts with declared currency.");
+    }
+    const resolvedCurr = normCurr ?? unitCurrency;
+    const resolvedScale = scaleName ?? (isYuan ? "元" : "ones");
+    if (isYuan && ZH_YUAN_UNITS.has(resolvedScale)) {
+      const canonicalUnit = resolvedCurr ? `${resolvedCurr} ${resolvedScale}` : resolvedScale;
+      return { family: "monetary", currency: resolvedCurr, scaleName: resolvedScale, exponent, canonicalUnit, isChineseYuan: true };
+    }
+    if (resolvedCurr !== null) {
+      const canonicalUnit = resolvedScale !== "ones" ? `${resolvedCurr} ${resolvedScale}` : resolvedCurr;
+      return { family: "monetary", currency: resolvedCurr, scaleName: resolvedScale, exponent, canonicalUnit, isChineseYuan: false };
+    }
+    return { family: "monetary", currency: null, scaleName: resolvedScale, exponent, canonicalUnit: resolvedScale, isChineseYuan: false };
+  }
+  return { family: `custom:${lowered}`, currency: normCurr, scaleName: "ones", exponent: 0, canonicalUnit: norm, isChineseYuan: false };
+}
+
+function alignFactsScale(facts, parsedDecimals) {
+  if (facts.length === 0) throw new CalcError("At least one input fact is required.");
+  const rawCurrencies = new Set(facts.map((item) => item.currency ?? null));
+  if (rawCurrencies.size !== 1) throw new CalcError("Input units and currencies must match.");
+  const declaredCurrency = facts[0].currency ?? null;
+
+  if (new Set(facts.map((item) => item.unit)).size === 1) {
+    const spec0 = parseUnitScale(facts[0].unit, declaredCurrency);
+    if (["percent", "percentage_points", "bps"].includes(spec0.family) && declaredCurrency !== null) {
+      throw new CalcError("Percentage inputs cannot have a currency.");
+    }
+    return { alignedDecimals: parsedDecimals, targetUnit: facts[0].unit, targetCurrency: declaredCurrency, scaleAdjustments: [] };
+  }
+
+  const specs = facts.map((item) => parseUnitScale(item.unit, item.currency ?? null));
+  if (new Set(specs.map((item) => item.family)).size !== 1) throw new CalcError("Input units and currencies must match.");
+  const { family } = specs[0];
+  if (new Set(specs.map((item) => item.currency)).size !== 1) throw new CalcError("Input units and currencies must match.");
+  if (family !== "monetary" && family !== "shares") {
+    if (new Set(specs.map((item) => item.canonicalUnit)).size !== 1) throw new CalcError("Input units and currencies must match.");
+    return { alignedDecimals: parsedDecimals, targetUnit: specs[0].canonicalUnit, targetCurrency: declaredCurrency, scaleAdjustments: [] };
+  }
+  if (declaredCurrency === null && family === "monetary") {
+    if (new Set(specs.map((item) => item.isChineseYuan)).size !== 1) throw new CalcError("Input units and currencies must match.");
+  }
+
+  const targetExponent = Math.min(...specs.map((item) => item.exponent));
+  const preferredIdx = specs.findIndex((item) => item.exponent === targetExponent);
+  const targetSpec = specs[preferredIdx];
+  let targetUnit;
+  if (targetSpec.isChineseYuan && ZH_YUAN_UNITS.has(facts[preferredIdx].unit.trim())) {
+    targetUnit = facts[preferredIdx].unit.trim();
+  } else if (targetSpec.family === "monetary" && declaredCurrency && facts[preferredIdx].unit.trim() === declaredCurrency) {
+    targetUnit = declaredCurrency;
+  } else {
+    targetUnit = targetSpec.canonicalUnit;
+  }
+
+  const alignedDecimals = [];
+  const scaleAdjustments = [];
+  for (let i = 0; i < facts.length; i += 1) {
+    const fact = facts[i];
+    const spec = specs[i];
+    const dec = parsedDecimals[i];
+    const expDiff = spec.exponent - targetExponent;
+    const alignedDec = expDiff > 0
+      ? (dec.s >= expDiff ? { n: dec.n, s: dec.s - expDiff } : { n: dec.n * pow10(expDiff - dec.s), s: 0 })
+      : dec;
+    alignedDecimals.push(alignedDec);
+    if (expDiff !== 0 || fact.unit !== targetUnit) {
+      scaleAdjustments.push({
+        fact_id: fact.fact_id,
+        from_unit: fact.unit,
+        to_unit: targetUnit,
+        from_scale: spec.scaleName,
+        to_scale: targetSpec.scaleName,
+        multiplier: plainDecimalStr({ n: pow10(expDiff), s: 0 }),
+        original_value: plainDecimalStr(dec),
+        aligned_value: plainDecimalStr(alignedDec),
+      });
+    }
+  }
+  return { alignedDecimals, targetUnit, targetCurrency: declaredCurrency, scaleAdjustments };
+}
+
+function gcdBigInt(a, b) {
+  let x = a < 0n ? -a : a;
+  let y = b < 0n ? -b : b;
+  while (y !== 0n) [x, y] = [y, x % y];
+  return x;
+}
+
+function cagrPercent(endVal, baseVal, periodsDec, places) {
+  if (endVal === 0n) return formatQuotient(-100n, 1n, places);
+  const rawP = periodsDec.n;
+  const rawQ = pow10(periodsDec.s);
+  const g = gcdBigInt(rawP, rawQ);
+  const p = rawP / g;
+  const q = rawQ / g;
+  if (p === 1n && q === 1n) return formatQuotient((endVal - baseVal) * 100n, baseVal, places);
+  if (p <= 100n && q <= 50n) {
+    const PREC = 40;
+    const scale = pow10(PREC);
+    const num = (endVal ** q) * (10n ** (BigInt(PREC) * p));
+    const den = baseVal ** q;
+    const target = num / den;
+    const approx = Math.pow(Number(endVal) / Number(baseVal), Number(q) / Number(p));
+    let y;
+    if (Number.isFinite(approx) && approx > 0) {
+      const exp = Math.floor(Math.log10(approx));
+      const mantissa = Math.round(approx * (10 ** (15 - exp)));
+      const shift = PREC - 15 + exp;
+      y = shift >= 0 ? BigInt(mantissa) * pow10(shift) : BigInt(mantissa) / pow10(-shift);
+      if (y <= 0n) y = 1n;
+    } else {
+      let lo = 1n;
+      let hi = target > 1n ? target : 1n;
+      while (lo < hi) {
+        const mid = (lo + hi + 1n) >> 1n;
+        if (mid ** p <= target) lo = mid;
+        else hi = mid - 1n;
+      }
+      y = lo;
+    }
+    for (let i = 0; i < 12; i += 1) {
+      const yPowMinus1 = y ** (p - 1n);
+      if (yPowMinus1 === 0n) break;
+      const next = ((p - 1n) * y + target / yPowMinus1) / p;
+      if (next === y) break;
+      y = next;
+    }
+    while ((y + 1n) ** p <= target) y += 1n;
+    while (y ** p > target && y > 0n) y -= 1n;
+    return formatQuotient((y - scale) * 100n, scale, places);
+  }
+  const approxPct = (Math.pow(Number(endVal) / Number(baseVal), Number(q) / Number(p)) - 1) * 100;
+  return formatQuotient(BigInt(Math.round(approxPct * (10 ** 12))), pow10(12), places);
+}
+
+/**
+ * Deterministic calculation engine mirroring research_calculations.calculate.
+ * For binary formulas, `inputs[0]` is current/numerator/minuend and `inputs[1]` is baseline/denominator/subtrahend.
+ */
+function calculateEngine(formula, inputs, places, { periods = null, weights = null } = {}) {
+  if (!FORMULAS.includes(formula)) throw new CalcError("Unsupported formula.");
+  if (!Array.isArray(inputs) || inputs.length < 2 || inputs.length > 50) throw new CalcError("Invalid calculation inputs.");
+  if (BINARY_FORMULAS.includes(formula) && inputs.length !== 2) throw new CalcError(`Formula '${formula}' requires exactly 2 facts.`);
+  if (formula === "ttm_sum" && inputs.length !== 4) throw new CalcError("Formula 'ttm_sum' requires exactly 4 quarterly facts.");
+  if (new Set(inputs.map((item) => item.fact_id)).size !== inputs.length) throw new CalcError("Inputs must identify distinct facts.");
+
+  let parsedPeriods = null;
+  if (formula === "cagr") {
+    if (periods === null || periods === undefined) throw new CalcError("periods > 0 is required for formula 'cagr'.");
+    parsedPeriods = parseDecimal(String(periods));
+    if (parsedPeriods.n <= 0n || parsedPeriods.n > 1000n * pow10(parsedPeriods.s)) {
+      throw new CalcError("periods must be a finite positive number <= 1000.");
+    }
+  } else if (periods !== null && periods !== undefined) {
+    throw new CalcError("periods is only supported for formula 'cagr'.");
+  }
+
+  let parsedWeights = null;
+  if (formula === "weighted_average") {
+    if (!Array.isArray(weights) || weights.length !== inputs.length) {
+      throw new CalcError("weights length must match the number of input facts.");
+    }
+    parsedWeights = weights.map((item) => {
+      const dec = parseDecimal(String(item));
+      if (dec.n < 0n) throw new CalcError("weights must be finite non-negative numbers within supported precision.");
+      return dec;
+    });
+    if (parsedWeights.every((item) => item.n === 0n)) throw new CalcError("weights sum must be positive.");
+  } else if (weights !== null && weights !== undefined) {
+    throw new CalcError("weights is only supported for formula 'weighted_average'.");
+  }
+
+  const parsedDecimals = inputs.map((item) => parseDecimal(item.value));
+  const { alignedDecimals, targetUnit, targetCurrency, scaleAdjustments } = alignFactsScale(inputs, parsedDecimals);
+  const maxS = Math.max(...alignedDecimals.map((item) => item.s));
+  const alignedVals = alignedDecimals.map((item) => item.n * pow10(maxS - item.s));
+
+  let periodOrderCheck = "not_checked";
+  if (formula === "margin_percent" && inputs[0].period !== inputs[1].period) {
+    throw new CalcError("Margin inputs must have the same period.");
+  }
+  if (formula === "growth_percent" || formula === "cagr") {
+    const label = formula === "cagr" ? "CAGR" : "Growth";
+    if (inputs[0].period === inputs[1].period) throw new CalcError(`${label} inputs must refer to different periods.`);
+    const current = comparablePeriod(inputs[0].period);
+    const baseline = comparablePeriod(inputs[1].period);
+    if (current && baseline && current[0] === baseline[0]) {
+      if (tupleCompare(current[1], baseline[1]) <= 0) throw new CalcError(`${label} current period must be later than its baseline.`);
+      periodOrderCheck = "recognized_formats_only";
+    }
+  }
+  if (formula === "growth_percent" && alignedVals[1] <= 0n) throw new CalcError("Growth requires a positive baseline.");
+  if (formula === "margin_percent" && alignedVals[1] <= 0n) throw new CalcError("Margin requires a positive denominator.");
+  if (formula === "cagr") {
+    if (alignedVals[1] <= 0n) throw new CalcError("CAGR requires a positive baseline.");
+    if (alignedVals[0] < 0n) throw new CalcError("CAGR requires a non-negative ending value.");
+  }
+  if (formula === "ratio" && alignedVals[1] <= 0n) throw new CalcError("Ratio requires a positive denominator.");
+  if (formula === "ttm_sum") {
+    const rawPeriods = inputs.map((item) => item.period);
+    if (new Set(rawPeriods).size !== 4) throw new CalcError("ttm_sum inputs must refer to distinct periods.");
+    for (const period of rawPeriods) {
+      const gran = granularityOf(period);
+      if (gran === "year" || gran === "month") throw new CalcError("ttm_sum requires quarterly periods.");
+    }
+    const parsedQuarters = rawPeriods.map(parseQuarterIndex);
+    if (parsedQuarters.every((item) => item !== null)) {
+      const fyFlags = new Set(parsedQuarters.map((item) => item.isFy));
+      if (fyFlags.size !== 1) throw new CalcError("ttm_sum cannot mix fiscal and calendar quarter labels.");
+      const indices = parsedQuarters.map((item) => item.index).sort((x, y) => x - y);
+      if (indices.some((idx, i) => idx !== indices[0] + i)) {
+        throw new CalcError("ttm_sum requires 4 consecutive quarterly periods.");
+      }
+      periodOrderCheck = "recognized_formats_only";
+    }
+  }
+
   let value;
   let expression;
   let unit = "percent";
   let formulaVersion = "1";
+  const isPctInput = isPercentUnit(inputs[0].unit);
+
   if (formula === "growth_percent") {
-    value = formatQuotient((A - B) * 100n, B, places);
+    value = formatQuotient((alignedVals[0] - alignedVals[1]) * 100n, alignedVals[1], places);
     expression = "(first / second - 1) * 100";
   } else if (formula === "margin_percent") {
-    value = formatQuotient(A * 100n, B, places);
+    value = formatQuotient(alignedVals[0] * 100n, alignedVals[1], places);
     expression = "first / second * 100";
-  } else {
-    value = formatQuotient(A - B, pow10(s), places);
+  } else if (formula === "difference") {
+    value = formatQuotient(alignedVals[0] - alignedVals[1], pow10(maxS), places);
     expression = "first - second";
-    unit = first.unit;
-    if (isPercentUnit(first.unit)) {
-      if ((first.currency ?? null) !== null) throw new CalcError("Percentage inputs cannot have a currency.");
+    if (isPctInput) {
+      if ((inputs[0].currency ?? null) !== null) throw new CalcError("Percentage inputs cannot have a currency.");
       unit = "percentage points";
       formulaVersion = "2";
+    } else {
+      unit = targetUnit;
     }
+  } else if (formula === "cagr") {
+    value = cagrPercent(alignedVals[0], alignedVals[1], parsedPeriods, places);
+    expression = "((first / second) ** (1 / periods) - 1) * 100";
+  } else if (formula === "ratio") {
+    value = formatQuotient(alignedVals[0], alignedVals[1], places);
+    expression = "first / second";
+    unit = "ratio";
+  } else if (formula === "sum") {
+    const total = alignedVals.reduce((acc, item) => acc + item, 0n);
+    value = formatQuotient(total, pow10(maxS), places);
+    expression = "sum(inputs)";
+    unit = isPctInput ? "percent" : targetUnit;
+  } else if (formula === "subtract") {
+    const tailSum = alignedVals.slice(1).reduce((acc, item) => acc + item, 0n);
+    value = formatQuotient(alignedVals[0] - tailSum, pow10(maxS), places);
+    expression = "inputs[0] - sum(inputs[1:])";
+    unit = isPctInput ? "percentage points" : targetUnit;
+  } else if (formula === "weighted_average") {
+    const wMaxS = Math.max(...parsedWeights.map((item) => item.s));
+    const wAligned = parsedWeights.map((item) => item.n * pow10(wMaxS - item.s));
+    const weightSum = wAligned.reduce((acc, item) => acc + item, 0n);
+    if (weightSum <= 0n) throw new CalcError("Weighted average requires positive total weight.");
+    const weightedTotal = wAligned.reduce((acc, weight, idx) => acc + weight * alignedVals[idx], 0n);
+    value = formatQuotient(weightedTotal, weightSum * pow10(maxS), places);
+    expression = "sum(w_i * x_i) / sum(w_i)";
+    unit = isPctInput ? "percent" : targetUnit;
+  } else {
+    if (isPctInput) throw new CalcError("ttm_sum cannot sum percentage rates.");
+    const total = alignedVals.reduce((acc, item) => acc + item, 0n);
+    value = formatQuotient(total, pow10(maxS), places);
+    expression = "sum(ttm_quarters)";
+    unit = targetUnit;
   }
-  return {
+
+  const outCurrency = unit === "percent" || unit === "percentage points" || unit === "ratio" ? null : targetCurrency;
+  const output = {
     formula_id: formula,
     formula_version: formulaVersion,
     expression,
     value,
     unit,
-    currency: unit === "percent" || unit === "percentage points" ? null : first.currency ?? null,
+    currency: outCurrency,
     decimal_places: places,
     rounding: "half_up",
-    inputs: [first, second].map((item) => ({ fact_id: item.fact_id, value: item.value, unit: item.unit, currency: item.currency ?? null, period: item.period })),
+    inputs: inputs.map((item) => ({ fact_id: item.fact_id, value: item.value, unit: item.unit, currency: item.currency ?? null, period: item.period })),
     input_verification: "not_verified_by_calculator",
     input_precision_status: "not_established",
-    period_order_check: formula === "growth_percent" ? orderCheck : null,
-    period_granularity_check: formula === "growth_percent"
+    period_order_check: formula === "growth_percent" || formula === "cagr" || formula === "ttm_sum" ? periodOrderCheck : null,
+    period_granularity_check: formula === "growth_percent" || formula === "cagr"
       ? (() => {
-          const g1 = granularityOf(first.period);
-          const g2 = granularityOf(second.period);
+          const g1 = granularityOf(inputs[0].period);
+          const g2 = granularityOf(inputs[1].period);
           return g1 !== null && g2 !== null && g1 !== g2 ? "different_labels_verify_stock_or_flow" : "not_established";
         })()
       : null,
   };
+  if (formula === "cagr") output.periods = plainDecimalStr(parsedPeriods);
+  if (formula === "weighted_average") output.weights = parsedWeights.map(plainDecimalStr);
+  if (scaleAdjustments.length > 0) output.scale_adjustments = scaleAdjustments;
+  return output;
 }
 
 /** Mirrors calculation_result_status: recompute and compare stored output. */
 function calcResultStatus(calc) {
   try {
-    if (!Array.isArray(calc.inputs) || calc.inputs.length !== 2 || !Number.isInteger(calc.decimal_places)) return "unverifiable";
-    const expected = calculateEngine(calc.formula_id, calc.inputs[0], calc.inputs[1], calc.decimal_places);
+    if (!FORMULAS.includes(calc.formula_id) || !Array.isArray(calc.inputs) || calc.inputs.length < 2 || !Number.isInteger(calc.decimal_places)) {
+      return "unverifiable";
+    }
+    if (BINARY_FORMULAS.includes(calc.formula_id) && calc.inputs.length !== 2) return "unverifiable";
+    if (calc.formula_id === "ttm_sum" && calc.inputs.length !== 4) return "unverifiable";
+    if (calc.formula_id === "cagr" && (calc.periods === null || calc.periods === undefined)) return "unverifiable";
+    if (calc.formula_id === "weighted_average" && !Array.isArray(calc.weights)) return "unverifiable";
+    const expected = calculateEngine(calc.formula_id, calc.inputs, calc.decimal_places, {
+      periods: calc.formula_id === "cagr" ? calc.periods : null,
+      weights: calc.formula_id === "weighted_average" ? calc.weights : null,
+    });
     if (!decimalEquals(String(calc.value), expected.value)) return "mismatch";
-    return ["formula_version", "expression", "unit", "currency", "rounding"].some((key) => (calc[key] ?? null) !== expected[key]) ? "mismatch" : "matched";
+    if (["formula_version", "expression", "unit", "currency", "rounding"].some((key) => (calc[key] ?? null) !== expected[key])) {
+      return "mismatch";
+    }
+    for (const key of ["periods", "weights", "scale_adjustments"]) {
+      if (!same(calc[key] ?? null, expected[key] ?? null)) return "mismatch";
+    }
+    return "matched";
   } catch {
     return "unverifiable";
   }
@@ -380,7 +779,10 @@ const legacyPercentageDifference = (calc) =>
 function calcInputStatus(calc, facts) {
   if (legacyPercentageDifference(calc)) return "unverifiable";
   try {
-    if (!Array.isArray(calc.inputs) || calc.inputs.length !== 2 || calc.inputs[0].fact_id === calc.inputs[1].fact_id) return "unverifiable";
+    if (!FORMULAS.includes(calc.formula_id) || !Array.isArray(calc.inputs) || calc.inputs.length < 2 || calc.inputs.length > 50) return "unverifiable";
+    if (BINARY_FORMULAS.includes(calc.formula_id) && calc.inputs.length !== 2) return "unverifiable";
+    if (calc.formula_id === "ttm_sum" && calc.inputs.length !== 4) return "unverifiable";
+    if (new Set(calc.inputs.map((item) => item.fact_id)).size !== calc.inputs.length) return "unverifiable";
     let unverifiable = false;
     for (const input of calc.inputs) {
       const matches = facts.filter((fact) => fact.fact_id === input.fact_id);
@@ -404,8 +806,12 @@ const FACT_COMPUTED_FIELDS = ["currency_quote_missing", "scale_quote_missing", "
 const CALCULATION_COMPUTED_FIELDS = ["input_status", "legacy_unit_warning", "result_status"];
 const FACT_KEYS = ["fact_id", "turn_id", "label", "value", "unit", "currency", "period", "source_id", "quotation", "character_start", "character_end", "location", "verification", ...FACT_COMPUTED_FIELDS];
 const CLAIM_KEYS = ["claim_id", "turn_id", "role", "text", "citations", "challenges_claim_ids", "edited_by_user"];
-const CALCULATION_KEYS = ["calculation_id", "turn_id", "formula_id", "formula_version", "expression", "input_verification", "input_precision_status", "period_order_check", "period_granularity_check", "inputs", "value", "unit", "currency", "rounding", "decimal_places", ...CALCULATION_COMPUTED_FIELDS, "authorship", "verification"];
-const FORMULAS = ["growth_percent", "margin_percent", "difference"];
+const CALCULATION_KEYS = ["calculation_id", "turn_id", "formula_id", "formula_version", "expression", "input_verification", "input_precision_status", "period_order_check", "period_granularity_check", "inputs", "value", "unit", "currency", "rounding", "decimal_places", "periods", "weights", "scale_adjustments", ...CALCULATION_COMPUTED_FIELDS, "authorship", "verification"];
+const SCALE_ADJUSTMENT_KEYS = ["fact_id", "from_unit", "to_unit", "from_scale", "to_scale", "multiplier", "original_value", "aligned_value"];
+const BINARY_FORMULAS = ["growth_percent", "margin_percent", "difference", "cagr", "ratio"];
+const MULTI_FACT_FORMULAS = ["sum", "subtract", "weighted_average", "ttm_sum"];
+const FORMULAS = [...BINARY_FORMULAS, ...MULTI_FACT_FORMULAS];
+const CREATE_CALCULATION_FORMULAS = ["growth_percent", "margin_percent", "difference"];
 
 function exactKeys(value, allowed, location) {
   if (!isRecord(value)) throw invalid("Input should be a valid dictionary or object.", location);
@@ -514,9 +920,27 @@ const factIdentity = (fact) => ({
 function readCalculation(raw, index) {
   const where = `body/content/calculations/${index}`;
   exactKeys(raw, CALCULATION_KEYS, where);
-  if (!FORMULAS.includes(raw.formula_id)) throw invalid("Input should be 'growth_percent', 'margin_percent' or 'difference'.", `${where}/formula_id`);
-  if (!Array.isArray(raw.inputs) || raw.inputs.length !== 2) throw invalid("List should have exactly 2 items.", `${where}/inputs`);
+  if (!FORMULAS.includes(raw.formula_id)) {
+    throw invalid(`Input should be ${FORMULAS.map((item) => `'${item}'`).join(", ")}.`, `${where}/formula_id`);
+  }
+  const binary = BINARY_FORMULAS.includes(raw.formula_id);
+  if (!Array.isArray(raw.inputs) || (binary ? raw.inputs.length !== 2 : raw.inputs.length < 2 || raw.inputs.length > 50)) {
+    throw invalid(binary ? "List should have exactly 2 items." : "List should have between 2 and 50 items.", `${where}/inputs`);
+  }
   const optional = (key) => (raw[key] === undefined ? null : readString(raw[key], `${where}/${key}`, { nullable: true }));
+  let weights = null;
+  if (raw.weights !== undefined && raw.weights !== null) {
+    if (!Array.isArray(raw.weights)) throw invalid("Input should be a valid list.", `${where}/weights`);
+    weights = raw.weights.map((item, i) => readString(item, `${where}/weights/${i}`));
+  }
+  let scaleAdjustments = null;
+  if (raw.scale_adjustments !== undefined && raw.scale_adjustments !== null) {
+    if (!Array.isArray(raw.scale_adjustments)) throw invalid("Input should be a valid list.", `${where}/scale_adjustments`);
+    scaleAdjustments = raw.scale_adjustments.map((item, i) => {
+      exactKeys(item, SCALE_ADJUSTMENT_KEYS, `${where}/scale_adjustments/${i}`);
+      return Object.fromEntries(SCALE_ADJUSTMENT_KEYS.map((key) => [key, readString(item[key], `${where}/scale_adjustments/${i}/${key}`)]));
+    });
+  }
   const calc = {
     calculation_id: readString(raw.calculation_id, `${where}/calculation_id`, { min: 1, max: 200 }),
     turn_id: optional("turn_id"),
@@ -542,6 +966,9 @@ function readCalculation(raw, index) {
     currency: optional("currency"),
     rounding: readString(raw.rounding, `${where}/rounding`),
     decimal_places: readInt(raw.decimal_places, `${where}/decimal_places`, { max: 8 }),
+    periods: optional("periods"),
+    weights,
+    scale_adjustments: scaleAdjustments,
     result_status: optional("result_status"),
     input_status: optional("input_status"),
     legacy_unit_warning: optional("legacy_unit_warning"),
@@ -559,6 +986,9 @@ const calculationIdentity = (calc) => {
     period_order_check: calc.period_order_check ?? null,
     period_granularity_check: calc.period_granularity_check ?? null,
     currency: calc.currency ?? null,
+    periods: calc.periods ?? null,
+    weights: calc.weights ?? null,
+    scale_adjustments: calc.scale_adjustments ?? null,
     authorship: calc.authorship ?? null,
     verification: calc.verification ?? null,
     inputs: (calc.inputs ?? []).map((item) => ({ ...item, currency: item.currency ?? null })),
@@ -590,7 +1020,7 @@ function validateCalculationRequest(body, { recalculate }) {
   const parent = readString(body.parent_version_id, "body/parent_version_id", { min: 1 }).trim();
   if (parent.length < 1 || parent.length > 100) throw invalid("String should have at least 1 and at most 100 characters.", "body/parent_version_id");
   if (recalculate) return { parent, index: readInt(body.calculation_index, "body/calculation_index", { max: 1999 }) };
-  if (!FORMULAS.includes(body.formula)) throw invalid("Input should be 'growth_percent', 'margin_percent' or 'difference'.", "body/formula");
+  if (!CREATE_CALCULATION_FORMULAS.includes(body.formula)) throw invalid("Input should be 'growth_percent', 'margin_percent' or 'difference'.", "body/formula");
   const ids = ["first_fact_id", "second_fact_id"].map((key) => {
     const id = readString(body[key], `body/${key}`, { min: 1 }).trim();
     if (id.length < 1 || id.length > 200) throw invalid("String should have at least 1 and at most 200 characters.", `body/${key}`);
@@ -2607,10 +3037,10 @@ export function createServer({ tickMs = 1500, heartbeatMs = 15000, maxSsePerAcco
     });
   }
 
-  function runCalculation(formula, content, factIds, places) {
-    const [first, second] = calculationInputs(content, factIds);
+  function runCalculation(formula, content, factIds, places, options = {}) {
+    const facts = calculationInputs(content, factIds);
     try {
-      return calculateEngine(formula, first, second, places);
+      return calculateEngine(formula, facts, places, options);
     } catch (error) {
       if (error instanceof CalcError) throw unprocessable("Calculation cannot be performed with the current facts.");
       throw error;
@@ -2647,10 +3077,24 @@ export function createServer({ tickMs = 1500, heartbeatMs = 15000, maxSsePerAcco
     const { topic, previous, content } = calculationTopic(dataFor(auth.accountId), params.topic, request.parent);
     if (request.index >= content.calculations.length) throw unprocessable("Calculation does not exist in this version.");
     const old = content.calculations[request.index];
-    if (!["1", "2"].includes(old.formula_version) || !Array.isArray(old.inputs) || old.inputs.length !== 2) {
+    const validInputCount = Array.isArray(old.inputs) && (
+      BINARY_FORMULAS.includes(old.formula_id)
+        ? old.inputs.length === 2
+        : old.inputs.length >= 2 && old.inputs.length <= 50
+    );
+    if (!FORMULAS.includes(old.formula_id) || !["1", "2"].includes(old.formula_version) || !validInputCount) {
       throw unprocessable("Calculation inputs or formula version are unavailable.");
     }
-    const result = runCalculation(old.formula_id, content, old.inputs.map((item) => item.fact_id), old.decimal_places);
+    const result = runCalculation(
+      old.formula_id,
+      content,
+      old.inputs.map((item) => item.fact_id),
+      old.decimal_places,
+      {
+        periods: old.formula_id === "cagr" ? old.periods ?? null : null,
+        weights: old.formula_id === "weighted_average" ? old.weights ?? null : null,
+      },
+    );
     content.calculations[request.index] = {
       calculation_id: old.calculation_id,
       ...result,

@@ -76,28 +76,148 @@
             "title": "Decimal Places",
             "type": "integer"
           },
+          "facts": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/NumericFact"
+                },
+                "maxItems": 50,
+                "minItems": 2,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facts"
+          },
           "first": {
-            "$ref": "#/components/schemas/NumericFact"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NumericFact"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "formula": {
             "enum": [
               "growth_percent",
               "margin_percent",
-              "difference"
+              "difference",
+              "cagr",
+              "ratio",
+              "sum",
+              "subtract",
+              "weighted_average",
+              "ttm_sum"
             ],
             "title": "Formula",
             "type": "string"
           },
+          "periods": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Periods"
+          },
           "second": {
-            "$ref": "#/components/schemas/NumericFact"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NumericFact"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weights": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights"
           }
         },
         "required": [
-          "formula",
-          "first",
-          "second"
+          "formula"
         ],
         "title": "CalculationRequest",
+        "type": "object"
+      },
+      "CalculationScaleAdjustment": {
+        "additionalProperties": false,
+        "properties": {
+          "aligned_value": {
+            "title": "Aligned Value",
+            "type": "string"
+          },
+          "fact_id": {
+            "title": "Fact Id",
+            "type": "string"
+          },
+          "from_scale": {
+            "title": "From Scale",
+            "type": "string"
+          },
+          "from_unit": {
+            "title": "From Unit",
+            "type": "string"
+          },
+          "multiplier": {
+            "title": "Multiplier",
+            "type": "string"
+          },
+          "original_value": {
+            "title": "Original Value",
+            "type": "string"
+          },
+          "to_scale": {
+            "title": "To Scale",
+            "type": "string"
+          },
+          "to_unit": {
+            "title": "To Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fact_id",
+          "from_unit",
+          "to_unit",
+          "from_scale",
+          "to_scale",
+          "multiplier",
+          "original_value",
+          "aligned_value"
+        ],
+        "title": "CalculationScaleAdjustment",
         "type": "object"
       },
       "CausalGraphEdge": {
@@ -1079,7 +1199,13 @@
             "enum": [
               "growth_percent",
               "margin_percent",
-              "difference"
+              "difference",
+              "cagr",
+              "ratio",
+              "sum",
+              "subtract",
+              "weighted_average",
+              "ttm_sum"
             ],
             "title": "Formula Id",
             "type": "string"
@@ -1111,7 +1237,7 @@
             "items": {
               "$ref": "#/components/schemas/CalculationInput"
             },
-            "maxItems": 2,
+            "maxItems": 50,
             "minItems": 2,
             "title": "Inputs",
             "type": "array"
@@ -1149,6 +1275,17 @@
             ],
             "title": "Period Order Check"
           },
+          "periods": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Periods"
+          },
           "result_status": {
             "anyOf": [
               {
@@ -1163,6 +1300,20 @@
           "rounding": {
             "title": "Rounding",
             "type": "string"
+          },
+          "scale_adjustments": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CalculationScaleAdjustment"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale Adjustments"
           },
           "turn_id": {
             "anyOf": [
@@ -1193,6 +1344,20 @@
               }
             ],
             "title": "Verification"
+          },
+          "weights": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights"
           }
         },
         "required": [

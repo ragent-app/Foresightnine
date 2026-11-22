@@ -283,6 +283,14 @@ def safe_exception_diagnostic(error: BaseException) -> dict[str, Any]:
         if path.parent == root and path.suffix == '.py':
             result['location'] = {'file': path.name, 'line': frame.tb_lineno}
         frame = frame.tb_next
+    if isinstance(error, ValidationError):
+        result['validation_errors'] = [
+            {
+                'loc': '.'.join(str(p) for p in item.get('loc', ()))[:120],
+                'type': str(item.get('type', ''))[:64],
+            }
+            for item in error.errors(include_url=False, include_context=False, include_input=False)[:5]
+        ]
     return result
 
 def report_diagnostic_write_failure(error: BaseException, *, operation_id: str | None = None) -> None:

@@ -6,11 +6,21 @@ turn into the version it started from. It never edits an earlier turn's items.
 """
 from __future__ import annotations
 
-from typing import Any
+import logging
+from typing import Any, Mapping
+
+from pydantic import BaseModel, ValidationError
 
 from .research_charts import ResearchChart
+from .research_diagnostics import safe_exception_diagnostic
 from .research_topics import (ResearchCalculation, ResearchClaim, ResearchContent, ResearchFact, ResearchGap,
                               ResearchTurn, ResearchVersion)
+
+_logger = logging.getLogger(__name__)
+_PERSISTENCE_DROPPED_GAPS: dict[str, str] = {
+    'calculation_persistence_dropped': 'One or more calculations could not be persisted due to schema validation.',
+    'chart_persistence_dropped': 'One or more charts could not be persisted due to schema validation.',
+}
 
 
 def prior_research_input(version: ResearchVersion) -> dict | None:
@@ -43,6 +53,56 @@ def _union(*lists: list[str]) -> list[str]:
     return list(dict.fromkeys(item for values in lists for item in values))
 
 
+def _merge_isolated_items(
+    *,
+    raw_items: list[dict] | tuple[dict, ...] | None,
+    target_list: list[Any],
+    existing_ids: set[str],
+    id_field: str,
+    model_cls: type[BaseModel],
+    turn_id: str,
+    item_kind: str,
+) -> tuple[set[str], bool]:
+    """Validate and merge items individually so one invalid row does not drop the turn."""
+    dropped_ids: set[str] = set()
+    dropped_any = False
+    for item in raw_items or ():
+        if not isinstance(item, Mapping):
+            dropped_any = True
+            try:
+                model_cls.model_validate(item)
+            except ValidationError as error:
+                _logger.warning(
+                    'research_item_persistence_dropped item_kind=%s metadata=%s',
+                    item_kind,
+                    safe_exception_diagnostic(error),
+                )
+            continue
+        item_id = item.get(id_field)
+        if isinstance(item_id, str) and item_id in existing_ids:
+            continue
+        try:
+            validated = model_cls.model_validate({**item, 'turn_id': turn_id})
+        except ValidationError as error:
+            dropped_any = True
+            _logger.warning(
+                'research_item_persistence_dropped item_kind=%s metadata=%s',
+                item_kind,
+                safe_exception_diagnostic(error),
+            )
+            if isinstance(item_id, str) and item_id:
+                dropped_ids.add(item_id)
+            continue
+        existing_ids.add(getattr(validated, id_field))
+        target_list.append(validated)
+    return dropped_ids, dropped_any
+
+
+def _append_unique_gap(gaps: list[ResearchGap], code: str) -> None:
+    if not any(item.code == code for item in gaps):
+        gaps.append(ResearchGap(code=code, message=_PERSISTENCE_DROPPED_GAPS[code]))
+
+
 def merge_turn(parent: ResearchContent, turn: ResearchTurn, *, claims: list[dict], facts: list[dict],
                calculations: list[dict], sources: list[dict], source_candidates: list[dict],
                charts: list[dict] | None = None) -> ResearchContent:
@@ -64,10 +124,24 @@ def merge_turn(parent: ResearchContent, turn: ResearchTurn, *, claims: list[dict
                           if item['claim_id'] not in existing_claims)
     content.facts.extend(ResearchFact.model_validate({**item, 'turn_id': tid}) for item in facts
                          if item['fact_id'] not in existing_facts)
-    content.calculations.extend(ResearchCalculation.model_validate({**item, 'turn_id': tid}) for item in calculations
-                                if item['calculation_id'] not in existing_calcs)
-    content.charts.extend(ResearchChart.model_validate({**item, 'turn_id': tid}) for item in (charts or ())
-                          if item['chart_id'] not in existing_charts)
+    dropped_calc_ids, dropped_calc_any = _merge_isolated_items(
+        raw_items=calculations,
+        target_list=content.calculations,
+        existing_ids=existing_calcs,
+        id_field='calculation_id',
+        model_cls=ResearchCalculation,
+        turn_id=tid,
+        item_kind='calculation',
+    )
+    dropped_chart_ids, dropped_chart_any = _merge_isolated_items(
+        raw_items=charts,
+        target_list=content.charts,
+        existing_ids=existing_charts,
+        id_field='chart_id',
+        model_cls=ResearchChart,
+        turn_id=tid,
+        item_kind='chart',
+    )
     if content.turns and content.turns[-1].turn_id == tid:
         old = content.turns[-1]
         turn.index, turn.question, turn.question_origin = old.index, old.question, old.question_origin
@@ -83,6 +157,14 @@ def merge_turn(parent: ResearchContent, turn: ResearchTurn, *, claims: list[dict
         content.turns[-1] = turn
     else:
         content.turns.append(turn)
+    if dropped_calc_ids:
+        turn.calculation_ids = [cid for cid in turn.calculation_ids if cid not in dropped_calc_ids]
+    if dropped_chart_ids:
+        turn.chart_ids = [cid for cid in turn.chart_ids if cid not in dropped_chart_ids]
+    if dropped_calc_any:
+        _append_unique_gap(turn.gaps, 'calculation_persistence_dropped')
+    if dropped_chart_any:
+        _append_unique_gap(turn.gaps, 'chart_persistence_dropped')
     known = {row.get('source_id') for row in content.sources if isinstance(row, dict)}
     content.sources.extend(row for row in sources if row.get('source_id') not in known)
     content.source_candidates = source_candidates[:10]

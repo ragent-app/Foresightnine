@@ -1074,7 +1074,7 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
         return "unverifiable"
     formula = calculation.get("formula_id")
     inputs = calculation.get("inputs")
-    if not isinstance(inputs, list) or len(inputs) < 2 or any(not isinstance(item, dict) for item in inputs):
+    if (formula not in BINARY_FORMULAS and formula not in MULTI_FACT_FORMULAS) or not isinstance(inputs, list) or len(inputs) < 2 or any(not isinstance(item, dict) for item in inputs):
         return "unverifiable"
     if formula in BINARY_FORMULAS and len(inputs) != 2:
         return "unverifiable"
@@ -1375,7 +1375,7 @@ def calculation_result_status(calculation: dict) -> str:
         if value != Decimal(expected['value']) or any(calculation.get(key) != expected[key] for key in fields_to_match):
             return 'mismatch'
         for optional_key in ('periods', 'weights', 'scale_adjustments'):
-            if optional_key in expected and calculation.get(optional_key) != expected[optional_key]:
+            if calculation.get(optional_key) != expected.get(optional_key):
                 return 'mismatch'
         return 'matched'
     except (ValidationError, CalculationError, InvalidOperation, TypeError, ValueError, KeyError, OverflowError):

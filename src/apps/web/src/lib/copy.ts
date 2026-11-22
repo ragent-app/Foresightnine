@@ -421,6 +421,12 @@ export const FORMULA_LABEL: Readonly<Record<string, string>> = {
   growth_percent: "增长率",
   margin_percent: "利润率",
   difference: "差额",
+  ratio: "比率",
+  cagr: "复合年增长率",
+  sum: "合计",
+  subtract: "净差额",
+  weighted_average: "加权平均",
+  ttm_sum: "滚动十二个月合计",
 };
 
 export function formulaLabel(formulaId: string): string {
