@@ -222,6 +222,7 @@ from .oauth_provider import OAuthProviderClient, OAuthProviderError
 from .market_provider import MarketSnapshotRequest, build_snapshot_response
 from .fin_data.policy import Denied as FinDataDenied, load_policy as load_fin_data_policy
 from .admin_auth import ELEVATION_HEADER, AdminAuthError, AdminGate
+from .admin_router import create_admin_router
 from .platform_secrets import PlatformSecretError, PlatformSecretStore, configure as configure_platform_secrets, default_cipher as platform_secret_cipher, managed_secret, managed_secrets, platform_secret, provider_registry, search_secret_name
 from .market_credentials import (
     AccountMarketDataSettings,
@@ -1734,6 +1735,17 @@ def _authenticated_account_session(authorization: str | None) -> tuple[LocalAcco
 def _authenticated_account(authorization: str | None) -> LocalAccount:
     account, _session = _authenticated_account_session(authorization)
     return account
+
+
+app.include_router(
+    create_admin_router(
+        admin_gate,
+        platform_secret_store,
+        _authenticated_account_session,
+        ApiProblem,
+    ),
+    include_in_schema=False,
+)
 
 
 @app.post("/v2/research/topics", response_model=ResearchTopic, status_code=201, include_in_schema=False)
