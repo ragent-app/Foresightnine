@@ -35,7 +35,8 @@ def core_caps(box):
 
 
 def last_result(model, index=1):
-    return json.loads(model.inputs[index][-1]['content'])
+    tool_msgs = [m for m in model.inputs[index] if m.get('role') == 'tool']
+    return json.loads(tool_msgs[-1]['content'])
 
 
 def run(model, **kw):

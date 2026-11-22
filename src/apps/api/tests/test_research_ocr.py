@@ -385,6 +385,86 @@ def test_vision_engine_disabled_unless_fully_configured(monkeypatch):
     monkeypatch.delenv("FORESIGHTNINE_OCR_VISION_API_KEY")
     assert VisionModelEngine.from_environment() is None
 
+    # OpenAI-compatible protocol requires no anthropic_version.
+    monkeypatch.setenv("FORESIGHTNINE_OCR_VISION_PROTOCOL", "openai_compatible")
+    monkeypatch.setenv("FORESIGHTNINE_OCR_VISION_API_KEY", "k")
+    monkeypatch.delenv("FORESIGHTNINE_OCR_VISION_ANTHROPIC_VERSION", raising=False)
+    oai_engine = VisionModelEngine.from_environment()
+    assert oai_engine is not None and oai_engine.available() and oai_engine.protocol == "openai_compatible"
+
+
+def test_vision_engine_openai_compatible_request_usage_errors_and_cache(tmp_path, caplog):
+    seen = []
+
+    def transport(method, url, headers, body, timeout, **kwargs):
+        seen.append({"method": method, "url": url, "headers": dict(headers), "body": json.loads(body), "timeout": timeout})
+        reply = {
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": "Revenue | 4,215\nNet | 12"},
+                "finish_reason": "stop",
+            }],
+            "usage": {"prompt_tokens": 1200, "completion_tokens": 35, "total_tokens": 1235},
+        }
+        return BinaryHttpResponse(200, json.dumps(reply).encode(), {})
+
+    engine = VisionModelEngine(
+        base_url="https://vision.example/v1",
+        model="vision-oai-model",
+        api_key="sk-secret-oai-key",
+        allowlist="vision.example:443",
+        max_output_tokens=2048,
+        protocol="openai_compatible",
+        transport=transport,
+    )
+    png = b"\x89PNG-fake-openai-image"
+    with caplog.at_level(logging.DEBUG):
+        result = engine.ocr(png, langs="eng", timeout=20)
+    assert result.error is None and result.text == "Revenue | 4,215\nNet | 12"
+    assert result.usage == {"input_tokens": 1200, "output_tokens": 35}
+    assert result.engine == "vision_model" and result.engine_version == "vision-oai-model"
+    assert seen[0]["method"] == "POST" and seen[0]["url"] == "https://vision.example/v1/chat/completions"
+    assert seen[0]["headers"]["Authorization"] == "Bearer sk-secret-oai-key"
+    assert "x-api-key" not in seen[0]["headers"] and "anthropic-version" not in seen[0]["headers"]
+    content = seen[0]["body"]["messages"][0]["content"]
+    img_part = next(part for part in content if part["type"] == "image_url")
+    assert img_part["image_url"]["url"] == "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+    assert "verbatim" in next(part for part in content if part["type"] == "text")["text"]
+    assert "sk-secret-oai-key" not in caplog.text
+
+    # Error handling: length truncation preserves usage, HTTP 500, empty content.
+    def reply(status, payload):
+        return VisionModelEngine(
+            base_url="https://vision.example/v1/chat/completions",
+            model="vision-oai-model",
+            api_key="sk-secret-oai-key",
+            allowlist="vision.example:443",
+            max_output_tokens=2048,
+            protocol="openai_compatible",
+            transport=lambda *a, **k: BinaryHttpResponse(status, json.dumps(payload).encode(), {}),
+        )
+
+    truncated = reply(200, {
+        "choices": [{"message": {"content": "partial"}, "finish_reason": "length"}],
+        "usage": {"prompt_tokens": 50, "completion_tokens": 2048},
+    }).ocr(b"p", langs="eng", timeout=5)
+    assert truncated.error == "output_truncated" and truncated.usage == {"input_tokens": 50, "output_tokens": 2048}
+    assert reply(500, {}).ocr(b"p", langs="eng", timeout=5).error == "http_500"
+    assert reply(200, {"choices": [{"message": {"content": ""}, "finish_reason": "stop"}]}).ocr(b"p", langs="eng", timeout=5).error == "empty_response"
+
+    # OcrUsageHooks + OcrCache integration: second run hits cache without calling transport or reserving.
+    from hashlib import sha256
+    cache = OcrCache(tmp_path / "ocr-cache")
+    hooks, log = recording_hooks("op:ocr:oai")
+    png_hash = sha256(png).hexdigest()
+    first = research_ocr._run_vision(engine, png, png_hash, "eng", 20.0, cache, hooks, 1)
+    second = research_ocr._run_vision(engine, png, png_hash, "eng", 20.0, cache, hooks, 2)
+    assert first.error is None and first.cached is False and first.usage == {"input_tokens": 1200, "output_tokens": 35}
+    assert second.error is None and second.cached is True and second.usage is None and second.text == first.text
+    assert len(seen) == 2  # 1 direct ocr() call + 1 uncached _run_vision call
+    assert [entry[0] for entry in log] == ["reserve", "settle"]
+    assert log[1][2] == 1235
+
 
 # ---- merge --------------------------------------------------------------------------------------
 

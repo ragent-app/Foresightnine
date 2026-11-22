@@ -298,7 +298,7 @@ _RATE_LEVEL_POINTS = re.compile(
     rf"(?:interest\s+rate|federal\s+funds\s+rate|target)\s+(?:target\s+)?range)"
     rf"(?P<between>[^。！？.!?;；\n]{{0,48}}?)(?P<range>{_RATE_NUMBER}\s*(?:至|到|to|–|—)\s*{_RATE_NUMBER})\s*(?:[个個]?百分[点點]|percentage\s+points?)",
     re.IGNORECASE)
-_RATE_CHANGE = re.compile(r"上[调調]|下[调調]|上升|下降|扩大|缩小|增加|減少|减少|升高|降低|[调調]整|"
+_RATE_CHANGE = re.compile(r"上[调調]|下[调調]|上升|下降|扩大|缩小|增加|減少|减少|升高|降低|回落|收窄|下滑|下跌|上涨|上漲|增长|增長|[调調]整|"
                           r"\b(?:adjust|increase|decrease|narrow|widen|change|cut|rise|raise|lower)\w*\b", re.IGNORECASE)
 
 
@@ -764,15 +764,52 @@ _PERIOD_RELATIVE_RATE = re.compile(
 _METRIC_PERCENT_CLAIM = re.compile(
     r"\b(?P<metric>GDP|GDI)(?:['’]s)?\s+(?:(?:grew|rose|increased|was|is|of)\s+)?"
     r"(?:only\s+)?(?P<value>\d+(?:\.\d+)?)\s*(?:percent\b|%)", re.IGNORECASE)
+_EN_DIRECTION_UP = frozenset({'increased', 'rose', 'grew', 'expanded', 'widened', 'climbed', 'surged', 'rebounded'})
+_EN_DIRECTION_DOWN = frozenset({'decreased', 'fell', 'declined', 'dropped', 'narrowed', 'shrank', 'contracted'})
+_ZH_DIRECTION_UP = ('增长', '增長', '上升', '扩大', '擴大', '上涨', '上漲', '提高', '增加', '提升', '回升', '攀升')
+_ZH_DIRECTION_DOWN = ('下降', '下滑', '减少', '減少', '收窄', '回落', '下跌', '降低', '缩小', '縮小', '萎缩', '萎縮', '收缩', '收縮')
+_ZH_DIRECTION_UP_SET = frozenset(_ZH_DIRECTION_UP)
+_EN_DIRECTION_PATTERN = '|'.join(sorted(_EN_DIRECTION_UP | _EN_DIRECTION_DOWN, key=len, reverse=True))
+_ZH_DIRECTION_PATTERN = '|'.join(sorted((*_ZH_DIRECTION_UP, *_ZH_DIRECTION_DOWN), key=len, reverse=True))
+
 _EXPLICIT_PERCENT_CHANGE = re.compile(
-    r"\b(?P<subject>[A-Za-z][A-Za-z0-9'-]*(?:\s+[A-Za-z][A-Za-z0-9'-]*){0,2})\s+"
-    r"(?P<direction>increased|rose|grew|decreased|fell|declined|dropped)\s+"
-    r"(?:by\s+)?(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>percentage\s+points?\b|percent\b|%)", re.IGNORECASE)
+    rf"\b(?P<subject>[A-Za-z][A-Za-z0-9'-]*(?:\s+[A-Za-z][A-Za-z0-9'-]*){{0,2}})\s+"
+    rf"(?P<direction>{_EN_DIRECTION_PATTERN})\s+"
+    rf"(?:by\s+)?(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>percentage\s+points?\b|percent\b|%)", re.IGNORECASE)
+_ZH_EXPLICIT_PERCENT_CHANGE = re.compile(
+    rf"(?P<subject>(?:(?<![A-Za-z0-9])[A-Za-z][A-Za-z0-9'-]*|[\u4e00-\u9fff]{{2,12}}))\s*"
+    rf"(?P<modifier>同比|环比|環比)?\s*"
+    rf"(?P<direction>{_ZH_DIRECTION_PATTERN})\s*"
+    rf"(?:了|约|約|大约|大約)?\s*"
+    rf"(?P<value>\d+(?:\.\d+)?)\s*"
+    rf"(?P<unit>[个個]?百分[点點]|%|％)")
+_ZH_SUBJECT_NON_ENTITY = frozenset({
+    '同比', '环比', '環比', '其中', '分别', '分別', '各自', '两者', '兩者', '二者', '两项', '兩項',
+    '约', '約', '大约', '大約', '并未', '並未', '没有', '沒有', '并非', '並非', '不是', '不能', '无法', '無法',
+})
+_ZH_SUBJECT_BOUNDARY = re.compile(r"(?:的|为|為|是|在|较|較|比|和|与|與|及|或|但|而|且|并|並|其中)")
+_ZH_TIGHT_NEGATION = re.compile(r"(?:不(?:会|會|再|能|应|應)?|未(?:曾|必)?|没|沒|非)\s*$")
+
+
+def _clean_zh_subject(raw: str, text: str, subject_start: int) -> str | None:
+    subject = raw.strip()
+    if subject_start > 0 and text[subject_start - 1].isdigit() and subject[:1] in {'年', '月', '日'}:
+        subject = subject[1:].strip()
+    if not subject:
+        return None
+    if subject.isascii():
+        folded = subject.casefold()
+        return None if folded in {'the', 'a', 'an'} else folded
+    parts = _ZH_SUBJECT_BOUNDARY.split(subject)
+    subject = parts[-1].strip()
+    if len(subject) < 2 or subject in _ZH_SUBJECT_NON_ENTITY:
+        return None
+    return subject.casefold()
 
 
 def _explicit_percent_changes(text: str) -> list[tuple[str, str, Decimal, str, str]]:
-    """Extract only simple, explicit English metric-direction-value phrases."""
-    output = []
+    """Extract simple, explicit English and Chinese metric-direction-value phrases."""
+    matches: list[tuple[int, tuple[str, str, Decimal, str, str]]] = []
     for match in _EXPLICIT_PERCENT_CHANGE.finditer(text):
         if _COMPONENT_NEGATION.search(text[max(0, match.start()-30):match.start()]):
             continue
@@ -781,12 +818,28 @@ def _explicit_percent_changes(text: str) -> list[tuple[str, str, Decimal, str, s
             subject.pop(0)
         if not subject:
             continue
-        direction = 'up' if match.group('direction').casefold() in {'increased','rose','grew'} else 'down'
+        direction = 'up' if match.group('direction').casefold() in _EN_DIRECTION_UP else 'down'
         unit = 'percentage_points' if match.group('unit').casefold().startswith('percentage') else 'percent'
-        output.append((' '.join(subject), direction, Decimal(match.group('value')), unit, match.group(0)))
-        if len(output) == 20:
-            break
-    return output
+        matches.append((match.start(), (' '.join(subject), direction, Decimal(match.group('value')), unit, match.group(0))))
+    for match in _ZH_EXPLICIT_PERCENT_CHANGE.finditer(text):
+        pre_match = text[max(0, match.start() - 30):match.start()]
+        pre_verb = text[max(0, match.start('direction') - 12):match.start('direction')]
+        if (_COMPONENT_NEGATION.search(pre_match) or _COMPONENT_NEGATION.search(pre_verb) or
+                _ZH_TIGHT_NEGATION.search(pre_verb)):
+            continue
+        subject = _clean_zh_subject(match.group('subject'), text, match.start('subject'))
+        if not subject:
+            continue
+        modifier = match.group('modifier')
+        if modifier:
+            norm_mod = '环比' if modifier in {'环比', '環比'} else modifier
+            subject = f"{subject} {norm_mod}"
+        direction = 'up' if match.group('direction') in _ZH_DIRECTION_UP_SET else 'down'
+        raw_unit = match.group('unit')
+        unit = 'percentage_points' if '百分' in raw_unit else 'percent'
+        matches.append((match.start(), (subject, direction, Decimal(match.group('value')), unit, match.group(0))))
+    matches.sort(key=lambda item: item[0])
+    return [entry for _, entry in matches[:20]]
 
 
 def _explicit_quarters(text: str) -> list[tuple[str, tuple[int, int]]]:
@@ -814,16 +867,16 @@ _BOTH_NARROW_DEFICIT = re.compile(
     r"|(?:两者|兩者|二者|两项|兩項)(?:变化|變化|变动|變動)?(?:均|都|皆|都会|都會|均会|均會)?"
     r"[^。！？；;]{0,14}?(?:(?:缩小|縮小|收窄|减少|減少)[^。！？；;]{0,8}?(?:总|總|总体|總體|整体|整體)?(?:贸易|貿易)?逆差"
     r"|(?:总|總|总体|總體|整体|整體)?(?:贸易|貿易)?逆差[^。！？；;]{0,8}?(?:缩小|縮小|收窄|减少|減少))", re.IGNORECASE)
-_GOODS_DEFICIT_FALL = re.compile(r"\b(?:decrease|decline|fall|reduction)\s+(?:in\s+)?(?:the\s+)?goods\s+deficit\b|\bgoods\s+deficit\s+(?:fell|decreased|declined|narrowed)\b|(?:商品|货物|貨物)逆差(?:下降|减少|減少|收窄)", re.IGNORECASE)
-_SERVICES_SURPLUS_FALL = re.compile(r"\b(?:decrease|decline|fall|reduction)\s+(?:in\s+)?(?:the\s+)?services\s+surplus\b|\bservices\s+surplus\s+(?:fell|decreased|declined|shrank)\b|(?:服务|服務)顺差(?:下降|减少|減少|收窄)", re.IGNORECASE)
+_GOODS_DEFICIT_FALL = re.compile(r"\b(?:decrease|decline|fall|reduction)\s+(?:in\s+)?(?:the\s+)?goods\s+deficit\b|\bgoods\s+deficit\s+(?:fell|decreased|declined|narrowed)\b|(?:商品|货物|貨物)逆差(?:下降|减少|減少|收窄|下滑|回落|缩小|縮小)", re.IGNORECASE)
+_SERVICES_SURPLUS_FALL = re.compile(r"\b(?:decrease|decline|fall|reduction)\s+(?:in\s+)?(?:the\s+)?services\s+surplus\b|\bservices\s+surplus\s+(?:fell|decreased|declined|shrank)\b|(?:服务|服務)(?:顺|順)差(?:下降|减少|減少|收窄|下滑|回落|缩小|縮小)", re.IGNORECASE)
 _BOTH_RAISE_PROFIT = re.compile(
     r"\bboth(?:\s+of\s+which|\s+changes?)?\s+(?:(?:would|will|should|can|could)\s+)?"
     r"(?:increase|raise|improve|boost)\s+(?:the\s+)?operating\s+(?:profit|income)\b"
     r"|(?:两者|兩者|二者|两项|兩項)(?:变化|變化|变动|變動)?(?:均|都|皆|都会|都會|均会|均會)?"
     r"[^。！？；;]{0,14}?(?:(?:提高|提升|增加|推动|推動)[^。！？；;]{0,8}?(?:营业|營業|经营|經營)(?:利润|利潤)"
     r"|(?:营业|營業|经营|經營)(?:利润|利潤)[^。！？；;]{0,8}?(?:上升|增长|增長|增加|提高))", re.IGNORECASE)
-_REVENUE_FALL = re.compile(r"\b(?:revenues?|sales)\s+(?:fell|decreased|declined|dropped)\b|\b(?:decrease|decline|fall|reduction)\s+in\s+(?:the\s+)?(?:revenues?|sales)\b|(?:营收|營收|收入)(?:下降|减少|減少|下滑)", re.IGNORECASE)
-_OPERATING_EXPENSE_FALL = re.compile(r"\boperating\s+expenses?\s+(?:fell|decreased|declined|dropped)\b|\b(?:decrease|decline|fall|reduction)\s+in\s+(?:the\s+)?operating\s+expenses?\b|(?:营业|營業|经营|經營)费用(?:下降|减少|減少|下滑)|(?:營業|經營)費用(?:下降|減少|下滑)", re.IGNORECASE)
+_REVENUE_FALL = re.compile(r"\b(?:revenues?|sales)\s+(?:fell|decreased|declined|dropped)\b|\b(?:decrease|decline|fall|reduction)\s+in\s+(?:the\s+)?(?:revenues?|sales)\b|(?:营收|營收|营业收入|營業收入|收入)(?:下降|减少|減少|下滑|回落|下跌)", re.IGNORECASE)
+_OPERATING_EXPENSE_FALL = re.compile(r"\boperating\s+expenses?\s+(?:fell|decreased|declined|dropped)\b|\b(?:decrease|decline|fall|reduction)\s+in\s+(?:the\s+)?operating\s+expenses?\b|(?:营业|營業|经营|經營)(?:费用|費用)(?:下降|减少|減少|下滑|回落|下跌)", re.IGNORECASE)
 _COMPONENT_NEGATION = re.compile(r"\b(?:not|neither|incorrect|false|deny|denies)\b|并非|並非|并不|並不|不认为|不認為|不是|没有|沒有|不能|未必|无法|無法|并未|並未", re.IGNORECASE)
 _REVISION_DIRECTION = re.compile(r"\b(?:downward|upward)\s+revision\b|\brevis(?:ed|ion)\s+(?:up|down|upwards?|downwards?)\b|(?:向下|向上|下调|下調|上调|上調)(?:修订|修訂|修正|调整|調整)|(?:修订|修訂|修正)(?:向下|向上|下调|下調|上调|上調)", re.IGNORECASE)
 _REVISION_CONTRADICTION = re.compile(r"\b(?:contrary\s+to|contradict(?:s|ed)?|refut(?:e|es|ed))\b|(?:反驳|反駁|与.{0,12}相矛盾|與.{0,12}相矛盾)", re.IGNORECASE)

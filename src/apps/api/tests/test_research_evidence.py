@@ -1180,3 +1180,39 @@ def test_truncated_previous_findings_omission_cue_is_limited_and_recomputed():
     assert 'prior_findings_scope_unverified' not in items[0]
     result[0]['text'] = 'The dissenters preferred a cut.'
     assert not flag_truncated_previous_findings(result)[0].get('prior_findings_scope_unverified')
+
+
+def test_chinese_direction_verbs_detect_opposite_polarity_and_respect_negation():
+    from app.research_evidence import flag_component_direction
+    pairs = [
+        ('2026年第一季度营收下降5%。', '2026年第一季度营收增长5%。'),
+        ('公司净利润下滑3.2%。', '公司净利润上升3.2%。'),
+        ('毛利率收窄2个百分点。', '毛利率扩大2个百分点。'),
+        ('消费支出减少4.5%。', '消费支出上升4.5%。'),
+        ('核心通胀回落0.3个百分点。', '核心通胀上涨0.3个百分点。'),
+        ('股价下跌8%。', '股价上涨8%。'),
+        ('GDP decreased 5 percent in Q1 2026.', '2026年Q1 GDP增长5%。'),
+    ]
+    for quote, claim_text in pairs:
+        source = ResearchSource(
+            source_id='s', owner_id='owner', title='Report', text=quote, kind='user_supplied',
+            obtained_at=datetime.now(timezone.utc), content_sha256='hash',
+            permissions=SourcePermissions(store=True, display=True, model_input=True),
+        )
+        cite = {'source_id': 's', 'quotation': quote, 'location': {'character_start': 0, 'character_end': len(quote)}}
+        res = flag_component_direction([{'text': claim_text, 'citations': [cite]}], [source])[0]
+        assert res['balance_direction_warnings'][0]['basis'] == 'quoted_direction_conflict', (quote, claim_text)
+        # Same polarity produces no conflict warning
+        same_dir = flag_component_direction([{'text': quote, 'citations': [cite]}], [source])[0]
+        assert not same_dir.get('balance_direction_warnings')
+
+    # Negations and YoY-vs-QoQ distinctions must not produce false direction warnings
+    zh_source_text = '公司营收同比下降5%。'
+    zh_source = ResearchSource(
+        source_id='s', owner_id='owner', title='Report', text=zh_source_text, kind='user_supplied',
+        obtained_at=datetime.now(timezone.utc), content_sha256='hash',
+        permissions=SourcePermissions(store=True, display=True, model_input=True),
+    )
+    zh_cite = {'source_id': 's', 'quotation': zh_source_text, 'location': {'character_start': 0, 'character_end': len(zh_source_text)}}
+    for safe_claim in ('并非公司营收同比增长5%。', '公司营收没有同比增长5%。', '公司营收未同比增长5%。', '公司营收环比增长5%。'):
+        assert not flag_component_direction([{'text': safe_claim, 'citations': [zh_cite]}], [zh_source])[0].get('balance_direction_warnings')

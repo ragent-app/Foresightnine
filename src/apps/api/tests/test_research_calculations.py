@@ -479,3 +479,103 @@ def test_monetary_scale_cannot_be_inferred_from_a_matching_bare_number():
     assert not monetary_scale_not_in_quotation({**item,'unit':'USD millions','quotation':'Revenue was USD 100 million.'})
     assert not monetary_scale_not_in_quotation({**item,'unit':'percent'})
     assert not monetary_scale_not_in_quotation({**item,'source_id':None})
+
+
+def test_expanded_formulas_cagr_ratio_sum_subtract_weighted_average_and_ttm():
+    from app.research_calculations import (
+        CalculationError,
+        CalculationRequest,
+        NumericFact,
+        calculate,
+        calculation_input_status,
+        calculation_result_status,
+    )
+
+    f_start = NumericFact(fact_id='f0', value=Decimal('100'), unit='USD millions', currency='USD', period='FY2022')
+    f_end = NumericFact(fact_id='f3', value=Decimal('133.1'), unit='USD millions', currency='USD', period='FY2025')
+    cagr = calculate(CalculationRequest(formula='cagr', first=f_end, second=f_start, periods=Decimal('3')))
+    assert cagr['formula_id'] == 'cagr'
+    assert cagr['value'] == '10.00'
+    assert cagr['unit'] == 'percent'
+    assert cagr['periods'] == '3'
+    assert 'scale_adjustments' not in cagr
+
+    # Cross-order CAGR fails closed.
+    with pytest.raises(CalculationError, match='later than its baseline'):
+        calculate(CalculationRequest(formula='cagr', first=f_start, second=f_end, periods=Decimal('3')))
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError, match='positive'):
+        CalculationRequest(formula='cagr', first=f_end, second=f_start, periods=Decimal('0'))
+
+    # Ratio rejects non-positive denominator and works accurately with differing/matching units.
+    num = NumericFact(fact_id='num', value=Decimal('35'), unit='USD per share', currency='USD', period='FY2025')
+    den = NumericFact(fact_id='den', value=Decimal('2.5'), unit='USD per share', currency='USD', period='FY2025')
+    ratio = calculate(CalculationRequest(formula='ratio', first=num, second=den))
+    assert ratio['value'] == '14.00'
+    assert ratio['unit'] == 'ratio'
+    zero_den = NumericFact(fact_id='zden', value=Decimal('0'), unit='USD per share', currency='USD', period='FY2025')
+    with pytest.raises(CalculationError, match='positive denominator'):
+        calculate(CalculationRequest(formula='ratio', first=num, second=zero_den))
+
+    # Multi-fact sum, subtract, weighted_average.
+    q1 = NumericFact(fact_id='q1', value=Decimal('10'), unit='USD millions', currency='USD', period='2025-Q1')
+    q2 = NumericFact(fact_id='q2', value=Decimal('12'), unit='USD millions', currency='USD', period='2025-Q2')
+    q3 = NumericFact(fact_id='q3', value=Decimal('15'), unit='USD millions', currency='USD', period='2025-Q3')
+    q4 = NumericFact(fact_id='q4', value=Decimal('23'), unit='USD millions', currency='USD', period='2025-Q4')
+
+    s_res = calculate(CalculationRequest(formula='sum', facts=[q1, q2, q3]))
+    assert s_res['value'] == '37.00'
+    assert len(s_res['inputs']) == 3
+
+    sub_res = calculate(CalculationRequest(formula='subtract', facts=[q4, q1, q2]))
+    assert sub_res['value'] == '1.00'
+
+    w_res = calculate(CalculationRequest(formula='weighted_average', facts=[q1, q4], weights=[Decimal('1'), Decimal('3')]))
+    assert w_res['value'] == '19.75'
+    assert w_res['weights'] == ['1', '3']
+
+    ttm_res = calculate(CalculationRequest(formula='ttm_sum', facts=[q1, q2, q3, q4]))
+    assert ttm_res['value'] == '60.00'
+    assert ttm_res['unit'] == 'USD millions'
+
+    # Non-consecutive quarters fail closed for ttm_sum.
+    q_skip = NumericFact(fact_id='q5', value=Decimal('30'), unit='USD millions', currency='USD', period='2026-Q2')
+    with pytest.raises(CalculationError, match='4 consecutive quarterly'):
+        calculate(CalculationRequest(formula='ttm_sum', facts=[q1, q2, q3, q_skip]))
+
+    # Verification helper recognizes matched inputs & results across new formulas.
+    fact_dicts = [{'fact_id': f.fact_id, 'value': str(f.value), 'unit': f.unit, 'currency': f.currency, 'period': f.period}
+                  for f in (f_start, f_end, q1, q2, q3, q4)]
+    assert calculation_input_status(cagr, fact_dicts) == 'matched'
+    assert calculation_result_status(cagr) == 'matched'
+    assert calculation_input_status(ttm_res, fact_dicts) == 'matched'
+    assert calculation_result_status(ttm_res) == 'matched'
+
+
+def test_same_currency_scale_alignment_and_cross_currency_fail_closed():
+    from app.research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, calculation_result_status
+
+    f_bn = NumericFact(fact_id='fb', value=Decimal('2'), unit='USD billions', currency='USD', period='FY2025')
+    f_mn = NumericFact(fact_id='fm', value=Decimal('500'), unit='USD millions', currency='USD', period='FY2025')
+    sum_aligned = calculate(CalculationRequest(formula='sum', facts=[f_bn, f_mn]))
+    assert sum_aligned['value'] == '2500.00'
+    assert sum_aligned['unit'] == 'USD millions'
+    assert sum_aligned['currency'] == 'USD'
+    assert len(sum_aligned['scale_adjustments']) == 1
+    assert sum_aligned['scale_adjustments'][0]['fact_id'] == 'fb'
+    assert sum_aligned['scale_adjustments'][0]['multiplier'] == '1000'
+    assert calculation_result_status(sum_aligned) == 'matched'
+
+    # Chinese yuan scale alignment: 亿元 + 万元.
+    c_later = NumericFact(fact_id='cl', value=Decimal('2'), unit='亿元', currency='CNY', period='FY2025')
+    c_base = NumericFact(fact_id='cb', value=Decimal('10000'), unit='万元', currency='CNY', period='FY2024')
+    growth_zh = calculate(CalculationRequest(formula='growth_percent', first=c_later, second=c_base))
+    assert growth_zh['value'] == '100.00'
+    assert len(growth_zh['scale_adjustments']) == 1
+    assert calculation_result_status(growth_zh) == 'matched'
+
+    # Cross-currency remains rejected.
+    f_eur = NumericFact(fact_id='fe', value=Decimal('500'), unit='EUR millions', currency='EUR', period='FY2025')
+    with pytest.raises(CalculationError, match='must match'):
+        calculate(CalculationRequest(formula='sum', facts=[f_bn, f_eur]))
+

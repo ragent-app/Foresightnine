@@ -20,9 +20,10 @@ from .research_fetch import _TextParser
 from .research_calculations import parse_annual_period_end, quotation_is_inside_table_row, quotation_is_table_row
 from .research_sources import ResearchSource
 from .research_uploads import MAX_PDF_BYTES, MAX_TEXT_BYTES, _UploadedHtmlParser
-from .research_xbrl import resolve_inline_annual_facts
+from .research_xbrl import resolve_inline_facts
 
 _TABLE_TRACE_WORKERS = BoundedSemaphore(2)
+MAX_ROWSPAN = 10
 
 
 class _TraceMixin:
@@ -47,25 +48,38 @@ class _TraceMixin:
         if tag == "table":
             self.table_depth += 1
             if self.table_depth == 1:
-                self.table = {"invalid": False, "closed": False, "previous": deque(maxlen=15), "row_count": 0}
+                self.table = {
+                    "invalid": False, "closed": False, "previous": deque(maxlen=15), "row_count": 0,
+                    "occupied": {}, "has_rowspan": False, "expected_width": None, "width_mismatch": False,
+                }
             elif self.table is not None:
                 self.table["invalid"] = True
         elif tag == "tr" and self.table_depth == 1 and self.table is not None:
             if self.row is not None:
                 self.table["invalid"] = True
-            self.row = {"part_start": len(self.parts) - 1, "cells": [], "width": 0, "invalid": False}
+            self.row = {
+                "part_start": len(self.parts) - 1, "cells": [], "width": 0, "col": 0,
+                "occupied": dict(self.table["occupied"]), "next_occupied": {}, "invalid": False,
+            }
         elif tag in {"td", "th"} and self.table_depth == 1 and self.row is not None:
             if self.cell is not None:
                 self.row["invalid"] = True
             spans = [value for name, value in attrs if name == "colspan"]
             rowspans = [value for name, value in attrs if name == "rowspan"]
             span = spans[0] if len(spans) == 1 else None
-            if (len(spans) > 1 or len(rowspans) > 1 or
-                    (span is not None and (not span.isascii() or not span.isdigit() or not 1 <= int(span) <= 99)) or
-                    any(value is None or not value.isascii() or not value.isdigit() or int(value) != 1 for value in rowspans)):
+            rspan = rowspans[0] if len(rowspans) == 1 else None
+            bad_colspan = (len(spans) > 1 or
+                           (span is not None and (not span.isascii() or not span.isdigit() or not 1 <= int(span) <= 99)))
+            bad_rowspan = (len(rowspans) > 1 or
+                           (rspan is not None and (not rspan.isascii() or not rspan.isdigit() or not 1 <= int(rspan) <= MAX_ROWSPAN)))
+            if bad_colspan or bad_rowspan:
                 self.row["invalid"] = True
-            width = int(span) if span is not None and span.isascii() and span.isdigit() and 1 <= int(span) <= 99 else 1
-            self.cell = {"part_start": len(self.parts), "span": width, "kind": tag, "inline_facts": [], "inline_invalid": False}
+            width = int(span) if not bad_colspan and span is not None else 1
+            height = int(rspan) if not bad_rowspan and rspan is not None else 1
+            self.cell = {
+                "part_start": len(self.parts), "span": width, "rowspan": height,
+                "kind": tag, "inline_facts": [], "inline_invalid": False,
+            }
         elif tag == "ix:nonfraction" and self.table_depth == 1 and self.cell is not None:
             allowed = {"name", "contextref", "unitref", "format", "scale", "decimals", "sign", "id"}
             pairs = [(name, value) for name, value in attrs if name in allowed]
@@ -87,16 +101,27 @@ class _TraceMixin:
             elif tag in {"td", "th"} and self.cell is not None and self.row is not None:
                 content = "".join(self.parts[self.cell["part_start"]:]).strip()
                 width = self.cell["span"]
+                height = self.cell["rowspan"]
                 if (len(content) > 1000 or "|" in content or "\n" in content or
                         re.search(r"\[(?:colspan|rowspan)=", content, re.IGNORECASE)):
                     self.row["invalid"] = True
                 if self.inline is not None:
                     self.cell["inline_invalid"] = True
                     self.inline = None
-                self.row["cells"].append({"start": self.row["width"], "end": self.row["width"] + width,
+                while self.row["col"] in self.row["occupied"]:
+                    self.row["col"] += 1
+                col = self.row["col"]
+                if any(c in self.row["occupied"] for c in range(col, col + width)):
+                    self.row["invalid"] = True
+                self.row["cells"].append({"start": col, "end": col + width,
                     "text": content, "kind": self.cell["kind"],
                     **({"inline_facts": self.cell["inline_facts"]} if self.cell["inline_facts"] and not self.cell["inline_invalid"] else {})})
-                self.row["width"] += width
+                if height > 1:
+                    self.table["has_rowspan"] = True
+                    for c in range(col, col + width):
+                        self.row["next_occupied"][c] = height - 1
+                self.row["col"] = col + width
+                self.row["width"] = max(self.row["col"], max(self.row["occupied"]) + 1 if self.row["occupied"] else 0)
                 if self.row["width"] > 120 or len(self.row["cells"]) > 120:
                     self.row["invalid"] = True
                 self.cell = None
@@ -104,22 +129,37 @@ class _TraceMixin:
                 if self.cell is not None:
                     self.row["invalid"] = True
                     self.cell = None
+                for c, rem in self.row["occupied"].items():
+                    if rem > 1:
+                        if c in self.row["next_occupied"]:
+                            self.row["invalid"] = True
+                        else:
+                            self.row["next_occupied"][c] = rem - 1
+                row_width = max(self.row["col"], max(self.row["occupied"]) + 1 if self.row["occupied"] else 0)
+                self.row["width"] = row_width
+                self.table["occupied"] = self.row["next_occupied"]
+                if self.table["expected_width"] is None:
+                    self.table["expected_width"] = row_width
+                elif row_width != self.table["expected_width"]:
+                    self.table["width_mismatch"] = True
                 # _TextParser emits the final row delimiter at the closing tag.
                 raw = "".join(self.parts[self.row["part_start"]:]) + " |\n"
                 row_text = "\n".join(line.strip() for line in raw.splitlines() if line.strip())
-                item = {"text": row_text, "cells": self.row["cells"], "width": self.row["width"],
+                item = {"text": row_text, "cells": self.row["cells"], "width": row_width,
                         "invalid": self.row["invalid"] or "\n" in row_text or not self.row["cells"]}
-                # A rowspan or malformed row outside the returned window can
-                # still alter the columns inside it. Reject the whole table.
-                if item["invalid"]:
+                if item["invalid"] or (self.table["has_rowspan"] and self.table["width_mismatch"]):
                     self.table["invalid"] = True
                 if row_text == self.target:
                     self.matches.append((self.table, [*self.table["previous"], item], self.table["row_count"]))
                 self.table["previous"].append(item)
                 self.table["row_count"] += 1
                 self.row = None
+            elif tag in {"thead", "tbody", "tfoot"} and self.table is not None:
+                if self.table["occupied"]:
+                    self.table["invalid"] = True
             elif tag == "table" and self.table is not None:
-                if self.row is not None or self.cell is not None:
+                if (self.row is not None or self.cell is not None or self.table["occupied"] or
+                        (self.table["has_rowspan"] and self.table["width_mismatch"])):
                     self.table["invalid"] = True
                 self.table["closed"] = True
         if self.visible() and tag == "table" and self.table_depth:
@@ -175,11 +215,17 @@ def trace_html_table(source: ResearchSource, start: int, end: int) -> dict | Non
             return None
         while len(rows) > 1 and sum(len(row["text"]) for row in rows) > 10_000:
             rows.pop(0)
-        xbrl_facts = resolve_inline_annual_facts(html, rows)
+        all_xbrl_facts = resolve_inline_facts(html, rows)
+        xbrl_facts = [
+            {k: v for k, v in item.items() if k != "period_kind"}
+            for item in all_xbrl_facts
+            if item.get("period_kind") == "annual"
+        ]
         return {"source_sha256": source.response_sha256, "row_start": line_start, "row_end": line_end,
                 "truncated_before": prior_rows > len(rows) - 1,
                 "rows": [{"text": row["text"], "width": row["width"], "cells": row["cells"]} for row in rows],
-                **({"inline_xbrl_annual_facts": xbrl_facts} if xbrl_facts else {})}
+                **({"inline_xbrl_annual_facts": xbrl_facts} if xbrl_facts else {}),
+                **({"inline_xbrl_facts": all_xbrl_facts} if all_xbrl_facts else {})}
     except (binascii.Error, UnicodeError, ValueError, RecursionError, OverflowError):
         return None
 
@@ -234,10 +280,16 @@ def annual_table_value_alignment(trace: dict, value: Decimal, period: str) -> di
     if not isinstance(width, int) or width <= 0 or any(row.get("width") != width for row in rows):
         return None
     def parse_amount(text: str) -> Decimal | None:
-        if not re.fullmatch(r"[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?", text):
+        s = text.strip()
+        neg = False
+        if re.fullmatch(r"\((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\)", s):
+            s = s[1:-1]
+            neg = True
+        elif not re.fullmatch(r"[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?", s):
             return None
         try:
-            return Decimal(text.replace(",", ""))
+            out = Decimal(s.replace(",", ""))
+            return -out if neg else out
         except InvalidOperation:
             return None
     values = [cell for cell in rows[-1].get("cells", []) if parse_amount(cell.get("text", "")) == value]

@@ -133,7 +133,7 @@ def test_request_ocr_without_callback_reports_ocr_unavailable(tmp_path):
     src = pdf_source(tmp_path, [scan_page(tmp_path), TEXT_PAGE])
     m = Model([turn(*request([1])), STOP])
     run(m, [src])
-    fb = json.loads(m.inputs[1][-1]['content'])
+    fb = tool_messages(m, 1)[-1]
     assert fb['status'] == 'ocr_unavailable' and fb['message']
 
 
@@ -149,7 +149,7 @@ def test_request_ocr_creates_derived_version_with_ocr_pages_and_shifted_offsets(
     saved = []
     out = run(m, [src], ocr_pages=callback(store, engines=[TesseractEngine()]),
               checkpoint=lambda s: saved.append(json.loads(json.dumps(s))))
-    fb = json.loads(m.inputs[1][-1]['content'])
+    fb = tool_messages(m, 1)[-1]
     new = store.versions[0]
     assert fb['status'] == 'completed' and fb['source_id'] == new.source_id and fb['previous_source_id'] == 'pdf'
     assert fb['pages'][0]['page'] == 1 and fb['pages'][0]['status'] == 'ocr' and fb['pages'][0]['engine'] == 'tesseract'
@@ -166,7 +166,7 @@ def test_request_ocr_creates_derived_version_with_ocr_pages_and_shifted_offsets(
     assert page_for_offset(document_pages, new_text_start) == 2
     # the old version is untouched and later outline calls resolve to the new version
     assert src.provenance['document_pages']['pages'][0][2] == 'needs_ocr' and 'Quarterly' not in src.text
-    outline = json.loads(m.inputs[2][-1]['content'])
+    outline = tool_messages(m, 2)[-1]
     assert outline['source_id'] == new.source_id and outline['source_version']['requested_source_id'] == 'pdf'
     assert outline['page_status_summary']['counts'] == {'ocr': 1, 'text': 1}
     assert outline['page_status_summary']['ocr']['pages'] == [1]
@@ -180,7 +180,7 @@ def test_read_pages_ocr_automatically_and_reads_from_new_version(tmp_path):
     store = VersionStore()
     m = Model([turn('read_pages', {'source_id': 'pdf', 'first_page': 1, 'last_page': 2, 'rationale': 'r'}, 'a'), STOP])
     out = run(m, [src], ocr_pages=callback(store, engines=[TesseractEngine()]))
-    fb = json.loads(m.inputs[1][-1]['content'])
+    fb = tool_messages(m, 1)[-1]
     new = store.versions[0]
     assert fb['source_id'] == new.source_id and fb['source_version']['requested_source_id'] == 'pdf'
     assert fb['ocr']['status'] == 'completed' and fb['ocr']['source_id'] == new.source_id
@@ -205,7 +205,7 @@ def test_read_pages_does_not_retry_pages_whose_ocr_failed(tmp_path):
                turn('read_pages', {'source_id': 'pdf', 'first_page': 2, 'last_page': 2, 'rationale': 'second'}, 'c'), STOP])
     run(m, [src], ocr_pages=failing)
     assert calls == [[2]]
-    first = json.loads(m.inputs[1][-1]['content'])
+    first = tool_messages(m, 1)[-1]
     assert first['ocr']['status'] == 'failed' and [r['status'] for r in first['page_statuses']] == ['text', 'needs_ocr']
     assert 'pages' in first['results'][0] or first['results'][0]['status'] == 'read'
 
@@ -215,7 +215,7 @@ def test_ocr_unavailable_without_original(tmp_path):
     store = VersionStore()
     m = Model([turn(*request([1])), STOP])
     run(m, [src], ocr_pages=callback(store, engines=[FakeEngine(text='x')]))
-    fb = json.loads(m.inputs[1][-1]['content'])
+    fb = tool_messages(m, 1)[-1]
     assert fb['status'] == 'ocr_unavailable' and fb['reason'] == 'original_not_retained'
     assert 'not retained' in fb['message'] and not store.versions
 
@@ -229,7 +229,7 @@ def test_original_from_blob_store_when_no_inline_pdf(tmp_path, monkeypatch):
     store = VersionStore()
     m = Model([turn(*request([1])), STOP])
     run(m, [src], ocr_pages=callback(store, engines=[TesseractEngine()]))
-    assert json.loads(m.inputs[1][-1]['content'])['status'] == 'completed'
+    assert tool_messages(m, 1)[-1]['status'] == 'completed'
     assert store.versions[0].provenance['document_pages']['original_blob_sha256']
 
 
@@ -238,7 +238,7 @@ def test_request_for_readable_pages_changes_nothing(tmp_path):
     store = VersionStore()
     m = Model([turn(*request([1])), STOP])
     run(m, [src], ocr_pages=callback(store, engines=[FakeEngine(text='x')]))
-    fb = json.loads(m.inputs[1][-1]['content'])
+    fb = tool_messages(m, 1)[-1]
     assert fb['status'] == 'unchanged' and fb['pages'][0]['note'] == 'already readable' and not store.versions
 
 
@@ -259,7 +259,7 @@ def test_duplicate_request_ocr_reuses_new_version_without_running_again(tmp_path
     m = Model([turn(*request([1], 'first')), turn(*request([1], 'second wording')),
                turn(*request([1], 'third'), ) , STOP])
     run(m, [src], ocr_pages=callback(store, engines=[Counting()]))
-    first, second = (json.loads(m.inputs[i][-1]['content']) for i in (1, 2))
+    first, second = (tool_messages(m, i)[-1] for i in (1, 2))
     assert first['status'] == 'completed' and len(engine_calls) == 1 and len(store.versions) == 1
     assert second['status'] == 'duplicate_action' and second['reused'] is True
     assert second['source_id'] == first['source_id'] == store.versions[0].source_id
@@ -271,7 +271,7 @@ def test_second_request_on_old_id_continues_from_latest_version(tmp_path):
     store = VersionStore()
     m = Model([turn(*request([1], 'one')), turn(*request([2], 'two')), STOP])
     run(m, [src], ocr_pages=callback(store, engines=[TesseractEngine()]))
-    second = json.loads(m.inputs[2][-1]['content'])
+    second = tool_messages(m, 2)[-1]
     assert len(store.versions) == 2 and second['previous_source_id'] == store.versions[0].source_id
     assert second['source_version']['requested_source_id'] == 'pdf'
     assert [e[2] for e in store.versions[1].provenance['document_pages']['pages']] == ['ocr', 'ocr']
@@ -303,7 +303,7 @@ def _fact_run(tmp_path, confidence):
 
 def test_fact_on_ocr_page_is_marked_and_warned_when_confidence_is_low(tmp_path):
     model, out, store = _fact_run(tmp_path, 40.0)
-    fb = json.loads(model.inputs[2][-1]['content'])
+    fb = tool_messages(model, 2)[-1]
     fact = out.facts[0]
     assert fact['extraction_method'] == 'ocr' and fact['ocr_engine'] == 'tesseract' and fact['ocr_mean_confidence'] == 40.0
     assert fact['source_id'] == store.versions[0].source_id
@@ -312,7 +312,7 @@ def test_fact_on_ocr_page_is_marked_and_warned_when_confidence_is_low(tmp_path):
 
 def test_fact_on_confident_ocr_page_is_marked_without_warning(tmp_path):
     model, out, _ = _fact_run(tmp_path, 96.0)
-    fb = json.loads(model.inputs[2][-1]['content'])
+    fb = tool_messages(model, 2)[-1]
     assert out.facts[0]['extraction_method'] == 'ocr' and 'warnings' not in fb
 
 
@@ -366,7 +366,7 @@ def test_vision_engine_disabled_without_hooks(tmp_path):
     store = VersionStore()
     m = Model([turn(*request([1])), STOP])
     run(m, [src], ocr_pages=callback(store, engines=[dead_local(), vision], usage=None))
-    fb = json.loads(m.inputs[1][-1]['content'])
+    fb = tool_messages(m, 1)[-1]
     assert fb['status'] == 'failed' and fb['pages'][0]['status'] == 'needs_ocr' and not sent and not store.versions
 
 
@@ -378,7 +378,7 @@ def test_vision_engine_reserves_and_settles_once_per_page_and_records_events(tmp
     m = Model([turn(*request([1, 2])), STOP])
     out = run(m, [src], ocr_pages=callback(store, engines=[dead_local(), vision_engine(vision_transport(sent))],
                                            usage=hooks.usage()))
-    fb = json.loads(m.inputs[1][-1]['content'])
+    fb = tool_messages(m, 1)[-1]
     assert fb['status'] == 'completed' and len(sent) == 2
     ids = ['op:ocr:pdf:p1:vision_model', 'op:ocr:pdf:p2:vision_model']
     assert sorted(e[1] for e in hooks.log if e[0] == 'reserve') == ids
@@ -441,7 +441,7 @@ def test_two_responses_of_only_repeated_ocr_requests_stop_the_run(tmp_path):
     m = Model([turn(*request([1], 'a')), turn(*request([1], 'b')), turn(*request([1], 'c'))])
     out = run(m, [src], ocr_pages=callback(VersionStore(), engines=[FakeEngine()]))
     assert out.reason == 'no_progress'
-    second = json.loads(m.inputs[2][-1]['content'])
+    second = tool_messages(m, 2)[-1]
     assert second['status'] == 'duplicate_action' and 'will stop' in second['run_notice']
 
 

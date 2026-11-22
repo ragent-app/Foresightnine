@@ -16,9 +16,11 @@ import shutil
 import subprocess
 import tempfile
 from threading import BoundedSemaphore
-from typing import Callable
+from typing import Callable, Sequence
 import xml.etree.ElementTree as ET
 
+from .research_blob_store import DocumentBlobStore, configured_blob_store, is_valid_sha256
+from .research_fetch import large_document_max_bytes
 from .research_sources import ResearchSource
 from .research_uploads import MAX_PDF_BYTES
 
@@ -26,6 +28,8 @@ GEOMETRY_METHOD = 'poppler_bbox_layout_exact_v1'
 _MAX_XML = 8_000_000
 _MAX_WORDS = 100_000
 _MAX_GROUP_LINES = 1_200
+_BLOB_VERIFY_CHUNK = 1024 * 1024
+_SUPPORTED_RETRIEVAL_METHODS = frozenset({'user_pdf', 'web_pdf'})
 _WORKERS = BoundedSemaphore(2)
 
 
@@ -94,24 +98,58 @@ def complete_sentence_line(text: str, line: GeometryLine) -> bool:
     return any(unit.kind == 'sentence' and unit.parts == ((0, fragment),) for unit in units)
 
 
-def map_geometry(xml: bytes, text: str, pdf_sha256: str) -> PdfGeometry:
+def map_geometry(
+    xml: bytes,
+    text: str,
+    pdf_sha256: str,
+    *,
+    first_page: int = 1,
+    page_spans: Sequence[Sequence[object]] | None = None,
+) -> PdfGeometry:
     """Map unique complete lines on their own page; ambiguous lines stay unknown."""
+    if type(first_page) is not int or first_page < 1:
+        raise ValueError('invalid first_page')
     if len(xml) > _MAX_XML or b'<!ENTITY' in xml.upper():
         raise ValueError('unsafe geometry')
     root = ET.fromstring(xml)
-    pages = text.split('\f')
-    starts = []
-    cursor = 0
-    for page in pages:
-        starts.append(cursor)
-        cursor += len(page) + 1
+    if page_spans is None:
+        pages = text.split('\f')
+        starts = []
+        cursor = 0
+        for page in pages:
+            starts.append(cursor)
+            cursor += len(page) + 1
+    else:
+        pages = []
+        starts = []
     result: list[GeometryLine] = []
     table_rows: list[GeometryTableRow] = []
     unmatched = 0
     count = 0
-    for page_index, page in enumerate(root.findall('.//{*}page')):
-        if page_index >= len(pages):
-            break
+    for xml_index, page in enumerate(root.findall('.//{*}page')):
+        page_index = (first_page - 1) + xml_index
+        if page_spans is not None:
+            if page_index >= len(page_spans):
+                break
+            span = page_spans[page_index]
+            p_start, p_end, p_status = span[0], span[1], span[2]
+            if (
+                type(p_start) is int
+                and type(p_end) is int
+                and p_status in {'text', 'ocr'}
+                and 0 <= p_start <= p_end <= len(text)
+            ):
+                page_text = text[p_start:p_end]
+                page_start = p_start
+            else:
+                page_text = ''
+                page_start = 0
+        else:
+            if page_index >= len(pages):
+                break
+            page_text = pages[page_index]
+            page_start = starts[page_index]
+        page_number = page_index + 1
         for line in page.findall('.//{*}line'):
             words = line.findall('.//{*}word')
             count += len(words)
@@ -136,7 +174,7 @@ def map_geometry(xml: bytes, text: str, pdf_sha256: str) -> PdfGeometry:
                 unmatched += 1
                 continue
             pattern = r'(?<!\S)' + r'[ \t]+'.join(re.escape(token) for token in tokens) + r'(?!\S)'
-            matches = re.finditer(pattern, pages[page_index])
+            matches = re.finditer(pattern, page_text)
             match = next(matches, None)
             if match is None or next(matches, None) is not None:
                 unmatched += 1
@@ -148,12 +186,12 @@ def map_geometry(xml: bytes, text: str, pdf_sha256: str) -> PdfGeometry:
                 for left, right in zip(edges, edges[1:]):
                     begin, end = left + 1, right + 1
                     cells.append((' '.join(tokens[begin:end]), boxes[begin][0], boxes[end - 1][2]))
-                table_rows.append(GeometryTableRow(page_index + 1, starts[page_index] + match.start(),
-                                                  starts[page_index] + match.end(), tuple(cells), bounds))
+                table_rows.append(GeometryTableRow(page_number, page_start + match.start(),
+                                                  page_start + match.end(), tuple(cells), bounds))
                 unmatched += 1  # A row alone is not a validated table group.
                 continue
-            result.append(GeometryLine(page_index + 1, starts[page_index] + match.start(),
-                                       starts[page_index] + match.end(), bounds))
+            result.append(GeometryLine(page_number, page_start + match.start(),
+                                       page_start + match.end(), bounds))
     return PdfGeometry(GEOMETRY_METHOD, pdf_sha256, sha256(text.encode('utf-8')).hexdigest(), tuple(result), unmatched, tuple(table_rows))
 
 
@@ -227,29 +265,111 @@ def geometry_evidence_groups(text: str, geometry: PdfGeometry) -> list[GeometryE
     return groups
 
 
-def extract_geometry(source: ResearchSource, should_stop: Callable[[], bool] | None = None) -> PdfGeometry | None:
-    """Extract an ephemeral hash-bound sidecar, without changing source text."""
-    if (source.retrieval_method != 'user_pdf' or not source.permissions.store or
-            not source.permissions.model_input or not source.original_pdf_base64 or not source.response_sha256):
+def _verified_blob_pdf(source: ResearchSource, blob_store: DocumentBlobStore | None) -> tuple[Path, str] | None:
+    provenance = source.provenance if isinstance(source.provenance, dict) else {}
+    document_pages = provenance.get('document_pages')
+    blob_digest = document_pages.get('original_blob_sha256') if isinstance(document_pages, dict) else None
+    if not blob_digest:
+        blob_digest = provenance.get('original_blob_sha256')
+    if not is_valid_sha256(blob_digest) or blob_digest != source.response_sha256:
         return None
+    store = blob_store if blob_store is not None else configured_blob_store()
+    if store is None:
+        return None
+    blob_path = store.path_for(blob_digest)
+    if blob_path is None:
+        return None
+    max_bytes = large_document_max_bytes()
+    hasher = sha256()
+    total_bytes = 0
+    first_chunk = True
     try:
-        raw = base64.b64decode(source.original_pdf_base64, validate=True)
-    except (ValueError, binascii.Error):
+        with blob_path.open('rb') as handle:
+            while chunk := handle.read(_BLOB_VERIFY_CHUNK):
+                if first_chunk:
+                    if not chunk.startswith(b'%PDF-'):
+                        return None
+                    first_chunk = False
+                total_bytes += len(chunk)
+                if total_bytes > max_bytes:
+                    return None
+                hasher.update(chunk)
+    except OSError:
         return None
-    digest = sha256(raw).hexdigest()
-    if (len(raw) > MAX_PDF_BYTES or not raw.startswith(b'%PDF-') or digest != source.response_sha256 or
-            sha256(source.text.encode('utf-8')).hexdigest() != source.content_sha256):
+    if first_chunk or hasher.hexdigest() != source.response_sha256:
         return None
+    return blob_path, blob_digest
+
+
+def _source_page_spans(source: ResearchSource) -> list[list[object]] | None:
+    if not isinstance(source.provenance, dict):
+        return None
+    document_pages = source.provenance.get('document_pages')
+    pages = document_pages.get('pages') if isinstance(document_pages, dict) else None
+    if not isinstance(pages, list) or not pages:
+        return None
+    if not all(isinstance(entry, (list, tuple)) and len(entry) >= 3 for entry in pages):
+        return None
+    return pages
+
+
+def extract_geometry(
+    source: ResearchSource,
+    should_stop: Callable[[], bool] | None = None,
+    *,
+    first_page: int | None = None,
+    last_page: int | None = None,
+    blob_store: DocumentBlobStore | None = None,
+) -> PdfGeometry | None:
+    """Extract an ephemeral hash-bound sidecar, without changing source text."""
+    if (source.retrieval_method not in _SUPPORTED_RETRIEVAL_METHODS or not source.permissions.store or
+            not source.permissions.model_input or not source.response_sha256):
+        return None
+    if first_page is not None and (type(first_page) is not int or first_page < 1):
+        return None
+    if last_page is not None and (type(last_page) is not int or last_page < 1):
+        return None
+    if first_page is not None and last_page is not None and first_page > last_page:
+        return None
+    if sha256(source.text.encode('utf-8')).hexdigest() != source.content_sha256:
+        return None
+
+    inline_raw: bytes | None = None
+    blob_target: tuple[Path, str] | None = None
+    if source.original_pdf_base64:
+        try:
+            inline_raw = base64.b64decode(source.original_pdf_base64, validate=True)
+        except (ValueError, binascii.Error):
+            return None
+        digest = sha256(inline_raw).hexdigest()
+        if len(inline_raw) > MAX_PDF_BYTES or not inline_raw.startswith(b'%PDF-') or digest != source.response_sha256:
+            return None
+    else:
+        blob_target = _verified_blob_pdf(source, blob_store)
+        if blob_target is None:
+            return None
+
     executable, limiter = shutil.which('pdftotext'), shutil.which('prlimit')
     if not executable or not limiter or not _WORKERS.acquire(blocking=False):
         return None
     try:
         with tempfile.TemporaryDirectory(prefix='foresight-pdf-geometry-') as directory:
-            path, output = Path(directory) / 'source.pdf', Path(directory) / 'geometry.xml'
-            path.write_bytes(raw)
+            output = Path(directory) / 'geometry.xml'
+            if inline_raw is not None:
+                path = Path(directory) / 'source.pdf'
+                path.write_bytes(inline_raw)
+                pdf_digest = source.response_sha256
+            else:
+                assert blob_target is not None
+                path, pdf_digest = blob_target
+            page_args: list[str] = []
+            if first_page is not None:
+                page_args.extend(['-f', str(first_page)])
+            if last_page is not None:
+                page_args.extend(['-l', str(last_page)])
             try:
                 process = subprocess.Popen([limiter, '--as=536870912', '--cpu=3', f'--fsize={_MAX_XML + 1}',
-                    '--', executable, '-bbox-layout', '-enc', 'UTF-8', str(path), str(output)],
+                    '--', executable, '-bbox-layout', '-enc', 'UTF-8', *page_args, str(path), str(output)],
                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 import time
                 deadline = time.monotonic() + 4
@@ -269,7 +389,13 @@ def extract_geometry(source: ResearchSource, should_stop: Callable[[], bool] | N
                         process.wait()
                 if process.returncode or not output.is_file() or output.stat().st_size > _MAX_XML:
                     return None
-                return map_geometry(output.read_bytes(), source.text, digest)
+                return map_geometry(
+                    output.read_bytes(),
+                    source.text,
+                    pdf_digest,
+                    first_page=first_page if first_page is not None else 1,
+                    page_spans=_source_page_spans(source),
+                )
             except (OSError, subprocess.TimeoutExpired, ET.ParseError, ValueError, RecursionError):
                 return None
     finally:

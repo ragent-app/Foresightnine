@@ -6,7 +6,7 @@ from decimal import Decimal
 import pytest
 
 from app.research_reconciliation import (
-    TOLERANCES, classify_source, compare_values, derive_metric, detect_qualifiers, entity_hint, detect_metrics,
+    METRIC_RULES, TOLERANCES, classify_source, compare_values, derive_metric, detect_qualifiers, entity_hint, detect_metrics,
     model_summary, normalize_period, normalize_value, reconcile, suggested_gaps, ui_view,
 )
 
@@ -426,3 +426,82 @@ def test_real_anthropic_ipo_runs_reconcile_conservatively():
     # market cap, the after-hours print and the gain percentage never meet another figure
     assert "high" not in by_metric and "market_cap" not in by_metric
     assert report["stats"]["by_status"]["differs"] == 1
+
+
+def test_expanded_metric_rules_cover_40_plus_metrics_without_collisions():
+    assert len(METRIC_RULES) >= 40
+    cases = [
+        ("AAPL gross profit", "USD", "gross_profit"),
+        ("AAPL cost of revenue", "USD", "cost_of_revenue"),
+        ("AAPL营业成本", "CNY", "cost_of_revenue"),
+        ("AAPL rd expense", "USD", "rd_expense"),
+        ("AAPL研发费用", "CNY", "rd_expense"),
+        ("AAPL sga expense", "USD", "sga_expense"),
+        ("AAPL ebitda", "USD", "ebitda"),
+        ("AAPL free cash flow", "USD", "free_cash_flow"),
+        ("AAPL自由现金流", "USD", "free_cash_flow"),
+        ("AAPL operating cash flow", "USD", "operating_cash_flow"),
+        ("AAPL capex", "USD", "capex"),
+        ("AAPL total debt", "USD", "total_debt"),
+        ("AAPL short term debt", "USD", "short_term_debt"),
+        ("AAPL long term debt", "USD", "long_term_debt"),
+        ("AAPL pe ratio", "x", "pe_ratio"),
+        ("AAPL 市盈率", "倍", "pe_ratio"),
+        ("AAPL pb ratio", "x", "pb_ratio"),
+        ("AAPL ev/ebitda", "x", "ev_ebitda"),
+        ("AAPL ROE", "%", "roe"),
+        ("AAPL ROIC", "%", "roic"),
+        ("AAPL dividend yield", "%", "dividend_yield"),
+        ("AAPL shares diluted", "shares", "shares_diluted"),
+        ("AAPL cash", "USD", "cash"),
+        ("AAPL 货币资金", "CNY", "cash"),
+    ]
+    for label, unit, expected in cases:
+        assert derive_metric(label, unit) == (expected, None), (label, unit)
+
+
+def test_expanded_metrics_reconcile_multiples_and_return_percentages():
+    facts = [
+        fact("pe1", "AAPL P/E ratio", "28.5", "x", "sec", period="FY2025"),
+        fact("pe2", "AAPL市盈率", "28.5x", "", "cnbc", period="FY2025"),
+        fact("roe1", "AAPL ROE", "145.0", "%", "sec", period="FY2025"),
+        fact("roe2", "AAPL净资产收益率", "1.450", "ratio", "yahoo", period="FY2025"),
+        fact("fcf1", "AAPL free cash flow", "100", "billions USD", "sec", period="FY2025", currency="USD"),
+        fact("fcf2", "AAPL自由现金流", "90", "billions USD", "cnbc", period="FY2025", currency="USD"),
+    ]
+    report = reconcile(facts, sources("sec", "cnbc", "yahoo"))
+    pe = row_for(report, "pe_ratio", entity="AAPL")
+    assert pe["status"] == "consistent" and pe["kind"] == "ratio"
+    roe = row_for(report, "roe", entity="AAPL")
+    assert roe["status"] == "consistent" and roe["kind"] == "percent"
+    fcf = row_for(report, "free_cash_flow", entity="AAPL")
+    assert fcf["status"] == "differs" and fcf["severity"] == "material"
+
+
+def test_fiscal_alignment_hints_surface_fy_vs_year_end_date_without_merging():
+    facts = [
+        fact("fy_sec", "AAPL revenue", "391.0", "billions USD", "sec", period="FY2025", currency="USD"),
+        fact("dt_cnbc", "AAPL revenue", "391.0", "billions USD", "cnbc", period="2025-09-27", currency="USD"),
+        # Different entity, metric, currency, or year must NOT produce false alignment hints
+        fact("other_cur", "AAPL revenue", "360.0", "billions EUR", "yahoo", period="2025-12-31", currency="EUR"),
+        fact("other_yr", "AAPL revenue", "380.0", "billions USD", "yahoo", period="2024-09-28", currency="USD"),
+    ]
+    report = reconcile(facts, sources("sec", "cnbc", "yahoo"))
+    assert report["rows"] == []  # never silently merged across FY2025 vs 2025-09-27
+    hints = report["fiscal_alignment_hints"]
+    assert len(hints) == 1
+    hint = hints[0]
+    assert hint["entity"] == "AAPL"
+    assert hint["metric"] == "revenue"
+    assert hint["currency"] == "USD"
+    assert hint["fiscal_period"] == "FY2025"
+    assert hint["date_period"] == "2025-09-27"
+    assert hint["fiscal_fact_ids"] == ["fy_sec"]
+    assert hint["date_fact_ids"] == ["dt_cnbc"]
+    assert hint["merged"] is False
+    assert "not merged" in hint["message"]
+
+    summary = model_summary(report)["reconciliation"]
+    assert summary["fiscal_alignment_hints"] == hints
+    ui = ui_view(report)
+    assert ui["fiscal_alignment_hints"] == hints

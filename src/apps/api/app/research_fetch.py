@@ -7,6 +7,7 @@ import io
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
+import html as html_module
 from html.parser import HTMLParser
 import os
 from pathlib import Path
@@ -89,6 +90,167 @@ _HARD_HIDDEN_TAGS = frozenset({"script", "style", "noscript", "svg"})
 _BOILERPLATE_TAGS = frozenset({"nav", "footer", "aside"})
 _BOILERPLATE_ROLES = frozenset({"navigation", "banner", "contentinfo", "complementary"})
 _PRESERVE_CONTAINER_TAGS = frozenset({"main", "article", "table"})
+_PRESERVE_ROLES = frozenset({"main", "article"})
+_DENSITY_CANDIDATE_TAGS = frozenset({"div", "section"})
+_MAX_DENSITY_BUFFER_CHARS = 16_384
+_MAX_DENSITY_BUFFER_PARTS = 8_192
+
+_EXACT_BOILERPLATE_ATTRS = frozenset({
+    "ad", "ads", "advert", "adverts", "advertisement", "advertisements", "adsense", "adserver",
+    "adslot", "adunit", "adbox", "adbanner", "adwrapper", "adcontainer", "taboola", "outbrain",
+    "cookie", "cookies", "cookiebanner", "cookieconsent", "cookiebar", "cookienotice", "cookielaw",
+    "cookiepolicy", "cookiebot", "onetrust", "didomi", "complianz", "cookieyes", "termly",
+    "quantcast", "trustarc", "consentmanager",
+    "comments", "comment-section", "comments-section", "comment-list", "comments-list",
+    "comment-box", "comments-box", "comment-form", "comments-form", "comment-thread",
+    "comments-thread", "comment-area", "comments-area", "comment-wrapper", "comments-wrapper",
+    "comment-container", "comments-container", "comment-respond", "disqus_thread",
+    "newsletter", "newsletters", "newsletter-signup", "newsletter-box", "subscribe-box",
+    "subscribe-banner", "subscribe-widget", "email-signup", "signup-box",
+    "breadcrumb", "breadcrumbs", "share-buttons", "share-bar", "share-links", "share-widget",
+    "social-share", "social-links", "social-buttons", "around-the-web", "you-might-like",
+    "you-may-like", "read-next", "also-read", "recirculation",
+})
+_BOILERPLATE_SUBTOKENS = frozenset({
+    "ads", "advert", "adverts", "advertisement", "advertisements", "adsense", "adserver",
+    "adslot", "adunit", "adbox", "adbanner", "adwrapper", "adcontainer", "doubleclick",
+    "googlesyndication", "taboola", "outbrain", "dfp",
+    "cookiebanner", "cookieconsent", "cookiebar", "cookienotice", "cookielaw", "cookiepolicy",
+    "cookiebot", "onetrust", "didomi", "complianz", "cookieyes", "termly", "quantcast",
+    "trustarc", "consentmanager",
+    "disqus", "utterances", "giscus", "livefyre", "spotim", "commentbox", "commentsbox",
+    "commentsection", "commentssection", "breadcrumbs", "recirculation",
+})
+_AD_QUALIFIERS = frozenset({
+    "banner", "slot", "unit", "box", "block", "container", "wrapper", "section", "area",
+    "module", "widget", "sidebar", "header", "footer", "bar", "leaderboard", "skyscraper",
+    "overlay", "holder", "frame", "label", "tag", "sense", "choice", "choices",
+    "top", "bottom", "left", "right", "mid", "inline", "native", "promo", "sponsor", "sponsored",
+})
+_SPONSORED_QUALIFIERS = frozenset({
+    "content", "link", "links", "post", "posts", "article", "articles", "ad", "ads",
+    "box", "card", "widget", "section", "block", "banner", "slot", "listing",
+})
+_COOKIE_QUALIFIERS = frozenset({
+    "banner", "consent", "notice", "policy", "bar", "popup", "modal", "wall", "overlay",
+    "settings", "preferences", "dialog", "message", "alert", "wrapper", "container",
+    "box", "prompt", "optin", "cmp", "gate", "toast", "footer", "header",
+})
+_PRIVACY_QUALIFIERS = frozenset({"banner", "modal", "popup", "overlay", "consent", "choices", "toast", "bar"})
+_COMMENT_QUALIFIERS = frozenset({
+    "section", "list", "box", "form", "thread", "area", "wrapper", "container",
+    "respond", "reply", "replies", "widget", "panel", "feed", "block", "drawer", "stream",
+    "user", "reader", "article", "post",
+})
+_NEWSLETTER_QUALIFIERS = frozenset({
+    "signup", "subscribe", "subscription", "form", "box", "widget", "banner", "modal",
+    "popup", "overlay", "card", "bar", "cta", "module", "promo", "block", "container",
+    "wrapper", "section", "footer", "sidebar", "prompt", "optin",
+})
+_RELATED_NOUNS = frozenset({
+    "articles", "article", "posts", "post", "stories", "story", "news", "links",
+    "reads", "content", "topics", "items", "widget", "box", "sidebar", "cards",
+})
+_TRENDING_NOUNS = frozenset({"articles", "posts", "stories", "news", "tickers", "topics", "now", "widget", "box", "sidebar", "list"})
+_MORE_NOUNS = frozenset({"articles", "stories", "news", "posts", "reads"})
+_SHARE_NOUNS = frozenset({"buttons", "bar", "links", "widget", "box", "icons", "tools", "panel"})
+_AD_INDEXED_RE = re.compile(r"^ad(?:[-_]\d+)?$")
+_CAMEL_BOUNDARY_RE = re.compile(r"([a-z0-9])([A-Z])")
+_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+
+_HTML_TITLE_RE = re.compile(r"<title\b[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+_SPA_EMPTY_ROOT_RE = re.compile(
+    r"""<(?:div|main)\b[^>]*\b(?:data-reactroot(?:\s*=\s*(?:["'][^"']*["']|[^\s>]+))?|id\s*=\s*["']?(?:root|app|__next|__nuxt|svelte|mount)["']?)[^>]*>\s*(?:<!--.*?-->\s*|loading\.{0,3}|please wait\.{0,3})?\s*</(?:div|main)>""",
+    re.IGNORECASE | re.DOTALL,
+)
+_SCRIPT_TAG_RE = re.compile(r"<script\b", re.IGNORECASE)
+_NOSCRIPT_BLOCK_RE = re.compile(r"<noscript\b[^>]*>(.*?)</noscript>", re.IGNORECASE | re.DOTALL)
+_TAG_STRIP_RE = re.compile(r"<[^>]+>")
+_WORD_TOKEN_RE = re.compile(r"[A-Za-z0-9\u4e00-\u9fff]+")
+
+_CHALLENGE_HTML_MARKERS = (
+    "_cf_chl_opt",
+    "cf-chl-widget",
+    "cf-turnstile",
+    "/cdn-cgi/challenge-platform/",
+    "cf-browser-verification",
+    "cf_chl_prog",
+    'id="challenge-running"',
+    "id='challenge-running'",
+    'id="challenge-form"',
+    "id='challenge-form'",
+    'id="cf-please-wait"',
+    "id='cf-please-wait'",
+    "px-captcha",
+    "captcha-delivery.com",
+)
+_CHALLENGE_TITLE_MARKERS = (
+    "just a moment...",
+    "attention required! | cloudflare",
+    "pardon our interruption",
+    "verify you are human",
+    "human verification",
+    "robot or human?",
+    "ddos-guard",
+)
+_CHALLENGE_TEXT_MARKERS = (
+    "checking if the site connection is secure",
+    "checking your browser before accessing",
+    "enable javascript and cookies to continue",
+    "performing security verification",
+    "please verify you are a human",
+    "verify you are human",
+    "access to this page has been denied",
+    "please complete the security check",
+)
+_PAYWALL_TEXT_MARKERS = (
+    "subscribe to continue reading",
+    "subscribe to read the full",
+    "subscribe to read this article",
+    "subscribe to unlock",
+    "sign in to continue reading",
+    "log in to continue reading",
+    "login to continue reading",
+    "create a free account to continue reading",
+    "register to continue reading",
+    "you have reached your article limit",
+    "reached your free article limit",
+    "reached your monthly article limit",
+    "this content is for subscribers only",
+    "this article is for subscribers only",
+    "exclusively for subscribers",
+    "unlock this article",
+    "unlock full access",
+    "become a member to read",
+    "join to read the full",
+)
+_PAYWALL_HTML_MARKERS = (
+    '"isaccessibleforfree":false',
+    '"isaccessibleforfree": false',
+    "'isaccessibleforfree':false",
+    "'isaccessibleforfree': false",
+    "paywall-overlay",
+    "paywall-modal",
+    "paywall-wall",
+    "piano-offer",
+    "tp-modal",
+    "regwall",
+    "meter-wall",
+)
+_JS_REQUIRED_MARKERS = (
+    "enable javascript",
+    "javascript is required",
+    "javascript is disabled",
+    "turn on javascript",
+    "requires javascript",
+    "please activate javascript",
+    "you need to enable javascript",
+    "browser does not support javascript",
+    "without javascript enabled",
+)
+_LOADING_PLACEHOLDER_WORDS = frozenset({
+    "", "loading", "loading...", "please wait", "please wait...", "initializing", "initializing...", "redirecting", "redirecting...",
+})
 _VOID_HTML_TAGS = frozenset({
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr",
 })
@@ -234,6 +396,66 @@ class _TableCellState:
     spans: list[str]
 
 
+@dataclass
+class _DensityFrame:
+    scope_index: int
+    part_start: int
+    has_leading_newline: bool = False
+    total_chars: int = 0
+    link_chars: int = 0
+    link_count: int = 0
+
+
+def _split_attr_subtokens(item: str) -> list[str]:
+    expanded = _CAMEL_BOUNDARY_RE.sub(r"\1 \2", item).lower()
+    return [tok for tok in _NON_ALNUM_RE.split(expanded) if tok]
+
+
+def _is_boilerplate_attr_item(item: str) -> bool:
+    lowered = item.strip().lower()
+    if not lowered:
+        return False
+    if lowered in _EXACT_BOILERPLATE_ATTRS or _AD_INDEXED_RE.fullmatch(lowered):
+        return True
+    subtokens = _split_attr_subtokens(item)
+    if not subtokens:
+        return False
+    if any(tok in _BOILERPLATE_SUBTOKENS for tok in subtokens):
+        return True
+    subtoken_set = set(subtokens)
+    if "ad" in subtoken_set and any(tok in _AD_QUALIFIERS for tok in subtokens):
+        return True
+    if "sponsored" in subtoken_set and (len(subtokens) == 1 or any(tok in _SPONSORED_QUALIFIERS for tok in subtokens)):
+        return True
+    if ("cookie" in subtoken_set or "cookies" in subtoken_set or "gdpr" in subtoken_set or "consent" in subtoken_set) and (
+        len(subtokens) == 1 or any(tok in _COOKIE_QUALIFIERS for tok in subtokens)
+    ):
+        return True
+    if "privacy" in subtoken_set and any(tok in _PRIVACY_QUALIFIERS for tok in subtokens):
+        return True
+    if ("comment" in subtoken_set or "comments" in subtoken_set) and (
+        ("comments" in subtoken_set and len(subtokens) == 1)
+        or any(tok in _COMMENT_QUALIFIERS for tok in subtokens)
+    ):
+        return True
+    if ("newsletter" in subtoken_set or "newsletters" in subtoken_set) and any(tok in _NEWSLETTER_QUALIFIERS for tok in subtokens):
+        return True
+    for left, right in zip(subtokens, subtokens[1:]):
+        if left == "related" and right in _RELATED_NOUNS:
+            return True
+        if left == "recommended" and right in _RELATED_NOUNS:
+            return True
+        if left == "trending" and right in _TRENDING_NOUNS:
+            return True
+        if left == "more" and right in _MORE_NOUNS:
+            return True
+        if left in {"share", "social"} and right in _SHARE_NOUNS:
+            return True
+        if left in {"subscribe", "email"} and right in {"box", "banner", "widget", "signup", "form", "modal", "popup"}:
+            return True
+    return False
+
+
 class _TextParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -244,10 +466,20 @@ class _TextParser(HTMLParser):
         self._table_depth = 0
         self._row_stack: list[_TableRowState] = []
         self._cell_stack: list[_TableCellState] = []
-        self._scope_stack: list[tuple[str, bool]] = []
+        self._scope_stack: list[tuple[str, bool, bool]] = []
+        self._density_stack: list[_DensityFrame] = []
 
     def _boilerplate_suppressed(self) -> bool:
         return bool(self._scope_stack and self._scope_stack[-1][1])
+
+    def _in_link(self) -> bool:
+        return bool(self._scope_stack and self._scope_stack[-1][2])
+
+    def can_flush_parts(self) -> bool:
+        return not self._row_stack and not self._cell_stack and not self._density_stack
+
+    def _retire_density_frames(self) -> None:
+        self._density_stack.clear()
 
     @staticmethod
     def _has_boilerplate_role(attrs: list[tuple[str, str | None]]) -> bool:
@@ -255,6 +487,34 @@ class _TextParser(HTMLParser):
             if name == "role" and isinstance(value, str):
                 if any(token in _BOILERPLATE_ROLES for token in value.strip().lower().split()):
                     return True
+        return False
+
+    @staticmethod
+    def _has_preserved_role(attrs: list[tuple[str, str | None]]) -> bool:
+        for name, value in attrs:
+            if name == "role" and isinstance(value, str):
+                if any(token in _PRESERVE_ROLES for token in value.strip().lower().split()):
+                    return True
+        return False
+
+    @staticmethod
+    def _has_boilerplate_attrs(attrs: list[tuple[str, str | None]]) -> bool:
+        for name, value in attrs:
+            if name in {"class", "id"} and isinstance(value, str):
+                for item in value.split():
+                    if _is_boilerplate_attr_item(item):
+                        return True
+        return False
+
+    @staticmethod
+    def _should_prune_density_frame(frame: _DensityFrame) -> bool:
+        if frame.total_chars < 6:
+            return False
+        ratio = frame.link_chars / frame.total_chars
+        if frame.link_count >= 3 and ratio >= 0.70:
+            return True
+        if frame.link_count >= 4 and frame.total_chars >= 12 and ratio >= 0.65:
+            return True
         return False
 
     def _finish_cell(self) -> None:
@@ -298,16 +558,32 @@ class _TextParser(HTMLParser):
             self.hidden += 1
         if self.hidden:
             return
-        if tag in _PRESERVE_CONTAINER_TAGS:
+        preserved_role = self._has_preserved_role(attrs)
+        if tag in _PRESERVE_CONTAINER_TAGS or preserved_role:
             suppressed = False
+            self._retire_density_frames()
         elif tag in _BOILERPLATE_TAGS or self._has_boilerplate_role(attrs):
+            suppressed = True
+        elif not self._boilerplate_suppressed() and self._table_depth == 0 and self._has_boilerplate_attrs(attrs):
             suppressed = True
         else:
             suppressed = self._boilerplate_suppressed()
+        has_href = tag == "a" and any(name == "href" and value is not None for name, value in attrs)
+        parent_in_link = self._in_link()
+        in_link = (has_href or parent_in_link) and tag not in _PRESERVE_CONTAINER_TAGS and not preserved_role and not suppressed
+        if has_href and not parent_in_link and not suppressed and self._density_stack:
+            self._density_stack[-1].link_count += 1
+        scope_index = len(self._scope_stack)
         if tag not in _VOID_HTML_TAGS:
-            self._scope_stack.append((tag, suppressed))
+            self._scope_stack.append((tag, suppressed, in_link))
         if suppressed:
             return
+        if tag in _DENSITY_CANDIDATE_TAGS and self._table_depth == 0 and not preserved_role and tag not in _VOID_HTML_TAGS:
+            self._density_stack.append(_DensityFrame(
+                scope_index=scope_index,
+                part_start=len(self.parts),
+                has_leading_newline=(tag == "div"),
+            ))
         if tag == "table":
             self._table_depth += 1
         elif tag in {"td", "th"}:
@@ -361,10 +637,22 @@ class _TextParser(HTMLParser):
             if self._scope_stack[idx][0] == tag:
                 scope_idx = idx
                 break
+        pruned_closing = False
         if scope_idx is not None:
             was_suppressed = self._scope_stack[scope_idx][1]
             del self._scope_stack[scope_idx:]
-            if was_suppressed:
+            while self._density_stack and self._density_stack[-1].scope_index >= scope_idx:
+                frame = self._density_stack.pop()
+                if self._should_prune_density_frame(frame):
+                    del self.parts[frame.part_start:]
+                    if frame.scope_index == scope_idx and frame.has_leading_newline:
+                        pruned_closing = True
+                elif self._density_stack:
+                    parent = self._density_stack[-1]
+                    parent.total_chars += frame.total_chars
+                    parent.link_chars += frame.link_chars
+                    parent.link_count += frame.link_count
+            if was_suppressed or pruned_closing:
                 return
         elif self._boilerplate_suppressed():
             return
@@ -388,6 +676,18 @@ class _TextParser(HTMLParser):
         if self.row_depth and not self.cell_depth and not data.strip():
             return
         self.parts.append(re.sub(r"\s+", " ", data) if self.cell_depth else data)
+        if self._density_stack:
+            non_ws = sum(1 for ch in data if not ch.isspace())
+            if non_ws:
+                frame = self._density_stack[-1]
+                frame.total_chars += non_ws
+                if self._in_link():
+                    frame.link_chars += non_ws
+            for idx in range(len(self._density_stack) - 1, -1, -1):
+                cur = self._density_stack[idx]
+                if cur.total_chars > _MAX_DENSITY_BUFFER_CHARS or len(self.parts) - cur.part_start > _MAX_DENSITY_BUFFER_PARTS:
+                    del self._density_stack[:idx + 1]
+                    break
 
     def close(self) -> None:
         super().close()
@@ -399,6 +699,7 @@ class _TextParser(HTMLParser):
         self.row_depth = 0
         self._table_depth = 0
         self._scope_stack.clear()
+        self._density_stack.clear()
 
 
 class _SafeHtmlParser(_TextParser):
@@ -438,6 +739,124 @@ class _SafeHtmlParser(_TextParser):
     def handle_data(self, data: str) -> None:
         if not self.hidden_tags:
             super().handle_data(data)
+
+
+@dataclass(frozen=True)
+class SoftBlockMatch:
+    reason: str
+    marker: str
+    detail: str
+
+
+_SOFT_BLOCK_HEAD_BYTES = 131_072
+
+
+def _extract_html_title(html: str) -> str | None:
+    match = _HTML_TITLE_RE.search(html or "")
+    if not match:
+        return None
+    cleaned = re.sub(r"\s+", " ", html_module.unescape(_TAG_STRIP_RE.sub(" ", match.group(1)))).strip()
+    return cleaned or None
+
+
+def _html_head_sample(source: Path | bytes | str, content_type_header: str) -> str:
+    if isinstance(source, str):
+        return source[:_SOFT_BLOCK_HEAD_BYTES]
+    if isinstance(source, bytes):
+        head = source[:_SOFT_BLOCK_HEAD_BYTES]
+    else:
+        try:
+            with source.open("rb") as handle:
+                head = handle.read(_SOFT_BLOCK_HEAD_BYTES)
+        except OSError:
+            return ""
+    return _decode_text_bytes(head, content_type_header, is_html=True)
+
+
+def detect_soft_block(html: str, extracted_text: str, title: str | None = None) -> SoftBlockMatch | None:
+    """Detect conservative HTTP-200 anti-bot challenges, soft paywalls, and JS-required empty shells.
+
+    Requires minimal real extracted prose combined with clear challenge, paywall, or JS-shell
+    markers so legitimate short press releases, filings, and articles mentioning those topics are preserved.
+    """
+    html_str = html or ""
+    text_str = extracted_text or ""
+    stripped_text = text_str.strip()
+    char_count = len(stripped_text)
+    word_count = len(_WORD_TOKEN_RE.findall(stripped_text))
+
+    if char_count >= 1500 or word_count >= 220:
+        return None
+
+    html_lower = html_str.lower()
+    text_lower = stripped_text.lower()
+    html_title = _extract_html_title(html_str)
+    title_candidates = [t.strip().lower() for t in (title, html_title) if isinstance(t, str) and t.strip()]
+
+    if word_count < 180 and char_count < 1200:
+        if any(marker in html_lower for marker in _CHALLENGE_HTML_MARKERS):
+            return SoftBlockMatch(
+                reason="fetch_blocked_soft_wall",
+                marker="challenge_html",
+                detail="Page returned an anti-bot or browser challenge interstitial instead of document content.",
+            )
+        if any(marker in t for t in title_candidates for marker in _CHALLENGE_TITLE_MARKERS):
+            return SoftBlockMatch(
+                reason="fetch_blocked_soft_wall",
+                marker="challenge_title",
+                detail="Page returned an anti-bot or security challenge title instead of document content.",
+            )
+        if any(marker in text_lower for marker in _CHALLENGE_TEXT_MARKERS) or (
+            "enable javascript and cookies to continue" in html_lower
+        ):
+            return SoftBlockMatch(
+                reason="fetch_blocked_soft_wall",
+                marker="challenge_text",
+                detail="Page returned a challenge prompt requiring browser verification.",
+            )
+        if ("why have i been blocked" in text_lower or "attention required" in text_lower) and "cloudflare" in (
+            text_lower + " " + " ".join(title_candidates)
+        ):
+            return SoftBlockMatch(
+                reason="fetch_blocked_soft_wall",
+                marker="cloudflare_block",
+                detail="Page returned a Cloudflare block notice instead of document content.",
+            )
+        if "datadome" in html_lower and "captcha" in (html_lower + " " + text_lower):
+            return SoftBlockMatch(
+                reason="fetch_blocked_soft_wall",
+                marker="datadome_challenge",
+                detail="Page returned a DataDome captcha interstitial.",
+            )
+
+    if any(marker in text_lower or marker in html_lower for marker in _PAYWALL_TEXT_MARKERS) or (
+        "already a subscriber" in text_lower and ("sign in" in text_lower or "log in" in text_lower)
+    ) or any(marker in html_lower for marker in _PAYWALL_HTML_MARKERS):
+        return SoftBlockMatch(
+            reason="fetch_blocked_soft_wall",
+            marker="soft_paywall",
+            detail="Page returned a soft paywall or subscriber-only gate with minimal readable content.",
+        )
+
+    if word_count < 40 and char_count < 250:
+        noscript_text = " ".join(
+            _TAG_STRIP_RE.sub(" ", block).lower() for block in _NOSCRIPT_BLOCK_RE.findall(html_str)
+        )
+        js_haystack = f"{text_lower}\n{noscript_text}\n{' '.join(title_candidates)}"
+        if any(marker in js_haystack for marker in _JS_REQUIRED_MARKERS):
+            return SoftBlockMatch(
+                reason="js_rendered_empty",
+                marker="enable_js_prompt",
+                detail="Page requires JavaScript execution and contains no usable server-rendered prose.",
+            )
+        if text_lower in _LOADING_PLACEHOLDER_WORDS and _SCRIPT_TAG_RE.search(html_str) and _SPA_EMPTY_ROOT_RE.search(html_str):
+            return SoftBlockMatch(
+                reason="js_rendered_empty",
+                marker="empty_spa_shell",
+                detail="Page returned an empty JavaScript application shell with no server-rendered content.",
+            )
+
+    return None
 
 
 @dataclass(frozen=True)
@@ -661,7 +1080,7 @@ def _extract_text_once(source: Path | bytes | str, encoding: str | None, *, is_h
             except (ValueError, RecursionError) as error:
                 raise FetchFailure("source_invalid", "HTML parsing failed.") from error
             # Rows and cells keep indexes into ``parts``; flush only between them so memory stays bounded.
-            if parser.parts and not parser._row_stack and not parser._cell_stack:
+            if parser.parts and parser.can_flush_parts():
                 text = "".join(parser.parts)
                 parser.parts.clear()
                 emit(text, final=False)
@@ -1068,7 +1487,20 @@ def _fetch_document_impl(
         raise FetchFailure("source_invalid")
     if size > download_cap:
         raise FetchFailure("source_too_large", f"Response exceeded {download_cap:,} byte limit.")
-    text, document_pages = extract_text_pages(source, content_type_header, is_html=is_html, deadline=parse_deadline)
+    html_sample = _html_head_sample(source, content_type_header) if is_html else ""
+    html_title = _extract_html_title(html_sample) if is_html else None
+    try:
+        text, document_pages = extract_text_pages(source, content_type_header, is_html=is_html, deadline=parse_deadline)
+    except FetchFailure as error:
+        if is_html and error.code == "source_invalid":
+            soft_block = detect_soft_block(html_sample, "", html_title)
+            if soft_block is not None:
+                raise FetchFailure(soft_block.reason, soft_block.detail) from error
+        raise
+    if is_html and len(text) < 2000:
+        soft_block = detect_soft_block(html_sample, text, html_title)
+        if soft_block is not None:
+            raise FetchFailure(soft_block.reason, soft_block.detail)
     original_base64: str | None = None
     date_info = _published_date_info(raw, spool_path) if is_html else None
     if is_html and size <= MAX_FETCH_BYTES:

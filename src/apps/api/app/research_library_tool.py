@@ -2,20 +2,35 @@
 
 The library itself (``research_library``) is pure computation.  This module owns the glue that must not live in
 the library: which of a run's sources are searchable (the same eligibility rule as every other read tool), how
-newly acquired sources and OCR versions are folded in (``add_source`` / ``replace_source``), and how a hit is
-turned into something the model can act on (``read_sources`` range, ``read_pages`` page, OCR verification note).
-Nothing here touches the network or a model.
+newly acquired sources and OCR versions are folded in (``add_source`` / ``replace_source``), optional protocol-neutral
+embedding scoring via ``default_vector_scorer``, and how a hit is turned into something the model can act on
+(``read_sources`` range, ``read_pages`` page, OCR verification note).
 """
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Callable, Mapping
+import logging
+import os
+from typing import Any, Callable, Iterable, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .research_library import Hit, ResearchLibrary
+from .research_diagnostics import safe_exception_diagnostic
+from .research_embeddings import (
+    DEFAULT_EMBEDDING_CACHE_SIZE,
+    EMBEDDING_CACHE_SIZE_ENV,
+    EmbeddingCache,
+    EmbeddingClient,
+    EmbeddingConfigError,
+    EmbeddingSettings,
+    EmbeddingVectorScorer,
+    default_embedding_cache,
+)
+from .research_library import _UNSET, Hit, ResearchLibrary, VectorScorer, _Unset
 from .research_source_policy import source_eligibility
 from .research_sources import ResearchSource
+
+_logger = logging.getLogger(__name__)
 
 MAX_LIBRARY_HITS = 20
 DEFAULT_LIBRARY_HITS = 8
@@ -57,14 +72,64 @@ def head_source_id(source_id: str, versions: Mapping[str, str], known: Mapping[s
     return source_id
 
 
-def sync_library(library: ResearchLibrary, source_by_id: Mapping[str, ResearchSource], versions: Mapping[str, str],
-                 as_of: datetime | None) -> None:
+def default_vector_scorer(
+    environ: Mapping[str, str] | None = None,
+    *,
+    cache: EmbeddingCache | None = None,
+    transport: Any = None,
+) -> EmbeddingVectorScorer | None:
+    """Return an ``EmbeddingVectorScorer`` when configured in ``environ``, else ``None``."""
+    env = environ if environ is not None else os.environ
+    try:
+        settings = EmbeddingSettings.from_environ(env)
+    except EmbeddingConfigError as error:
+        _logger.warning("embedding_configuration_invalid metadata=%s", safe_exception_diagnostic(error))
+        return None
+    if settings is None:
+        return None
+    if cache is not None:
+        resolved_cache = cache
+    elif (env.get(EMBEDDING_CACHE_SIZE_ENV) or "").strip() and settings.cache_size != DEFAULT_EMBEDDING_CACHE_SIZE:
+        resolved_cache = EmbeddingCache(settings.cache_size)
+    else:
+        resolved_cache = default_embedding_cache()
+    return EmbeddingVectorScorer(EmbeddingClient(settings, cache=resolved_cache, transport=transport))
+
+
+def create_research_library(
+    sources: Iterable[ResearchSource] = (),
+    *,
+    ineligible: Mapping[str, str] | None = None,
+    vector_scorer: VectorScorer | None | _Unset = _UNSET,
+    environ: Mapping[str, str] | None = None,
+) -> ResearchLibrary:
+    """Create a ``ResearchLibrary`` wired with ``default_vector_scorer`` unless explicitly overridden."""
+    resolved = default_vector_scorer(environ=environ) if vector_scorer is _UNSET else vector_scorer
+    return ResearchLibrary(sources, ineligible=ineligible, vector_scorer=resolved)
+
+
+def sync_library(
+    library: ResearchLibrary,
+    source_by_id: Mapping[str, ResearchSource],
+    versions: Mapping[str, str],
+    as_of: datetime | None,
+    *,
+    vector_scorer: VectorScorer | None | _Unset = _UNSET,
+    environ: Mapping[str, str] | None = None,
+) -> None:
     """Bring ``library`` in line with the run's current sources, incrementally.
 
     * an eligible source not yet indexed is added;
     * a source with a newer (OCR) version is swapped for its head with ``replace_source``;
     * a source that is not eligible is only remembered with its reason so coverage can explain the exclusion.
     """
+    if vector_scorer is not _UNSET:
+        if library.vector_scorer is not vector_scorer:
+            library.attach_vector_scorer(vector_scorer)  # type: ignore[arg-type]
+    elif not library.vector_scorer_explicit and library.vector_scorer is None:
+        resolved = default_vector_scorer(environ=environ)
+        if resolved is not None:
+            library.attach_vector_scorer(resolved)
     for source_id, source in source_by_id.items():
         head_id = head_source_id(source_id, versions, source_by_id)
         if head_id != source_id:
@@ -129,6 +194,14 @@ def compact_coverage(coverage: Mapping[str, Any]) -> dict[str, Any]:
             out['sources_excluded_more'] = len(excluded) - MAX_COVERAGE_ROWS
     if coverage.get('notes'):
         out['notes'] = list(coverage['notes'])[:4]
+    if isinstance(coverage.get('retrieval_mode'), str):
+        out['retrieval_mode'] = coverage['retrieval_mode']
+    if type(coverage.get('embedding_cache_hits')) is int:
+        out['embedding_cache_hits'] = coverage['embedding_cache_hits']
+    if type(coverage.get('embedding_cache_misses')) is int:
+        out['embedding_cache_misses'] = coverage['embedding_cache_misses']
+    if isinstance(coverage.get('vector_fallback_reason'), str):
+        out['vector_fallback_reason'] = coverage['vector_fallback_reason']
     return out
 
 
@@ -162,4 +235,10 @@ def run_search_library(req: SearchLibraryRequest, *, library: ResearchLibrary, s
                'source_count': coverage['sources_searched'], 'unsearched_pages': int(coverage['unsearched_page_count'] or 0),
                'complete': coverage['complete'],
                'hits_preview': [{'title': str(r['title'])[:160], 'page': r['page'], 'source_id': r['source_id']} for r in rows[:5]]}
+    if isinstance(coverage.get('retrieval_mode'), str):
+        summary['retrieval_mode'] = coverage['retrieval_mode']
+    if type(coverage.get('embedding_cache_hits')) is int:
+        summary['embedding_cache_hits'] = coverage['embedding_cache_hits']
+    if type(coverage.get('embedding_cache_misses')) is int:
+        summary['embedding_cache_misses'] = coverage['embedding_cache_misses']
     return result, summary

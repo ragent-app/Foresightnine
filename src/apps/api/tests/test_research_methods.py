@@ -5,8 +5,8 @@ import pytest
 from pydantic import ValidationError
 
 from app.research_methods import (
-    KNOWN_TOOLS, MAX_PACK_CHARS, PACKS_DIR, Pack, load_packs, pack_fingerprint, packs_fingerprint,
-    render_for_prompt, select_packs,
+    KNOWN_TOOLS, MAX_PACK_CHARS, PACKS_DIR, Pack, get_pack, list_available_packs, load_packs,
+    pack_fingerprint, packs_fingerprint, render_for_prompt, select_packs,
 )
 
 EXPECTED = {'earnings_review', 'company_comparison', 'ipo_or_major_event_day', 'market_trend', 'macro_release'}
@@ -150,3 +150,15 @@ def test_packs_have_no_sample_specific_strings():
             pattern = rf'(?<![A-Za-z]){re.escape(word)}(?![A-Za-z])' if word.isascii() else re.escape(word)
             assert not re.search(pattern, raw, flags=re.I if word.isascii() and len(word) > 4 else 0), (path.name, word)
         assert not re.search(r'20\d\d', raw), path.name  # no concrete years/dates
+
+
+def test_list_available_packs_and_get_pack():
+    listed = list_available_packs()
+    assert [item['pack_id'] for item in listed] == sorted(EXPECTED)
+    for item in listed:
+        assert item['fingerprint'] == pack_fingerprint(get_pack(item['pack_id']))
+        assert item['title_en'] and item['title_zh'] and item['question_types']
+    pack = get_pack(' earnings_review ')
+    assert pack is not None and pack.id == 'earnings_review'
+    assert get_pack('nonexistent_pack') is None
+    assert get_pack('') is None

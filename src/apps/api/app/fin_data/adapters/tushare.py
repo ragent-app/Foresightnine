@@ -21,7 +21,7 @@ from ..policy import Denied, FinDataPolicy, load_policy
 from ..ratelimit import default_limiter
 from .base import StopWith, Transport, default_transport, rate_limited_result, scrub, utcnow
 from .cn_base import LineValue, bar_window, build_statement_lines, dec, parse_day
-from .sec_edgar import STANDARD_LINES
+from .sec_edgar import STANDARD_LINES, derive_period_metrics
 
 PROVIDER = "tushare"
 BASE = "https://api.tushare.pro"
@@ -35,16 +35,47 @@ _STATEMENT_COMMON = "ts_code,ann_date,f_ann_date,end_date,report_type,update_fla
 # standard line -> (api_name, extra fields in priority order). The first non-null field wins; the field name
 # used is recorded as the reported tag.
 LINE_FIELDS: dict[str, tuple[str, tuple[str, ...]]] = {
+    # ---- income statement (preserve original keys and tag priorities)
     "revenue": ("income", ("total_revenue", "revenue")),               # 营业总收入, else 营业收入
+    "cost_of_revenue": ("income", ("oper_cost",)),                     # 营业成本
+    "rd_expense": ("income", ("rd_exp",)),                             # 研发费用
+    "selling_expense": ("income", ("sell_exp",)),                      # 销售费用
+    "admin_expense": ("income", ("admin_exp",)),                       # 管理费用
+    "total_operating_costs": ("income", ("total_cogs",)),              # 营业总成本
     "operating_income": ("income", ("operate_profit",)),               # 营业利润
+    "interest_expense": ("income", ("fin_exp_int_exp", "int_exp")),    # 财务费用:利息费用 / 利息支出
+    "finance_expense": ("income", ("fin_exp",)),                       # 财务费用
+    "profit_before_tax": ("income", ("total_profit",)),                # 利润总额
+    "income_tax": ("income", ("income_tax",)),                         # 所得税费用
     "net_income": ("income", ("n_income_attr_p",)),                    # 归属于母公司所有者的净利润
+    "ebitda": ("income", ("ebitda",)),                                 # 息税折旧摊销前利润
+    "eps_basic": ("income", ("basic_eps",)),                           # 基本每股收益
     "eps_diluted": ("income", ("diluted_eps",)),                       # 稀释每股收益
-    "total_assets": ("balancesheet", ("total_assets",)),
-    "total_liabilities": ("balancesheet", ("total_liab",)),
-    "equity": ("balancesheet", ("total_hldr_eqy_exc_min_int",)),       # 归属于母公司股东权益合计
+    # ---- balance sheet
     "cash": ("balancesheet", ("money_cap",)),                          # 货币资金
+    "short_term_investments": ("balancesheet", ("trad_asset",)),       # 交易性金融资产
+    "accounts_receivable": ("balancesheet", ("accounts_receiv", "accounts_receiv_bill")),  # 应收账款
+    "inventory": ("balancesheet", ("inventories",)),                   # 存货
+    "current_assets": ("balancesheet", ("total_cur_assets",)),         # 流动资产合计
+    "ppe_net": ("balancesheet", ("fix_assets",)),                      # 固定资产
+    "goodwill": ("balancesheet", ("goodwill",)),                       # 商誉
+    "intangible_assets": ("balancesheet", ("intang_assets",)),         # 无形资产
+    "total_assets": ("balancesheet", ("total_assets",)),               # 资产总计
+    "accounts_payable": ("balancesheet", ("accounts_pay",)),           # 应付账款
+    "short_term_debt": ("balancesheet", ("st_borr",)),                 # 短期借款
+    "current_liabilities": ("balancesheet", ("total_cur_liab",)),      # 流动负债合计
+    "long_term_debt": ("balancesheet", ("lt_borr", "bond_payable")),   # 长期借款, else 应付债券
+    "total_liabilities": ("balancesheet", ("total_liab",)),            # 负债合计
+    "retained_earnings": ("balancesheet", ("undistr_porfit",)),        # 未分配利润
+    "equity": ("balancesheet", ("total_hldr_eqy_exc_min_int",)),       # 归属于母公司股东权益合计
+    "non_controlling_interests": ("balancesheet", ("minority_int",)),  # 少数股东权益
+    # ---- cash-flow statement
+    "depreciation_amortization": ("cashflow", ("depr_fa_coga_dpba",)), # 固定资产折旧等
     "operating_cash_flow": ("cashflow", ("n_cashflow_act",)),          # 经营活动现金流量净额
     "capex": ("cashflow", ("c_pay_acq_const_fiolta",)),                # 购建固定资产、无形资产和其他长期资产支付的现金
+    "investing_cash_flow": ("cashflow", ("n_cashflow_inv_act",)),      # 投资活动现金流量净额
+    "financing_cash_flow": ("cashflow", ("n_cash_flows_fnc_act",)),    # 筹资活动现金流量净额
+    "net_increase_in_cash": ("cashflow", ("n_incr_cash_cash_equ",)),   # 现金及现金等价物净增加额
 }
 _unknown = [l for l in LINE_FIELDS if l not in STANDARD_LINES]
 assert not _unknown, _unknown
@@ -70,6 +101,9 @@ def _mapped_error(code: Any, msg: str, api: str, prov, cost, secret: str) -> Too
 
 
 class TushareAdapter:
+    STANDARD_LINES = STANDARD_LINES
+    LINE_FIELDS = LINE_FIELDS
+
     def __init__(self, *, token: str | None = None, credential_owner: str = "platform", account_id: str | None = None,
                  transport: Transport | None = None, limiter=None, policy: FinDataPolicy | None = None,
                  now_fn: Callable[[], datetime] = utcnow, timeout: float = 15.0) -> None:
@@ -273,7 +307,7 @@ class TushareAdapter:
     def statement_lines(self, code: cn.CnCode, *, lines: Iterable[str] | None = None, period: str = "quarter", n: int = 8,
                         derive_quarters: bool = False, entity_id: str | None = None) -> ToolResult:
         wanted = list(lines) if lines else list(LINE_FIELDS)
-        unknown = [l for l in wanted if l not in LINE_FIELDS]
+        unknown = [l for l in wanted if l not in STANDARD_LINES]
         if unknown or period not in ("quarter", "year") or n < 1:
             return ToolResult.failure("failed", "unknown_line" if unknown else "invalid_request",
                                       f"Unsupported standard lines for Tushare: {', '.join(unknown)}." if unknown else "period must be quarter|year.")
@@ -281,13 +315,23 @@ class TushareAdapter:
         if isinstance(gate, ToolResult):
             return gate
         eid = entity_id or code.entity_id
+        supported = [l for l in wanted if l in LINE_FIELDS]
+        unmapped = [l for l in wanted if l not in LINE_FIELDS]
+        if not supported:
+            return ToolResult(
+                status="empty", reason="no_matching_lines", permissions=gate,
+                coverage=Coverage(entity_id=eid, rows=0, currency=cn.CN_CURRENCY,
+                                  notes=[f"No Tushare field mapping for standard line(s): {', '.join(unmapped)}."]),
+                message=f"Tushare has no direct mapping for: {', '.join(unmapped)}.")
         apis: dict[str, list[str]] = {}
-        for line in wanted:
+        for line in supported:
             api, fields = LINE_FIELDS[line]
             apis.setdefault(api, [])
             apis[api].extend(f for f in fields if f not in apis[api])
-        values: dict[str, dict[date, LineValue]] = {line: {} for line in wanted}
+        values: dict[str, dict[date, LineValue]] = {line: {} for line in supported}
         notes: list[str] = []
+        if unmapped:
+            notes.append(f"No Tushare field mapping for standard line(s): {', '.join(unmapped)}.")
         calls, hashes, endpoints, last_prov = 0, [], [], None
         failures: list[ToolResult] = []
         for api, fields in apis.items():
@@ -303,7 +347,7 @@ class TushareAdapter:
             hashes.append(prov.response_sha256 or "")
             endpoints.append(prov.endpoint)
             last_prov = prov
-            self._collect(rows, api, wanted, values)
+            self._collect(rows, api, supported, values)
         if not any(values.values()):
             if failures:
                 return failures[0].model_copy(update={"cost": Cost(provider_calls=calls)})
@@ -316,10 +360,13 @@ class TushareAdapter:
                           response_sha256=digest, endpoints=endpoints)
         cov = Coverage(entity_id=eid, requested={"period": period, "n": str(n)}, rows=len(out), currency=cn.CN_CURRENCY,
                        data_as_of=max((l.filed_at for l in out if l.filed_at), default=None), notes=notes)
-        partial = bool(failures)
-        return ToolResult(status="partial" if partial else "ok", reason="source_gap" if partial else "ok", coverage=cov,
+        partial = bool(failures) or bool(unmapped)
+        reason = "source_gap" if failures else ("missing_lines" if unmapped else "ok")
+        msg = ("Some statements could not be fetched; see notes." if failures else
+               (f"No Tushare mapping for: {', '.join(unmapped)}." if unmapped else ""))
+        return ToolResult(status="partial" if partial else "ok", reason=reason, coverage=cov,
                           permissions=gate, provenance=prov, cost=Cost(provider_calls=calls), data=out,
-                          message="Some statements could not be fetched; see notes." if partial else "")
+                          message=msg)
 
     @staticmethod
     def _collect(rows: list[dict[str, Any]], api: str, wanted: list[str], values: dict[str, dict[date, LineValue]]) -> None:
@@ -340,7 +387,7 @@ class TushareAdapter:
             if line_api != api:
                 continue
             spec = STANDARD_LINES[line]
-            unit = "CNY/share" if spec.unit_kind == "per_share" else "CNY"
+            unit = "CNY/share" if spec.unit_kind == "per_share" else ("shares" if spec.unit_kind == "shares" else "CNY")
             for end, group in by_end.items():
                 for field_name in fields:
                     winner, value, superseded = cn.pick_latest(group, field_name)

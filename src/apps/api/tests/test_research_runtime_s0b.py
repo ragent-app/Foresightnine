@@ -66,7 +66,7 @@ def test_read_pages_reads_text_pages_reports_ocr_and_records_ranges():
     src = paged_source(['Page one revenue 10.', None, 'Page three margin 20.'])
     m = Model([turn('read_pages', {'source_id': 'pdf', 'first_page': 1, 'last_page': 3, 'rationale': 'r'}, 'a'), STOP])
     out = run(m, [src])
-    fb = json.loads(m.inputs[1][-1]['content'])
+    fb = tool_messages(m, 1)[-1]
     assert fb['results'][0]['text'] == src.text[0:len(src.text)]
     assert [r['status'] for r in fb['page_statuses']] == ['text', 'needs_ocr', 'text']
     assert 'OCR' in fb['message'] and 'next_page' not in fb
@@ -77,7 +77,7 @@ def test_read_pages_only_ocr_pages_returns_needs_ocr_status():
     src = paged_source(['Text page.', None])
     m = Model([turn('read_pages', {'source_id': 'pdf', 'first_page': 2, 'last_page': 2, 'rationale': 'r'}, 'a'), STOP])
     run(m, [src])
-    fb = json.loads(m.inputs[1][-1]['content'])
+    fb = tool_messages(m, 1)[-1]
     assert fb['status'] == 'needs_ocr' and fb['page_statuses'] == [{'page': 2, 'status': 'needs_ocr'}]
     assert 'not available' in fb['message']
 
@@ -88,24 +88,24 @@ def test_read_pages_limit_returns_next_page_and_continues():
     m = Model([turn('read_pages', {'source_id': 'pdf', 'first_page': 1, 'last_page': 4, 'rationale': 'r'}, 'a'),
                turn('read_pages', {'source_id': 'pdf', 'first_page': 3, 'last_page': 4, 'rationale': 'more'}, 'b'), STOP])
     run(m, [src])
-    first = json.loads(m.inputs[1][-1]['content'])
+    first = tool_messages(m, 1)[-1]
     assert first['pages_read'] == [1, 2] and first['next_page'] == 3 and first['truncated_by_limit'] is True
     assert len(first['results'][0]['text']) <= 25_000
-    second = json.loads(m.inputs[2][-1]['content'])
+    second = tool_messages(m, 2)[-1]
     assert second['pages_read'] == [3, 4] and 'next_page' not in second
 
 
 def test_read_pages_without_page_map_is_invalid_and_points_to_read_sources():
     m = Model([turn('read_pages', {'source_id': 'p1', 'first_page': 1, 'last_page': 2, 'rationale': 'r'}, 'a'), STOP])
     run(m, [make_source()])
-    fb = json.loads(m.inputs[1][-1]['content'])
+    fb = tool_messages(m, 1)[-1]
     assert fb['status'] == 'invalid' and 'read_sources' in fb['instruction']
 
 
 def test_read_pages_validates_page_order():
     m = Model([turn('read_pages', {'source_id': 'pdf', 'first_page': 3, 'last_page': 1, 'rationale': 'r'}, 'a'), STOP])
     run(m, [paged_source(['a', 'b', 'c'])])
-    assert json.loads(m.inputs[1][-1]['content'])['status'] == 'invalid'
+    assert tool_messages(m, 1)[-1]['status'] == 'invalid'
 
 
 def test_outline_includes_page_map_summary_and_entry_pages():
@@ -113,7 +113,7 @@ def test_outline_includes_page_map_summary_and_entry_pages():
     src = paged_source(pages)
     m = Model([turn('outline_source', {'source_id': 'pdf'}, 'a'), STOP])
     run(m, [src])
-    fb = json.loads(m.inputs[1][-1]['content'])
+    fb = tool_messages(m, 1)[-1]
     assert fb['page_count'] == 4
     assert fb['page_status_summary'] == {'counts': {'text': 3, 'needs_ocr': 1}, 'needs_ocr_pages': [3]}
     by_title = {e['title']: e.get('page') for e in fb['entries']}
@@ -237,7 +237,7 @@ def test_locate_reports_quotation_outside_read_ranges_with_page():
     m = Model([turn('read_pages', {'source_id': 'pdf', 'first_page': 1, 'last_page': 1, 'rationale': 'r'}, 'a'),
                turn('submit_research', quotation_error(src, 'Net income of 55 million'), 'b'), STOP])
     run(m, [src])
-    fb = json.loads(m.inputs[2][-1]['content'])
+    fb = tool_messages(m, 2)[-1]
     assert fb['status'] == 'invalid'
     reason = fb['reason']
     assert f'[{start}, {start + len("Net income of 55 million")})' in reason and 'page 2' in reason
@@ -249,7 +249,7 @@ def test_locate_not_found_anywhere_suggests_checking_whitespace_and_escapes():
     m = Model([turn('read_sources', {'reads': [{'source_id': 'p1'}], 'rationale': 'r'}, 'a'),
                turn('submit_research', quotation_error(src, 'Revenue was 999 USD.'), 'b'), STOP])
     run(m, [src])
-    reason = json.loads(m.inputs[2][-1]['content'])['reason']
+    reason = tool_messages(m, 2)[-1]['reason']
     assert 'does not occur verbatim anywhere' in reason and 'whitespace' in reason
 
 

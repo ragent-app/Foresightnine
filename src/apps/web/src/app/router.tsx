@@ -1,4 +1,5 @@
 import { Navigate, Outlet, createBrowserRouter, type RouteObject } from "react-router-dom";
+import { AdminKeysPage } from "../pages/AdminKeysPage";
 import { HomePage } from "../pages/HomePage";
 import { LoginPage } from "../pages/LoginPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
@@ -21,6 +22,7 @@ export const routes: RouteObject[] = [
       { path: "/research/new", element: <Navigate to="/research" replace /> },
       { path: "/research/:topicId", element: <TopicPage /> },
       { path: "/settings", element: <SettingsPage /> },
+      { path: "/admin/keys", element: <AdminKeysPage /> },
     ],
   },
   { path: "*", element: <NotFoundPage /> },

@@ -5,7 +5,16 @@ from types import SimpleNamespace
 
 from app.fin_data.models import Cost, ToolResult
 from app.news.gdelt import GDELT_ATTRIBUTION, NewsLead
-from app.news.search import GdeltNewsProvider, GlmNewsProvider, news_search
+from app.news.search import (
+    AUTHORITY_TIER_WEIGHTS,
+    EVENT_TYPES,
+    GdeltNewsProvider,
+    GlmNewsProvider,
+    classify_authority_tier,
+    entity_matches,
+    news_search,
+    tag_news_events,
+)
 
 UTC = timezone.utc
 
@@ -163,3 +172,235 @@ def test_glm_adapter_keeps_quota_failure_code_message_and_reset():
     r = GlmNewsProvider(Boom()).search("q")
     assert r.status == "failed" and r.reason == "search_quota_exhausted" and not r.retryable
     assert "limit reached" in r.message and "2026-11-23T21:28:02+08:00" in r.message
+
+
+def test_newest_clusters_kept_when_truncated_by_limit():
+    leads = [
+        lead("https://alpha.example.com/1", "Alpha Semiconductor Fab Expansion Update", "glm", published_at=datetime(2026, 11, 1, tzinfo=UTC)),
+        lead("https://beta.example.com/2", "Beta Copper Mine Output Report", "glm", published_at=datetime(2026, 11, 5, tzinfo=UTC)),
+        lead("https://gamma.example.com/3", "Gamma Grid Transformer Shortage Briefing", "glm", published_at=datetime(2026, 11, 10, tzinfo=UTC)),
+        lead("https://delta.example.com/4", "Delta Airline Fuel Hedging Results", "glm", published_at=datetime(2026, 11, 15, tzinfo=UTC)),
+        lead("https://epsilon.example.com/5", "Epsilon Sovereign Bond Auction Demand", "glm", published_at=datetime(2026, 11, 20, tzinfo=UTC)),
+        lead("https://zeta.example.com/6", "Zeta Undated Background Industry Primer", "glm"),
+    ]
+    r = news_search("market", limit=2, providers=[Fake("glm", ok(leads))])
+    assert r.status == "ok"
+    assert r.coverage.truncated is True
+    assert [g["representative"].url for g in r.data] == [
+        "https://epsilon.example.com/5",
+        "https://delta.example.com/4",
+    ]
+
+
+def test_concurrent_multi_provider_search_preserves_deterministic_merge_order():
+    import threading
+    import time
+
+    barrier = threading.Barrier(2, timeout=2.0)
+
+    class BarrierProvider:
+        def __init__(self, name, result, delay=0.0):
+            self.name = name
+            self.result = result
+            self.delay = delay
+            self.supports_time_filter = False
+
+        def search(self, query, **kw):
+            barrier.wait()
+            if self.delay:
+                time.sleep(self.delay)
+            return self.result
+
+    p1 = BarrierProvider(
+        "first",
+        ok([
+            lead("https://www.reuters.com/story?utm_source=first", "First provider headline about rates", "first",
+                 published_at=datetime(2026, 11, 19, tzinfo=UTC), excerpt="First excerpt"),
+            lead("https://only-first.example.com/a", "Unique story from first provider", "first",
+                 published_at=datetime(2026, 11, 18, tzinfo=UTC)),
+        ]),
+        delay=0.05,  # finishes slower than p2, yet must win deterministic merge order
+    )
+    p2 = BarrierProvider(
+        "second",
+        ok([
+            lead("https://reuters.com/story", "Second provider headline about rates", "second",
+                 seen_at=datetime(2026, 11, 19, 12, tzinfo=UTC), domain="reuters.com"),
+            lead("https://only-second.example.com/b", "Unique story from second provider", "second",
+                 published_at=datetime(2026, 11, 20, tzinfo=UTC)),
+        ]),
+        delay=0.0,
+    )
+
+    r = news_search("rates", providers=[p1, p2])
+    assert r.status == "ok"
+    assert "Providers answered: first, second." in r.coverage.notes
+    all_leads = [m for g in r.data for m in g["members"]]
+    merged = next(m for m in all_leads if m.canonical_url == "https://reuters.com/story")
+    assert merged.url == "https://www.reuters.com/story?utm_source=first"
+    assert merged.excerpt == "First excerpt"
+    assert merged.seen_at == datetime(2026, 11, 19, 12, tzinfo=UTC)
+    assert merged.providers == ["first", "second"]
+
+
+def test_concurrent_provider_exception_and_timeout_isolation():
+    import threading
+
+    release_hung = threading.Event()
+
+    class ExplodingProvider:
+        name = "exploding"
+        supports_time_filter = False
+
+        def search(self, query, **kw):
+            raise RuntimeError("boom")
+
+    class HungProvider:
+        name = "hung"
+        supports_time_filter = False
+
+        def search(self, query, **kw):
+            release_hung.wait(timeout=2.0)
+            return ok([lead("https://hung.example.com/late", "Too late", "hung")])
+
+    fast = Fake("fast", ok([
+        lead("https://fast.example.com/news", "Fast provider story arrives cleanly", "fast",
+             published_at=datetime(2026, 11, 20, tzinfo=UTC)),
+    ]))
+    try:
+        r = news_search("news", providers=[ExplodingProvider(), HungProvider(), fast], timeout_seconds=0.05)
+    finally:
+        release_hung.set()
+
+    assert r.status == "partial"
+    assert [g["representative"].url for g in r.data] == ["https://fast.example.com/news"]
+    notes = " ".join(r.coverage.notes)
+    assert "Providers answered: fast." in notes
+    assert "Provider exploding failed (provider_exception" in notes
+    assert "Provider hung failed (provider_timeout" in notes
+
+
+def test_composite_ranking_respects_authority_relevance_as_of_and_recency_mode():
+    ref_as_of = datetime(2026, 6, 15, 12, 0, tzinfo=UTC)
+    leads = [
+        # Newest, but aggregator and weak match
+        lead("https://finance.yahoo.com/news/roundup", "Market wrap for Tuesday", "glm",
+             published_at=datetime(2026, 6, 15, 10, 0, tzinfo=UTC), excerpt="Broad markets digest macro news."),
+        # Slightly older, official filing matching both query and entity
+        lead("https://www.sec.gov/Archives/nvda-10q", "NVDA Form 10-Q Quarterly Revenue Filing", "glm",
+             published_at=datetime(2026, 6, 14, 10, 0, tzinfo=UTC), excerpt="NVDA reports data center revenue growth."),
+        # Wire agency matching query strongly, same day as official
+        lead("https://www.reuters.com/tech/nvda-revenue", "NVDA quarterly revenue jumps on data center demand", "glm",
+             published_at=datetime(2026, 6, 14, 11, 0, tzinfo=UTC), excerpt="Reuters coverage of NVDA revenue."),
+        # General tech blog matching query, same day (distinct story text so not clustered with Reuters)
+        lead("https://techblog.example.com/nvda-post", "NVDA quarterly revenue surges in AI server boom", "glm",
+             published_at=datetime(2026, 6, 14, 11, 30, tzinfo=UTC), excerpt="Analysis of NVDA revenue."),
+        # Much older official filing (decayed by as_of=2026-06-15)
+        lead("https://www.sec.gov/Archives/nvda-old", "NVDA Form 10-Q Quarterly Revenue Filing", "glm",
+             published_at=datetime(2026, 2, 1, 10, 0, tzinfo=UTC), excerpt="Older NVDA filing."),
+    ]
+    assert classify_authority_tier(leads[1]) == "official"
+    assert classify_authority_tier(leads[2]) == "wire_agency"
+    assert classify_authority_tier(leads[3]) == "general"
+    assert classify_authority_tier(leads[0]) == "aggregator"
+    assert AUTHORITY_TIER_WEIGHTS["official"] > AUTHORITY_TIER_WEIGHTS["wire_agency"] > AUTHORITY_TIER_WEIGHTS["general"] > AUTHORITY_TIER_WEIGHTS["aggregator"]
+
+    rel = news_search("NVDA quarterly revenue", entities=["NVDA"], as_of=ref_as_of, providers=[Fake("glm", ok(leads))])
+    assert rel.status == "ok"
+    rel_urls = [g["representative"].url for g in rel.data]
+    assert rel_urls[0] == "https://www.sec.gov/Archives/nvda-10q"
+    assert rel_urls.index("https://www.reuters.com/tech/nvda-revenue") < rel_urls.index("https://techblog.example.com/nvda-post")
+    assert rel_urls.index("https://techblog.example.com/nvda-post") < rel_urls.index("https://finance.yahoo.com/news/roundup")
+    assert rel_urls[-1] == "https://www.sec.gov/Archives/nvda-old"
+
+    rec = news_search("NVDA quarterly revenue", entities=["NVDA"], sort_by="recency", as_of=ref_as_of, providers=[Fake("glm", ok(leads))])
+    assert [g["representative"].url for g in rec.data] == [
+        "https://finance.yahoo.com/news/roundup",
+        "https://techblog.example.com/nvda-post",
+        "https://www.reuters.com/tech/nvda-revenue",
+        "https://www.sec.gov/Archives/nvda-10q",
+        "https://www.sec.gov/Archives/nvda-old",
+    ]
+
+
+def test_composite_ranking_deterministic_tie_breaking_and_invalid_sort_by():
+    same_dt = datetime(2026, 11, 18, 9, 0, tzinfo=UTC)
+    l1 = lead("https://b.example.com/story", "Chile copper mine output drops unexpectedly", "glm", published_at=same_dt)
+    l2 = lead("https://a.example.com/story", "Peru copper smelter margins expand sharply", "glm", published_at=same_dt)
+    res = news_search("copper", providers=[Fake("glm", ok([l1, l2]))])
+    assert [g["representative"].canonical_url for g in res.data] == [
+        "https://a.example.com/story",
+        "https://b.example.com/story",
+    ]
+
+    bad = news_search("copper", sort_by="popularity", providers=[Fake("glm", ok([l1]))])  # type: ignore[arg-type]
+    assert bad.status == "failed" and bad.reason == "news_sort_invalid"
+
+
+def test_word_boundary_and_cjk_entity_matching():
+    assert entity_matches("AI", "AI chip demand surges in Q3")
+    assert entity_matches("AI", "C3.ai reports quarterly results")
+    assert entity_matches("AI", "人工智能AI赛道持续升温")
+    assert not entity_matches("AI", "Analysts said claims on Taiwan rail gained momentum")
+
+    assert entity_matches("ON", "ON Semiconductor beats expectations")
+    assert entity_matches("ON", "美股ON半导体盘前上涨")
+    assert not entity_matches("ON", "Company announced billion-dollar deal on Monday")
+    assert not entity_matches("ON", "On Tuesday markets paused")
+
+    assert entity_matches("比亚迪", "比亚迪公布第三季度财报")
+    assert entity_matches("Federal Reserve", "The Federal Reserve held rates steady")
+
+    glm = Fake("glm", ok([
+        lead("https://a.example.com/1", "Analysts said Taiwan rail gained", "glm"),
+        lead("https://a.example.com/2", "人工智能AI芯片龙头发布业绩", "glm"),
+        lead("https://a.example.com/3", "Report on Monday billion-dollar company", "glm"),
+        lead("https://a.example.com/4", "(NASDAQ: ON) beats Q3 revenue", "glm"),
+    ]))
+    r = news_search("said", entities=["AI", "ON"], providers=[glm])
+    by_url = {m.url: m.matched_entities for g in r.data for m in g["members"]}
+    assert by_url["https://a.example.com/1"] == []
+    assert by_url["https://a.example.com/2"] == ["AI"]
+    assert by_url["https://a.example.com/3"] == []
+    assert by_url["https://a.example.com/4"] == ["ON"]
+    # Because "AI" does not match inside "said", "AI" is appended to provider query.
+    sent_query = glm.calls[0][0]
+    assert "AI" in sent_query and "ON" in sent_query
+
+
+def test_bilingual_event_type_tagging():
+    en_cases = [
+        ("Apple reports Q4 earnings beat estimates", "EPS exceeded consensus", ["earnings"]),
+        ("Nvidia raises full-year revenue guidance", None, ["guidance"]),
+        ("Microsoft agrees to buy gaming studio in all-cash acquisition", None, ["m_and_a"]),
+        ("SEC fines brokerage firm over compliance failures", None, ["regulatory"]),
+        ("Federal Reserve cuts interest rates as inflation cools", None, ["macro"]),
+        ("Morgan Stanley upgrades stock and raises price target", None, ["rating_change"]),
+        ("Board approves $10B share repurchase and special dividend", None, ["corporate_action"]),
+    ]
+    zh_cases = [
+        ("公司公布2026年三季报，营业收入与净利润双增长", None, ["earnings"]),
+        ("管理层上调全年业绩指引并展望需求复苏", None, ["guidance"]),
+        ("某科技巨头宣布重大资产重组及并购方案", None, ["m_and_a"]),
+        ("证监会就信息披露违规向公司出具警示函并立案调查", None, ["regulatory"]),
+        ("美联储宣布降息25个基点，通胀与CPI走势受关注", None, ["macro"]),
+        ("券商发布研报上调评级至买入并调高目标价", None, ["rating_change"]),
+        ("公司董事会批准股份回购及年度分红派息方案", None, ["corporate_action"]),
+    ]
+    seen_types: set[str] = set()
+    for title, excerpt, expected in en_cases + zh_cases:
+        tags = tag_news_events(title, excerpt)
+        assert tags == expected, (title, tags)
+        seen_types.update(tags)
+    assert seen_types == set(EVENT_TYPES)
+    assert tag_news_events("Apple Q4 earnings beat estimates and raises full-year guidance") == ["earnings", "guidance"]
+    assert tag_news_events("Coastal city enjoys mild sunny weekend weather", "Local festival draws crowds.") == []
+
+    # Cluster aggregates member event tags in canonical order
+    glm = Fake("glm", ok([
+        lead("https://a.example.com/1", "Acme Q3 earnings beat consensus", "glm", published_at=datetime(2026, 11, 20, tzinfo=UTC)),
+        lead("https://b.example.com/2", "Acme Q3 earnings beat consensus", "glm",
+             excerpt="Management also raises full-year guidance.", published_at=datetime(2026, 11, 20, tzinfo=UTC)),
+    ]))
+    res = news_search("Acme", providers=[glm])
+    assert res.data[0]["event_types"] == ["earnings", "guidance"]

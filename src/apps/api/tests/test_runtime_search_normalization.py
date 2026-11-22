@@ -97,28 +97,36 @@ def test_glm_opaque_goto_batch_does_not_poison_search_invalid_response():
     def rpc(msg_id: int, result: dict) -> HttpResponse:
         return HttpResponse(200, json.dumps({'jsonrpc': '2.0', 'id': msg_id, 'result': result}), {'mcp-session-id': 's1'})
 
-    def mcp_search_replies(rows: list[dict]) -> list[HttpResponse]:
-        return [
-            rpc(1, {'protocolVersion': '2025-03-26'}),
-            HttpResponse(202, ''),
-            rpc(2, {'tools': [{'name': 'web_search_prime', 'inputSchema': {'type': 'object', 'properties': {'search_query': {'type': 'string'}, 'count': {'type': 'integer'}}}}]}),
-            rpc(3, {'content': [{'type': 'text', 'text': json.dumps({'search_result': rows})}]}),
-        ]
+    call_batches = [
+        [
+            {'title': 'Opaque 1', 'link': 'https://www.google.com/goto?url=CAESdwHEIkXX&gsessionid=x', 'content': 'One.'},
+            {'title': 'Opaque 2', 'link': 'https://www.google.com/goto?url=CAESother123&gsessionid=y', 'content': 'Two.'},
+        ],
+        [
+            {'title': 'Opaque 3', 'link': 'https://www.google.com/goto?url=CAESmixed&gsessionid=z', 'content': 'Three.'},
+            {'title': 'Bing filing', 'link': f"https://www.bing.com/ck/a?u={_b64_bing('https://www.sec.gov/nvda.htm')}", 'content': 'Filing.', 'date': '2026-08-01T12:00:00Z'},
+            {'title': 'Fallback target', 'link': 'https://www.google.com/goto?url=CAESfallback', 'target_url': 'https://investor.nvidia.com/news', 'content': 'PR.', 'publish_date': '2026-08-02'},
+            {'title': 'Wrapped FRED', 'link': 'https://www.google.com/url?q=https://fred.stlouisfed.org/series/GDP', 'content': 'Restricted.'},
+        ],
+    ]
 
-    replies = mcp_search_replies([
-        {'title': 'Opaque 1', 'link': 'https://www.google.com/goto?url=CAESdwHEIkXX&gsessionid=x', 'content': 'One.'},
-        {'title': 'Opaque 2', 'link': 'https://www.google.com/goto?url=CAESother123&gsessionid=y', 'content': 'Two.'},
-    ]) + mcp_search_replies([
-        {'title': 'Opaque 3', 'link': 'https://www.google.com/goto?url=CAESmixed&gsessionid=z', 'content': 'Three.'},
-        {'title': 'Bing filing', 'link': f"https://www.bing.com/ck/a?u={_b64_bing('https://www.sec.gov/nvda.htm')}", 'content': 'Filing.', 'date': '2026-08-01T12:00:00Z'},
-        {'title': 'Fallback target', 'link': 'https://www.google.com/goto?url=CAESfallback', 'target_url': 'https://investor.nvidia.com/news', 'content': 'PR.', 'publish_date': '2026-08-02'},
-        {'title': 'Wrapped FRED', 'link': 'https://www.google.com/url?q=https://fred.stlouisfed.org/series/GDP', 'content': 'Restricted.'},
-    ])
+    def transport(_method: str, _url: str, _headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
+        payload = json.loads(body)
+        method = payload.get('method')
+        if method == 'initialize':
+            return rpc(1, {'protocolVersion': '2025-03-26'})
+        if method == 'notifications/initialized':
+            return HttpResponse(202, '')
+        if method == 'tools/list':
+            return rpc(2, {'tools': [{'name': 'web_search_prime', 'inputSchema': {'type': 'object', 'properties': {'search_query': {'type': 'string'}, 'count': {'type': 'integer'}}}}]})
+        if method == 'tools/call':
+            return rpc(3, {'content': [{'type': 'text', 'text': json.dumps({'search_result': call_batches.pop(0)})}]})
+        raise AssertionError(f'Unexpected MCP method: {method}')
 
-    provider = GlmCodingMcpSearchEvidenceProvider('synthetic-secret', transport=lambda *_args: replies.pop(0), sleeper=lambda _delay: None)
+    provider = GlmCodingMcpSearchEvidenceProvider('synthetic-secret', transport=transport, sleeper=lambda _delay: None)
     model = Model([
         turn('news_search', {'query': 'first opaque batch', 'rationale': 'find'}, 'c1'),
-        turn('news_search', {'query': 'second mixed batch', 'rationale': 'find more'}, 'c2'),
+        turn('news_search', {'query': 'second mixed batch', 'rationale': 'find more', 'sort_by': 'recency'}, 'c2'),
         ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
     ])
 

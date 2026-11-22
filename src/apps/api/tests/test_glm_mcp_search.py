@@ -351,3 +351,230 @@ def test_ordinary_search_payload_is_not_mistaken_for_an_error() -> None:
     payload = json.dumps({"search_result": [{"title": "T", "link": "https://example.com/a", "content": "c", "publish_date": "2026-08-01"}]})
     provider = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=_call_result_transport({"content": [{"type": "text", "text": payload}]}), sleeper=lambda _d: None)
     assert provider.search("q", limit=1)[0].url == "https://example.com/a"
+
+
+def test_glm_mcp_reuses_session_and_tool_schema_across_searches() -> None:
+    calls: list[tuple[str | None, str, dict[str, object]]] = []
+
+    def transport(_method: str, _url: str, headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
+        payload = json.loads(body)
+        rpc_method = payload.get("method")
+        calls.append((headers.get("Mcp-Session-Id"), str(rpc_method), payload))
+        if rpc_method == "initialize":
+            return response({"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-03-26"}}, session="reuse-sess-1")
+        if rpc_method == "notifications/initialized":
+            return HttpResponse(202, "")
+        if rpc_method == "tools/list":
+            return response({"jsonrpc": "2.0", "id": 2, "result": {"tools": [{
+                "name": "web_search_prime",
+                "inputSchema": {"type": "object", "properties": {"search_query": {"type": "string", "maxLength": 50}, "count": {"type": "integer"}}},
+            }]}})
+        if rpc_method == "tools/call":
+            q = payload["params"]["arguments"]["search_query"]
+            return response({"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": json.dumps({
+                "search_result": [{"title": f"Hit for {q}", "link": f"https://example.com/{len(calls)}", "content": "Snippet."}]
+            })}]}})
+        raise AssertionError(f"Unexpected method {rpc_method}")
+
+    provider = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=transport, sleeper=lambda _d: None)
+    first = provider.search("alpha", limit=2)
+    second = provider.search("beta", limit=3)
+    third = provider.search("gamma", limit=1)
+
+    assert [c.title for c in first] == ["Hit for alpha"]
+    assert [c.title for c in second] == ["Hit for beta"]
+    assert [c.title for c in third] == ["Hit for gamma"]
+    assert [c[1] for c in calls] == [
+        "initialize",
+        "notifications/initialized",
+        "tools/list",
+        "tools/call",
+        "tools/call",
+        "tools/call",
+    ]
+    assert all(c[0] == "reuse-sess-1" for c in calls[3:])
+
+    # Cached schema maxLength enforcement fires with zero additional HTTP calls.
+    before = len(calls)
+    with pytest.raises(ProviderFailure, match="provider-declared limit"):
+        provider.search("x" * 51, limit=1)
+    assert len(calls) == before
+
+
+@pytest.mark.parametrize("failure_mode", ["http_404", "http_401", "jsonrpc_error", "tool_session_expired"])
+def test_glm_mcp_invalidates_and_reinitializes_once_on_expired_session_or_protocol_error(failure_mode: str) -> None:
+    calls: list[tuple[str | None, str]] = []
+    session_counter = 0
+
+    def transport(_method: str, _url: str, headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
+        nonlocal session_counter
+        payload = json.loads(body)
+        rpc_method = str(payload.get("method"))
+        sid = headers.get("Mcp-Session-Id")
+        calls.append((sid, rpc_method))
+        if rpc_method == "initialize":
+            session_counter += 1
+            return response({"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-03-26"}}, session=f"sess-{session_counter}")
+        if rpc_method == "notifications/initialized":
+            return HttpResponse(202, "")
+        if rpc_method == "tools/list":
+            return response({"jsonrpc": "2.0", "id": 2, "result": {"tools": [{
+                "name": "web_search_prime",
+                "inputSchema": {"type": "object", "properties": {"search_query": {"type": "string"}, "count": {"type": "integer"}}},
+            }]}})
+        if rpc_method == "tools/call":
+            if sid == "sess-1" and len([c for c in calls if c[1] == "tools/call"]) >= 2:
+                if failure_mode == "http_404":
+                    return HttpResponse(404, "Session not found", {})
+                if failure_mode == "http_401":
+                    return HttpResponse(401, "Session unauthorized", {})
+                if failure_mode == "jsonrpc_error":
+                    return response({"jsonrpc": "2.0", "id": 3, "error": {"code": -32001, "message": "Session expired"}})
+                return response({"jsonrpc": "2.0", "id": 3, "result": {
+                    "isError": True,
+                    "content": [{"type": "text", "text": "MCP error -32001: session expired"}],
+                }})
+            return response({"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": json.dumps({
+                "search_result": [{"title": f"Result on {sid}", "link": "https://example.com/ok", "content": "Content."}]
+            })}]}})
+        raise AssertionError(f"Unexpected method {rpc_method}")
+
+    provider = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=transport, sleeper=lambda _d: None)
+    assert provider.search("first", limit=1)[0].title == "Result on sess-1"
+    recovered = provider.search("second", limit=1)
+    assert recovered[0].title == "Result on sess-2"
+    # Third search reuses sess-2 without another handshake.
+    assert provider.search("third", limit=1)[0].title == "Result on sess-2"
+    assert [c[1] for c in calls] == [
+        "initialize", "notifications/initialized", "tools/list", "tools/call",
+        "tools/call",
+        "initialize", "notifications/initialized", "tools/list", "tools/call",
+        "tools/call",
+    ]
+
+
+def test_glm_mcp_persistent_session_rejection_reinitializes_at_most_once_and_clears_cache() -> None:
+    calls: list[tuple[str | None, str]] = []
+    session_counter = 0
+
+    def transport(_method: str, _url: str, headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
+        nonlocal session_counter
+        payload = json.loads(body)
+        rpc_method = str(payload.get("method"))
+        sid = headers.get("Mcp-Session-Id")
+        calls.append((sid, rpc_method))
+        if rpc_method == "initialize":
+            session_counter += 1
+            return response({"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-03-26"}}, session=f"sess-{session_counter}")
+        if rpc_method == "notifications/initialized":
+            return HttpResponse(202, "")
+        if rpc_method == "tools/list":
+            return response({"jsonrpc": "2.0", "id": 2, "result": {"tools": [{
+                "name": "web_search_prime",
+                "inputSchema": {"type": "object", "properties": {"search_query": {"type": "string"}}},
+            }]}})
+        if rpc_method == "tools/call":
+            if len([c for c in calls if c[1] == "tools/call"]) == 1:
+                return response({"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": json.dumps({
+                    "search_result": [{"title": "Initial", "link": "https://example.com/1", "content": "Ok."}]
+                })}]}})
+            return HttpResponse(404, "Session expired", {})
+        raise AssertionError(f"Unexpected method {rpc_method}")
+
+    provider = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=transport, sleeper=lambda _d: None)
+    assert provider.search("ok", limit=1)[0].title == "Initial"
+    with pytest.raises(ProviderFailure) as raised:
+        provider.search("fails", limit=1)
+    assert raised.value.code == "search_provider_rejected"
+    assert [c[1] for c in calls] == [
+        "initialize", "notifications/initialized", "tools/list", "tools/call",
+        "tools/call",
+        "initialize", "notifications/initialized", "tools/list", "tools/call",
+    ]
+    assert provider._session_id is None and provider._tool_cache is None
+
+
+def test_glm_mcp_concurrent_calls_share_single_handshake_and_single_reinit() -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+
+    lock = threading.Lock()
+    init_count = 0
+    call_sessions: list[str | None] = []
+    expired_flag = False
+
+    def transport(_method: str, _url: str, headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
+        nonlocal init_count
+        payload = json.loads(body)
+        rpc_method = str(payload.get("method"))
+        sid = headers.get("Mcp-Session-Id")
+        if rpc_method == "initialize":
+            with lock:
+                init_count += 1
+                current = init_count
+            return response({"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-03-26"}}, session=f"conc-{current}")
+        if rpc_method == "notifications/initialized":
+            return HttpResponse(202, "")
+        if rpc_method == "tools/list":
+            return response({"jsonrpc": "2.0", "id": 2, "result": {"tools": [{
+                "name": "web_search_prime",
+                "inputSchema": {"type": "object", "properties": {"search_query": {"type": "string"}}},
+            }]}})
+        if rpc_method == "tools/call":
+            with lock:
+                call_sessions.append(sid)
+            if expired_flag and sid == "conc-1":
+                return HttpResponse(404, "expired", {})
+            q = payload["params"]["arguments"]["search_query"]
+            return response({"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": json.dumps({
+                "search_result": [{"title": q, "link": f"https://example.com/{q}", "content": "Body."}]
+            })}]}})
+        raise AssertionError(f"Unexpected method {rpc_method}")
+
+    provider = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=transport, sleeper=lambda _d: None)
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        results = list(pool.map(lambda i: provider.search(f"q{i}", limit=1)[0].title, range(6)))
+
+    assert results == [f"q{i}" for i in range(6)]
+    assert init_count == 1
+    assert call_sessions == ["conc-1"] * 6
+
+    expired_flag = True
+    barrier = threading.Barrier(4, timeout=2.0)
+
+    def run_after_expiry(i: int) -> str:
+        barrier.wait()
+        return provider.search(f"r{i}", limit=1)[0].title
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        recovered = list(pool.map(run_after_expiry, range(4)))
+
+    assert recovered == [f"r{i}" for i in range(4)]
+    assert init_count == 2
+
+
+def test_glm_mcp_delegates_to_mcp_client_with_sse_and_cache_counters() -> None:
+    def transport(_method: str, _url: str, _headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
+        payload = json.loads(body)
+        rpc_method = payload.get("method")
+        if rpc_method == "initialize":
+            msg = json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-03-26"}})
+            return HttpResponse(200, f"event: message\ndata: {msg}\n\n", {"Content-Type": "text/event-stream", "Mcp-Session-Id": "sse-glm-1"})
+        if rpc_method == "notifications/initialized":
+            return HttpResponse(202, "")
+        if rpc_method == "tools/list":
+            msg = json.dumps({"jsonrpc": "2.0", "id": 2, "result": {"tools": [{"name": "web_search_prime", "inputSchema": {"type": "object", "properties": {"search_query": {"type": "string"}}}}]}})
+            return HttpResponse(200, f"data: {msg}\n\n", {"Content-Type": "text/event-stream"})
+        if rpc_method == "tools/call":
+            msg = json.dumps({"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": json.dumps({"search_result": [{"title": "SSE Hit", "link": "https://example.com/sse", "content": "Body."}]})}]}})
+            return HttpResponse(200, f"data: {msg}\n\n", {"Content-Type": "text/event-stream"})
+        raise AssertionError(f"Unexpected method {rpc_method}")
+
+    provider = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=transport, sleeper=lambda _d: None)
+    candidates = provider.search("sse test", limit=1)
+    assert [c.title for c in candidates] == ["SSE Hit"]
+    assert provider.mcp_client.session_cache_misses == 1
+    assert provider.mcp_client.session_cache_hits >= 1
+    provider.search("sse test 2", limit=1)
+    assert provider.mcp_client.session_cache_misses == 1
+

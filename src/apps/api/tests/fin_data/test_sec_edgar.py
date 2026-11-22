@@ -4,8 +4,8 @@ from decimal import Decimal
 
 import pytest
 
-from app.fin_data.adapters.sec_edgar import (STANDARD_LINES, SecEdgarAdapter, classify_duration, last_n_fiscal_years,
-                                             last_n_quarters)
+from app.fin_data.adapters.sec_edgar import (STANDARD_LINES, SecEdgarAdapter, classify_duration, derive_period_metrics,
+                                             last_n_fiscal_years, last_n_quarters)
 from .helpers import FIX, NOW, UA, ConceptTransport, FakeTransport, Reply, efts_policy, json_reply, open_limiter
 
 
@@ -234,3 +234,125 @@ def test_companyfacts_size_guard_applies_to_the_streaming_path_and_stops_the_dow
                         now_fn=lambda: NOW)
     r = a.statement_lines(320193, period="year", n=1)
     assert r.status == "failed" and r.reason == "source_too_large" and len(written) == 5
+
+
+def test_expanded_standard_lines_coverage_and_shares_unit():
+    expected_expanded = {
+        "revenue", "cost_of_revenue", "gross_profit", "rd_expense", "sga_expense",
+        "selling_expense", "admin_expense", "total_operating_costs", "operating_income",
+        "interest_expense", "finance_expense", "profit_before_tax", "income_tax",
+        "net_income", "ebitda", "eps_basic", "eps_diluted", "shares_basic", "shares_diluted",
+        "cash", "short_term_investments", "accounts_receivable", "inventory", "current_assets",
+        "ppe_net", "goodwill", "intangible_assets", "total_assets", "accounts_payable",
+        "short_term_debt", "current_liabilities", "long_term_debt", "total_liabilities",
+        "retained_earnings", "equity", "non_controlling_interests", "depreciation_amortization",
+        "operating_cash_flow", "capex", "investing_cash_flow", "financing_cash_flow",
+        "dividends_paid", "share_repurchases", "net_increase_in_cash",
+    }
+    assert len(STANDARD_LINES) >= 35
+    assert expected_expanded <= set(STANDARD_LINES)
+    assert STANDARD_LINES["revenue"].tags["us-gaap"][0] == "Revenues"
+
+    t = ConceptTransport()
+    q_row = lambda val: [{"start": "2024-01-01", "end": "2024-03-31", "val": val, "accn": "A-24-1",
+                          "fy": 2024, "fp": "Q1", "form": "10-Q", "filed": "2024-05-01"}]
+    b_row = lambda val: [{"end": "2024-03-31", "val": val, "accn": "A-24-1",
+                          "fy": 2024, "fp": "Q1", "form": "10-Q", "filed": "2024-05-01"}]
+    t.doc["facts"]["us-gaap"].update({
+        "CostOfGoodsAndServicesSold": {"units": {"USD": q_row(600)}},
+        "GrossProfit": {"units": {"USD": q_row(400)}},
+        "ResearchAndDevelopmentExpense": {"units": {"USD": q_row(120)}},
+        "SellingGeneralAndAdministrativeExpense": {"units": {"USD": q_row(80)}},
+        "InterestExpense": {"units": {"USD": q_row(15)}},
+        "IncomeTaxExpenseBenefit": {"units": {"USD": q_row(35)}},
+        "EarningsBeforeInterestTaxesDepreciationAndAmortization": {"units": {"USD": q_row(240)}},
+        "WeightedAverageNumberOfDilutedSharesOutstanding": {"units": {"shares": q_row(1000)}},
+        "AccountsReceivableNetCurrent": {"units": {"USD": b_row(300)}},
+        "InventoryNet": {"units": {"USD": b_row(200)}},
+        "AssetsCurrent": {"units": {"USD": b_row(1500)}},
+        "LiabilitiesCurrent": {"units": {"USD": b_row(700)}},
+        "ShortTermBorrowings": {"units": {"USD": b_row(100)}},
+        "LongTermDebtNoncurrent": {"units": {"USD": b_row(500)}},
+        "DepreciationDepletionAndAmortization": {"units": {"USD": q_row(40)}},
+        "NetCashProvidedByUsedInInvestingActivities": {"units": {"USD": q_row(-90)}},
+        "NetCashProvidedByUsedInFinancingActivities": {"units": {"USD": q_row(-60)}},
+        "PaymentsOfDividendsCommonStock": {"units": {"USD": q_row(25)}},
+        "PaymentsForRepurchaseOfCommonStock": {"units": {"USD": q_row(35)}},
+    })
+    wanted = [
+        "cost_of_revenue", "gross_profit", "rd_expense", "sga_expense", "interest_expense",
+        "income_tax", "ebitda", "shares_diluted", "accounts_receivable", "inventory",
+        "current_assets", "current_liabilities", "short_term_debt", "long_term_debt",
+        "depreciation_amortization", "investing_cash_flow", "financing_cash_flow",
+        "dividends_paid", "share_repurchases",
+    ]
+    r = adapter(t).statement_lines(320193, lines=wanted, period="quarter", n=1)
+    assert r.status == "ok"
+    by_line = {s.line: s for s in r.data}
+    assert set(by_line) == set(wanted)
+    assert by_line["shares_diluted"].unit == "shares" and by_line["shares_diluted"].currency is None
+    assert by_line["shares_diluted"].value == Decimal("1000")
+    assert by_line["ebitda"].value == Decimal("240")
+    assert by_line["investing_cash_flow"].value == Decimal("-90")
+    assert by_line["long_term_debt"].period_start is None
+
+
+def test_derive_period_metrics_sec_quarters_ttm_growth_margins_and_fcf():
+    from app.fin_data.models import StatementLine
+
+    def line(stmt, name, start, end, val, *, tag="Tag", unit="USD", cur="USD", label=None):
+        return StatementLine(
+            entity_id="cik:0000320193", statement=stmt, line=name, reported_tag=tag, taxonomy="us-gaap",
+            period_start=start, period_end=end, fiscal_label=label, value=Decimal(val), unit=unit, currency=cur,
+            form="10-Q", filed_at=end, accession="A-1",
+        )
+
+    quarters = [
+        (date(2024, 1, 1), date(2024, 3, 31), "100", "60", "25", "20", "30", "10"),
+        (date(2024, 4, 1), date(2024, 6, 30), "120", "70", "30", "24", "35", "-12"),
+        (date(2024, 7, 1), date(2024, 9, 30), "140", "80", "35", "28", "40", "15"),
+        (date(2024, 10, 1), date(2024, 12, 31), "160", "90", "40", "32", "45", "15"),
+        (date(2025, 1, 1), date(2025, 3, 31), "150", "85", "38", "30", "42", "12"),
+    ]
+    rows = []
+    for s, e, rev, cost, op, ni, ocf, capex in quarters:
+        rows.extend([
+            line("income", "revenue", s, e, rev, tag="Revenues"),
+            line("income", "cost_of_revenue", s, e, cost, tag="CostOfRevenue"),
+            line("income", "operating_income", s, e, op, tag="OperatingIncomeLoss"),
+            line("income", "net_income", s, e, ni, tag="NetIncomeLoss"),
+            line("cashflow", "operating_cash_flow", s, e, ocf, tag="NetCashProvidedByUsedInOperatingActivities"),
+            line("cashflow", "capex", s, e, capex, tag="PaymentsToAcquirePropertyPlantAndEquipment"),
+            line("balance", "cash", None, e, "500", tag="CashAndCashEquivalentsAtCarryingValue"),
+        ])
+
+    derived = derive_period_metrics(rows)
+    assert all(d.derived is True and d.derivation for d in derived)
+    by_key = {(d.line, d.period_end): d for d in derived}
+
+    # Margins & derived gross profit
+    assert by_key[("gross_profit", date(2024, 3, 31))].value == Decimal("40")
+    assert by_key[("gross_margin", date(2024, 3, 31))].value == Decimal("40.00")
+    assert by_key[("gross_margin", date(2024, 3, 31))].unit == "percent"
+    assert by_key[("gross_margin", date(2024, 3, 31))].currency is None
+    assert by_key[("operating_margin", date(2024, 3, 31))].value == Decimal("25.00")
+    assert by_key[("net_margin", date(2024, 3, 31))].value == Decimal("20.00")
+
+    # FCF uses operating_cash_flow - abs(capex) regardless of capex sign
+    assert by_key[("free_cash_flow", date(2024, 3, 31))].value == Decimal("20")
+    assert by_key[("free_cash_flow", date(2024, 6, 30))].value == Decimal("23")
+
+    # TTM sums (2024Q4 and 2025Q1), never computed for balance-sheet instant lines
+    ttm_24 = by_key[("revenue_ttm", date(2024, 12, 31))]
+    assert ttm_24.value == Decimal("520") and ttm_24.period_start == date(2024, 1, 1) and ttm_24.basis == "ttm"
+    ttm_25 = by_key[("revenue_ttm", date(2025, 3, 31))]
+    assert ttm_25.value == Decimal("570") and ttm_25.period_start == date(2024, 4, 1)
+    assert ("cash_ttm", date(2024, 12, 31)) not in by_key
+
+    # YoY and QoQ growth
+    assert by_key[("revenue_yoy_growth", date(2025, 3, 31))].value == Decimal("50.00")
+    assert by_key[("revenue_qoq_growth", date(2024, 6, 30))].value == Decimal("20.00")
+    assert by_key[("cash_yoy_growth", date(2025, 3, 31))].value == Decimal("0.00")
+
+    # Idempotent / non-cascading over derived outputs
+    assert derive_period_metrics([*rows, *derived]) == derived

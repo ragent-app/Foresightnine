@@ -243,7 +243,7 @@ def test_runtime_extract_then_record_facts_with_returned_quotation():
     source = paged_source(['示例股份有限公司 2025年年度报告', CN_INCOME])
     m = Model([turn('extract_statements', {'source_id': 'pdf', 'statements': ['income'], 'rationale': 'r'}, 'a'), STOP])
     run_agent(m, [source])
-    fb = json.loads(m.inputs[1][-1]['content'])
+    fb = json.loads([msg for msg in m.inputs[1] if msg.get('role') == 'tool'][-1]['content'])
     assert fb['status'] == 'completed'
     rev = next(r for r in fb['statements'][0]['rows'] if r['standard_line'] == 'revenue')
     fact = {'label': '营业总收入', 'value': rev['value_as_stated'][0], 'unit': 'CNY', 'currency': 'CNY', 'period': 'FY2025',
@@ -252,5 +252,5 @@ def test_runtime_extract_then_record_facts_with_returned_quotation():
     m2 = Model([turn('extract_statements', {'source_id': 'pdf', 'statements': ['income'], 'rationale': 'r'}, 'a'),
                 turn('record_facts', {'facts': [fact], 'rationale': 'r'}, 'b'), STOP])
     run_agent(m2, [source])
-    rec = json.loads(m2.inputs[2][-1]['content'])
+    rec = json.loads([msg for msg in m2.inputs[2] if msg.get('role') == 'tool'][-1]['content'])
     assert rec['facts'][0]['character_start'] == rev['character_start'] and 'fact_id' in rec['facts'][0]

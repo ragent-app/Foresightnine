@@ -5,8 +5,9 @@ heuristics remain candidates for consolidation into structured assessments.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from time import monotonic
+from typing import Any
 
 from .research_analysis import AnalysisResult
 from .research_calculations import (calculation_input_status, calculation_result_status,
@@ -17,6 +18,47 @@ from .research_coverage import derive_absence_assessment, derive_evidence_needs,
 from .research_runs import ResearchRunRequest
 
 
+BLOCKING_CLAIM_EVIDENCE_WARNINGS: tuple[str, ...] = (
+    'percentage_unit_unverified',
+    'uncited_exact_dates',
+    'publication_date_warnings',
+    'rate_unit_warnings',
+    'uncited_amounts',
+    'uncited_claim_amounts',
+    'uncited_dollar_amounts',
+    'uncited_quarters',
+    'balance_direction_warnings',
+    'uncited_percentages',
+    'uncited_percentage_bounds',
+    'reused_percentages',
+    'uncited_basis_points',
+    'uncited_percentage_points',
+    'uncited_fact_values',
+)
+ADVISORY_CLAIM_EVIDENCE_WARNINGS: tuple[str, ...] = (
+    'counterpoint_relevance_unverified',
+    'prior_findings_scope_unverified',
+    'source_scope_absence_unverified',
+    'causal_attribution_unverified',
+    'citation_context_warnings',
+)
+assert set(BLOCKING_CLAIM_EVIDENCE_WARNINGS).isdisjoint(ADVISORY_CLAIM_EVIDENCE_WARNINGS)
+assert set(BLOCKING_CLAIM_EVIDENCE_WARNINGS) | set(ADVISORY_CLAIM_EVIDENCE_WARNINGS) == set(CLAIM_EVIDENCE_WARNINGS)
+
+
+def _collect_claim_warnings(claims: list[dict], warning_names: tuple[str, ...], *, severity: str) -> list[dict[str, Any]]:
+    collected: list[dict[str, Any]] = []
+    for name in warning_names:
+        indexes = [i for i, claim in enumerate(claims) if isinstance(claim, dict) and claim.get(name)]
+        if indexes:
+            collected.append({
+                'warning': name,
+                'severity': severity,
+                'claim_indexes': indexes,
+            })
+    return collected
+
+
 @dataclass
 class ResearchAssessment:
     complete: bool
@@ -24,6 +66,10 @@ class ResearchAssessment:
     differences: list[dict]
     calculation_differences: list[dict]
     amount_differences: list[dict]
+    blocking_warnings: list[dict[str, Any]] = field(default_factory=list)
+    advisory_warnings: list[dict[str, Any]] = field(default_factory=list)
+    review_queue: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisResult,
@@ -32,6 +78,14 @@ def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisRe
                             counterpoint_status: str, gap_status: str, gap_search_status: str, planning_status: str,
                             deadline: float, usage: int | None) -> ResearchAssessment:
     """Evaluate the assembled result without making external calls."""
+    require_counterarguments = bool(getattr(request, 'require_counterarguments', False))
+    plan_research = bool(getattr(request, 'plan_research', False))
+    counterpoint_followup = bool(getattr(request, 'counterpoint_followup', False))
+    gap_search = bool(getattr(request, 'gap_search', False))
+    gap_followup = bool(getattr(request, 'gap_followup', False))
+    support_review = bool(getattr(request, 'support_review', False))
+    max_total_tokens = getattr(request, 'max_total_tokens', None)
+
     differences = evidence_differences(analysis.facts)
     calculation_differences = claim_calculation_differences(claims, analysis.calculations, analysis.facts)
     amount_differences = claim_amount_differences(claims, analysis.facts)
@@ -56,14 +110,14 @@ def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisRe
     review_outcomes = model_review_outcomes(claims)
     review_supports_all = (review_status == "complete" and not any(
         review_outcomes[name] for name in ('does_not_support', 'contradicts', 'uncertain', 'not_reviewed')) and all(
-        c.get('role') != 'counterargument' or not request.require_counterarguments or
+        c.get('role') != 'counterargument' or not require_counterarguments or
         (isinstance(c.get('support_review'), dict) and c['support_review'].get('relevance') == 'relevant') for c in claims))
     incomplete_stages = incomplete_requested_stages({
-        'planning_requested': request.plan_research, 'planning_status': planning_status,
-        'counterpoint_requested': request.counterpoint_followup, 'counterpoint_status': counterpoint_status,
-        'gap_search_requested': request.gap_search, 'gap_search_status': gap_search_status,
-        'gap_followup_requested': request.gap_followup, 'gap_followup_status': gap_status,
-        'support_review_requested': request.support_review, 'support_review_status': review_status,
+        'planning_requested': plan_research, 'planning_status': planning_status,
+        'counterpoint_requested': counterpoint_followup, 'counterpoint_status': counterpoint_status,
+        'gap_search_requested': gap_search, 'gap_search_status': gap_search_status,
+        'gap_followup_requested': gap_followup, 'gap_followup_status': gap_status,
+        'support_review_requested': support_review, 'support_review_status': review_status,
     })
     scope_run = {'operation_id': 'current', 'source_processing': source_states,
                  'research_questions': analysis.research_questions,
@@ -73,10 +127,20 @@ def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisRe
     needs = derive_evidence_needs(run=scope_run, scope=scope)
     absences = derive_absence_assessment(run=scope_run, scope=scope)
     unresolved_task_gap = has_unresolved_task_gap(needs=needs, absences=absences, claims=claims)
-    complete = bool(analysis.structured_output_status == 'complete' and analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
+    blocking_warnings = _collect_claim_warnings(claims, BLOCKING_CLAIM_EVIDENCE_WARNINGS, severity='blocking')
+    advisory_warnings = _collect_claim_warnings(claims, ADVISORY_CLAIM_EVIDENCE_WARNINGS, severity='advisory')
+    review_queue = [*blocking_warnings, *advisory_warnings]
+    metadata = {
+        'blocking_warnings': blocking_warnings,
+        'advisory_warnings': advisory_warnings,
+        'blocking_warning_names': [item['warning'] for item in blocking_warnings],
+        'advisory_warning_names': [item['warning'] for item in advisory_warnings],
+        'review_queue': review_queue,
+    }
+    complete = bool(analysis.structured_output_status == 'complete' and analysis.claims and (analysis.counterarguments or not require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
                     and not processing_incomplete and not unresolved_task_gap and not missing_fact_dimensions and not unverified_calculations and not unverified_calculation_results and not differences and not calculation_differences and not amount_differences and
-                    not any(c.get(warning) for c in claims for warning in CLAIM_EVIDENCE_WARNINGS) and
-                    (not request.support_review or review_supports_all) and
+                    not blocking_warnings and
+                    (not support_review or review_supports_all) and
                     not incomplete_stages and
                     not any(not item.get('claim_indexes') for item in analysis.research_questions))
     limitations = [*discovery_notes, *analysis.limitations]
@@ -90,7 +154,7 @@ def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisRe
             limitations.append('No valid research results survived structured output validation.')
     if unresolved_task_gap:
         limitations.append('A recorded task-related evidence need or absence observation is not established; review it and obtain relevant evidence.')
-    if request.plan_research:
+    if plan_research:
         limitations.append('The model-generated research plan is an unverified guide and may omit relevant questions.')
         if planning_status != 'completed':
             limitations.append('The requested research plan did not complete; the result used the original question.')
@@ -118,11 +182,11 @@ def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisRe
         limitations.append("A calculation result could not be reproduced from its saved formula and inputs.")
     if not analysis.counterarguments:
         limitations.append("No counterarguments were provided; this does not establish that none exist.")
-    if request.support_review:
+    if support_review:
         limitations.append("A second model assessment is not independent proof that evidence supports a claim.")
         if any(review_outcomes[name] for name in ('does_not_support', 'contradicts', 'uncertain', 'not_reviewed')):
             limitations.append('Some findings were not supported, were contradicted, remained uncertain or were not reviewed in the model assessment; inspect each recorded opinion and its evidence.')
-        if request.require_counterarguments and any(
+        if require_counterarguments and any(
                 c.get('role') == 'counterargument' and c.get('support_review', {}).get('relevance') != 'relevant' for c in claims):
             limitations.append('Counterpoint relevance was not supported by a complete model review; the relationship remains unverified.')
         if review_status != "complete":
@@ -172,9 +236,19 @@ def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisRe
     if monotonic() > deadline:
         complete = False
         limitations.append("Research exceeded its time budget; the retained result is partial.")
-    if request.max_total_tokens is not None and usage is not None and usage > request.max_total_tokens:
+    if max_total_tokens is not None and usage is not None and usage > max_total_tokens:
         complete = False
         limitations.append("Provider-reported token use exceeded the requested budget; the result is partial.")
     if not complete:
         limitations.append("The research is partial: review the recorded findings, requested steps and outstanding limitations.")
-    return ResearchAssessment(complete, limitations, differences, calculation_differences, amount_differences)
+    return ResearchAssessment(
+        complete,
+        limitations,
+        differences,
+        calculation_differences,
+        amount_differences,
+        blocking_warnings=blocking_warnings,
+        advisory_warnings=advisory_warnings,
+        review_queue=review_queue,
+        metadata=metadata,
+    )

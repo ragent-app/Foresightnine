@@ -244,7 +244,7 @@ def test_focus_range_alone_licenses_a_quotation_and_survives_a_checkpoint():
     stop = ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')
     unfocused = Model([turn('submit_research', submission, 'b'), stop])
     run_research_agent(question='Revenue?', sources=[source()], model=unfocused, context=context())
-    assert 'previously read range' in unfocused.inputs[1][-1]['content']
+    assert 'previously read range' in [m for m in unfocused.inputs[1] if m.get('role') == 'tool'][-1]['content']
     # A continuation restores the same focus from the checkpoint, not from the call arguments.
     state = next(deepcopy(item) for item in saved if item['pending'] and item['pending']['kind'] == 'tool_batch')
     again = run_research_agent(question='Revenue?', sources=[source()], model=Model([]), context=context(), initial_state=state)
@@ -309,7 +309,7 @@ def test_all_eight_tools_current_activity_and_summaries():
                     'rationale': 'Record revenue figures',
                 }, 'c6')
             if self.step == 7:
-                facts = json.loads(messages[-1]['content'])['facts']
+                facts = json.loads([m for m in messages if m.get('role') == 'tool'][-1]['content'])['facts']
                 return turn('calculate_financials', {
                     'calculations': [{'formula': 'growth_percent', 'first_fact_id': facts[0]['fact_id'], 'second_fact_id': facts[1]['fact_id']}],
                     'rationale': 'Compute revenue growth',
@@ -371,8 +371,8 @@ def test_all_eight_tools_current_activity_and_summaries():
         'denied_count': 1,
         'cluster_count': 2,
         'leads_preview': [
-            {'title': 'NVIDIA Q4 Release', 'host': 'nvidianews.nvidia.com', 'published_at': '2025-02-26T00:00:00+00:00'},
             {'title': 'NVDA 10-K Filing', 'host': 'www.sec.gov', 'published_at': '2025-02-26T00:00:00+00:00'},
+            {'title': 'NVIDIA Q4 Release', 'host': 'nvidianews.nvidia.com', 'published_at': '2025-02-26T00:00:00+00:00'},
         ],
     }
     assert tool_events['acquire_sources']['summary'] == {

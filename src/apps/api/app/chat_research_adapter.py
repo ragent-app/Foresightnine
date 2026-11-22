@@ -1,7 +1,13 @@
 """Chat Completions rendering for the neutral research turn contract."""
 import inspect
 import json
-from .model_protocol import ModelResponse, ModelToolCall
+from .model_protocol import (
+    ModelResponse,
+    ModelToolCall,
+    canonical_json_dumps,
+    canonicalize_json_string,
+    canonicalize_json_value,
+)
 
 
 class ChatResearchAdapter:
@@ -13,20 +19,36 @@ class ChatResearchAdapter:
 
     @staticmethod
     def _render(turn):
-        messages = [{'role': 'system', 'content': turn.system}, {'role': 'user', 'content': turn.user}]
+        user_content = canonicalize_json_string(turn.user)
+        messages = [{'role': 'system', 'content': turn.system}, {'role': 'user', 'content': user_content}]
         for exchange in turn.history:
             messages.append(exchange.assistant.envelope)
-            messages.extend({'role': 'tool', 'tool_call_id': result.tool_call_id, 'content': result.content}
-                            for result in exchange.results)
+            messages.extend(
+                {
+                    'role': 'tool',
+                    'tool_call_id': result.tool_call_id,
+                    'content': canonicalize_json_string(result.content),
+                }
+                for result in exchange.results
+            )
         raw_tail = getattr(turn, 'tail_note', None)
         tail_note = raw_tail if isinstance(raw_tail, str) and raw_tail.strip() else None
         if tail_note is not None:
             if turn.history:
                 messages.append({'role': 'user', 'content': tail_note})
             else:
-                messages[-1] = {'role': 'user', 'content': f'{turn.user}\n\n{tail_note}'}
-        tools = [{'type': 'function', 'function': {'name': tool.name, 'description': tool.description,
-                  'parameters': tool.input_schema}} for tool in turn.tools]
+                messages[-1] = {'role': 'user', 'content': f'{user_content}\n\n{tail_note}'}
+        tools = [
+            {
+                'type': 'function',
+                'function': {
+                    'name': tool.name,
+                    'description': tool.description,
+                    'parameters': canonicalize_json_value(tool.input_schema),
+                },
+            }
+            for tool in turn.tools
+        ]
         return messages, tools
 
     def estimate_turn_input(self, turn):
@@ -34,7 +56,7 @@ class ChatResearchAdapter:
         estimator = getattr(self.provider, 'estimate_native_input', None)
         if callable(estimator):
             return estimator(messages, tools)
-        return len(json.dumps({'messages': messages, 'tools': tools}, ensure_ascii=False).encode()) + 64
+        return len(canonical_json_dumps({'messages': messages, 'tools': tools}).encode('utf-8')) + 64
 
     def complete_turn(self, turn, *, cancel_event=None, timeout_seconds=None, diagnostic_callback=None,
                       max_output_tokens=None, on_submission=None, on_stream_event=None):

@@ -1,14 +1,30 @@
 """Auditable deterministic financial calculations for research tools."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, localcontext
 from datetime import date, datetime
 from hashlib import sha256
 import json
 import re
-from typing import Literal
+from typing import Literal, Sequence
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+
+
+FormulaId = Literal[
+    "growth_percent",
+    "margin_percent",
+    "difference",
+    "cagr",
+    "ratio",
+    "sum",
+    "subtract",
+    "weighted_average",
+    "ttm_sum",
+]
+BINARY_FORMULAS: frozenset[str] = frozenset({"growth_percent", "margin_percent", "difference", "cagr", "ratio"})
+MULTI_FACT_FORMULAS: frozenset[str] = frozenset({"sum", "subtract", "weighted_average", "ttm_sum"})
 
 
 class NumericFact(BaseModel):
@@ -29,10 +45,78 @@ class NumericFact(BaseModel):
 
 class CalculationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    formula: Literal["growth_percent", "margin_percent", "difference"]
-    first: NumericFact
-    second: NumericFact
+    formula: FormulaId
+    first: NumericFact | None = None
+    second: NumericFact | None = None
+    facts: list[NumericFact] | None = Field(default=None, min_length=2, max_length=50)
+    weights: list[Decimal] | None = None
+    periods: Decimal | None = None
     decimal_places: int = Field(default=2, ge=0, le=8)
+
+    @field_validator("periods")
+    @classmethod
+    def validate_periods(cls, value: Decimal | None) -> Decimal | None:
+        if value is None:
+            return None
+        if isinstance(value, bool) or not value.is_finite() or value <= 0 or value > Decimal("1000"):
+            raise ValueError("periods must be a finite positive number <= 1000.")
+        return value
+
+    @field_validator("weights")
+    @classmethod
+    def validate_weights(cls, value: list[Decimal] | None) -> list[Decimal] | None:
+        if value is None:
+            return None
+        if not value:
+            raise ValueError("weights must not be empty.")
+        for item in value:
+            if isinstance(item, bool) or not item.is_finite() or item < 0 or abs(item.adjusted()) > 30:
+                raise ValueError("weights must be finite non-negative numbers within supported precision.")
+        if sum(value, Decimal(0)) <= 0:
+            raise ValueError("weights sum must be positive.")
+        return value
+
+    @model_validator(mode="after")
+    def validate_inputs_and_parameters(self) -> CalculationRequest:
+        if self.facts is not None:
+            if self.first is not None or self.second is not None:
+                raise ValueError("Provide either first/second or facts, not both.")
+            resolved = list(self.facts)
+        else:
+            if self.first is None or self.second is None:
+                raise ValueError("Provide first and second facts, or facts list.")
+            resolved = [self.first, self.second]
+
+        if self.formula in BINARY_FORMULAS and len(resolved) != 2:
+            raise ValueError(f"Formula {self.formula!r} requires exactly 2 facts.")
+        if self.formula == "ttm_sum" and len(resolved) != 4:
+            raise ValueError("Formula 'ttm_sum' requires exactly 4 quarterly facts.")
+
+        if len(resolved) == 2 and self.first is None and self.second is None:
+            self.first = resolved[0]
+            self.second = resolved[1]
+
+        if self.formula == "cagr":
+            if self.periods is None:
+                raise ValueError("periods > 0 is required for formula 'cagr'.")
+        elif self.periods is not None:
+            raise ValueError("periods is only supported for formula 'cagr'.")
+
+        if self.formula == "weighted_average":
+            if self.weights is None:
+                raise ValueError("weights are required for formula 'weighted_average'.")
+            if len(self.weights) != len(resolved):
+                raise ValueError("weights length must match the number of input facts.")
+        elif self.weights is not None:
+            raise ValueError("weights is only supported for formula 'weighted_average'.")
+
+        return self
+
+    def resolved_facts(self) -> list[NumericFact]:
+        if self.facts is not None:
+            return list(self.facts)
+        assert self.first is not None and self.second is not None
+        return [self.first, self.second]
 
 
 class RecalculateRequest(BaseModel):
@@ -648,6 +732,330 @@ def _is_ratio_scale_factor(text: str, match: re.Match[str]) -> bool:
         return False
 
 
+def _plain_decimal_str(value: Decimal) -> str:
+    with localcontext() as ctx:
+        ctx.prec = 100
+        if value == 0:
+            return "0"
+        text = format(value, "f")
+        if "." in text:
+            text = text.rstrip("0").rstrip(".")
+        return text or "0"
+
+
+@dataclass(frozen=True)
+class UnitScaleSpec:
+    family: str
+    currency: str | None
+    scale_name: str
+    exponent: int
+    canonical_unit: str
+    is_chinese_yuan: bool = False
+
+
+_EN_SCALE_TO_SPEC: dict[str, tuple[str, int]] = {
+    "one": ("ones", 0),
+    "ones": ("ones", 0),
+    "1": ("ones", 0),
+    "unit": ("ones", 0),
+    "units": ("ones", 0),
+    "thousand": ("thousands", 3),
+    "thousands": ("thousands", 3),
+    "k": ("thousands", 3),
+    "million": ("millions", 6),
+    "millions": ("millions", 6),
+    "m": ("millions", 6),
+    "mn": ("millions", 6),
+    "mm": ("millions", 6),
+    "billion": ("billions", 9),
+    "billions": ("billions", 9),
+    "b": ("billions", 9),
+    "bn": ("billions", 9),
+    "trillion": ("trillions", 12),
+    "trillions": ("trillions", 12),
+    "t": ("trillions", 12),
+    "tn": ("trillions", 12),
+}
+
+_ZH_SCALE_PATTERN = re.compile(
+    r"(万亿元|万亿|萬億元|萬億|十亿元|十亿|十億元|十億|百万元|百万|百萬元|百萬|亿元|亿|億元|億|万元|万|萬元|萬|千元|千|元)"
+)
+_ZH_SCALE_TO_SPEC: dict[str, tuple[str, int, bool]] = {
+    "元": ("元", 0, True),
+    "千元": ("千元", 3, True),
+    "千": ("thousands", 3, False),
+    "万元": ("万元", 4, True),
+    "萬元": ("万元", 4, True),
+    "万": ("万元", 4, False),
+    "萬": ("万元", 4, False),
+    "百万元": ("百万元", 6, True),
+    "百萬元": ("百万元", 6, True),
+    "百万": ("millions", 6, False),
+    "百萬": ("millions", 6, False),
+    "亿元": ("亿元", 8, True),
+    "億元": ("亿元", 8, True),
+    "亿": ("亿元", 8, False),
+    "億": ("亿元", 8, False),
+    "十亿元": ("十亿元", 9, True),
+    "十億元": ("十亿元", 9, True),
+    "十亿": ("billions", 9, False),
+    "十億": ("billions", 9, False),
+    "万亿元": ("万亿元", 12, True),
+    "萬億元": ("万亿元", 12, True),
+    "万亿": ("trillions", 12, False),
+    "萬億": ("trillions", 12, False),
+}
+
+_KNOWN_ISO_CURRENCIES = frozenset({
+    "USD", "EUR", "GBP", "JPY", "KRW", "CNY", "RMB", "HKD", "TWD",
+    "CHF", "CAD", "AUD", "NZD", "SGD", "INR", "BRL", "MXN", "SEK",
+    "NOK", "DKK", "ZAR", "SAR", "AED",
+})
+_CURRENCY_PHRASES: dict[str, str] = {
+    "dollar": "USD",
+    "dollars": "USD",
+    "us dollar": "USD",
+    "us dollars": "USD",
+    "us$": "USD",
+    "euro": "EUR",
+    "euros": "EUR",
+    "won": "KRW",
+    "korean won": "KRW",
+    "yen": "JPY",
+    "japanese yen": "JPY",
+    "yuan": "CNY",
+    "renminbi": "CNY",
+    "pound": "GBP",
+    "pounds": "GBP",
+    "sterling": "GBP",
+    "人民币": "CNY",
+    "人民幣": "CNY",
+    "美元": "USD",
+    "美金": "USD",
+    "港元": "HKD",
+    "港币": "HKD",
+    "港幣": "HKD",
+    "欧元": "EUR",
+    "歐元": "EUR",
+    "日元": "JPY",
+    "日圆": "JPY",
+    "韩元": "KRW",
+    "韓元": "KRW",
+}
+
+
+def parse_unit_scale(unit: str, currency: str | None = None) -> UnitScaleSpec:
+    """Parse unit + optional currency into a normalized scale/family specification."""
+    norm = " ".join(str(unit or "").strip().split())
+    if not norm:
+        raise CalculationError("Unit must not be empty.")
+    norm_curr = currency.strip().upper() if isinstance(currency, str) and currency.strip() else None
+
+    if is_percent_unit(norm):
+        if norm_curr is not None:
+            raise CalculationError("Percentage inputs cannot have a currency.")
+        return UnitScaleSpec("percent", None, "ones", 0, "percent")
+
+    lowered = norm.casefold()
+    if re.fullmatch(r"percentage\s+points?|百分点|百分點|\bpp\b", lowered):
+        if norm_curr is not None:
+            raise CalculationError("Percentage-point inputs cannot have a currency.")
+        return UnitScaleSpec("percentage_points", None, "ones", 0, "percentage points")
+
+    if re.fullmatch(r"basis\s+points?|\bbps\b|基点|基點", lowered):
+        if norm_curr is not None:
+            raise CalculationError("Basis-point inputs cannot have a currency.")
+        return UnitScaleSpec("bps", None, "ones", 0, "bps")
+
+    if re.search(r"(?:per\s+share|/\s*shares?\b|每股)", lowered):
+        found_curr: str | None = None
+        for token in re.findall(r"[A-Za-z]{3}", norm.upper()):
+            if token in _KNOWN_ISO_CURRENCIES:
+                found_curr = "CNY" if token == "RMB" else token
+                break
+        norm_curr_canon = "CNY" if norm_curr == "RMB" else norm_curr
+        if found_curr and norm_curr_canon and found_curr != norm_curr_canon:
+            raise CalculationError("Input unit currency conflicts with declared currency.")
+        return UnitScaleSpec("price_per_share", norm_curr or found_curr, "ones", 0, norm)
+
+    # Split out known CJK currency prefixes and CJK scale words before ASCII tokenization.
+    spaced = lowered.replace(" of ", " ")
+    for zh_curr in ("人民币", "人民幣", "美元", "美金", "港元", "港币", "港幣", "欧元", "歐元", "日元", "日圆", "韩元", "韓元"):
+        if zh_curr in spaced:
+            spaced = spaced.replace(zh_curr, f" {zh_curr} ")
+    spaced = _ZH_SCALE_PATTERN.sub(r" \1 ", spaced)
+    tokens = [tok for tok in re.split(r"[\s,/()]+", spaced) if tok]
+    if not tokens:
+        raise CalculationError(f"Invalid unit {unit!r}.")
+
+    unit_currency: str | None = None
+    scale_name: str | None = None
+    exponent = 0
+    is_yuan = False
+    is_shares = False
+    unmatched: list[str] = []
+
+    i = 0
+    while i < len(tokens):
+        two = f"{tokens[i]} {tokens[i + 1]}" if i + 1 < len(tokens) else ""
+        if two in _CURRENCY_PHRASES:
+            mapped_c = _CURRENCY_PHRASES[two]
+            if unit_currency and unit_currency != mapped_c:
+                raise CalculationError("Multiple currencies found in unit.")
+            unit_currency = mapped_c
+            i += 2
+            continue
+        tok = tokens[i]
+        upper_tok = tok.upper()
+        if tok in ("share", "shares", "股"):
+            is_shares = True
+        elif upper_tok in _KNOWN_ISO_CURRENCIES:
+            mapped_c = "CNY" if upper_tok == "RMB" else upper_tok
+            if unit_currency and unit_currency != mapped_c:
+                raise CalculationError("Multiple currencies found in unit.")
+            unit_currency = mapped_c
+        elif tok in _CURRENCY_PHRASES:
+            mapped_c = _CURRENCY_PHRASES[tok]
+            if unit_currency and unit_currency != mapped_c:
+                raise CalculationError("Multiple currencies found in unit.")
+            unit_currency = mapped_c
+        elif tok in _EN_SCALE_TO_SPEC:
+            s_name, s_exp = _EN_SCALE_TO_SPEC[tok]
+            if scale_name is not None and (scale_name, exponent) != (s_name, s_exp):
+                raise CalculationError("Multiple scales found in unit.")
+            scale_name, exponent = s_name, s_exp
+        elif tok in _ZH_SCALE_TO_SPEC:
+            s_name, s_exp, s_yuan = _ZH_SCALE_TO_SPEC[tok]
+            if scale_name is not None and (scale_name, exponent) != (s_name, s_exp):
+                raise CalculationError("Multiple scales found in unit.")
+            scale_name, exponent = s_name, s_exp
+            is_yuan = is_yuan or s_yuan
+        else:
+            unmatched.append(tok)
+        i += 1
+
+    if not unmatched and is_shares and unit_currency is None:
+        resolved_scale = scale_name or "ones"
+        canonical = "shares" if resolved_scale == "ones" else f"{resolved_scale} shares"
+        return UnitScaleSpec("shares", None, resolved_scale, exponent, canonical)
+
+    if not unmatched and not is_shares and (unit_currency is not None or scale_name is not None):
+        norm_curr_canon = "CNY" if norm_curr == "RMB" else norm_curr
+        if unit_currency is not None and norm_curr_canon is not None and unit_currency != norm_curr_canon:
+            raise CalculationError("Input unit currency conflicts with declared currency.")
+        resolved_curr = norm_curr or unit_currency
+        resolved_scale = scale_name or ("元" if is_yuan else "ones")
+        if is_yuan and resolved_scale in ("元", "千元", "万元", "百万元", "亿元", "十亿元", "万亿元"):
+            canonical = f"{resolved_curr} {resolved_scale}" if resolved_curr else resolved_scale
+            return UnitScaleSpec("monetary", resolved_curr, resolved_scale, exponent, canonical, is_chinese_yuan=True)
+        if resolved_curr is not None:
+            canonical = f"{resolved_curr} {resolved_scale}" if resolved_scale != "ones" else resolved_curr
+            return UnitScaleSpec("monetary", resolved_curr, resolved_scale, exponent, canonical, is_chinese_yuan=False)
+        return UnitScaleSpec("monetary", None, resolved_scale, exponent, resolved_scale, is_chinese_yuan=False)
+
+    return UnitScaleSpec(f"custom:{lowered}", norm_curr, "ones", 0, norm)
+
+
+def align_facts_scale(
+    facts: Sequence[NumericFact],
+) -> tuple[list[Decimal], str, str | None, list[dict[str, str]]]:
+    """Align same-currency/same-family quantities to the finest common scale.
+
+    Returns ``(aligned_values, target_unit, target_currency, scale_adjustments)``.
+    Cross-currency and incompatible unit mismatches fail closed with ``CalculationError``.
+    """
+    if not facts:
+        raise CalculationError("At least one input fact is required.")
+    raw_currencies = {f.currency for f in facts}
+    if len(raw_currencies) != 1:
+        raise CalculationError("Input units and currencies must match.")
+    declared_currency = facts[0].currency
+
+    if len({f.unit for f in facts}) == 1:
+        # Validate self-consistency even on identical units (e.g., percent with currency fails).
+        spec0 = parse_unit_scale(facts[0].unit, declared_currency)
+        if spec0.family in ("percent", "percentage_points", "bps") and declared_currency is not None:
+            raise CalculationError("Percentage inputs cannot have a currency.")
+        return [f.value for f in facts], facts[0].unit, declared_currency, []
+
+    specs = [parse_unit_scale(f.unit, f.currency) for f in facts]
+    families = {s.family for s in specs}
+    if len(families) != 1:
+        raise CalculationError("Input units and currencies must match.")
+    family = specs[0].family
+
+    eff_currencies = {s.currency for s in specs}
+    if len(eff_currencies) != 1:
+        raise CalculationError("Input units and currencies must match.")
+
+    if family not in ("monetary", "shares"):
+        if len({s.canonical_unit for s in specs}) != 1:
+            raise CalculationError("Input units and currencies must match.")
+        return [f.value for f in facts], specs[0].canonical_unit, declared_currency, []
+
+    if declared_currency is None and family == "monetary":
+        # Without an explicit currency, never combine Chinese '元' units with non-'元' scales.
+        if len({s.is_chinese_yuan for s in specs}) != 1:
+            raise CalculationError("Input units and currencies must match.")
+
+    target_exponent = min(s.exponent for s in specs)
+    min_specs = [s for s in specs if s.exponent == target_exponent]
+    # Prefer the exact unit style of an input already at target_exponent (e.g. '万元', 'USD millions', 'USD').
+    preferred_idx = next(i for i, s in enumerate(specs) if s.exponent == target_exponent)
+    target_spec = min_specs[0]
+    if target_spec.is_chinese_yuan and facts[preferred_idx].unit.strip() in (
+        "元", "千元", "万元", "百万元", "亿元", "十亿元", "万亿元"
+    ):
+        target_unit = facts[preferred_idx].unit.strip()
+    elif target_spec.family == "monetary" and declared_currency and facts[preferred_idx].unit.strip() == declared_currency:
+        target_unit = declared_currency
+    else:
+        target_unit = target_spec.canonical_unit
+
+    aligned_values: list[Decimal] = []
+    scale_adjustments: list[dict[str, str]] = []
+    with localcontext() as ctx:
+        ctx.prec = 100
+        for fact, spec in zip(facts, specs):
+            exp_diff = spec.exponent - target_exponent
+            factor = Decimal(1).scaleb(exp_diff)
+            aligned_val = fact.value.scaleb(exp_diff) if exp_diff else fact.value
+            aligned_values.append(aligned_val)
+            if exp_diff != 0 or fact.unit != target_unit:
+                scale_adjustments.append({
+                    "fact_id": fact.fact_id,
+                    "from_unit": fact.unit,
+                    "to_unit": target_unit,
+                    "from_scale": spec.scale_name,
+                    "to_scale": target_spec.scale_name,
+                    "multiplier": _plain_decimal_str(factor),
+                    "original_value": _plain_decimal_str(fact.value),
+                    "aligned_value": _plain_decimal_str(aligned_val),
+                })
+
+    return aligned_values, target_unit, declared_currency, scale_adjustments
+
+
+_TTM_QUARTER_RE = re.compile(
+    r"^(?:FY\s*)?((?:19|20)\d{2})\s*[- ]?\s*Q([1-4])$",
+    re.IGNORECASE,
+)
+_TTM_ZH_QUARTER_NUM = {"1": 1, "2": 2, "3": 3, "4": 4, "一": 1, "二": 2, "三": 3, "四": 4}
+_TTM_ZH_QUARTER_RE = re.compile(r"^((?:19|20)\d{2})\s*年?\s*第?\s*([1-4一二三四])\s*季(?:度)?$")
+
+
+def _parse_quarter_index(period: str) -> tuple[bool, int] | None:
+    text = period.strip()
+    m = _TTM_QUARTER_RE.match(text)
+    if m:
+        is_fy = text.upper().startswith("FY")
+        return is_fy, int(m.group(1)) * 4 + (int(m.group(2)) - 1)
+    mz = _TTM_ZH_QUARTER_RE.match(text)
+    if mz:
+        return False, int(mz.group(1)) * 4 + (_TTM_ZH_QUARTER_NUM[mz.group(2)] - 1)
+    return None
+
+
 def legacy_percentage_difference_unit(calculation: dict) -> bool:
     """Identify old results whose now-recognized rate unit needs recalculation."""
     inputs = calculation.get("inputs")
@@ -664,13 +1072,18 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
     """
     if legacy_percentage_difference_unit(calculation):
         return "unverifiable"
+    formula = calculation.get("formula_id")
     inputs = calculation.get("inputs")
-    if not isinstance(inputs, list) or len(inputs) != 2 or any(not isinstance(item, dict) for item in inputs):
+    if not isinstance(inputs, list) or len(inputs) < 2 or any(not isinstance(item, dict) for item in inputs):
+        return "unverifiable"
+    if formula in BINARY_FORMULAS and len(inputs) != 2:
+        return "unverifiable"
+    if formula == "ttm_sum" and len(inputs) != 4:
         return "unverifiable"
     fields = ("fact_id", "value", "unit", "currency", "period")
     try:
         expected = [NumericFact.model_validate({key: item[key] for key in fields if key in item}) for item in inputs]
-        if expected[0].fact_id == expected[1].fact_id:
+        if len({item.fact_id for item in expected}) != len(expected):
             return "unverifiable"
         by_id: dict[str, list[dict]] = {}
         for item in facts:
@@ -702,25 +1115,34 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
                 return 'unverifiable'
             contexts = [fact['structured_metadata'] for fact in structured]
             if (not all(isinstance(ctx.get('entity_id'), str) and isinstance(ctx.get('metric_id'), str) for ctx in contexts) or
-                    contexts[0]['entity_id'] != contexts[1]['entity_id']):
+                    len({ctx['entity_id'] for ctx in contexts}) != 1):
                 return 'unverifiable'
-            formula = calculation.get('formula_id')
-            same_metric = contexts[0]['metric_id'] == contexts[1]['metric_id']
-            if formula == 'growth_percent' and not same_metric:
+            same_metric = len({ctx['metric_id'] for ctx in contexts}) == 1
+            if formula in {'growth_percent', 'cagr', 'ttm_sum'} and not same_metric:
                 return 'unverifiable'
             try:
                 ends = [date.fromisoformat(ctx['period_end']) for ctx in contexts]
                 starts = [date.fromisoformat(ctx['period_start']) if ctx.get('period_start') else None for ctx in contexts]
-                if (starts[0] is None) != (starts[1] is None):
+                if len({s is None for s in starts}) != 1:
                     return 'unverifiable'
-                same_period = ends[0] == ends[1] and starts[0] == starts[1]
-                if formula == 'growth_percent' and ends[0] <= ends[1]:
+                same_period = len(set(zip(starts, ends))) == 1
+                if formula in {'growth_percent', 'cagr'} and ends[0] <= ends[1]:
                     return 'unverifiable'
                 if formula == 'margin_percent' and not same_period:
                     return 'unverifiable'
                 if formula == 'difference' and not same_metric and not same_period:
                     return 'unverifiable'
-                if formula in {'growth_percent', 'difference'} and same_metric and not same_period and starts[0] is not None:
+                if formula == 'ttm_sum':
+                    if any(s is None for s in starts):
+                        return 'unverifiable'
+                    sorted_spans = sorted(zip(starts, ends))  # type: ignore[type-var]
+                    for idx, (s, e) in enumerate(sorted_spans):
+                        days = (e - s).days
+                        if not (70 <= days <= 105):
+                            return 'unverifiable'
+                        if idx > 0 and s <= sorted_spans[idx - 1][1]:
+                            return 'unverifiable'
+                elif formula in {'growth_percent', 'cagr', 'difference'} and same_metric and not same_period and starts[0] is not None:
                     if not (starts[0] > ends[1] or starts[1] > ends[0]):
                         return 'unverifiable'
                     if abs((ends[0] - starts[0]).days - (ends[1] - starts[1]).days) > 7:
@@ -729,86 +1151,186 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
                 return 'unverifiable'
         proofs = [by_id[item.fact_id][0].get('xbrl_source_consistency') if xbrl_source_consistent(by_id[item.fact_id][0]) else None for item in expected]
         if any(proofs):
-            if not all(proofs) or proofs[0].get('entity_cik') != proofs[1].get('entity_cik') or proofs[0].get('source_sha256') != proofs[1].get('source_sha256'):
+            if (not all(proofs) or len({p.get('entity_cik') for p in proofs}) != 1 or
+                    len({p.get('source_sha256') for p in proofs}) != 1):
                 return 'unverifiable'
-            if calculation.get('formula_id') in {'growth_percent', 'difference'} and proofs[0].get('concept') != proofs[1].get('concept'):
+            if formula in {'growth_percent', 'cagr', 'difference', 'ttm_sum'} and len({p.get('concept') for p in proofs}) != 1:
                 return 'unverifiable'
             try:
                 periods = [(date.fromisoformat(proof['period_start']), date.fromisoformat(proof['period_end'])) for proof in proofs]
             except (KeyError, ValueError, TypeError):
                 return 'unverifiable'
-            if calculation.get('formula_id') in {'growth_percent', 'difference'}:
+            if formula in {'growth_percent', 'cagr', 'difference'}:
                 if (not (periods[0][0] > periods[1][1] or periods[1][0] > periods[0][1]) or
                         abs((periods[0][1] - periods[0][0]).days - (periods[1][1] - periods[1][0]).days) > 7):
                     return 'unverifiable'
-            elif calculation.get('formula_id') == 'margin_percent' and periods[0] != periods[1]:
+            elif formula == 'margin_percent' and periods[0] != periods[1]:
                 return 'unverifiable'
+            elif formula == 'ttm_sum':
+                sorted_spans = sorted(periods)
+                for idx, (s, e) in enumerate(sorted_spans):
+                    if not (70 <= (e - s).days <= 105):
+                        return 'unverifiable'
+                    if idx > 0 and s <= sorted_spans[idx - 1][1]:
+                        return 'unverifiable'
     except (ValidationError, TypeError, ValueError):
         return "unverifiable"
     return "matched"
 
 
 def calculate(request: CalculationRequest) -> dict:
-    """Calculate first versus second; first is current/numerator.
+    """Calculate deterministically using 100-digit Decimal precision.
 
     Preserve original inputs and reject ambiguous or non-comparable quantities.
-    The second input is the baseline for growth and denominator for margin.
+    For binary formulas, ``first`` is current/numerator/minuend and ``second`` is
+    the baseline/denominator/subtrahend. Supports safe same-currency scale
+    alignment while failing closed on cross-currency or incompatible unit mismatches.
     """
-    a, b = request.first, request.second
-    period_order_check = "not_checked"
-    if a.fact_id == b.fact_id:
+    inputs = request.resolved_facts()
+    if len({item.fact_id for item in inputs}) != len(inputs):
         raise CalculationError("Inputs must identify distinct facts.")
-    if a.unit != b.unit or a.currency != b.currency:
-        raise CalculationError("Input units and currencies must match.")
-    if request.formula == "margin_percent" and a.period != b.period:
-        raise CalculationError("Margin inputs must have the same period.")
-    if request.formula == "growth_percent" and a.period == b.period:
-        raise CalculationError("Growth inputs must refer to different periods.")
-    if request.formula == "growth_percent":
+
+    aligned_values, aligned_unit, aligned_currency, scale_adjustments = align_facts_scale(inputs)
+
+    period_order_check = "not_checked"
+    if request.formula == "margin_percent":
+        a, b = inputs[0], inputs[1]
+        if a.period != b.period:
+            raise CalculationError("Margin inputs must have the same period.")
+    if request.formula in {"growth_percent", "cagr"}:
+        a, b = inputs[0], inputs[1]
+        if a.period == b.period:
+            label = "CAGR" if request.formula == "cagr" else "Growth"
+            raise CalculationError(f"{label} inputs must refer to different periods.")
         current, baseline = _comparable_period(a.period), _comparable_period(b.period)
         if current is not None and baseline is not None and current[0] == baseline[0]:
             if current[1] <= baseline[1]:
-                raise CalculationError("Growth current period must be later than its baseline.")
+                label = "CAGR" if request.formula == "cagr" else "Growth"
+                raise CalculationError(f"{label} current period must be later than its baseline.")
             period_order_check = "recognized_formats_only"
-    if request.formula == "growth_percent" and b.value <= 0:
+
+    if request.formula == "growth_percent" and aligned_values[1] <= 0:
         raise CalculationError("Growth requires a positive baseline.")
-    if request.formula == "margin_percent" and b.value <= 0:
+    if request.formula == "margin_percent" and aligned_values[1] <= 0:
         raise CalculationError("Margin requires a positive denominator.")
+    if request.formula == "cagr":
+        if request.periods is None or request.periods <= 0:
+            raise CalculationError("CAGR requires positive periods.")
+        if aligned_values[1] <= 0:
+            raise CalculationError("CAGR requires a positive baseline.")
+        if aligned_values[0] < 0:
+            raise CalculationError("CAGR requires a non-negative ending value.")
+    if request.formula == "ratio" and aligned_values[1] <= 0:
+        raise CalculationError("Ratio requires a positive denominator.")
+    if request.formula == "ttm_sum":
+        if len(inputs) != 4:
+            raise CalculationError("ttm_sum requires exactly 4 quarterly facts.")
+        raw_periods = [item.period for item in inputs]
+        if len(set(raw_periods)) != 4:
+            raise CalculationError("ttm_sum inputs must refer to distinct periods.")
+        for p in raw_periods:
+            gran = _period_granularity(p)
+            if gran in {"year", "month"}:
+                raise CalculationError("ttm_sum requires quarterly periods.")
+        parsed_quarters = [_parse_quarter_index(p) for p in raw_periods]
+        if all(item is not None for item in parsed_quarters):
+            fy_flags = {item[0] for item in parsed_quarters if item is not None}
+            if len(fy_flags) != 1:
+                raise CalculationError("ttm_sum cannot mix fiscal and calendar quarter labels.")
+            indices = sorted(item[1] for item in parsed_quarters if item is not None)
+            if indices != [indices[0] + i for i in range(4)]:
+                raise CalculationError("ttm_sum requires 4 consecutive quarterly periods.")
+            period_order_check = "recognized_formats_only"
+
     formula_version = "1"
+    is_pct_input = is_percent_unit(inputs[0].unit)
     try:
         with localcontext() as context:
             context.prec = 100
             if request.formula == "growth_percent":
-                result = (a.value / b.value - 1) * 100
+                result = (aligned_values[0] / aligned_values[1] - 1) * 100
                 expression = "(first / second - 1) * 100"
                 unit = "percent"
             elif request.formula == "margin_percent":
-                result = a.value / b.value * 100
+                result = aligned_values[0] / aligned_values[1] * 100
                 expression = "first / second * 100"
                 unit = "percent"
-            else:
-                result = a.value - b.value
+            elif request.formula == "difference":
+                result = aligned_values[0] - aligned_values[1]
                 expression = "first - second"
-                if is_percent_unit(a.unit):
-                    if a.currency is not None:
+                if is_pct_input:
+                    if inputs[0].currency is not None:
                         raise CalculationError("Percentage inputs cannot have a currency.")
                     unit = "percentage points"
                     formula_version = "2"
                 else:
-                    unit = a.unit
+                    unit = aligned_unit
+            elif request.formula == "cagr":
+                assert request.periods is not None
+                result = ((aligned_values[0] / aligned_values[1]) ** (Decimal(1) / request.periods) - 1) * 100
+                expression = "((first / second) ** (1 / periods) - 1) * 100"
+                unit = "percent"
+            elif request.formula == "ratio":
+                result = aligned_values[0] / aligned_values[1]
+                expression = "first / second"
+                unit = "ratio"
+            elif request.formula == "sum":
+                result = sum(aligned_values, Decimal(0))
+                expression = "sum(inputs)"
+                unit = "percent" if is_pct_input else aligned_unit
+            elif request.formula == "subtract":
+                result = aligned_values[0] - sum(aligned_values[1:], Decimal(0))
+                expression = "inputs[0] - sum(inputs[1:])"
+                unit = "percentage points" if is_pct_input else aligned_unit
+            elif request.formula == "weighted_average":
+                assert request.weights is not None
+                weight_sum = sum(request.weights, Decimal(0))
+                if weight_sum <= 0:
+                    raise CalculationError("Weighted average requires positive total weight.")
+                weighted_total = sum((w * v for w, v in zip(request.weights, aligned_values)), Decimal(0))
+                result = weighted_total / weight_sum
+                expression = "sum(w_i * x_i) / sum(w_i)"
+                unit = "percent" if is_pct_input else aligned_unit
+            else:  # ttm_sum
+                if is_pct_input:
+                    raise CalculationError("ttm_sum cannot sum percentage rates.")
+                result = sum(aligned_values, Decimal(0))
+                expression = "sum(ttm_quarters)"
+                unit = aligned_unit
             rounded = result.quantize(Decimal(1).scaleb(-request.decimal_places), rounding=ROUND_HALF_UP)
     except (InvalidOperation, OverflowError) as error:
         raise CalculationError("Calculation exceeds supported precision.") from error
-    return {"formula_id": request.formula, "formula_version": formula_version, "expression": expression,
-            "input_verification": "not_verified_by_calculator",
-            "input_precision_status": "not_established",
-            **({"period_order_check": period_order_check,
-                "period_granularity_check": "different_labels_verify_stock_or_flow" if _growth_granularity_conflict(a.period, b.period)
-                    else "not_established"} if request.formula == "growth_percent" else {}),
-            "inputs": [a.model_dump(mode="json"), b.model_dump(mode="json")],
-            "value": str(rounded), "unit": unit,
-            "currency": None if unit in {"percent", "percentage points"} else a.currency,
-            "rounding": "half_up", "decimal_places": request.decimal_places}
+
+    out_currency = None if unit in {"percent", "percentage points", "ratio"} else aligned_currency
+    output: dict[str, object] = {
+        "formula_id": request.formula,
+        "formula_version": formula_version,
+        "expression": expression,
+        "input_verification": "not_verified_by_calculator",
+        "input_precision_status": "not_established",
+        "inputs": [item.model_dump(mode="json") for item in inputs],
+        "value": str(rounded),
+        "unit": unit,
+        "currency": out_currency,
+        "rounding": "half_up",
+        "decimal_places": request.decimal_places,
+    }
+    if request.formula in {"growth_percent", "cagr"}:
+        output["period_order_check"] = period_order_check
+        output["period_granularity_check"] = (
+            "different_labels_verify_stock_or_flow"
+            if _growth_granularity_conflict(inputs[0].period, inputs[1].period)
+            else "not_established"
+        )
+    elif request.formula == "ttm_sum":
+        output["period_order_check"] = period_order_check
+    if request.formula == "cagr" and request.periods is not None:
+        output["periods"] = _plain_decimal_str(request.periods)
+    if request.formula == "weighted_average" and request.weights is not None:
+        output["weights"] = [_plain_decimal_str(w) for w in request.weights]
+    if scale_adjustments:
+        output["scale_adjustments"] = scale_adjustments
+    return output
 
 
 def calculation_result_status(calculation: dict) -> str:
@@ -819,16 +1341,32 @@ def calculation_result_status(calculation: dict) -> str:
     does not certify authorship, source validity or economic interpretation.
     """
     try:
+        formula = calculation.get('formula_id')
         inputs = calculation.get('inputs')
-        if not isinstance(inputs, list) or len(inputs) != 2 or any(not isinstance(item, dict) for item in inputs):
+        if not isinstance(inputs, list) or len(inputs) < 2 or any(not isinstance(item, dict) for item in inputs):
             return 'unverifiable'
         fields = ('fact_id', 'value', 'unit', 'currency', 'period')
-        first, second = ({key: item[key] for key in fields if key in item} for item in inputs)
+        cleaned_inputs = [{key: item[key] for key in fields if key in item} for item in inputs]
         places = calculation.get('decimal_places')
         if type(places) is not int:
             return 'unverifiable'
-        request = CalculationRequest.model_validate({'formula': calculation.get('formula_id'),
-            'first': first, 'second': second, 'decimal_places': places})
+        payload: dict[str, object] = {'formula': formula, 'decimal_places': places}
+        if formula in BINARY_FORMULAS:
+            if len(cleaned_inputs) != 2:
+                return 'unverifiable'
+            payload['first'] = cleaned_inputs[0]
+            payload['second'] = cleaned_inputs[1]
+            if formula == 'cagr':
+                if calculation.get('periods') is None:
+                    return 'unverifiable'
+                payload['periods'] = calculation.get('periods')
+        else:
+            payload['facts'] = cleaned_inputs
+            if formula == 'weighted_average':
+                if calculation.get('weights') is None:
+                    return 'unverifiable'
+                payload['weights'] = calculation.get('weights')
+        request = CalculationRequest.model_validate(payload)
         expected = calculate(request)
         value = Decimal(str(calculation.get('value')))
         if not value.is_finite():
@@ -836,6 +1374,9 @@ def calculation_result_status(calculation: dict) -> str:
         fields_to_match = ('formula_version', 'expression', 'unit', 'currency', 'rounding')
         if value != Decimal(expected['value']) or any(calculation.get(key) != expected[key] for key in fields_to_match):
             return 'mismatch'
+        for optional_key in ('periods', 'weights', 'scale_adjustments'):
+            if optional_key in expected and calculation.get(optional_key) != expected[optional_key]:
+                return 'mismatch'
         return 'matched'
     except (ValidationError, CalculationError, InvalidOperation, TypeError, ValueError, KeyError, OverflowError):
         return 'unverifiable'

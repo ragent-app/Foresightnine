@@ -268,3 +268,78 @@ def test_analysis_keeps_structural_calculation_provisional_and_fails_closed():
     restricted = source.model_copy(deep=True)
     restricted.permissions.display = False
     assert not run(restricted).calculations
+
+
+def test_trace_supports_bounded_rowspan_on_rectangular_tables():
+    from decimal import Decimal
+    from app.research_xbrl import match_inline_fact
+
+    html = (
+        '<html xmlns:ix="http://www.xbrl.org/2013/inlineXBRL"'
+        ' xmlns:xbrli="http://www.xbrl.org/2003/instance"'
+        ' xmlns:iso4217="http://www.xbrl.org/2003/iso4217"'
+        ' xmlns:ixt="http://www.xbrl.org/inlineXBRL/transformation/2020-02-12"'
+        ' xmlns:us-gaap="http://fasb.org/us-gaap/2024">'
+        '<ix:header>'
+        '<xbrli:context id="c1"><xbrli:entity><xbrli:identifier scheme="http://www.sec.gov/CIK">0000858877</xbrli:identifier></xbrli:entity>'
+        '<xbrli:period><xbrli:startDate>2023-07-30</xbrli:startDate><xbrli:endDate>2024-07-27</xbrli:endDate></xbrli:period></xbrli:context>'
+        '<xbrli:context id="c2"><xbrli:entity><xbrli:identifier scheme="http://www.sec.gov/CIK">0000858877</xbrli:identifier></xbrli:entity>'
+        '<xbrli:period><xbrli:startDate>2022-07-31</xbrli:startDate><xbrli:endDate>2023-07-29</xbrli:endDate></xbrli:period></xbrli:context>'
+        '<xbrli:unit id="usd"><xbrli:measure>iso4217:USD</xbrli:measure></xbrli:unit>'
+        '</ix:header>'
+        '<p>In millions</p>'
+        '<table>'
+        '<tr><th rowspan="2">Line Item</th><th colspan="2">Years Ended</th></tr>'
+        '<tr><th>July 27, 2024</th><th>July 29, 2023</th></tr>'
+        '<tr><td>Total revenue</td>'
+        '<td><ix:nonFraction name="us-gaap:Revenues" contextRef="c1" unitRef="usd" format="ixt:num-dot-decimal" scale="6" decimals="-6">100</ix:nonFraction></td>'
+        '<td><ix:nonFraction name="us-gaap:Revenues" contextRef="c2" unitRef="usd" format="ixt:num-dot-decimal" scale="6" decimals="-6">90</ix:nonFraction></td></tr>'
+        '</table></html>'
+    )
+    source = source_for(html)
+    traced = trace(source)
+    assert traced is not None
+    assert [row["width"] for row in traced["rows"]] == [3, 3, 3]
+    assert traced["rows"][1]["cells"] == [
+        {"start": 1, "end": 2, "text": "July 27, 2024", "kind": "th"},
+        {"start": 2, "end": 3, "text": "July 29, 2023", "kind": "th"},
+    ]
+    alignment = annual_table_value_alignment({"status": "available", **traced}, Decimal("100"), "FY2024 (year ended July 27, 2024)")
+    assert alignment is not None and alignment["status"] == "matched"
+    matched = match_inline_fact({"status": "available", **traced}, alignment, value=Decimal("100"),
+                                label="Total revenue FY2024", unit="USD million", currency="USD")
+    assert matched is not None and matched["entity_cik"] == "0000858877"
+
+    # Data-row rowspan shifts occupied column cleanly on subsequent row and allows rowspan=10 boundary
+    body_span = (
+        '<table>'
+        '<tr><th>Group</th><th>2024</th><th>2023</th></tr>'
+        '<tr><td rowspan="2">Core</td><td>200</td><td>180</td></tr>'
+        '<tr><td>100</td><td>90</td></tr>'
+        '</table>'
+    )
+    body_traced = trace(source_for(body_span))
+    assert body_traced is not None and body_traced["rows"][-1]["width"] == 3
+    assert body_traced["rows"][-1]["cells"][0] == {"start": 1, "end": 2, "text": "100", "kind": "td"}
+
+    bound_10 = '<table><tr><td rowspan="10">Grp</td><td>1</td></tr>' + '<tr><td>2</td></tr>' * 8 + '<tr><td>100</td></tr></table>'
+    assert trace(source_for(bound_10)) is not None
+
+
+def test_trace_fails_closed_on_ambiguous_or_oversized_rowspan():
+    # Exceeds MAX_ROWSPAN (10)
+    over_10 = '<table><tr><td rowspan="11">Grp</td><td>1</td></tr>' + '<tr><td>2</td></tr>' * 9 + '<tr><td>100</td></tr></table>'
+    assert trace(source_for(over_10)) is None
+    # Non-rectangular table with rowspan
+    non_rect = '<table><tr><td rowspan="2">Grp</td><td>1</td></tr><tr><td>100</td><td>90</td></tr></table>'
+    assert trace(source_for(non_rect)) is None
+    # Rowspan overlapping with colspan
+    overlap = '<table><tr><td>A</td><td rowspan="2">B</td><td>C</td></tr><tr><td colspan="3">100</td></tr></table>'
+    assert trace(source_for(overlap)) is None
+    # Rowspan crossing thead -> tbody boundary
+    cross_group = '<table><thead><tr><th rowspan="2">M</th><th>2024</th></tr></thead><tbody><tr><td>100</td></tr></tbody></table>'
+    assert trace(source_for(cross_group)) is None
+    # Invalid rowspan values (0, non-digit, duplicate attr)
+    assert trace(source_for('<table><tr><td rowspan="0">A</td><td>100</td></tr></table>')) is None
+    assert trace(source_for('<table><tr><td rowspan="x">A</td><td>100</td></tr></table>')) is None
+    assert trace(source_for('<table><tr><td rowspan="2" rowspan="2">A</td><td>1</td></tr><tr><td>100</td></tr></table>')) is None

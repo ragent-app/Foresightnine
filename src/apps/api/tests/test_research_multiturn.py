@@ -202,7 +202,7 @@ def test_failed_second_turn_continues_in_place_without_duplicates(env, monkeypat
                         submit(sid, quotation='Costs were 60 USD.', role='counterargument'))
     env.install(provider)
     env.run()
-    second_id = env.run({'question_override': 'Compare costs.'})
+    second_id = env.run({'question_override': 'Check costs.'})
     partial = env.latest()
     turn2 = partial['content']['turns'][-1]
     assert turn2['status'] == 'partial' and turn2['reason'] == 'provider_transport_error'
@@ -218,7 +218,7 @@ def test_failed_second_turn_continues_in_place_without_duplicates(env, monkeypat
     assert len(final['turns']) == 2
     turn2 = final['turns'][-1]
     assert turn2['operation_ids'] == [second_id, third_id]
-    assert turn2['status'] == 'completed' and turn2['index'] == 2 and turn2['question'] == 'Compare costs.'
+    assert turn2['status'] == 'completed' and turn2['index'] == 2 and turn2['question'] == 'Check costs.'
     assert len(final['facts']) == 3 and len({f['fact_id'] for f in final['facts']}) == 3
     assert len(final['claims']) == 2 and turn2['claim_ids'] == [final['claims'][1]['claim_id']]
     assert turn2['fact_ids'] == [final['facts'][2]['fact_id']]

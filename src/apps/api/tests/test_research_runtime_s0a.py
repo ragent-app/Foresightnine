@@ -29,7 +29,8 @@ def price_args(**extra):
 
 
 def feedback(model, index=1):
-    return json.loads(model.inputs[index][-1]['content'])
+    tool_msgs = [m for m in model.inputs[index] if m.get('role') == 'tool']
+    return json.loads(tool_msgs[-1]['content'])
 
 
 def test_clock_only_in_first_user_message_and_resume_keeps_it():

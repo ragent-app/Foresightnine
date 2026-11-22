@@ -61,6 +61,7 @@ class LocalSession(BaseModel):
     token_digest: str = Field(min_length=64, max_length=64)
     created_at: datetime
     expires_at: datetime
+    auth_provider: Literal["google", "github"] | None = None
 
 
 def normalize_email(value: str) -> str:
@@ -117,6 +118,7 @@ def _new_session(
     now: datetime,
     *,
     auth_mode: Literal["local_mock", "oauth"] = "local_mock",
+    auth_provider: Literal["google", "github"] | None = None,
 ) -> dict[str, Any]:
     token = secrets.token_urlsafe(32)
     session = LocalSession(
@@ -125,6 +127,7 @@ def _new_session(
         token_digest=_token_digest(token),
         created_at=now,
         expires_at=now + SESSION_TTL,
+        auth_provider=auth_provider,
     )
     sessions[session.session_id] = session
     return {
@@ -142,10 +145,12 @@ def issue_session(
     *,
     now: datetime,
     auth_mode: Literal["local_mock", "oauth"] = "local_mock",
+    auth_provider: Literal["google", "github"] | None = None,
 ) -> dict[str, Any]:
     """Issue the same server-side bearer session for a verified OAuth account."""
 
-    return _new_session(sessions, account, _now_utc(now), auth_mode=auth_mode)
+    return _new_session(sessions, account, _now_utc(now), auth_mode=auth_mode,
+                        auth_provider=auth_provider if auth_mode == "oauth" else None)
 
 
 def register(

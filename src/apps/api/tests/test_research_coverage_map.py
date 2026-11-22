@@ -283,3 +283,55 @@ def test_deterministic_json_serialisable_and_consumers():
     m = run("Q-A1")
     price_row = next(r for r in ui_view(m)["rows"] if r["category"] == "market_prices")
     assert price_row["data_as_of"] == "2026-11-19" and price_row["trading_days_behind"] == 0 and price_row["is_stale"] is False
+
+
+def test_staleness_respects_exchange_holidays_and_reports_holidays_modelled_honestly():
+    # NYSE: Wed 2026-11-25 data evaluated after Fri 2026-11-27 close -> skips Thu 2026-11-26 Thanksgiving -> 1 trading day behind.
+    clock_thanksgiving = {
+        "utc_date": "2026-11-28",
+        "exchanges": [{"exchange": "NYSE", "last_completed_session": "2026-11-27"}],
+    }
+    src_nyse = {
+        "source_id": "s-nyse",
+        "title": "AAPL daily close",
+        "kind": "market_data",
+        "retrieval_method": "market_data",
+        "provenance": {"provider": "yahoo", "instrument_id": "AAPL", "exchange": "NYSE", "actual_last_date": "2026-11-25"},
+    }
+    m_nyse = build_coverage_map({"user": {"research_clock": clock_thanksgiving}}, sources=[src_nyse])
+    stale_nyse = cat(m_nyse, "market_prices")["staleness"]
+    assert stale_nyse["trading_days_before_last_session"] == 1
+    assert stale_nyse["holidays_modelled"] is True
+
+    # Unmodelled exchange (ASX) keeps holidays_modelled == False cleanly.
+    clock_asx = {
+        "utc_date": "2026-11-28",
+        "exchanges": [{"exchange": "ASX", "last_completed_session": "2026-11-27"}],
+    }
+    src_asx = {
+        "source_id": "s-asx",
+        "title": "BHP daily close",
+        "kind": "market_data",
+        "retrieval_method": "market_data",
+        "provenance": {"provider": "yahoo", "instrument_id": "BHP", "exchange": "ASX", "actual_last_date": "2026-11-25"},
+    }
+    m_asx = build_coverage_map({"user": {"research_clock": clock_asx}}, sources=[src_asx])
+    stale_asx = cat(m_asx, "market_prices")["staleness"]
+    assert stale_asx["trading_days_before_last_session"] == 2
+    assert stale_asx["holidays_modelled"] is False
+
+    # Out-of-coverage year (2028) for covered exchange reports holidays_modelled == False honestly.
+    clock_future = {
+        "utc_date": "2028-01-10",
+        "exchanges": [{"exchange": "NYSE", "last_completed_session": "2028-01-07"}],
+    }
+    src_future = {
+        "source_id": "s-fut",
+        "title": "AAPL 2028",
+        "kind": "market_data",
+        "retrieval_method": "market_data",
+        "provenance": {"provider": "yahoo", "instrument_id": "AAPL", "exchange": "NYSE", "actual_last_date": "2028-01-05"},
+    }
+    m_future = build_coverage_map({"user": {"research_clock": clock_future}}, sources=[src_future])
+    assert cat(m_future, "market_prices")["staleness"]["holidays_modelled"] is False
+

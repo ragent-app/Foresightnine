@@ -19,7 +19,11 @@ from app.main import reset_state
 
 @pytest.fixture(autouse=True)
 def clean_in_memory_state() -> None:
+    from app.research_news_tool import reset_news_search_cache
     reset_state()
+    reset_news_search_cache()
+    yield
+    reset_news_search_cache()
 
 
 @pytest.fixture(autouse=True)

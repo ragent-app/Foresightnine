@@ -37,6 +37,14 @@ class Model:
         return next(self.turns)
 
 
+def _last_tool_msg(messages):
+    return [msg for msg in messages if msg.get('role') == 'tool'][-1]
+
+
+def _last_tool(model, index=-1):
+    return _last_tool_msg(model.inputs[index])
+
+
 def test_read_feedback_and_submission_uses_call_association_and_server_ids():
     m = Model([turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'financial disclosure'}, 'a'),
                turn('submit_research', {'report': 'Revenue was 100 USD.', 'claims': [{'text': 'Revenue was 100 USD.', 'source_id': 's1',
@@ -46,8 +54,8 @@ def test_read_feedback_and_submission_uses_call_association_and_server_ids():
                                 checkpoint=lambda s: saved.append(json.loads(json.dumps(s))))
     assert result.status == 'completed'
     assert result.claims[0]['claim_id'].startswith('claim-')
-    assert m.inputs[1][-1]['tool_call_id'] == 'a'
-    assert 'Revenue was 100 USD.' in m.inputs[1][-1]['content']
+    assert _last_tool(m, 1)['tool_call_id'] == 'a'
+    assert 'Revenue was 100 USD.' in _last_tool(m, 1)['content']
     assert any(s['pending'] and s['pending']['kind'] == 'model' for s in saved)
     assert saved[-1]['submission']['report'] == result.report
 
@@ -58,7 +66,7 @@ def test_fred_and_missing_permission_are_denied_at_read():
                    ModelResponse({'role': 'assistant', 'content': 'Cannot proceed.'}, (), None, 'stop')])
         result = run_research_agent(question='Question', sources=[item], model=m, context=context())
         assert result.status == 'partial'
-        assert 'denied_or_unavailable' in m.inputs[1][-1]['content']
+        assert 'denied_or_unavailable' in _last_tool(m, 1)['content']
         assert not result.source_ids
 
 
@@ -88,7 +96,7 @@ def test_facts_and_calculation_are_source_linked():
         count = len(m.inputs)
         m.inputs.append(json.loads(json.dumps(messages)))
         if count == 2:
-            facts = json.loads(messages[-1]['content'])['facts']
+            facts = json.loads(_last_tool_msg(messages)['content'])['facts']
             return turn('calculate_financials', {'calculations': [{'formula': 'growth_percent',
                 'first_fact_id': facts[0]['fact_id'], 'second_fact_id': facts[1]['fact_id']}], 'rationale': 'growth'}, 'c')
         return ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')
@@ -130,7 +138,7 @@ def test_tool_batch_cursor_resumes_without_model_replay():
     result = run_research_agent(question='Q', sources=[source()], model=m, context=context(), initial_state=saved)
     assert result.reason == 'no_submission'
     assert len(m.inputs) == 1
-    assert m.inputs[0][-1]['tool_call_id'] == 'a'
+    assert _last_tool(m, 0)['tool_call_id'] == 'a'
 
 
 def test_same_action_with_changed_rationale_is_no_progress():
@@ -181,7 +189,7 @@ def test_quotation_offsets_are_resolved_and_ambiguous_matches_are_rejected():
                turn('submit_research', submit, 'b'), ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')])
     result = run_research_agent(question='Q', sources=[repeated], model=m, context=context())
     assert result.status == 'partial'
-    assert 'candidate offsets' in m.inputs[-1][-1]['content']
+    assert 'candidate offsets' in _last_tool(m)['content']
 
 
 def test_known_failed_response_is_saved_and_settled():
@@ -210,7 +218,7 @@ def test_acquire_known_failure_details_are_model_feedback():
         acquire=lambda *_: (None, {'status': 'failed', 'notes': ['Unavailable'],
                                    'outcomes': [{'status': 'failed', 'external_state': 'returned'}]}))
     assert result.reason == 'no_submission'
-    assert 'Unavailable' in m.inputs[-1][-1]['content']
+    assert 'Unavailable' in _last_tool(m)['content']
 
 
 def test_repeated_facts_reuse_id_and_failed_batch_is_atomic():
@@ -226,8 +234,8 @@ def test_repeated_facts_reuse_id_and_failed_batch_is_atomic():
     result = run_research_agent(question='Q', sources=[source()], model=m, context=context())
     assert result.reason == 'no_progress'
     assert len(result.facts) == 1
-    first = json.loads(m.inputs[3][-1]['content'])['facts']
-    second = json.loads(m.inputs[4][-1]['content'])['facts']
+    first = json.loads(_last_tool(m, 3)['content'])['facts']
+    second = json.loads(_last_tool(m, 4)['content'])['facts']
     assert first[0]['fact_id'] == first[1]['fact_id'] == second[0]['fact_id'] == result.facts[0]['fact_id']
 
 
@@ -239,7 +247,7 @@ def test_malformed_arguments_first_and_later_do_not_reuse_rationale():
         m = Model([*turns, ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')])
         result = run_research_agent(question='Q', sources=[source()], model=m, context=context())
         assert result.status == 'partial'
-        assert json.loads(m.inputs[-1][-1]['content'])['status'] == 'invalid'
+        assert json.loads(_last_tool(m)['content'])['status'] == 'invalid'
         event = next(e for e in result.events if e.get('tool_call_id') == 'bad')
         assert event['rationale'] is None
 
@@ -257,7 +265,7 @@ def test_fred_search_leads_are_removed_before_model_feedback_and_checkpoint():
     event = next(e for e in outcome.events if e.get('name') == 'news_search')
     assert event['denied_count'] == 3
     assert event['denied_reasons']['source_not_authorized'] == 3
-    feedback = json.loads(m.inputs[-1][-1]['content'])
+    feedback = json.loads(_last_tool(m)['content'])
     assert feedback['denied_count'] == 3
     assert len(feedback['leads']) == 1
     assert 'SECRET CONTENT' not in json.dumps(saved)
@@ -508,7 +516,7 @@ def test_submission_claim_requires_support_or_counterargument_role(claim_role):
                ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')])
     result = run_research_agent(question='Q', sources=[source()], model=m, context=context())
     assert result.status == 'partial' and result.claims == []
-    feedback = json.loads(m.inputs[-1][-1]['content'])
+    feedback = json.loads(_last_tool(m)['content'])
     assert feedback['status'] == 'invalid'
 
 
@@ -655,7 +663,7 @@ def test_company_financials_success_unconfigured_restricted_and_unknown_recovery
     m_ok = Model([turn('company_financials', fin_args, 'f1'), stop])
     sources_list = []
     res_ok = run_research_agent(question='Q', sources=sources_list, model=m_ok, context=context(), fin_data=make_toolbox(sec=t))
-    fb = json.loads(m_ok.inputs[1][-1]['content'])
+    fb = json.loads(_last_tool(m_ok, 1)['content'])
     assert fb['status'] in ('ok', 'partial') and fb['source_id'] == 'src_1' and res_ok.source_ids == ['src_1']
     assert len(sources_list) == 1 and sources_list[0].retrieval_method == 'sec_companyfacts' and sources_list[0].kind == 'official'
 
@@ -663,13 +671,13 @@ def test_company_financials_success_unconfigured_restricted_and_unknown_recovery
     t2 = FakeTransport(Reply())
     m_unconf = Model([turn('company_financials', fin_args, 'f1'), stop])
     run_research_agent(question='Q', sources=[], model=m_unconf, context=context(), fin_data=make_toolbox(sec=t2, user_agent=None))
-    assert json.loads(m_unconf.inputs[1][-1]['content']) == {
+    assert json.loads(_last_tool(m_unconf, 1)['content']) == {
         'status': 'unavailable', 'reason': 'sec_contact_unconfigured_or_unavailable'}
     m_cutoff = Model([turn('company_financials', fin_args, 'f1'), stop])
     run_research_agent(question='Q', sources=[], model=m_cutoff, context=context(),
                        as_of=datetime(2025, 2, 1, tzinfo=timezone.utc),
                        fin_data=make_toolbox(sec=t2, disabled_reason='historical_cutoff'))
-    assert json.loads(m_cutoff.inputs[1][-1]['content']) == {'status': 'restricted', 'reason': 'historical_cutoff'}
+    assert json.loads(_last_tool(m_cutoff, 1)['content']) == {'status': 'restricted', 'reason': 'historical_cutoff'}
     assert not t2.calls
 
     # 3. An unknown SEC outcome is recorded as a failure, not retried, and the run continues.
@@ -677,7 +685,7 @@ def test_company_financials_success_unconfigured_restricted_and_unknown_recovery
     m_unknown = Model([turn('company_financials', fin_args, 'f_u'), stop])
     res_unknown = run_research_agent(question='Q', sources=[], model=m_unknown, context=context(), fin_data=make_toolbox(sec=t3))
     assert len(m_unknown.inputs) == 2
-    fed_back = json.loads(m_unknown.inputs[1][-1]['content'])
+    fed_back = json.loads(_last_tool(m_unknown, 1)['content'])
     assert fed_back['status'] == 'failed' and fed_back['reason'] == 'source_unavailable'
     assert any(e.get('name') == 'company_financials' and e.get('status') == 'failed' for e in res_unknown.events)
     assert len(t3.calls) == 1
@@ -690,7 +698,7 @@ def test_acquire_sources_distinguishes_disabled_undiscovered_and_granular_failur
         ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
     ])
     run_research_agent(question='Q', sources=[], model=m_disabled, context=context(), acquire=None)
-    fb_disabled = json.loads(m_disabled.inputs[1][-1]['content'])
+    fb_disabled = json.loads(_last_tool(m_disabled, 1)['content'])
     assert fb_disabled['status'] == 'unavailable'
     assert fb_disabled['reason'] == 'acquisition_not_authorized_or_disabled'
     assert fb_disabled['results'][0]['reason'] == 'acquisition_not_authorized_or_disabled'
@@ -709,7 +717,7 @@ def test_acquire_sources_distinguishes_disabled_undiscovered_and_granular_failur
         acquire=lambda u, t: acquire_calls.append((u, t)) or (None, {}),
     )
     assert acquire_calls == []
-    fb_unsearched = json.loads(m_unsearched.inputs[1][-1]['content'])
+    fb_unsearched = json.loads(_last_tool(m_unsearched, 1)['content'])
     assert fb_unsearched['status'] == 'unavailable'
     assert fb_unsearched['reason'] == 'lead_not_discovered'
     assert 'news_search' in fb_unsearched['hint']
@@ -755,7 +763,7 @@ def test_acquire_sources_distinguishes_disabled_undiscovered_and_granular_failur
         discover=lambda _: leads,
         acquire=acquire_by_url,
     )
-    fb_multi = json.loads(m_multi.inputs[2][-1]['content'])
+    fb_multi = json.loads(_last_tool(m_multi, 2)['content'])
     assert fb_multi['status'] == 'unavailable'
     assert fb_multi['reason'] == 'source_cannot_be_acquired'
     assert fb_multi['failure_reasons'] == ['sec_contact_unconfigured', 'http_forbidden_or_challenge', 'source_too_large']
@@ -783,7 +791,7 @@ def test_acquire_sources_distinguishes_disabled_undiscovered_and_granular_failur
         discover=lambda _: [leads[1]],
         acquire=acquire_by_url,
     )
-    fb_single = json.loads(m_single.inputs[2][-1]['content'])
+    fb_single = json.loads(_last_tool(m_single, 2)['content'])
     assert fb_single['reason'] == 'http_forbidden_or_challenge'
     assert fb_single['failure_reasons'] == ['http_forbidden_or_challenge']
 
@@ -882,9 +890,9 @@ def test_company_financials_rate_limit_allows_one_retry_and_stops_on_second_repe
     res_ok = run_research_agent(question='Q', sources=[], model=m_ok, context=context(),
                                 fin_data=make_toolbox(sec=t, reserve_sec=lambda: next(pace, True)),
                                 checkpoint=lambda s: saved.append(json.loads(json.dumps(s))))
-    first = json.loads(m_ok.inputs[1][-1]['content'])
+    first = json.loads(_last_tool(m_ok, 1)['content'])
     assert first['status'] == 'rate_limited' and first['retryable'] is True
-    assert json.loads(m_ok.inputs[2][-1]['content'])['status'] in ('ok', 'partial')
+    assert json.loads(_last_tool(m_ok, 2)['content'])['status'] in ('ok', 'partial')
     assert len(t.concept_urls) == 4 and len(saved[-1]['rate_limit_retries']) == 1
 
     # 2. A second consecutive rate limit keeps the signature in seen, so repeating again stops with no_progress.
@@ -1103,7 +1111,7 @@ def test_search_source_supports_exact_fallbacks_bounds_and_requires_read_before_
     assert res.reason == 'no_submission'
     assert res.source_ids == []
 
-    tool_msgs = [json.loads(inp[-1]['content']) for inp in m.inputs[1:]]
+    tool_msgs = [json.loads(_last_tool_msg(inp)['content']) for inp in m.inputs[1:]]
     ws_fb, tok_fb, cs_fb, ci_fb, cap_fb, none_fb, blank_fb, max_fb, unread_fb = tool_msgs
 
     assert ws_fb['match_mode'] == 'whitespace_normalized'
@@ -1156,7 +1164,7 @@ def test_search_source_boundary_snippets_and_read_sources_ineligible_non_leakage
         ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
     ])
     run_research_agent(question='Q', sources=[src, hidden], model=m, context=context())
-    first_fb, last_fb, hidden_fb = (json.loads(inp[-1]['content']) for inp in m.inputs[1:])
+    first_fb, last_fb, hidden_fb = (json.loads(_last_tool_msg(inp)['content']) for inp in m.inputs[1:])
     assert len(first_fb['hits'][0]['snippet']) == 300
     assert first_fb['hits'][0]['snippet'].startswith('FIRST_KEY')
     assert len(last_fb['hits'][0]['snippet']) == 300
@@ -1203,7 +1211,7 @@ def test_outline_and_search_enforce_eligibility_and_as_of_cutoff():
         as_of=cutoff,
     )
     for inp in m.inputs[1:]:
-        raw = inp[-1]['content']
+        raw = _last_tool_msg(inp)['content']
         assert json.loads(raw)['status'] == 'denied_or_unavailable'
         assert 'SECRET' not in raw
         assert 'total_characters' not in raw
@@ -1223,7 +1231,7 @@ def test_read_sources_enforces_span_and_batch_caps_while_preserving_small_source
     ])
     res_exact = run_research_agent(question='Q', sources=[exact_src], model=m_exact, context=context())
     assert res_exact.source_ids == ['s_exact']
-    fb_exact = json.loads(m_exact.inputs[1][-1]['content'])
+    fb_exact = json.loads(_last_tool(m_exact, 1)['content'])
     assert fb_exact['results'][0]['status'] == 'read'
     assert len(fb_exact['results'][0]['text']) == MAX_READ_SOURCE_SPAN_CHARS
 
@@ -1269,7 +1277,7 @@ def test_read_sources_enforces_span_and_batch_caps_while_preserving_small_source
             if self.step < 4:
                 self.step += 1
                 return next(self._gen)
-            last = json.loads(messages[-1]['content'])
+            last = json.loads(_last_tool_msg(messages)['content'])
             if self.step == 4:
                 self.step += 1
                 hit = last['hits'][0]
@@ -1300,7 +1308,7 @@ def test_read_sources_enforces_span_and_batch_caps_while_preserving_small_source
     assert res_long.source_ids == ['s_long']
 
     for idx, expected_err in ((1, 'read_span_too_large'), (2, 'read_span_too_large'), (3, 'read_batch_too_large')):
-        msg = gm.inputs[idx][-1]
+        msg = _last_tool(gm, idx)
         fb = json.loads(msg['content'])
         assert fb['status'] == 'invalid'
         assert fb['error'] == expected_err
@@ -1353,11 +1361,17 @@ def test_below_watermark_runtime_keeps_history_prefix_byte_identical_for_kv_cach
     assert 'compaction_count' not in saved[-1]
     assert len(m.inputs) == 5
 
-    # Every call's prefix of messages must match the previous call's entire prompt byte-for-byte.
+    # Volatile tail_note sits only in the trailing user message; everything prior stays byte-identical across turns.
+    def _cached_prefix(msgs):
+        if len(msgs) > 2 and msgs[-1].get('role') == 'user':
+            assert '[Coverage]' in msgs[-1]['content'] or '[Working Memory]' in msgs[-1]['content'] or '[Convergence]' in msgs[-1]['content']
+            return msgs[:-1]
+        return msgs
+
     for idx in range(1, len(m.inputs)):
-        prev_msgs = m.inputs[idx - 1]
-        curr_prefix = m.inputs[idx][:len(prev_msgs)]
-        assert json.dumps(curr_prefix, sort_keys=True) == json.dumps(prev_msgs, sort_keys=True)
+        prev_prefix = _cached_prefix(m.inputs[idx - 1])
+        curr_prefix = m.inputs[idx][:len(prev_prefix)]
+        assert json.dumps(curr_prefix, sort_keys=True) == json.dumps(prev_prefix, sort_keys=True)
 
     # Direct helper check below watermark is a pure no-op.
     snapshot_before = json.dumps(saved[-1]['history'], sort_keys=True)
@@ -1536,8 +1550,10 @@ def test_l1_compaction_triggers_under_tight_context_and_record_facts_still_locat
             self.step = 0
 
         def research_capacity(self):
-            # Trigger watermark: ~40_500 * 3 * 0.58 - fixed (~25k, incl. the financial data and issuer_documents tool schemas) ≈ ~44k chars.
-            return SimpleNamespace(context_tokens=43_100, output_tokens=1000, input_counter='chars_div_3')
+            from app.research_runtime import SYSTEM, _TOOLS_SERIALIZED_CHARS
+            # Keep ~45k chars available above SYSTEM + serialized tool schemas (~44k after user payload).
+            context_tokens = int((45_000 + len(SYSTEM) + _TOOLS_SERIALIZED_CHARS) / (3 * 0.58))
+            return SimpleNamespace(context_tokens=context_tokens, output_tokens=1000, input_counter='chars_div_3')
 
         def estimate_turn_input(self, turn_obj):
             return 100

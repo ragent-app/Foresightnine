@@ -280,12 +280,14 @@ class TesseractEngine:
 # ---- vision model --------------------------------------------------------------------------
 
 class VisionModelEngine:
-    """Optional OCR through a vision-capable model over the anthropic_messages wire protocol."""
+    """Optional OCR through a vision-capable model over anthropic_messages or openai_compatible."""
 
     name = "vision_model"
+    _SUPPORTED_PROTOCOLS = frozenset({"anthropic_messages", "openai_compatible"})
 
     def __init__(self, *, base_url: str, model: str, api_key: str, allowlist: str, max_output_tokens: int,
-                 anthropic_version: str, auth_scheme: str = "x-api-key",
+                 anthropic_version: str = "", auth_scheme: str = "x-api-key",
+                 protocol: str = "anthropic_messages",
                  transport: Callable[..., object] | None = None):
         from .openai_compatible import OpenAICompatibleSettings
         from .phase3 import ProviderFailure
@@ -295,20 +297,28 @@ class VisionModelEngine:
         self.max_output_tokens = max_output_tokens
         self.anthropic_version = anthropic_version
         self.auth_scheme = auth_scheme if auth_scheme in {"x-api-key", "bearer"} else "x-api-key"
+        self.protocol = (protocol or "anthropic_messages").strip()
         self._transport = transport
         self._api_key = api_key
         self._settings = None
+        if self.protocol not in self._SUPPORTED_PROTOCOLS:
+            return
         try:
             self._settings = OpenAICompatibleSettings.from_values(
                 base_url=base_url, model=model, api_key=api_key, allowlist=allowlist)
         except ProviderFailure:
             return
-        self._ready = bool(api_key and anthropic_version and max_output_tokens > 0)
+        if self.protocol == "anthropic_messages":
+            valid_version = bool(anthropic_version and not any(c in anthropic_version for c in "\r\n"))
+            self._ready = bool(api_key and valid_version and max_output_tokens > 0)
+        else:
+            self._ready = bool(api_key and max_output_tokens > 0)
 
     @classmethod
     def from_environment(cls, *, transport: Callable[..., object] | None = None) -> "VisionModelEngine | None":
         env = os.environ.get
-        if env("FORESIGHTNINE_OCR_VISION_PROTOCOL", "").strip() != "anthropic_messages":
+        protocol = env("FORESIGHTNINE_OCR_VISION_PROTOCOL", "").strip()
+        if protocol not in cls._SUPPORTED_PROTOCOLS:
             return None
         try:
             max_tokens = int(env("FORESIGHTNINE_OCR_VISION_MAX_OUTPUT_TOKENS", "").strip())
@@ -321,11 +331,91 @@ class VisionModelEngine:
             max_output_tokens=max_tokens,
             anthropic_version=(env("FORESIGHTNINE_OCR_VISION_ANTHROPIC_VERSION", "") or env("FORESIGHTNINE_MESSAGES_VERSION", "")).strip(),
             auth_scheme=env("FORESIGHTNINE_OCR_VISION_AUTH_SCHEME", "x-api-key").strip() or "x-api-key",
+            protocol=protocol,
             transport=transport)
         return engine if engine.available() else None
 
     def available(self) -> bool:
         return self._ready
+
+    def _build_request(self, png: bytes) -> tuple[str, dict[str, str], bytes]:
+        assert self._settings is not None
+        encoded = base64.b64encode(png).decode("ascii")
+        if self.protocol == "openai_compatible":
+            from .openai_compatible import _endpoint as _openai_endpoint
+            url = _openai_endpoint(self._settings.base_url)
+            body = json.dumps({
+                "model": self.model,
+                "max_tokens": self.max_output_tokens,
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded}"}},
+                        {"type": "text", "text": VISION_INSTRUCTION},
+                    ],
+                }],
+            }, sort_keys=True, separators=(",", ":")).encode()
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + self._api_key,
+            }
+            return url, headers, body
+        from .anthropic_messages import _endpoint as _anthropic_endpoint
+        url = _anthropic_endpoint(self._settings.base_url)
+        body = json.dumps({
+            "model": self.model, "max_tokens": self.max_output_tokens,
+            "messages": [{"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": encoded}},
+                {"type": "text", "text": VISION_INSTRUCTION}]}],
+        }, separators=(",", ":")).encode()
+        headers = {"Accept": "application/json", "Content-Type": "application/json",
+                   "anthropic-version": self.anthropic_version}
+        if self.auth_scheme == "bearer":
+            headers["Authorization"] = "Bearer " + self._api_key
+        else:
+            headers["x-api-key"] = self._api_key
+        return url, headers, body
+
+    def _parse_payload(self, payload: object) -> tuple[str, str | None, dict | None]:
+        usage = _usage(payload.get("usage") if isinstance(payload, dict) else None)
+        if not isinstance(payload, dict):
+            return "", "response_invalid", usage
+        if self.protocol == "openai_compatible":
+            choices = payload.get("choices")
+            if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+                return "", "response_invalid", usage
+            choice = choices[0]
+            message = choice.get("message")
+            if not isinstance(message, dict):
+                return "", "response_invalid", usage
+            content = message.get("content")
+            if isinstance(content, str):
+                text = content.strip()
+            elif isinstance(content, list):
+                text = "\n".join(
+                    b["text"] for b in content
+                    if isinstance(b, dict) and b.get("type") == "text" and isinstance(b.get("text"), str)
+                ).strip()
+            elif content is None:
+                text = ""
+            else:
+                return "", "response_invalid", usage
+            if choice.get("finish_reason") == "length":
+                return "", "output_truncated", usage
+            if not text:
+                return "", "empty_response", usage
+            return text, None, usage
+        blocks = payload.get("content")
+        if not isinstance(blocks, list):
+            return "", "response_invalid", usage
+        text = "\n".join(b["text"] for b in blocks
+                         if isinstance(b, dict) and b.get("type") == "text" and isinstance(b.get("text"), str)).strip()
+        if payload.get("stop_reason") == "max_tokens":
+            return "", "output_truncated", usage
+        if not text:
+            return "", "empty_response", usage
+        return text, None, usage
 
     def ocr(self, png: bytes, *, langs: str, timeout: float) -> OcrPageResult:
         def failure(code: str, usage: dict | None = None) -> OcrPageResult:
@@ -335,24 +425,11 @@ class VisionModelEngine:
             return failure("engine_unavailable")
         if timeout <= 0:
             return failure("timeout")
-        from .anthropic_messages import _endpoint
         from .openai_compatible import _TransportFailure, _TransportTimeout, _default_binary_transport
-        body = json.dumps({
-            "model": self.model, "max_tokens": self.max_output_tokens,
-            "messages": [{"role": "user", "content": [
-                {"type": "image", "source": {"type": "base64", "media_type": "image/png",
-                                             "data": base64.b64encode(png).decode("ascii")}},
-                {"type": "text", "text": VISION_INSTRUCTION}]}],
-        }, separators=(",", ":")).encode()
-        headers = {"Accept": "application/json", "Content-Type": "application/json",
-                   "anthropic-version": self.anthropic_version}
-        if self.auth_scheme == "bearer":
-            headers["Authorization"] = "Bearer " + self._api_key
-        else:
-            headers["x-api-key"] = self._api_key
+        url, headers, body = self._build_request(png)
         send = self._transport or _default_binary_transport
         try:
-            response = send("POST", _endpoint(self._settings.base_url), headers, body, timeout)
+            response = send("POST", url, headers, body, timeout)
         except _TransportTimeout:
             return failure("timeout")
         except (_TransportFailure, OSError):
@@ -363,23 +440,23 @@ class VisionModelEngine:
             payload = json.loads(response.body.decode("utf-8"))
         except (ValueError, AttributeError):
             return failure("response_invalid")
-        usage = _usage(payload.get("usage") if isinstance(payload, dict) else None)
-        blocks = payload.get("content") if isinstance(payload, dict) else None
-        if not isinstance(blocks, list):
-            return failure("response_invalid", usage)
-        text = "\n".join(b["text"] for b in blocks
-                         if isinstance(b, dict) and b.get("type") == "text" and isinstance(b.get("text"), str)).strip()
-        if payload.get("stop_reason") == "max_tokens":
-            return failure("output_truncated", usage)
-        if not text:
-            return failure("empty_response", usage)
+        text, error_code, usage = self._parse_payload(payload)
+        if error_code is not None:
+            return failure(error_code, usage)
         return OcrPageResult(text, None, 0, self.name, self.version, langs, usage=usage)
 
 
 def _usage(raw: object) -> dict | None:
     if not isinstance(raw, Mapping):
         return None
-    out = {key: raw[key] for key in ("input_tokens", "output_tokens") if type(raw.get(key)) is int and raw[key] >= 0}
+    out: dict[str, int] = {}
+    for target, candidates in (("input_tokens", ("input_tokens", "prompt_tokens")),
+                               ("output_tokens", ("output_tokens", "completion_tokens"))):
+        for key in candidates:
+            value = raw.get(key)
+            if type(value) is int and value >= 0:
+                out[target] = value
+                break
     return out or None
 
 

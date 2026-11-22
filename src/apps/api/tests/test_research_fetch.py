@@ -11,6 +11,9 @@ from app.openai_compatible import BinaryHttpResponse, HttpResponse, _TransportFa
 from app.research_fetch import (
     FetchFailure,
     FetchSourceRequest,
+    SoftBlockMatch,
+    detect_soft_block,
+    extract_text_pages,
     fetch_official_pdf,
     fetch_official_text,
     fetch_source_document,
@@ -665,3 +668,164 @@ def test_extract_html_suppresses_boilerplate_containers_while_preserving_main_ar
         "Hidden table",
     ):
         assert boilerplate not in doc.text
+
+
+def test_prunes_semantic_boilerplate_and_high_link_density_while_preserving_main_article_and_tables():
+    html = (
+        '<html>'
+        '<div class="ad-banner">Buy Widget Now</div>'
+        '<div id="ad-1">Top Sponsor Slot</div>'
+        '<section class="cookie-banner"><p>Accept all cookies to continue.</p></section>'
+        '<div id="onetrust-banner-sdk">Cookie preferences</div>'
+        '<div class="link-strip">'
+        '  <a href="/markets">Markets</a> | <a href="/tech">Tech</a> | '
+        '  <a href="/rates">Rates</a> | <a href="/fx">FX</a>'
+        '</div>'
+        '<section class="more-widget">'
+        '  <h3>Related</h3>'
+        '  <a href="/s1">First Headline Story</a>'
+        '  <a href="/s2">Second Headline Story</a>'
+        '  <a href="/s3">Third Headline Story</a>'
+        '</section>'
+        '<div class="ad-banner">'
+        '  <main>'
+        '    <div class="related-party-transactions"><p>Related party lease totaled $4.2 million.</p></div>'
+        '    <div class="management-commentary"><p>Operating margin expanded 180 bps.</p></div>'
+        '    <div class="ad-hoc-note"><p>See <a href="/10k">10-K</a> and <a href="/10q">10-Q</a> for details.</p></div>'
+        '    <div class="newsletter-signup">Subscribe to our daily newsletter!</div>'
+        '    <div class="related-articles"><a href="/r1">More Tech</a><a href="/r2">More AI</a><a href="/r3">More Chips</a></div>'
+        '    <section id="comments"><p>Reader comment: great quarter!</p></section>'
+        '  </main>'
+        '</div>'
+        '<div class="link-wrapper">'
+        '  <a href="/a">A</a><a href="/b">B</a><a href="/c">C</a>'
+        '  <table>'
+        '    <tr><th>Segment</th><th>FY25</th></tr>'
+        '    <tr><td><div class="cell-links"><a href="/1">Cloud</a> <a href="/2">AI</a> <a href="/3">Core</a></div></td><td>98,500</td></tr>'
+        '  </table>'
+        '</div>'
+        '</html>'
+    )
+    doc = fetch_source_document(
+        request("https://ir.example.com/q4-release"),
+        lambda *a: BinaryHttpResponse(200, html.encode("utf-8"), {"content-type": "text/html; charset=utf-8"}),
+    )
+    assert "Related party lease totaled $4.2 million." in doc.text
+    assert "Operating margin expanded 180 bps." in doc.text
+    assert "See 10-K and 10-Q for details." in doc.text
+    assert "| Segment | FY25 |" in doc.text
+    assert "|  Cloud AI Core  | 98,500 |" in doc.text
+    for noise in (
+        "Buy Widget Now",
+        "Top Sponsor Slot",
+        "Accept all cookies",
+        "Cookie preferences",
+        "Markets",
+        "First Headline Story",
+        "Subscribe to our daily newsletter",
+        "More Tech",
+        "Reader comment",
+    ):
+        assert noise not in doc.text
+
+
+def test_density_pruning_streams_large_containers_without_dropping_body():
+    body = (
+        '<div class="nav-links"><a href="/1">Home</a><a href="/2">News</a><a href="/3">Data</a></div>'
+        '<div class="article-shell">'
+        + "".join(f"<p>Paragraph {i:04d} operating cash flow remained solid.</p>" for i in range(600))
+        + "</div>"
+    )
+    text, pages = extract_text_pages(body.encode("utf-8"), "text/html; charset=utf-8", is_html=True)
+    assert "Home" not in text
+    assert "Paragraph 0000 operating cash flow remained solid." in text
+    assert "Paragraph 0599 operating cash flow remained solid." in text
+    assert pages["page_count"] >= 1
+
+
+def test_detect_soft_block_identifies_challenges_paywalls_and_js_shells():
+    cf_html = (
+        '<html><head><title>Just a moment...</title></head>'
+        '<body><div id="cf-please-wait">Checking if the site connection is secure. '
+        'Enable JavaScript and cookies to continue.</div>'
+        '<script>window._cf_chl_opt = {cvId: "3"};</script></body></html>'
+    )
+    cf_match = detect_soft_block(cf_html, "Checking if the site connection is secure. Enable JavaScript and cookies to continue.", "Just a moment...")
+    assert isinstance(cf_match, SoftBlockMatch) and cf_match.reason == "fetch_blocked_soft_wall"
+
+    paywall_html = (
+        '<html><head><script type="application/ld+json">{"isAccessibleForFree": false}</script></head>'
+        '<body><h1>Chipmakers Face Supply Constraints</h1>'
+        '<p>Leading foundries saw strong demand in Q3.</p>'
+        '<div class="paywall-overlay">Subscribe to continue reading this article.</div></body></html>'
+    )
+    pw_match = detect_soft_block(
+        paywall_html,
+        "Chipmakers Face Supply Constraints\nLeading foundries saw strong demand in Q3.\nSubscribe to continue reading this article.",
+        "Chipmakers Face Supply Constraints",
+    )
+    assert pw_match is not None and pw_match.reason == "fetch_blocked_soft_wall"
+
+    js_html = (
+        '<html><body><div id="root"></div>'
+        '<noscript>You need to enable JavaScript to run this app.</noscript>'
+        '<script src="/static/js/main.js"></script></body></html>'
+    )
+    js_match = detect_soft_block(js_html, "", "Portal")
+    assert js_match is not None and js_match.reason == "js_rendered_empty"
+
+    spa_loading = '<html><body><div id="__next">Loading...</div><script src="/_next/static/app.js"></script></body></html>'
+    spa_match = detect_soft_block(spa_loading, "Loading...", "Portal")
+    assert spa_match is not None and spa_match.reason == "js_rendered_empty"
+
+    for payload, expected_code in (
+        (cf_html, "fetch_blocked_soft_wall"),
+        (paywall_html, "fetch_blocked_soft_wall"),
+        (js_html, "js_rendered_empty"),
+        (spa_loading, "js_rendered_empty"),
+    ):
+        with pytest.raises(FetchFailure) as err:
+            fetch_source_document(
+                request("https://news.example.com/blocked"),
+                lambda *a, html=payload: BinaryHttpResponse(200, html.encode("utf-8"), {"content-type": "text/html; charset=utf-8"}),
+            )
+        assert err.value.code == expected_code
+
+
+def test_detect_soft_block_negative_cases_preserve_short_valid_filings_and_articles():
+    short_filing = (
+        '<html><head><title>Form 8-K</title></head>'
+        '<body><h1>Form 8-K</h1><p>Item 2.02 Results of Operations and Financial Condition. '
+        'Revenue was $42.5 million in Q4 2026.</p></body></html>'
+    )
+    assert detect_soft_block(short_filing, "Form 8-K\nItem 2.02 Results of Operations and Financial Condition. Revenue was $42.5 million in Q4 2026.", "Form 8-K") is None
+    doc = fetch_source_document(
+        request("https://ir.example.com/8k"),
+        lambda *a: BinaryHttpResponse(200, short_filing.encode("utf-8"), {"content-type": "text/html"}),
+    )
+    assert "Revenue was $42.5 million in Q4 2026." in doc.text
+
+    # Legitimate short press release mentioning Cloudflare, subscriptions, and JavaScript.
+    cf_pr = (
+        '<html><head><title>Cloudflare Q3 2026 Financial Results</title></head>'
+        '<body><div id="app"><h1>Cloudflare Reports Q3 Revenue of $430.1M</h1>'
+        '<p>Subscription revenue grew 28% year over year. Our JavaScript Workers platform now serves 2 million developers.</p>'
+        '</div><script src="/analytics.js"></script></body></html>'
+    )
+    cf_pr_text = "Cloudflare Reports Q3 Revenue of $430.1M\nSubscription revenue grew 28% year over year. Our JavaScript Workers platform now serves 2 million developers."
+    assert detect_soft_block(cf_pr, cf_pr_text, "Cloudflare Q3 2026 Financial Results") is None
+    doc_cf = fetch_source_document(
+        request("https://ir.example.com/cloudflare-q3"),
+        lambda *a: BinaryHttpResponse(200, cf_pr.encode("utf-8"), {"content-type": "text/html"}),
+    )
+    assert "Subscription revenue grew 28%" in doc_cf.text
+
+    # Full real article that happens to include a subscribe banner at the bottom must NOT be blocked.
+    long_prose = " ".join(["Operating revenue increased across every regional segment during the fiscal year."] * 45)
+    long_html = f'<html><body><article><p>{long_prose}</p></article><p>Subscribe to continue reading.</p></body></html>'
+    assert detect_soft_block(long_html, long_prose + "\nSubscribe to continue reading.", "Annual Review") is None
+    doc_long = fetch_source_document(
+        request("https://news.example.com/full-story"),
+        lambda *a: BinaryHttpResponse(200, long_html.encode("utf-8"), {"content-type": "text/html"}),
+    )
+    assert "Operating revenue increased" in doc_long.text

@@ -15,11 +15,16 @@ Public entry points: ``build_coverage_map`` (from a runtime checkpoint ``state``
 from __future__ import annotations
 
 from collections import Counter
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 import json
 import re
 from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import urlparse
+
+from .research_clock import (
+    holidays_modelled as clock_holidays_modelled,
+    trading_days_between as clock_trading_days_between,
+)
 
 VERSION = 1
 LOW_OCR_CONFIDENCE = 70.0
@@ -179,11 +184,9 @@ def _json_or_map(value: Any) -> dict[str, Any]:
     return {}
 
 
-def trading_days_between(after: date, up_to: date) -> int:
-    """Weekdays in ``(after, up_to]``. Exchange holidays are not modelled (same limitation as the research clock)."""
-    if up_to <= after:
-        return 0
-    return sum(1 for i in range(1, (up_to - after).days + 1) if (after + timedelta(days=i)).weekday() < 5)
+def trading_days_between(after: date, up_to: date, exchange: str | None = None) -> int:
+    """Trading days in ``(after, up_to]``, delegating to ``research_clock.trading_days_between``."""
+    return clock_trading_days_between(after, up_to, exchange=exchange)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -291,15 +294,22 @@ def _staleness(as_of: str | None, clock: Mapping[str, Any], exchange: str | None
         return None
     session = clock["sessions"].get(exchange) if exchange else None
     basis = "exchange" if session else "earliest_across_exchanges"
+    ref_exchange = exchange if exchange and clock["sessions"].get(exchange) else None
     # Unknown exchange: judge against the *earliest* last completed session among the clock's exchanges, so data is
     # only called stale when it lags every market (never because an earlier-closing Asian exchange is already a day on).
     session = session or clock.get("earliest_session")
-    out: dict[str, Any] = {"reference_exchange": exchange if exchange and clock["sessions"].get(exchange) else None,
+    years_spanned = (
+        range(day.year, session.year + 1)
+        if (session and day < session)
+        else ((session.year,) if session else ())
+    )
+    modelled = bool(ref_exchange and session and clock_holidays_modelled(ref_exchange, years=years_spanned))
+    out: dict[str, Any] = {"reference_exchange": ref_exchange,
                            "reference_basis": basis, "reference_session": session.isoformat() if session else None,
                            "days_before_clock_date": (utc - day).days if utc else None,
                            "days_before_last_session": (session - day).days if session else None,
-                           "trading_days_before_last_session": trading_days_between(day, session) if session else None,
-                           "holidays_modelled": False}
+                           "trading_days_before_last_session": trading_days_between(day, session, exchange=ref_exchange) if session else None,
+                           "holidays_modelled": modelled}
     out["is_stale"] = (out["trading_days_before_last_session"] or 0) >= 1 if price_like and session else None
     return out
 

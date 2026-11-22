@@ -6,7 +6,13 @@ import socket
 from time import monotonic
 from typing import Any, Callable
 from urllib.parse import urlsplit
-from .model_protocol import ModelResponse, ModelToolCall, ModelUsage
+from .model_protocol import (
+    ModelResponse,
+    ModelToolCall,
+    ModelUsage,
+    canonical_json_dumps,
+    canonicalize_json_value,
+)
 from .openai_compatible import (
     _MAX_RESPONSE_BYTES,
     _SseLineParser,
@@ -75,6 +81,10 @@ class AnthropicMessagesProvider:
             return v if type(v) is int and v >= 0 else None
         inp, out = count('input_tokens'), count('output_tokens')
         creation, read = count('cache_creation_input_tokens'), count('cache_read_input_tokens')
+        if creation is None and 'cache_creation_input_tokens' not in u and isinstance(u.get('cache_creation'), dict):
+            nested = u['cache_creation']
+            if nested and all(type(v) is int and v >= 0 for v in nested.values()):
+                creation = sum(nested.values())
         total = count('total_tokens')
         if total is None and inp is not None and out is not None:
             cache_keys = ('cache_creation_input_tokens', 'cache_read_input_tokens')
@@ -130,23 +140,52 @@ class AnthropicMessagesProvider:
         return ModelResponse({'role': 'assistant', 'content': safe_blocks}, tuple(calls), usage, reason, 'tool_calls' if calls else 'end')
 
     @staticmethod
-    def _mark_last_prefix_cache_control(messages: list[dict[str, Any]]) -> None:
-        """Mark the last stable content block in ``messages`` with ephemeral cache_control."""
+    def _mark_message_cache_control(msg: dict[str, Any]) -> dict[str, Any] | None:
+        """Return a copy of ``msg`` with cache_control on its last cacheable block, or None."""
+        content = msg.get('content')
+        if isinstance(content, list) and content:
+            for block_idx in range(len(content) - 1, -1, -1):
+                block = content[block_idx]
+                if not isinstance(block, dict):
+                    continue
+                if block.get('type') in ('thinking', 'redacted_thinking'):
+                    continue
+                copied_content = list(content)
+                copied_content[block_idx] = {**block, 'cache_control': {'type': 'ephemeral'}}
+                return {**msg, 'content': copied_content}
+            return None
+        if isinstance(content, str) and content:
+            return {
+                **msg,
+                'content': [{'type': 'text', 'text': content, 'cache_control': {'type': 'ephemeral'}}],
+            }
+        return None
+
+    @classmethod
+    def _mark_last_prefix_cache_control(
+        cls,
+        messages: list[dict[str, Any]],
+        *,
+        max_breakpoints: int = 2,
+    ) -> None:
+        """Mark the last stable content block and up to one earlier rolling user boundary."""
+        if max_breakpoints <= 0 or not messages:
+            return
+        last_idx: int | None = None
         for idx in range(len(messages) - 1, -1, -1):
-            msg = messages[idx]
-            content = msg.get('content')
-            if isinstance(content, list) and content:
-                last_block = content[-1]
-                if isinstance(last_block, dict):
-                    copied_content = list(content)
-                    copied_content[-1] = {**last_block, 'cache_control': {'type': 'ephemeral'}}
-                    messages[idx] = {**msg, 'content': copied_content}
-                    return
-            elif isinstance(content, str):
-                messages[idx] = {
-                    **msg,
-                    'content': [{'type': 'text', 'text': content, 'cache_control': {'type': 'ephemeral'}}],
-                }
+            updated = cls._mark_message_cache_control(messages[idx])
+            if updated is not None:
+                messages[idx] = updated
+                last_idx = idx
+                break
+        if last_idx is None or max_breakpoints < 2:
+            return
+        for idx in range(last_idx - 1, 0, -1):
+            if messages[idx].get('role') != 'user':
+                continue
+            updated = cls._mark_message_cache_control(messages[idx])
+            if updated is not None:
+                messages[idx] = updated
                 return
 
     def _wire(self, turn, cap=None, *, profile=None):
@@ -167,9 +206,12 @@ class AnthropicMessagesProvider:
                 ]
                 messages.append({'role': 'user', 'content': results_content})
             if explicit_cache:
-                self._mark_last_prefix_cache_control(messages)
+                used_breakpoints = (1 if turn.system else 0) + (1 if turn.tools else 0)
+                self._mark_last_prefix_cache_control(messages, max_breakpoints=max(0, min(2, 4 - used_breakpoints)))
             if tail_note is not None:
-                messages[-1]['content'].append({'type': 'text', 'text': tail_note})
+                last_content = messages[-1]['content']
+                if isinstance(last_content, list):
+                    messages[-1] = {**messages[-1], 'content': [*last_content, {'type': 'text', 'text': tail_note}]}
         else:
             if explicit_cache:
                 user_blocks: list[dict[str, Any]] = [
@@ -185,7 +227,7 @@ class AnthropicMessagesProvider:
 
         system_payload: Any = (
             [{'type': 'text', 'text': turn.system, 'cache_control': {'type': 'ephemeral'}}]
-            if explicit_cache
+            if explicit_cache and turn.system
             else turn.system
         )
         wire: dict[str, Any] = {
@@ -195,7 +237,14 @@ class AnthropicMessagesProvider:
             'max_tokens': min(self.max_tokens, cap) if cap is not None else self.max_tokens,
         }
         if turn.tools:
-            wire_tools = [{'name': t.name, 'description': t.description, 'input_schema': t.input_schema} for t in turn.tools]
+            wire_tools = [
+                {
+                    'name': t.name,
+                    'description': t.description,
+                    'input_schema': canonicalize_json_value(t.input_schema),
+                }
+                for t in turn.tools
+            ]
             if explicit_cache:
                 wire_tools[-1]['cache_control'] = {'type': 'ephemeral'}
             wire['tools'] = wire_tools
@@ -203,7 +252,7 @@ class AnthropicMessagesProvider:
 
     def estimate_turn_input_dual(self, turn):
         from .provider_capabilities import estimate_dual_input
-        serialized = json.dumps(self._wire(turn), ensure_ascii=False, separators=(',', ':'))
+        serialized = canonical_json_dumps(self._wire(turn))
         return estimate_dual_input(serialized, envelope_bytes=64, envelope_chars=0)
 
     def estimate_turn_input(self, turn):
@@ -565,7 +614,7 @@ class AnthropicMessagesProvider:
                 wire = self._wire(turn, effective_max_tokens, profile=profile)
                 if streaming:
                     wire['stream'] = True
-                body = json.dumps(wire, ensure_ascii=False, separators=(',', ':')).encode()
+                body = canonical_json_dumps(wire).encode()
                 wire_bytes = len(body)
                 headers = {
                     'Accept': 'text/event-stream' if streaming else 'application/json',

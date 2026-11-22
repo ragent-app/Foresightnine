@@ -150,7 +150,7 @@ def test_acquire_of_blocked_lead_is_denied_without_calling_acquire():
                turn("acquire_sources", {"urls": [LEADS[0]["url"], LEADS[1]["url"]], "rationale": "r"}, "a1"), STOP])
     run_research_agent(question="Q", sources=[], model=m, context=context(), discover=lambda q: LEADS,
                        acquire=lambda url, title: calls.append(url) or (None, {"status": "failed"}))
-    fb = json.loads(m.inputs[2][-1]["content"])
+    fb = json.loads([msg for msg in m.inputs[2] if msg.get("role") == "tool"][-1]["content"])
     blocked = next(row for row in fb["results"] if "hkexnews" in row["url"])
     assert blocked["status"] == "denied_or_unavailable" and blocked["reason"] == "source_blocked_terms"
     assert blocked["external_state"] == "not_started" and blocked["message"] == TOOL_FAILURE_GUIDANCE["source_blocked_terms"]

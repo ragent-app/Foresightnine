@@ -2,22 +2,25 @@
 
 The official Coding Plan search service is a remote Streamable HTTP MCP server.
 This adapter keeps its fixed endpoint, credential, JSON-RPC session and raw search
-results on the API service.  It intentionally returns *candidates*, never facts:
+results on the API service by delegating protocol/session handling to
+:mod:`app.mcp_client`.  It intentionally returns *candidates*, never facts:
 callers must show the source to a user and submit a canonical EvidenceBundle before
 any result becomes challenge evidence or is supplied to an LLM prompt.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 import json
 import os
 import re
-from time import monotonic, sleep
-from typing import Any, Callable, Mapping
+from time import sleep
+from typing import Any, Callable
 from urllib.parse import urlsplit
 
-from .openai_compatible import HttpResponse, OpenAICompatibleTransport, _TransportFailure, _TransportTimeout, _default_transport
+from .mcp_client import McpCallResult, McpClientError, McpServerConfig, McpToolSpec, StreamableHttpMcpClient
+from .openai_compatible import OpenAICompatibleTransport
 from .phase3 import ClientSearchEvidenceProvider, ProviderFailure
 from .research_discovery import RedirectLead, unwrap_redirect_url
 
@@ -39,8 +42,6 @@ _MAX_CONTENT_BLOCKS = 32
 _MAX_CANDIDATES = 50
 _MAX_RESULT_DEPTH = 8
 _MAX_RESULT_NODES = 2048
-_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
-_SESSION_VALUE = re.compile(r"^[\x21-\x7e]{1,256}$")
 _URL_FIELDS = ("link", "url", "target_url", "real_url", "origin_url")
 _DATE_FIELDS = ("publish_date", "published_at", "date")
 
@@ -57,7 +58,18 @@ _RESET_TIME = re.compile(r"(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})
 # bigmodel.cn reports local (China Standard Time) timestamps without an offset.
 _PROVIDER_TZ = timezone(timedelta(hours=8))
 _SECRET_LIKE = re.compile(r"(Bearer\s+\S+|sk-[A-Za-z0-9_\-]{8,}|[A-Za-z0-9_\-.]{32,})")
+_SESSION_EXPIRED_WORDS = re.compile(
+    r"session.{0,24}(?:expired|invalid|unknown|not found|closed|missing)"
+    r"|(?:expired|invalid|unknown|missing).{0,24}session|mcp-session-id",
+    re.I,
+)
 _MAX_ERROR_MESSAGE = 300
+
+
+def _protocol_failure(message: str) -> ProviderFailure:
+    failure = ProviderFailure("search_response_invalid", message, retryable=False)
+    failure.protocol_error = True
+    return failure
 
 
 def _safe_provider_text(text: str) -> str:
@@ -129,6 +141,52 @@ def mcp_error_failure(text: str, *, http_status: int | None = None) -> ProviderF
     return failure
 
 
+def _classify_glm_protocol_or_rate_error(text: str, http_status: int | None) -> ProviderFailure | None:
+    """Translate GLM quota/rate payloads during HTTP 429 or JSON-RPC error parsing."""
+    if http_status == 429:
+        classified = mcp_error_failure(text, http_status=429)
+        if classified is not None and classified.code == "search_quota_exhausted":
+            return classified
+        return None
+    classified = mcp_error_failure(text)
+    if classified is not None and classified.code in ("search_quota_exhausted", "search_rate_limited"):
+        return classified
+    return None
+
+
+def _translate_mcp_error(error: McpClientError) -> ProviderFailure:
+    """Map generic :class:`McpClientError` failures to search-provider error codes."""
+    kind = error.error_metadata.get("kind")
+    if error.code == "mcp_cancelled":
+        return ProviderFailure("search_cancelled", "Search was cancelled.", retryable=True)
+    if error.code == "mcp_timeout":
+        if kind == "budget_exhausted":
+            return ProviderFailure("search_timeout", "Search exceeded its time budget.", retryable=True)
+        return ProviderFailure("search_provider_timeout", "Search provider timed out without a usable result.", retryable=True)
+    if error.code == "mcp_rate_limited":
+        failure = ProviderFailure("search_provider_rate_limited", "Search provider is temporarily unavailable.", retryable=True)
+        failure.provider_response_received = error.provider_response_received
+        return failure
+    if error.code == "mcp_unavailable":
+        return ProviderFailure("search_provider_unavailable", "Search provider is temporarily unavailable.", retryable=True)
+    if error.code == "mcp_rejected":
+        failure = ProviderFailure("search_provider_rejected", "Search provider rejected the request.", retryable=False)
+        failure.http_status = error.http_status
+        failure.session_expired = error.session_expired
+        failure.provider_response_received = error.provider_response_received
+        return failure
+    if error.code == "mcp_tool_not_found":
+        failure = _protocol_failure("Search provider did not expose the expected search tool.")
+        failure.provider_response_received = error.provider_response_received
+        return failure
+    if error.code in ("mcp_url_rejected", "mcp_configuration_invalid"):
+        return ProviderFailure("search_provider_unconfigured", "Project search configuration is invalid.", retryable=False)
+    failure = _protocol_failure("Search provider returned invalid protocol data.")
+    failure.session_expired = error.session_expired
+    failure.provider_response_received = error.provider_response_received
+    return failure
+
+
 @dataclass(frozen=True)
 class SearchCandidate:
     """An unverified provider search result, safe to display for user review."""
@@ -157,15 +215,31 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
         max_attempts: int = 2,
         sleeper: Callable[[float], None] | None = None,
     ) -> None:
-        self._api_key = (api_key or "").strip() or None
-        self._transport = transport or _default_transport
-        self._timeout_seconds = timeout_seconds
-        self._max_attempts = max_attempts
-        self._sleeper = sleeper or sleep
         if not 0 < timeout_seconds <= 30:
             raise ValueError("MCP search timeout must be between 0 and 30 seconds.")
         if not 1 <= max_attempts <= 3:
             raise ValueError("MCP search attempts must be between 1 and 3.")
+        self._api_key = (api_key or "").strip() or None
+        self._timeout_seconds = timeout_seconds
+        self._max_attempts = max_attempts
+        self._sleeper = sleeper or sleep
+        self._mcp_client = StreamableHttpMcpClient(
+            McpServerConfig(
+                endpoint=_MCP_ENDPOINT,
+                auth_token=self._api_key,
+                protocol_version=_MCP_PROTOCOL_VERSION,
+                client_name=_MCP_CLIENT_NAME,
+                client_version=_MCP_CLIENT_VERSION,
+                timeout_seconds=timeout_seconds,
+                max_attempts=max_attempts,
+                max_response_bytes=_MAX_RESPONSE_CHARS,
+                max_content_blocks=_MAX_CONTENT_BLOCKS,
+                fixed_operation_rpc_ids=True,
+            ),
+            transport=transport,
+            sleeper=sleeper,
+            error_classifier=_classify_glm_protocol_or_rate_error,
+        )
 
     @classmethod
     def from_environment(cls) -> "GlmCodingMcpSearchEvidenceProvider":
@@ -175,12 +249,34 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
         return f"{type(self).__name__}(configured={bool(self._api_key)!r}, endpoint=<fixed>)"
 
     @property
+    def mcp_client(self) -> StreamableHttpMcpClient:
+        return self._mcp_client
+
+    @property
+    def _session_id(self) -> str | None:
+        return self._mcp_client.session_id
+
+    @property
+    def _tool_cache(self) -> tuple[Mapping[str, Any], str, str] | None:
+        tools = self._mcp_client.cached_tools
+        if tools is None:
+            return None
+        try:
+            return self._tool_schema(tools)
+        except ProviderFailure:
+            return None
+
+    @property
     def supports_project_search(self) -> bool:
         # Health and discovery capability must agree: a configured adapter is
         # not usable until its server-only credential is present.  Returning
         # False here lets every client choose the explicit client-bundle
         # fallback without first attempting an external request.
         return self._api_key is not None
+
+    def invalidate_session(self, *, expected_generation: int | None = None) -> None:
+        """Clear cached MCP session state unless already replaced by a newer generation."""
+        self._mcp_client.invalidate_session(expected_generation=expected_generation)
 
     @staticmethod
     def _validate_query(query: str, limit: int) -> None:
@@ -190,113 +286,28 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
             raise ProviderFailure("search_query_invalid", "Search result limit is outside the accepted range.", retryable=False)
 
     @staticmethod
-    def _response_header(response: HttpResponse, name: str) -> str | None:
-        for key, value in response.headers.items():
-            if key.lower() == name.lower():
-                return value
-        return None
-
-    @staticmethod
-    def _jsonrpc_message(response: HttpResponse, expected_id: int | None) -> dict[str, Any]:
-        if len(response.body) > _MAX_RESPONSE_CHARS:
-            raise ProviderFailure("search_response_invalid", "Search provider returned an oversized result.", retryable=False)
-        messages: list[Any] = []
-        body = response.body.strip()
-        if body:
-            try:
-                parsed = json.loads(body)
-                messages = parsed if isinstance(parsed, list) else [parsed]
-            except json.JSONDecodeError:
-                for line in response.body.splitlines():
-                    if line.startswith("data:"):
-                        try:
-                            messages.append(json.loads(line.removeprefix("data:").strip()))
-                        except json.JSONDecodeError as error:
-                            raise ProviderFailure("search_response_invalid", "Search provider returned invalid structured data.", retryable=False) from error
-        if expected_id is None:
-            return {}
-        for message in messages:
-            if not isinstance(message, dict) or message.get("jsonrpc") != "2.0" or message.get("id") != expected_id:
+    def _tool_schema(tools_source: Sequence[McpToolSpec] | Mapping[str, Any]) -> tuple[Mapping[str, Any], str, str]:
+        if isinstance(tools_source, Mapping):
+            raw_tools = tools_source.get("tools")
+            if not isinstance(raw_tools, list):
+                raise ProviderFailure("search_response_invalid", "Search provider returned no tool catalog.", retryable=False)
+            candidates: list[tuple[str, Any]] = [
+                (tool["name"], tool.get("inputSchema"))
+                for tool in raw_tools
+                if isinstance(tool, Mapping) and isinstance(tool.get("name"), str)
+            ]
+        else:
+            candidates = [(spec.name, spec.input_schema) for spec in tools_source]
+        for tool_name, schema in candidates:
+            if tool_name not in _MCP_TOOL_NAMES:
                 continue
-            if "error" in message and isinstance(message["error"], dict):
-                error_object = message["error"]
-                classified = mcp_error_failure(json.dumps({"error": {"code": error_object.get("code"), "message": error_object.get("message")}}, ensure_ascii=False))
-                if classified is not None and classified.code in ("search_quota_exhausted", "search_rate_limited"):
-                    raise classified
-            if "error" in message or not isinstance(message.get("result"), dict):
-                raise ProviderFailure("search_response_invalid", "Search provider rejected its own protocol request.", retryable=False)
-            return message["result"]
-        raise ProviderFailure("search_response_invalid", "Search provider returned no matching protocol response.", retryable=False)
-
-    def _post(self, *, message: Mapping[str, Any], session_id: str | None, expected_id: int | None,
-              deadline: float | None = None, cancel_event: Any = None) -> tuple[dict[str, Any], str | None]:
-        if self._api_key is None:
-            raise ProviderFailure("search_provider_unconfigured", "Project search is not configured on this server.", retryable=False)
-        headers: dict[str, str] = {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-        }
-        if session_id is not None:
-            headers["Mcp-Session-Id"] = session_id
-        body = json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        last_failure: ProviderFailure | None = None
-        for attempt in range(self._max_attempts):
-            if cancel_event is not None and cancel_event.is_set():
-                raise ProviderFailure("search_cancelled", "Search was cancelled.", retryable=True)
-            remaining = deadline - monotonic() if deadline is not None else self._timeout_seconds
-            if remaining <= 0:
-                raise ProviderFailure("search_timeout", "Search exceeded its time budget.", retryable=True)
-            try:
-                response = self._transport("POST", _MCP_ENDPOINT, headers, body, min(self._timeout_seconds, remaining))
-            except _TransportTimeout as error:
-                last_failure = ProviderFailure("search_provider_timeout", "Search provider timed out without a usable result.", retryable=True)
-            except (_TransportFailure, TimeoutError, OSError):
-                last_failure = ProviderFailure("search_provider_unavailable", "Search provider is temporarily unavailable.", retryable=True)
-            else:
-                if 200 <= response.status_code < 300:
-                    result = self._jsonrpc_message(response, expected_id)
-                    received_session = self._response_header(response, "Mcp-Session-Id")
-                    if received_session is not None and not _SESSION_VALUE.fullmatch(received_session):
-                        raise ProviderFailure("search_response_invalid", "Search provider returned an invalid session identifier.", retryable=False)
-                    return result, received_session or session_id
-                if response.status_code == 429:
-                    classified = mcp_error_failure(response.body, http_status=429) if response.body else None
-                    if classified is not None and classified.code == "search_quota_exhausted":
-                        raise classified   # a usage cap does not clear by retrying
-                if response.status_code not in _RETRYABLE_STATUS_CODES:
-                    raise ProviderFailure("search_provider_rejected", "Search provider rejected the request.", retryable=False)
-                last_failure = ProviderFailure(
-                    "search_provider_rate_limited" if response.status_code == 429 else "search_provider_unavailable",
-                    "Search provider is temporarily unavailable.",
-                    retryable=True,
-                )
-                if response.status_code == 429:
-                    last_failure.provider_response_received = True
-            if attempt + 1 < self._max_attempts:
-                delay = 0.05 * (2**attempt)
-                if deadline is not None and monotonic() + delay >= deadline:
-                    raise ProviderFailure("search_timeout", "Search exceeded its time budget.", retryable=True)
-                self._sleeper(delay)
-        assert last_failure is not None
-        raise last_failure
-
-    @staticmethod
-    def _tool_schema(tools_result: Mapping[str, Any]) -> tuple[Mapping[str, Any], str, str]:
-        tools = tools_result.get("tools")
-        if not isinstance(tools, list):
-            raise ProviderFailure("search_response_invalid", "Search provider returned no tool catalog.", retryable=False)
-        for tool in tools:
-            if not isinstance(tool, dict) or tool.get("name") not in _MCP_TOOL_NAMES:
-                continue
-            schema = tool.get("inputSchema")
-            if not isinstance(schema, dict) or not isinstance(schema.get("properties"), dict):
+            if not isinstance(schema, Mapping) or not isinstance(schema.get("properties"), Mapping):
                 break
             properties = schema["properties"]
             query_field = "search_query" if "search_query" in properties else "query" if "query" in properties else None
             if query_field is None:
                 break
-            return schema, query_field, tool["name"]
+            return schema, query_field, tool_name
         raise ProviderFailure("search_response_invalid", "Search provider did not expose the expected search tool.", retryable=False)
 
     @staticmethod
@@ -401,27 +412,47 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
             return None
         return fallback_redirect, True
 
-    def _candidates(self, result: Mapping[str, Any], limit: int) -> tuple[SearchCandidate, ...]:
-        content = result.get("content")
-        if not isinstance(content, list) or len(content) > _MAX_CONTENT_BLOCKS:
-            raise ProviderFailure("search_response_invalid", "Search provider returned invalid result content.", retryable=False)
+    def _candidates(self, result: McpCallResult | Mapping[str, Any], limit: int) -> tuple[SearchCandidate, ...]:
+        if isinstance(result, McpCallResult):
+            content: Sequence[Any] = result.content
+            is_error = result.is_error
+            structured_content = result.structured_content
+        else:
+            raw_content = result.get("content")
+            if not isinstance(raw_content, list) or len(raw_content) > _MAX_CONTENT_BLOCKS:
+                raise _protocol_failure("Search provider returned invalid result content.")
+            content = raw_content
+            is_error = result.get("isError") is True
+            structured_content = result.get("structuredContent")
+
         for block in content:
-            if isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str):
+            if isinstance(block, Mapping) and block.get("type") == "text" and isinstance(block.get("text"), str):
                 error_failure = mcp_error_failure(block["text"])
                 if error_failure is not None:
+                    if error_failure.code == "search_provider_error" and _SESSION_EXPIRED_WORDS.search(block["text"]):
+                        error_failure.session_expired = True
                     raise error_failure
-        if result.get("isError") is True:
-            first_text = next((b["text"] for b in content if isinstance(b, dict) and isinstance(b.get("text"), str)), "")
-            error_failure = ProviderFailure("search_provider_error", _safe_provider_text(first_text) or "Search provider reported an error.", retryable=False)
+        if is_error:
+            first_text = next(
+                (b["text"] for b in content if isinstance(b, Mapping) and isinstance(b.get("text"), str)),
+                "",
+            )
+            error_failure = ProviderFailure(
+                "search_provider_error",
+                _safe_provider_text(first_text) or "Search provider reported an error.",
+                retryable=False,
+            )
             error_failure.provider_response_received = True
             error_failure.reset_at = None
+            if _SESSION_EXPIRED_WORDS.search(first_text):
+                error_failure.session_expired = True
             raise error_failure
+
         rows: list[Mapping[str, Any]] = []
-        structured_content = result.get("structuredContent")
         if structured_content is not None:
             rows.extend(self._result_rows(structured_content))
         for block in content:
-            if not isinstance(block, dict) or block.get("type") != "text" or not isinstance(block.get("text"), str):
+            if not isinstance(block, Mapping) or block.get("type") != "text" or not isinstance(block.get("text"), str):
                 continue
             text = block["text"].strip()
             if text.startswith("```json") and text.endswith("```"):
@@ -477,58 +508,32 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
 
     def search(self, query: str, *, limit: int = 5, deadline: float | None = None, cancel_event: Any = None) -> tuple[SearchCandidate, ...]:
         """Discover bounded source candidates without supplying them to a model."""
-
         self._validate_query(query, limit)
-        # Omit new keywords for legacy callers and their injected transports.
-        budget = {"deadline": deadline, "cancel_event": cancel_event} if deadline is not None or cancel_event is not None else {}
-        initialize, session_id = self._post(
-            message={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": _MCP_PROTOCOL_VERSION,
-                    "capabilities": {},
-                    "clientInfo": {"name": _MCP_CLIENT_NAME, "version": _MCP_CLIENT_VERSION},
-                },
-            },
-            session_id=None,
-            expected_id=1,
-            **budget,
-        )
-        protocol_version = initialize.get("protocolVersion")
-        if not isinstance(protocol_version, str) or not protocol_version:
-            raise ProviderFailure("search_response_invalid", "Search provider returned no protocol version.", retryable=False)
-        _, session_id = self._post(
-            message={"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}},
-            session_id=session_id,
-            expected_id=None,
-            **budget,
-        )
-        tools, session_id = self._post(
-            message={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
-            session_id=session_id,
-            expected_id=2,
-            **budget,
-        )
-        schema, query_field, tool_name = self._tool_schema(tools)
-        properties = schema["properties"]
-        query_schema = properties.get(query_field, {})
-        provider_limit = query_schema.get("maxLength") if isinstance(query_schema, dict) else None
-        if isinstance(provider_limit, int) and len(query.strip()) > provider_limit:
-            raise ProviderFailure("search_query_provider_limit", "Query exceeds the provider-declared limit.", retryable=False)
-        arguments: dict[str, Any] = {query_field: query.strip()}
-        if "count" in properties:
-            arguments["count"] = limit
-        result, _ = self._post(
-            message={
-                "jsonrpc": "2.0",
-                "id": 3,
-                "method": "tools/call",
-                "params": {"name": tool_name, "arguments": arguments},
-            },
-            session_id=session_id,
-            expected_id=3,
-            **budget,
-        )
-        return self._candidates(result, limit)
+        if self._api_key is None:
+            raise ProviderFailure("search_provider_unconfigured", "Project search is not configured on this server.", retryable=False)
+
+        try:
+            tools = self._mcp_client.list_tools(deadline=deadline, cancel_event=cancel_event)
+            try:
+                schema, query_field, tool_name = self._tool_schema(tools)
+            except ProviderFailure:
+                self._mcp_client.invalidate_session()
+                raise
+            properties = schema["properties"]
+            query_schema = properties.get(query_field, {})
+            provider_limit = query_schema.get("maxLength") if isinstance(query_schema, Mapping) else None
+            if isinstance(provider_limit, int) and len(query.strip()) > provider_limit:
+                raise ProviderFailure("search_query_provider_limit", "Query exceeds the provider-declared limit.", retryable=False)
+            arguments: dict[str, Any] = {query_field: query.strip()}
+            if "count" in properties:
+                arguments["count"] = limit
+            call_result = self._mcp_client.call_tool(
+                tool_name,
+                arguments,
+                deadline=deadline,
+                cancel_event=cancel_event,
+            )
+        except McpClientError as error:
+            raise _translate_mcp_error(error) from error
+
+        return self._candidates(call_result, limit)

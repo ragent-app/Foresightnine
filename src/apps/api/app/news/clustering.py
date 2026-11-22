@@ -10,12 +10,15 @@ from __future__ import annotations
 import hashlib
 import re
 import unicodedata
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 MAX_ITEMS = 1500
 _MAX_TEXT = 20_000
+MIN_FULL_BODY_CHARS = 200
 BODY_HAMMING = 4
 BODY_HAMMING_WITH_TITLE = 10
 TITLE_SIMILARITY = 0.85
@@ -213,7 +216,7 @@ def _prepare(item: ClusterInput) -> _Prepared:
         if host.startswith(prefix) and host.count(".") >= 2:
             host = host[len(prefix):]
             break
-    return _Prepared(item, canonical, host, simhash(text) if len(text) >= 200 else None,
+    return _Prepared(item, canonical, host, simhash(text) if len(text) >= MIN_FULL_BODY_CHARS else None,
                      len(_title_tokens(item.title)) >= 4, _aware(item.published_at) or _aware(item.seen_at),
                      detect_agency(canonical, text))
 
@@ -292,3 +295,103 @@ def cluster_items(items: list[ClusterInput]) -> ClusterResult:
     when_of = {p.item.id: p.when for p in prepared}
     clusters.sort(key=lambda c: (when_of.get(c.representative_id) or far, c.cluster_id))
     return ClusterResult(clusters, item_cluster, notes)
+
+
+def _coerce_datetime(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return _aware(value)
+    if isinstance(value, date):
+        return datetime(value.year, value.month, value.day, tzinfo=timezone.utc)
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            try:
+                parsed_date = date.fromisoformat(raw[:10])
+                return datetime(parsed_date.year, parsed_date.month, parsed_date.day, tzinfo=timezone.utc)
+            except ValueError:
+                return None
+        return _aware(parsed)
+    return None
+
+
+def _source_field(source: Any, *names: str) -> Any:
+    if isinstance(source, Mapping):
+        for name in names:
+            if name in source and source[name] is not None:
+                return source[name]
+        return None
+    for name in names:
+        val = getattr(source, name, None)
+        if val is not None:
+            return val
+    return None
+
+
+def _to_cluster_input(source: Any, index: int) -> tuple[ClusterInput, bool]:
+    if isinstance(source, ClusterInput):
+        collapsed = " ".join(source.text.split())[:_MAX_TEXT] if isinstance(source.text, str) and source.text.strip() else None
+        has_full_body = bool(collapsed and len(collapsed) >= MIN_FULL_BODY_CHARS)
+        if collapsed == source.text:
+            return source, has_full_body
+        return ClusterInput(
+            id=source.id,
+            url=source.url,
+            title=source.title,
+            text=collapsed,
+            published_at=source.published_at,
+            seen_at=source.seen_at,
+            domain=source.domain,
+        ), has_full_body
+
+    raw_id = _source_field(source, "source_id", "id")
+    sid = str(raw_id).strip() if raw_id is not None and str(raw_id).strip() else f"src_{index}"
+    raw_url = _source_field(source, "url", "canonical_url")
+    url = str(raw_url).strip() if raw_url is not None and str(raw_url).strip() else sid
+    raw_title = _source_field(source, "title")
+    title = str(raw_title).strip() if raw_title is not None else ""
+    raw_text = _source_field(source, "text", "body", "content", "excerpt")
+    collapsed = " ".join(str(raw_text).split())[:_MAX_TEXT] if isinstance(raw_text, str) and raw_text.strip() else None
+    has_full_body = bool(collapsed and len(collapsed) >= MIN_FULL_BODY_CHARS)
+    published_at = _coerce_datetime(_source_field(source, "published_at"))
+    seen_at = _coerce_datetime(_source_field(source, "seen_at"))
+    raw_domain = _source_field(source, "domain")
+    domain = str(raw_domain).strip().lower() if isinstance(raw_domain, str) and raw_domain.strip() else None
+    return ClusterInput(
+        id=sid,
+        url=url,
+        title=title,
+        text=collapsed,
+        published_at=published_at,
+        seen_at=seen_at,
+        domain=domain,
+    ), has_full_body
+
+
+def recluster_acquired_sources(sources: Iterable[Any]) -> ClusterResult:
+    """Re-cluster acquired sources using full-body SimHash (>=200 chars) and wire-agency dateline detection.
+
+    Recalculates ``cluster_id``, ``independent_source_count``, ``independent_sources``, and ``syndicated_from``
+    from full fetched article text (fixing pre-acquisition title-only false merges and missed wire syndications).
+    """
+    items: list[ClusterInput] = []
+    short_count = 0
+    for idx, src in enumerate(sources):
+        item, has_full_body = _to_cluster_input(src, idx)
+        items.append(item)
+        if not has_full_body:
+            short_count += 1
+    if not items:
+        return ClusterResult(clusters=[], item_cluster={}, notes=[])
+    result = cluster_items(items)
+    if short_count:
+        result.notes.append(
+            f"{short_count} acquired source(s) had fewer than {MIN_FULL_BODY_CHARS} characters of body text "
+            "and fell back to title/URL clustering."
+        )
+    return result

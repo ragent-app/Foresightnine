@@ -620,7 +620,7 @@ def test_runtime_loop_multiturn_replaces_and_continuation_merge():
                 "t1-b",
             )
         if step == 2:
-            facts = json.loads(messages[-1]["content"])["facts"]
+            facts = json.loads([m for m in messages if m.get("role") == "tool"][-1]["content"])["facts"]
             return _tool_turn(
                 "create_chart",
                 {
@@ -638,7 +638,7 @@ def test_runtime_loop_multiturn_replaces_and_continuation_merge():
                 },
                 "t1-c",
             )
-        chart_res = json.loads(messages[-1]["content"])
+        chart_res = json.loads([m for m in messages if m.get("role") == "tool"][-1]["content"])
         cid = chart_res["chart_id"]
         return _tool_turn(
             "submit_research",
@@ -757,7 +757,7 @@ def test_runtime_loop_multiturn_replaces_and_continuation_merge():
                 },
                 "t2-a",
             )
-        chart_res = json.loads(messages[-1]["content"])
+        chart_res = json.loads([m for m in messages if m.get("role") == "tool"][-1]["content"])
         return _tool_turn(
             "submit_research",
             {
@@ -1306,7 +1306,7 @@ def test_causal_graph_runtime_tool_progress_and_export_permissions(monkeypatch):
                 },
                 "cg-t2-a",
             )
-        res = json.loads(messages[-1]["content"])
+        res = json.loads([m for m in messages if m.get("role") == "tool"][-1]["content"])
         return _tool_turn(
             "submit_research",
             {

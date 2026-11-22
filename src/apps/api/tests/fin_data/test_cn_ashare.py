@@ -11,7 +11,8 @@ import pytest
 from app.fin_data import cn
 from app.fin_data.adapters import baostock as bs_module
 from app.fin_data.adapters.baostock import BaoStockAdapter, BaoStockFailure, report_periods, subprocess_runner
-from app.fin_data.adapters.tushare import TushareAdapter
+from app.fin_data.adapters.tushare import LINE_FIELDS, TushareAdapter, derive_period_metrics
+from app.fin_data.adapters.sec_edgar import STANDARD_LINES
 from app.fin_data.entity import resolve_cn, resolve_entity, wants_cn
 from app.fin_data.policy import Denied, FinDataPolicy, PolicyRule, default_policy
 from app.openai_compatible import _TransportFailure
@@ -392,3 +393,67 @@ def test_beijing_exchange_is_registered_with_beijing_hours():
     bse = exchange_session("BJSE")
     assert bse is not None and bse.timezone == "Asia/Shanghai" and str(bse.open) == "09:30:00" and str(bse.close) == "15:00:00"
     assert bse.lunch is not None and "BJSE" in EXCHANGES
+
+
+def test_tushare_expanded_standard_lines_and_unmapped_handling():
+    assert len(LINE_FIELDS) >= 35
+    assert TushareAdapter.STANDARD_LINES is STANDARD_LINES
+    inc_row = {
+        "ts_code": "600519.SH", "ann_date": "20261025", "f_ann_date": "20261025", "end_date": "20260930",
+        "report_type": "1", "update_flag": "0",
+        "total_revenue": 1000.0, "oper_cost": 100.0, "rd_exp": 20.0, "sell_exp": 30.0, "admin_exp": 40.0,
+        "total_cogs": 200.0, "operate_profit": 800.0, "fin_exp_int_exp": 5.0, "fin_exp": -10.0,
+        "total_profit": 810.0, "income_tax": 200.0, "n_income_attr_p": 600.0, "ebitda": 830.0,
+        "basic_eps": 4.8, "diluted_eps": 4.75,
+    }
+    bal_row = {
+        "ts_code": "600519.SH", "ann_date": "20261025", "f_ann_date": "20261025", "end_date": "20260930",
+        "report_type": "1", "update_flag": "0",
+        "money_cap": 1500.0, "trad_asset": 100.0, "accounts_receiv": 50.0, "inventories": 400.0,
+        "total_cur_assets": 2200.0, "fix_assets": 600.0, "goodwill": 10.0, "intang_assets": 25.0,
+        "total_assets": 3000.0, "accounts_pay": 120.0, "st_borr": 30.0, "total_cur_liab": 500.0,
+        "lt_borr": 80.0, "total_liab": 700.0, "undistr_porfit": 1800.0, "total_hldr_eqy_exc_min_int": 2200.0,
+        "minority_int": 100.0,
+    }
+    cf_row = {
+        "ts_code": "600519.SH", "ann_date": "20261025", "f_ann_date": "20261025", "end_date": "20260930",
+        "report_type": "1", "update_flag": "0",
+        "depr_fa_coga_dpba": 25.0, "n_cashflow_act": 500.0, "c_pay_acq_const_fiolta": 40.0,
+        "n_cashflow_inv_act": -60.0, "n_cash_flows_fnc_act": -120.0, "n_incr_cash_cash_equ": 320.0,
+    }
+    fake = standard_tushare(income=ts_reply([inc_row]), balancesheet=ts_reply([bal_row]), cashflow=ts_reply([cf_row]))
+    r = ts(fake).statement_lines(SH, period="quarter", n=1)
+    assert r.status == "ok"
+    by_line = {s.line: s for s in r.data}
+    assert by_line["cost_of_revenue"].reported_tag == "oper_cost" and by_line["cost_of_revenue"].value == Decimal("100.0")
+    assert by_line["rd_expense"].value == Decimal("20.0") and by_line["ebitda"].value == Decimal("830.0")
+    assert by_line["short_term_debt"].reported_tag == "st_borr" and by_line["long_term_debt"].reported_tag == "lt_borr"
+    assert by_line["accounts_receivable"].reported_tag == "accounts_receiv" and by_line["inventory"].value == Decimal("400.0")
+    assert by_line["investing_cash_flow"].value == Decimal("-60.0") and by_line["financing_cash_flow"].value == Decimal("-120.0")
+    assert by_line["depreciation_amortization"].value == Decimal("25.0")
+
+    # Standard lines without a direct Tushare column degrade partially or return empty rather than unknown_line
+    partial = ts(fake).statement_lines(SH, lines=["revenue", "gross_profit"], period="quarter", n=1)
+    assert partial.status == "partial" and partial.reason == "missing_lines" and len(partial.data) == 1
+    empty = ts(fake).statement_lines(SH, lines=["gross_profit"], period="quarter", n=1)
+    assert empty.status == "empty" and empty.reason == "no_matching_lines"
+
+
+def test_derive_period_metrics_cn_ytd_and_single_quarters():
+    fake = standard_tushare()
+    # YTD cumulative only: YoY matches same YTD month, no invalid H1-vs-Q1 QoQ, TTM computed via YTD + prev FY - prev YTD
+    ytd_res = ts(fake).statement_lines(SH, lines=["revenue", "operating_income", "net_income"], period="quarter", n=8)
+    ytd_derived = derive_period_metrics(ytd_res.data)
+    ytd_map = {(d.line, d.period_end): d for d in ytd_derived}
+    assert ytd_map[("revenue_yoy_growth", date(2026, 6, 30))].value == Decimal("13.04")
+    assert ("revenue_qoq_growth", date(2026, 6, 30)) not in ytd_map
+    assert ytd_map[("revenue_ttm", date(2026, 9, 30))].value == Decimal("605.0")  # 430 + 565 - 390
+    assert ytd_map[("operating_margin", date(2026, 9, 30))].value == Decimal("62.79")
+
+    # Single-quarter derived mode: computes single-quarter QoQ and 4-quarter TTM
+    sq_res = ts(fake).statement_lines(SH, lines=["revenue", "operating_income", "net_income"],
+                                       period="quarter", n=8, derive_quarters=True)
+    sq_derived = derive_period_metrics(sq_res.data)
+    sq_qoq = {(d.period_start, d.period_end): d for d in sq_derived if d.line == "revenue_qoq_growth"}
+    assert (date(2026, 4, 1), date(2026, 6, 30)) in sq_qoq
+    assert sq_qoq[(date(2026, 4, 1), date(2026, 6, 30))].value == Decimal("16.67")  # 140 vs 120 Q1

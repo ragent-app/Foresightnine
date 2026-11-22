@@ -859,3 +859,133 @@ def test_mid_stream_nonzero_usage_and_normal_stream_metrics(monkeypatch):
     assert diag['stream_metrics']['block_bytes_by_type'] == {'thinking': 0, 'text': 5, 'tool_use': 0, 'redacted_thinking': 0}
     assert diag['stream_metrics']['reassembled_bytes'] == 5
     assert diag['stream_metrics']['active_tool_names'] == []
+
+
+def _count_anthropic_breakpoints(wire: dict) -> int:
+    count = 0
+    if isinstance(wire.get('system'), list):
+        count += sum(1 for b in wire['system'] if isinstance(b, dict) and 'cache_control' in b)
+    for tool in wire.get('tools') or ():
+        if isinstance(tool, dict) and 'cache_control' in tool:
+            count += 1
+    for msg in wire.get('messages') or ():
+        content = msg.get('content')
+        if isinstance(content, list):
+            count += sum(1 for b in content if isinstance(b, dict) and 'cache_control' in b)
+    return count
+
+
+def test_rolling_cache_breakpoints_prefix_stability_and_schema_normalization(monkeypatch):
+    raw_bodies = []
+    sent_wires = []
+    settings = SimpleNamespace(base_url='https://example.com/api/anthropic', model='configured-model', api_key='secret', allow_private_network=False)
+    policy = SimpleNamespace(timeout_seconds=300, max_input_tokens=None)
+    provider = AnthropicMessagesProvider(
+        settings, policy, anthropic_version='2023-06-01', auth_scheme='x-api-key', max_tokens=100,
+        transport=lambda m, u, h, b, t: (
+            raw_bodies.append(b),
+            sent_wires.append(json.loads(b)),
+            response([{'type': 'text', 'text': 'ok'}], 'end_turn'),
+        )[2],
+    )
+    monkeypatch.setenv('FORESIGHTNINE_LLM_ENDPOINT_VERSION', 'v1')
+    monkeypatch.setenv('FORESIGHTNINE_LLM_CAPABILITY_PROFILE', json.dumps({
+        'endpoint': 'https://example.com/api/anthropic/v1/messages',
+        'model': 'configured-model',
+        'version': 'v1',
+        'mode': 'json_object',
+        'explicit_cache_control': True,
+    }))
+
+    tools_a = (
+        ModelToolDefinition('lookup', 'Lookup', {'type': 'object', 'properties': {'z': {'type': 'string'}, 'a': {'type': 'number'}}}),
+        ModelToolDefinition('record', 'Record', {'properties': {'second': {'type': 'integer'}, 'first': {'type': 'boolean'}}, 'type': 'object'}),
+    )
+    tools_b = (
+        ModelToolDefinition('lookup', 'Lookup', {'properties': {'a': {'type': 'number'}, 'z': {'type': 'string'}}, 'type': 'object'}),
+        ModelToolDefinition('record', 'Record', {'type': 'object', 'properties': {'first': {'type': 'boolean'}, 'second': {'type': 'integer'}}}),
+    )
+
+    ex1 = ModelTurnExchange(
+        ModelAssistantContinuation({'role': 'assistant', 'content': [{'type': 'thinking', 'thinking': 't1', 'signature': 's1'}, {'type': 'tool_use', 'id': 'c1', 'name': 'lookup', 'input': {'z': '1', 'a': 2}}]}),
+        (ModelToolResult('c1', 'res-1'),),
+    )
+    ex2 = ModelTurnExchange(
+        ModelAssistantContinuation({'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'c2', 'name': 'lookup', 'input': {'a': 3, 'z': '4'}}]}),
+        (ModelToolResult('c2', 'res-2'),),
+    )
+    ex3 = ModelTurnExchange(
+        ModelAssistantContinuation({'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'c3', 'name': 'lookup', 'input': {'z': '5', 'a': 6}}]}),
+        (ModelToolResult('c3', 'res-3'),),
+    )
+
+    # Turn 1 (1 exchange) -> 3 breakpoints (system, last tool, ex1 results); tail_note uncached.
+    provider.complete_turn(ModelTurnInput('sys', 'q', tools_a, (ex1,), tail_note='volatile-1'))
+    w1 = sent_wires[-1]
+    assert _count_anthropic_breakpoints(w1) == 3
+    assert w1['messages'][2]['content'][-1] == {'type': 'text', 'text': 'volatile-1'}
+    assert w1['messages'][2]['content'][-2]['cache_control'] == {'type': 'ephemeral'}
+
+    # Turn 2 (2 exchanges) -> 4 breakpoints (system, last tool, ex1 results, ex2 results); ex1 matches Turn 1 cached prefix; tail_note uncached.
+    provider.complete_turn(ModelTurnInput('sys', 'q', tools_a, (ex1, ex2), tail_note='volatile-2'))
+    w2 = sent_wires[-1]
+    assert _count_anthropic_breakpoints(w2) == 4
+    assert w2['messages'][2] == {'role': 'user', 'content': [w1['messages'][2]['content'][0]]}
+    assert w2['messages'][2]['content'][-1]['cache_control'] == {'type': 'ephemeral'}
+    assert w2['messages'][4]['content'][-2]['cache_control'] == {'type': 'ephemeral'}
+    assert w2['messages'][4]['content'][-1] == {'type': 'text', 'text': 'volatile-2'}
+
+    # Turn 3 (3 exchanges) -> still <= 4 breakpoints; rolling window moves from ex1 to (ex2, ex3).
+    provider.complete_turn(ModelTurnInput('sys', 'q', tools_a, (ex1, ex2, ex3), tail_note='volatile-3'))
+    w3 = sent_wires[-1]
+    assert _count_anthropic_breakpoints(w3) == 4
+    assert 'cache_control' not in w3['messages'][2]['content'][-1]
+    assert w3['messages'][4] == {'role': 'user', 'content': [w2['messages'][4]['content'][0]]}
+    assert w3['messages'][4]['content'][-1]['cache_control'] == {'type': 'ephemeral'}
+    assert w3['messages'][6]['content'][-2]['cache_control'] == {'type': 'ephemeral'}
+    assert w3['messages'][6]['content'][-1] == {'type': 'text', 'text': 'volatile-3'}
+
+    # Reordered schema keys produce byte-identical HTTP wire body and sorted in-memory schema keys.
+    provider.complete_turn(ModelTurnInput('sys', 'q', tools_b, (ex1, ex2, ex3), tail_note='volatile-3'))
+    assert raw_bodies[-1] == raw_bodies[-2]
+    assert list(sent_wires[-1]['tools'][0]['input_schema'].keys()) == ['properties', 'type']
+    assert list(sent_wires[-1]['tools'][0]['input_schema']['properties'].keys()) == ['a', 'z']
+
+
+def test_thinking_blocks_never_receive_cache_control(monkeypatch):
+    monkeypatch.setenv('FORESIGHTNINE_LLM_ENDPOINT_VERSION', 'v1')
+    monkeypatch.setenv('FORESIGHTNINE_LLM_CAPABILITY_PROFILE', json.dumps({
+        'endpoint': 'https://example.com/api/anthropic/v1/messages',
+        'model': 'configured-model',
+        'version': 'v1',
+        'mode': 'json_object',
+        'explicit_cache_control': True,
+    }))
+    provider, _ = fixture(response([{'type': 'text', 'text': 'ok'}], 'end_turn'))
+    ex = ModelTurnExchange(
+        ModelAssistantContinuation({
+            'role': 'assistant',
+            'content': [
+                {'type': 'text', 'text': 'reasoning summary'},
+                {'type': 'thinking', 'thinking': 'hidden', 'signature': 'sig'},
+            ],
+        }),
+        (),
+    )
+    wire = provider._wire(ModelTurnInput('sys', 'q', (), (ex,)))
+    asst_blocks = wire['messages'][1]['content']
+    assert 'cache_control' not in asst_blocks[1]
+    assert asst_blocks[0]['cache_control'] == {'type': 'ephemeral'}
+
+
+def test_anthropic_usage_captures_nested_cache_creation_and_hit_ratio():
+    usage = AnthropicMessagesProvider._usage_from_dict({
+        'input_tokens': 20,
+        'output_tokens': 10,
+        'cache_read_input_tokens': 50,
+        'cache_creation': {'ephemeral_5m_input_tokens': 20, 'ephemeral_1h_input_tokens': 10},
+    })
+    assert usage.cache_creation_input_tokens == 30
+    assert usage.cache_read_input_tokens == 50
+    assert usage.total_tokens == 110
+    assert usage.cache_hit_ratio == pytest.approx(0.5)

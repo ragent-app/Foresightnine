@@ -15,7 +15,7 @@ import re
 import unicodedata
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -152,6 +152,91 @@ def _load() -> dict[str, Pack]:
 
 def load_packs() -> dict[str, Pack]:
     return dict(_load())
+
+
+def get_pack(pack_id: str) -> Pack | None:
+    """Return the validated ``Pack`` for ``pack_id``, or ``None`` if unknown."""
+    if not isinstance(pack_id, str):
+        return None
+    return _load().get(pack_id.strip())
+
+
+def list_available_packs() -> list[dict[str, Any]]:
+    """Return sorted metadata summaries for all available research method packs."""
+    return [
+        {
+            'pack_id': pack.id,
+            'version': pack.version,
+            'fingerprint': pack_fingerprint(pack),
+            'title_en': pack.title_en,
+            'title_zh': pack.title_zh,
+            'question_types': list(pack.applies_when.question_types),
+        }
+        for _, pack in sorted(_load().items())
+    ]
+
+
+def resolve_active_packs(pack_records: Sequence[Mapping[str, Any]] | None) -> list[Pack]:
+    """Resolve active ``Pack`` models deterministically from ``state['method_packs']`` records."""
+    if not pack_records:
+        return []
+    packs = _load()
+    resolved: list[Pack] = []
+    seen: set[str] = set()
+    for record in pack_records:
+        if not isinstance(record, Mapping):
+            continue
+        pack_id = record.get('pack_id')
+        if isinstance(pack_id, str) and pack_id in packs and pack_id not in seen:
+            seen.add(pack_id)
+            resolved.append(packs[pack_id])
+    return resolved
+
+
+def tool_available_in_run(
+    tool: str,
+    caps: Mapping[str, Any] | None = None,
+    *,
+    has_fin_data: bool | None = None,
+    has_eligible_sources: bool = True,
+) -> bool:
+    """Return whether ``tool`` can actually execute in the current run configuration."""
+    c = caps or {}
+    fin_flags = (
+        'market_data_available',
+        'sec_financials_available',
+        'filings_available',
+        'cn_market_data_available',
+        'cn_financials_available',
+        'hk_market_data_available',
+    )
+    if tool == 'resolve_entity':
+        if has_fin_data is not None:
+            return has_fin_data
+        return any(bool(c.get(flag)) for flag in fin_flags)
+    if tool == 'market_data':
+        return bool(c.get('market_data_available') or c.get('cn_market_data_available') or c.get('hk_market_data_available'))
+    if tool == 'company_financials':
+        return bool(c.get('sec_financials_available') or c.get('cn_financials_available'))
+    if tool == 'filings':
+        return bool(c.get('filings_available'))
+    if tool == 'issuer_documents':
+        return bool(c.get('issuer_documents_available'))
+    if tool == 'news_search':
+        return bool(c.get('news_search_available'))
+    if tool == 'acquire_sources':
+        return bool(c.get('acquire_available'))
+    can_acquire_sources = (
+        bool(c.get('acquire_available'))
+        or bool(c.get('sec_financials_available') or c.get('cn_financials_available'))
+        or bool(c.get('filings_available'))
+        or bool(c.get('market_data_available') or c.get('cn_market_data_available') or c.get('hk_market_data_available'))
+    )
+    if tool == 'search_library':
+        return bool(c.get('search_library_available', True)) and (has_eligible_sources or can_acquire_sources)
+    if tool in ('read_sources', 'read_pages', 'outline_source', 'search_source', 'request_ocr', 'extract_statements'):
+        return has_eligible_sources or can_acquire_sources
+    return tool in KNOWN_TOOLS
 
 
 def packs_fingerprint() -> str:

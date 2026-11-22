@@ -27,12 +27,25 @@ from __future__ import annotations
 from array import array
 from collections import Counter
 from dataclasses import dataclass
+import logging
 import math
 import re
 from typing import TYPE_CHECKING, Any, Iterable, Mapping, Protocol, Sequence
 
+from .research_diagnostics import safe_exception_diagnostic
+
 if TYPE_CHECKING:  # pragma: no cover
     from .research_sources import ResearchSource
+
+_logger = logging.getLogger(__name__)
+
+
+class _Unset:
+    def __repr__(self) -> str:
+        return "UNSET"
+
+
+_UNSET = _Unset()
 
 MIN_PASSAGE_CHARS = 600
 MAX_PASSAGE_CHARS = 1200
@@ -376,6 +389,7 @@ class Hit:
     reasons: tuple[str, ...] = ()
     extraction_method: str | None = None   # "ocr" when the page text came from OCR
     lexical_score: float = 0.0
+    vector_score: float | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -385,6 +399,25 @@ class Hit:
             "matched_terms": list(self.matched_terms), "context": self.context, "reasons": list(self.reasons),
             "extraction_method": self.extraction_method,
         }
+
+
+def _scorer_cache_stats(scorer: VectorScorer | None) -> tuple[int, int] | None:
+    if scorer is None:
+        return None
+    cache_stats = getattr(scorer, "cache_stats", None)
+    raw = cache_stats() if callable(cache_stats) else None
+    if isinstance(raw, Mapping):
+        hits = raw.get("hits")
+        misses = raw.get("misses")
+        if type(hits) is int and hits >= 0 and type(misses) is int and misses >= 0:
+            return hits, misses
+    cache = getattr(scorer, "cache", None)
+    if cache is not None:
+        hits = getattr(cache, "hits", None)
+        misses = getattr(cache, "misses", None)
+        if type(hits) is int and hits >= 0 and type(misses) is int and misses >= 0:
+            return hits, misses
+    return None
 
 
 class HitList(list):
@@ -428,19 +461,50 @@ class _SourceIndex:
 
 
 class ResearchLibrary:
-    """Lexical index over the eligible sources of one research topic or run."""
+    """Lexical/hybrid index over the eligible sources of one research topic or run."""
 
     def __init__(self, sources: Iterable["ResearchSource"] = (), *,
-                 ineligible: Mapping[str, str] | None = None, vector_scorer: VectorScorer | None = None) -> None:
+                 ineligible: Mapping[str, str] | None = None,
+                 vector_scorer: VectorScorer | None | _Unset = _UNSET) -> None:
         self._tok = _Tokenizer()
         self._indexes: dict[str, _SourceIndex] = {}
         self._df: Counter[str] = Counter()
         self._total_passages = 0
         self._total_length = 0
         self._ineligible: dict[str, str] = dict(ineligible or {})
-        self._vector = vector_scorer
+        self._vector_explicit = vector_scorer is not _UNSET
+        self._vector: VectorScorer | None = None if vector_scorer is _UNSET else vector_scorer  # type: ignore[assignment]
         for source in sources:
             self.add_source(source)
+
+    @property
+    def vector_scorer(self) -> VectorScorer | None:
+        return self._vector
+
+    @property
+    def vector_scorer_explicit(self) -> bool:
+        return self._vector_explicit
+
+    def attach_vector_scorer(self, vector_scorer: VectorScorer | None) -> None:
+        """Attach or replace the library's vector scorer and index any existing sources."""
+        old = self._vector
+        if old is vector_scorer:
+            self._vector_explicit = True
+            return
+        if old is not None:
+            for source_id in list(self._indexes):
+                try:
+                    old.remove_source(source_id)
+                except Exception as error:
+                    _logger.warning("vector_scorer_remove_failed metadata=%s", safe_exception_diagnostic(error))
+        self._vector = vector_scorer
+        self._vector_explicit = True
+        if vector_scorer is not None:
+            for index in self._indexes.values():
+                try:
+                    vector_scorer.index_source(index.source, self._passages(index))
+                except Exception as error:
+                    _logger.warning("vector_scorer_index_failed metadata=%s", safe_exception_diagnostic(error))
 
     # -- membership ---------------------------------------------------------------------------------
     @property
@@ -516,7 +580,10 @@ class ResearchLibrary:
         self._total_passages += len(index.starts)
         self._total_length += sum(index.lengths)
         if self._vector is not None:
-            self._vector.index_source(index.source, self._passages(index))
+            try:
+                self._vector.index_source(index.source, self._passages(index))
+            except Exception as error:
+                _logger.warning("vector_scorer_index_failed metadata=%s", safe_exception_diagnostic(error))
 
     def _uninstall(self, source_id: str) -> bool:
         index = self._indexes.pop(source_id, None)
@@ -532,7 +599,10 @@ class ResearchLibrary:
         self._total_passages -= len(index.starts)
         self._total_length -= sum(index.lengths)
         if self._vector is not None:
-            self._vector.remove_source(source_id)
+            try:
+                self._vector.remove_source(source_id)
+            except Exception as error:
+                _logger.warning("vector_scorer_remove_failed metadata=%s", safe_exception_diagnostic(error))
         return True
 
     def _passages(self, index: _SourceIndex) -> list[Passage]:
@@ -581,8 +651,16 @@ class ResearchLibrary:
                          "a miss does not mean the text is absent from those pages.")
         if excluded:
             notes.append("Excluded sources were not searched.")
-        return {"searched_sources": searched, "excluded_sources": excluded, "unsearched_page_count": unsearched_total,
-                "complete": not unsearched_total and not excluded, "notes": notes}
+        out: dict[str, Any] = {
+            "searched_sources": searched, "excluded_sources": excluded, "unsearched_page_count": unsearched_total,
+            "complete": not unsearched_total and not excluded, "notes": notes,
+            "retrieval_mode": "hybrid_rrf" if self._vector is not None else "bm25_only",
+        }
+        cache_stats = _scorer_cache_stats(self._vector)
+        if cache_stats is not None:
+            out["embedding_cache_hits"] = cache_stats[0]
+            out["embedding_cache_misses"] = cache_stats[1]
+        return out
 
     # -- search -------------------------------------------------------------------------------------
     def search(self, query: str, *, source_ids: Sequence[str] | None = None, top_k: int = 10,
@@ -597,27 +675,92 @@ class ResearchLibrary:
             weights[term] = NUMBER_BOOST if _is_numeric_term(term) else 1.0
         scored = self._lexical(weights, targets)
         phrase = " ".join(query.lower().split())
-        ranked = self._rank(scored, phrase, max(top_k * 5, 50))
-        fused: dict[tuple[str, int], float] | None = None
+        pool_limit = max(top_k * 5, 50)
+        ranked = self._rank(scored, phrase, pool_limit)
+        vector_scores: dict[tuple[str, int], float] = {}
+        vector_active = False
+        fallback_reason: str | None = None
+
         if self._vector is not None and targets:
-            vec = list(self._vector.query(query, source_ids=targets, limit=max(top_k * 5, 50)))
-            vec.sort(key=lambda c: (-c.score, c.source_id, c.passage_index))
-            fused = {}
-            for rank, key in enumerate(ranked, 1):
-                fused[key[0]] = fused.get(key[0], 0.0) + 1.0 / (RRF_K + rank)
-            for rank, cand in enumerate(vec, 1):
-                key0 = (cand.source_id, cand.passage_index)
-                if cand.source_id in self._indexes and cand.passage_index < len(self._indexes[cand.source_id].starts):
+            try:
+                raw_vec = list(self._vector.query(query, source_ids=targets, limit=pool_limit) or ())
+            except Exception as error:
+                _logger.warning("vector_scorer_query_failed metadata=%s", safe_exception_diagnostic(error))
+                raw_vec = []
+                fallback_reason = "vector_scorer_error"
+            else:
+                last_err = getattr(self._vector, "last_query_error", None)
+                if not raw_vec and isinstance(last_err, str) and last_err:
+                    fallback_reason = last_err
+                else:
+                    vector_active = True
+
+            if vector_active:
+                target_set = set(targets)
+                valid_vec: list[tuple[tuple[str, int], float]] = []
+                for cand in raw_vec:
+                    sid = getattr(cand, "source_id", None)
+                    pid = getattr(cand, "passage_index", None)
+                    vscore = getattr(cand, "score", None)
+                    if (
+                        not isinstance(sid, str)
+                        or sid not in target_set
+                        or type(pid) is not int
+                        or not (0 <= pid < len(self._indexes[sid].starts))
+                        or isinstance(vscore, bool)
+                        or not isinstance(vscore, (int, float))
+                        or not math.isfinite(float(vscore))
+                    ):
+                        continue
+                    valid_vec.append(((sid, pid), float(vscore)))
+                valid_vec.sort(key=lambda item: (-item[1], item[0][0], self._indexes[item[0][0]].starts[item[0][1]]))
+                dedup_vec: list[tuple[tuple[str, int], float]] = []
+                seen_vec: set[tuple[str, int]] = set()
+                for key0, vscore in valid_vec:
+                    if key0 not in seen_vec:
+                        seen_vec.add(key0)
+                        dedup_vec.append((key0, vscore))
+                dedup_vec = dedup_vec[:pool_limit]
+
+                fused: dict[tuple[str, int], float] = {}
+                for rank, (key0, _lex) in enumerate(ranked, 1):
                     fused[key0] = fused.get(key0, 0.0) + 1.0 / (RRF_K + rank)
-            order = sorted(fused.items(), key=lambda kv: (-kv[1], kv[0][0], self._indexes[kv[0][0]].starts[kv[0][1]]))
-            lexical = {k: v for k, v in ranked}
-            ranked = [(k, fused[k]) for k, _ in order[:top_k]]
-            lexical_of = lexical
+                for rank, (key0, vscore) in enumerate(dedup_vec, 1):
+                    fused[key0] = fused.get(key0, 0.0) + 1.0 / (RRF_K + rank)
+                    vector_scores[key0] = vscore
+                order = sorted(
+                    fused.items(),
+                    key=lambda kv: (-kv[1], kv[0][0], self._indexes[kv[0][0]].starts[kv[0][1]]),
+                )
+                lexical_of = {k: v for k, v in ranked}
+                ranked = [(k, score) for k, score in order[:top_k]]
+            else:
+                ranked = ranked[:top_k]
+                lexical_of = {k: v for k, v in ranked}
         else:
             ranked = ranked[:top_k]
             lexical_of = {k: v for k, v in ranked}
-        hits = [self._make_hit(key, score, lexical_of.get(key, 0.0), weights, phrase, max_chars_per_hit)
-                for key, score in ranked]
+
+        coverage["retrieval_mode"] = "hybrid_rrf" if vector_active else "bm25_only"
+        if fallback_reason:
+            coverage["vector_fallback_reason"] = fallback_reason
+        cache_stats = _scorer_cache_stats(self._vector)
+        if cache_stats is not None:
+            coverage["embedding_cache_hits"] = cache_stats[0]
+            coverage["embedding_cache_misses"] = cache_stats[1]
+
+        hits = [
+            self._make_hit(
+                key,
+                score,
+                lexical_of.get(key, 0.0),
+                weights,
+                phrase,
+                max_chars_per_hit,
+                vector_score=vector_scores.get(key),
+            )
+            for key, score in ranked
+        ]
         return HitList(hits, coverage)
 
     def _lexical(self, weights: Mapping[str, float], targets: Sequence[str]) -> dict[tuple[str, int], float]:
@@ -667,7 +810,7 @@ class ResearchLibrary:
         return pool[:limit]
 
     def _make_hit(self, key: tuple[str, int], score: float, lexical: float, weights: Mapping[str, float],
-                  phrase: str, max_chars: int) -> Hit:
+                  phrase: str, max_chars: int, *, vector_score: float | None = None) -> Hit:
         source_id, pid = key
         index = self._indexes[source_id]
         text = index.source.text
@@ -681,7 +824,11 @@ class ResearchLibrary:
         if context:
             context_terms = {t for t in self._tok.terms(context) if t in weights} - passage_terms
         all_terms = passage_terms | context_terms
-        reasons = ["lexical_bm25"]
+        reasons: list[str] = []
+        if lexical > 0.0:
+            reasons.append("lexical_bm25")
+        if vector_score is not None:
+            reasons.append("semantic_vector")
         if any(_is_numeric_term(t) for t in all_terms):
             reasons.append("number_or_date_exact")
         if context_terms:
@@ -693,7 +840,7 @@ class ResearchLibrary:
                    score=score, snippet=text[snip_start:snip_end], snippet_start=snip_start, snippet_end=snip_end,
                    matched_terms=tuple(sorted(all_terms)), context=context, reasons=tuple(reasons),
                    extraction_method="ocr" if page and index.statuses.get(page) == "ocr" else None,
-                   lexical_score=lexical)
+                   lexical_score=lexical, vector_score=vector_score)
 
     @staticmethod
     def _window(matched: Sequence[tuple[str, int, int]], weights: Mapping[str, float], start: int, end: int,

@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass, replace
 from hashlib import sha256
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, localcontext
 from typing import Any, Callable, Iterable
 from urllib.parse import quote, urlencode
 
@@ -68,7 +68,7 @@ class LineSpec:
     line: str
     statement: str
     flow: bool            # duration (flow) vs instant (balance sheet)
-    unit_kind: str        # money | per_share
+    unit_kind: str        # money | per_share | shares
     tags: dict[str, tuple[str, ...]]
 
 
@@ -77,25 +77,104 @@ def _spec(line, statement, flow, unit_kind, us, ifrs) -> LineSpec:
 
 
 STANDARD_LINES: dict[str, LineSpec] = {s.line: s for s in (
+    # ---- income statement (preserve original keys and tag priorities)
     _spec("revenue", "income", True, "money",
           ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet",
            "RevenueFromContractWithCustomerIncludingAssessedTax"], ["Revenue"]),
+    _spec("cost_of_revenue", "income", True, "money",
+          ["CostOfGoodsAndServicesSold", "CostOfRevenue", "CostOfGoodsSold", "CostOfServices"],
+          ["CostOfSales"]),
+    _spec("gross_profit", "income", True, "money", ["GrossProfit"], ["GrossProfit"]),
+    _spec("rd_expense", "income", True, "money",
+          ["ResearchAndDevelopmentExpense", "ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost"],
+          ["ResearchAndDevelopmentExpense"]),
+    _spec("sga_expense", "income", True, "money",
+          ["SellingGeneralAndAdministrativeExpense"], ["SellingGeneralAndAdministrativeExpense"]),
+    _spec("selling_expense", "income", True, "money",
+          ["SellingAndMarketingExpense", "SellingExpense"], ["SellingExpense", "DistributionCosts"]),
+    _spec("admin_expense", "income", True, "money",
+          ["GeneralAndAdministrativeExpense"], ["AdministrativeExpense"]),
+    _spec("total_operating_costs", "income", True, "money",
+          ["OperatingExpenses", "CostsAndExpenses", "OperatingCostsAndExpenses"], ["OperatingExpenses"]),
     _spec("operating_income", "income", True, "money", ["OperatingIncomeLoss"], ["ProfitLossFromOperatingActivities"]),
+    _spec("interest_expense", "income", True, "money",
+          ["InterestExpense", "InterestExpenseDebt", "InterestAndDebtExpense"],
+          ["FinanceCosts", "InterestExpense"]),
+    _spec("finance_expense", "income", True, "money",
+          ["InterestIncomeExpenseNet", "InterestIncomeExpenseNonoperatingNet"], ["FinanceCosts"]),
+    _spec("profit_before_tax", "income", True, "money",
+          ["IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+           "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments"],
+          ["ProfitLossBeforeTax"]),
+    _spec("income_tax", "income", True, "money", ["IncomeTaxExpenseBenefit"], ["IncomeTaxExpenseContinuingOperations"]),
     _spec("net_income", "income", True, "money", ["NetIncomeLoss", "ProfitLoss"], ["ProfitLoss"]),
+    _spec("ebitda", "income", True, "money", ["EarningsBeforeInterestTaxesDepreciationAndAmortization"], []),
+    _spec("eps_basic", "income", True, "per_share", ["EarningsPerShareBasic"], ["BasicEarningsLossPerShare"]),
     _spec("eps_diluted", "income", True, "per_share", ["EarningsPerShareDiluted"], ["DilutedEarningsLossPerShare"]),
+    _spec("shares_basic", "income", True, "shares",
+          ["WeightedAverageNumberOfSharesOutstandingBasic"], ["WeightedAverageShares"]),
+    _spec("shares_diluted", "income", True, "shares",
+          ["WeightedAverageNumberOfDilutedSharesOutstanding"], ["AdjustedWeightedAverageShares"]),
+    # ---- balance sheet
+    _spec("cash", "balance", False, "money",
+          ["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"],
+          ["CashAndCashEquivalents"]),
+    _spec("short_term_investments", "balance", False, "money",
+          ["ShortTermInvestments", "MarketableSecuritiesCurrent", "AvailableForSaleSecuritiesDebtSecuritiesCurrent"],
+          ["OtherCurrentFinancialAssets"]),
+    _spec("accounts_receivable", "balance", False, "money",
+          ["AccountsReceivableNetCurrent", "AccountsNotesAndLoansReceivableNetCurrent", "ReceivablesNetCurrent"],
+          ["TradeAndOtherCurrentReceivables"]),
+    _spec("inventory", "balance", False, "money",
+          ["InventoryNet", "InventoryFinishedGoodsNetOfReserves"], ["Inventories"]),
+    _spec("current_assets", "balance", False, "money", ["AssetsCurrent"], ["CurrentAssets"]),
+    _spec("ppe_net", "balance", False, "money", ["PropertyPlantAndEquipmentNet"], ["PropertyPlantAndEquipment"]),
+    _spec("goodwill", "balance", False, "money", ["Goodwill"], ["Goodwill"]),
+    _spec("intangible_assets", "balance", False, "money",
+          ["IntangibleAssetsNetExcludingGoodwill", "FiniteLivedIntangibleAssetsNet"],
+          ["IntangibleAssetsOtherThanGoodwill"]),
     _spec("total_assets", "balance", False, "money", ["Assets"], ["Assets"]),
+    _spec("accounts_payable", "balance", False, "money",
+          ["AccountsPayableCurrent", "AccountsPayableAndAccruedLiabilitiesCurrent"],
+          ["TradeAndOtherCurrentPayables"]),
+    _spec("short_term_debt", "balance", False, "money",
+          ["ShortTermBorrowings", "DebtCurrent", "LongTermDebtCurrent", "NotesPayableCurrent"],
+          ["ShorttermBorrowings", "CurrentPortionOfLongtermBorrowings"]),
+    _spec("current_liabilities", "balance", False, "money", ["LiabilitiesCurrent"], ["CurrentLiabilities"]),
+    _spec("long_term_debt", "balance", False, "money",
+          ["LongTermDebtNoncurrent", "LongTermDebt", "LongTermNotesAndLoans"],
+          ["LongtermBorrowings", "NoncurrentPortionOfNoncurrentLoansReceived"]),
     _spec("total_liabilities", "balance", False, "money", ["Liabilities"], ["Liabilities"]),
+    _spec("retained_earnings", "balance", False, "money", ["RetainedEarningsAccumulatedDeficit"], ["RetainedEarnings"]),
     _spec("equity", "balance", False, "money",
           ["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"], ["Equity"]),
+    _spec("non_controlling_interests", "balance", False, "money", ["MinorityInterest"], ["NoncontrollingInterests"]),
+    # ---- cash-flow statement
+    _spec("depreciation_amortization", "cashflow", True, "money",
+          ["DepreciationDepletionAndAmortization", "DepreciationAndAmortization", "Depreciation"],
+          ["DepreciationAndAmortisationExpense", "AdjustmentsForDepreciationAndAmortisationExpense"]),
     _spec("operating_cash_flow", "cashflow", True, "money",
           ["NetCashProvidedByUsedInOperatingActivities",
            "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"], ["CashFlowsFromUsedInOperatingActivities"]),
     _spec("capex", "cashflow", True, "money",
           ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"],
           ["PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities"]),
-    _spec("cash", "balance", False, "money",
-          ["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"],
-          ["CashAndCashEquivalents"]),
+    _spec("investing_cash_flow", "cashflow", True, "money",
+          ["NetCashProvidedByUsedInInvestingActivities",
+           "NetCashProvidedByUsedInInvestingActivitiesContinuingOperations"], ["CashFlowsFromUsedInInvestingActivities"]),
+    _spec("financing_cash_flow", "cashflow", True, "money",
+          ["NetCashProvidedByUsedInFinancingActivities",
+           "NetCashProvidedByUsedInFinancingActivitiesContinuingOperations"], ["CashFlowsFromUsedInFinancingActivities"]),
+    _spec("dividends_paid", "cashflow", True, "money",
+          ["PaymentsOfDividendsCommonStock", "PaymentsOfDividends", "PaymentsOfOrdinaryDividends"],
+          ["DividendsPaidClassifiedAsFinancingActivities", "DividendsPaid"]),
+    _spec("share_repurchases", "cashflow", True, "money",
+          ["PaymentsForRepurchaseOfCommonStock", "PaymentsForRepurchaseOfEquity"],
+          ["PaymentsToAcquireOrRedeemEntitysShares"]),
+    _spec("net_increase_in_cash", "cashflow", True, "money",
+          ["CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect",
+           "CashAndCashEquivalentsPeriodIncreaseDecrease"],
+          ["IncreaseDecreaseInCashAndCashEquivalents"]),
 )}
 
 
@@ -217,8 +296,17 @@ def last_n_fiscal_years(entries: Iterable[dict], n: int, *, flow: bool = True, t
 
 def _pick_unit(units: dict, unit_kind: str) -> str | None:
     names = [u for u, rows in units.items() if isinstance(rows, list) and rows]
-    ok = [u for u in names if (("/" in u or "per" in u.lower()) if unit_kind == "per_share" else
-                               ("/" not in u and "share" not in u.lower() and "per" not in u.lower()))]
+    if unit_kind == "per_share":
+        ok = [u for u in names if "/" in u or "per" in u.lower()]
+        if not ok:
+            return None
+        return "USD/shares" if "USD/shares" in ok else ("USD" if "USD" in ok else sorted(ok)[0])
+    if unit_kind == "shares":
+        ok = [u for u in names if "/" not in u and "per" not in u.lower() and "share" in u.lower()]
+        if not ok:
+            return None
+        return "shares" if "shares" in ok else sorted(ok)[0]
+    ok = [u for u in names if "/" not in u and "share" not in u.lower() and "per" not in u.lower()]
     if not ok:
         return None
     return "USD" if "USD" in ok else sorted(ok)[0]
@@ -227,6 +315,319 @@ def _pick_unit(units: dict, unit_kind: str) -> str | None:
 def _currency(unit: str) -> str | None:
     head = unit.split("/")[0]
     return head if re.fullmatch(r"[A-Z]{3}", head) else None
+
+
+def _quantize(value: Decimal, decimal_places: int) -> Decimal:
+    return value.quantize(Decimal(1).scaleb(-decimal_places), rounding=ROUND_HALF_UP)
+
+
+def _period_class(line: StatementLine) -> str | None:
+    spec = STANDARD_LINES.get(line.line)
+    if spec is None:
+        return None
+    if not spec.flow:
+        return "instant" if line.period_start is None else None
+    if line.period_start is None:
+        return None
+    if line.basis == "ytd_cumulative" and line.period_start == date(line.period_end.year, 1, 1):
+        if line.period_end.month in (3, 6, 9, 12):
+            return f"ytd_{line.period_end.month}"
+        return None
+    days = (line.period_end - line.period_start).days
+    if 78 <= days <= 105:
+        return "quarter"
+    if 340 <= days <= 380:
+        return "year"
+    return None
+
+
+def _is_single_quarter_flow(line: StatementLine) -> bool:
+    cls = _period_class(line)
+    return cls in ("quarter", "ytd_3")
+
+
+def _derive_margins_and_fcf(
+    by_period: dict[tuple[str, str, date | None, date, str | None, str, str | None], dict[str, StatementLine]],
+    decimal_places: int,
+) -> list[StatementLine]:
+    derived: list[StatementLine] = []
+    ordered_periods = sorted(
+        by_period.items(),
+        key=lambda kv: (kv[0][0], kv[0][1], kv[0][2] or date.min, kv[0][3], kv[0][4] or "", kv[0][5], kv[0][6] or ""),
+    )
+    for (eid, taxonomy, p_start, p_end, _basis, unit, currency), bucket in ordered_periods:
+        ocf = bucket.get("operating_cash_flow")
+        capex = bucket.get("capex")
+        if ocf is not None and capex is not None and STANDARD_LINES["operating_cash_flow"].unit_kind == "money":
+            derived.append(StatementLine(
+                entity_id=eid, statement="cashflow", line="free_cash_flow",
+                reported_tag=f"{ocf.reported_tag}-{capex.reported_tag}", taxonomy=taxonomy,
+                period_start=p_start, period_end=p_end, fiscal_label=ocf.fiscal_label or capex.fiscal_label,
+                value=ocf.value - abs(capex.value), unit=unit, currency=currency,
+                form=ocf.form or capex.form,
+                filed_at=max((d for d in (ocf.filed_at, capex.filed_at) if d is not None), default=None),
+                accession=ocf.accession or capex.accession, derived=True,
+                derivation=f"operating_cash_flow ({ocf.value}) - abs(capex ({capex.value}))",
+                basis=ocf.basis, accounting_standard=ocf.accounting_standard,
+            ))
+
+        rev = bucket.get("revenue")
+        if rev is None:
+            continue
+        gp = bucket.get("gross_profit")
+        cost = bucket.get("cost_of_revenue")
+        if gp is None and cost is not None and cost.value >= 0:
+            gp = StatementLine(
+                entity_id=eid, statement="income", line="gross_profit",
+                reported_tag=f"{rev.reported_tag}-{cost.reported_tag}", taxonomy=taxonomy,
+                period_start=p_start, period_end=p_end, fiscal_label=rev.fiscal_label,
+                value=rev.value - cost.value, unit=unit, currency=currency,
+                form=rev.form or cost.form,
+                filed_at=max((d for d in (rev.filed_at, cost.filed_at) if d is not None), default=None),
+                accession=rev.accession or cost.accession, derived=True,
+                derivation=f"revenue ({rev.value}) - cost_of_revenue ({cost.value})",
+                basis=rev.basis, accounting_standard=rev.accounting_standard,
+            )
+            derived.append(gp)
+        if rev.value <= 0:
+            continue
+        margin_basis = "period_ratio" if rev.basis else None
+        for target_line, source_line, obj in (
+            ("gross_margin", "gross_profit", gp),
+            ("operating_margin", "operating_income", bucket.get("operating_income")),
+            ("net_margin", "net_income", bucket.get("net_income")),
+        ):
+            if obj is None:
+                continue
+            pct = _quantize((obj.value / rev.value) * Decimal(100), decimal_places)
+            derived.append(StatementLine(
+                entity_id=eid, statement="income", line=target_line,
+                reported_tag=f"{obj.reported_tag}/{rev.reported_tag}", taxonomy=taxonomy,
+                period_start=p_start, period_end=p_end, fiscal_label=rev.fiscal_label,
+                value=pct, unit="percent", currency=None,
+                form=rev.form or obj.form,
+                filed_at=max((d for d in (rev.filed_at, obj.filed_at) if d is not None), default=None),
+                accession=rev.accession or obj.accession, derived=True,
+                derivation=f"{source_line} ({obj.value}) / revenue ({rev.value}) * 100",
+                basis=margin_basis, accounting_standard=rev.accounting_standard,
+            ))
+    return derived
+
+
+def _derive_ttm_rows(
+    series_items: list[StatementLine],
+    eid: str,
+    taxonomy: str,
+    line_name: str,
+    unit: str,
+    currency: str | None,
+) -> list[StatementLine]:
+    spec = STANDARD_LINES.get(line_name)
+    if spec is None or not spec.flow or spec.unit_kind != "money":
+        return []
+    out: list[StatementLine] = []
+    covered_ends: set[date] = set()
+    # Path 1: 4 contiguous single quarters.
+    quarters_by_end: dict[date, StatementLine] = {}
+    for item in series_items:
+        if _is_single_quarter_flow(item):
+            cur = quarters_by_end.get(item.period_end)
+            if cur is None or (cur.derived and not item.derived):
+                quarters_by_end[item.period_end] = item
+    quarters = [quarters_by_end[d] for d in sorted(quarters_by_end)]
+    for i in range(len(quarters) - 3):
+        win = quarters[i:i + 4]
+        assert all(q.period_start is not None for q in win)
+        contiguous = all(
+            abs(((win[j + 1].period_start - win[j].period_end).days) - 1) <= 5  # type: ignore[operator]
+            for j in range(3)
+        )
+        total_days = (win[3].period_end - win[0].period_start).days  # type: ignore[operator]
+        if not contiguous or not 340 <= total_days <= 385:
+            continue
+        covered_ends.add(win[3].period_end)
+        out.append(StatementLine(
+            entity_id=eid, statement=spec.statement, line=f"{line_name}_ttm",
+            reported_tag=win[3].reported_tag, taxonomy=taxonomy,
+            period_start=win[0].period_start, period_end=win[3].period_end,
+            fiscal_label=f"TTM {win[3].period_end.isoformat()}",
+            value=sum((q.value for q in win), Decimal(0)), unit=unit, currency=currency,
+            form=win[3].form,
+            filed_at=max((q.filed_at for q in win if q.filed_at is not None), default=None),
+            accession=win[3].accession, derived=True,
+            derivation=f"TTM sum of 4 quarters ({win[0].period_end.isoformat()}..{win[3].period_end.isoformat()})",
+            basis="ttm", accounting_standard=win[3].accounting_standard,
+        ))
+    # Path 2: YTD cumulative series (A-shares without derive_quarters): TTM = cur_YTD + prev_FY - prev_YTD.
+    ytd_by_end = {
+        item.period_end: item for item in series_items
+        if item.basis == "ytd_cumulative" and item.period_start == date(item.period_end.year, 1, 1)
+    }
+    for end, cur in sorted(ytd_by_end.items()):
+        if end in covered_ends or end.month not in (3, 6, 9):
+            continue
+        prev_fy = ytd_by_end.get(date(end.year - 1, 12, 31))
+        prev_ytd = next(
+            (v for d, v in ytd_by_end.items() if d.year == end.year - 1 and d.month == end.month),
+            None,
+        )
+        if prev_fy is None or prev_ytd is None:
+            continue
+        out.append(StatementLine(
+            entity_id=eid, statement=spec.statement, line=f"{line_name}_ttm",
+            reported_tag=cur.reported_tag, taxonomy=taxonomy,
+            period_start=prev_ytd.period_end + timedelta(days=1), period_end=end,
+            fiscal_label=f"TTM {end.isoformat()}",
+            value=cur.value + prev_fy.value - prev_ytd.value, unit=unit, currency=currency,
+            form=cur.form,
+            filed_at=max((d for d in (cur.filed_at, prev_fy.filed_at, prev_ytd.filed_at) if d is not None), default=None),
+            derived=True,
+            derivation=(f"TTM from YTD ({cur.fiscal_label or end.isoformat()}) + "
+                        f"{prev_fy.fiscal_label or prev_fy.period_end.isoformat()} - "
+                        f"{prev_ytd.fiscal_label or prev_ytd.period_end.isoformat()}"),
+            basis="ttm", accounting_standard=cur.accounting_standard,
+        ))
+    return out
+
+
+def _derive_growth_rows(
+    series_items: list[StatementLine],
+    eid: str,
+    taxonomy: str,
+    line_name: str,
+    decimal_places: int,
+) -> list[StatementLine]:
+    spec = STANDARD_LINES.get(line_name)
+    if spec is None:
+        return []
+    out: list[StatementLine] = []
+    seen_yoy: set[tuple[date | None, date, str | None]] = set()
+    seen_qoq: set[tuple[date | None, date, str | None]] = set()
+    ordered = sorted(series_items, key=lambda s: (s.period_end, s.period_start or date.min))
+    for cur in ordered:
+        cls = _period_class(cur)
+        if cls is None:
+            continue
+        # YoY growth
+        yoy_candidates: list[StatementLine] = []
+        for prev in ordered:
+            if prev.period_end >= cur.period_end:
+                continue
+            p_cls = _period_class(prev)
+            if cls.startswith("ytd_"):
+                if p_cls == cls and prev.period_end.year == cur.period_end.year - 1 and prev.period_end.month == cur.period_end.month:
+                    yoy_candidates.append(prev)
+            elif cls == "quarter" and p_cls in ("quarter", "ytd_3"):
+                if 330 <= (cur.period_end - prev.period_end).days <= 400:
+                    yoy_candidates.append(prev)
+            elif p_cls == cls and 330 <= (cur.period_end - prev.period_end).days <= 400:
+                yoy_candidates.append(prev)
+        if yoy_candidates:
+            prev = min(
+                yoy_candidates,
+                key=lambda p: (
+                    0 if (cls == "instant" and cur.form and p.form == cur.form) else 1,
+                    abs((cur.period_end - p.period_end).days - 365),
+                    int(p.derived),
+                ),
+            )
+            yoy_key = (cur.period_start, cur.period_end, cur.basis)
+            if prev.value > 0 and yoy_key not in seen_yoy:
+                seen_yoy.add(yoy_key)
+                pct = _quantize(((cur.value / prev.value) - Decimal(1)) * Decimal(100), decimal_places)
+                out.append(StatementLine(
+                    entity_id=eid, statement=spec.statement, line=f"{line_name}_yoy_growth",
+                    reported_tag=cur.reported_tag, taxonomy=taxonomy,
+                    period_start=cur.period_start, period_end=cur.period_end, fiscal_label=cur.fiscal_label,
+                    value=pct, unit="percent", currency=None,
+                    form=cur.form, filed_at=cur.filed_at, accession=cur.accession, derived=True,
+                    derivation=f"YoY growth vs {prev.period_end.isoformat()} ({prev.value})",
+                    basis=cur.basis, accounting_standard=cur.accounting_standard,
+                ))
+        # QoQ growth (single-quarter flows or quarterly instant snapshots; never cumulative H1/9M/FY)
+        qoq_candidates: list[StatementLine] = []
+        if _is_single_quarter_flow(cur):
+            for prev in ordered:
+                if prev.period_end >= cur.period_end or not _is_single_quarter_flow(prev):
+                    continue
+                if cur.period_start is not None and abs((cur.period_start - prev.period_end).days - 1) <= 5:
+                    qoq_candidates.append(prev)
+        elif cls == "instant":
+            for prev in ordered:
+                if prev.period_end >= cur.period_end or _period_class(prev) != "instant":
+                    continue
+                if 60 <= (cur.period_end - prev.period_end).days <= 120:
+                    qoq_candidates.append(prev)
+        if qoq_candidates:
+            prev = min(
+                qoq_candidates,
+                key=lambda p: (abs((cur.period_end - p.period_end).days - 91), int(p.derived)),
+            )
+            qoq_key = (cur.period_start, cur.period_end, cur.basis)
+            if prev.value > 0 and qoq_key not in seen_qoq:
+                seen_qoq.add(qoq_key)
+                pct = _quantize(((cur.value / prev.value) - Decimal(1)) * Decimal(100), decimal_places)
+                out.append(StatementLine(
+                    entity_id=eid, statement=spec.statement, line=f"{line_name}_qoq_growth",
+                    reported_tag=cur.reported_tag, taxonomy=taxonomy,
+                    period_start=cur.period_start, period_end=cur.period_end, fiscal_label=cur.fiscal_label,
+                    value=pct, unit="percent", currency=None,
+                    form=cur.form, filed_at=cur.filed_at, accession=cur.accession, derived=True,
+                    derivation=f"QoQ growth vs {prev.period_end.isoformat()} ({prev.value})",
+                    basis=cur.basis, accounting_standard=cur.accounting_standard,
+                ))
+    return out
+
+
+def derive_period_metrics(lines: Iterable[StatementLine], *, decimal_places: int = 2) -> list[StatementLine]:
+    """Deterministically compute FCF, margins, TTM sums, and YoY/QoQ growth from standard StatementLines.
+
+    All outputs use ``Decimal`` arithmetic and carry ``derived=True`` with an explicit ``derivation`` string.
+    Does not mutate or cascade over already-derived metric lines.
+    """
+    if not 0 <= decimal_places <= 8:
+        raise ValueError("decimal_places must be between 0 and 8")
+    # Deduplicate base standard lines (keeping non-derived over derived for the exact same period & basis).
+    deduped: dict[tuple[str, str, str, date | None, date, str | None, str, str | None], StatementLine] = {}
+    for item in lines:
+        if item.line not in STANDARD_LINES or not item.value.is_finite():
+            continue
+        # Only feed reported base lines and derived single-quarter lines into period derivations;
+        # never cascade over outputs previously produced by derive_period_metrics().
+        if item.derived and item.basis != "single_quarter_derived" and not (item.derivation or "").startswith("FY minus"):
+            continue
+        key = (item.entity_id, item.taxonomy, item.line, item.period_start, item.period_end,
+               item.basis, item.unit, item.currency)
+        cur = deduped.get(key)
+        if cur is None or (cur.derived and not item.derived):
+            deduped[key] = item
+    if not deduped:
+        return []
+
+    by_period: dict[tuple[str, str, date | None, date, str | None, str, str | None], dict[str, StatementLine]] = {}
+    by_series: dict[tuple[str, str, str, str, str | None], list[StatementLine]] = {}
+    for item in deduped.values():
+        spec = STANDARD_LINES[item.line]
+        if spec.unit_kind == "money":
+            p_key = (item.entity_id, item.taxonomy, item.period_start, item.period_end,
+                     item.basis, item.unit, item.currency)
+            by_period.setdefault(p_key, {})[item.line] = item
+        s_key = (item.entity_id, item.taxonomy, item.line, item.unit, item.currency)
+        by_series.setdefault(s_key, []).append(item)
+
+    with localcontext() as ctx:
+        ctx.prec = 100
+        out: list[StatementLine] = []
+        out.extend(_derive_margins_and_fcf(by_period, decimal_places))
+        ordered_series = sorted(
+            by_series.items(),
+            key=lambda kv: (kv[0][0], kv[0][1], kv[0][2], kv[0][3], kv[0][4] or ""),
+        )
+        for (eid, taxonomy, line_name, unit, currency), series_items in ordered_series:
+            out.extend(_derive_ttm_rows(series_items, eid, taxonomy, line_name, unit, currency))
+            out.extend(_derive_growth_rows(series_items, eid, taxonomy, line_name, decimal_places))
+    out.sort(key=lambda s: (s.statement, s.line, s.period_end, s.period_start or date.min))
+    return out
 
 
 def select_line(facts: dict, spec: LineSpec, kind: str, n: int, *, derive_q4: bool, taxonomy: str) -> list[Period]:
@@ -251,6 +652,8 @@ def select_line(facts: dict, spec: LineSpec, kind: str, n: int, *, derive_q4: bo
 
 # --------------------------------------------------------------------- adapter
 class SecEdgarAdapter:
+    STANDARD_LINES = STANDARD_LINES
+
     def __init__(self, user_agent: str | None, *, transport: Transport | None = None, limiter=None,
                  policy: FinDataPolicy | None = None, now_fn: Callable[[], datetime] = utcnow,
                  timeout: float = 15.0, stream_transport: StreamTransport | None = None) -> None:

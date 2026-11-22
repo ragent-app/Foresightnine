@@ -111,3 +111,40 @@ def test_build_research_clock_defaults_to_all_exchanges():
     assert all(row['last_completed_session'] == '2026-11-20' or row['exchange'] in ('TSE', 'KRX', 'ASX', 'NSE', 'SSE', 'SZSE', 'HKEX', 'TWSE')
                for row in clock['exchanges'])
     assert {row['session_status'] for row in clock['exchanges']} <= {'non_trading_day', 'closed'}
+
+
+def test_exchange_holiday_calendars_2024_to_2027_and_session_helpers():
+    from app.research_clock import holidays_modelled, is_holiday, is_trading_day, trading_days_between
+
+    # All 9 target exchanges are modelled for 2024-2027; outside years or unmodelled exchanges return False cleanly.
+    for ex_code in ('NYSE', 'NASDAQ', 'SSE', 'SZSE', 'BJSE', 'HKEX', 'TSE', 'KRX', 'LSE'):
+        assert ex_code in EXCHANGES
+        assert holidays_modelled(ex_code, years=(2024, 2025, 2026, 2027)) is True
+        assert holidays_modelled(ex_code, years=(2028,)) is False
+        assert holidays_modelled(ex_code, years=(2023,)) is False
+    assert holidays_modelled('ASX', years=(2026,)) is False
+
+    # NYSE Thanksgiving 2026-11-26 (Thursday) during US regular trading hours -> non_trading_day, last session Wed 2026-11-25.
+    thanksgiving_utc = utc(2026, 11, 26, 16, 0)
+    assert is_holiday(date(2026, 11, 26), 'NYSE') is True
+    assert is_trading_day(date(2026, 11, 26), 'NYSE') is False
+    assert session_status(thanksgiving_utc, EXCHANGES['NYSE']) == 'non_trading_day'
+    assert last_completed_session(thanksgiving_utc, EXCHANGES['NYSE']) == date(2026, 11, 25)
+    # Jimmy Carter National Day of Mourning 2025-01-09.
+    assert is_holiday(date(2025, 1, 9), 'NYSE') is True
+    assert is_holiday(date(2025, 1, 9), 'NASDAQ') is True
+
+    # China (SSE/SZSE/BJSE) 2026 National Day holiday & 2027 Spring Festival; HKEX 2027 Good Friday; TSE Mountain Day; KRX Constitution Day; LSE Early May Bank Holiday.
+    assert is_holiday(date(2026, 10, 1), 'SSE') is True
+    assert is_holiday(date(2027, 2, 8), 'SZSE') is True
+    assert is_holiday(date(2027, 2, 9), 'BJSE') is True
+    assert is_holiday(date(2027, 3, 26), 'HKEX') is True
+    assert is_holiday(date(2026, 8, 11), 'TSE') is True
+    assert is_holiday(date(2026, 7, 17), 'KRX') is True
+    assert is_holiday(date(2026, 5, 4), 'LSE') is True
+
+    # Trading days between skips holidays when exchange + year are covered.
+    assert trading_days_between(date(2026, 11, 25), date(2026, 11, 27), exchange='NYSE') == 1
+    assert trading_days_between(date(2026, 11, 25), date(2026, 11, 27)) == 2
+    assert trading_days_between(date(2026, 12, 31), date(2027, 1, 4), exchange='NYSE') == 1  # skips 2027-01-01 + weekend
+

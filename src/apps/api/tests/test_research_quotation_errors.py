@@ -29,7 +29,8 @@ def run(model, sources):
 
 
 def last_tool(model, index):
-    return json.loads(model.inputs[index][-1]['content'])
+    tool_msgs = [m for m in model.inputs[index] if m.get('role') == 'tool']
+    return json.loads(tool_msgs[-1]['content'])
 
 
 def test_only_failing_claim_is_listed_with_hint_and_resubmission_succeeds():

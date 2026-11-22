@@ -141,3 +141,121 @@ def test_pdf_diagnostic_reports_mapping_and_unknown_without_claiming_completenes
     limited = PdfGeometry('test', 'pdf', 'text', geometry.lines * 1201, 0)
     assert pdf_structure_diagnostic('s', limited, [])['geometry_status'] == 'limit_reached'
     assert pdf_structure_diagnostic('s', limited, [])['group_count'] is None
+
+
+def test_extract_geometry_supports_web_pdf_blob_store_and_page_bounds(tmp_path, monkeypatch):
+    import shutil
+    from datetime import datetime, timezone
+    from time import monotonic
+    from app.research_blob_store import DocumentBlobStore
+    from app.research_documents import extract_pdf_pages
+    from app.research_pdf_geometry import extract_geometry
+    from app.research_sources import ResearchSource, SourcePermissions
+    from tests.test_research_large_documents import build_pdf
+
+    if not (shutil.which('pdftotext') and shutil.which('prlimit') and shutil.which('pdfinfo')):
+        pytest.skip('poppler-utils and prlimit are required')
+
+    raw = build_pdf([
+        'Page one revenue rose steadily.',
+        'Page two gross margin reached 64 percent.',
+        'Page three operating cash flow grew.',
+    ])
+    store = DocumentBlobStore(tmp_path / 'blobs')
+    digest = store.put_bytes(raw)
+    pdf_path = tmp_path / 'source.pdf'
+    pdf_path.write_bytes(raw)
+    extracted = extract_pdf_pages(pdf_path, deadline=monotonic() + 30)
+    doc_pages = {**extracted.document_pages, 'original_retained': True, 'original_blob_sha256': digest}
+    source = ResearchSource(
+        source_id='src-web-pdf',
+        owner_id='owner',
+        title='Annual Report',
+        text=extracted.text,
+        kind='user_supplied',
+        obtained_at=datetime.now(timezone.utc),
+        content_sha256=sha256(extracted.text.encode('utf-8')).hexdigest(),
+        retrieval_method='web_pdf',
+        response_sha256=digest,
+        original_pdf_base64=None,
+        permissions=SourcePermissions(store=True, model_input=True, display=True),
+        provenance={'document_pages': doc_pages},
+    )
+
+    bounded = extract_geometry(source, first_page=2, last_page=3, blob_store=store)
+    assert bounded is not None
+    assert bounded.pdf_sha256 == digest
+    assert {line.page for line in bounded.lines} == {2, 3}
+    mapped_texts = [source.text[line.start:line.end] for line in bounded.lines]
+    assert any('gross margin reached 64 percent' in item for item in mapped_texts)
+    assert any('operating cash flow grew' in item for item in mapped_texts)
+    assert not any('Page one' in item for item in mapped_texts)
+
+    # Configured env blob store fallback also works when blob_store argument is omitted.
+    monkeypatch.setenv('FORESIGHTNINE_DOCUMENT_STORE_DIR', str(tmp_path / 'blobs'))
+    via_env = extract_geometry(source, first_page=2, last_page=2)
+    assert via_env is not None and [line.page for line in via_env.lines] == [2]
+
+    # Guardrails and fail-closed checks.
+    assert extract_geometry(source, first_page=3, last_page=2, blob_store=store) is None
+    assert extract_geometry(source.model_copy(update={'response_sha256': '0' * 64}), blob_store=store) is None
+    assert extract_geometry(source.model_copy(update={'content_sha256': '0' * 64}), blob_store=store) is None
+    assert extract_geometry(source.model_copy(update={'permissions': SourcePermissions(store=True, model_input=False)}), blob_store=store) is None
+    assert extract_geometry(source.model_copy(update={'retrieval_method': 'web_html'}), blob_store=store) is None
+
+
+def test_extract_geometry_invokes_prlimit_and_page_flags(tmp_path, monkeypatch):
+    import base64
+    from datetime import datetime, timezone
+    import app.research_pdf_geometry as geometry_module
+    from app.research_sources import ResearchSource, SourcePermissions
+    from tests.test_research_large_documents import build_pdf
+
+    raw = build_pdf(['Alpha line.', 'Beta line.'])
+    digest = sha256(raw).hexdigest()
+    text = 'Alpha line.\fBeta line.\f'
+    source = ResearchSource(
+        source_id='src-inline-web-pdf',
+        owner_id='owner',
+        title='Brief',
+        text=text,
+        kind='user_supplied',
+        obtained_at=datetime.now(timezone.utc),
+        content_sha256=sha256(text.encode('utf-8')).hexdigest(),
+        retrieval_method='web_pdf',
+        response_sha256=digest,
+        original_pdf_base64=base64.b64encode(raw).decode('ascii'),
+        permissions=SourcePermissions(store=True, model_input=True, display=True),
+    )
+
+    seen_cmd = []
+
+    class FakePopen:
+        returncode = 0
+
+        def __init__(self, cmd, **kwargs):
+            seen_cmd.extend(cmd)
+            out_path = cmd[-1]
+            with open(out_path, 'wb') as fh:
+                fh.write(b'<doc><page><line xMin="0" yMin="1" xMax="100" yMax="9"><word xMin="0" yMin="1" xMax="30" yMax="9">Beta</word><word xMin="35" yMin="1" xMax="60" yMax="9">line.</word></line></page></doc>')
+
+        def poll(self):
+            return 0
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            pass
+
+    monkeypatch.setattr(geometry_module.shutil, 'which', lambda name: f'/usr/bin/{name}')
+    monkeypatch.setattr(geometry_module.subprocess, 'Popen', FakePopen)
+
+    result = geometry_module.extract_geometry(source, first_page=2, last_page=2)
+    assert result is not None
+    assert '--as=536870912' in seen_cmd and '--cpu=3' in seen_cmd
+    assert '-f' in seen_cmd and seen_cmd[seen_cmd.index('-f') + 1] == '2'
+    assert '-l' in seen_cmd and seen_cmd[seen_cmd.index('-l') + 1] == '2'
+    assert len(result.lines) == 1
+    assert result.lines[0].page == 2
+    assert text[result.lines[0].start:result.lines[0].end] == 'Beta line.'

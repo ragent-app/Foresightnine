@@ -1581,17 +1581,32 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                 wire['configured_parameters'] = json.loads(raw)
             except (ValueError, TypeError):
                 raise ProviderFailure('provider_configuration_invalid', 'Model generation parameters are invalid.', retryable=False) from None
-        return len(json.dumps(wire, ensure_ascii=False, separators=(',', ':')).encode('utf-8')) + 64
+        return len(json.dumps(wire, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')) + 64
 
     @staticmethod
     def _usage_from_dict(u: object) -> Any:
         from .model_protocol import ModelUsage
         if not isinstance(u, dict):
             return None
-        def count(key: str) -> int | None:
-            value = u.get(key)
+        def count(mapping: Mapping[str, Any], key: str) -> int | None:
+            value = mapping.get(key)
             return value if type(value) is int and value >= 0 else None
-        return ModelUsage(count('prompt_tokens'), count('completion_tokens'), count('total_tokens'))
+        details = u.get('prompt_tokens_details')
+        details_map = details if isinstance(details, dict) else {}
+        inp = count(u, 'prompt_tokens')
+        if inp is None:
+            inp = count(u, 'input_tokens')
+        out = count(u, 'completion_tokens')
+        if out is None:
+            out = count(u, 'output_tokens')
+        total = count(u, 'total_tokens')
+        creation = count(u, 'cache_creation_input_tokens')
+        if creation is None:
+            creation = count(details_map, 'cache_creation_input_tokens')
+        read = count(u, 'cache_read_input_tokens')
+        if read is None:
+            read = count(details_map, 'cached_tokens')
+        return ModelUsage(inp, out, total, creation, read)
 
     def complete(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, cancel_event=None, timeout_seconds: float | None = None,
                  diagnostic_callback=None, max_output_tokens: int | None = None, on_submission=None,
@@ -1666,7 +1681,7 @@ class OpenAICompatibleLlmProvider(LlmProvider):
             wire["stream"] = True
             if profile.usage is True:
                 wire["stream_options"] = {"include_usage": True}
-        body = json.dumps(wire, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+        body = json.dumps(wire, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
         if self.policy.max_input_tokens is not None and len(body) > self.policy.max_input_tokens:
             raise ProviderFailure("provider_budget_exhausted", "Model input budget exceeded.", retryable=False)
 
@@ -1722,7 +1737,7 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                 raise ValueError()
             if isinstance(chunk.get("error"), dict):
                 raise ProviderFailure("provider_unavailable", "Provider stream returned an error.", retryable=False)
-            if isinstance(chunk.get("usage"), dict):
+            if isinstance(chunk.get("usage"), dict) and chunk["usage"]:
                 last_usage_dict = chunk["usage"]
             choices = chunk.get("choices")
             if choices is None:
@@ -2106,7 +2121,7 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                     raise ProviderFailure("provider_budget_exhausted", "Research output budget is exhausted.", retryable=False)
                 wire = json.loads(body)
                 wire['max_tokens'] = min(max_output_tokens, self.policy.max_output_tokens) if self.policy.max_output_tokens is not None else max_output_tokens
-                body = json.dumps(wire, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+                body = json.dumps(wire, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
         except BaseException:
             if diagnostic_callback is not None:
                 try:
@@ -2249,7 +2264,7 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                 raise ProviderFailure("provider_budget_exhausted", "Challenge output budget is exhausted.", retryable=False)
             wire = json.loads(body)
             wire['max_tokens'] = min(output_cap, self.policy.max_output_tokens) if self.policy.max_output_tokens is not None else output_cap
-            body = json.dumps(wire, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+            body = json.dumps(wire, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",

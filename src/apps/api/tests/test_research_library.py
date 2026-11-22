@@ -9,7 +9,7 @@ import time
 import pytest
 
 from app.research_library import (
-    MAX_PASSAGE_CHARS, MIN_PASSAGE_CHARS, ResearchLibrary, VectorCandidate,
+    MAX_PASSAGE_CHARS, MIN_PASSAGE_CHARS, RRF_K, ResearchLibrary, VectorCandidate,
 )
 from app.research_sources import ResearchSource, SourcePermissions
 
@@ -229,9 +229,69 @@ def test_vector_scorer_extension_point_is_fused():
     lib = ResearchLibrary([make_source("a", "gamma delta lexical match here\n"), make_source("b", "semantic neighbour text only\n")],
                           vector_scorer=fake)
     assert fake.indexed == {"a": 1, "b": 1}
-    assert {h.source_id for h in lib.search("gamma delta")} == {"a", "b"}
+    hits = lib.search("gamma delta")
+    assert {h.source_id for h in hits} == {"a", "b"}
+    assert hits.coverage["retrieval_mode"] == "hybrid_rrf"
+    assert "embedding_cache_hits" not in hits.coverage
+    by_id = {h.source_id: h for h in hits}
+    assert by_id["a"].reasons == ("lexical_bm25", "phrase")
+    assert by_id["b"].reasons == ("semantic_vector",)
+    assert ResearchLibrary([make_source("a", "gamma")]).search("gamma").coverage["retrieval_mode"] == "bm25_only"
     lib.remove_source("a")
     assert fake.removed == ["a"]
+
+
+def test_rrf_fusion_ranking_dedup_validation_and_fallback():
+    class RichFake:
+        def index_source(self, source, passages):
+            return None
+
+        def remove_source(self, source_id):
+            return None
+
+        def query(self, text, *, source_ids, limit):
+            # Include out-of-scope source, negative index, NaN, and duplicate candidates.
+            return [
+                VectorCandidate("outside", 0, 0.99),
+                VectorCandidate("s_lex", -1, 0.99),
+                VectorCandidate("s_both", 0, float("nan")),
+                VectorCandidate("s_vec", 0, 0.92),
+                VectorCandidate("s_both", 0, 0.85),
+                VectorCandidate("s_both", 0, 0.40),  # duplicate lower score should be ignored
+            ]
+
+    sources = [
+        make_source("s_lex", "quarterly revenue growth revenue growth\n"),
+        make_source("s_both", "quarterly revenue growth commentary\n"),
+        make_source("s_vec", "top-line expansion without exact words\n"),
+        make_source("outside", "excluded from source_ids filter\n"),
+    ]
+    lib = ResearchLibrary(sources, vector_scorer=RichFake())
+    hits = lib.search("quarterly revenue growth", source_ids=["s_lex", "s_both", "s_vec"], top_k=3)
+    assert [h.source_id for h in hits] == ["s_both", "s_vec", "s_lex"] or hits[0].source_id == "s_both"
+    # s_both gets lexical rank 2 + vector rank 2 -> 2 / (RRF_K + 2), beating single-signal rank 1 (1 / (RRF_K + 1)).
+    expected_both = 1.0 / (RRF_K + 2) + 1.0 / (RRF_K + 2)
+    assert hits[0].source_id == "s_both"
+    assert hits[0].score == pytest.approx(expected_both)
+    assert hits[0].reasons == ("lexical_bm25", "semantic_vector", "phrase")
+
+    # Faulty external vector scorer raises in query/index/remove -> fails open cleanly to BM25.
+    class BrokenScorer:
+        def index_source(self, source, passages):
+            raise RuntimeError("index boom")
+
+        def remove_source(self, source_id):
+            raise RuntimeError("remove boom")
+
+        def query(self, text, *, source_ids, limit):
+            raise TimeoutError("query boom")
+
+    broken_lib = ResearchLibrary([make_source("a", "quarterly revenue growth\n")], vector_scorer=BrokenScorer())
+    fallback_hits = broken_lib.search("quarterly revenue growth")
+    assert [h.source_id for h in fallback_hits] == ["a"]
+    assert fallback_hits.coverage["retrieval_mode"] == "bm25_only"
+    assert fallback_hits.coverage["vector_fallback_reason"] == "vector_scorer_error"
+    assert broken_lib.remove_source("a") is True
 
 
 def _synthetic(seed: int, chars: int) -> str:

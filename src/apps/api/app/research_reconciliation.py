@@ -79,19 +79,82 @@ METRIC_RULES: tuple[MetricRule, ...] = (
     MetricRule("volume", r"成交量|交易量|成交股数|trading volume|shares traded|traded shares|\bvolume\b", "count", _MKT, "成交量", "Volume"),
     MetricRule("shares_offered", r"发行股数|发行股份|发售股数|shares offered|shares sold|shares in (?:the )?offering|offering size", "count", _FIL, "发行股数", "Shares offered", True),
     MetricRule("proceeds", r"募资|募集|筹资|proceeds|raised|gross proceeds", "money", _FIL, "募资额", "Proceeds", True),
+    # Valuation multiples & return ratios (matched before underlying components)
+    MetricRule("ev_ebitda", r"\bev\s*/\s*ebitda\b|\bev_ebitda\b|\bev\s+ebitda\b|enterprise\s+value\s*(?:/|to)\s*ebitda|企业价值倍数", "ratio", _FIL, "EV/EBITDA", "EV/EBITDA"),
+    MetricRule("ev_sales", r"\bev\s*/\s*(?:sales|revenue)\b|\bev_sales\b|\bev\s+sales\b|enterprise\s+value\s*(?:/|to)\s*(?:sales|revenue)", "ratio", _FIL, "EV/Sales", "EV/Sales"),
+    MetricRule("pe_ratio", r"\bp\s*/\s*e(?:\s+ratio)?\b|\bpe[- _]ratio\b|price[- ]to[- ]earnings(?:\s+ratio)?|市盈率", "ratio", _FIL, "市盈率", "P/E ratio"),
+    MetricRule("pb_ratio", r"\bp\s*/\s*b(?:\s+ratio)?\b|\bpb[- _]ratio\b|price[- ]to[- ]book(?:\s+ratio)?|市净率", "ratio", _FIL, "市净率", "P/B ratio"),
+    MetricRule("ps_ratio", r"\bp\s*/\s*s(?:\s+ratio)?\b|\bps[- _]ratio\b|price[- ]to[- ]sales(?:\s+ratio)?|市销率", "ratio", _FIL, "市销率", "P/S ratio"),
+    MetricRule("debt_to_equity", r"debt[- ]to[- ]equity|\bdebt_to_equity\b|产权比率|债务股本比", "ratio", _FIL, "产权比率", "Debt to equity"),
+    MetricRule("current_ratio", r"current\s+ratio|\bcurrent_ratio\b|流动比率", "ratio", _FIL, "流动比率", "Current ratio"),
+    MetricRule("enterprise_value", r"enterprise\s+value|\benterprise_value\b|企业价值", "money", _FIL, "企业价值", "Enterprise value"),
     MetricRule("market_cap", r"市值|market cap(?:italization)?|market value|valuation|估值", "money", _FIL, "市值", "Market cap"),
+    # Margins & percentage return/yield metrics
     MetricRule("gross_margin", r"毛利率|gross margin", "money", _FIL, "毛利率", "Gross margin"),
     MetricRule("net_margin", r"净利率|net margin", "money", _FIL, "净利率", "Net margin"),
     MetricRule("operating_margin", r"营业利润率|经营利润率|operating margin", "money", _FIL, "营业利润率", "Operating margin"),
-    MetricRule("net_income", r"净利润|净亏损|归母净利润|归属于母公司|net income|net profit|net loss|net earnings", "money", _FIL, "净利润", "Net income"),
-    MetricRule("operating_income", r"营业利润|经营利润|营业收益|operating income|operating profit|operating loss", "money", _FIL, "营业利润", "Operating income"),
-    MetricRule("gross_profit", r"毛利润|毛利(?!率)|gross profit", "money", _FIL, "毛利", "Gross profit"),
+    MetricRule("ebitda_margin", r"ebitda\s*margin|ebitda率|息税折旧摊销前利润率", "money", _FIL, "EBITDA利润率", "EBITDA margin"),
+    MetricRule("fcf_margin", r"(?:free\s+cash\s+flow|fcf)\s+margin|自由现金流利润率", "money", _FIL, "自由现金流利润率", "FCF margin"),
+    MetricRule("roe", r"\broe\b|return\s+on\s+equity|净资产收益率", "money", _FIL, "净资产收益率", "ROE"),
+    MetricRule("roic", r"\broic\b|return\s+on\s+invested\s+capital|投入资本回报率", "money", _FIL, "投入资本回报率", "ROIC"),
+    MetricRule("roa", r"\broa\b|return\s+on\s+assets|总资产收益率", "money", _FIL, "总资产收益率", "ROA"),
+    MetricRule("dividend_yield", r"dividend\s+yield|\bdividend_yield\b|股息率", "money", _FIL, "股息率", "Dividend yield"),
+    # Income statement lines (ordered so composite phrases blank before base words)
+    MetricRule("cost_of_revenue", r"cost\s+of\s+(?:revenue|sales|goods\s+sold|services|goods\s+and\s+services)|\bcost_of_revenue\b|营业成本|主营业务成本|销售成本", "money", _FIL, "营业成本", "Cost of revenue"),
+    MetricRule("rd_expense", r"research\s+and\s+development(?:\s+(?:expenses?|costs?|expenditures?))?|r\s*&\s*d\s+(?:expenses?|costs?)|\brd\s+expense\b|\brd_expense\b|研发费用|研发支出|研发开支", "money", _FIL, "研发费用", "R&D expense"),
+    MetricRule("sga_expense", r"selling,?\s*general\s+and\s+administrative(?:\s+(?:expenses?|costs?))?|sg\s*&\s*a(?:\s+(?:expenses?|costs?))?|\bsga\s+expense\b|\bsga_expense\b|销售及管理费用", "money", _FIL, "销售及管理费用", "SG&A expense"),
+    MetricRule("selling_expense", r"selling(?:\s+and\s+(?:marketing|distribution))?\s+(?:expenses?|costs?)|\bselling_expense\b|销售费用", "money", _FIL, "销售费用", "Selling expense"),
+    MetricRule("admin_expense", r"(?:general\s+and\s+)?administrative\s+(?:expenses?|costs?)|\badmin\s+expense\b|\badmin_expense\b|管理费用", "money", _FIL, "管理费用", "Admin expense"),
+    MetricRule("total_operating_costs", r"(?:total\s+)?operating\s+(?:costs|expenses)|\btotal_operating_costs\b|营业总成本|营业费用", "money", _FIL, "营业总成本", "Total operating costs"),
+    MetricRule("ebitda", r"\bebitda\b|earnings\s+before\s+interest,?\s*taxes,?\s*depreciation\s+and\s+amortization|息税折旧摊销前利润", "money", _FIL, "EBITDA", "EBITDA"),
+    MetricRule("interest_expense", r"interest\s+(?:expenses?|costs?)|\binterest_expense\b|利息费用|利息支出", "money", _FIL, "利息费用", "Interest expense"),
+    MetricRule("finance_expense", r"finance\s+(?:expenses?|costs?)|\bfinance_expense\b|财务费用", "money", _FIL, "财务费用", "Finance expense"),
+    MetricRule("depreciation_amortization", r"depreciation\s+(?:and|&)\s+amortization|depreciation\s+amortization|\bdepreciation_amortization\b|折旧(?:与|及)摊销|固定资产折旧", "money", _FIL, "折旧与摊销", "Depreciation & amortization"),
+    MetricRule("profit_before_tax", r"(?:profit|income|earnings)\s+before\s+(?:income\s+)?tax(?:es|ation)?|\bprofit_before_tax\b|pre[- ]?tax\s+(?:income|profit)|利润总额|税前利润", "money", _FIL, "利润总额", "Profit before tax"),
+    MetricRule("income_tax", r"income\s+tax(?:\s+(?:expenses?|benefit|provision))?|\bincome_tax\b|所得税费用|所得税", "money", _FIL, "所得税费用", "Income tax"),
+    MetricRule("net_income", r"净利润|净亏损|归母净利润|归属于母公司(?:所有者的)?净利润|net income|net profit|net loss|net earnings|\bnet_income\b", "money", _FIL, "净利润", "Net income"),
+    MetricRule("operating_income", r"营业利润|经营利润|营业收益|operating income|operating profit|operating loss|\boperating_income\b", "money", _FIL, "营业利润", "Operating income"),
+    MetricRule("gross_profit", r"毛利润|毛利(?!率)|gross profit|\bgross_profit\b", "money", _FIL, "毛利", "Gross profit"),
+    MetricRule("eps_basic", r"basic\s+(?:eps|earnings\s+per\s+share|loss\s+per\s+share)|\beps\s+basic\b|\beps_basic\b|基本每股收益", "per_share", _FIL, "基本每股收益", "Basic EPS"),
+    MetricRule("eps_diluted", r"diluted\s+(?:eps|earnings\s+per\s+share|loss\s+per\s+share)|\beps\s+diluted\b|\beps_diluted\b|稀释每股收益", "per_share", _FIL, "稀释每股收益", "Diluted EPS"),
     MetricRule("eps", r"每股收益|每股盈利|\beps\b|earnings per share", "per_share", _FIL, "每股收益", "EPS"),
+    MetricRule("shares_basic", r"(?:weighted\s+average\s+)?basic\s+shares(?:\s+outstanding)?|\bshares\s+basic\b|\bshares_basic\b|基本股数|加权平均基本股数", "count", _FIL, "基本股数", "Basic shares"),
+    MetricRule("shares_diluted", r"(?:weighted\s+average\s+)?diluted\s+shares(?:\s+outstanding)?|\bshares\s+diluted\b|\bshares_diluted\b|稀释股数|稀释后股数|摊薄股数", "count", _FIL, "稀释股数", "Diluted shares"),
+    # Cash-flow statement lines (ordered before `cash`)
+    MetricRule("free_cash_flow", r"free\s+cash\s+flow|\bfree_cash_flow\b|\bfcf\b|自由现金流", "money", _FIL, "自由现金流", "Free cash flow"),
+    MetricRule("operating_cash_flow", r"(?:net\s+)?(?:cash\s+(?:provided\s+by|from)\s+operating\s+activities|operating\s+cash\s+flow|\bcfo\b)|\boperating_cash_flow\b|经营活动(?:产生的)?现金流量净额|经营现金流", "money", _FIL, "经营现金流", "Operating cash flow"),
+    MetricRule("investing_cash_flow", r"(?:net\s+)?(?:cash\s+(?:used\s+in|from)\s+investing\s+activities|investing\s+cash\s+flow)|\binvesting_cash_flow\b|投资活动(?:产生的)?现金流量净额|投资现金流", "money", _FIL, "投资现金流", "Investing cash flow"),
+    MetricRule("financing_cash_flow", r"(?:net\s+)?(?:cash\s+(?:used\s+in|from)\s+financing\s+activities|financing\s+cash\s+flow)|\bfinancing_cash_flow\b|筹资活动(?:产生的)?现金流量净额|筹资现金流", "money", _FIL, "筹资现金流", "Financing cash flow"),
+    MetricRule("net_increase_in_cash", r"net\s+(?:increase|decrease|change)\s+in\s+cash(?:\s+and\s+cash\s+equivalents)?|\bnet_increase_in_cash\b|现金及现金等价物净增加额", "money", _FIL, "现金净增加额", "Net increase in cash"),
+    MetricRule("capex", r"capital\s+expenditures?|\bcapex\b|资本支出|资本开支|购建固定资产(?:、无形资产和其他长期资产)?支付的现金", "money", _FIL, "资本开支", "Capex"),
+    MetricRule("dividends_paid", r"dividends?\s+paid|cash\s+dividends|\bdividends_paid\b|支付股利|现金分红|分红派息", "money", _FIL, "支付股利", "Dividends paid"),
+    MetricRule("share_repurchases", r"share\s+repurchases?|stock\s+repurchases?|\bbuybacks?\b|\bshare_repurchases\b|股份回购|股票回购", "money", _FIL, "股份回购", "Share repurchases"),
+    # Balance sheet lines
+    MetricRule("short_term_investments", r"short[- ]?term\s+investments?|marketable\s+securities|\bshort_term_investments\b|短期投资|交易性金融资产", "money", _FIL, "短期投资", "Short-term investments"),
+    MetricRule("cash", r"cash\s+and\s+(?:cash\s+)?equivalents|\bcash\b|货币资金|现金及现金等价物|现金余额", "money", _FIL, "货币资金", "Cash"),
+    MetricRule("accounts_receivable", r"accounts?\s+receivable|trade\s+receivables?|\baccounts_receivable\b|应收账款|应收票据及应收账款", "money", _FIL, "应收账款", "Accounts receivable"),
+    MetricRule("inventory", r"\binventor(?:y|ies)\b|存货", "money", _FIL, "存货", "Inventory"),
+    MetricRule("current_assets", r"(?:total\s+)?current\s+assets|\bcurrent_assets\b|流动资产(?:合计|总计)?", "money", _FIL, "流动资产", "Current assets"),
+    MetricRule("ppe_net", r"(?:net\s+)?property,?\s*plant,?\s*(?:and|&)\s*equipment|\bppe\s+net\b|\bppe_net\b|固定资产", "money", _FIL, "固定资产", "PP&E net"),
+    MetricRule("goodwill", r"\bgoodwill\b|商誉", "money", _FIL, "商誉", "Goodwill"),
+    MetricRule("intangible_assets", r"intangible\s+assets?|\bintangible_assets\b|无形资产", "money", _FIL, "无形资产", "Intangible assets"),
+    MetricRule("total_assets", r"total\s+assets|\btotal_assets\b|资产总计|资产合计|总资产", "money", _FIL, "总资产", "Total assets"),
+    MetricRule("accounts_payable", r"accounts?\s+payable|trade\s+payables?|\baccounts_payable\b|应付账款", "money", _FIL, "应付账款", "Accounts payable"),
+    MetricRule("short_term_debt", r"short[- ]?term\s+(?:debt|borrowings?)|\bshort_term_debt\b|短期借款|短期债务", "money", _FIL, "短期债务", "Short-term debt"),
+    MetricRule("long_term_debt", r"long[- ]?term\s+(?:debt|borrowings?)|\blong_term_debt\b|长期借款|长期债务|应付债券", "money", _FIL, "长期债务", "Long-term debt"),
+    MetricRule("net_debt", r"net\s+debt|\bnet_debt\b|净债务|净负债", "money", _FIL, "净债务", "Net debt"),
+    MetricRule("total_debt", r"total\s+debt|\btotal_debt\b|总债务|有息负债", "money", _FIL, "总债务", "Total debt"),
+    MetricRule("current_liabilities", r"(?:total\s+)?current\s+liabilities|\bcurrent_liabilities\b|流动负债(?:合计|总计)?", "money", _FIL, "流动负债", "Current liabilities"),
+    MetricRule("total_liabilities", r"total\s+liabilities|\btotal_liabilities\b|负债合计|负债总计|总负债", "money", _FIL, "总负债", "Total liabilities"),
+    MetricRule("retained_earnings", r"retained\s+earnings|\bretained_earnings\b|未分配利润|留存收益", "money", _FIL, "未分配利润", "Retained earnings"),
+    MetricRule("non_controlling_interests", r"non[- ]?controlling\s+interests?|minority\s+interests?|\bnon_controlling_interests\b|少数股东权益", "money", _FIL, "少数股东权益", "Non-controlling interests"),
+    MetricRule("equity", r"(?:stockholders'?|shareholders'?|owners'?)\s+equity|total\s+equity|\bequity\b|所有者权益(?:合计|总计)?|股东权益(?:合计|总计)?", "money", _FIL, "股东权益", "Equity"),
     MetricRule("revenue", r"营业收入|营收|总收入|销售收入|收入|revenues?|net sales|\bsales\b", "money", _FIL, "营收", "Revenue"),
 )
 _RULE_BY_KEY = {rule.key: rule for rule in METRIC_RULES}
 _COMPILED_RULES = tuple((rule, re.compile(rule.pattern, re.I)) for rule in METRIC_RULES)
-_MARGIN_KEYS = frozenset({"gross_margin", "net_margin", "operating_margin"})
+_MARGIN_KEYS = frozenset({"gross_margin", "net_margin", "operating_margin", "ebitda_margin", "fcf_margin"})
+_PERCENT_METRIC_KEYS = _MARGIN_KEYS | frozenset({"roe", "roic", "roa", "dividend_yield"})
 
 # Labels that turn a "high"/"low"/"open"-style label into a *range* statement, which is not a daily value.
 _RANGE_SCOPE = re.compile(
@@ -117,6 +180,7 @@ TOLERANCES: dict[str, dict[str, Decimal]] = {
     "per_share": {"rel": Decimal("0.01")},
     "count": {"rel": Decimal("0.01")},         # 1% (consolidated vs primary-venue volume differ legitimately)
     "money": {"rel": Decimal("0.01")},
+    "ratio": {"rel": Decimal("0.01")},
     "percent": {"abs": Decimal("0.1")},        # 0.1 percentage point
 }
 
@@ -126,13 +190,19 @@ PRIMARY_HOSTS = ("sec.gov", "hkexnews.hk", "cninfo.com.cn", "sse.com.cn", "szse.
 _STOP_TICKERS = frozenset({
     "IPO", "USD", "EUR", "GBP", "JPY", "CNY", "RMB", "HKD", "KRW", "CAD", "ET", "EST", "EDT", "UTC", "EPS", "GAAP", "YOY",
     "QOQ", "FY", "TTM", "YTD", "AI", "US", "USA", "ETF", "NYSE", "NASDAQ", "SEC", "CEO", "CFO", "EBIT", "EBITDA", "PE",
-    "ROE", "ROA", "GDP", "CPI", "PPI", "PMI", "FOMC", "FED", "VWAP", "OHLC", "HK", "CN", "AM", "PM", "NA", "NM", "OK",
+    "PB", "PS", "EV", "ROE", "ROA", "ROIC", "FCF", "SGA", "RD", "PPE", "CAGR", "SMA", "RSI", "GDP", "CPI", "PPI", "PMI",
+    "FOMC", "FED", "VWAP", "OHLC", "HK", "CN", "AM", "PM", "NA", "NM", "OK",
     "IPOS", "S1", "ADR", "NAV", "BPS", "PP", "ANN", "TBD", "IV",
 })
 _GENERIC_NAME_WORDS = frozenset({
     "The", "Total", "Net", "First", "Day", "Opening", "Closing", "Intraday", "Daily", "Trading", "Gross", "Full", "Last",
     "Latest", "Stock", "Share", "Shares", "Price", "Company", "Revenue", "Sales", "Market", "Initial", "Public", "Offering",
     "Quarter", "Annual", "Year", "Fiscal", "Reported", "Estimated", "Peak", "Final", "Low", "High", "Open", "Close", "Volume",
+    "Free", "Operating", "Investing", "Financing", "Current", "Short", "Long", "Term", "Diluted", "Basic", "Capital",
+    "Interest", "Income", "Cost", "Expenses", "Expense", "Cash", "Equity", "Assets", "Liabilities", "Debt", "Dividend",
+    "Yield", "Ratio", "Enterprise", "Value", "Retained", "Earnings", "Goodwill", "Inventory", "Accounts", "Receivable",
+    "Payable", "Intangible", "Research", "Selling", "General", "Administrative", "Finance", "Depreciation", "Amortization",
+    "Minority", "Non",
 })
 _GENERIC_PREFIX = re.compile(r"常规|时段|交易|口径|累计|累积|期间|首日|当日|全年|最新|前\d+个月|本季|上季|去年|今年|合计|总计|当周|全稀释|盘中|盘后|该公司|公司|同期")
 
@@ -334,6 +404,8 @@ def _unit_scale(unit: str) -> Decimal | None:
 def normalize_value(value: Any, unit: str | None, metric_kind: str, currency: str | None = None) -> NormValue | None:
     """Parse ``value`` + ``unit`` into base units. None when unparseable or scale conflicts."""
     raw = value if isinstance(value, str) else (str(value) if isinstance(value, (int, float, Decimal)) else "")
+    if metric_kind == "ratio":
+        raw = re.sub(r"\s*(?:x|倍|times)\s*$", "", raw, flags=re.I)
     match = _NUMBER.match(raw)
     if not match:
         return None
@@ -358,7 +430,7 @@ def normalize_value(value: Any, unit: str | None, metric_kind: str, currency: st
         return NormValue(number, "percent", None, decimals, Decimal(1).scaleb(-decimals), Decimal(1))
     if _BPS_UNIT.search(unit_text):
         return NormValue(number / 100, "percent", None, decimals + 2, Decimal(1).scaleb(-decimals) / 100, Decimal(1))
-    if _RATIO_UNIT.search(unit_text):
+    if _RATIO_UNIT.search(unit_text) and metric_kind != "ratio":
         # a ratio is only comparable with percentages: express it as percentage points
         return NormValue(number * 100, "percent", None, max(decimals - 2, 0), Decimal(1).scaleb(-decimals) * 100, Decimal(1))
     base = number * scale
@@ -425,8 +497,16 @@ def derive_metric(label: str, unit: str | None, *, norm_kind_hint: str | None = 
         return None, "range_scope"
     unit_text = unit or ""
     pct = bool(_PERCENT_UNIT.search(unit_text) or _BPS_UNIT.search(unit_text) or _RATIO_UNIT.search(unit_text))
-    if key in _MARGIN_KEYS:
+    if key in _PERCENT_METRIC_KEYS:
         return (key, None) if pct else (None, "margin_without_percent_unit")
+    if rule.kind == "ratio":
+        if bool(_PERCENT_UNIT.search(unit_text) or _BPS_UNIT.search(unit_text)):
+            if _CHANGE_WORDS.search(label):
+                return f"{key}_pct", None
+            return None, "percent_semantics_unknown"
+        if parse_currency(unit_text):
+            return None, "ratio_with_currency_unit"
+        return key, None
     if pct:
         if _CHANGE_WORDS.search(label):
             return f"{key}_pct", None
@@ -675,6 +755,57 @@ def _independent_key(item: _Item) -> str:
     return f"url:{url}" if url else f"source:{item.source_id}"
 
 
+_FY_PERIOD_RE = re.compile(r"^FY(20\d{2})$")
+_DATE_PERIOD_RE = re.compile(r"^(20\d{2})-(\d{2})-(\d{2})$")
+
+
+def _build_fiscal_alignment_hints(items: Sequence[_Item]) -> list[dict[str, Any]]:
+    """Surface potential ``FY20XX`` vs ``20XX-MM-DD`` matches without merging them."""
+    buckets: dict[tuple[Any, ...], list[_Item]] = {}
+    for item in items:
+        if item.period is None:
+            continue
+        currency = item.norm.currency if item.kind in ("price", "money", "per_share") else None
+        buckets.setdefault((item.metric, item.entity, item.qualifiers, item.kind, currency), []).append(item)
+
+    hints: list[dict[str, Any]] = []
+    for (metric, entity, qualifiers, _kind, currency), bucket in buckets.items():
+        fy_by_year: dict[str, list[_Item]] = {}
+        date_by_year: dict[str, dict[str, list[_Item]]] = {}
+        for item in bucket:
+            period = item.period or ""
+            fy_match = _FY_PERIOD_RE.fullmatch(period)
+            if fy_match:
+                fy_by_year.setdefault(fy_match.group(1), []).append(item)
+                continue
+            date_match = _DATE_PERIOD_RE.fullmatch(period)
+            if date_match:
+                date_by_year.setdefault(date_match.group(1), {}).setdefault(period, []).append(item)
+        for year in sorted(set(fy_by_year) & set(date_by_year)):
+            fy_items = fy_by_year[year]
+            fiscal_period = f"FY{year}"
+            for date_period in sorted(date_by_year[year]):
+                date_items = date_by_year[year][date_period]
+                hints.append({
+                    "entity": entity,
+                    "metric": metric,
+                    "currency": currency,
+                    "qualifiers": list(qualifiers),
+                    "fiscal_period": fiscal_period,
+                    "date_period": date_period,
+                    "fiscal_fact_ids": [it.fact_id for it in fy_items],
+                    "date_fact_ids": [it.fact_id for it in date_items],
+                    "merged": False,
+                    "message": (
+                        f"{entity} {metric} has separate {fiscal_period} and {date_period} facts"
+                        + (f" ({currency})" if currency else "")
+                        + "; verify fiscal year-end alignment before comparing (not merged)."
+                    ),
+                })
+    hints.sort(key=lambda h: (h["entity"], h["metric"], h["currency"] or "", h["fiscal_period"], h["date_period"]))
+    return hints
+
+
 def reconcile(facts: Iterable[Any], sources: Iterable[Any] = (), *, calculations: Iterable[Any] = (),
               cluster_of: Callable[[Any], str | None] | None = None,
               entity_aliases: Mapping[str, str] | None = None, default_entity: str | None = None,
@@ -714,14 +845,14 @@ def reconcile(facts: Iterable[Any], sources: Iterable[Any] = (), *, calculations
             continue
         base_key = metric[:-4] if metric.endswith("_pct") else metric
         rule = _RULE_BY_KEY[base_key]
-        kind = "percent" if metric.endswith("_pct") or base_key in _MARGIN_KEYS else rule.kind
+        kind = "percent" if metric.endswith("_pct") or base_key in _PERCENT_METRIC_KEYS else rule.kind
         norm = normalize_value(fact.get("value"), unit, kind, fact.get("currency") if isinstance(fact.get("currency"), str) else None)
         if norm is None:
             unmerged["unparseable_value"] += 1
             continue
         if norm.kind != kind:
             kind = norm.kind
-            if kind == "percent" and not metric.endswith("_pct") and base_key not in _MARGIN_KEYS:
+            if kind == "percent" and not metric.endswith("_pct") and base_key not in _PERCENT_METRIC_KEYS:
                 metric = f"{base_key}_pct"
         if kind in ("price", "money", "per_share") and norm.currency is None:
             unmerged["currency_unknown"] += 1
@@ -777,6 +908,7 @@ def reconcile(facts: Iterable[Any], sources: Iterable[Any] = (), *, calculations
         rows.append(row)
     rows.sort(key=lambda r: (-_STATUS_RANK[r["status"]], 0 if r["severity"] == "material" else 1, r["metric"], r["period"] or "", r["entity_hint"]))
     counts = Counter(r["status"] for r in rows)
+    fiscal_alignment_hints = _build_fiscal_alignment_hints(items)
     report = {
         "version": VERSION,
         "rows": rows,
@@ -786,6 +918,7 @@ def reconcile(facts: Iterable[Any], sources: Iterable[Any] = (), *, calculations
         "limits": ["Only facts recorded in this run are compared; a missing row means the facts were not comparable or "
                    "only one source reported the figure, not that the figure is confirmed.",
                    "Reference values prefer exchange data and filings; no value is corrected automatically."],
+        "fiscal_alignment_hints": fiscal_alignment_hints,
     }
     report["suggested_gaps"] = suggested_gaps(report, limit=top_n_gaps)
     return report
@@ -874,8 +1007,8 @@ def _build_row(key: tuple, members: list[_Item], calc_inputs: dict[str, list[str
         flags.append("news_only")
     row_id = "recon-" + hashlib.sha256(repr((metric, period, entity, qualifiers, kind, currency)).encode()).hexdigest()[:12]
     row = {
-        "row_id": row_id, "metric": metric, "metric_label": {"zh": rule.zh + ("变动(%)" if metric.endswith("_pct") and base_key not in _MARGIN_KEYS else ""),
-                                                             "en": rule.en + (" change (%)" if metric.endswith("_pct") and base_key not in _MARGIN_KEYS else "")},
+        "row_id": row_id, "metric": metric, "metric_label": {"zh": rule.zh + ("变动(%)" if metric.endswith("_pct") and base_key not in _PERCENT_METRIC_KEYS else ""),
+                                                             "en": rule.en + (" change (%)" if metric.endswith("_pct") and base_key not in _PERCENT_METRIC_KEYS else "")},
         "kind": kind, "period": period, "entity_hint": entity, "qualifiers": list(qualifiers), "currency": currency,
         "values": values,
         "reference_value": ({"value": _fmt(reference.norm.value), "fact_id": reference.fact_id, "source_id": reference.source_id,
@@ -950,16 +1083,21 @@ def model_summary(report: Mapping[str, Any], *, top_n: int = 5, max_chars: int =
             "flags": row["flags"], "affected_calculations": row["affected_calculations"],
         })
     discrepancies = discrepancies[:top_n]
-    summary = {
+    hints = list(report.get("fiscal_alignment_hints") or ())[:top_n]
+    summary: dict[str, Any] = {
         "reconciliation": {
             "checked_groups": len(rows), "by_status": report.get("stats", {}).get("by_status", {}),
             "discrepancies": discrepancies,
+            **({"fiscal_alignment_hints": hints} if hints else {}),
             "guidance": ("Different sources report different values for the discrepancies listed. Do not average or pick silently: "
                          "cite the reference value (exchange data or filing) when available, state the other value and its source, "
                          "and record the difference as a gap or counterpoint."),
         }}
-    while len(repr(summary)) > max_chars and summary["reconciliation"]["discrepancies"]:
-        summary["reconciliation"]["discrepancies"].pop()
+    while len(repr(summary)) > max_chars and (summary["reconciliation"]["discrepancies"] or summary["reconciliation"].get("fiscal_alignment_hints")):
+        if summary["reconciliation"]["discrepancies"]:
+            summary["reconciliation"]["discrepancies"].pop()
+        elif summary["reconciliation"].get("fiscal_alignment_hints"):
+            summary["reconciliation"]["fiscal_alignment_hints"].pop()
         summary["reconciliation"]["truncated"] = True
     return summary
 
@@ -985,4 +1123,5 @@ def ui_view(report: Mapping[str, Any]) -> dict[str, Any]:
                      "independent_source_count": row["independent_source_count"], "distinct_hosts": row["distinct_hosts"],
                      "flags": row["flags"], "affected_calculations": row["affected_calculations"]})
     return {"version": VERSION, "counts": report.get("stats", {}).get("by_status", {}), "rows": rows,
+            "fiscal_alignment_hints": list(report.get("fiscal_alignment_hints") or []),
             "unmerged": report.get("stats", {}).get("unmerged", {}), "limits": report.get("limits", [])}

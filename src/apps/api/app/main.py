@@ -108,38 +108,20 @@ from .research_live_stream import ResearchLiveBroker, format_sse_frame, parse_la
 from .research_turns import gap_rows, merge_turn, prior_research_input
 from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, verified_direction_proof, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
-from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
-from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisResult, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
-from .research_evidence import claim_amount_differences, evidence_differences, flag_counterpoint_agreement, flag_truncated_previous_findings, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, flag_uncited_causal_attribution, flag_uncited_exact_dates, previous_supplemental_leads, suggest_excerpt_dates, suggest_percentage_evidence, suggest_related_with_supplemental_leads, suggest_usd_amount_evidence, suggest_uncited_numeric_facts, suggest_cross_source_comparison_evidence
-from .research_verification import REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT
-from .research_review_stage import ReviewStageResult, execute_support_review
-from .research_runs import DOCUMENT_OVERVIEW_QUESTION, ResearchRunRequest, ResearchRunResult, discovery_query, resolve_automatic_research_request
-from .research_gap_stage import GapStageResult, execute_gap_followup
-from .research_source_policy import prepare_sources, source_eligibility, source_language_hints, summarize_sources, summarize_source_processing
-from .research_discovery import execute_source_search
+from .research_table_provenance import bounded_table_trace
+from .research_analysis import SELECTION_METHOD as RESEARCH_SELECTION_METHOD, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
+from .research_runs import DOCUMENT_OVERVIEW_QUESTION, ResearchRunRequest, ResearchRunResult, resolve_automatic_research_request
+from .research_source_policy import prepare_sources, source_eligibility, summarize_sources
 from .research_budget import ResearchExecutionBudget
-from .research_coordinator import ResearchExecutionContext, PlanningResult, execute_generation, execute_planning
+from .research_coordinator import ResearchExecutionContext
 from .research_lifecycle import ResearchVersionChain
-from .research_checkpoints import ResearchCheckpointPublisher
 from .research_official_retrieval import execute_official_retrieval, official_source_id
 from .research_news_tool import default_news_providers
 from .research_run_insights import method_pack_records
 from .research_ocr import OcrUsageHooks, build_ocr_pages_callback, vision_engine_configured
-from .research_workflow import ResearchWorkflow, StageReceipt
-from .research_orchestrator import CoordinationObservation, ResearchOrchestrator
-from .research_recovery import (prepare_recovery, recovered_content, RecoveryJournal, RecoverySnapshot, RecoveryBudget,
-    prepare_continuation, continuation_context, restore_stage_state, stage_result_settled, model_receipts_confirmed,
-    external_results_confirmed, recovery_status, runtime_truncation_loop_blocked, _REPEATED_TRUNCATION_MESSAGE,
+from .research_workflow import ResearchWorkflow
+from .research_recovery import (RecoveryJournal, runtime_truncation_loop_blocked, _REPEATED_TRUNCATION_MESSAGE,
     runtime_timeout_loop_blocked, _REPEATED_TIMEOUT_MESSAGE)
-from .research_gap_followup import build_gap_focus
-from .research_requirements import combined_requirements, unresolved_original_requirement, unresolved_requirement_indexes, evidence_need_details
-from .research_coordinator import has_usable_research_counterpoint
-from .research_acquisition import execute_decision
-from .research_evidence_verifier import compare_requirement_candidates, derive_verification_feedback, claim_fingerprint
-from .research_provenance import derive_evidence_links, derive_question_links
-from .research_assessment import assess_research_outcome
-from .research_artifacts import assemble_initial_artifacts, assemble_research_content, build_run_core, prepare_claim_evidence, prepare_run_claims
-from .research_counterpoint_stage import execute_counterpoint
 from .research_topics import ResearchContent
 from .research_fetch import (
     HTML_EXTRACTION_DISCLOSURE,
@@ -157,7 +139,6 @@ from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fet
 from .research_source_catalog import canonical_source_url, source_capabilities
 from .research_source_terms import user_initiated_basis, user_initiated_scope
 from .issuer_documents import IssuerDocuments
-from .research_structured_connector import StructuredQuery, execute_structured_query
 from .research_uploads import HtmlUploadRequest, PdfFailure, PdfReextractRequest, PdfUploadRequest, extract_pdf, extract_uploaded_html
 
 _DEFAULT_FETCH_OFFICIAL_TEXT = fetch_official_text
@@ -192,7 +173,7 @@ def _resolve_market_key(account_id: str, policy=None) -> tuple[str | None, str |
     allowed = any(not isinstance(policy.decide("twelve_data", category, credential_owner="platform"), FinDataDenied)
                   for category in ("identity", "bars_daily", "bars_intraday"))
     if allowed:
-        platform = os.environ.get("FORESIGHTNINE_TWELVEDATA_API_KEY", "").strip()
+        platform = platform_secret("FORESIGHTNINE_TWELVEDATA_API_KEY") or ""
         if platform:
             return platform, "platform"
     return None, None
@@ -216,7 +197,7 @@ def _resolve_tushare_key(account_id: str, policy=None) -> tuple[str | None, str 
     allowed = any(not isinstance(policy.decide("tushare", category, credential_owner="platform"), FinDataDenied)
                   for category in ("identity", "bars_daily", "financials"))
     if allowed:
-        platform = os.environ.get("FORESIGHTNINE_TUSHARE_TOKEN", "").strip()
+        platform = platform_secret("FORESIGHTNINE_TUSHARE_TOKEN") or ""
         if platform:
             return platform, "platform"
     return None, None
@@ -240,6 +221,8 @@ from .oauth_identity import OAuthIdentity, OAuthSessionResponse
 from .oauth_provider import OAuthProviderClient, OAuthProviderError
 from .market_provider import MarketSnapshotRequest, build_snapshot_response
 from .fin_data.policy import Denied as FinDataDenied, load_policy as load_fin_data_policy
+from .admin_auth import ELEVATION_HEADER, AdminAuthError, AdminGate
+from .platform_secrets import PlatformSecretError, PlatformSecretStore, configure as configure_platform_secrets, default_cipher as platform_secret_cipher, managed_secret, managed_secrets, platform_secret, provider_registry, search_secret_name
 from .market_credentials import (
     AccountMarketDataSettings,
     MarketCredentialCipher,
@@ -507,6 +490,13 @@ model_settings = AccountModelSettings(
     MODEL_CONFIGS,
     ModelCredentialCipher.from_environment(),
 )
+PLATFORM_SECRETS = build_repository(storage_config, "platform_secrets", value_loader=None)
+PLATFORM_SECRET_AUDIT = build_repository(storage_config, "platform_secret_audit")
+ADMIN_ELEVATIONS = build_repository(storage_config, "admin_elevations")
+ADMIN_ATTEMPTS = build_repository(storage_config, "admin_attempts")
+platform_secret_store = PlatformSecretStore(PLATFORM_SECRETS, PLATFORM_SECRET_AUDIT, platform_secret_cipher(), now=lifecycle_clock.now)
+configure_platform_secrets(platform_secret_store)
+admin_gate = AdminGate(OAUTH_IDENTITIES, ADMIN_ELEVATIONS, ADMIN_ATTEMPTS, lifecycle_clock.now)
 
 
 def _store_challenge_operation_result(operation_id: str, challenge: ChallengeRecord) -> None:
@@ -652,6 +642,10 @@ def reset_state() -> None:
     USAGE_LEDGER.clear()
     MARKET_DATA_CONFIGS.clear()
     MODEL_CONFIGS.clear()
+    PLATFORM_SECRETS.clear()
+    ADMIN_ELEVATIONS.clear()
+    ADMIN_ATTEMPTS.clear()
+    platform_secret_store.invalidate()
     CHALLENGE_OPERATION_RESULTS.clear()
     OPERATION_SESSIONS.clear()
     CHALLENGE_OPERATION_IDS.clear()
@@ -932,7 +926,7 @@ app.add_middleware(
     allow_origins=list(security_config.allowed_origins),
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "Last-Event-ID", "X-Captcha-Token", "X-Session-ID"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "Last-Event-ID", "X-Captcha-Token", "X-Session-ID", ELEVATION_HEADER],
     max_age=600,
 )
 app.add_middleware(
@@ -1718,23 +1712,28 @@ def exchange_oauth_ticket(request: OAuthTicketExchangeRequest, response: Respons
             account,
             now=lifecycle_clock.now(),
             auth_mode="oauth",
+            auth_provider=ticket.provider,
         )
         return OAuthSessionResponse(**{**session, "provider": ticket.provider})
     except OAuthExchangeTicketError as exception:
         raise ApiProblem(400, "bad_request", "OAuth exchange is unavailable.") from exception
 
 
-def _authenticated_account(authorization: str | None) -> LocalAccount:
+def _authenticated_account_session(authorization: str | None) -> tuple[LocalAccount, LocalSession]:
     try:
-        account, _session = authenticate_local(
+        return authenticate_local(
             ACCOUNTS,
             AUTH_SESSIONS,
             authorization,
             now=lifecycle_clock.now(),
         )
-        return account
     except LocalAuthError as error:
         raise _local_auth_problem(error) from error
+
+
+def _authenticated_account(authorization: str | None) -> LocalAccount:
+    account, _session = _authenticated_account_session(authorization)
+    return account
 
 
 @app.post("/v2/research/topics", response_model=ResearchTopic, status_code=201, include_in_schema=False)
@@ -2662,7 +2661,7 @@ def get_research_capabilities(authorization: str | None = Header(default=None)) 
     from .research_fin_tools import FinDataToolbox
     account = _authenticated_account(authorization)
     _, sec_available = _configured_sec_user_agent()
-    search_available = bool(getattr(evidence_provider, "supports_project_search", False))
+    search_available = bool(getattr(evidence_provider, "supports_project_search", False)) or bool(default_news_providers(None))
     allowed_hosts = fetch_allowed_hosts()
     _market = _resolve_market_key(account.account_id)
     _tushare = _resolve_tushare_key(account.account_id)
@@ -2868,9 +2867,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     tushare_key, tushare_owner = _resolve_tushare_key(account.account_id)
     historical_available = (market_key is not None or _configured_sec_user_agent()[1]
                             or _cn_data_possible(tushare_key)) and topic.request.as_of is None
+    has_news_search = bool(getattr(evidence_provider, 'supports_project_search', False)) or bool(default_news_providers(None))
     if continuation_input is None:
         request = resolve_automatic_research_request(request,
-            search_available=bool(getattr(evidence_provider, 'supports_project_search', False)),
+            search_available=has_news_search,
             historical_prices_available=historical_available)
     provider, _personal = _model_provider_for_request(http_request, research=True)
     if isinstance(provider, OpenAICompatibleLlmProvider):
@@ -2929,7 +2929,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         discovery_notes: list[str] = []
         search_status = "not_requested"
         if (request.discover_sources is not False and request.max_search_calls != 0
-                and not getattr(evidence_provider, 'supports_project_search', False)):
+                and not has_news_search):
             search_status = 'unavailable'
             discovery_notes.append('Source discovery is unavailable because no search provider is configured.')
         usage: int | None = None
@@ -2984,6 +2984,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         if request.discover_sources and callable(search) and getattr(evidence_provider, 'supports_project_search', False):
             discover = lambda query: search(query, limit=10, deadline=context.budget.deadline,
                                              cancel_event=context.cancel_event())
+        run_news_providers = default_news_providers(discover) if request.discover_sources else []
         sec_agent_raw = os.environ.get('FORESIGHTNINE_SEC_USER_AGENT') or os.environ.get('SEC_USER_AGENT')
         _, sec_configured = _configured_sec_user_agent()
         retrieval_permitted = bool(request.auto_fetch_official and request.selected_source_ids != [])
@@ -3054,8 +3055,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         allowed_hosts = fetch_allowed_hosts()
         retrieval_active = retrieval_permitted and topic.request.as_of is None and request.max_cost_usd is None
         capabilities: dict[str, Any] = {
-            'search_available': discover is not None,
-            'news_search_available': discover is not None,
+            'search_available': bool(run_news_providers),
+            'news_search_available': bool(run_news_providers),
             'search_library_available': True,
             'acquire_available': retrieval_active,
             'web_fetch_enabled': retrieval_active and allowed_hosts is None,
@@ -3178,7 +3179,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         outcome = run_research_agent(question=effective_question, sources=sources, model=provider,
             context=context, discover=discover, acquire=acquire if retrieval_permitted else None,
             fin_data=fin_data, capabilities=capabilities,
-            news_providers=default_news_providers(discover) if discover is not None else [],
+            news_providers=run_news_providers,
             issuer_docs=(IssuerDocuments(remaining_seconds=lambda: context.budget.deadline - context.now(),
                                          ensure_running=context.ensure_running, reserve_call=context.reserve_search,
                                          now=lifecycle_clock.now) if retrieval_active else None),
