@@ -12,6 +12,8 @@ from typing import Any, Mapping
 from pydantic import BaseModel, ValidationError
 
 from .research_charts import ResearchChart
+from .research_tables import ResearchTable
+from .research_answer_evidence import reconcile_saved_answers
 from .research_diagnostics import safe_exception_diagnostic
 from .research_topics import (ResearchCalculation, ResearchClaim, ResearchContent, ResearchFact, ResearchGap,
                               ResearchTurn, ResearchVersion)
@@ -19,6 +21,7 @@ from .research_topics import (ResearchCalculation, ResearchClaim, ResearchConten
 _logger = logging.getLogger(__name__)
 _PERSISTENCE_DROPPED_GAPS: dict[str, str] = {
     'calculation_persistence_dropped': 'One or more calculations could not be persisted due to schema validation.',
+    'table_persistence_dropped': 'One or more tables could not be persisted due to schema validation.',
     'chart_persistence_dropped': 'One or more charts could not be persisted due to schema validation.',
 }
 
@@ -41,6 +44,9 @@ def prior_research_input(version: ResearchVersion) -> dict | None:
             }
             for item in content.charts
         ],
+        'tables': [{'table_id': item.table_id, 'table_type': item.table_type, 'title': item.title,
+                    'replaces_table_id': item.replaces_table_id} for item in content.tables],
+        'market_analyses': [analysis.model_dump(mode='json') for turn in content.turns for analysis in turn.market_analyses],
         'gaps': [item.model_dump(mode='json') for item in content.gaps],
         'read_ranges': [item.model_dump(mode='json') for turn in content.turns for item in turn.read_ranges],
         'source_hashes': {row['source_id']: row.get('content_sha256') for row in content.sources
@@ -105,7 +111,7 @@ def _append_unique_gap(gaps: list[ResearchGap], code: str) -> None:
 
 def merge_turn(parent: ResearchContent, turn: ResearchTurn, *, claims: list[dict], facts: list[dict],
                calculations: list[dict], sources: list[dict], source_candidates: list[dict],
-               charts: list[dict] | None = None) -> ResearchContent:
+               charts: list[dict] | None = None, tables: list[dict] | None = None) -> ResearchContent:
     """Return the next version's content: the parent plus this turn, never altering earlier items.
 
     If the parent's last turn has the same turn_id (a continuation or delivery of a
@@ -120,6 +126,7 @@ def merge_turn(parent: ResearchContent, turn: ResearchTurn, *, claims: list[dict
     existing_facts = {item.fact_id for item in content.facts}
     existing_calcs = {item.calculation_id for item in content.calculations}
     existing_charts = {item.chart_id for item in content.charts}
+    existing_tables = {item.table_id for item in content.tables}
     content.claims.extend(ResearchClaim.model_validate({**item, 'turn_id': tid}) for item in claims
                           if item['claim_id'] not in existing_claims)
     content.facts.extend(ResearchFact.model_validate({**item, 'turn_id': tid}) for item in facts
@@ -142,6 +149,10 @@ def merge_turn(parent: ResearchContent, turn: ResearchTurn, *, claims: list[dict
         turn_id=tid,
         item_kind='chart',
     )
+    dropped_table_ids, dropped_table_any = _merge_isolated_items(
+        raw_items=tables, target_list=content.tables, existing_ids=existing_tables,
+        id_field='table_id', model_cls=ResearchTable, turn_id=tid, item_kind='table',
+    )
     if content.turns and content.turns[-1].turn_id == tid:
         old = content.turns[-1]
         turn.index, turn.question, turn.question_origin = old.index, old.question, old.question_origin
@@ -151,6 +162,7 @@ def merge_turn(parent: ResearchContent, turn: ResearchTurn, *, claims: list[dict
         turn.fact_ids = _union(old.fact_ids, turn.fact_ids)
         turn.calculation_ids = _union(old.calculation_ids, turn.calculation_ids)
         turn.chart_ids = _union(old.chart_ids, turn.chart_ids)
+        turn.table_ids = _union(old.table_ids, turn.table_ids)
         turn.usage = turn.usage.model_copy(update={key: max(getattr(old.usage, key), getattr(turn.usage, key))
                                                    for key in ('model_calls', 'search_calls', 'total_tokens')})
         turn.events = turn.events if turn.events[:len(old.events)] == old.events else [*old.events, *turn.events]
@@ -161,12 +173,17 @@ def merge_turn(parent: ResearchContent, turn: ResearchTurn, *, claims: list[dict
         turn.calculation_ids = [cid for cid in turn.calculation_ids if cid not in dropped_calc_ids]
     if dropped_chart_ids:
         turn.chart_ids = [cid for cid in turn.chart_ids if cid not in dropped_chart_ids]
+    if dropped_table_ids:
+        turn.table_ids = [item for item in turn.table_ids if item not in dropped_table_ids]
+    if dropped_table_any:
+        _append_unique_gap(turn.gaps, 'table_persistence_dropped')
     if dropped_calc_any:
         _append_unique_gap(turn.gaps, 'calculation_persistence_dropped')
     if dropped_chart_any:
         _append_unique_gap(turn.gaps, 'chart_persistence_dropped')
     known = {row.get('source_id') for row in content.sources if isinstance(row, dict)}
     content.sources.extend(row for row in sources if row.get('source_id') not in known)
+    reconcile_saved_answers(content, turn)
     content.source_candidates = source_candidates[:10]
     content.gaps = [item.model_copy(deep=True) for item in turn.gaps]
     return content

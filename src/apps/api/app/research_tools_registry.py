@@ -125,6 +125,9 @@ class RequestOcrRequest(BaseModel):
         return value
 
 
+from .research_counter_search import CounterSearchIntent
+
+
 class SearchSourceRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     source_id: str = Field(min_length=1, description='Authorized source_id from the sources inventory or acquired tools.')
@@ -136,6 +139,7 @@ class SearchSourceRequest(BaseModel):
         description=f'Maximum number of matching hits to return (1-{MAX_SEARCH_HITS}).',
     )
     case_sensitive: bool = Field(default=False, description='Whether matching is case-sensitive (default false).')
+    counter_search: CounterSearchIntent | None = None
     rationale: str | None = Field(default=None, min_length=1, description='Optional brief reason for searching this source.')
 
     @field_validator('query')
@@ -165,14 +169,15 @@ class ProposedFact(BaseModel):
     currency: str | None = Field(default=None, description='ISO currency code when the value is monetary.')
     period: str = Field(min_length=1, description='Period or date the value refers to.')
     source_id: str = Field(min_length=1)
-    quotation: str = Field(min_length=1, description='Exact text copied from the source that contains the value.')
+    quotation: str | None = Field(default=None, min_length=1, description='Source quotation containing the value; optional with hash-bound offsets.')
+    content_sha256: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$', description='Source content hash returned by read_sources; required when offsets are supplied.')
     character_start: int | None = Field(default=None, ge=0, description=_OFFSET_HELP)
     character_end: int | None = Field(default=None, gt=0, description=_OFFSET_HELP)
 
 
 class FactsRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    facts: list[ProposedFact] = Field(min_length=1)
+    facts: list[Any] = Field(min_length=1, json_schema_extra={'items': ProposedFact.model_json_schema()})
     rationale: str = Field(min_length=1)
 
 
@@ -276,14 +281,50 @@ class Claim(BaseModel):
         description='support: the quotation supports this finding. counterargument: the quotation is evidence against the main conclusion or against another finding.')
     challenges_claim_ids: list[str] = Field(default_factory=list, max_length=20,
         description='IDs of prior claims from prior_research that this claim contradicts or weakens.')
+    fact_ids: list[str] = Field(default_factory=list, max_length=30)
+    calculation_ids: list[str] = Field(default_factory=list, max_length=30)
+    reasoning: str | None = Field(default=None, max_length=3000)
+    qualification: str | None = Field(default=None, max_length=3000)
 
 
 REPORT_FORMAT_GUIDANCE = (
     'Write the report in concise restricted GFM Markdown: use ## or ### section headings, lists and **bold**, '
-    'and prefer GFM tables for multi-period or cross-company financial figures. Never output raw HTML tags or '
+    'and prefer GFM tables for multi-period or cross-company financial figures. Link checkpointed claims using [[claim:claim_id]] next to the supported text. Never output raw HTML tags or '
     'Markdown images ![](...). Write currency amounts directly (for example $130.5B or USD 130.5B) and never '
     'wrap text in single $ math delimiters.'
 )
+
+
+class CheckpointQuestionPartRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    question: str = Field(min_length=1, max_length=1000, description='Exact excerpt of the user question.')
+    answer: str = Field(default='', max_length=3000, description='Evidence-based partial answer, explicitly identify uncertainty.')
+    unresolved: str = Field(default='', max_length=1000, description='Specific missing information or conditions.')
+    fact_ids: list[str] = Field(default_factory=list, max_length=20)
+    citations: list[DraftCitation] = Field(default_factory=list, max_length=10, description='Exact quotations for qualitative answers.')
+
+
+class DraftCitation(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    source_id: str = Field(min_length=1)
+    quotation: str = Field(min_length=1, max_length=1000)
+    character_start: int | None = Field(default=None, ge=0)
+    character_end: int | None = Field(default=None, gt=0)
+
+
+class DraftClause(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    replaces_claim_id: str | None = Field(default=None, description='Saved draft claim to replace after this clause validates.')
+    text: str = Field(min_length=1, max_length=3000)
+    role: Literal['support', 'counterargument']
+    citations: list[DraftCitation] = Field(min_length=1, max_length=10)
+    fact_ids: list[str] = Field(default_factory=list, max_length=30)
+    calculation_ids: list[str] = Field(default_factory=list, max_length=30)
+
+
+class CheckpointReportDraftRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    clauses: list[DraftClause] = Field(min_length=1, max_length=100)
 
 
 class SubmitRequest(BaseModel):
@@ -316,7 +357,7 @@ SYSTEM = ("You are a financial research coordinator. Identify evidence needs, ch
           "(research_as_of, when set, is a cutoff for evidence and not the current time); never infer the current date from training knowledge. "
           "State in the report the as-of date of each data series used. "
           "When a tool result carries message, suggested_actions or hints, follow them before giving up on a path. "
-          "Discovery returns leads, not evidence. Only pass URLs returned by news_search, filings or issuer_documents, or a URL the user wrote, into acquire_sources; "
+          "For a targeted counter-evidence search, set counter_search with the specific target and alternative hypothesis, even before a claim exists; ordinary searches do not count as counter-evidence checks. Link any independently sourced finding to the challenged saved claim. Discovery returns leads, not evidence. Only pass URLs returned by news_search, filings or issuer_documents, or a URL the user wrote, into acquire_sources; "
           "never invent or guess URLs. For a security or company, call resolve_entity first and pass the chosen entity_id onward. "
           "Use company_financials (when sec_financials_available) for structured US-registered issuer statement lines, filings (when filings_available) to list "
           "filings and obtain document URLs for acquire_sources, and market_data (when market_data_available) for price history. "
@@ -337,6 +378,7 @@ SYSTEM = ("You are a financial research coordinator. Identify evidence needs, ch
           "For annual or interim reports of issuers without SEC XBRL (mainland China, Hong Kong), after acquire_sources call extract_statements on the report source to get statement rows with unit, period columns and exact quotations (it reads the statement pages itself); record the needed rows with record_facts, check warnings, and derive single quarters explicitly from year-to-date figures. "
           "For historical market performance, resolve the instrument and use a market_data series or authorized dated observations. "
           "If required prices are missing, explain the gap without inventing prices. "
+          "Use checkpoint_report_draft to save each independently cited report clause incrementally. Use checkpoint_question_part as evidence becomes available to save each question component and its specific unresolved information before continuing. An answer must cite recorded fact IDs and must not present a numerical fact as an investment recommendation. "
           "Use deterministic calculation where needed. "
           "Use create_chart only when a visual comparison, trend, waterfall, price series, or causal transmission graph materially improves clarity; bind numeric series strictly to recorded fact_ids, calculation_ids, or acquired market_data source_ids and never supply raw numeric arrays. For chart_type='causal_graph' (macro -> industry -> company -> asset transmission chains or scenario branches), populate causal_graph without y_axes/series, bind edges to known claim_ids from prior_research when available, and mark unsupported links as assumptions. When referencing a created chart in report, place [[chart:chart_id]] on its own line. "
           "Use create_table when structured comparison, financial summary, peer comp, valuation, or time-series tables improve clarity; bind every numeric cell strictly to a fact_id or calculation_id and embed created tables in report as [[table:table_id]] on its own line. "
@@ -800,7 +842,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         name='record_facts',
-        description='Record quoted numeric observations; source match does not establish semantic accuracy.',
+        description='Record numeric observations independently. Use an exact quotation or both character offsets and the content_sha256 returned by the read tool. Failures do not discard valid entries; source match does not establish semantic accuracy.',
         input_model=FactsRequest,
         persistence_model=ResearchFact,
         persistence_item_kind='fact',
@@ -892,6 +934,18 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         input_model=ExtractStatementsRequest,
         compaction_role='bulk',
         activity_summarizer=_rationale_summarizer(_target_extract_statements),
+    ),
+    ToolSpec(
+        name='checkpoint_question_part',
+        description='Save a question component and its grounded partial answer or specific missing information as soon as available.',
+        input_model=CheckpointQuestionPartRequest,
+        compaction_role='protected',
+    ),
+    ToolSpec(
+        name='checkpoint_report_draft',
+        description='Save individually grounded report clauses incrementally with quotations and fact/calculation IDs; invalid clauses are returned for repair.',
+        input_model=CheckpointReportDraftRequest,
+        compaction_role='protected',
     ),
     ToolSpec(
         name='submit_research',

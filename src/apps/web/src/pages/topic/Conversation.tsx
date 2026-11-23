@@ -2,18 +2,19 @@ import type { ResearchV2 } from "@foresightnine/contracts";
 import { useCallback, useMemo, useState, type Ref } from "react";
 import { Link } from "react-router-dom";
 import type { ProgressEvent, RecoveryStatus } from "../../api/types";
-import { formatInterimParts, formulaLabel, gapText, recoveryReasonLabel, turnReasonLabel, TURN_STATUS_LABEL, VERIFY_NOTE } from "../../lib/copy";
+import { formatInterimParts, formulaLabel, gapText, OPERATION_STATUS_LABEL, recoveryReasonLabel, turnReasonLabel, TURN_STATUS_LABEL, VERIFY_NOTE } from "../../lib/copy";
 import { displayTurnNumber, formatClock, formatDuration, formatInteger, formatQuantity, turnStamp } from "../../lib/format";
 import { answerSummary, claimRole, parseTurnEvents, partialSummary, ROLE_LABEL, stepRows, toolStepCount, turnCharts, turnContent, turnDurationMs } from "../../lib/research";
 import { Disclosure } from "../../ui/controls";
 import { Icon } from "../../ui/icons";
-import { extractReferencedChartIds, MarkdownContent } from "../../ui/MarkdownContent";
+import { extractReferencedChartIds, extractReferencedTableIds, MarkdownContent } from "../../ui/MarkdownContent";
 import { useNow } from "../../ui/media";
 import { Menu, type MenuEntry } from "../../ui/Menu";
 import { CitationButton } from "./Citation";
 import { EvidenceViews } from "./EvidenceViews";
 import { ChartCard } from "./charts/ChartCard";
 import { LiveDraftPreview, LiveEmptyOrStream } from "./LiveStreamView";
+import { QuestionParts } from "./QuestionParts";
 import { ProcessTimeline } from "./ProcessTimeline";
 import { useTopicView, type LiveRun } from "./context";
 
@@ -45,7 +46,13 @@ export function usageMeta(turn: ResearchV2.ResearchTurn): string {
   const parts = [`${turn.usage.model_calls} 次模型调用`];
   if (turn.usage.search_calls > 0) parts.push(`${turn.usage.search_calls} 次搜索`);
   // partial_unknown: some call reported no usage, so the total includes reserved estimates for those calls.
-  parts.push(turn.usage.usage_status === "partial_unknown"
+  if (turn.usage.reported_tokens != null) {
+    parts.push(`已回执 ${formatInteger(turn.usage.reported_tokens)} Token`);
+    if (turn.usage.unknown_usage_calls) {
+      parts.push(`${turn.usage.unknown_usage_calls} 次用量未知`);
+      if (turn.usage.reserved_estimate_tokens != null) parts.push(`预留估算 ${formatInteger(turn.usage.reserved_estimate_tokens)} Token`);
+    }
+  } else parts.push(turn.usage.usage_status === "partial_unknown"
     ? `约 ${formatInteger(turn.usage.total_tokens)} Token（部分调用用量未知，已按预留额度计入）`
     : `${formatInteger(turn.usage.total_tokens)} Token`);
   const ms = turnDurationMs(turn);
@@ -82,7 +89,7 @@ export function AskBubble({ text, focusLabel }: { text: string; focusLabel?: str
   );
 }
 
-const BLOCKED_CONTINUATION_REASONS = new Set<string>(["repeated_truncation", "repeated_timeout"]);
+const BLOCKED_CONTINUATION_REASONS = new Set<string>(["repeated_truncation", "repeated_timeout", "repeated_interruption_no_progress"]);
 
 /** Callout actions follow spec §4.3: one primary decision, the rest under “更多”. */
 function CalloutActions({ actions }: { actions: TurnActions }) {
@@ -197,6 +204,8 @@ function ClaimList({ claims }: { claims: readonly ResearchV2.ResearchClaim[] }) 
               {(claim.citations ?? []).map((citation, index) => (
                 <CitationButton key={index} n={view.citations.numberFor(citation)} citation={citation} claimId={claimId} citationIndex={index} />
               ))}
+              {claim.reasoning ? <span className="note">推断依据 · {claim.reasoning}</span> : null}
+              {claim.qualification ? <span className="note">适用条件 · {claim.qualification}</span> : null}
               {claim.edited_by_user ? <span className="edited">你修改过</span> : null}
             </span>
           </li>
@@ -225,6 +234,18 @@ export function AnswerBlock({ turn, actions }: { turn: ResearchV2.ResearchTurn; 
     return map;
   }, [view.content.charts]);
 
+  const tablesById = useMemo(() => new Map((view.content.tables ?? []).map((table) => [table.table_id,
+    <figure key={table.table_id} className="research-table">
+      <figcaption>{table.title}{table.subtitle ? ` — ${table.subtitle}` : ""}</figcaption>
+      <div className="md-table-wrap"><div className="md-table-scroll"><table><thead><tr><th scope="col"></th>{table.columns.map((column) => <th scope="col" key={column.key}>{column.label}{column.unit ? ` (${column.unit})` : ""}</th>)}</tr></thead>
+        <tbody>{table.rows.map((row, index) => <tr key={index}><th scope="row">{row.label ?? ""}</th>{table.columns.map((column) => <td key={column.key}>{row.cells[column.key]?.display_value ?? "—"}</td>)}</tr>)}</tbody></table></div></div>
+    </figure>,
+  ])), [view.content.tables]);
+
+  const inlineTableIds = useMemo(() => extractReferencedTableIds(reportText), [reportText]);
+  const trailingTables = (view.content.tables ?? []).filter((table) =>
+    (turn.table_ids ?? []).includes(table.table_id) && !inlineTableIds.has(table.table_id));
+
   const turnChartList = useMemo(() => turnCharts(view.content, turn), [view.content, turn]);
   const inlineChartIds = useMemo(() => extractReferencedChartIds(reportText), [reportText]);
   const trailingCharts = useMemo(
@@ -251,9 +272,24 @@ export function AnswerBlock({ turn, actions }: { turn: ResearchV2.ResearchTurn; 
   return (
     <div className="answer">
       <div className="status">
-        <span className={`role ${partial ? "review" : "support"}`}>{TURN_STATUS_LABEL[turn.status] ?? turn.status}</span>
+        <span className={`role ${partial ? "review" : "support"}`}>研究结果：<span>{TURN_STATUS_LABEL[turn.status] ?? turn.status}</span></span>
         <span className="meta">{usageMeta(turn)}</span>
       </div>
+      {turn.attempts?.length ? (
+        <Disclosure summary="每次执行的用量和成果">
+          <ol>{turn.attempts.map((attempt, index) => (
+            <li key={attempt.operation_id}>
+              {index === 0 ? "首次执行" : `续跑 ${index}`} · {attempt.model_calls} 次模型调用 · {attempt.search_calls} 次搜索
+              {attempt.elapsed_seconds != null && ` · ${formatDuration(attempt.elapsed_seconds * 1000)}`}
+              {attempt.reported_tokens != null && ` · 已回执 ${formatInteger(attempt.reported_tokens)} Token`}
+              {Boolean(attempt.unknown_usage_calls) && ` · ${attempt.unknown_usage_calls} 次用量未知`}
+              {attempt.reserved_estimate_tokens != null && attempt.reserved_estimate_tokens > 0 && ` · 预留估算 ${formatInteger(attempt.reserved_estimate_tokens)} Token`}
+              <div>新增事实 {attempt.new_facts} 条、计算 {attempt.new_calculations} 项、主张 {attempt.new_claims} 条，新回答 {attempt.answered_parts} 项。{turnReasonLabel(attempt.reason)}</div>
+            </li>
+          ))}</ol>
+          <p className="note">实际费用未取得供应商账单。</p>
+        </Disclosure>
+      ) : null}
       {rows.length > 0 ? (
         <div className="turn-process">
           <button
@@ -284,6 +320,7 @@ export function AnswerBlock({ turn, actions }: { turn: ResearchV2.ResearchTurn; 
             variant="report"
             chartsById={chartsById}
             renderChart={renderChart}
+            tablesById={tablesById}
           />
         </div>
       ) : partial ? (
@@ -296,6 +333,8 @@ export function AnswerBlock({ turn, actions }: { turn: ResearchV2.ResearchTurn; 
           ))}
         </div>
       ) : null}
+      <QuestionParts turn={turn} />
+      {trailingTables.map((table) => <div key={table.table_id}>{tablesById.get(table.table_id)}</div>)}
       <StatLine calculations={items.calculations} turnId={turn.turn_id} />
       <ClaimList claims={items.claims} />
       {items.claims.length > 0 ? <p className="note">{VERIFY_NOTE}</p> : null}
@@ -394,6 +433,7 @@ export function LiveTurn({ number, startedAt, question, live = null, sectionRef,
         <div className="live-turn-head">
           <span className="dot running" aria-hidden="true" />
           <span className="live-turn-title">{statusTitle}</span>
+          <span className="meta">运行状态：{OPERATION_STATUS_LABEL[status] ?? status}</span>
           {metaParts.length > 0 ? <span className="meta live-turn-meta">{metaParts.join(" · ")}</span> : null}
           <button
             type="button"

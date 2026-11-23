@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 import json
 import logging
+import re
 from typing import Any
 
 from .model_protocol import canonical_json_dumps
@@ -167,7 +168,8 @@ def reconcile_run(state: Mapping[str, Any], source_by_id: Mapping[str, Any]) -> 
         metas = [source_meta(source_by_id[sid], clusters.get(sid)) for sid in ids if sid in source_by_id]
         default_entity, aliases = entity_context(state)
         return reconcile(list(facts.values()), metas, calculations=[c for c in state.get('calculations') or [] if isinstance(c, Mapping)],
-                         cluster_of=lambda src: src.get('cluster_id'), entity_aliases=aliases, default_entity=default_entity)
+                         cluster_of=lambda src: src.get('cluster_id'), entity_aliases=aliases, default_entity=default_entity,
+                         issuer_hosts=state.get('issuer_site_hosts') or ())
     except Exception as error:   # an analysis aid must never fail a research run
         return _degraded_payload('reconcile_run', error)
 
@@ -195,7 +197,7 @@ def reconciliation_view(report: Mapping[str, Any] | None) -> dict[str, Any] | No
                 'status': 'degraded',
                 'diagnostic': _safe_preserved_diagnostic(report.get('diagnostic')),
             }
-        return reconciliation_ui_view(report) if report.get('rows') else None
+        return reconciliation_ui_view(report) if report.get('rows') or report.get('single_source_rows') else None
     except Exception as error:
         return _degraded_payload('reconciliation_view', error, versioned=True)
 
@@ -219,7 +221,7 @@ def coverage_source_record(source: Any) -> dict[str, Any]:
     """Richer source record for the coverage map; ``text`` is referenced, not copied."""
     return {'source_id': source.source_id, 'title': source.title, 'url': str(source.url) if getattr(source, 'url', None) is not None else None,
             'kind': source.kind, 'retrieval_method': source.retrieval_method, 'published_at': _iso(source.published_at),
-            'provenance': getattr(source, 'provenance', None) or {}, 'text': source.text}
+            'provenance': getattr(source, 'provenance', None) or {}, 'permissions': source.permissions.model_dump(), 'text': source.text}
 
 
 def run_coverage_map(state: Mapping[str, Any], source_by_id: Mapping[str, Any], *, library_coverage: Mapping[str, Any] | None = None,
@@ -272,6 +274,35 @@ def method_pack_records(question: str) -> list[dict[str, Any]]:
     """Which packs a question selects (for run-input records written before the run starts)."""
     return method_pack_texts(question, {})[1]
 
+
+
+def assess_core_requirements(question: str, state: Mapping[str, Any], source_by_id: Mapping[str, Any], *,
+                             as_of: Any = None, claims: Sequence[Any] = ()) -> list[dict[str, Any]]:
+    """Assess the original question against eligible, saved evidence, never tool counts."""
+    from .research_evidence_requirements import assess
+    from datetime import datetime
+    try:
+        if isinstance(as_of, str):
+            as_of = datetime.fromisoformat(as_of.replace('Z', '+00:00'))
+        eval_state = state
+        # When every recorded label explicitly names the question's leading entity,
+        # supply it as reconciliation context (including one-letter tickers).
+        import re
+        subject = re.match(r'^([A-Za-z][A-Za-z0-9.-]*)\s+(?=[一-龥])', question.strip())
+        fact_rows = [f for f in [*(state.get('prior_facts') or []), *(state.get('facts') or [])] if isinstance(f, Mapping)]
+        if (subject and fact_rows and not state.get('entity_candidates')
+            and all(re.search(r'(?<![A-Za-z0-9])' + re.escape(subject.group(1)) + r'(?![A-Za-z0-9])', str(f.get('label') or ''), re.I) for f in fact_rows)):
+            eval_state = dict(state)
+            eval_state['entity_candidates'] = {'question_subject': {'symbol': subject.group(1)}}
+        reconciliation = reconcile_run(eval_state, source_by_id) or {}
+        conflicts = [r for r in reconciliation.get('rows', []) if isinstance(r, Mapping)
+                     and r.get('status') == 'differs' and r.get('severity') == 'material']
+        return assess(question, state, source_by_id, as_of=as_of, claims=claims, conflicts=conflicts)
+    except Exception as error:
+        _degraded_diagnostic('assess_core_requirements', error)
+        return [{'id': 'req-assessment-unavailable', 'question': question, 'status': 'unavailable',
+                 'reason': 'Evidence assessment failed; the core question needs verification.',
+                 'references': [], 'core': True, 'kind': 'generic'}]
 
 # --------------------------------------------------------------------------------------------- live attention & gate
 
@@ -418,7 +449,7 @@ def _requirement_satisfied(
     )
     if tools == ['market_data']:
         if pack_id == 'ipo_or_major_event_day' and req_id == 'benchmark':
-            return market_src_count >= 2 or ok_counts.get('market_data', 0) >= 2
+            return False  # Determined from comparable return calculations by the core evaluator.
         return market_src_count >= 1 or ok_counts.get('market_data', 0) >= 1
 
     if any(ok_counts.get(t, 0) > 0 for t in tools):
@@ -572,12 +603,38 @@ def evaluate_method_and_reconciliation(
                     'satisfiable': satisfiable,
                 })
 
-        counter_claims = sum(
-            1
-            for claim in claims
-            if (claim.get('role') if isinstance(claim, Mapping) else getattr(claim, 'role', None)) == 'counterargument'
-        )
-        counter_completed = search_actions + counter_claims
+        attempts = [a for a in (state.get('counter_searches') or []) if isinstance(a, Mapping)
+                    and a.get('scope') in ('external', 'document') and a.get('target') and a.get('hypothesis')]
+        external_attempts = sum(a.get('scope') == 'external' for a in attempts)
+        document_attempts = sum(a.get('scope') == 'document' for a in attempts)
+        prior_meta = {c.get('claim_id'): c.get('source_ids', []) for c in state.get('prior_claims_meta', []) if isinstance(c, Mapping)}
+        known_claims = [*state.get('draft_claims', []), *claims]
+        for item in known_claims:
+            if isinstance(item, Mapping) and item.get('claim_id'):
+                prior_meta[item['claim_id']] = [c.get('source_id') for c in item.get('citations', []) if isinstance(c, Mapping)]
+        referenced = {sid for ids in prior_meta.values() for sid in ids if isinstance(sid, str)}
+        clusters = news_clusters(source_by_id, sorted(referenced), state.get('source_clusters') or {})
+        findings = []
+        for claim in claims:
+            if not isinstance(claim, Mapping) or claim.get('role') != 'counterargument':
+                continue
+            for citation in claim.get('citations') or []:
+                sid = citation.get('source_id') if isinstance(citation, Mapping) else None
+                source = source_by_id.get(sid)
+                if not source:
+                    continue
+                for target in claim.get('challenges_claim_ids') or []:
+                    target_sources = [source_by_id.get(x) for x in prior_meta.get(target, [])]
+                    target_sources = [x for x in target_sources if x is not None]
+                    if not target_sources or any(x.source_id == sid or (clusters.get(sid) and clusters.get(x.source_id) == clusters.get(sid)) or (getattr(source, 'url', None) and getattr(source, 'url', None) == getattr(x, 'url', None)) for x in target_sources):
+                        continue
+                    finding = {'claim_id': claim.get('claim_id'), 'target_claim_id': target, 'source_id': sid,
+                               'quotation': citation.get('quotation'), 'independence': 'not_verified'}
+                    if finding not in findings:
+                        findings.append(finding)
+        counter_claims = sum(1 for claim in claims if isinstance(claim, Mapping) and claim.get('role') == 'counterargument')
+        counter_completed = sum(a.get('status') == 'completed' for a in attempts)
+        # Attempts and findings are separate: a search without a finding never proves absence.
         counter_satisfied = counter_completed >= min_counter_actions if min_counter_actions > 0 else True
         counter_ack = bool(lim_text and any(cue in lim_text for cue in _COUNTER_ACK_CUES))
         search_tools_available = any(
@@ -634,7 +691,9 @@ def evaluate_method_and_reconciliation(
             'required_checks': required_checks,
             'counter_evidence': {
                 'required_actions': min_counter_actions,
-                'completed_actions': counter_completed,
+                'completed_actions': counter_completed, 'attempted_actions': len(attempts),
+                'external_attempts': external_attempts, 'document_attempts': document_attempts,
+                'attempts': [dict(a) for a in attempts], 'linked_findings': findings,
                 'satisfied': counter_satisfied,
                 'acknowledged': counter_ack,
                 'satisfiable': counter_satisfiable,
@@ -660,6 +719,108 @@ def evaluate_method_and_reconciliation(
             'sources_count': len(source_by_id) if isinstance(source_by_id, Mapping) else 0,
             'open_gaps': [],
         }
+
+
+def primary_filing_gap(state: Mapping[str, Any], source_by_id: Mapping[str, Any], claims: Sequence[Any] = (), *, as_of: Any = None) -> dict[str, Any] | None:
+    """Identify a specific cited financial observation with an unexamined eligible filing lead."""
+    from .research_reconciliation import _RULE_BY_KEY, derive_metric
+    from .research_source_policy import source_eligibility
+    from .research_evidence_requirements import _period_key, _valid_facts
+    hosts = state.get('issuer_site_hosts') or ()
+    if as_of is None:
+        try:
+            from datetime import datetime
+            user = json.loads(state.get('user') or '{}')
+            as_of = datetime.fromisoformat(user['research_as_of']) if user.get('research_as_of') else None
+        except (TypeError, ValueError, KeyError):
+            as_of = None
+    filings = [source for source in source_by_id.values()
+               if classify_source(source, issuer_hosts=hosts) == 'filing'
+               and source_eligibility([source], as_of)[0][1] == 'eligible']
+    if not filings:
+        return None
+    citations = {c.get('source_id') for claim in claims if isinstance(claim, Mapping)
+                 for c in claim.get('citations', []) if isinstance(c, Mapping)}
+    if not citations:
+        return None
+    candidates = state.get('entity_candidates') or {}
+    companies: dict[str, set[str]] = {}
+    for info in candidates.values():
+        if not isinstance(info, Mapping):
+            continue
+        name = str(info.get('company') or '').strip()
+        key = re.sub(r'[^a-z0-9]', '', name.casefold())
+        if len(key) < 4:
+            continue
+        aliases = companies.setdefault(key, set())
+        aliases.add(name.casefold())
+        first = re.match(r'[a-z0-9]{4,}', name.casefold())
+        if first:
+            aliases.add(first.group())
+        symbol = str(info.get('symbol') or '').strip()
+        if len(symbol) >= 2:
+            aliases.add(symbol.casefold())
+
+    def entity_for(fact: Mapping[str, Any]) -> str | None:
+        source = source_by_id.get(fact.get('source_id'))
+        pieces = [str(fact.get(k) or '') for k in ('entity', 'entity_id', 'label', 'quotation')]
+        if source is not None:
+            pieces.append(source.title)
+        for claim in claims:
+            if not isinstance(claim, Mapping):
+                continue
+            ids = {c.get('source_id') for c in claim.get('citations', []) if isinstance(c, Mapping)}
+            if ids == {fact.get('source_id')}:
+                pieces.append(str(claim.get('text') or ''))
+        text = ' '.join(pieces).casefold()
+        found = {key for key, aliases in companies.items() if any(
+            re.search(r'(?<![a-z0-9])' + re.escape(alias) + r'(?![a-z0-9])', text) for alias in aliases)}
+        if len(found) == 1:
+            return next(iter(found))
+        if not found and len(companies) == 1:
+            return next(iter(companies))
+        return None
+
+    def filing_entity(source: Any) -> str | None:
+        header = re.sub(r'[^a-z0-9]', '', (source.title + ' ' + source.text[:15000]).casefold())
+        found = [key for key in companies if key in header]
+        return found[0] if len(found) == 1 else None
+
+    facts = _valid_facts(state, source_by_id, as_of)
+    for fact in facts:
+        if fact.get('source_id') not in citations or classify_source(source_by_id[fact['source_id']], issuer_hosts=hosts) in ('filing', 'issuer'):
+            continue
+        entity = entity_for(fact)
+        if entity is None:
+            continue
+        metric, _ = derive_metric(str(fact.get('label') or ''), str(fact.get('unit') or ''))
+        if not metric or metric not in _RULE_BY_KEY:
+            continue
+        rule = _RULE_BY_KEY[metric]
+        if rule.primary_order[0] != 'filing' or rule.timeless or metric in ('market_cap', 'enterprise_value'):
+            continue
+        years = re.findall(r'(?<!\d)(?:19|20)\d{2}(?!\d)', str(fact.get('period') or ''))
+        if not years:
+            continue
+        if any(other.get('source_id') in citations
+               and classify_source(source_by_id[other['source_id']], issuer_hosts=hosts) in ('filing', 'issuer')
+               and entity_for(other) == entity
+               and (classify_source(source_by_id[other['source_id']], issuer_hosts=hosts) != 'filing' or filing_entity(source_by_id[other['source_id']]) == entity)
+               and derive_metric(str(other.get('label') or ''), str(other.get('unit') or ''))[0] == metric
+               and ((_period_key(str(fact.get('period') or '')) is not None
+                     and _period_key(str(other.get('period') or '')) == _period_key(str(fact.get('period') or '')))
+                    or str(other.get('period') or '').strip().casefold() == str(fact.get('period') or '').strip().casefold())
+               for other in facts):
+            continue
+        for filing in filings:
+            if filing_entity(filing) != entity:
+                continue
+            if not re.search(rule.pattern, filing.text, re.I) or years[0] not in filing.text:
+                continue
+            return {'code': 'primary_filing_unverified', 'source_id': filing.source_id,
+                    'metric': metric, 'period': str(fact.get('period'))[:80],
+                    'message': 'A relevant eligible filing is available, but the cited financial observation has not been grounded in it. Search the filing for the metric and period, read the matching passage and cite it, or report the primary-source gap.'}
+    return None
 
 
 def evaluate_presubmit_gate(
@@ -702,6 +863,10 @@ def evaluate_presubmit_gate(
             'completed_actions': ce['completed_actions'],
             'look_for': ce['look_for'],
         })
+    primary_gap = primary_filing_gap(state, source_by_id, claims)
+    if primary_gap:
+        missing_items.append({**primary_gap, 'kind': 'primary_source', 'suggested_tools': ['search_source', 'read_sources'],
+                              'query': primary_gap['metric'] + ' ' + primary_gap['period']})
     unaddressed_conflicts = [c for c in ev['material_conflicts'] if not c['addressed']]
     return {
         'needs_attention': bool(missing_items or unaddressed_conflicts),
@@ -727,6 +892,14 @@ def build_working_memory_anchor(
         lines: list[str] = [
             f"State: facts={ev['facts_count']} calcs={ev['calcs_count']} charts={ev['charts_count']} sources={ev['sources_count']}"
         ]
+        payload = _user_payload(state)
+        question = str(payload.get('question') or state.get('question') or '')
+        requirements = assess_core_requirements(question, state, source_by_id, as_of=payload.get('research_as_of') or payload.get('as_of'),
+                                                claims=state.get('draft_claims') or ())
+        unmet = [r for r in requirements if r.get('core') and r.get('status') not in ('satisfied', 'not_applicable')]
+        if unmet:
+            lines.append('Core evidence needed: ' + '; '.join(
+                f"{r.get('kind')}: {r.get('reason')}" for r in unmet[:3]))
         if ev['active_packs']:
             checks = []
             for chk in ev['required_checks']:

@@ -600,8 +600,8 @@ def entity_hint(label: str, *, quotation: str | None = None, source: Mapping[str
 
 def source_host(source: Any) -> str | None:
     url = _get(source, "url")
-    if isinstance(url, str) and url:
-        host = (urlparse(url).hostname or "").lower()
+    if url is not None and str(url):
+        host = (urlparse(str(url)).hostname or "").lower()
         return host[4:] if host.startswith("www.") else (host or None)
     host = _get(source, "host")
     if isinstance(host, str) and host:
@@ -626,11 +626,12 @@ def classify_source(source: Any, *, issuer_hosts: Iterable[str] = ()) -> str:
         return "market_data"
     if kind is None and method is None and not host and re.search(r"daily close|\bbars\b", title, re.I):
         return "market_data"
+    # A genuine upload remains an upload even when the user supplied an attribution URL.
+    if method in ("user_supplied", "user_pdf", "user_html") or (kind == "user_supplied" and not method):
+        return "user_upload"
     if method in ("sec_companyconcept", "sec_companyfacts", "sec_filing_html") or _host_matches(host, PRIMARY_HOSTS) \
             or (host and (host.endswith(".gov") or ".gov." in host)):
         return "filing"
-    if kind == "user_supplied" or method in ("user_supplied", "user_pdf", "user_html"):
-        return "user_upload"
     # NB: runtime ``kind == "official"`` marks every fetched web page, news included; only the official-site
     # retrieval path (or a caller supplied host) identifies the issuer's own site.
     if method == "official_html" or _host_matches(host, issuer_hosts):
@@ -900,10 +901,14 @@ def reconcile(facts: Iterable[Any], sources: Iterable[Any] = (), *, calculations
 
     rows: list[dict[str, Any]] = []
     singles = 0
+    single_rows: list[dict[str, Any]] = []
     for key, members in groups.items():
         row = _build_row(key, members, calc_inputs)
         if row is None:
             singles += 1
+            single = _build_row(key, members, calc_inputs, allow_single=True)
+            if single is not None:
+                single_rows.append(single)
             continue
         rows.append(row)
     rows.sort(key=lambda r: (-_STATUS_RANK[r["status"]], 0 if r["severity"] == "material" else 1, r["metric"], r["period"] or "", r["entity_hint"]))
@@ -912,6 +917,7 @@ def reconcile(facts: Iterable[Any], sources: Iterable[Any] = (), *, calculations
     report = {
         "version": VERSION,
         "rows": rows,
+        "single_source_rows": single_rows,
         "stats": {"facts_total": total, "facts_considered": len(items), "groups": len(groups), "rows": len(rows),
                   "single_source_groups_skipped": singles, "by_status": {s: counts.get(s, 0) for s in _STATUS_RANK},
                   "unmerged": dict(sorted(unmerged.items()))},
@@ -933,11 +939,12 @@ def _worst_pair(values: list[_Item]) -> tuple[dict[str, Any], tuple[_Item, _Item
             cmp = compare_values(values[i].norm, values[j].norm, values[i].kind)
             if worst is None or (_STATUS_RANK[cmp["status"]], cmp["abs"]) > (_STATUS_RANK[worst["status"]], worst["abs"]):
                 worst, pair = cmp, (values[i], values[j])
-    assert worst is not None
+    if worst is None:
+        return {"status": "single_source", "abs": Decimal(0), "rel": Decimal(0), "within_tolerance": False, "severity": None}, None
     return worst, pair
 
 
-def _build_row(key: tuple, members: list[_Item], calc_inputs: dict[str, list[str]]) -> dict[str, Any] | None:
+def _build_row(key: tuple, members: list[_Item], calc_inputs: dict[str, list[str]], *, allow_single: bool = False) -> dict[str, Any] | None:
     metric, period, entity, qualifiers, kind, currency = key
     independent = {_independent_key(m) for m in members}
     # one comparable value per (independent source, value); keep every fact id for traceability
@@ -947,8 +954,8 @@ def _build_row(key: tuple, members: list[_Item], calc_inputs: dict[str, list[str
     reps = [group[0] for group in unique.values()]
     reps.sort(key=lambda m: m.order)
     distinct_values = {r.norm.value for r in reps}
-    if len(independent) < 2 and len(distinct_values) < 2:
-        return None  # one source repeating itself: nothing to reconcile
+    if len(independent) < 2 and len(distinct_values) < 2 and not allow_single:
+        return None
     base_key = metric[:-4] if metric.endswith("_pct") else metric
     rule = _RULE_BY_KEY[base_key]
     primary_order = rule.primary_order
@@ -996,7 +1003,7 @@ def _build_row(key: tuple, members: list[_Item], calc_inputs: dict[str, list[str
     hosts = sorted({r.host for g in unique.values() for r in g if r.host})
     flags = []
     if len(independent) < 2:
-        flags.append("single_source_internal_conflict")
+        flags.append("single_source_internal_conflict" if len(distinct_values) > 1 else "single_source_only")
     if any(v["low_ocr_confidence"] for v in values):
         flags.append("low_ocr_confidence")
     if reference is None:
@@ -1105,7 +1112,7 @@ def model_summary(report: Mapping[str, Any], *, top_n: int = 5, max_chars: int =
 def ui_view(report: Mapping[str, Any]) -> dict[str, Any]:
     """UI-facing structure: one table row per reconciliation, one cell per independent value."""
     rows = []
-    for row in report.get("rows", []):
+    for row in [*(report.get("rows") or []), *(report.get("single_source_rows") or [])]:
         period = row["period"]
         title = {"zh": f"{row['entity_hint']} {row['metric_label']['zh']}" + (f" · {period}" if period else ""),
                  "en": f"{row['entity_hint']} {row['metric_label']['en']}" + (f" · {period}" if period else "")}

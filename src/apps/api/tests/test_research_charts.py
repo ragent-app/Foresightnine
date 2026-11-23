@@ -1471,3 +1471,82 @@ def test_market_data_normalize_base_100_and_legacy_daily_close_still_work():
     legacy = "NVDA | 2025-01-02 | daily close | 105.00 USD\nNVDA | 2025-01-03 | daily close | 110.00 USD\n"
     chart = _price_chart(_make_source("hp-l", legacy, kind="market_data", provenance={"currency": "USD"}))
     assert [p.y for p in chart.series[0].points] == ["105", "110"]
+
+
+def test_table_export_enforces_cell_provenance_and_blocks_forged_versions(monkeypatch):
+    from app.research_tables import ResearchTable
+    from app.research_topics import VersionInput
+
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    client = TestClient(api.app)
+    token = client.post("/v1/auth/local/register", json={"email": "table-export@example.test", "password": "correct horse battery staple!"}).json()["access_token"]
+    headers = {"Authorization": "Bearer " + token}
+    account_id = client.get("/v1/account", headers=headers).json()["account"]["account_id"]
+    restricted = api.research_sources.create(account_id, api.SourceInput(title="Restricted", text="Revenue 100 USD", kind="market_data", permissions=SourcePermissions(store=True, display=True, model_input=True, export=False)))
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue?"}).json()
+    topic_id, parent = topic["topic_id"], topic["versions"][-1]["version_id"]
+    content = api.research_topics.get(account_id, topic_id).versions[-1].content.model_copy(deep=True)
+    content.tables = [ResearchTable.model_validate({"table_id": "t1", "table_type": "comparison", "title": "Revenue", "columns": [{"key": "v", "label": "Revenue"}], "rows": [{"cells": {"v": {"kind": "fact", "display_value": "100", "provenance": {"source_id": restricted.source_id, "fact_id": "f1", "unit": "USD", "period": "2025"}}}}]})]
+    edit = client.post(f"/v2/research/topics/{topic_id}/versions", headers=headers, json={"parent_version_id": parent, "content": content.model_dump(mode="json"), "review": "draft", "note": ""})
+    assert edit.status_code == 422
+    updated = api.research_topics.add_version(account_id, topic_id, VersionInput(parent_version_id=parent, content=content, review="draft", note=""))
+    version = updated.versions[-1].version_id
+    assert client.get(f"/v2/research/topics/{topic_id}/versions/{version}/export", headers=headers).status_code == 403
+    public = api.research_sources.create(account_id, api.SourceInput(title="Public", text="Revenue 100 USD", kind="user_supplied", permissions=SourcePermissions(store=True, display=True, model_input=True, export=True)))
+    content.tables[0].rows[0].cells["v"].provenance.source_id = public.source_id
+    updated = api.research_topics.add_version(account_id, topic_id, VersionInput(parent_version_id=version, content=content, review="draft", note=""))
+    reopened_version = updated.versions[-1].version_id
+    response = client.get(f"/v2/research/topics/{topic_id}/versions/{reopened_version}/export", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["version"]["content"]["tables"][0]["rows"][0]["cells"]["v"]["display_value"] == "100"
+    assert any(item["source_id"] == public.source_id for item in response.json()["source_provenance"])
+
+
+def test_runtime_table_submission_rejects_unknown_marker_then_persists_corrected_report():
+    src = _make_source("s1", "FY2025 revenue 100 million USD.", title="Income Statement")
+    seen = []
+    def resolver(step, messages):
+        seen.append(step)
+        if step == 0:
+            return _tool_turn("read_sources", {"reads": [{"source_id": "s1"}], "rationale": "Read filing"}, "read")
+        if step == 1:
+            return _tool_turn("record_facts", {"facts": [{"label": "Revenue", "value": 100, "unit": "millions", "currency": "USD", "period": "FY2025", "source_id": "s1", "quotation": "FY2025 revenue 100 million USD."}], "rationale": "Record revenue"}, "facts")
+        if step == 2:
+            fact = json.loads([m for m in messages if m.get("role") == "tool"][-1]["content"])["facts"][0]
+            return _tool_turn("create_table", {"title": "Revenue", "columns": [{"key": "v", "label": "Revenue"}], "rows": [{"label": "FY2025", "cells": {"v": {"kind": "fact", "fact_id": fact["fact_id"]}}}], "rationale": "Show revenue"}, "table")
+        table_result = next(json.loads(m["content"]) for m in messages if m.get("role") == "tool" and 'embed_marker' in m.get("content", ""))
+        marker = "[[table:missing]]" if step == 3 else table_result["embed_marker"]
+        return _tool_turn("submit_research", {"status": "completed", "report": f"Revenue\n\n{marker}", "claims": [{"text": "Revenue was 100 million USD.", "source_id": "s1", "quotation": "FY2025 revenue 100 million USD.", "role": "support"}], "limitations": [], "stopping_reason": "answered"}, f"submit-{step}")
+    outcome = run_research_agent(question="Revenue?", sources=[src], model=_ScriptedModel(resolver), context=_context())
+    assert outcome.status == "completed"
+    assert len(outcome.tables) == 1
+    assert f"[[table:{outcome.tables[0]['table_id']}]]" in outcome.report
+    assert 4 in seen  # The rejected submission caused a corrective model turn.
+
+
+def test_normalized_price_comparison_uses_first_common_date_and_rejects_disjoint_series():
+    sources = {
+        "ipo": _make_source("ipo", "IPO | 2025-01-03 | daily close | 100 USD\nIPO | 2025-01-06 | daily close | 117.07 USD"),
+        "asset": _make_source("asset", "AST | 2025-01-02 | daily close | 200 USD\nAST | 2025-01-03 | daily close | 100 USD\nAST | 2025-01-06 | daily close | 87.15 USD"),
+        "benchmark": _make_source("benchmark", "IDX | 2025-01-03 | daily close | 100 USD\nIDX | 2025-01-06 | daily close | 91.50 USD"),
+    }
+    payload = {"chart_type": "price_series", "title": "Comparison", "y_axes": [{"id": "left", "label": "Index"}], "series": [{"name": sid, "mark": "line", "binding": {"kind": "historical_prices", "source_id": sid, "normalize_base_100": True}} for sid in sources], "rationale": "Compare aligned closes"}
+    chart = build_research_chart(CreateChartRequest.model_validate(payload), facts=[], calculations=[], sources=sources)
+    assert chart.normalization_base == "2025-01-03"
+    assert "2025-01-03" in chart.subtitle
+    assert [[p.y for p in series.points] for series in chart.series] == [["100", "117.07"], ["100", "87.15"], ["100", "91.5"]]
+    assert all(series.points[0].x == "2025-01-03" for series in chart.series)
+    sources["benchmark"] = _make_source("benchmark", "IDX | 2025-01-07 | daily close | 100 USD")
+    with pytest.raises(ChartBuildError, match="no common observation"):
+        build_research_chart(CreateChartRequest.model_validate(payload), facts=[], calculations=[], sources=sources)
+
+
+def test_normalized_intraday_comparison_matches_instants_across_timezones():
+    left = _make_source('left', 'AAA@XNYS | 2025-01-03T09:30:00-05:00 | 1h | O 10 H 10 L 10 C 10 V 10 USD\nAAA@XNYS | 2025-01-03T10:30:00-05:00 | 1h | O 11 H 11 L 11 C 11 V 10 USD')
+    right = _make_source('right', 'BBB@XLON | 2025-01-03T14:30:00+00:00 | 1h | O 20 H 20 L 20 C 20 V 10 USD\nBBB@XLON | 2025-01-03T15:30:00+00:00 | 1h | O 18 H 18 L 18 C 18 V 10 USD')
+    payload = {'chart_type': 'price_series', 'title': 'Intraday', 'y_axes': [{'id': 'left', 'label': 'Index'}], 'series': [{'name': sid, 'mark': 'line', 'binding': {'kind': 'historical_prices', 'source_id': sid, 'normalize_base_100': True}} for sid in ('left', 'right')], 'rationale': 'Compare'}
+    chart = build_research_chart(CreateChartRequest.model_validate(payload), facts=[], calculations=[], sources={'left': left, 'right': right})
+    assert chart.normalization_base == '2025-01-03T14:30:00+00:00'
+    assert [p.x for p in chart.series[0].points] == [p.x for p in chart.series[1].points]
+    assert [p.y for p in chart.series[0].points] == ['100', '110']
+    assert [p.y for p in chart.series[1].points] == ['100', '90']

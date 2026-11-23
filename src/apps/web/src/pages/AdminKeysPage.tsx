@@ -28,7 +28,7 @@ export function AdminKeysPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [clearing, setClearing] = useState<KeyStatus | null>(null);
-  const headers = token ? { "X-Admin-Elevation": token } : undefined;
+  const headers: Record<string, string> = token ? { "X-Admin-Elevation": token } : {};
 
   useEffect(() => {
     let active = true;
@@ -37,7 +37,7 @@ export function AdminKeysPage() {
   }, []);
 
   const load = useCallback(async () => {
-    const options = { headers: token ? { "X-Admin-Elevation": token } : undefined };
+    const options = token ? { headers: { "X-Admin-Elevation": token } } : {};
     const [keyData, auditData] = await Promise.all([
       apiRequest<{ keys: KeyStatus[] }>("/v1/admin/keys", options),
       apiRequest<{ entries: AuditEntry[] }>("/v1/admin/audit", options),

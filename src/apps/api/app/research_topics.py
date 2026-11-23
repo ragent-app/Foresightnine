@@ -16,6 +16,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .storage import JsonDocumentRepository, StorageConflictError, owner_items
 from .research_calculations import BINARY_FORMULAS, FormulaId, MULTI_FACT_FORMULAS, calculation_result_status
 from .research_charts import ResearchChart
+from .research_tables import ResearchTable
+from .research_market_analytics import AnalyzeMarketSeriesRequest
 
 
 class ResearchInput(BaseModel):
@@ -69,6 +71,11 @@ class ResearchClaim(BaseModel):
     text: str = Field(min_length=1, max_length=3000)
     citations: list[Citation] = Field(default_factory=list, max_length=10)
     challenges_claim_ids: list[str] = Field(default_factory=list)
+    fact_ids: list[str] = Field(default_factory=list)
+    calculation_ids: list[str] = Field(default_factory=list)
+    grounding_status: Literal["mechanically_checked", "needs_review"] | None = None
+    reasoning: str | None = None
+    qualification: str | None = None
     edited_by_user: bool = False
 
 
@@ -117,9 +124,24 @@ class CalculationScaleAdjustment(BaseModel):
     aligned_value: str
 
 
+class ReturnContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    entry_type: Literal["issue_price", "first_close", "open", "close", "unknown"]
+    start_date: str
+    end_date: str
+    start_price: str
+    end_price: str
+    instrument: str | None = None
+    price_basis: str
+    identity_verified: bool
+    start_price_type: Literal["open", "close", "issue_price"]
+    end_price_type: Literal["open", "close", "issue_price"]
+
+
 class ResearchCalculation(BaseModel):
     model_config = ConfigDict(extra="forbid")
     calculation_id: str = Field(min_length=1, max_length=200)
+    return_context: ReturnContext | None = None
     turn_id: str | None = None
     formula_id: FormulaId
     formula_version: str
@@ -164,6 +186,9 @@ class TurnUsage(BaseModel):
     model_calls: int = Field(ge=0)
     search_calls: int = Field(ge=0)
     total_tokens: int = Field(ge=0)
+    reported_tokens: int | None = Field(default=None, ge=0)
+    unknown_usage_calls: int | None = Field(default=None, ge=0)
+    reserved_estimate_tokens: int | None = Field(default=None, ge=0)
     # partial_unknown: some model call reported no usage. total_tokens is then the ledger total including
     # the reserved estimate for those calls, not a lower bound.
     usage_status: Literal['complete', 'partial_unknown'] | None = Field(default=None, description=(
@@ -200,6 +225,81 @@ class TurnAttribution(BaseModel):
     url: str | None = None
 
 
+class QuestionPartReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    fact_id: str | None = None
+    calculation_id: str | None = None
+    analysis_id: str | None = None
+    chart_id: str | None = None
+    claim_id: str | None = None
+    source_id: str | None = None
+    character_start: int | None = Field(default=None, ge=0)
+    character_end: int | None = Field(default=None, gt=0)
+    origin: Literal["prior", "current"] = "current"
+
+    @model_validator(mode="after")
+    def validate_target(self) -> QuestionPartReference:
+        if not any((self.fact_id, self.calculation_id, self.analysis_id, self.chart_id, self.claim_id, self.source_id)):
+            raise ValueError("An evidence reference requires a target.")
+        if self.character_start is not None or self.character_end is not None:
+            if not self.source_id or self.character_start is None or self.character_end is None or self.character_end <= self.character_start:
+                raise ValueError("A cited range requires a source and ordered offsets.")
+        return self
+
+
+class SavedMarketAnalysis(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    analysis_id: str
+    request: AnalyzeMarketSeriesRequest
+    result: dict
+
+    @model_validator(mode="after")
+    def verify_sources(self) -> SavedMarketAnalysis:
+        expected = {self.request.source_id}
+        if self.request.benchmark_source_id:
+            expected.add(self.request.benchmark_source_id)
+        if self.result.get("source_id") != self.request.source_id or set(self.result.get("source_ids", ())) != expected:
+            raise ValueError("Market analysis sources must match the analyzed series.")
+        return self
+
+
+class ResearchEvidenceRequirement(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    question: str
+    status: Literal["satisfied", "partial", "missing", "unavailable", "conflict", "not_applicable"]
+    reason: str
+    references: list[QuestionPartReference] = Field(default_factory=list)
+    core: bool = True
+
+
+class ResearchQuestionPart(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str | None = None
+    core: bool = True
+    question: str
+    status: Literal["answered", "partial", "unresolved"]
+    answer: str = ""
+    reason: str
+    references: list[QuestionPartReference] = Field(default_factory=list)
+    requirements: list[ResearchEvidenceRequirement] = Field(default_factory=list)
+
+
+class ResearchAttempt(BaseModel):
+    operation_id: str
+    reported_tokens: int | None = Field(default=None, ge=0)
+    unknown_usage_calls: int | None = Field(default=None, ge=0)
+    reserved_estimate_tokens: int | None = Field(default=None, ge=0)
+    elapsed_seconds: float | None = Field(default=None, ge=0)
+    model_calls: int = Field(ge=0)
+    search_calls: int = Field(ge=0)
+    new_facts: int = Field(ge=0)
+    new_calculations: int = Field(ge=0)
+    new_claims: int = Field(ge=0)
+    answered_parts: int = Field(ge=0)
+    reason: str
+
+
 class ResearchTurn(BaseModel):
     """One question and its run. Immutable once saved, except by continuing the same turn."""
     model_config = ConfigDict(extra="forbid")
@@ -216,13 +316,17 @@ class ResearchTurn(BaseModel):
     reason: str
     report: str = ""
     partial_notes: str | None = None
+    question_parts: list[ResearchQuestionPart] = Field(default_factory=list)
+    market_analyses: list[SavedMarketAnalysis] = Field(default_factory=list)
     stopping_note: str | None = None
     claim_ids: list[str] = Field(default_factory=list)
     fact_ids: list[str] = Field(default_factory=list)
     calculation_ids: list[str] = Field(default_factory=list)
     chart_ids: list[str] = Field(default_factory=list)
+    table_ids: list[str] = Field(default_factory=list)
     gaps: list[ResearchGap] = Field(default_factory=list)
     usage: TurnUsage
+    attempts: list[ResearchAttempt] = Field(default_factory=list)
     search_status: str
     official_fetch_status: str
     read_ranges: list[ReadRange] = Field(default_factory=list)
@@ -230,6 +334,7 @@ class ResearchTurn(BaseModel):
     events: list[dict] = Field(default_factory=list)
     # Deterministic run views (versioned UI structures, see research_reconciliation.ui_view / research_coverage_map.ui_view).
     reconciliation: dict | None = None
+    counter_evidence: dict | None = None
     coverage_map: dict | None = None
     method_packs: list[MethodPackRef] = Field(default_factory=list)
     attributions: list[TurnAttribution] = Field(default_factory=list)
@@ -246,6 +351,7 @@ class ResearchContent(BaseModel):
     calculations: list[ResearchCalculation] = Field(default_factory=list)
     claims: list[ResearchClaim] = Field(default_factory=list)
     charts: list[ResearchChart] = Field(default_factory=list)
+    tables: list[ResearchTable] = Field(default_factory=list)
     # Open gaps: the latest turn's gaps.
     gaps: list[ResearchGap] = Field(default_factory=list)
     turns: list[ResearchTurn] = Field(default_factory=list)

@@ -353,6 +353,9 @@ class ResearchExecutionContext:
             if receipt is not None:
                 receipt['settlement'] = ('settled' if settled and known and receipt['provider'] == 'returned' else 'unknown')
             charge = tokens if settled and known else reserved
+            if receipt is not None:
+                receipt['reported_tokens'] = tokens if known else None
+                receipt['reserved_estimate_tokens'] = reserved if not known else None
             self.accounted_tokens = self.accounted_tokens + charge if self.accounted_tokens is not None and charge is not None else None
             reported = tokens if settled and known else None
             self.usage = (reported if previous_calls == 0 else

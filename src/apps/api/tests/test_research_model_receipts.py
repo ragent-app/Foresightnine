@@ -14,13 +14,19 @@ def test_returned_and_settled_requires_known_usage_and_successful_settlement():
     before = ctx.start_model('a', 100)
     assert ctx.invoke_model('a', lambda: ({}, 12)) == ({}, 12)
     ctx.finish_model('a', 12, before)
-    assert ctx.model_call_receipts['a'] == {'provider': 'returned', 'settlement': 'settled', 'processing_error': None}
+    assert ctx.model_call_receipts['a'] == {'provider': 'returned', 'settlement': 'settled', 'processing_error': None,
+                                            'reported_tokens': 12, 'reserved_estimate_tokens': None}
     ctx.mark_model_processing_error('a', 'contract_validation')
     assert ctx.model_call_receipts['a']['processing_error'] == 'contract_validation'
     before = ctx.start_model('b', 100)
     ctx.invoke_model('b', lambda: ({}, None))
     ctx.finish_model('b', None, before)
     assert ctx.model_call_receipts['b']['settlement'] == 'unknown'
+    from app.research_turn_persister import receipt_breakdown
+    event = {'call_id': 'a', 'kind': 'model', 'usage': 12}
+    assert receipt_breakdown(ctx.model_call_receipts, [event, event], ctx.accounted_tokens) == {
+        'reported_tokens': 12, 'unknown_usage_calls': 1, 'reserved_estimate_tokens': 100,
+    }
 
 
 def test_provider_exception_and_settlement_failure_stay_unknown():

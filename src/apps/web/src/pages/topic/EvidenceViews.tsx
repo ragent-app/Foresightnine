@@ -7,6 +7,7 @@ import { parseAttributions, parseCoverageMap, parseReconciliation } from "../../
 import { Disclosure } from "../../ui/controls";
 
 const BADGE_TONE: Readonly<Record<string, string>> = {
+  single_source: "neutral",
   consistent: "support",
   rounding_only: "neutral",
   differs_minor: "review",
@@ -50,7 +51,7 @@ function ReconRow({ row }: { row: ReconciliationRow }) {
     <tr>
       <th scope="row">
         <span className="ev-title">{row.title.zh || row.title.en}</span>
-        <span className={`role light ${tone}`}>{RECONCILIATION_BADGE_LABEL[row.badge] ?? row.badge}</span>
+        <span className={`role light ${tone}`}>{row.badge === "single_source" ? "仅单一来源，未交叉核实" : RECONCILIATION_BADGE_LABEL[row.badge] ?? row.badge}</span>
       </th>
       <td>
         {row.reference?.value ? <b>{row.reference.value}</b> : <span className="meta">无参考值</span>}
@@ -62,6 +63,7 @@ function ReconRow({ row }: { row: ReconciliationRow }) {
             <li key={`${cell.fact_id}-${idx}`}>
               <b>{cell.display_value}</b>
               <span className="meta">{[SOURCE_CLASS_LABEL[cell.source_class] ?? cell.source_class, cell.host, cell.as_of ?? cell.published_at].filter(Boolean).join(" · ")}</span>
+              {cell.quotation_excerpt ? <blockquote>{cell.quotation_excerpt}</blockquote> : null}
               {cell.is_reference ? <span className="role light support">参考</span> : null}
               {cell.low_ocr_confidence ? <span className="role light review">OCR 置信度低</span> : null}
             </li>
@@ -77,7 +79,7 @@ export function ReconciliationTable({ view }: { view: ReconciliationView }) {
   return (
     <div className="ev-block">
       <div className="gtitle">多来源口径核对</div>
-      <p className="note">同一指标、期间与口径的数字来自不同来源时并排列出；不会自动修正任何数值，转载只算一个独立来源。</p>
+      <p className="note">仅比较已记录且可匹配的数值；单一来源未交叉核实。数值差异可能来自口径或模型解释，需查看来源原文；不会自动修正任何数值。</p>
       <div className="md-table-scroll">
         <table className="ev-table">
           <thead>
@@ -101,8 +103,13 @@ function docPagesNote(doc: CoverageDocument): string[] {
   return parts;
 }
 
+const SOURCE_ORIGINS: Record<string, string> = { regulatory_filing: "监管披露", verified_issuer: "已确认发行人", issuer_candidate_unverified: "可能为发行人网站（未确认）", website_unverified: "网站来源（身份未确认）", data_provider: "数据服务", user_upload: "用户上传", unknown: "来源身份未知" };
+const INGESTION: Record<string, string> = { user_supplied: "用户提供", official: "官方来源", market_data: "行情数据" };
+const METHODS: Record<string, string> = { web_html: "网页", web_pdf: "网页 PDF", user_pdf: "上传 PDF", user_html: "上传网页", user_supplied: "用户输入", official_html: "官方网页", sec_filing_html: "监管文件", market_data: "行情接口", historical_prices: "历史价格", sec_companyfacts: "监管结构化财务数据", sec_companyconcept: "监管结构化财务数据", structured_financials: "结构化财务数据" };
+const PERMISSIONS: Record<string, string> = { store: "保存", model_input: "模型使用", display: "展示", export: "导出" };
+
 export function CoverageMapBlock({ coverage }: { coverage: CoverageMapView }) {
-  const docs = coverage.documents.filter((doc) => docPagesNote(doc).length > 0);
+  const docs = coverage.documents;
   return (
     <div className="ev-block">
       <div className="gtitle">取证覆盖与缺口</div>
@@ -121,11 +128,11 @@ export function CoverageMapBlock({ coverage }: { coverage: CoverageMapView }) {
         })}
       </ul>
       {docs.length > 0 ? (
-        <ul className="ev-docs" aria-label="未读与待识别页面">
+        <ul className="ev-docs" aria-label="来源身份与覆盖">
           {docs.map((doc) => (
             <li key={doc.source_id}>
               <span className="ev-title">{doc.title || doc.source_id}</span>
-              <span className="meta">{docPagesNote(doc).join(" · ")}</span>
+              <span className="meta">{[doc.origin ? SOURCE_ORIGINS[doc.origin] ?? "来源身份未知" : "", doc.ingestion_kind ? `入口：${INGESTION[doc.ingestion_kind] ?? "未知"}` : "", doc.retrieval_method ? `获取方式：${METHODS[doc.retrieval_method] ?? "未知"}` : "", doc.permissions ? `权限：${Object.entries(doc.permissions).filter(([, allowed]) => allowed).map(([key]) => PERMISSIONS[key] ?? key).join("、") || "无"}` : "", ...docPagesNote(doc)].filter(Boolean).join(" · ")}</span>
             </li>
           ))}
         </ul>
@@ -150,16 +157,30 @@ export function AttributionLine({ items }: { items: readonly TurnAttributionView
   );
 }
 
+function CounterEvidenceView({ value }: { value: unknown }) {
+  if (!value || typeof value !== "object") return null;
+  const data = value as Record<string, unknown>;
+  const attempts = Array.isArray(data.attempts) ? data.attempts.filter((a): a is Record<string, unknown> => !!a && typeof a === "object") : [];
+  const findings = Array.isArray(data.linked_findings) ? data.linked_findings.filter((a): a is Record<string, unknown> => !!a && typeof a === "object") : [];
+  if (!attempts.length && !findings.length) return null;
+  return <div className="ev-block"><div className="gtitle">反证检查</div>
+    <p className="note">外部搜索 {attempts.filter((a) => a.scope === "external").length} 次；文内搜索 {attempts.filter((a) => a.scope === "document").length} 次；关联反证 {findings.length} 条。搜索未找到结果不代表不存在反证，来源独立性与模型解释仍需核查。</p>
+    <ul>{attempts.map((a, index) => <li key={index}>{a.scope === "external" ? "外部搜索" : "文内搜索"}：{String(a.target ?? "")} · 查找 {String(a.hypothesis ?? "")} · {String(a.status ?? "未知")}{a.source_id ? ` · 来源 ${String(a.source_id)}` : ""}</li>)}</ul>
+    {findings.length ? <ul>{findings.map((f, index) => <li key={index}>关联观点 {String(f.target_claim_id ?? "")} · 来源 {String(f.source_id ?? "")}<blockquote>{String(f.quotation ?? "")}</blockquote><span className="note">独立性未核实</span></li>)}</ul> : <p className="note">尚无已关联的反证。</p>}
+  </div>;
+}
+
 /** 数据截至、口径核对表、覆盖与缺口地图和来源署名，来自一轮研究保存的确定性视图。 */
 export function EvidenceViews({ turn }: { turn: ResearchV2.ResearchTurn }) {
   const reconciliation = useMemo(() => parseReconciliation(turn.reconciliation), [turn.reconciliation]);
   const coverage = useMemo(() => parseCoverageMap(turn.coverage_map), [turn.coverage_map]);
   const attributions = useMemo(() => parseAttributions(turn.attributions), [turn.attributions]);
   const differs = reconciliation?.rows.some((row) => row.status === "differs") ?? false;
-  if (!reconciliation && !coverage && attributions.length === 0) return null;
+  if (!reconciliation && !coverage && !turn.counter_evidence && attributions.length === 0) return null;
   return (
     <div className="ev-views">
       {coverage ? <DataAsOfList coverage={coverage} /> : null}
+      <CounterEvidenceView value={turn.counter_evidence} />
       {reconciliation || coverage ? (
         <Disclosure summary="口径核对与取证覆盖" defaultOpen={differs}>
           {reconciliation ? <ReconciliationTable view={reconciliation} /> : null}

@@ -505,3 +505,13 @@ def test_fiscal_alignment_hints_surface_fy_vs_year_end_date_without_merging():
     assert summary["fiscal_alignment_hints"] == hints
     ui = ui_view(report)
     assert ui["fiscal_alignment_hints"] == hints
+
+
+def test_single_source_is_exposed_separately_without_claiming_comparison():
+    report = reconcile([fact('machine', 'ANT close', '97.17', 'USD', 'bar', currency='USD')], sources('bar'))
+    assert report['rows'] == []
+    assert len(report['single_source_rows']) == 1
+    view = ui_view(report)
+    assert view['rows'][0]['status'] == 'single_source'
+    assert view['rows'][0]['independent_source_count'] == 1
+    assert view['rows'][0]['cells'][0]['source_id'] == 's_bar'

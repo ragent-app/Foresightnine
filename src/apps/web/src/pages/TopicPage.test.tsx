@@ -95,7 +95,11 @@ const CLAIMS: ResearchV2.ResearchClaim[] = [
 describe("TopicPage", () => {
   it("shows a partial turn with its gaps and offers to continue when recovery allows it", async () => {
     const partial = turn(1, { status: "partial", reason: "no_submission", gaps: [{ code: "no_cited_claims", message: "x" }] });
-    const completed = turn(2, { claim_ids: ["C1", "C2"], report: "第一段。\n\n第二段。" });
+    const completed = turn(2, {
+      claim_ids: ["C1", "C2"], report: "披露收入 [[claim:C1]]。另附标记示例 `[[claim:C2]]`。",
+      question_parts: [{ id: "revenue", question: "本期收入是多少？", status: "answered",
+        answer: "总收入为 48,612 百万美元。", reason: "年报披露", references: [{ claim_id: "C1" }] }],
+    });
     mockApi((url) => {
       if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([partial, completed], CLAIMS));
       if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_2", "completed"), operation("op_1", "failed")]);
@@ -107,6 +111,11 @@ describe("TopicPage", () => {
     expect(within(turn2).getByText("完成")).toBeTruthy();
     expect(within(turn2).getByText("支持")).toBeTruthy();
     expect(within(turn2).getByText("待复核")).toBeTruthy();
+    expect(within(turn2).getByRole("region", { name: "问题各部分的进展" })).toBeTruthy();
+    const marker = within(turn2).getByRole("link", { name: "查看依据" });
+    expect(marker.getAttribute("href")).toBe("#claim-C1");
+    expect(document.getElementById("claim-C1")?.textContent).toContain("48,612");
+    expect(within(turn2).getByText("[[claim:C2]]", { selector: "code" })).toBeTruthy();
     // The same quotation cited twice reuses one citation number.
     expect(within(turn2).getAllByRole("button", { name: "引用 1" })).toHaveLength(2);
     // The partial turn is not the last one, so it shows its gaps without actions.
@@ -446,6 +455,32 @@ describe("TopicPage", () => {
       expect(await screen.findByText("10-K")).toBeTruthy();
       await waitFor(() => expect(screen.getByRole("link", { name: /打开网页/ })).toBeTruthy());
       expect(screen.queryByRole("button", { name: /获取原文/ })).toBeNull();
+    });
+
+    it("reopens saved partial question components with evidence and missing details", async () => {
+      const partial = turn(1, { status: "partial", reason: "provider_timeout", question: "Revenue and entry timing?",
+        question_parts: [
+          { question: "Revenue", status: "answered", answer: "The filing reports 100 USD.", reason: "", references: [{ fact_id: "f1", origin: "prior" }] },
+          { question: "entry timing", status: "unresolved", answer: "", reason: "Current price and entry criteria are missing.", references: [] },
+        ] });
+      const base = topicWith([partial]);
+      const facts: ResearchV2.ResearchFact[] = [{ fact_id: "f1", label: "Revenue", value: "100", unit: "USD", currency: "USD", period: "2025", source_id: "s1", quotation: "Revenue was 100 USD.", character_start: 0, character_end: 20, location: { character_start: 0, character_end: 20 }, verification: "numeric_and_location_match_semantics_not_verified" }];
+      const saved = { ...base, versions: [base.versions[0]!, { ...base.versions[1]!, content: { ...base.versions[1]!.content, facts } }] };
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(saved);
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+        return undefined;
+      });
+      const page = renderTopic();
+      let region = await screen.findByRole("region", { name: "第 1 轮" });
+      expect(within(region).getByText("The filing reports 100 USD.")).toBeTruthy();
+      expect(within(region).getByText("Current price and entry criteria are missing.")).toBeTruthy();
+      expect(within(region).getByText(/此前记录/)).toBeTruthy();
+      page.unmount();
+      renderTopic();
+      region = await screen.findByRole("region", { name: "第 1 轮" });
+      expect(within(region).getByText("The filing reports 100 USD.")).toBeTruthy();
+      expect(within(region).getByRole("button", { name: "查看原文" })).toBeTruthy();
     });
 
     it("renders partial_notes as an explicitly labeled unverified note on a partial turn", async () => {

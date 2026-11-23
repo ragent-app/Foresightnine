@@ -1,0 +1,247 @@
+{
+  "method": "offline reassessment from frozen saved facts/calculations and authorized fixed exhibit; no model requests",
+  "question": "Record both annual revenues, calculate FY2025 year-over-year growth with calculate_financials, and cite the evidence.",
+  "evidence_limit": "Numeric and source locations matched; semantic support is not automatically verified. Original run status is unchanged.",
+  "results": [
+    {
+      "run_id": "facts-1-A",
+      "input_sha256": "520359e53c641193958442b39c5819448810cce341a8e2be154ce5a1813b34cb",
+      "original_status": "partial",
+      "original_reason": "provider_budget_exhausted",
+      "parts": [
+        {
+          "question": "Record both annual revenues",
+          "status": "answered",
+          "answer": "Annual revenue FY2025 120 USD million；Annual revenue FY2024 100 USD million",
+          "references": [
+            {
+              "fact_id": "fact-f4ec3ab789c1737eb46bb4ffa002ee0d9073f33ec9a4d6282054fcfb099b601c",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-462b39845917d069860f5ab0539821e07e358b98a7ccf4b91299c148473dae0c",
+              "origin": "current"
+            }
+          ],
+          "reason": "Eligible, located facts cover the requested metric and years; semantic interpretation remains subject to review."
+        },
+        {
+          "question": "calculate FY2025 year-over-year growth with calculate_financials",
+          "status": "answered",
+          "answer": "Annual revenue FY2025 120 USD million；Annual revenue FY2024 100 USD million；growth_percent 20.00 percent",
+          "references": [
+            {
+              "fact_id": "fact-f4ec3ab789c1737eb46bb4ffa002ee0d9073f33ec9a4d6282054fcfb099b601c",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-462b39845917d069860f5ab0539821e07e358b98a7ccf4b91299c148473dae0c",
+              "origin": "current"
+            },
+            {
+              "calculation_id": "calc-33d6d82d9762432eaaedb564d0e59ac6",
+              "origin": "current"
+            }
+          ],
+          "reason": "Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review."
+        },
+        {
+          "question": "cite the evidence",
+          "status": "answered",
+          "answer": "Annual revenue FY2025 120 USD million；Annual revenue FY2024 100 USD million",
+          "references": [
+            {
+              "fact_id": "fact-f4ec3ab789c1737eb46bb4ffa002ee0d9073f33ec9a4d6282054fcfb099b601c",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-462b39845917d069860f5ab0539821e07e358b98a7ccf4b91299c148473dae0c",
+              "origin": "current"
+            }
+          ],
+          "reason": "Recorded facts link to eligible original source ranges; semantic support remains subject to review."
+        }
+      ]
+    },
+    {
+      "run_id": "facts-1-B",
+      "input_sha256": "e92eb694e19a7e6d43854654dd79c8d69dbcf3ab80dbaf1f862bc2026bdd501e",
+      "original_status": "partial",
+      "original_reason": "provider_output_truncated",
+      "parts": [
+        {
+          "question": "Record both annual revenues",
+          "status": "answered",
+          "answer": "Annual revenue FY2025 120 USD million；Annual revenue FY2024 100 USD million",
+          "references": [
+            {
+              "fact_id": "fact-f4ec3ab789c1737eb46bb4ffa002ee0d9073f33ec9a4d6282054fcfb099b601c",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-462b39845917d069860f5ab0539821e07e358b98a7ccf4b91299c148473dae0c",
+              "origin": "current"
+            }
+          ],
+          "reason": "Eligible, located facts cover the requested metric and years; semantic interpretation remains subject to review."
+        },
+        {
+          "question": "calculate FY2025 year-over-year growth with calculate_financials",
+          "status": "answered",
+          "answer": "revenue FY2025 120 USD million；revenue FY2024 100 USD million；growth_percent 20.00 percent",
+          "references": [
+            {
+              "fact_id": "fact-d525371f2f17a9556ba83a1f30bc3abb0764f0b9cd2164a6ccb85e90093c78e8",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-8ab09baf30ee5d6608a9771f71b2be2d9514309514e59c5cab45fb6e973f6aa9",
+              "origin": "current"
+            },
+            {
+              "calculation_id": "calc-fd7e5591e1fd47a8a26c3535612d0e95",
+              "origin": "current"
+            }
+          ],
+          "reason": "Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review."
+        },
+        {
+          "question": "cite the evidence",
+          "status": "answered",
+          "answer": "Annual revenue FY2025 120 USD million；Annual revenue FY2024 100 USD million",
+          "references": [
+            {
+              "fact_id": "fact-f4ec3ab789c1737eb46bb4ffa002ee0d9073f33ec9a4d6282054fcfb099b601c",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-462b39845917d069860f5ab0539821e07e358b98a7ccf4b91299c148473dae0c",
+              "origin": "current"
+            }
+          ],
+          "reason": "Recorded facts link to eligible original source ranges; semantic support remains subject to review."
+        }
+      ]
+    },
+    {
+      "run_id": "facts-2-A",
+      "input_sha256": "5c283a7109a36b9bb40d0a7df958e6cad9a7223a4424186e298ccfdf900c8d9e",
+      "original_status": "partial",
+      "original_reason": "provider_budget_exhausted",
+      "parts": [
+        {
+          "question": "Record both annual revenues",
+          "status": "answered",
+          "answer": "Annual revenue FY2025 120 USD million；Annual revenue FY2024 100 USD million",
+          "references": [
+            {
+              "fact_id": "fact-f4ec3ab789c1737eb46bb4ffa002ee0d9073f33ec9a4d6282054fcfb099b601c",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-462b39845917d069860f5ab0539821e07e358b98a7ccf4b91299c148473dae0c",
+              "origin": "current"
+            }
+          ],
+          "reason": "Eligible, located facts cover the requested metric and years; semantic interpretation remains subject to review."
+        },
+        {
+          "question": "calculate FY2025 year-over-year growth with calculate_financials",
+          "status": "answered",
+          "answer": "Annual revenue FY2025 120 USD million；Annual revenue FY2024 100 USD million；growth_percent 20.00 percent",
+          "references": [
+            {
+              "fact_id": "fact-f4ec3ab789c1737eb46bb4ffa002ee0d9073f33ec9a4d6282054fcfb099b601c",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-462b39845917d069860f5ab0539821e07e358b98a7ccf4b91299c148473dae0c",
+              "origin": "current"
+            },
+            {
+              "calculation_id": "calc-00390b1b36cf439bb6162e4f8240f2d5",
+              "origin": "current"
+            }
+          ],
+          "reason": "Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review."
+        },
+        {
+          "question": "cite the evidence",
+          "status": "answered",
+          "answer": "Annual revenue FY2025 120 USD million；Annual revenue FY2024 100 USD million",
+          "references": [
+            {
+              "fact_id": "fact-f4ec3ab789c1737eb46bb4ffa002ee0d9073f33ec9a4d6282054fcfb099b601c",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-462b39845917d069860f5ab0539821e07e358b98a7ccf4b91299c148473dae0c",
+              "origin": "current"
+            }
+          ],
+          "reason": "Recorded facts link to eligible original source ranges; semantic support remains subject to review."
+        }
+      ]
+    },
+    {
+      "run_id": "facts-2-B",
+      "input_sha256": "b292879745854d1addf93b928ea1ca19c5afc0547bc391876615844556ecb3e8",
+      "original_status": "partial",
+      "original_reason": "provider_output_truncated",
+      "parts": [
+        {
+          "question": "Record both annual revenues",
+          "status": "answered",
+          "answer": "Annual revenue FY2025 120 USD million；Annual revenue FY2024 100 USD million",
+          "references": [
+            {
+              "fact_id": "fact-f4ec3ab789c1737eb46bb4ffa002ee0d9073f33ec9a4d6282054fcfb099b601c",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-462b39845917d069860f5ab0539821e07e358b98a7ccf4b91299c148473dae0c",
+              "origin": "current"
+            }
+          ],
+          "reason": "Eligible, located facts cover the requested metric and years; semantic interpretation remains subject to review."
+        },
+        {
+          "question": "calculate FY2025 year-over-year growth with calculate_financials",
+          "status": "answered",
+          "answer": "Annual revenue FY2025 120 USD million；Annual revenue FY2024 100 USD million；growth_percent 20.00 percent",
+          "references": [
+            {
+              "fact_id": "fact-f4ec3ab789c1737eb46bb4ffa002ee0d9073f33ec9a4d6282054fcfb099b601c",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-462b39845917d069860f5ab0539821e07e358b98a7ccf4b91299c148473dae0c",
+              "origin": "current"
+            },
+            {
+              "calculation_id": "calc-2295c842e93b41a780946ecc64fed051",
+              "origin": "current"
+            }
+          ],
+          "reason": "Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review."
+        },
+        {
+          "question": "cite the evidence",
+          "status": "answered",
+          "answer": "Annual revenue FY2025 120 USD million；Annual revenue FY2024 100 USD million",
+          "references": [
+            {
+              "fact_id": "fact-f4ec3ab789c1737eb46bb4ffa002ee0d9073f33ec9a4d6282054fcfb099b601c",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-462b39845917d069860f5ab0539821e07e358b98a7ccf4b91299c148473dae0c",
+              "origin": "current"
+            }
+          ],
+          "reason": "Recorded facts link to eligible original source ranges; semantic support remains subject to review."
+        }
+      ]
+    }
+  ]
+}

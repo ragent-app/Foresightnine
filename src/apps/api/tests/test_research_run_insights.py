@@ -177,3 +177,49 @@ def test_research_runtime_never_crashes_when_insights_fail(monkeypatch) -> None:
     assert out.coverage_map is not None
     assert out.coverage_map['status'] == 'degraded'
     assert out.coverage_map['diagnostic']['operation'] == 'run_coverage_map'
+
+
+def test_counter_searches_separate_external_document_and_linked_findings():
+    from app.research_run_insights import evaluate_method_and_reconciliation
+    state = {'counter_searches': [
+        *[{'call_id': f'ext-{i}', 'scope': 'external', 'target': 'IPO demand', 'hypothesis': 'Demand may be weaker', 'query': 'weak demand', 'status': 'completed'} for i in range(2)],
+        *[{'call_id': f'doc-{i}', 'scope': 'document', 'target': 'IPO demand', 'hypothesis': 'Demand may be weaker', 'query': 'risk', 'status': 'completed', 'source_id': 'filing'} for i in range(6)],
+        {'call_id': 'ordinary', 'scope': 'external'},
+    ]}
+    result = evaluate_method_and_reconciliation(state, {}, claims=[])
+    counter = result['counter_evidence']
+    assert counter['external_attempts'] == 2
+    assert counter['document_attempts'] == 6
+    assert counter['completed_actions'] == 8
+    assert counter['linked_findings'] == []
+    assert len(counter['attempts']) == 8
+
+
+def test_only_explicit_search_intent_is_recorded_and_resume_is_idempotent():
+    from types import SimpleNamespace
+    from app.research_tool_executor import _record_counter_search
+    from app.research_tools_registry import SearchSourceRequest
+    ctx = SimpleNamespace(state={})
+    ordinary = SimpleNamespace(req=SearchSourceRequest(source_id='s1', query='risk'), call=SimpleNamespace(id='ordinary'))
+    _record_counter_search(ctx, ordinary, scope='document', result={'status': 'completed'}, source_id='s1')
+    assert ctx.state == {}
+    request = SearchSourceRequest(source_id='s1', query='risk', counter_search={'target': 'IPO valuation', 'hypothesis': 'Valuation may be unsustainable'})
+    invocation = SimpleNamespace(req=request, call=SimpleNamespace(id='counter-1'))
+    for _ in range(2):
+        _record_counter_search(ctx, invocation, scope='document', result={'status': 'completed', 'total_matches': 0}, source_id='s1')
+    assert len(ctx.state['counter_searches']) == 1
+    assert ctx.state['counter_searches'][0]['matches'] == 0
+    assert ctx.state['counter_searches'][0]['target'] == 'IPO valuation'
+
+
+def test_linked_counterfinding_requires_a_distinct_source_and_explicit_target():
+    target = _source('target')
+    contrary = _source('contrary')
+    state = {'prior_claims_meta': [{'claim_id': 'c1', 'source_ids': ['target']}], 'counter_searches': []}
+    def claim(sid):
+        return {'claim_id': 'c2', 'role': 'counterargument', 'challenges_claim_ids': ['c1'], 'citations': [{'source_id': sid, 'quotation': 'Evidence'}]}
+    same = insights.evaluate_method_and_reconciliation(state, {'target': target, 'contrary': contrary}, claims=[claim('target')])
+    assert same['counter_evidence']['linked_findings'] == []
+    distinct = insights.evaluate_method_and_reconciliation(state, {'target': target, 'contrary': contrary}, claims=[claim('contrary')])
+    assert distinct['counter_evidence']['linked_findings'][0]['independence'] == 'not_verified'
+    assert distinct['counter_evidence']['linked_findings'][0]['quotation'] == 'Evidence'

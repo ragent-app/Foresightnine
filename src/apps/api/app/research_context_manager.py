@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import inspect
+from hashlib import sha256
 import json
 import math
 import re
@@ -844,6 +845,16 @@ def _extract_failure_metadata(
                     raw_elapsed_ms = stage.get('elapsed_ms')
                 break
 
+    metrics = call_diag.get('stream_metrics', {}) if isinstance(call_diag, Mapping) else {}
+    frames = _sanitize_bounded_nonneg_int(metrics.get('frames_received')) if isinstance(metrics, Mapping) else None
+    if frames is not None:
+        meta['frames_received'] = frames
+    if (reason in ('provider_timeout', 'provider_transport_error')
+            and ((frames or 0) > 0 or (_sanitize_bounded_nonneg_int(raw_streamed_bytes) or 0) > 0)):
+        meta['interruption'] = 'response_body_after_frames'
+    elif read_field(error, 'interruption') == 'response_body_after_frames':
+        meta['interruption'] = 'response_body_after_frames'
+
     clean_kind = _sanitize_timeout_kind(raw_timeout_kind)
     if clean_kind is not None:
         meta['timeout_kind'] = clean_kind
@@ -892,7 +903,12 @@ def _record_failed_attempt(
         clean_val = _sanitize_bounded_nonneg_int(val)
         if clean_val is not None:
             meta[key] = clean_val
+    evidence_keys = ('facts', 'read_ranges', 'calculations', 'claims', 'charts', 'tables', 'question_parts', 'acquired_source_ids', 'analyzed_market_source_ids')
+    evidence = {key: state.get(key) or [] for key in evidence_keys}
+    evidence_json = json.dumps(evidence, ensure_ascii=False, sort_keys=True, separators=(',', ':'), default=str)
     entry: dict[str, Any] = {
+        'evidence_progress': {key: len(value) if isinstance(value, (list, dict)) else 0 for key, value in evidence.items()},
+        'evidence_fingerprint': sha256(evidence_json.encode('utf-8')).hexdigest(),
         'call_id': clean_call_id,
         'reason': clean_reason,
         'finish_reason': _clip(finish_reason, 100) if isinstance(finish_reason, str) and finish_reason else None,
@@ -925,7 +941,11 @@ def _failure_awareness_payload(state: Mapping[str, Any]) -> tuple[list[dict[str,
         clean_kind = _sanitize_timeout_kind(item.get('timeout_kind'))
         if clean_kind is not None:
             row['timeout_kind'] = clean_kind
-        for meta_key in ('elapsed_ms', 'wire_bytes', 'streamed_bytes'):
+        if item.get('interruption') == 'response_body_after_frames':
+            row['interruption'] = item['interruption']
+        if isinstance(item.get('evidence_progress'), Mapping):
+            row['evidence_progress'] = dict(item['evidence_progress'])
+        for meta_key in ('elapsed_ms', 'wire_bytes', 'streamed_bytes', 'frames_received'):
             meta_val = _sanitize_bounded_nonneg_int(item.get(meta_key))
             if meta_val is not None:
                 row[meta_key] = meta_val
@@ -938,6 +958,12 @@ def _failure_awareness_payload(state: Mapping[str, Any]) -> tuple[list[dict[str,
             'Prior attempt failed due to output/context limit or truncated response. '
             'Do not repeat wide reads or emit overly long drafts; rely on recorded facts and read_ranges, '
             'use search_source and tiny targeted read_sources slices only if essential, and call submit_research concisely.'
+        )
+    elif any(row.get('interruption') == 'response_body_after_frames' for row in recent):
+        guidance = (
+            'The response stream was interrupted after partial frames. Use the recorded evidence and reads; '
+            'choose one narrow unfinished task, persist facts with record_facts in small batches, and submit a concise partial '
+            'result with gaps if necessary. Do not repeat completed work.'
         )
     elif 'provider_timeout' in reasons:
         guidance = (
@@ -1171,6 +1197,8 @@ def _prior_research(
             'calculation_id': c['calculation_id'], 'formula_id': c['formula_id'], 'value': c['value'],
             'unit': c['unit'], 'input_fact_ids': list(input_ids),
         }
+        if c.get('return_context'):
+            row['return_context'] = c['return_context']
         unique_calcs_desc.append((row, _prior_tokens(row) + 1))
 
     selected_calcs_desc: list[dict[str, Any]] = []
@@ -1304,12 +1332,17 @@ def _prior_research(
     if prior_omitted:
         summary['prior_omitted'] = prior_omitted
 
+    # Table metadata is bounded; full cells remain in durable content.
+    prior_tables = [t for t in (prior.get('tables') or []) if isinstance(t, Mapping) and isinstance(t.get('table_id'), str)]
+    summary['tables'] = prior_tables[-50:]
     prior_state = {
+        'prior_table_ids': [t['table_id'] for t in prior_tables],
         'prior_facts': [{key: f.get(key) for key in ('fact_id', 'label', 'value', 'unit', 'currency', 'period', 'source_id',
-                                                      'character_start', 'character_end')} for f in facts_pool],
+                                                      'character_start', 'character_end', 'quotation')} for f in facts_pool],
         'prior_calculations': [{key: c.get(key) for key in ('calculation_id', 'formula_id', 'expression', 'inputs',
-                                                             'value', 'unit', 'currency')} for c in calcs_pool],
+                                                             'value', 'unit', 'currency', 'return_context')} for c in calcs_pool],
         'prior_claim_ids': [c['claim_id'] for c in claims_all],
+        'prior_claims': [dict(c) for c in claims_pool if isinstance(c, Mapping) and isinstance(c.get('claim_id'), str) and c.get('citations') and all(isinstance(cit, Mapping) and cit.get('source_id') in eligible for cit in c['citations'])],
         'prior_claims_meta': [
             {
                 'claim_id': c['claim_id'],
@@ -1327,6 +1360,112 @@ def _prior_research(
         'prior_read_ranges': [{'source_id': r['source_id'], 'start': r['character_start'], 'end': r['character_end']} for r in ranges_all],
     }
     return summary, prior_state
+
+
+def _narrow_recovery_view(state: Mapping[str, Any], source_by_id: Mapping[str, ResearchSource]) -> tuple[str, list[dict[str, Any]]] | None:
+    attempts = state.get('failed_attempts')
+    if not (isinstance(attempts, list) and attempts and isinstance(attempts[-1], Mapping)
+            and (attempts[-1].get('interruption') == 'response_body_after_frames'
+                 or attempts[-1].get('reason') in {'provider_timeout', 'provider_output_truncated',
+                                                 'provider_context_limit', 'incomplete_model_response', 'no_submission'})
+            and state.get('continuation_guidance')):
+        return None
+    try:
+        original = json.loads(state['user'])
+    except (ValueError, TypeError, KeyError):
+        return None
+    if not isinstance(original, dict):
+        return None
+    # A prompt view only: the checkpoint and enforcement state remain authoritative.
+    view = {key: original[key] for key in ('question', 'research_as_of', 'research_clock', 'focus_citation') if key in original}
+    capabilities = original.get('available_capabilities')
+    if isinstance(capabilities, Mapping):
+        view['tool_availability'] = {key: value for key, value in capabilities.items()
+                                     if key.endswith('_available') and type(value) is bool}
+    try:
+        as_of = datetime.fromisoformat(original['research_as_of']) if original.get('research_as_of') else None
+    except (TypeError, ValueError):
+        return None
+    eligible = {src.source_id: src for src, code in source_eligibility(list(source_by_id.values()), as_of)
+                if code == 'eligible'}
+    if (view.get('focus_citation') or {}).get('source_id') not in eligible:
+        view.pop('focus_citation', None)
+    recorded_hashes = {
+        row['source_id']: row['content_sha256'] for row in [*(original.get('sources') or []), *(state.get('_sources') or [])]
+        if isinstance(row, Mapping) and row.get('source_id') and row.get('content_sha256')
+    }
+    unchanged = {sid for sid, src in eligible.items() if recorded_hashes.get(sid) == src.content_sha256}
+    view['sources'] = [{'source_id': src.source_id, 'title': src.title, 'content_sha256': src.content_sha256,
+                        'permissions': src.permissions.model_dump()}
+                       for src in list(eligible.values())[:50]]
+    view['omitted_source_count'] = max(0, len(eligible) - 50)
+    # Historical envelopes can contain original text. Retain complete exchanges only
+    # while every source previously read is still eligible and fits the recovery window.
+    permitted_history = bool(recorded_hashes) and recorded_hashes.keys() <= unchanged and all(row.get('source_id') in unchanged for key in ('prior_read_ranges', 'read_ranges')
+                            for row in (state.get(key) or []) if isinstance(row, Mapping))
+    history = (state.get('history') or []) if permitted_history else []
+    chosen = []
+    remaining = 6000
+    for exchange in reversed(history):
+        if not isinstance(exchange, dict):
+            break
+        size = len(json.dumps(exchange, ensure_ascii=False, default=str))
+        if size > remaining:
+            break
+        remaining -= size
+        chosen.append(exchange)
+    chosen.reverse()
+    retained_reads: dict[str, list[tuple[int, int]]] = {}
+    for exchange in chosen:
+        for result in exchange.get('results', []):
+            try:
+                payload = json.loads(result.get('content', ''))
+            except (ValueError, TypeError, AttributeError):
+                continue
+            for row in payload.get('results', []) if isinstance(payload, Mapping) else []:
+                if not isinstance(row, Mapping):
+                    continue
+                sid, start, end, text = row.get('source_id'), row.get('start'), row.get('end'), row.get('text')
+                if (sid in unchanged and type(start) is int and type(end) is int and 0 <= start < end <= len(eligible[sid].text)
+                        and isinstance(text, str) and text == eligible[sid].text[start:end]):
+                    retained_reads.setdefault(sid, []).append((start, end))
+    for key in ('prior_facts', 'facts', 'read_ranges'):
+        rows = state.get(key) or []
+        selected = []
+        for item in reversed(rows):
+            if not isinstance(item, Mapping) or item.get('source_id') not in unchanged:
+                continue
+            candidate = dict(item)
+            if key == 'read_ranges':
+                start, end = item.get('start'), item.get('end')
+                src = eligible[item['source_id']]
+                if (type(start) is int and type(end) is int and 0 <= start < end <= len(src.text)
+                        and not any(a <= start and end <= b for a, b in retained_reads.get(item['source_id'], []))):
+                    excerpt_end = min(end, start + 320)
+                    candidate.update(excerpt=src.text[start:excerpt_end], excerpt_end=excerpt_end,
+                                     content_sha256=src.content_sha256)
+            elif isinstance(candidate.get('quotation'), str):
+                start, end = candidate.get('character_start'), candidate.get('character_end')
+                if (type(start) is int and type(end) is int
+                        and any(a <= start and end <= b for a, b in retained_reads.get(item['source_id'], []))):
+                    candidate.pop('quotation', None)
+                else:
+                    candidate['quotation'] = candidate['quotation'][:320]
+            selected.append(candidate)
+            if len(selected) >= 12:
+                break
+        if selected:
+            view['recorded_' + key] = list(reversed(selected))
+        if len(rows) > len(selected):
+            view['omitted_' + key + '_count'] = len(rows) - len(selected)
+    from .research_partial_answer import question_parts
+    components = question_parts(str(original.get('question', '')), state, set(eligible))
+    next_part = next((part['question'] for part in components if part['status'] != 'answered'), None)
+    if next_part and next_part != original.get('question'):
+        view['next_question_part'] = next_part
+    view['recovery_scope'] = ('Work on next_question_part first. Use the supplied verified locations; '
+                              'record a supported result or checkpoint a specific gap.')
+    return json.dumps(view, ensure_ascii=False), chosen
 
 
 def build_model_turn_input(
@@ -1359,6 +1498,7 @@ def build_model_turn_input(
         or zero_yield >= 3
         or int(state.get('presubmit_nudges') or 0) > 0
     )
+    narrow_view = _narrow_recovery_view(state, source_by_id)
     tail_note = insights.build_tail_note(
         state,
         source_by_id,
@@ -1372,22 +1512,27 @@ def build_model_turn_input(
         accepts_tail = 'tail_note' in inspect.signature(ModelTurnInput).parameters
     except (TypeError, ValueError):
         accepts_tail = False
+    if narrow_view is not None and failure_payload is not None:
+        recent, guidance = failure_payload
+        latest = recent[-1] if recent else {}
+        tail_note = '[Recovery context: ' + json.dumps({'last_failure': {k: latest[k] for k in ('reason', 'interruption') if k in latest}, 'recovery_guidance': guidance}, ensure_ascii=False, sort_keys=True) + ']'
+    prompt_user, prompt_history = narrow_view if narrow_view is not None else (state['user'], state['history'])
     history_items = tuple(
         ModelTurnExchange(
             ModelAssistantContinuation(item['assistant']),
             tuple(ModelToolResult(**result) for result in item['results']),
         )
-        for item in state['history']
+        for item in prompt_history
     )
     if accepts_tail:
         return ModelTurnInput(
             system_prompt,
-            state['user'],
+            prompt_user,
             tuple(tools),
             history_items,
             tail_note=tail_note,
         )
-    user_text = state['user'] if state['history'] else _user_with_failure_awareness(state['user'], state)
+    user_text = prompt_user if prompt_history else _user_with_failure_awareness(prompt_user, state)
     return ModelTurnInput(
         system_prompt,
         user_text,

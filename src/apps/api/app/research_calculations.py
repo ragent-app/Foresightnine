@@ -868,15 +868,18 @@ def parse_unit_scale(unit: str, currency: str | None = None) -> UnitScaleSpec:
         return UnitScaleSpec("bps", None, "ones", 0, "bps")
 
     if re.search(r"(?:per\s+share|/\s*shares?\b|每股)", lowered):
-        found_curr: str | None = None
-        for token in re.findall(r"[A-Za-z]{3}", norm.upper()):
-            if token in _KNOWN_ISO_CURRENCIES:
-                found_curr = "CNY" if token == "RMB" else token
-                break
-        norm_curr_canon = "CNY" if norm_curr == "RMB" else norm_curr
-        if found_curr and norm_curr_canon and found_curr != norm_curr_canon:
-            raise CalculationError("Input unit currency conflicts with declared currency.")
-        return UnitScaleSpec("price_per_share", norm_curr or found_curr, "ones", 0, norm)
+        numerator = re.sub(r"(?:per\s+share|/\s*shares?\b|每股)", "", norm, flags=re.I).strip()
+        if numerator == '$':
+            numerator = 'USD'
+        if not numerator:
+            numerator = norm_curr or ''
+        parsed = parse_unit_scale(numerator, norm_curr)
+        if parsed.family != 'monetary' or parsed.currency is None:
+            raise CalculationError('Per-share unit must specify a currency.')
+        if parsed.exponent != 0:
+            raise CalculationError('Scaled per-share units are not supported.')
+        return UnitScaleSpec('price_per_share', parsed.currency, parsed.scale_name, parsed.exponent,
+                             f'{parsed.canonical_unit} per share')
 
     # Split out known CJK currency prefixes and CJK scale words before ASCII tokenization.
     spaced = lowered.replace(" of ", " ")
@@ -1178,7 +1181,7 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
     return "matched"
 
 
-def calculate(request: CalculationRequest) -> dict:
+def calculate(request: CalculationRequest, *, verified_intraday: bool = False) -> dict:
     """Calculate deterministically using 100-digit Decimal precision.
 
     Preserve original inputs and reject ambiguous or non-comparable quantities.
@@ -1199,12 +1202,12 @@ def calculate(request: CalculationRequest) -> dict:
             raise CalculationError("Margin inputs must have the same period.")
     if request.formula in {"growth_percent", "cagr"}:
         a, b = inputs[0], inputs[1]
-        if a.period == b.period:
+        if a.period == b.period and not (request.formula == "growth_percent" and verified_intraday):
             label = "CAGR" if request.formula == "cagr" else "Growth"
             raise CalculationError(f"{label} inputs must refer to different periods.")
         current, baseline = _comparable_period(a.period), _comparable_period(b.period)
         if current is not None and baseline is not None and current[0] == baseline[0]:
-            if current[1] <= baseline[1]:
+            if current[1] <= baseline[1] and not (request.formula == "growth_percent" and verified_intraday and current[1] == baseline[1]):
                 label = "CAGR" if request.formula == "cagr" else "Growth"
                 raise CalculationError(f"{label} current period must be later than its baseline.")
             period_order_check = "recognized_formats_only"

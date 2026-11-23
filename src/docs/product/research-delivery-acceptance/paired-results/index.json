@@ -1,0 +1,70 @@
+{
+  "runs": [
+    {
+      "run": "recovery-1-A.json",
+      "status": "partial",
+      "reason": "provider_budget_exhausted",
+      "calls": 4,
+      "reported_tokens": 67052,
+      "elapsed_seconds": 88.98
+    },
+    {
+      "run": "recovery-1-B.json",
+      "status": "partial",
+      "reason": "provider_output_truncated",
+      "calls": 3,
+      "reported_tokens": 49999,
+      "elapsed_seconds": 72.58
+    },
+    {
+      "run": "recovery-2-B.json",
+      "status": "partial",
+      "reason": "provider_output_truncated",
+      "calls": 2,
+      "reported_tokens": 33676,
+      "elapsed_seconds": 53.56
+    },
+    {
+      "run": "recovery-2-A.json",
+      "status": "partial",
+      "reason": "provider_budget_exhausted",
+      "calls": 4,
+      "reported_tokens": 63446,
+      "elapsed_seconds": 42.85
+    },
+    {
+      "run": "facts-1-A.json",
+      "status": "partial",
+      "reason": "provider_budget_exhausted",
+      "calls": 4,
+      "reported_tokens": 68585,
+      "elapsed_seconds": 50.69
+    },
+    {
+      "run": "facts-1-B.json",
+      "status": "partial",
+      "reason": "provider_output_truncated",
+      "calls": 4,
+      "reported_tokens": 67946,
+      "elapsed_seconds": 52.93
+    },
+    {
+      "run": "facts-2-B.json",
+      "status": "partial",
+      "reason": "provider_output_truncated",
+      "calls": 3,
+      "reported_tokens": 49250,
+      "elapsed_seconds": 38.41
+    },
+    {
+      "run": "facts-2-A.json",
+      "status": "partial",
+      "reason": "provider_budget_exhausted",
+      "calls": 4,
+      "reported_tokens": 66203,
+      "elapsed_seconds": 37.14
+    }
+  ],
+  "planned": 8,
+  "endpoint_blocked": false
+}

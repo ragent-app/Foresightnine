@@ -1,0 +1,20 @@
+{
+  "category_counts": {
+    "filings": 1,
+    "market_prices": 2,
+    "news_web": 10
+  },
+  "evidence_gap_remains_until_fact_and_citation": true,
+  "origin_counts": {
+    "data_provider": 2,
+    "issuer_candidate_unverified": 2,
+    "regulatory_filing": 1,
+    "website_unverified": 8
+  },
+  "read_characters": 300,
+  "read_spans": 1,
+  "search_hits": 471,
+  "source_count": 13,
+  "targeted_metric": "revenue",
+  "targeted_period": "2026-01-01 至 2026-09-30"
+}

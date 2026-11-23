@@ -1,6 +1,11 @@
 """Financial research loop using native model tools and run-scoped authority."""
 from __future__ import annotations
 
+from .research_partial_answer import merge_checkpoint_parts
+
+from .research_delivery import assess as assess_delivery, assemble_parts, incomplete as incomplete_delivery
+from .research_report_grounding import recover_draft_claims, eligible_prior_claims
+
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 import inspect
@@ -216,11 +221,13 @@ class RuntimeOutcome:
     partial_notes: str | None = None
     charts: list[dict] = field(default_factory=list)
     reconciliation: dict | None = None
+    counter_evidence: dict | None = None
     coverage_map: dict | None = None
     method_packs: list[dict] = field(default_factory=list)
     attributions: list[dict] = field(default_factory=list)
     cache_usage: dict[str, Any] | None = None
     tables: list[dict] = field(default_factory=list)
+    question_parts: list[dict] = field(default_factory=list)
 
 
 def _extract_model_note(message: Any) -> str | None:
@@ -292,7 +299,7 @@ def _initialize_runtime_state(
 ) -> dict[str, Any]:
     if initial_state:
         state = json.loads(json.dumps(initial_state))
-        for list_key in ('failed_attempts', 'charts', 'tables', 'analyzed_market_source_ids', 'method_packs'):
+        for list_key in ('failed_attempts', 'charts', 'tables', 'analyzed_market_source_ids', 'method_packs', 'counter_searches'):
             if not isinstance(state.get(list_key), list):
                 state[list_key] = []
         return state
@@ -601,7 +608,8 @@ def _invoke_model_turn(
 
         context.finish_model(call_id, None, before)
         is_trunc_or_ctx = error.code in ('provider_output_truncated', 'provider_context_limit')
-        should_record = is_trunc_or_ctx or error.code == 'provider_timeout' or (not error.retryable and not is_cancelled)
+        failure_meta = _extract_failure_metadata(error=error, call_diag=call_diag, reason=error.code)
+        should_record = is_trunc_or_ctx or error.code == 'provider_timeout' or failure_meta.get('interruption') == 'response_body_after_frames' or (not error.retryable and not is_cancelled)
         if should_record:
             _record_failed_attempt(
                 state,
@@ -721,6 +729,7 @@ def _process_model_returned(
         state.setdefault('model_receipts', []).append(receipt_entry)
         if (
             error['code'] in ('provider_output_truncated', 'provider_context_limit', 'provider_timeout')
+            or error.get('interruption') == 'response_body_after_frames'
             or (error.get('retryable') is False and error['code'] != 'provider_cancelled')
         ):
             _record_failed_attempt(
@@ -930,11 +939,26 @@ def run_research_agent(
                 library_cov = None
         coverage_raw = insights.run_coverage_map(state, source_by_id, library_coverage=library_cov, gaps=unique[:500])
         cache_usage_out = dict(state['cache_usage']) if isinstance(state.get('cache_usage'), Mapping) else None
+        saved_claims = recover_draft_claims(state, source_by_id, lambda source: _is_source_eligible(source, as_of))
+        outcome_claims = list(claims or [])
+        existing_claim_ids = {claim.get('claim_id') for claim in outcome_claims}
+        outcome_claims.extend(claim for claim in saved_claims if claim['claim_id'] not in existing_claim_ids)
+        previous_claims = eligible_prior_claims(state, source_by_id, lambda source: _is_source_eligible(source, as_of))
+        display_claims = [*outcome_claims, *previous_claims]
+        requirements = assess_delivery(question, state, source_by_id, as_of=as_of, claims=display_claims)
+        parts = assemble_parts(question, state, source_by_id, {s.source_id for s in sources if _is_source_eligible(s, as_of)}, requirements, display_claims)
+        parts = merge_checkpoint_parts(question, state, {s.source_id for s in sources if _is_source_eligible(s, as_of)}, parts, source_by_id)
+        if status == 'completed' and (incomplete_delivery(requirements) or any(p.get('core', True) and p.get('requirements') and p.get('status') != 'answered' for p in parts)):
+            status = 'partial'
+            report = ''
+            unique.append(gap('model_reported', '核心问题的依据或可展示答案仍需核验。'))
+            if not resolved_partial_notes:
+                resolved_partial_notes = _default_partial_notes(state=state, reason=reason, eligible_sources=[s for s in sources if _is_source_eligible(s, as_of)])
         return RuntimeOutcome(
             status,
             reason,
             report,
-            claims or [],
+            outcome_claims,
             state.get('facts', []),
             state['calculations'],
             unique[:500],
@@ -945,11 +969,13 @@ def run_research_agent(
             resolved_partial_notes,
             charts=list(state.get('charts', [])),
             reconciliation=insights.reconciliation_view(report_rec),
+            counter_evidence=insights.evaluate_method_and_reconciliation(state, source_by_id, claims=outcome_claims).get('counter_evidence'),
             coverage_map=insights.coverage_view(coverage_raw),
             method_packs=list(state.get('method_packs') or []),
             attributions=list(state.get('attributions') or []),
             cache_usage=cache_usage_out,
             tables=list(state.get('tables', [])),
+            question_parts=parts,
         )
 
     if state.get('stopped'):

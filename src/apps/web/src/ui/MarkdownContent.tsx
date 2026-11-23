@@ -29,6 +29,7 @@ export interface MarkdownContentProps<TChart = unknown> {
   showCursor?: boolean;
   chartsById?: ReadonlyMap<string, TChart>;
   renderChart?: (chart: TChart) => ReactNode;
+  tablesById?: ReadonlyMap<string, ReactNode>;
   className?: string;
 }
 
@@ -51,10 +52,36 @@ const NOTES_ELEMENTS = [
 const INLINE_ELEMENTS = ["p", "strong", "em", "del", "code", "img"] as const;
 
 const REMARK_PLUGINS = [remarkGfm];
-const CHART_ANCHOR_RE = /^\s*\[\[chart:([A-Za-z0-9_-]{1,64})\]\]\s*$/;
+type MarkdownNode = { type: string; value?: string; url?: string; children?: MarkdownNode[] };
+
+function remarkClaimLinks() {
+  function replaceMarkers(node: MarkdownNode): void {
+    if (!node.children || ["link", "linkReference", "code", "inlineCode"].includes(node.type)) return;
+    node.children = node.children.flatMap((child): MarkdownNode[] => {
+      if (child.type !== "text" || !child.value?.includes("[[claim:")) {
+        replaceMarkers(child);
+        return [child];
+      }
+      const pieces: MarkdownNode[] = [];
+      let offset = 0;
+      for (const match of child.value.matchAll(/\[\[claim:([A-Za-z0-9_-]{1,100})\]\]/g)) {
+        pieces.push({ type: "text", value: child.value.slice(offset, match.index) });
+        pieces.push({ type: "link", url: `#claim-${match[1]}`, children: [{ type: "text", value: "查看依据" }] });
+        offset = match.index + match[0].length;
+      }
+      pieces.push({ type: "text", value: child.value.slice(offset) });
+      return pieces;
+    });
+  }
+  return replaceMarkers;
+}
+
+const REPORT_PLUGINS = [remarkGfm, remarkClaimLinks];
+const CLAIM_FRAGMENT = /^#claim-[A-Za-z0-9_-]{1,100}$/;
+const CHART_ANCHOR_RE = /^\s*\[\[(chart|table):([A-Za-z0-9_-]{1,64})\]\]\s*$/;
 const FENCE_LINE_RE = /^\s*(`{3,}|~{3,})/;
 
-type Segment = { kind: "md"; text: string } | { kind: "chart"; chartId: string };
+type Segment = { kind: "md"; text: string } | { kind: "chart"; chartId: string } | { kind: "table"; chartId: string };
 
 function splitChartSegments(raw: string): Segment[] {
   const normalized = raw.replace(/\r\n?/g, "\n");
@@ -91,13 +118,17 @@ function splitChartSegments(raw: string): Segment[] {
     const anchor = CHART_ANCHOR_RE.exec(line);
     if (anchor) {
       flushMd();
-      segments.push({ kind: "chart", chartId: anchor[1]! });
+      segments.push({ kind: anchor[1] as "chart" | "table", chartId: anchor[2]! });
       continue;
     }
     mdBuf.push(line);
   }
   flushMd();
   return segments;
+}
+
+export function extractReferencedTableIds(raw: string): Set<string> {
+  return new Set(splitChartSegments(raw).filter((segment) => segment.kind === "table").map((segment) => (segment as { chartId: string }).chartId));
 }
 
 /** Extracts chart IDs referenced via standalone `[[chart:id]]` lines outside fenced code blocks. */
@@ -234,6 +265,7 @@ function buildComponents(variant: MarkdownVariant): Components {
       return <span className="md-img-fallback">{label ? `[图片：${label}]` : "[图片]"}</span>;
     },
     a: ({ href, children }) => {
+      if (isReport && href && CLAIM_FRAGMENT.test(href)) return <a href={href} className="md-link">{children}</a>;
       const safe = safeExternalHref(href);
       if (isReport && safe) {
         return (
@@ -278,6 +310,7 @@ function allowedElementsFor(variant: MarkdownVariant): readonly string[] {
 }
 
 function safeUrlTransform(url: string): string {
+  if (CLAIM_FRAGMENT.test(url)) return url;
   return safeExternalHref(url)?.href ?? "";
 }
 
@@ -349,7 +382,7 @@ function MarkdownAstBlock({
 }) {
   return (
     <ReactMarkdown
-      remarkPlugins={REMARK_PLUGINS}
+      remarkPlugins={variant === "report" ? REPORT_PLUGINS : REMARK_PLUGINS}
       skipHtml
       unwrapDisallowed
       allowedElements={allowedElementsFor(variant)}
@@ -366,21 +399,30 @@ function MarkdownBlockWithCharts<TChart = unknown>({
   variant,
   chartsById,
   renderChart,
+  tablesById,
 }: {
   text: string;
   variant: MarkdownVariant;
   chartsById?: ReadonlyMap<string, TChart> | undefined;
   renderChart?: ((chart: TChart) => ReactNode) | undefined;
+  tablesById?: ReadonlyMap<string, ReactNode> | undefined;
 }) {
   const allowCharts = variant === "report" || variant === "draft";
   const segments = useMemo(
-    () => (allowCharts && text.includes("[[chart:") ? splitChartSegments(text) : [{ kind: "md" as const, text }]),
+    () => (allowCharts && (text.includes("[[chart:") || text.includes("[[table:")) ? splitChartSegments(text) : [{ kind: "md" as const, text }]),
     [allowCharts, text],
   );
   const renderedChartIds = new Set<string>();
   return (
     <>
       {segments.map((segment, index) => {
+        if (segment.kind === "table") {
+          if (renderedChartIds.has(`table:${segment.chartId}`)) return null;
+          const table = tablesById?.get(segment.chartId);
+          if (table === undefined) return null;
+          renderedChartIds.add(`table:${segment.chartId}`);
+          return <div className="md-table-slot" key={`table-${segment.chartId}-${index}`}>{table}</div>;
+        }
         if (segment.kind === "chart") {
           if (renderedChartIds.has(segment.chartId)) return null;
           const chart = chartsById?.get(segment.chartId);
@@ -411,6 +453,7 @@ export function MarkdownContent<TChart = unknown>({
   showCursor = false,
   chartsById,
   renderChart,
+  tablesById,
   className,
 }: MarkdownContentProps<TChart>) {
   const isInline = variant === "inline";
@@ -444,6 +487,7 @@ export function MarkdownContent<TChart = unknown>({
               variant={variant}
               chartsById={chartsById}
               renderChart={renderChart}
+              tablesById={tablesById}
             />
           ))}
           {repairedTail ? (
@@ -452,6 +496,7 @@ export function MarkdownContent<TChart = unknown>({
               variant={variant}
               chartsById={chartsById}
               renderChart={renderChart}
+              tablesById={tablesById}
             />
           ) : null}
           {showCursor ? <span className="stream-cursor" aria-hidden="true" /> : null}
@@ -459,7 +504,7 @@ export function MarkdownContent<TChart = unknown>({
       );
     }
 
-    if ((isInline || !(variant === "report" && content.includes("[[chart:"))) && !hasMarkdownSyntax(content)) {
+    if ((isInline || !(variant === "report" && /\[\[(?:chart|table|claim):/.test(content))) && !hasMarkdownSyntax(content)) {
       return <PlainParagraphFallback content={content} inline={isInline} showCursor={false} />;
     }
 
@@ -469,9 +514,10 @@ export function MarkdownContent<TChart = unknown>({
         variant={variant}
         chartsById={chartsById}
         renderChart={renderChart}
+        tablesById={tablesById}
       />
     );
-  }, [content, streaming, isInline, showCursor, variant, chartsById, renderChart]);
+  }, [content, streaming, isInline, showCursor, variant, chartsById, renderChart, tablesById]);
 
   return (
     <Wrapper className={classes}>

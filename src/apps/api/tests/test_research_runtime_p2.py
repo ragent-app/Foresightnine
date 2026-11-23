@@ -305,7 +305,12 @@ def test_runtime_dispatches_expanded_calculations_market_analytics_and_create_ta
         as_of=datetime(2026, 3, 1, tzinfo=timezone.utc),
     )
 
-    assert outcome.status == "completed"
+    # The old completion assertion predated question-level evidence gates: the
+    # saved table and calculations do not answer the requested price momentum,
+    # and this fixture does not establish an AAPL/Apple identity link.
+    assert outcome.status == "partial"
+    assert any('No eligible recorded fact matches this metric' in gap['message'] for gap in outcome.gaps)
+    assert any('complete question needs an answer' in gap['message'] for gap in outcome.gaps)
     assert len(outcome.tables) == 1
     assert outcome.tables[0]["title"] == "Apple Multi-Year Revenue & CAGR"
     # TTM calc (USD 133,100 millions) aligned to column unit_preference "USD billions" -> 133.1!
@@ -383,5 +388,8 @@ def test_runtime_rejects_invalid_table_or_market_analytics_gracefully():
         model=BadThenSubmitModel(),
         context=_context(),
     )
-    assert outcome.status == "completed"
+    # The question describes a tool test; its unrelated revenue claim is not an
+    # evidence-backed answer to that question, even though the tool errors are handled.
+    assert outcome.status == "partial"
+    assert any('complete question needs an answer' in gap['message'] for gap in outcome.gaps)
     assert outcome.tables == []

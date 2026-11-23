@@ -3,6 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import { MarkdownContent } from "./MarkdownContent";
 
 describe("MarkdownContent", () => {
+  it("reopens persisted table markers once, ignores missing IDs and preserves code literals", () => {
+    const tables = new Map([["t1", <table><tbody><tr><td>100 USD</td></tr></tbody></table>]]);
+    const { container } = render(<MarkdownContent variant="report" tablesById={tables} content={"Result\n\n[[table:t1]]\n\n[[table:t1]]\n\n[[table:missing]]\n\n```text\n[[table:t1]]\n```"} />);
+    expect(screen.getAllByText("100 USD")).toHaveLength(1);
+    expect(screen.queryByText("[[table:missing]]")).toBeNull();
+    expect(container.querySelector("pre")?.textContent).toContain("[[table:t1]]");
+  });
   it("renders report headings demoted, GFM financial tables with right-aligned numbers, TSV copy, code copy, and safe https links", async () => {
     const writeText = vi.fn(async () => undefined);
     Object.defineProperty(navigator, "clipboard", {

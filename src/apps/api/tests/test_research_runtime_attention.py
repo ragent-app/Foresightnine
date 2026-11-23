@@ -324,7 +324,7 @@ def test_presubmit_gate_nudges_once_for_unmet_method_pack_then_accepts():
         context=_ctx(),
         checkpoint=lambda s: saved_a.append(json.loads(json.dumps(s))),
     )
-    assert out_a.status == 'completed'
+    assert out_a.status == 'partial'
     assert captured and captured[0]['status'] == 'needs_attention'
     assert captured[0]['presubmit_nudges'] == 1
     kinds = {item['kind'] for item in captured[0]['missing_items']}
@@ -361,7 +361,7 @@ def test_presubmit_gate_nudges_once_for_unmet_method_pack_then_accepts():
         model=recorder_b,
         context=_ctx(),
     )
-    assert out_b.status == 'completed'
+    assert out_b.status == 'partial'
     assert len(out_b.calculations) == 1
     assert any(ev.get('name') == 'search_source' for ev in out_b.events)
 
@@ -403,7 +403,7 @@ def test_presubmit_gate_catches_unaddressed_material_conflict_and_allows_resolut
         )[1],
     ])
     out = run_research_agent(question='What is Alpha revenue?', sources=[s1, s2], model=recorder, context=_ctx())
-    assert out.status == 'completed'
+    assert out.status == 'partial'  # The two conflicting values remain unresolved.
     assert len(recorder.turns) == 4
     assert 'MaterialConflicts: ALPHA:revenue' in (recorder.turns[2].tail_note or '')
     assert captured[0]['status'] == 'needs_attention'
@@ -437,7 +437,7 @@ def test_presubmit_gate_honors_explicit_gap_acknowledgment_and_resource_limits()
         context=_ctx(),
         checkpoint=lambda s: saved_ack.append(json.loads(json.dumps(s))),
     )
-    assert out_ack.status == 'completed'
+    assert out_ack.status == 'partial'  # A limitation does not answer the missing EPS.
     assert len(ack_recorder.turns) == 2
     assert not saved_ack[-1].get('presubmit_nudges')
 
@@ -460,7 +460,7 @@ def test_presubmit_gate_honors_explicit_gap_acknowledgment_and_resource_limits()
         context=_ctx(max_calls=2),
         checkpoint=lambda s: saved_budget.append(json.loads(json.dumps(s))),
     )
-    assert out_budget.status == 'completed'
+    assert out_budget.status == 'partial'  # Budget exhaustion retains the same missing core.
     assert len(budget_recorder.turns) == 2
     assert not saved_budget[-1].get('presubmit_nudges')
 
@@ -758,7 +758,7 @@ def test_activate_method_pack_tool_is_immutable_canonical_and_activates_checks_m
         context=_ctx(),
         checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
     )
-    assert out.status == 'completed'
+    assert out.status == 'partial'  # One revenue claim does not summarize the whole filing.
     assert len(recorder.turns) == 4
 
     # Initial user message had NO method_packs; KV-cache prefix stayed byte-identical across every turn!

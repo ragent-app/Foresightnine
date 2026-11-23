@@ -59,6 +59,10 @@ class AnalyzeMarketSeriesRequest(BaseModel):
         max_length=200,
         description="Optional persisted benchmark market_data or historical_prices source ID for excess return and beta.",
     )
+    benchmark_selection_reason: str | None = Field(
+        default=None, max_length=1000,
+        description="When the user did not name a benchmark, identify the selected benchmark and explain its relevance to the requested comparison.",
+    )
     start_date: str | None = Field(
         default=None,
         pattern=r"^\d{4}-\d{2}-\d{2}$",

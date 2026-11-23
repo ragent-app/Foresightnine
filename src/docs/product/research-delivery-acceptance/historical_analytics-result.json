@@ -1,0 +1,79 @@
+{
+  "returns_percent": {
+    "issue_to_close": "17.07",
+    "open_to_close": "-12.85",
+    "close_to_next_close": "-8.50"
+  },
+  "return_context": {
+    "issue_to_close": {
+      "entry_type": "issue_price",
+      "start_date": "2026-11-18",
+      "end_date": "2026-11-19",
+      "start_price": "83",
+      "end_price": "97.17",
+      "instrument": "ANT@NASDAQ",
+      "price_basis": "issue_price → none",
+      "identity_verified": false,
+      "start_price_type": "issue_price",
+      "end_price_type": "close"
+    },
+    "open_to_close": {
+      "entry_type": "open",
+      "start_date": "2026-11-19",
+      "end_date": "2026-11-19",
+      "start_price": "111.5",
+      "end_price": "97.17",
+      "instrument": "ANT@NASDAQ",
+      "price_basis": "none",
+      "identity_verified": true,
+      "start_price_type": "open",
+      "end_price_type": "close"
+    },
+    "close_to_next_close": {
+      "entry_type": "close",
+      "start_date": "2026-11-19",
+      "end_date": "2026-11-20",
+      "start_price": "97.17",
+      "end_price": "88.91",
+      "instrument": "ANT@NASDAQ",
+      "price_basis": "none",
+      "identity_verified": true,
+      "start_price_type": "close",
+      "end_price_type": "close"
+    }
+  },
+  "old_chart_start_dates": {
+    "ANT": "2026-11-19",
+    "QQQ": "2026-11-17"
+  },
+  "corrected_common_base": "2026-11-19",
+  "corrected_series": {
+    "ANT": [
+      {
+        "date": "2026-11-19",
+        "value": "100"
+      },
+      {
+        "date": "2026-11-20",
+        "value": "91.4994"
+      }
+    ],
+    "QQQ": [
+      {
+        "date": "2026-11-19",
+        "value": "100"
+      },
+      {
+        "date": "2026-11-20",
+        "value": "94.3275"
+      }
+    ]
+  },
+  "historical_search_events": {
+    "external": 2,
+    "document": 6
+  },
+  "explicit_counter_searches": 0,
+  "counter_search_note": "Historic events lack typed intent; total searches do not establish counter-evidence attempts.",
+  "live_calls": 0
+}

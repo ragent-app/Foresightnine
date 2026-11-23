@@ -1,0 +1,21 @@
+{
+  "method": "offline_frozen_fixture_messages_wire_serialization",
+  "description": "Read-only reconstruction using the frozen paired recovery fixture and local historical checkpoint. No provider request was sent; existing online experiment records and frozen inputs were not modified.",
+  "serializer": "AnthropicMessagesProvider._wire followed by canonical_json_dumps UTF-8 encoding, stream=true",
+  "fixed_environment": {
+    "model_placeholder": "wire-fixture",
+    "max_tokens": 2048,
+    "authentication": "unused placeholder; no network call",
+    "baseline_application": "frozen application snapshot from the paired experiment",
+    "candidate_application": "current working tree"
+  },
+  "wire_bytes": {
+    "short_control_A": {"baseline": 53350, "candidate": 53350},
+    "short_recovery_B": {"baseline": 54737, "candidate": 52825},
+    "historical_before_continuation": {"baseline": 196497, "candidate": 196497},
+    "historical_recovery": {"baseline": 70148, "candidate": 69108}
+  },
+  "interpretation": "The short recovery body is 1912 bytes smaller than the frozen recovery body and 525 bytes smaller than the offline short control. Historical recovery remains substantially smaller than its 196497-byte pre-continuation input. Differences from the separately recorded online wire sizes were not attributed to any specific cause.",
+  "replay_script": "recovery_wire_size.py",
+  "validation": "Seven focused recovery, timeout, truncation, and revoked-evidence tests passed."
+}

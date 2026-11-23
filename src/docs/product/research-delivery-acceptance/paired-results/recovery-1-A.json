@@ -1,0 +1,527 @@
+{
+  "case": "recovery",
+  "arm": "A",
+  "status": "partial",
+  "reason": "provider_budget_exhausted",
+  "seed_facts": 0,
+  "facts": [
+    {
+      "fact_id": "fact-d70f7a5a3798f0a9a691a418d363808fe2546fd2271c829bec9fea79ada67b18",
+      "label": "Employee share lock-up period",
+      "value": "90",
+      "unit": "days",
+      "currency": null,
+      "period": "Post-closing period (from closing)",
+      "source_id": "exhibit",
+      "quotation": "Employee shares are locked for 90 days after closing.",
+      "character_start": 30,
+      "character_end": 83,
+      "location": {
+        "character_start": 30,
+        "character_end": 83
+      },
+      "verification": "numeric_and_location_match_semantics_not_verified"
+    }
+  ],
+  "calculations": [],
+  "report": "",
+  "claims": [
+    {
+      "claim_id": "claim-f87c3975d8ef915bff32614670384bc7",
+      "text": "The exhibit sets the employee share lock-up at 90 days after closing (fact fact-d70f7a5a3798f0a9a691a418d363808fe2546fd2271c829bec9fea79ada67b18).",
+      "role": "support",
+      "citations": [
+        {
+          "source_id": "exhibit",
+          "quotation": "Employee shares are locked for 90 days after closing.",
+          "location": {
+            "character_start": 30,
+            "character_end": 83
+          }
+        }
+      ],
+      "challenges_claim_ids": [],
+      "fact_ids": [
+        "fact-d70f7a5a3798f0a9a691a418d363808fe2546fd2271c829bec9fea79ada67b18"
+      ],
+      "calculation_ids": []
+    },
+    {
+      "claim_id": "claim-38b620c483565f2e10055c2ebbb49007",
+      "text": "The document self-identifies as an \"Independent training exhibit\" rather than an issuer filing or agreement, so its terms cannot be treated as binding disclosure for any real security; the employee 90-day lock is a stated term of the exhibit, and nothing in it extends to public investors.",
+      "role": "support",
+      "citations": [
+        {
+          "source_id": "exhibit",
+          "quotation": "Independent training exhibit. Employee shares are locked for 90 days after closing.",
+          "location": {
+            "character_start": 0,
+            "character_end": 83
+          }
+        }
+      ],
+      "challenges_claim_ids": [],
+      "fact_ids": [],
+      "calculation_ids": []
+    },
+    {
+      "claim_id": "claim-c02894d0b3df8e8d45b1f9869e1295b3",
+      "text": "The exhibit's only lock-up term is the 90-day employee lock recorded as fact fact-d70f7a5a3798f0a9a691a418d363808fe2546fd2271c829bec9fea79ada67b18. It explicitly states that no holding period is disclosed for public investors, so the 90-day figure applies solely to employee shares and the exhibit does not establish any holding period for public investors.",
+      "role": "support",
+      "citations": [
+        {
+          "source_id": "exhibit",
+          "quotation": "Employee shares are locked for 90 days after closing. No holding period is disclosed for public investors.",
+          "location": {
+            "character_start": 30,
+            "character_end": 136
+          }
+        }
+      ],
+      "challenges_claim_ids": [],
+      "fact_ids": [
+        "fact-d70f7a5a3798f0a9a691a418d363808fe2546fd2271c829bec9fea79ada67b18"
+      ],
+      "calculation_ids": []
+    }
+  ],
+  "gaps": [
+    {
+      "code": "provider_error",
+      "message": "Model execution budget is unavailable or exhausted."
+    }
+  ],
+  "events": [
+    {
+      "kind": "model",
+      "usage": 15685,
+      "call_id": "research:research-agent:7f650b020a17443b8b9ffd2e829383a2",
+      "settlement": "settled",
+      "finish_reason": "tool_use",
+      "usage_detail": {
+        "input_tokens": 14731,
+        "output_tokens": 954,
+        "total_tokens": 15685,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 0
+      }
+    },
+    {
+      "kind": "tool",
+      "name": "record_facts",
+      "status": "completed",
+      "summary": {
+        "kind": "record_facts",
+        "recorded_count": 1,
+        "facts_preview": [
+          {
+            "label": "Employee share lock-up period",
+            "value": "90",
+            "unit": "days",
+            "currency": null,
+            "period": "Post-closing period (from closing)"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "model",
+      "usage": 16395,
+      "call_id": "research:research-agent:792664bb2900448b81b91e3c470645f6",
+      "settlement": "settled",
+      "finish_reason": "tool_use",
+      "usage_detail": {
+        "input_tokens": 15857,
+        "output_tokens": 538,
+        "total_tokens": 16395,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 0
+      }
+    },
+    {
+      "kind": "tool",
+      "name": "checkpoint_report_draft",
+      "status": "invalid"
+    },
+    {
+      "kind": "model",
+      "usage": 17098,
+      "call_id": "research:research-agent:ab5df429c138414db22d942792687fe0",
+      "settlement": "settled",
+      "finish_reason": "tool_use",
+      "usage_detail": {
+        "input_tokens": 1694,
+        "output_tokens": 940,
+        "total_tokens": 17098,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 14464
+      }
+    },
+    {
+      "kind": "tool",
+      "name": "checkpoint_report_draft",
+      "status": "completed",
+      "summary": {
+        "kind": "checkpoint_report_draft",
+        "accepted": 2,
+        "rejected": 1
+      }
+    },
+    {
+      "kind": "model",
+      "usage": 17874,
+      "call_id": "research:research-agent:4e8c53836ff24d24885d7d8122c05b9a",
+      "settlement": "settled",
+      "finish_reason": "tool_use",
+      "usage_detail": {
+        "input_tokens": 2327,
+        "output_tokens": 1083,
+        "total_tokens": 17874,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 14464
+      }
+    },
+    {
+      "kind": "tool",
+      "name": "checkpoint_report_draft",
+      "status": "completed",
+      "summary": {
+        "kind": "checkpoint_report_draft",
+        "accepted": 1,
+        "rejected": 0
+      }
+    }
+  ],
+  "tool_io": [
+    {
+      "id": "fixture-read",
+      "tool": "read_sources",
+      "input": {
+        "reads": [
+          {
+            "source_id": "exhibit"
+          }
+        ],
+        "rationale": "Inspect the fixed exhibit."
+      },
+      "result": "{\"cleared\":true,\"facts_recorded_count\":1,\"hint\":\"Use search_source or targeted read_sources if re-inspection needed; recorded read_ranges remain valid.\",\"original_chars\":403,\"reason\":\"context_compacted\",\"source_ids\":[\"exhibit\"],\"source_spans\":[{\"end\":136,\"source_id\":\"exhibit\",\"start\":0}],\"tool\":\"read_sources\"}"
+    },
+    {
+      "id": "call_eb09a67f82e14a3d80054308",
+      "tool": "record_facts",
+      "input": {
+        "facts": [
+          {
+            "label": "Employee share lock-up period",
+            "period": "Post-closing period (from closing)",
+            "quotation": "Employee shares are locked for 90 days after closing.",
+            "source_id": "exhibit",
+            "unit": "days",
+            "value": 90
+          }
+        ],
+        "rationale": "Record the employee lock-up duration stated in the exhibit (90 days after closing)."
+      },
+      "result": "{\"facts\": [{\"character_end\": 83, \"character_start\": 30, \"currency\": null, \"fact_id\": \"fact-d70f7a5a3798f0a9a691a418d363808fe2546fd2271c829bec9fea79ada67b18\", \"label\": \"Employee share lock-up period\", \"location\": {\"character_end\": 83, \"character_start\": 30}, \"period\": \"Post-closing period (from closing)\", \"quotation\": \"Employee shares are locked for 90 days after closing.\", \"source_id\": \"exhibit\", \"unit\": \"days\", \"value\": \"90\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}], \"failures\": []}"
+    },
+    {
+      "id": "call_5f17a048accd4c10a2517500",
+      "tool": "checkpoint_report_draft",
+      "input": {
+        "clauses": []
+      },
+      "result": "{\"reason\": \"Invalid arguments: clauses: List should have at least 1 item after validation, not 0.\", \"status\": \"invalid\"}"
+    },
+    {
+      "id": "call_182febf3aa004b5581ca284a",
+      "tool": "checkpoint_report_draft",
+      "input": {
+        "clauses": [
+          {
+            "citations": [
+              {
+                "quotation": "Employee shares are locked for 90 days after closing.",
+                "source_id": "exhibit"
+              }
+            ],
+            "fact_ids": [
+              "fact-d70f7a5a3798f0a9a691a418d363808fe2546fd2271c829bec9fea79ada67b18"
+            ],
+            "role": "support",
+            "text": "The exhibit sets the employee share lock-up at 90 days after closing (fact fact-d70f7a5a3798f0a9a691a418d363808fe2546fd2271c829bec9fea79ada67b18)."
+          },
+          {
+            "citations": [
+              {
+                "quotation": "No holding period is disclosed for public investors.",
+                "source_id": "exhibit"
+              }
+            ],
+            "role": "support",
+            "text": "The exhibit does not establish a holding period for public investors: it explicitly states that no holding period is disclosed for them. The 90-day lock applies only to employee shares, and the exhibit contains no lock-up, holding-period, or resale-restriction term covering public investors."
+          },
+          {
+            "citations": [
+              {
+                "quotation": "Independent training exhibit. Employee shares are locked for 90 days after closing.",
+                "source_id": "exhibit"
+              }
+            ],
+            "role": "support",
+            "text": "The document self-identifies as an \"Independent training exhibit\" rather than an issuer filing or agreement, so its terms cannot be treated as binding disclosure for any real security; the employee 90-day lock is a stated term of the exhibit, and nothing in it extends to public investors."
+          }
+        ]
+      },
+      "result": "{\"accepted\": [{\"claim_id\": \"claim-f87c3975d8ef915bff32614670384bc7\", \"index\": 0}, {\"claim_id\": \"claim-38b620c483565f2e10055c2ebbb49007\", \"index\": 2}], \"rejected\": [{\"index\": 1, \"reason\": \"A number or date is absent from the cited evidence and linked inputs.\"}]}"
+    },
+    {
+      "id": "call_abd5fb5f93e34cd28a873e54",
+      "tool": "checkpoint_report_draft",
+      "input": {
+        "clauses": [
+          {
+            "citations": [
+              {
+                "quotation": "Employee shares are locked for 90 days after closing. No holding period is disclosed for public investors.",
+                "source_id": "exhibit"
+              }
+            ],
+            "fact_ids": [
+              "fact-d70f7a5a3798f0a9a691a418d363808fe2546fd2271c829bec9fea79ada67b18"
+            ],
+            "role": "support",
+            "text": "The exhibit's only lock-up term is the 90-day employee lock recorded as fact fact-d70f7a5a3798f0a9a691a418d363808fe2546fd2271c829bec9fea79ada67b18. It explicitly states that no holding period is disclosed for public investors, so the 90-day figure applies solely to employee shares and the exhibit does not establish any holding period for public investors."
+          }
+        ]
+      },
+      "result": "{\"accepted\": [{\"claim_id\": \"claim-c02894d0b3df8e8d45b1f9869e1295b3\", \"index\": 0}], \"rejected\": []}"
+    }
+  ],
+  "diagnostics": [
+    {
+      "id": "research:research-agent:7f650b020a17443b8b9ffd2e829383a2",
+      "status_code": 200,
+      "error_code": null,
+      "error_type": null,
+      "transport": {
+        "submission_state": "response_received",
+        "stages": [
+          {
+            "stage": "dns",
+            "result": "ok",
+            "elapsed_ms": 342
+          },
+          {
+            "stage": "tcp",
+            "result": "ok",
+            "elapsed_ms": 67
+          },
+          {
+            "stage": "tls",
+            "result": "ok",
+            "elapsed_ms": 104
+          },
+          {
+            "stage": "request_write",
+            "result": "ok",
+            "elapsed_ms": 0
+          },
+          {
+            "stage": "response_headers",
+            "result": "ok",
+            "elapsed_ms": 21129
+          },
+          {
+            "stage": "response_headers",
+            "result": "ok",
+            "elapsed_ms": 0,
+            "status_code": 200
+          },
+          {
+            "stage": "response_body",
+            "result": "ok",
+            "elapsed_ms": 3
+          }
+        ]
+      },
+      "wire_bytes": 53337
+    },
+    {
+      "id": "research:research-agent:792664bb2900448b81b91e3c470645f6",
+      "status_code": 200,
+      "error_code": null,
+      "error_type": null,
+      "transport": {
+        "submission_state": "response_received",
+        "stages": [
+          {
+            "stage": "dns",
+            "result": "ok",
+            "elapsed_ms": 71
+          },
+          {
+            "stage": "tcp",
+            "result": "ok",
+            "elapsed_ms": 67
+          },
+          {
+            "stage": "tls",
+            "result": "ok",
+            "elapsed_ms": 70
+          },
+          {
+            "stage": "request_write",
+            "result": "ok",
+            "elapsed_ms": 0
+          },
+          {
+            "stage": "response_headers",
+            "result": "ok",
+            "elapsed_ms": 26662
+          },
+          {
+            "stage": "response_headers",
+            "result": "ok",
+            "elapsed_ms": 0,
+            "status_code": 200
+          },
+          {
+            "stage": "response_body",
+            "result": "ok",
+            "elapsed_ms": 0
+          }
+        ]
+      },
+      "wire_bytes": 58818
+    },
+    {
+      "id": "research:research-agent:ab5df429c138414db22d942792687fe0",
+      "status_code": 200,
+      "error_code": null,
+      "error_type": null,
+      "transport": {
+        "submission_state": "response_received",
+        "stages": [
+          {
+            "stage": "dns",
+            "result": "ok",
+            "elapsed_ms": 82
+          },
+          {
+            "stage": "tcp",
+            "result": "ok",
+            "elapsed_ms": 67
+          },
+          {
+            "stage": "tls",
+            "result": "ok",
+            "elapsed_ms": 78
+          },
+          {
+            "stage": "request_write",
+            "result": "ok",
+            "elapsed_ms": 0
+          },
+          {
+            "stage": "response_headers",
+            "result": "ok",
+            "elapsed_ms": 18171
+          },
+          {
+            "stage": "response_headers",
+            "result": "ok",
+            "elapsed_ms": 0,
+            "status_code": 200
+          },
+          {
+            "stage": "response_body",
+            "result": "ok",
+            "elapsed_ms": 0
+          }
+        ]
+      },
+      "wire_bytes": 60616
+    },
+    {
+      "id": "research:research-agent:4e8c53836ff24d24885d7d8122c05b9a",
+      "status_code": 200,
+      "error_code": null,
+      "error_type": null,
+      "transport": {
+        "submission_state": "response_received",
+        "stages": [
+          {
+            "stage": "dns",
+            "result": "ok",
+            "elapsed_ms": 195
+          },
+          {
+            "stage": "tcp",
+            "result": "ok",
+            "elapsed_ms": 69
+          },
+          {
+            "stage": "tls",
+            "result": "ok",
+            "elapsed_ms": 83
+          },
+          {
+            "stage": "request_write",
+            "result": "ok",
+            "elapsed_ms": 0
+          },
+          {
+            "stage": "response_headers",
+            "result": "ok",
+            "elapsed_ms": 21236
+          },
+          {
+            "stage": "response_headers",
+            "result": "ok",
+            "elapsed_ms": 0,
+            "status_code": 200
+          },
+          {
+            "stage": "response_body",
+            "result": "ok",
+            "elapsed_ms": 3
+          }
+        ]
+      },
+      "wire_bytes": 63183
+    }
+  ],
+  "actual_calls": 4,
+  "elapsed_seconds": 88.98,
+  "budget_accounted_tokens": 67052,
+  "usage": {
+    "reported_tokens": 67052,
+    "unknown_usage_calls": 0,
+    "reserved_estimate_tokens": 0
+  },
+  "question_parts": [
+    {
+      "question": "Record the employee lock-up in days",
+      "status": "unresolved",
+      "answer": "",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": []
+    },
+    {
+      "question": "cite the exhibit",
+      "status": "unresolved",
+      "answer": "",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": []
+    },
+    {
+      "question": "explain whether it establishes a holding period for public investors",
+      "status": "unresolved",
+      "answer": "",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": []
+    }
+  ],
+  "search_calls": 0,
+  "actual_cost": null
+}

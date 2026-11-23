@@ -1,0 +1,22 @@
+[
+  {
+    "run": "facts-1-A",
+    "frozen_fact_rows": 2,
+    "replayed_fact_rows": 2
+  },
+  {
+    "run": "facts-1-B",
+    "frozen_fact_rows": 4,
+    "replayed_fact_rows": 2
+  },
+  {
+    "run": "facts-2-A",
+    "frozen_fact_rows": 2,
+    "replayed_fact_rows": 2
+  },
+  {
+    "run": "facts-2-B",
+    "frozen_fact_rows": 2,
+    "replayed_fact_rows": 2
+  }
+]

@@ -229,7 +229,7 @@ def _instrument_of(src: Mapping[str, Any], action_target: str | None) -> str | N
     return match.group(1) if match else None
 
 
-def _category_of_source(src: Mapping[str, Any], action_tool: str | None) -> str:
+def _category_of_source(src: Mapping[str, Any], action_tool: str | None, issuer_hosts: Sequence[str] = ()) -> str:
     kind, method = src.get("kind"), src.get("retrieval_method")
     prov = src.get("provenance") if isinstance(src.get("provenance"), Mapping) else {}
     host = _host(src.get("url"))
@@ -239,14 +239,17 @@ def _category_of_source(src: Mapping[str, Any], action_tool: str | None) -> str:
         return "market_prices"
     if kind is None and method is None and not host and re.search(r"daily close|\bbars\b", title, re.I):
         return "market_prices"
+    if method in ("user_supplied", "user_pdf", "user_html") or (kind == "user_supplied" and not method):
+        return "uploads"
     if method in ("sec_companyconcept", "sec_companyfacts", "structured_financials") or action_tool in ("company_financials", "sec_company_concept", "sec_company_facts"):
         return "financial_statements"
     if method == "sec_filing_html" or action_tool in ("filings", "sec_filings") or _host_in(host, PRIMARY_HOSTS):
         return "filings"
-    if kind == "user_supplied" or method in ("user_supplied", "user_pdf", "user_html"):
-        return "uploads"
     if _str(prov.get("provider")) in MACRO_PROVIDERS or _host_in(host, MACRO_HOSTS) or (action_tool and _MACRO_TOOL.match(action_tool)):
         return "macro"
+    from .research_reconciliation import classify_source
+    if classify_source(src, issuer_hosts=issuer_hosts) == "issuer":
+        return "filings"
     if host or method in ("web_html", "web_pdf", "official_html") or action_tool == "acquire":
         return "news_web"
     return "other"
@@ -400,7 +403,7 @@ def build_coverage_map(state: Mapping[str, Any] | None = None, *, events: Sequen
             action_tool, action_target, _ = _split_action(src["_action"])
             if action_tool == "acquire" and action_target and not src.get("url"):
                 src["url"] = action_target
-        cat = _category_of_source(src, action_tool)
+        cat = _category_of_source(src, action_tool, state.get("issuer_site_hosts") or ())
         src["_category"], src["_action_tool"], src["_action_target"] = cat, action_tool, action_target
         cats[cat]["sources"].append(sid)
 
@@ -525,6 +528,18 @@ def build_coverage_map(state: Mapping[str, Any] | None = None, *, events: Sequen
             if isinstance(row, Mapping) and _str(row.get("source_id")):
                 excluded_from_search[row["source_id"]] = str(row.get("reason") or "excluded")
 
+    # This is an unverified domain hint, not evidence that a site is the issuer.
+    from .research_reconciliation import classify_source
+    candidates = state.get('entity_candidates') if isinstance(state.get('entity_candidates'), Mapping) else {}
+    names = {str(info.get('company') or '').strip() for info in candidates.values() if isinstance(info, Mapping)}
+    filing_headers = [re.sub(r'[^a-z0-9]', '', str(src.get('title') or '').casefold() + str(src.get('text') or '')[:15000].casefold())
+                      for src in by_id.values() if classify_source(src, issuer_hosts=state.get('issuer_site_hosts') or ()) == 'filing']
+    possible_issuer_tokens = set()
+    for name in names:
+        full = re.sub(r'[^a-z0-9]', '', name.casefold())
+        first = re.match(r'[a-z0-9]{4,}', name.casefold())
+        if first and full and any(full in header for header in filing_headers):
+            possible_issuer_tokens.add(first.group())
     documents: dict[str, dict[str, Any]] = {}
     for sid, src in by_id.items():
         cat = src["_category"]
@@ -538,7 +553,14 @@ def build_coverage_map(state: Mapping[str, Any] | None = None, *, events: Sequen
         merged_reads = _union(reads.get(sid, []))
         chars_read = sum(e - s for s, e in merged_reads if total is None) if total is None else sum(
             max(0, min(e, total) - max(s, 0)) for s, e in merged_reads)
-        doc: dict[str, Any] = {"source_id": sid, "category": cat, "title": _clip(src.get("title"), 160), "url": _str(src.get("url")),
+        source_class = classify_source(src, issuer_hosts=state.get("issuer_site_hosts") or ())
+        host_labels = (_host(src.get("url")) or "").split(".")
+        origin = ("issuer_candidate_unverified" if source_class == "news" and any(token in host_labels for token in possible_issuer_tokens)
+                  else {"filing": "regulatory_filing", "issuer": "verified_issuer", "news": "website_unverified",
+                        "market_data": "data_provider", "user_upload": "user_upload"}.get(source_class, "unknown"))
+        doc: dict[str, Any] = {"origin": origin, "source_class": source_class, "retrieval_method": src.get("retrieval_method"),
+                               "ingestion_kind": src.get("kind"), "permissions": src.get("permissions"),
+                               "source_id": sid, "category": cat, "title": _clip(src.get("title"), 160), "url": _str(src.get("url")),
                                "host": _host(src.get("url")), "chars_total": total, "chars_read": chars_read,
                                "read_fraction": round(chars_read / total, 4) if total else None, "read_range_count": len(merged_reads),
                                "pages": None, "ocr": None, "search": None}

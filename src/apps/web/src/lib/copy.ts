@@ -184,6 +184,7 @@ export function toolReasonLabel(reason: string | null): string | null {
 }
 
 export const TURN_REASON_LABEL: Readonly<Record<string, string>> = {
+  source_permission_changed: "部分依据的展示权限已变更",
   no_submission: "模型没有提交结果就停止了",
   no_progress: "模型重复相同操作，证据没有变化，已停止",
   native_tools_unavailable: "当前模型不支持研究工具调用",
@@ -250,6 +251,7 @@ export const RECOVERY_REASON_LABEL: Readonly<Record<string, string>> = {
   already_used: "这个检查点已经用过",
   budget_exhausted: "预算已用完",
   repeated_truncation: "连续多次达到模型输出或上下文长度上限，无法再通过“继续研究”恢复；建议缩小问题范围重新提问，或先查看、导出已收集的部分事实",
+  repeated_interruption_no_progress: "模型响应在相同证据进度处再次中断。已保存现有分项，可以补充资料或缩小问题范围后重新提问。",
   repeated_timeout: "连续多次发生模型单次调用超时，无法再通过“继续研究”恢复；建议缩小问题范围重新提问，或先查看、导出已收集的资料与部分事实",
   unavailable: "当前无法恢复",
 };

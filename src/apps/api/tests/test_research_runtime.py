@@ -81,13 +81,14 @@ def test_unknown_external_result_is_not_replayed():
 def test_facts_and_calculation_are_source_linked():
     src = source()
     src.text = 'Revenue was 100 USD. Revenue was 80 USD.'
-    src.content_sha256 = 'new-hash'
+    from hashlib import sha256
+    src.content_sha256 = sha256(src.text.encode()).hexdigest()
     m = Model([turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'compare'}, 'a'),
         turn('record_facts', {'facts': [
             {'label': 'revenue', 'value': 100, 'unit': 'USD', 'currency': 'USD', 'period': '2025', 'source_id': 's1',
-             'quotation': 'Revenue was 100 USD.', 'character_start': 0, 'character_end': 20},
+             'quotation': 'Revenue was 100 USD.', 'character_start': 0, 'character_end': 20, 'content_sha256': src.content_sha256},
             {'label': 'revenue', 'value': 80, 'unit': 'USD', 'currency': 'USD', 'period': '2024', 'source_id': 's1',
-             'quotation': 'Revenue was 80 USD.', 'character_start': 21, 'character_end': 40}], 'rationale': 'inputs'}, 'b')])
+             'quotation': 'Revenue was 80 USD.', 'character_start': 21, 'character_end': 40, 'content_sha256': src.content_sha256}], 'rationale': 'inputs'}, 'b')])
     original = m.complete
     # Record the subsequent calls as well as the two scripted turns.
     def wrapped(messages, tools, **kwargs):
@@ -221,7 +222,7 @@ def test_acquire_known_failure_details_are_model_feedback():
     assert 'Unavailable' in _last_tool(m)['content']
 
 
-def test_repeated_facts_reuse_id_and_failed_batch_is_atomic():
+def test_repeated_facts_reuse_id_and_partial_batch_commits_atomically():
     fact = {'label': 'revenue', 'value': 100, 'unit': 'USD', 'currency': 'USD', 'period': '2025',
             'source_id': 's1', 'quotation': 'Revenue was 100 USD.'}
     invalid = {**fact, 'value': 999}
@@ -234,9 +235,10 @@ def test_repeated_facts_reuse_id_and_failed_batch_is_atomic():
     result = run_research_agent(question='Q', sources=[source()], model=m, context=context())
     assert result.reason == 'no_progress'
     assert len(result.facts) == 1
-    first = json.loads(_last_tool(m, 3)['content'])['facts']
-    second = json.loads(_last_tool(m, 4)['content'])['facts']
-    assert first[0]['fact_id'] == first[1]['fact_id'] == second[0]['fact_id'] == result.facts[0]['fact_id']
+    first = json.loads(_last_tool(m, 2)['content'])
+    second = json.loads(_last_tool(m, 3)['content'])['facts']
+    assert len(first['failures']) == 1
+    assert first['facts'][0]['fact_id'] == second[0]['fact_id'] == second[1]['fact_id'] == result.facts[0]['fact_id']
 
 
 def test_malformed_arguments_first_and_later_do_not_reuse_rationale():
@@ -527,7 +529,7 @@ def test_submission_keeps_support_and_counterargument_roles_without_kind():
               {'text': 'Costs rose sharply.', 'source_id': 's1', 'quotation': 'Costs rose sharply.', 'role': 'counterargument'}]
     m = Model([turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'read'}, 'a'),
                turn('submit_research', {'report': 'Mixed.', 'claims': claims, 'limitations': [], 'stopping_reason': 'answered'}, 'b')])
-    result = run_research_agent(question='Q', sources=[text], model=m, context=context())
+    result = run_research_agent(question='What was revenue?', sources=[text], model=m, context=context())
     assert result.status == 'completed'
     assert [c['role'] for c in result.claims] == ['support', 'counterargument']
     assert all('kind' not in c for c in result.claims)
@@ -549,15 +551,13 @@ def test_presend_retry_settings_default_and_reject_invalid_values(monkeypatch):
 
 def test_invalid_tool_arguments_are_reported_per_field_and_offsets_get_a_location_hint():
     from pydantic import ValidationError
-    from app.research_runtime import FactsRequest, invalid_reason
-    try:
-        FactsRequest.model_validate({'rationale': 'r', 'facts': [{'label': 'x', 'unit': 'millions', 'period': 'FY',
-                                                                  'source_id': 's', 'quotation': 'q'}]})
-    except ValidationError as error:
-        message = invalid_reason(error)
-    assert message == 'Invalid arguments: facts[0].value: required field is missing.'
-    assert 'pydantic.dev' not in message and 'input_value' not in message
-    schema = FactsRequest.model_json_schema()['$defs']['ProposedFact']['properties']
+    from app.research_tools_registry import FactsRequest, ProposedFact
+    req = FactsRequest.model_validate({'rationale': 'r', 'facts': [{'label': 'x', 'unit': 'millions', 'period': 'FY',
+                                                              'source_id': 's', 'quotation': 'q'}]})
+    with pytest.raises(ValidationError) as error:
+        ProposedFact.model_validate(req.facts[0])
+    assert error.value.errors()[0]['loc'] == ('value',)
+    schema = FactsRequest.model_json_schema()['properties']['facts']['items']['properties']
     assert 'Omit both offsets' in schema['character_start']['description']
     assert 'Required' in schema['value']['description']
 
@@ -918,6 +918,7 @@ def test_acquire_sources_rate_limit_allows_one_retry_and_blocks_second_repeat():
         kind='official',
         obtained_at=datetime.now(timezone.utc),
         content_sha256='acq-hash',
+        provenance={'symbol': 'NVDA', 'cik': '1045810'},
         retrieval_method='sec_filing_html',
         permissions=SourcePermissions(store=True, model_input=True, display=True, export=True),
     )
@@ -1749,8 +1750,8 @@ def test_failed_attempts_and_partial_notes_recorded_across_truncation_context_in
         initial_state=final_cp,
         checkpoint=lambda s: resumed_saved.append(json.loads(json.dumps(s))),
     )
-    assert res_ok.status == 'completed'
-    assert res_ok.partial_notes is None
+    assert res_ok.status == 'partial'  # One period does not answer a comparison.
+    assert res_ok.partial_notes is not None
     assert resumed_saved[-1]['user'] == original_user
     assert capture.turns[0].user == original_user
     tail_note = capture.turns[0].tail_note or ''
@@ -1887,7 +1888,7 @@ def test_default_90k_and_max_input_tokens_watermarks_and_giant_protected_force()
         context=context(),
         checkpoint=lambda s: saved_big.append(json.loads(json.dumps(s))),
     )
-    assert res_big.status == 'completed'
+    assert res_big.status == 'partial'  # The fixture only supports one chunk, not its report.
     # Before step 5 (after 4 x 20k = ~82k history), zero compaction! Before step 6 (5 x 20k = ~102k > 90k), L1 triggers once!
     assert 'cleared' not in m_big.turns[4].history[0].results[0].content
     assert json.loads(m_big.turns[5].history[0].results[0].content)['cleared'] is True
@@ -1947,7 +1948,7 @@ def test_default_90k_and_max_input_tokens_watermarks_and_giant_protected_force()
             )
 
     res_pol = run_research_agent(question='Check policy?', sources=[small_src], model=PolicyTightModel(), context=context())
-    assert res_pol.status == 'completed'
+    assert res_pol.status == 'partial'  # This fixture only cites an unrelated marker.
 
     # 3. Protected tool > 8000 chars stays protected under force=False, compacts only under force=True.
     prot_state = {
@@ -2429,7 +2430,7 @@ def test_work_context_tokens_and_tail_note_preserve_messages_zero_byte_identical
         context=context(),
         checkpoint=lambda s: wc_saved.append(json.loads(json.dumps(s))),
     )
-    assert wc_out.status == 'completed'
+    assert wc_out.status == 'partial'  # A marker alone does not answer the question.
     assert json.loads(wc_model.turns[3].history[0].results[0].content)['cleared'] is True
     assert wc_saved[-1]['context_receipts'][0]['trigger'] == 'l1_in_turn'
 
@@ -2486,7 +2487,7 @@ def test_work_context_tokens_and_tail_note_preserve_messages_zero_byte_identical
         context=context(),
         initial_state=cp_to,
     )
-    assert out_ok.status == 'completed'
+    assert out_ok.status == 'partial'  # The placeholder source does not answer the question.
     assert captured_wires[2]['messages'][0] == captured_wires[1]['messages'][0]
     assert captured_wires[2]['messages'][0]['content'] == cp_to['user']
     tail_blocks = captured_wires[2]['messages'][-1]['content']
@@ -2544,3 +2545,155 @@ def test_provider_timeout_produces_dedicated_gap_code_and_unknown_settlement():
     assert saved[-1]['model_receipts'][-1]['settlement'] == 'unknown'
     assert saved[-1]['events'][-1]['usage'] is None
     assert ctx.usage is None
+
+
+def test_checkpointed_question_parts_survive_interruption_and_reopen_without_leaking_revoked_evidence():
+    model = Model([
+        turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'read disclosure'}, 'a'),
+        turn('record_facts', {'facts': [{'label': 'Revenue', 'value': 100, 'unit': 'USD', 'currency': 'USD',
+             'period': '2025', 'source_id': 's1', 'quotation': 'Revenue was 100 USD.'}], 'rationale': 'record revenue'}, 'b'),
+    ])
+    original = model.complete
+    def complete(messages, tools, **kwargs):
+        if len(model.inputs) < 2:
+            return original(messages, tools, **kwargs)
+        count = len(model.inputs)
+        model.inputs.append(json.loads(json.dumps(messages)))
+        if count == 2:
+            fact_id = json.loads(_last_tool_msg(messages)['content'])['facts'][0]['fact_id']
+            return turn('checkpoint_question_part', {'question': 'Revenue', 'answer': 'The filing reports revenue of 100 USD.', 'fact_ids': [fact_id]}, 'c')
+        if count == 3:
+            return turn('checkpoint_question_part', {'question': 'entry timing', 'unresolved': 'A current price and entry criteria are missing.'}, 'd')
+        return ModelResponse({'role': 'assistant', 'content': 'interrupted'}, (), None, 'stop')
+    model.complete = complete
+    snapshots = []
+    question = 'Revenue and entry timing?'
+    out = run_research_agent(question=question, sources=[source()], model=model, context=context(),
+                             checkpoint=lambda s: snapshots.append(json.loads(json.dumps(s))))
+    assert out.status == 'partial'
+    assert out.question_parts[0]['answer'] == 'The filing reports revenue of 100 USD.'
+    assert out.question_parts[0]['references'][0]['origin'] == 'current'
+    assert out.question_parts[1]['reason'] == 'A current price and entry criteria are missing.'
+    assert any(len(s.get('question_parts', [])) == 2 for s in snapshots)
+    from app.research_topics import ResearchQuestionPart
+    restored = [ResearchQuestionPart.model_validate(row).model_dump() for row in out.question_parts]
+    assert restored[0]['references'][0]['fact_id'] == out.facts[0]['fact_id']
+    from app.research_partial_answer import question_parts
+    revoked = question_parts(question, snapshots[-1], set())
+    assert revoked[0]['answer'] == '' and revoked[0]['references'] == []
+    assert '和平' in question_parts('和平公司涉及什么风险？', {}, set())[0]['question']
+
+
+def test_partial_question_enumerations_preserve_unsplit_entities_and_fill_only_uncovered_parts():
+    from app.research_partial_answer import question_parts
+    question = '请研究，包括风险、入场和持有？'
+    empty = question_parts(question, {}, set())
+    assert [p['question'] for p in empty] == ['风险', '入场', '持有']
+    state = {'question_parts': [{'question': '风险', 'status': 'unresolved', 'answer': '',
+                                 'reason': '缺少依据', 'references': []}]}
+    assert [p['question'] for p in question_parts(question, state, set())] == ['风险', '入场', '持有']
+    assert [p['question'] for p in question_parts('和平公司涉及什么风险？', {}, set())] == ['和平公司涉及什么风险']
+    assert [p['question'] for p in question_parts('Revenue and entry timing?', {}, set())] == ['Revenue', 'entry timing']
+
+
+def test_report_draft_retains_valid_clauses_after_rejection_and_rechecks_permissions():
+    src = source()
+    src.text = '\n'.join(f'Revenue was {n} USD.' for n in range(100, 125))
+    model = Model([
+        turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'read'}, 'a'),
+        turn('checkpoint_report_draft', {'clauses': [
+            *[{'text': f'Revenue was {n} USD.', 'role': 'support', 'citations': [{'source_id': 's1', 'quotation': f'Revenue was {n} USD.'}]} for n in range(100, 125)],
+            {'text': 'BlackRock revenue was 999 USD.', 'role': 'support', 'citations': [{'source_id': 's1', 'quotation': 'Revenue was 100 USD.'}]},
+        ]}, 'b'),
+        ModelResponse({'role': 'assistant', 'content': 'interrupted'}, (), None, 'stop'),
+    ])
+    saved = []
+    out = run_research_agent(question='What was revenue?', sources=[src], model=model, context=context(),
+                             checkpoint=lambda state: saved.append(json.loads(json.dumps(state))))
+    feedback = json.loads(_last_tool(model, 2)['content'])
+    assert len(feedback['accepted']) == 25 and len(feedback['rejected']) == 1
+    assert len(out.claims) == 25
+    assert all('BlackRock' not in claim['text'] for claim in out.claims)
+    from app.research_report_grounding import recover_draft_claims
+    assert len(recover_draft_claims(saved[-1], {'s1': src}, lambda s: True)) == 25
+    assert recover_draft_claims(saved[-1], {'s1': src}, lambda s: False) == []
+    src.text = src.text.replace('Revenue was 100 USD.', 'Revenue was 999 USD.')
+    assert len(recover_draft_claims(saved[-1], {'s1': src}, lambda s: True)) == 24
+
+
+def test_mixed_facts_checkpoint_replay_preserves_valid_entries_and_exact_source_spans():
+    from hashlib import sha256
+    text = 'Revenue 100.00 USD\nEPS 2.5 USD per share\nRepeated 8\nRepeated 8'
+    src = source().model_copy(update={'text': text, 'content_sha256': sha256(text.encode()).hexdigest()})
+    eps_start = text.index('EPS')
+    eps_end = text.index('\nRepeated')
+    base = {'unit': 'USD', 'currency': 'USD', 'period': '2025', 'source_id': 's1'}
+    revenue = {**base, 'label': 'revenue', 'value': 100, 'quotation': 'Revenue 100 USD'}
+    eps = {**base, 'label': 'eps', 'value': 2.5, 'unit': 'USD/share',
+           'character_start': eps_start, 'character_end': eps_end, 'content_sha256': src.content_sha256}
+    invalid = {**eps, 'label': 'wrong hash', 'content_sha256': '0' * 64}
+    ambiguous = {**base, 'label': 'ambiguous', 'value': 8, 'quotation': 'Repeated 8'}
+    rows = [revenue, eps, invalid, ambiguous, {'label': 'malformed'}, 42]
+    turns = [turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'read'}, 'a'),
+             turn('record_facts', {'facts': rows, 'rationale': 'record'}, 'b'),
+             ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')]
+    snapshots = []
+    model = Model(turns)
+    outcome = run_research_agent(question='Q', sources=[src], model=model, context=context(),
+                                 checkpoint=lambda s: snapshots.append(json.loads(json.dumps(s))))
+    feedback = json.loads(_last_tool(model)['content'])
+    assert len(feedback['facts']) == len(outcome.facts) == 2
+    assert [item['index'] for item in feedback['failures']] == [2, 3, 4, 5]
+    assert feedback['facts'][0]['quotation'] == 'Revenue 100.00 USD'
+    assert feedback['facts'][1]['quotation'] == text[eps_start:eps_end]
+    committed = next(s for s in snapshots if len(s.get('facts', [])) == 2 and s['history'][-1]['results'])
+    assert [f['fact_id'] for f in committed['facts']] == [f['fact_id'] for f in feedback['facts']]
+    model2 = Model(turns)
+    outcome2 = run_research_agent(question='Q', sources=[src], model=model2, context=context())
+    assert [f['fact_id'] for f in outcome2.facts] == [f['fact_id'] for f in outcome.facts]
+
+    from decimal import Decimal
+    from app.research_calculations import CalculationError, NumericFact, align_facts_scale
+    fact = NumericFact(fact_id='a', value=Decimal('2.5'), unit='USD/share', currency='USD', period='2025')
+    aligned, _, _, _ = align_facts_scale([fact, fact.model_copy(update={'fact_id': 'b', 'unit': 'USD per share'})])
+    assert aligned == [Decimal('2.5'), Decimal('2.5')]
+    with pytest.raises(CalculationError):
+        align_facts_scale([fact, fact.model_copy(update={'fact_id': 'b', 'unit': 'USD millions', 'value': Decimal('3')})])
+
+
+def test_report_draft_replacement_is_atomic_and_retry_does_not_duplicate():
+    from app.research_tool_executor import ToolExecutionContext, _exec_checkpoint_report_draft
+    from app.research_tools_registry import CheckpointReportDraftRequest
+    src = source()
+    ctx = ToolExecutionContext(question='Revenue?', state={'read_ranges': [{'source_id': 's1', 'start': 0, 'end': len(src.text)}]},
+                               sources=[src], source_by_id={'s1': src}, context=context(), as_of=None, seen=set())
+    def call(clauses):
+        return _exec_checkpoint_report_draft(ctx, SimpleNamespace(req=CheckpointReportDraftRequest(clauses=clauses))).result
+    original = {'text': 'Revenue was 100 USD.', 'role': 'support', 'citations': [{'source_id': 's1', 'quotation': src.text}]}
+    first = call([original])
+    old_id = first['accepted'][0]['claim_id']
+    rejected = call([{**original, 'text': 'Revenue was 999 USD.', 'replaces_claim_id': old_id}])
+    assert rejected['rejected'] and ctx.state['draft_claims'][0]['claim_id'] == old_id
+    patch = {**original, 'text': 'Revenue: 100 USD.', 'replaces_claim_id': old_id}
+    new_id = call([patch])['accepted'][0]['claim_id']
+    assert new_id != old_id
+    assert call([patch])['accepted'][0]['claim_id'] == new_id
+    assert [claim['claim_id'] for claim in ctx.state['draft_claims']] == [new_id]
+
+
+def test_repeated_dated_statement_facts_keep_their_id_and_distinct_measurements():
+    from hashlib import sha256
+    text = 'FY2024 net income was USD 40 million; adjusted net income was also USD 40 million.'
+    src = source().model_copy(update={'text': text, 'content_sha256': sha256(text.encode()).hexdigest()})
+    base = {'source_id': src.source_id, 'period': 'FY2024', 'value': 40, 'unit': 'USD million',
+            'currency': 'USD', 'quotation': text}
+    model = Model([
+        turn('read_sources', {'reads': [{'source_id': src.source_id}], 'rationale': 'Inspect disclosure.'}, 'read'),
+        turn('record_facts', {'facts': [{**base, 'label': 'Annual net income'}], 'rationale': 'Record annual result.'}, 'first'),
+        turn('record_facts', {'facts': [{**base, 'label': 'net income'}, {**base, 'label': 'adjusted net income'}],
+                              'rationale': 'Retry and add adjusted measure.'}, 'retry'),
+        ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop'),
+    ])
+    outcome = run_research_agent(question='Check both reported income measures.', sources=[src], model=model, context=context())
+    assert [f['label'] for f in outcome.facts] == ['Annual net income', 'adjusted net income']
+    assert len({f['fact_id'] for f in outcome.facts}) == 2

@@ -1096,6 +1096,147 @@ def test_repeated_timeout_circuit_breaker_blocks_recovery_status_and_continue(mo
     assert provider.calls == 3
 
 
+def test_interrupted_transport_continuation_stops_only_after_no_evidence_progress(monkeypatch):
+    from app.phase3 import ProviderFailure
+    from tests.test_research_runtime import turn
+
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRIES', '0')
+    monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+
+    client = TestClient(api.app)
+    registration = client.post('/v1/auth/local/register', json={
+        'email': f'timeout-circuit-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!',
+    })
+    assert registration.status_code == 201
+    headers = {'Authorization': 'Bearer ' + registration.json()['access_token']}
+    long_text = 'Nasdaq index closed at 18000. ' + ('Market commentary footnote. ' * 100)
+    source = client.post('/v2/research/sources', headers=headers, json={
+        'title': 'Market Feed', 'text': long_text,
+        'permissions': {'store': True, 'display': True, 'model_input': True, 'export': True},
+    })
+    assert source.status_code == 201
+    source_id = source.json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={
+        'question': 'Analyze recent index movement.', 'source_ids': [source_id],
+    })
+    assert topic.status_code == 201
+    path = '/v2/research/topics/' + topic.json()['topic_id']
+
+    observed_continue_messages: list[list[dict]] = []
+
+    class AlwaysTimingOutProvider:
+        name = 'always-timeout-test'
+        policy = SimpleNamespace(timeout_seconds=120, max_input_tokens=None, max_output_tokens=16384)
+
+        def __init__(self):
+            self.calls = 0
+
+        def complete(self, messages, tools, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return turn('read_sources', {'reads': [{'source_id': source_id}], 'rationale': 'Read market feed.'}, 'read1')
+            if self.calls == 3:
+                observed_continue_messages.append(messages)
+            err = ProviderFailure('provider_transport_error', 'Stream deadline exceeded.', retryable=True)
+            err.provider_response_received = True
+            err.timeout_kind = 'stream_deadline_timeout'
+            err.elapsed_ms = 120000
+            err.wire_bytes = 25000
+            err.streamed_bytes = 2048
+            raise err
+
+    provider = AlwaysTimingOutProvider()
+    monkeypatch.setattr(api, 'challenge_provider', provider)
+
+    started = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={
+        'parent_version_id': topic.json()['versions'][-1]['version_id'],
+        'discover_sources': False,
+    })
+    assert started.status_code == 202, started.text
+    op1 = started.json()['operation']['operation_id']
+    assert _terminal(client, path, headers, op1) == 'completed'
+    cp1 = api.RESEARCH_RUN_INPUTS.get(op1)['runtime_checkpoint']
+    assert len(cp1['failed_attempts']) == 1
+    assert cp1['failed_attempts'][0]['reason'] == 'provider_transport_error'
+    assert cp1['failed_attempts'][0]['interruption'] == 'response_body_after_frames'
+    assert cp1['failed_attempts'][0]['evidence_progress']['read_ranges'] > 0
+    assert cp1['model_receipts'][-1]['settlement'] == 'unknown'
+    assert cp1['events'][-1]['usage'] is None
+    v1_turn = client.get(path, headers=headers).json()['versions'][-1]['content']['turns'][-1]
+    assert any(g['code'] == 'provider_error' for g in v1_turn['gaps']), v1_turn['gaps']
+
+    status1 = client.get(f'{path}/runs/{op1}/recovery-status', headers=headers)
+    assert status1.status_code == 200
+    assert status1.json()['can_continue'] is True
+    assert status1.json()['can_deliver'] is False
+    assert status1.json()['reason'] is None
+
+    cont1 = client.post(f'{path}/runs/{op1}/continue', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={})
+    assert cont1.status_code == 202, cont1.text
+    op2 = cont1.json()['operation']['operation_id']
+    assert _terminal(client, path, headers, op2) == 'completed'
+    assert provider.calls == 3
+
+    # 1st /continue with facts=[] preserves the unread read_sources tool result and injects timeout guidance via tail_note.
+    tool_msgs = [json.loads(m['content']) for m in observed_continue_messages[0] if m['role'] == 'tool']
+    assert len(tool_msgs) == 1
+    assert 'cleared' not in tool_msgs[0]
+    assert 'Nasdaq index closed at 18000.' in tool_msgs[0]['results'][0]['text']
+    prefix_user_payload = json.loads(observed_continue_messages[0][1]['content'])
+    assert 'recovery_guidance' not in prefix_user_payload
+    assert 'prior_failed_attempts' not in prefix_user_payload
+    source_view = next(row for row in prefix_user_payload['sources'] if row['source_id'] == source_id)
+    assert source_view['permissions']['model_input'] is True
+    assert source_view['content_sha256'] == source.json()['content_sha256']
+    assert all('excerpt' not in row for row in prefix_user_payload.get('recorded_read_ranges', []))
+    tail_msg = observed_continue_messages[0][-1]
+    assert tail_msg['role'] == 'user' and tail_msg['content'].startswith('[Recovery context: ')
+    tail_payload = json.loads(tail_msg['content'][len('[Recovery context: '):-1])
+    assert 'record_facts' in tail_payload['recovery_guidance']
+    assert 'one narrow unfinished task' in tail_payload['recovery_guidance']
+    assert tail_payload['last_failure']['reason'] == 'provider_transport_error'
+
+    # A bulky saved history is narrowed only in the wire view; the checkpoint stays intact.
+    from copy import deepcopy
+    from app.research_context_manager import _narrow_recovery_view
+    bulky = deepcopy(cp1)
+    bulky['continuation_guidance'] = 'Choose one narrow unfinished task.'
+    bulky['history'][0]['results'][0]['content'] += 'x' * 190000
+    original = deepcopy(bulky)
+    user_view, history_view = _narrow_recovery_view(bulky, {})
+    before_bytes = len(json.dumps({'user': bulky['user'], 'history': bulky['history']}, ensure_ascii=False).encode())
+    after_bytes = len(json.dumps({'user': user_view, 'history': history_view}, ensure_ascii=False).encode())
+    assert after_bytes < before_bytes // 4
+    assert bulky == original
+    assert json.loads(user_view).get('recorded_read_ranges', []) == []  # unavailable sources cannot enter the prompt
+
+    cp2 = api.RESEARCH_RUN_INPUTS.get(op2)['runtime_checkpoint']
+    assert cp2['continuation_count'] == 1
+    assert cp2['consecutive_timeout_continuations'] == 0
+    assert cp2['consecutive_truncation_continuations'] == 0
+    assert len(cp2['failed_attempts']) == 2
+    assert cp2['failed_attempts'][0]['evidence_fingerprint'] == cp2['failed_attempts'][1]['evidence_fingerprint']
+    from copy import deepcopy
+    from app.research_recovery import runtime_interruption_no_progress_blocked
+    progressed = deepcopy(cp2)
+    progressed['failed_attempts'][-1]['evidence_fingerprint'] = 'different'
+    assert not runtime_interruption_no_progress_blocked(progressed)
+
+    status2 = client.get(f'{path}/runs/{op2}/recovery-status', headers=headers)
+    assert status2.status_code == 200
+    assert status2.json()['can_continue'] is False
+    assert status2.json()['can_deliver'] is False
+    assert status2.json()['reason'] == 'repeated_interruption_no_progress'
+
+    blocked = client.post(f'{path}/runs/{op2}/continue', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={})
+    assert blocked.status_code == 409, blocked.text
+    body = blocked.json()
+    assert body['error_code'] == 'lifecycle_conflict'
+    assert provider.calls == 3
+
+
 def test_runtime_timeout_continuation_policy_and_loop_breaker_edge_cases():
     from app.research_recovery import (
         L2_COMPACT_AFTER_CHARS,

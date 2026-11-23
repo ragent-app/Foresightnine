@@ -1,6 +1,93 @@
 {
   "components": {
     "schemas": {
+      "AnalyzeMarketSeriesRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "benchmark_selection_reason": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the user did not name a benchmark, identify the selected benchmark and explain its relevance to the requested comparison.",
+            "title": "Benchmark Selection Reason"
+          },
+          "benchmark_source_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional persisted benchmark market_data or historical_prices source ID for excess return and beta.",
+            "title": "Benchmark Source Id"
+          },
+          "decimal_places": {
+            "default": 2,
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Decimal Places",
+            "type": "integer"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional inclusive end date YYYY-MM-DD filter (also clamped to as_of).",
+            "title": "End Date"
+          },
+          "price_basis": {
+            "default": "adjusted",
+            "description": "Use forward-adjusted closes when ADJF is available ('adjusted') or raw unadjusted closes ('raw').",
+            "enum": [
+              "adjusted",
+              "raw"
+            ],
+            "title": "Price Basis",
+            "type": "string"
+          },
+          "source_id": {
+            "description": "Persisted market_data or historical_prices source ID for the target instrument.",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional inclusive start date YYYY-MM-DD filter.",
+            "title": "Start Date"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "title": "AnalyzeMarketSeriesRequest",
+        "type": "object"
+      },
       "AttachSourcesInput": {
         "additionalProperties": false,
         "properties": {
@@ -1105,6 +1192,112 @@
         "title": "PdfUploadRequest",
         "type": "object"
       },
+      "QuestionPartReference": {
+        "additionalProperties": false,
+        "properties": {
+          "analysis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Id"
+          },
+          "calculation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Id"
+          },
+          "character_end": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character End"
+          },
+          "character_start": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Start"
+          },
+          "chart_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chart Id"
+          },
+          "claim_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim Id"
+          },
+          "fact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fact Id"
+          },
+          "origin": {
+            "default": "current",
+            "enum": [
+              "prior",
+              "current"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          }
+        },
+        "title": "QuestionPartReference",
+        "type": "object"
+      },
       "ReadRange": {
         "additionalProperties": false,
         "properties": {
@@ -1152,6 +1345,108 @@
           "calculation_index"
         ],
         "title": "RecalculateRequest",
+        "type": "object"
+      },
+      "ResearchAttempt": {
+        "properties": {
+          "answered_parts": {
+            "minimum": 0.0,
+            "title": "Answered Parts",
+            "type": "integer"
+          },
+          "elapsed_seconds": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed Seconds"
+          },
+          "model_calls": {
+            "minimum": 0.0,
+            "title": "Model Calls",
+            "type": "integer"
+          },
+          "new_calculations": {
+            "minimum": 0.0,
+            "title": "New Calculations",
+            "type": "integer"
+          },
+          "new_claims": {
+            "minimum": 0.0,
+            "title": "New Claims",
+            "type": "integer"
+          },
+          "new_facts": {
+            "minimum": 0.0,
+            "title": "New Facts",
+            "type": "integer"
+          },
+          "operation_id": {
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "reported_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported Tokens"
+          },
+          "reserved_estimate_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reserved Estimate Tokens"
+          },
+          "search_calls": {
+            "minimum": 0.0,
+            "title": "Search Calls",
+            "type": "integer"
+          },
+          "unknown_usage_calls": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unknown Usage Calls"
+          }
+        },
+        "required": [
+          "operation_id",
+          "model_calls",
+          "search_calls",
+          "new_facts",
+          "new_calculations",
+          "new_claims",
+          "answered_parts",
+          "reason"
+        ],
+        "title": "ResearchAttempt",
         "type": "object"
       },
       "ResearchCalculation": {
@@ -1297,6 +1592,16 @@
             ],
             "title": "Result Status"
           },
+          "return_context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReturnContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "rounding": {
             "title": "Rounding",
             "type": "string"
@@ -1425,6 +1730,17 @@
             "title": "Is Simulated",
             "type": "boolean"
           },
+          "normalization_base": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalization Base"
+          },
           "replaces_chart_id": {
             "anyOf": [
               {
@@ -1488,6 +1804,13 @@
         "additionalProperties": false,
         "description": "One finding. `turn_id` is None for a user-authored claim.",
         "properties": {
+          "calculation_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Calculation Ids",
+            "type": "array"
+          },
           "challenges_claim_ids": {
             "items": {
               "type": "string"
@@ -1513,6 +1836,50 @@
             "default": false,
             "title": "Edited By User",
             "type": "boolean"
+          },
+          "fact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fact Ids",
+            "type": "array"
+          },
+          "grounding_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "mechanically_checked",
+                  "needs_review"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grounding Status"
+          },
+          "qualification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification"
+          },
+          "reasoning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning"
           },
           "role": {
             "enum": [
@@ -1608,6 +1975,13 @@
             "title": "Summary",
             "type": "string"
           },
+          "tables": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchTable"
+            },
+            "title": "Tables",
+            "type": "array"
+          },
           "turns": {
             "items": {
               "$ref": "#/components/schemas/ResearchTurn"
@@ -1617,6 +1991,55 @@
           }
         },
         "title": "ResearchContent",
+        "type": "object"
+      },
+      "ResearchEvidenceRequirement": {
+        "additionalProperties": false,
+        "properties": {
+          "core": {
+            "default": true,
+            "title": "Core",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/QuestionPartReference"
+            },
+            "title": "References",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "satisfied",
+              "partial",
+              "missing",
+              "unavailable",
+              "conflict",
+              "not_applicable"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "question",
+          "status",
+          "reason"
+        ],
+        "title": "ResearchEvidenceRequirement",
         "type": "object"
       },
       "ResearchFact": {
@@ -2034,6 +2457,70 @@
         "title": "ResearchMetadataExport",
         "type": "object"
       },
+      "ResearchQuestionPart": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "default": "",
+            "title": "Answer",
+            "type": "string"
+          },
+          "core": {
+            "default": true,
+            "title": "Core",
+            "type": "boolean"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/QuestionPartReference"
+            },
+            "title": "References",
+            "type": "array"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchEvidenceRequirement"
+            },
+            "title": "Requirements",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "answered",
+              "partial",
+              "unresolved"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question",
+          "status",
+          "reason"
+        ],
+        "title": "ResearchQuestionPart",
+        "type": "object"
+      },
       "ResearchRunRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2186,6 +2673,98 @@
         "title": "ResearchRunRequest",
         "type": "object"
       },
+      "ResearchTable": {
+        "additionalProperties": false,
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/TableColumn"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "is_simulated": {
+            "default": false,
+            "title": "Is Simulated",
+            "type": "boolean"
+          },
+          "markdown": {
+            "default": "",
+            "title": "Markdown",
+            "type": "string"
+          },
+          "replaces_table_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaces Table Id"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/TableRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          },
+          "subtitle": {
+            "default": "",
+            "title": "Subtitle",
+            "type": "string"
+          },
+          "table_id": {
+            "title": "Table Id",
+            "type": "string"
+          },
+          "table_type": {
+            "enum": [
+              "comparison",
+              "financial_summary",
+              "peer_comp",
+              "valuation",
+              "time_series",
+              "custom"
+            ],
+            "title": "Table Type",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Id"
+          }
+        },
+        "required": [
+          "table_id",
+          "table_type",
+          "title",
+          "columns",
+          "rows"
+        ],
+        "title": "ResearchTable",
+        "type": "object"
+      },
       "ResearchTopic": {
         "properties": {
           "created_at": {
@@ -2238,6 +2817,13 @@
         "additionalProperties": false,
         "description": "One question and its run. Immutable once saved, except by continuing the same turn.",
         "properties": {
+          "attempts": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchAttempt"
+            },
+            "title": "Attempts",
+            "type": "array"
+          },
           "attributions": {
             "items": {
               "$ref": "#/components/schemas/TurnAttribution"
@@ -2265,6 +2851,18 @@
             },
             "title": "Claim Ids",
             "type": "array"
+          },
+          "counter_evidence": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counter Evidence"
           },
           "coverage_map": {
             "anyOf": [
@@ -2320,6 +2918,13 @@
             "title": "Index",
             "type": "integer"
           },
+          "market_analyses": {
+            "items": {
+              "$ref": "#/components/schemas/SavedMarketAnalysis"
+            },
+            "title": "Market Analyses",
+            "type": "array"
+          },
           "method_packs": {
             "items": {
               "$ref": "#/components/schemas/MethodPackRef"
@@ -2365,6 +2970,13 @@
             ],
             "title": "Question Origin",
             "type": "string"
+          },
+          "question_parts": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchQuestionPart"
+            },
+            "title": "Question Parts",
+            "type": "array"
           },
           "read_ranges": {
             "items": {
@@ -2421,6 +3033,13 @@
               }
             ],
             "title": "Stopping Note"
+          },
+          "table_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Table Ids",
+            "type": "array"
           },
           "turn_id": {
             "title": "Turn Id",
@@ -2512,6 +3131,112 @@
           "review"
         ],
         "title": "ResearchVersion",
+        "type": "object"
+      },
+      "ReturnContext": {
+        "additionalProperties": false,
+        "properties": {
+          "end_date": {
+            "title": "End Date",
+            "type": "string"
+          },
+          "end_price": {
+            "title": "End Price",
+            "type": "string"
+          },
+          "end_price_type": {
+            "enum": [
+              "open",
+              "close",
+              "issue_price"
+            ],
+            "title": "End Price Type",
+            "type": "string"
+          },
+          "entry_type": {
+            "enum": [
+              "issue_price",
+              "first_close",
+              "open",
+              "close",
+              "unknown"
+            ],
+            "title": "Entry Type",
+            "type": "string"
+          },
+          "identity_verified": {
+            "title": "Identity Verified",
+            "type": "boolean"
+          },
+          "instrument": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instrument"
+          },
+          "price_basis": {
+            "title": "Price Basis",
+            "type": "string"
+          },
+          "start_date": {
+            "title": "Start Date",
+            "type": "string"
+          },
+          "start_price": {
+            "title": "Start Price",
+            "type": "string"
+          },
+          "start_price_type": {
+            "enum": [
+              "open",
+              "close",
+              "issue_price"
+            ],
+            "title": "Start Price Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entry_type",
+          "start_date",
+          "end_date",
+          "start_price",
+          "end_price",
+          "price_basis",
+          "identity_verified",
+          "start_price_type",
+          "end_price_type"
+        ],
+        "title": "ReturnContext",
+        "type": "object"
+      },
+      "SavedMarketAnalysis": {
+        "additionalProperties": false,
+        "properties": {
+          "analysis_id": {
+            "title": "Analysis Id",
+            "type": "string"
+          },
+          "request": {
+            "$ref": "#/components/schemas/AnalyzeMarketSeriesRequest"
+          },
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "analysis_id",
+          "request",
+          "result"
+        ],
+        "title": "SavedMarketAnalysis",
         "type": "object"
       },
       "SecConceptRequest": {
@@ -2784,6 +3509,263 @@
         "title": "SourceRef",
         "type": "object"
       },
+      "TableCell": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "display_value": {
+            "title": "Display Value",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "fact",
+              "calculation",
+              "text",
+              "empty"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TableProvenance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "kind",
+          "display_value"
+        ],
+        "title": "TableCell",
+        "type": "object"
+      },
+      "TableColumn": {
+        "additionalProperties": false,
+        "properties": {
+          "align": {
+            "default": "left",
+            "enum": [
+              "left",
+              "right",
+              "center"
+            ],
+            "title": "Align",
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "scale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "TableColumn",
+        "type": "object"
+      },
+      "TableProvenance": {
+        "additionalProperties": false,
+        "properties": {
+          "calculation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Id"
+          },
+          "character_end": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character End"
+          },
+          "character_start": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Start"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "fact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fact Id"
+          },
+          "input_fact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Fact Ids",
+            "type": "array"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "unit",
+          "period"
+        ],
+        "title": "TableProvenance",
+        "type": "object"
+      },
+      "TableRow": {
+        "additionalProperties": false,
+        "properties": {
+          "cells": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TableCell"
+            },
+            "title": "Cells",
+            "type": "object"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "cells"
+        ],
+        "title": "TableRow",
+        "type": "object"
+      },
       "TurnAttribution": {
         "additionalProperties": false,
         "description": "Attribution that must travel with a result, for example the GDELT Project citation.",
@@ -2843,6 +3825,30 @@
             "title": "Model Calls",
             "type": "integer"
           },
+          "reported_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported Tokens"
+          },
+          "reserved_estimate_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reserved Estimate Tokens"
+          },
           "search_calls": {
             "minimum": 0.0,
             "title": "Search Calls",
@@ -2852,6 +3858,18 @@
             "minimum": 0.0,
             "title": "Total Tokens",
             "type": "integer"
+          },
+          "unknown_usage_calls": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unknown Usage Calls"
           },
           "usage_status": {
             "anyOf": [

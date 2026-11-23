@@ -130,6 +130,28 @@ def runtime_truncation_loop_blocked(
     return False
 
 
+def runtime_interruption_no_progress_blocked(checkpoint: Mapping[str, Any] | None) -> bool:
+    """Block a second interrupted continuation only when durable evidence is unchanged."""
+    if not isinstance(checkpoint, Mapping) or checkpoint.get('submission'):
+        return False
+    attempts = checkpoint.get('failed_attempts')
+    if not isinstance(attempts, list) or len(attempts) < 2:
+        return False
+    first, second = attempts[-2:]
+    if not isinstance(first, Mapping) or not isinstance(second, Mapping):
+        return False
+    fingerprint = first.get('evidence_fingerprint')
+    return (second.get('reason') == 'provider_transport_error'
+            and first.get('interruption') == second.get('interruption') == 'response_body_after_frames'
+            and isinstance(fingerprint, str) and bool(fingerprint)
+            and fingerprint == second.get('evidence_fingerprint')
+            and type(checkpoint.get('continuation_count')) is int
+            and checkpoint['continuation_count'] >= 1)
+
+
+_REPEATED_INTERRUPTION_MESSAGE = 'Research continuation is blocked after a narrowed continuation made no evidence progress and the response stream was interrupted again.'
+
+
 def runtime_timeout_loop_blocked(
     checkpoint: Mapping[str, Any] | None,
     *,
@@ -305,6 +327,8 @@ def prepare_runtime_continuation(
     """Enforce truncation/timeout circuit breakers and apply differentiated compaction before resuming."""
     if runtime_truncation_loop_blocked(checkpoint, saved_turn=saved_turn):
         raise ApiProblem(409, 'lifecycle_conflict', _REPEATED_TRUNCATION_MESSAGE)
+    if runtime_interruption_no_progress_blocked(checkpoint):
+        raise ApiProblem(409, 'lifecycle_conflict', _REPEATED_INTERRUPTION_MESSAGE)
     if runtime_timeout_loop_blocked(checkpoint, saved_turn=saved_turn):
         raise ApiProblem(409, 'lifecycle_conflict', _REPEATED_TIMEOUT_MESSAGE)
     state = deepcopy(dict(checkpoint))
@@ -340,7 +364,15 @@ def prepare_runtime_continuation(
         if type(max_history_chars) is int and max_history_chars > 0
         else L2_COMPACT_AFTER_CHARS
     )
-    if latest_reason in TIMEOUT_FAILURE_REASONS:
+    attempts = state.get('failed_attempts') or []
+    interrupted = bool(attempts and isinstance(attempts[-1], Mapping) and attempts[-1].get('interruption') == 'response_body_after_frames')
+    if interrupted and latest_reason == 'provider_transport_error':
+        state['continuation_guidance'] = (
+            'The response stream was interrupted after partial frames. Use recorded evidence and reads, '
+            'choose one narrow unfinished task, persist facts with record_facts in small batches, and submit a concise partial '
+            'result with gaps if necessary. Do not repeat completed work.'
+        )
+    elif latest_reason in TIMEOUT_FAILURE_REASONS:
         from .research_runtime import _history_serialized_chars, compact_runtime_history
 
         has_facts = bool(state.get('facts'))
@@ -967,6 +999,9 @@ def recovery_status(*, topic: ResearchTopic, operation: dict[str, Any], inputs: 
         saved_turn = latest.content.turns[-1] if turn_matched else None
         if runtime_truncation_loop_blocked(runtime_cp, saved_turn=saved_turn):
             result['reason'] = 'repeated_truncation'
+            return result
+        if runtime_interruption_no_progress_blocked(runtime_cp):
+            result['reason'] = 'repeated_interruption_no_progress'
             return result
         if runtime_timeout_loop_blocked(runtime_cp, saved_turn=saved_turn):
             result['reason'] = 'repeated_timeout'

@@ -298,7 +298,7 @@ export interface ResearchCapabilities {
 }
 
 // apps/api/app/research_reconciliation.py ui_view (versioned; saved on ResearchTurn.reconciliation)
-export type ReconciliationBadge = "consistent" | "rounding_only" | "differs_minor" | "differs_material";
+export type ReconciliationBadge = "single_source" | "consistent" | "rounding_only" | "differs_minor" | "differs_material";
 
 export interface ReconciliationCell {
   fact_id: string;
@@ -310,12 +310,13 @@ export interface ReconciliationCell {
   as_of: string | null;
   is_reference: boolean;
   low_ocr_confidence: boolean;
+  quotation_excerpt: string | null;
 }
 
 export interface ReconciliationRow {
   row_id: string;
   title: { zh: string; en: string };
-  status: "consistent" | "rounding_only" | "differs";
+  status: "single_source" | "consistent" | "rounding_only" | "differs";
   severity: string | null;
   badge: ReconciliationBadge;
   cells: ReconciliationCell[];
@@ -344,6 +345,10 @@ export interface CoverageRow {
 }
 
 export interface CoverageDocument {
+  origin: string | null;
+  ingestion_kind: string | null;
+  retrieval_method: string | null;
+  permissions: Record<string, boolean> | null;
   source_id: string;
   category: string;
   title: string | null;

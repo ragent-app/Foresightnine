@@ -54,6 +54,9 @@ _BENIGN_SEARCH_FAILURES = frozenset({'search_query_invalid', 'search_provider_un
                                      'search_response_invalid', 'search_provider_error', *LIMIT_REASONS})
 
 
+from .research_counter_search import CounterSearchIntent
+
+
 class NewsSearchRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     query: str = Field(min_length=1, max_length=500, description=(
@@ -69,6 +72,7 @@ class NewsSearchRequest(BaseModel):
         description='Ranking mode for story clusters: "relevance" (query match, recency decay, and source authority) or "recency" (newest first).',
     )
     rationale: str = Field(min_length=1)
+    counter_search: CounterSearchIntent | None = None
 
     @model_validator(mode='after')
     def ordered_window(self) -> 'NewsSearchRequest':

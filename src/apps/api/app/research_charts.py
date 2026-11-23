@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, localcontext
 import json
 import re
@@ -341,6 +341,7 @@ class ResearchChart(BaseModel):
     has_projected_points: bool = False
     replaces_chart_id: str | None = None
     source_ids: list[str] = Field(default_factory=list)
+    normalization_base: str | None = None
 
     @model_validator(mode="after")
     def _validate_mode(self) -> ResearchChart:
@@ -1144,7 +1145,7 @@ def build_research_chart(
             )
         elif isinstance(binding, HistoricalPricesChartBinding):
             src = _validate_source(binding.source_id, sources, as_of, allow_simulated=allow_simulated)
-            pts = _parse_historical_prices_source(src, normalize_base_100=binding.normalize_base_100)
+            pts = _parse_historical_prices_source(src, normalize_base_100=False)
             used = {src.source_id: src}
         else:
             src = _validate_source(binding.source_id, sources, as_of, allow_simulated=allow_simulated)
@@ -1159,6 +1160,44 @@ def build_research_chart(
             raise ChartBuildError(f"Series {s_req.name!r} yielded no observations.")
         all_used_sources.update(used)
         series_raw.append((s_req, pts))
+
+    # Compare normalized series against one shared observation, never independently
+    # rebasing each instrument on a different starting day.
+    normalized = [(s, points) for s, points in series_raw
+                  if isinstance(s.binding, HistoricalPricesChartBinding) and s.binding.normalize_base_100]
+    historical = [(s, points) for s, points in series_raw if isinstance(s.binding, HistoricalPricesChartBinding)]
+    if normalized and len(normalized) != len(historical):
+        raise ChartBuildError("Historical price comparison cannot mix normalized and raw prices.")
+    normalization_base = None
+    if normalized:
+        def timeline_key(value: str) -> str:
+            if len(value) == 10:
+                return date.fromisoformat(value).isoformat()
+            stamp = datetime.fromisoformat(value)
+            if stamp.tzinfo is None or stamp.utcoffset() is None:
+                raise ChartBuildError("Intraday comparison requires timezone-aware timestamps.")
+            return stamp.astimezone(timezone.utc).isoformat()
+        keyed = []
+        for _, points in normalized:
+            values = {timeline_key(point.x): point for point in points}
+            if len(values) != len(points):
+                raise ChartBuildError("Price series contains duplicate observation times.")
+            keyed.append(values)
+        common = set(keyed[0]).intersection(*(set(item) for item in keyed[1:]))
+        if not common:
+            raise ChartBuildError("Normalized price series have no common observation time.")
+        normalization_base = min(common)
+        index_spec = _classify_unit("index", None, is_historical_price=True, normalized_base_100=True)
+        for (_, points), mapping in zip(normalized, keyed):
+            base = mapping[normalization_base].value
+            points[:] = [point for point in points if timeline_key(point.x) >= normalization_base]
+            for point in points:
+                point.x = timeline_key(point.x)
+                with localcontext() as decimal_context:
+                    decimal_context.prec = 100
+                    point.value = (point.value / base * Decimal("100")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                point.unit_spec = index_spec
+                point.normalized_base_100 = True
 
     # Validate each declared Y axis across all points bound to it and resolve target scale & unit.
     axis_meta: dict[ChartAxisId, tuple[ChartAxis, _UnitSpec, bool]] = {}
@@ -1231,7 +1270,7 @@ def build_research_chart(
 
         axis_obj = ChartAxis(
             id=ax_req.id,
-            label=ax_req.label,
+            label=(f"{ax_req.label}（{normalization_base}=100）" if family == "index_base_100" and normalization_base else ax_req.label),
             unit=axis_unit,
             currency=resolved_currency,
             scale=target_scale,
@@ -1282,7 +1321,7 @@ def build_research_chart(
         if converted:
             note = f"（已统一换算至 {ax_obj.scale}）"
         elif spec.family == "index_base_100":
-            note = "（首日基准=100）"
+            note = f"（{normalization_base} 基准=100）"
         elif ax_obj.scale != "ones":
             note = f"（量级：{ax_obj.scale}）"
         subtitle_parts.append(f"{prefix}：{ax_obj.unit}{note}")
@@ -1295,7 +1334,7 @@ def build_research_chart(
     return ResearchChart(
         chart_id="chart-" + uuid4().hex,
         chart_type=request.chart_type,
-        title=request.title,
+        title=(f"{request.title}（基准 {normalization_base}）" if normalization_base else request.title),
         subtitle=" · ".join(subtitle_parts),
         x_label=request.x_label,
         axes=ordered_axes,
@@ -1304,4 +1343,5 @@ def build_research_chart(
         has_projected_points=has_projected,
         replaces_chart_id=request.replaces_chart_id,
         source_ids=sorted(all_used_sources),
+        normalization_base=normalization_base,
     )

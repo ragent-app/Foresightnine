@@ -15,9 +15,11 @@ from .research_source_policy import source_eligibility, summarize_sources
 from .research_sources import ResearchSource
 from .research_topics import (
     ReadRange,
+    ResearchAttempt,
     ResearchContent,
     ResearchTurn,
     ResearchVersion,
+    SavedMarketAnalysis,
     TopicNotFound,
     TopicVersionConflict,
     TurnUsage,
@@ -148,7 +150,7 @@ def build_turn_usage(
     accounted_tokens: int | None,
 ) -> TurnUsage:
     """Assemble TurnUsage with complete vs partial_unknown accounting status."""
-    # Best known total: the settled ledger total is a lower bound when some call's usage is unknown.
+    # Admission accounting can include reserved estimates for interrupted calls.
     known_total = max(usage or 0, accounted_tokens or 0)
     usage_status = "partial_unknown" if usage is None and model_calls > 0 else "complete"
     return TurnUsage(
@@ -157,6 +159,29 @@ def build_turn_usage(
         total_tokens=known_total,
         usage_status=usage_status,
     )
+
+
+def receipt_breakdown(receipts, events, accounting):
+    """Count each admitted call once; keep reservations separate from provider receipts."""
+    reported = {}
+    admitted = {key: r for key, r in receipts.items()
+                if r.get('provider') != 'not_invoked' and r.get('settlement') != 'released'}
+    for e in events:
+        cid, tokens = e.get('call_id'), e.get('usage')
+        if cid in admitted and type(tokens) is int and tokens >= 0 and e.get('kind') in ('model', 'model_failure'):
+            reported[cid] = tokens
+    for cid, receipt in admitted.items():
+        tokens = receipt.get('reported_tokens')
+        if type(tokens) is int and tokens >= 0:
+            reported[cid] = tokens
+    unknown = [r for cid, r in admitted.items() if cid not in reported]
+    estimates = [r.get('reserved_estimate_tokens') for r in unknown]
+    known_total = sum(reported.values())
+    reservation = sum(estimates) if all(type(n) is int for n in estimates) else None
+    # Earlier checkpoints retained the charged aggregate and per-call events.
+    if reservation is None and type(accounting) is int and all(r.get('settlement') == 'unknown' for r in unknown):
+        reservation = max(0, accounting - known_total)
+    return dict(reported_tokens=known_total, unknown_usage_calls=len(unknown), reserved_estimate_tokens=reservation)
 
 
 def build_research_turn(
@@ -192,11 +217,13 @@ def build_research_turn(
         reason=outcome.reason,
         report=outcome.report,
         partial_notes=outcome.partial_notes,
+        question_parts=outcome.question_parts,
         stopping_note=outcome.stopping_note,
         claim_ids=[item["claim_id"] for item in outcome.claims],
         fact_ids=[item["fact_id"] for item in outcome.facts],
         calculation_ids=[item["calculation_id"] for item in outcome.calculations],
         chart_ids=[item["chart_id"] for item in outcome.charts],
+        table_ids=[item["table_id"] for item in outcome.tables],
         gaps=gap_rows([dict(item) for item in gaps]),
         usage=usage,
         search_status=search_status,
@@ -204,6 +231,7 @@ def build_research_turn(
         read_ranges=[ReadRange.model_validate(item) for item in read_ranges],
         events=outcome.events,
         reconciliation=outcome.reconciliation,
+        counter_evidence=getattr(outcome, 'counter_evidence', None),
         coverage_map=outcome.coverage_map,
         method_packs=outcome.method_packs,
         attributions=outcome.attributions,
@@ -294,6 +322,7 @@ class ResearchTurnPersister:
         finished_at: datetime,
         default_search_status: str,
         official_fetch_status: str,
+        operation_started_at: datetime | str | None = None,
     ) -> ResearchRunResult:
         """Assemble ResearchTurn, delegate to merge_turn, and return ResearchRunResult."""
         self.version_chain.source_ids = list(
@@ -316,6 +345,9 @@ class ResearchTurnPersister:
             usage=context.usage,
             accounted_tokens=context.accounted_tokens,
         )
+        receipts = getattr(context, 'model_call_receipts', {})
+        if receipts or context.calls == 0:
+            usage = usage.model_copy(update=receipt_breakdown(receipts, outcome.events, context.accounted_tokens))
         turn = build_research_turn(
             turn_meta=self.turn_meta,
             operation_id=operation_id,
@@ -327,6 +359,8 @@ class ResearchTurnPersister:
             official_fetch_status=official_fetch_status,
             read_ranges=ranges,
         )
+        turn.market_analyses = [SavedMarketAnalysis.model_validate(a) for a in runtime_state.get("market_analyses", ())
+                                if a.get("analysis_id")]
         summaries_fn = self.source_summaries_fn or (
             lambda analyzed_ids, segments: summarize_sources(self.sources, analyzed_ids, segments)
         )
@@ -337,14 +371,36 @@ class ResearchTurnPersister:
             facts=outcome.facts,
             calculations=outcome.calculations,
             charts=outcome.charts,
+            tables=outcome.tables,
             sources=summaries_fn(outcome.source_ids, ranges),
             source_candidates=candidates,
         )
+        saved = content.turns[-1]
+        previous = next((t for t in parent_version.content.turns if t.turn_id == saved.turn_id), None)
+        start = operation_started_at
+        if isinstance(start, str):
+            start = datetime.fromisoformat(start)
+        old_answered = {p.question for p in previous.question_parts if p.status == 'answered'} if previous else set()
+        operation_receipts = {cid: receipt for cid, receipt in receipts.items()
+                              if cid.startswith(operation_id + ':')}
+        breakdown = receipt_breakdown(operation_receipts, outcome.events, None) if operation_receipts else {}
+        attempt = ResearchAttempt(
+            **breakdown,
+            operation_id=operation_id, reason=saved.reason,
+            elapsed_seconds=max(0.0, (finished_at - start).total_seconds()) if start is not None else None,
+            model_calls=max(0, usage.model_calls - (previous.usage.model_calls if previous else 0)),
+            search_calls=max(0, usage.search_calls - (previous.usage.search_calls if previous else 0)),
+            new_facts=len(set(saved.fact_ids) - set(previous.fact_ids if previous else [])),
+            new_calculations=len(set(saved.calculation_ids) - set(previous.calculation_ids if previous else [])),
+            new_claims=len(set(saved.claim_ids) - set(previous.claim_ids if previous else [])),
+            answered_parts=len({p.question for p in saved.question_parts if p.status == 'answered'} - old_answered),
+        )
+        saved.attempts = [a for a in (previous.attempts if previous else []) if a.operation_id != operation_id] + [attempt]
         return ResearchRunResult(
             operation_id=operation_id,
             topic_id=self.topic_id,
             parent_version_id=self.parent_version_id,
-            status=outcome.status,
+            status=content.turns[-1].status,
             content=content,
         )
 

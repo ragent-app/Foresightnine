@@ -639,7 +639,7 @@ export function parseReconciliation(raw: unknown): ReconciliationView | null {
   for (const item of raw["rows"].slice(0, 50)) {
     if (!isRecord(item) || typeof item["row_id"] !== "string") continue;
     const status = item["status"];
-    if (status !== "consistent" && status !== "rounding_only" && status !== "differs") continue;
+    if (status !== "single_source" && status !== "consistent" && status !== "rounding_only" && status !== "differs") continue;
     const badgeRaw = item["badge"];
     const badge = typeof badgeRaw === "string" && BADGES.has(badgeRaw)
       ? (badgeRaw as ReconciliationRow["badge"])
@@ -657,6 +657,7 @@ export function parseReconciliation(raw: unknown): ReconciliationView | null {
         as_of: text(cell["as_of"], NAME_LIMIT),
         is_reference: cell["is_reference"] === true,
         low_ocr_confidence: cell["low_ocr_confidence"] === true,
+        quotation_excerpt: text(cell["quotation_excerpt"], 500),
       });
     }
     const ref = isRecord(item["reference"]) ? item["reference"] : null;
@@ -716,6 +717,10 @@ export function parseCoverageMap(raw: unknown): CoverageMapView | null {
       }
     }
     documents.push({
+      origin: text(item["origin"], NAME_LIMIT),
+      ingestion_kind: text(item["ingestion_kind"], NAME_LIMIT),
+      retrieval_method: text(item["retrieval_method"], NAME_LIMIT),
+      permissions: isRecord(item["permissions"]) ? Object.fromEntries(Object.entries(item["permissions"]).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean")) : null,
       source_id: item["source_id"],
       category: text(item["category"], NAME_LIMIT) ?? "other",
       title: text(item["title"], TITLE_LIMIT),

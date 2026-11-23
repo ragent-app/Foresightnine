@@ -10,6 +10,8 @@ import pytest
 
 from app.operations import ApiProblem
 from app.research_calculations import CalculationRequest, calculate, calculation_input_status
+from app.research_tables import CreateTableRequest, build_research_table
+from app.research_turns import merge_turn
 from app.research_lifecycle import ResearchVersionChain
 from app.research_runs import ResearchRunResult
 from app.research_sources import ResearchSource, SourcePermissions
@@ -75,11 +77,13 @@ def _make_outcome(**overrides) -> SimpleNamespace:
         "reason": "submitted",
         "report": "Revenue was 100 USD.",
         "partial_notes": None,
+        "question_parts": [],
         "stopping_note": "answered",
         "claims": [],
         "facts": [],
         "calculations": [],
         "charts": [],
+        "tables": [],
         "gaps": [],
         "source_ids": [],
         "events": [],
@@ -304,7 +308,14 @@ def test_build_research_turn_and_persister_finalize_with_merge_turn_isolation() 
         "challenges_claim_ids": [],
     }
 
+    table = build_research_table(CreateTableRequest.model_validate({
+        "title": "Revenue", "columns": [{"key": "amount", "label": "Revenue"}],
+        "rows": [{"label": "FY2025", "cells": {"amount": {"kind": "fact", "fact_id": "fact-2025"}}}],
+        "rationale": "Compare revenue",
+    }), facts=[f1, f2], calculations=[], sources={"src-1": src}).model_dump(mode="json")
     outcome = _make_outcome(
+        report=f"Revenue.\n\n[[table:{table['table_id']}]]",
+        tables=[table],
         claims=[claim],
         facts=[f1, f2],
         calculations=[valid_calc, invalid_calc],
@@ -380,6 +391,13 @@ def test_build_research_turn_and_persister_finalize_with_merge_turn_isolation() 
         usage_status="partial_unknown",
     )
     assert saved_turn.search_status == "completed"
+    assert saved_turn.table_ids == [table["table_id"]]
+    reopened = ResearchContent.model_validate_json(run_result.content.model_dump_json())
+    assert reopened.tables[0].rows[0].cells["amount"].provenance.fact_id == "fact-2025"
+    assert reopened.turns[-1].report.endswith(f"[[table:{table['table_id']}]]")
+    resumed = merge_turn(reopened, saved_turn, claims=[], facts=[], calculations=[], charts=[], tables=[table], sources=[], source_candidates=[])
+    assert len(resumed.tables) == 1
+    assert resumed.turns[-1].table_ids == [table["table_id"]]
     assert saved_turn.calculation_ids == ["calc-valid"]
     assert [c.calculation_id for c in run_result.content.calculations] == ["calc-valid"]
     assert [f.fact_id for f in run_result.content.facts] == ["fact-2025", "fact-2024"]
@@ -388,6 +406,25 @@ def test_build_research_turn_and_persister_finalize_with_merge_turn_isolation() 
     gap_codes = [g.code for g in saved_turn.gaps]
     assert "source_selection_partial" in gap_codes
     assert "calculation_persistence_dropped" in gap_codes
+
+    # A reported answer that specifically relied on the rejected calculation must be removed.
+    outcome.question_parts = [
+        {"id": "part-value", "question": "What was revenue?", "status": "answered", "reason": "",
+         "answer": "100 USD", "references": [{"fact_id": "fact-2025"}]},
+        {"id": "part-growth", "question": "How did it change?", "status": "answered", "reason": "",
+         "answer": "Reported growth", "references": [{"calculation_id": "calc-bad"}]},
+    ]
+    revised = persister.finalize_turn(
+        operation_id="op-3", parent_version=v0, outcome=outcome, runtime_state=runtime_state,
+        context=ctx, finished_at=finished_at, default_search_status="not_requested",
+        official_fetch_status="not_requested",
+    )
+    assert revised.status == revised.content.turns[-1].status == "partial"
+    valid_answer, missing_answer = revised.content.turns[-1].question_parts
+    assert valid_answer.answer == "100 USD"
+    assert missing_answer.status == "unresolved" and not missing_answer.answer and not missing_answer.references
+    assert not revised.content.turns[-1].report
+
 
 
 def test_persister_commit_handles_optimistic_lock_conflict_and_unexpected_error() -> None:
@@ -575,3 +612,26 @@ def test_persister_tracks_in_place_acquired_sources_and_continuation_turn_merge(
     assert [row["source_id"] for row in res2.content.sources] == ["src-1", "src-2"]
     assert "source_selection_partial" not in {g.code for g in merged_turn.gaps}
 
+
+
+def test_partial_question_components_are_persisted_and_reopened_with_turn():
+    components = [
+        {'question': 'Revenue', 'status': 'answered', 'answer': 'Reported revenue was 100 USD.', 'reason': '',
+         'references': [{'fact_id': 'f-prior', 'origin': 'prior'}]},
+        {'question': 'entry timing', 'status': 'unresolved', 'answer': '',
+         'reason': 'Current price and entry criteria are missing.', 'references': []},
+    ]
+    turn = build_research_turn(
+        turn_meta=_make_turn_meta(question='Revenue and entry timing?'), operation_id='op-1',
+        finished_at=datetime(2026, 11, 20, 12, 1, tzinfo=timezone.utc),
+        outcome=_make_outcome(status='partial', reason='provider_timeout', report='', question_parts=components),
+        gaps=[], usage=TurnUsage(model_calls=1, search_calls=0, total_tokens=1),
+        search_status='not_requested', official_fetch_status='not_requested', read_ranges=[],
+    )
+    reopened = ResearchContent.model_validate_json(ResearchContent(turns=[turn]).model_dump_json())
+    restored = reopened.turns[0].question_parts
+    assert restored[0].answer == components[0]["answer"]
+    assert restored[0].references[0].fact_id == "f-prior"
+    assert restored[0].references[0].origin == "prior"
+    assert restored[1].reason == components[1]["reason"]
+    assert reopened.turns[0].question == 'Revenue and entry timing?'

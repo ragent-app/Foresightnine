@@ -9,6 +9,7 @@ import json
 import logging
 import re
 from typing import Any, Callable, Mapping, Sequence
+from types import SimpleNamespace
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -29,9 +30,11 @@ from .research_calculations import (
     calculate,
     calculation_input_status,
 )
+from .research_return_context import price_return_context
 from .research_charts import build_research_chart
 from .research_context_manager import _record_failed_attempt, _turn_batch_usage
 from .research_documents import page_for_offset, page_range_to_chars
+from .research_delivery import assess, incomplete
 from .research_fin_tools import FinDataToolbox
 from .research_item_validator import ItemPersistenceValidationError, validate_research_item
 from .research_library import ResearchLibrary
@@ -57,6 +60,7 @@ from .research_tools_registry import (
     MAX_SEARCH_SNIPPET_CHARS,
     MAX_TURN_TOOL_RESULT_CHARS,
     ReadPagesRequest,
+    ProposedFact,
     ReadRequest,
     OutlineSourceRequest,
     SEARCH_SNIPPET_TARGET_CHARS,
@@ -1296,6 +1300,30 @@ def locate_quotation(
     return next(iter(matches))
 
 
+def locate_fact_quotation(source: ResearchSource, quotation: str, ranges: list[dict[str, Any]]) -> tuple[int, int]:
+    """Match formatting variants only when their mapped source span is unique."""
+    normalized, _, _ = _normalize_with_map(quotation.strip())
+    if not normalized:
+        raise ValueError('Quotation must not be blank.')
+    matches: set[tuple[int, int]] = set()
+    for span in ranges:
+        start, end = span['start'], span['end']
+        folded, starts, ends = _normalize_with_map(source.text[start:end])
+        pos = 0
+        while True:
+            pos = folded.find(normalized, pos)
+            if pos < 0:
+                break
+            matches.add((start + starts[pos], start + ends[pos + len(normalized) - 1]))
+            pos += 1
+    if len(matches) == 1:
+        return next(iter(matches))
+    if len(matches) > 1:
+        raise QuotationLocateError('Quotation is ambiguous within read ranges.', 'not_unique',
+                                   {'offsets': [list(m) for m in sorted(matches)[:5]]})
+    return locate_quotation(source, quotation, None, None, ranges=ranges)
+
+
 def build_turn_baseline(state: Mapping[str, Any], source_by_id: Mapping[str, Any]) -> dict[str, int]:
     """Snapshot per-turn artifact/source counts to detect zero-yield turns."""
     return {
@@ -1725,6 +1753,22 @@ def _exec_outline_source(ctx: ToolExecutionContext, inv: _CallInvocation) -> Too
     return ToolCallResult(result=result)
 
 
+def _record_counter_search(ctx: ToolExecutionContext, inv: _CallInvocation, *, scope: str, result: Mapping[str, Any], source_id: str | None = None) -> None:
+    intent = getattr(inv.req, 'counter_search', None)
+    if intent is None:
+        return
+    attempts = ctx.state.setdefault('counter_searches', [])
+    existing = next((item for item in attempts if item.get('call_id') == inv.call.id), None)
+    if existing is not None:
+        existing['status'] = result.get('status', existing['status'])
+        if scope == 'document':
+            existing['matches'] = result.get('total_matches')
+        return
+    attempts.append({'call_id': inv.call.id, 'scope': scope, 'target': intent.target, 'hypothesis': intent.hypothesis,
+                     'query': inv.req.query, 'source_id': source_id, 'status': result.get('status', 'unknown'),
+                     'matches': result.get('total_matches') if scope == 'document' else None})
+
+
 def _exec_search_source(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallResult:
     head_id = ctx.head_source_id(inv.req.source_id)
     result = _search_source(
@@ -1732,6 +1776,8 @@ def _exec_search_source(ctx: ToolExecutionContext, inv: _CallInvocation) -> Tool
         source_by_id=ctx.source_by_id,
         as_of=ctx.as_of,
     )
+    if result.get('status') == 'completed':
+        _record_counter_search(ctx, inv, scope='document', result=result, source_id=head_id)
     if head_id != inv.req.source_id and isinstance(result, dict) and result.get('status') != 'denied_or_unavailable':
         result['source_version'] = ctx.version_note(inv.req.source_id, head_id)
     return ToolCallResult(result=result)
@@ -1787,6 +1833,7 @@ def _exec_news_search(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCa
         'target': t_target,
         'started_at': inv.started_at,
     }
+    _record_counter_search(ctx, inv, scope='external', result={'status': 'in_progress'})
     ctx.save()
     news = ctx.deps.run_news_search(
         inv.req,
@@ -1807,6 +1854,7 @@ def _exec_news_search(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCa
     if news.invalid_response:
         ctx.state['search_invalid_response'] = True
     result, summary = news.result, news.summary
+    _record_counter_search(ctx, inv, scope='external', result=result)
     if news.denied_count is not None and news.result.get('status') == 'failed':
         summary = None
     _record_discovered_leads(ctx, inv.call.id, news.lead_rows, skip_fred=False)
@@ -2098,6 +2146,27 @@ def _exec_fin_tool(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallR
         produced = ctx.fin_data.filings(inv.req, entities)
     ctx.state['pending'] = ctx.tool_batch_pending(inv.index, started_at=inv.started_at)
     result = produced.result
+    if name == 'company_financials' and (result.get('status') == 'empty' or result.get('reason') in {'no_xbrl_facts', 'no_matching_lines', 'tag_not_reported', 'unit_or_period_not_found_in_returned_records'}):
+        from .research_reconciliation import classify_source
+        entity = entities.get(inv.req.entity_id, {}) if inv.req.entity_id else {}
+        company = str(entity.get('company') or '').strip() if isinstance(entity, Mapping) else ''
+        company_key = re.sub(r'[^a-z0-9]', '', company.casefold())
+        cik = str(inv.req.cik or '').lstrip('0')
+        candidates = []
+        for filing in ctx.source_by_id.values():
+            if classify_source(filing) != 'filing' or source_eligibility([filing], ctx.as_of)[0][1] != 'eligible':
+                continue
+            header = re.sub(r'[^a-z0-9]', '', (filing.title + ' ' + filing.text[:15000]).casefold())
+            filing_url = str(filing.url or '')
+            same_cik = bool(cik and re.search(r'/data/0*' + re.escape(cik) + r'(?:/|$)', filing_url))
+            if same_cik or (len(company_key) >= 4 and company_key in header):
+                candidates.append(filing.source_id)
+        if candidates:
+            result['primary_source_fallback'] = {
+                'source_ids': candidates[:5], 'lines': list(inv.req.lines or []), 'periods': inv.req.periods,
+                'instruction': 'Search these already available filings for the requested financial lines and periods, read the relevant passages, and record and cite them; if no matching passage is found, report the primary-source gap.',
+                'suggested_tools': ['search_source', 'read_sources'],
+            }
     if ctx.fin_data.on_result is not None:
         ctx.fin_data.on_result(name, result)
     for entity_id, info in produced.entities.items():
@@ -2130,25 +2199,59 @@ def _exec_fin_tool(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallR
     return ToolCallResult(result=result, summary=summary, transient_rate_limited=result.get('status') == 'rate_limited')
 
 
+# A frequency prefix repeats the period for additive statement measures. Other
+# qualifiers (including "recurring", "adjusted", and "annualized") distinguish observations.
+_STATEMENT_FLOWS = frozenset({
+    'revenue', 'net income', 'operating income', 'gross profit', 'operating cash flow', 'free cash flow',
+    '营收', '营业收入', '净利润', '营业利润', '毛利', '经营现金流', '自由现金流',
+})
+
+
+def _observation_label(label: str, period: str) -> str:
+    folded = label.strip().casefold()
+    if re.fullmatch(r'(?:FY\s*)?(?:19|20)\d{2}年?', period.strip(), re.I):
+        base = re.sub(r'^(?:annual\s+|年度)', '', folded)
+        if base in _STATEMENT_FLOWS:
+            return base
+    return label
+
+
 def _exec_record_facts(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallResult:
     rows: list[dict[str, Any]] = []
     staged: list[dict[str, Any]] = []
-    staged_entries: list[tuple[int, dict[str, Any]]] = []
     ocr_warnings: list[dict[str, Any]] = []
     existing = [*ctx.state.get('prior_facts', []), *ctx.state.get('facts', [])]
     fact_failures: list[dict[str, Any]] = []
-    for fact_index, fact in enumerate(inv.req.facts):
+    for fact_index, raw_fact in enumerate(inv.req.facts):
+        try:
+            fact = ProposedFact.model_validate(raw_fact)
+        except ValidationError as error:
+            fact_failures.append({'index': fact_index, 'reason': 'invalid_fact', 'message': str(error)[:500]})
+            continue
         source = ctx.source_by_id.get(fact.source_id)
         try:
             if source is None or source_eligibility([source], ctx.as_of)[0][1] != 'eligible':
                 raise ValueError('Fact source is unavailable or unauthorized.')
-            start, end = ctx.locate(source, fact.quotation, fact.character_start, fact.character_end)
-            if fact.value not in _quoted_numbers(fact.quotation):
+            if fact.character_start is not None or fact.character_end is not None:
+                if fact.content_sha256 != source.content_sha256:
+                    raise ValueError('Offsets require the current source content_sha256 from the read tool.')
+                start, end = fact.character_start, fact.character_end
+                if start is None or end is None or not any(r['start'] <= start < end <= r['end'] for r in ctx.ranges_for_source(fact.source_id)):
+                    raise ValueError('Both offsets must lie within a previously read range.')
+                quotation = source.text[start:end]
+                if fact.quotation is not None and fact.quotation != quotation:
+                    raise ValueError('Quotation does not match the specified location.')
+            elif fact.quotation:
+                start, end = locate_fact_quotation(source, fact.quotation, ctx.ranges_for_source(fact.source_id))
+                quotation = source.text[start:end]
+            else:
+                raise ValueError('Provide a quotation or hash-bound offsets.')
+            if fact.value not in _quoted_numbers(quotation):
                 raise ValueError('Fact value does not match source quotation.')
         except ValueError as item_error:
-            fact_failures.append(ctx.quotation_failure(fact_index, 'facts', source, fact.source_id, fact.quotation, item_error))
+            fact_failures.append(ctx.quotation_failure(fact_index, 'facts', source, fact.source_id, fact.quotation or '', item_error))
             continue
-        candidate = {**fact.model_dump(mode='json'), 'character_start': start, 'character_end': end}
+        candidate = {**fact.model_dump(mode='json', exclude={'content_sha256'}), 'quotation': quotation, 'character_start': start, 'character_end': end}
         if (
             not candidate.get('currency')
             and _ISO_CURRENCY_LIKE_RE.match(fact.unit or '')
@@ -2177,32 +2280,39 @@ def _exec_record_facts(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolC
                         'value against the original page image.'
                     ),
                 })
-        identity_fields = ('source_id', 'character_start', 'character_end', 'unit', 'currency', 'period', 'label')
-        row = next(
-            (
-                item for item in existing + staged
-                if all(item.get(k) == candidate[k] for k in identity_fields)
-                and Decimal(str(item.get('value'))) == fact.value
-            ),
-            None,
-        )
+        identity_fields = ('source_id', 'character_start', 'character_end', 'unit', 'currency', 'period')
+        identity = {k: candidate[k] for k in identity_fields}
+        identity.update(label=_observation_label(fact.label, fact.period),
+                        value=str(fact.value.normalize()), source_sha256=source.content_sha256)
+        fact_id = 'fact-' + sha256(json.dumps(identity, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        row = next((item for item in existing + staged if item.get('fact_id') == fact_id), None)
+        if row is None:
+            # Older in-flight observations may have opaque IDs. Reuse them only
+            # when this source still contains their exact verified quotation.
+            row = next((item for item in existing
+                        if not re.fullmatch(r'fact-[a-f0-9]{64}', str(item.get('fact_id', '')))
+                        and all(item.get(k) == candidate[k] for k in identity_fields)
+                        and item.get('quotation') == quotation and item.get('label') == fact.label
+                        and Decimal(str(item['value'])) == fact.value), None)
         if row is None:
             row = {
-                'fact_id': 'fact-' + uuid4().hex,
+                'fact_id': fact_id,
                 **candidate,
                 'location': {'character_start': start, 'character_end': end},
                 'verification': 'numeric_and_location_match_semantics_not_verified',
             }
+            try:
+                validate_persisted_tool_item('record_facts', row, item_index=fact_index)
+            except ItemPersistenceValidationError as error:
+                fact_failures.append({'index': fact_index, 'reason': 'invalid_fact', 'message': str(error)[:500]})
+                continue
             staged.append(row)
-            staged_entries.append((fact_index, row))
         rows.append(row)
-    # Validate the entire batch before changing durable state.
-    if fact_failures:
-        raise _quotation_batch_error('facts', fact_failures, len(inv.req.facts))
-    for fact_index, fact_row in staged_entries:
-        validate_persisted_tool_item('record_facts', fact_row, item_index=fact_index)
+    # Commit all accepted entries together with the enclosing tool result checkpoint.
     ctx.state.setdefault('facts', []).extend(staged)
-    result: dict[str, Any] = {'facts': rows}
+    for failure in fact_failures:
+        failure.pop('_message', None)
+    result: dict[str, Any] = {'facts': rows, 'failures': fact_failures}
     if ocr_warnings:
         result['warnings'] = ocr_warnings
     rec_summary = insights.reconciliation_for_model(insights.reconcile_run(ctx.state, ctx.source_by_id))
@@ -2260,10 +2370,16 @@ def _exec_calculate_financials(ctx: ToolExecutionContext, inv: _CallInvocation) 
                 calc_payload['first'] = first_dict
                 calc_payload['second'] = second_dict
         request = CalculationRequest.model_validate(calc_payload)
-        row = {'calculation_id': 'calc-' + uuid4().hex, **ctx.deps.calculate(request)}
+        preliminary = price_return_context({'formula_id': request.formula, 'inputs': [item.model_dump(mode='json') for item in request.resolved_facts()]}, facts, ctx.source_by_id)
+        intraday = bool(preliminary and preliminary['identity_verified'] and preliminary['start_date'] == preliminary['end_date'] and preliminary['start_price_type'] == 'open' and preliminary['end_price_type'] == 'close')
+        calculated = ctx.deps.calculate(request, verified_intraday=True) if intraday else ctx.deps.calculate(request)
+        row = {'calculation_id': 'calc-' + uuid4().hex, **calculated}
         # Same consistency check as user-created calculations, so agent rows do not
         # wait for a later user save to show their input status (363 acceptance).
         row['input_status'] = ctx.deps.calculation_input_status(row, list(facts.values()))
+        return_context = price_return_context(row, facts, ctx.source_by_id)
+        if return_context is not None:
+            row['return_context'] = return_context
         validate_persisted_tool_item('calculate_financials', row, item_index=len(rows))
         rows.append(row)
     ctx.state['calculations'].extend(rows)
@@ -2327,6 +2443,7 @@ def _exec_create_chart(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolC
             'title': chart.title,  # type: ignore[attr-defined]
             'subtitle': chart.subtitle,  # type: ignore[attr-defined]
             'axes': chart_dict['axes'],
+            'normalization_base': chart_dict.get('normalization_base'),
             'series_summary': [
                 {
                     'name': s['name'],
@@ -2406,6 +2523,12 @@ def _exec_analyze_market_series(ctx: ToolExecutionContext, inv: _CallInvocation)
         as_of=ctx.as_of,
         allow_simulated=False,
     )
+    payload = {'request': inv.req.model_dump(mode='json'), 'result': analysis}
+    analysis_id = 'market-analysis-' + sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()[:32]
+    recorded = {'analysis_id': analysis_id, **payload}
+    analyses = ctx.state.setdefault('market_analyses', [])
+    if not any(item.get('analysis_id') == analysis_id for item in analyses):
+        analyses.append(recorded)
     analyzed_ids = ctx.state.setdefault('analyzed_market_source_ids', [])
     for sid in analysis.get('source_ids', []):
         if sid not in analyzed_ids:
@@ -2418,7 +2541,7 @@ def _exec_analyze_market_series(ctx: ToolExecutionContext, inv: _CallInvocation)
         'bar_count': analysis['bar_count'],
         'latest_close': analysis['latest_close'],
     }
-    return ToolCallResult(result={'status': 'ok', **analysis}, summary=summary)
+    return ToolCallResult(result={'status': 'ok', 'analysis_id': analysis_id, **analysis}, summary=summary)
 
 
 def _exec_activate_method_pack(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallResult:
@@ -2462,11 +2585,149 @@ def _exec_activate_method_pack(ctx: ToolExecutionContext, inv: _CallInvocation) 
     return ToolCallResult(result=result, summary=summary)
 
 
+def _validate_draft_clause(ctx: ToolExecutionContext, clause: Any) -> dict:
+    from .research_report_grounding import clause_problem
+    citations = []
+    for citation in clause.citations:
+        source = ctx.source_by_id.get(citation.source_id)
+        if source is None or source_eligibility([source], ctx.as_of)[0][1] != 'eligible':
+            raise ValueError('Citation source is unavailable or unauthorized.')
+        start, end = ctx.locate(source, citation.quotation, citation.character_start, citation.character_end)
+        citations.append({'source_id': citation.source_id, 'quotation': citation.quotation,
+                          'location': {'character_start': start, 'character_end': end}})
+    facts_by_id = {f['fact_id']: f for f in [*ctx.state.get('prior_facts', []), *ctx.state.get('facts', [])]}
+    calcs_by_id = {c['calculation_id']: c for c in [*ctx.state.get('prior_calculations', []), *ctx.state.get('calculations', [])]}
+    calculations = []
+    fact_ids = list(clause.fact_ids)
+    for calc_id in clause.calculation_ids:
+        calc = calcs_by_id.get(calc_id)
+        if calc is None:
+            raise ValueError('Unknown calculation ID: ' + calc_id)
+        calculations.append(calc)
+        fact_ids.extend(x.get('fact_id') for x in calc.get('inputs', []) if isinstance(x, Mapping))
+    facts = []
+    for fact_id in dict.fromkeys(fact_ids):
+        fact = facts_by_id.get(fact_id)
+        source = ctx.source_by_id.get(fact.get('source_id')) if fact else None
+        if source is None or source_eligibility([source], ctx.as_of)[0][1] != 'eligible':
+            raise ValueError('Fact source is unavailable or unauthorized: ' + str(fact_id))
+        start, end = fact.get('character_start'), fact.get('character_end')
+        if type(start) is not int or type(end) is not int or not 0 <= start < end <= len(source.text):
+            raise ValueError('Fact location is unavailable: ' + str(fact_id))
+        if fact.get('quotation') and source.text[start:end] != fact['quotation']:
+            raise ValueError('Fact source has changed: ' + str(fact_id))
+        facts.append(fact)
+    problem = clause_problem(clause.text, [c['quotation'] for c in citations], facts, calculations)
+    if problem:
+        raise ValueError(problem)
+    canonical = {'text': clause.text, 'role': clause.role, 'citations': citations,
+                 'fact_ids': list(clause.fact_ids), 'calculation_ids': list(clause.calculation_ids)}
+    digest = sha256(json.dumps(canonical, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    return {**canonical, 'claim_id': 'claim-' + digest[:32], 'challenges_claim_ids': []}
+
+
+def _exec_checkpoint_report_draft(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallResult:
+    saved = ctx.state.setdefault('draft_claims', [])
+    accepted, rejected = [], []
+    for index, clause in enumerate(inv.req.clauses):
+        try:
+            item = _validate_draft_clause(ctx, clause)
+        except ValueError as error:
+            rejected.append({'index': index, 'reason': str(error)})
+            continue
+        previous = clause.replaces_claim_id
+        if previous and not any(existing.get('claim_id') == previous for existing in saved):
+            if any(existing.get('claim_id') == item['claim_id'] for existing in saved):
+                accepted.append({'index': index, 'claim_id': item['claim_id']})
+                continue
+            rejected.append({'index': index, 'reason': 'Unknown draft claim to replace.'})
+            continue
+        if previous:
+            saved[:] = [existing for existing in saved if existing.get('claim_id') != previous]
+        if not any(existing.get('claim_id') == item['claim_id'] for existing in saved):
+            saved.append(item)
+        accepted.append({'index': index, 'claim_id': item['claim_id']})
+    ctx.save()
+    return ToolCallResult(result={'accepted': accepted, 'rejected': rejected},
+                          summary={'kind': 'checkpoint_report_draft', 'accepted': len(accepted), 'rejected': len(rejected)})
+
+
+def _exec_checkpoint_question_part(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallResult:
+    req = inv.req
+    question = ctx.question
+    if req.question.strip() not in question:
+        raise ValueError('question must be an exact excerpt of the user question')
+    if not req.answer.strip() and not req.unresolved.strip():
+        raise ValueError('Provide an answer or explain what is missing')
+    refs = []
+    for fact_id in req.fact_ids:
+        found = None
+        for origin, key in (('current', 'facts'), ('prior', 'prior_facts')):
+            for fact in ctx.state.get(key, []):
+                if fact.get('fact_id') == fact_id:
+                    source = ctx.source_by_id.get(fact.get('source_id'))
+                    if source is not None and source_eligibility([source], ctx.as_of)[0][1] == 'eligible':
+                        found = {'fact_id': fact_id, 'origin': origin}
+                    break
+            if found:
+                break
+        if not found:
+            raise ValueError('Unknown or unauthorized fact ID: ' + fact_id)
+        if found not in refs:
+            refs.append(found)
+    for citation in req.citations:
+        source = ctx.source_by_id.get(citation.source_id)
+        if source is None or source_eligibility([source], ctx.as_of)[0][1] != 'eligible':
+            raise ValueError('Citation source is unavailable or unauthorized')
+        start, end = ctx.locate(source, citation.quotation, citation.character_start, citation.character_end)
+        refs.append({'source_id': citation.source_id, 'character_start': start, 'character_end': end, 'origin': 'current'})
+    if req.answer.strip() and not refs:
+        raise ValueError('An answer requires an authorized recorded fact or a located quotation')
+    if req.answer.strip():
+        from .research_report_grounding import clause_problem
+        all_facts = {f.get('fact_id'): f for key in ('facts', 'prior_facts') for f in ctx.state.get(key, [])}
+        linked = [all_facts[r['fact_id']] for r in refs if r.get('fact_id') in all_facts]
+        quotations = [c.quotation for c in req.citations] + [f.get('quotation', '') for f in linked]
+        problem = clause_problem(req.answer, quotations, linked, [])
+        if problem:
+            raise ValueError(problem)
+    row = {'question': req.question.strip(), 'answer': req.answer.strip(),
+           'status': 'partial' if req.answer.strip() and req.unresolved.strip() else 'answered' if req.answer.strip() else 'unresolved',
+           'reason': req.unresolved.strip(), 'references': refs}
+    parts = ctx.state.setdefault('question_parts', [])
+    parts[:] = [p for p in parts if p.get('question') != row['question']]
+    parts.append(row)
+    ctx.save()
+    return ToolCallResult(result={'status': 'saved', 'question': row['question']}, summary={'kind': 'checkpoint_question_part', 'status': 'saved'})
+
+
 def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallResult:
     req = inv.req
+    # Only standalone markers outside fenced code are renderable. Reject unknown IDs
+    # instead of silently delivering a report with missing tables.
+    known_tables = set(ctx.state.get('prior_table_ids', [])) | {
+        item.get('table_id') for item in ctx.state.get('tables', []) if isinstance(item, dict)
+    }
+    fence_char = None
+    fence_len = 0
+    for line in req.report.splitlines():
+        fence = re.match(r'^\s*(`{3,}|~{3,})', line)
+        if fence:
+            marker = fence.group(1)
+            if fence_char is None:
+                fence_char, fence_len = marker[0], len(marker)
+            elif marker[0] == fence_char and len(marker) >= fence_len:
+                fence_char = None
+            continue
+        if fence_char is None and '[[table:' in line:
+            match = re.fullmatch(r'\s*\[\[table:([A-Za-z0-9_-]{1,64})\]\]\s*', line)
+            if not match or match.group(1) not in known_tables:
+                raise ValueError('Table markers must be standalone and reference a created table.')
+    from .research_report_grounding import clause_problem, recover_draft_claims, report_problems, eligible_prior_claims, eligible_calculations
+    from .research_delivery import assess, incomplete, assemble_parts
     claims: list[dict[str, Any]] = []
     rejected_claims = 0
-    prior_ids = set(ctx.state.get('prior_claim_ids', []))
+    prior_ids = set(ctx.state.get('prior_claim_ids', [])) | {item.get('claim_id') for item in ctx.state.get('draft_claims', []) if item.get('claim_id')}
     for claim in req.claims:
         unknown_ids = [claim_id for claim_id in claim.challenges_claim_ids if claim_id not in prior_ids]
         if unknown_ids:
@@ -2484,18 +2745,37 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
                 continue
             rejected_claims += 1
             continue
-        claims.append({
-            'claim_id': 'claim-' + uuid4().hex,
-            'role': claim.role,
-            'text': claim.text,
-            'citations': [{'source_id': claim.source_id, 'quotation': claim.quotation, 'location': {'character_start': start, 'character_end': end}}],
-            'challenges_claim_ids': list(dict.fromkeys(claim.challenges_claim_ids)),
-        })
+        try:
+            checked = _validate_draft_clause(ctx, SimpleNamespace(
+                text=claim.text, role=claim.role,
+                citations=[SimpleNamespace(source_id=claim.source_id, quotation=claim.quotation,
+                                           character_start=start, character_end=end)],
+                fact_ids=claim.fact_ids, calculation_ids=claim.calculation_ids))
+        except ValueError:
+            rejected_claims += 1
+            continue
+        checked['challenges_claim_ids'] = list(dict.fromkeys(claim.challenges_claim_ids))
+        checked['grounding_status'] = 'needs_review'
+        checked['reasoning'] = claim.reasoning
+        checked['qualification'] = claim.qualification
+        claims.append(checked)
     if claim_failures:
         raise _quotation_batch_error('claims', claim_failures, len(req.claims))
+    saved_drafts = recover_draft_claims(ctx.state, ctx.source_by_id, lambda source: source_eligibility([source], ctx.as_of)[0][1] == 'eligible')
+    claims.extend(saved_drafts)
+    claim_ids = {claim['claim_id'] for claim in claims}
+    markers = re.findall(r'\[\[claim:([A-Za-z0-9_-]{1,100})\]\]', req.report)
+    if any(marker not in claim_ids for marker in markers):
+        raise ValueError('Claim markers must reference a current, verified claim.')
     if not claims and req.status == 'completed' and not ctx.state.get('prior_cited_claims'):
         raise ValueError('At least one source-backed claim is required for completed research.')
     validate_persisted_tool_batch('submit_research', claims)
+    prior_claims = eligible_prior_claims(ctx.state, ctx.source_by_id, lambda source: source_eligibility([source], ctx.as_of)[0][1] == 'eligible')
+    support_claims = [*claims, *prior_claims]
+    requirements = assess(ctx.question, ctx.state, ctx.source_by_id, as_of=ctx.as_of, claims=support_claims)
+    eligible = {sid for sid, source in ctx.source_by_id.items() if source_eligibility([source], ctx.as_of)[0][1] == 'eligible'}
+    assessed_parts = assemble_parts(ctx.question, ctx.state, ctx.source_by_id, eligible, requirements, support_claims)
+    missing_answer = any(p.get('core', True) and p.get('status') != 'answered' for p in assessed_parts if p.get('requirements'))
     skip_presubmit = (
         req.status == 'partial'
         and (any(text.strip() for text in req.limitations) or not claims)
@@ -2530,7 +2810,7 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
                 'Pre-submit check found unmet requirements, counter-evidence checks, or material conflicts. '
                 'Perform one targeted follow-up or explicitly explain the open gaps in limitations, then resubmit.'
             ),
-            'missing_items': gate_eval['missing_items'],
+            'missing_items': gate_eval['missing_items'] + [{**row, 'kind': 'core_requirement'} for row in requirements if row.get('core', True) and row.get('status') not in ('satisfied', 'not_applicable')],
             'unaddressed_conflicts': gate_eval['unaddressed_conflicts'],
             'presubmit_nudges': ctx.state['presubmit_nudges'],
             'max_presubmit_nudges': 1,
@@ -2550,6 +2830,22 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
         gaps.append(gap('claims_omitted_unverified_location'))
     gaps.extend(gap('model_reported', text) for text in req.limitations if text.strip())
     status = req.status
+    if status == 'completed' and (incomplete(requirements) or missing_answer):
+        status = 'partial'
+        gaps.extend(gap('model_reported', row.get('reason') or '核心要求尚未满足。') for row in requirements if row.get('core', True) and row.get('status') not in ('satisfied', 'not_applicable'))
+        if missing_answer:
+            gaps.append(gap('model_reported', '核心问题尚缺少可展示的有据答案。'))
+    filing_gap = insights.primary_filing_gap(ctx.state, ctx.source_by_id, claims, as_of=ctx.as_of)
+    if filing_gap:
+        status = 'partial'
+        gaps.append(gap(filing_gap['code'], filing_gap['message']))
+    report_issues = report_problems(req.report, support_claims, eligible_calculations(ctx.state, ctx.source_by_id, lambda source: source_eligibility([source], ctx.as_of)[0][1] == 'eligible')) if status == 'completed' else []
+    if status == 'completed' and (rejected_claims or report_issues):
+        status = 'partial'
+        for issue in report_issues[:10]:
+            gaps.append(gap('model_reported', f"{issue['clause']}: {issue['reason']}"))
+        if rejected_claims:
+            gaps.append(gap('model_reported', '部分结论缺少可核对的依据。'))
     report = req.report if status == 'completed' else ''
     partial_notes = (req.report.strip() or None) if status == 'partial' else None
     ctx.state['events'].append({'kind': 'submission', 'stopping_reason': req.stopping_reason, 'status': status})
@@ -2605,6 +2901,8 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     'activate_method_pack': _exec_activate_method_pack,
     'extract_statements': _exec_extract_statements,
     'submit_research': _exec_submit_research,
+    'checkpoint_question_part': _exec_checkpoint_question_part,
+    'checkpoint_report_draft': _exec_checkpoint_report_draft,
 }
 
 
@@ -2705,6 +3003,10 @@ def execute_tool_batch(
                         'its earlier result is unchanged and is not repeated. Use that result or take a different action.'
                     ),
                 }
+                if call.name == 'record_facts':
+                    invocation = _CallInvocation(call, req, args, index, tool_started_at, signature, turn_read_chars, turn_bulk_result_chars)
+                    result = handler(ctx, invocation).result
+                    result['reused'] = True
                 reused_ids = ctx.state.get('acquired_by_signature', {}).get(signature)
                 if spec.is_acquisition_tool and reused_ids:
                     result['reused'] = True

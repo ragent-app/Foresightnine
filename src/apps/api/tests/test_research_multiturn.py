@@ -218,7 +218,10 @@ def test_failed_second_turn_continues_in_place_without_duplicates(env, monkeypat
     assert len(final['turns']) == 2
     turn2 = final['turns'][-1]
     assert turn2['operation_ids'] == [second_id, third_id]
-    assert turn2['status'] == 'completed' and turn2['index'] == 2 and turn2['question'] == 'Check costs.'
+    # The synthetic claim prefixes a cost quote with 'Revenue was'; its relationship
+    # to costs is not established, although the recorded cost fact is retained.
+    assert turn2['status'] == 'partial' and turn2['index'] == 2 and turn2['question'] == 'Check costs.'
+    assert turn2['gaps']
     assert len(final['facts']) == 3 and len({f['fact_id'] for f in final['facts']}) == 3
     assert len(final['claims']) == 2 and turn2['claim_ids'] == [final['claims'][1]['claim_id']]
     assert turn2['fact_ids'] == [final['facts'][2]['fact_id']]
@@ -390,7 +393,10 @@ def test_completion_counts_prior_claims_and_prior_facts_resolve_for_calculation(
                     {'formula': 'growth_percent', 'first_fact_id': 'fact-a', 'second_fact_id': 'fact-b'}]}, 'a'),
                turn('submit_research', {'report': 'Grew 25%.', 'claims': [], 'limitations': [], 'stopping_reason': 'answered'}, 'b')])
     result = run_research_agent(question='Q2', sources=[src], model=m, context=context(), prior=prior)
-    assert result.status == 'completed' and result.facts == [] and result.claims == []
+    # Q2 does not identify the object of the growth figure, so the calculation
+    # remains available without asserting a completed answer.
+    assert result.status == 'partial' and result.facts == [] and result.claims == []
+    assert result.gaps
     assert result.calculations[0]['value'] == '25.00' and result.reason == 'submitted'
     assert result.stopping_note == 'answered'
     prior['claims'] = []

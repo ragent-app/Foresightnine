@@ -32,7 +32,7 @@ const coverage = {
     { category: "news_web", label: { zh: "新闻与网页", en: "News and web" }, status: "not_found", status_label: { zh: "未找到", en: "Not found" }, data_as_of: null, is_stale: null, trading_days_behind: null, days_behind_clock: null, not_established: [], sources_obtained: 0 },
   ],
   documents: [
-    { source_id: "d1", category: "filings", title: "年报", chars_total: 1000, read_fraction: 0.2, pages: { total: 10, by_status: { text: 8, needs_ocr: 2 }, read: 3, unread_text_pages: 5, unsearched_count: 2, ocr_low_confidence_pages: [4] } },
+    { source_id: "d1", category: "filings", title: "年报", origin: "regulatory_filing", ingestion_kind: "official", retrieval_method: "sec_filing_html", permissions: { store: true, model_input: true, display: true, export: false }, chars_total: 1000, read_fraction: 0.2, pages: { total: 10, by_status: { text: 8, needs_ocr: 2 }, read: 3, unread_text_pages: 5, unsearched_count: 2, ocr_low_confidence_pages: [4] } },
   ],
 };
 
@@ -54,11 +54,24 @@ describe("EvidenceViews", () => {
     expect(within(table).getByText(/新闻与网页 · cbsnews.com/)).toBeTruthy();
     expect(screen.getByText("没有交易所行情：ANT")).toBeTruthy();
     expect(screen.getByText("未找到")).toBeTruthy();
-    expect(screen.getByLabelText("未读与待识别页面").textContent).toContain("2 页待 OCR");
-    expect(screen.getByLabelText("未读与待识别页面").textContent).toContain("5 页文字未读");
+    expect(screen.getByLabelText("来源身份与覆盖").textContent).toContain("2 页待 OCR");
+    expect(screen.getByLabelText("来源身份与覆盖").textContent).toContain("5 页文字未读");
+    expect(screen.getByLabelText("来源身份与覆盖").textContent).toContain("监管披露");
+    expect(screen.getByLabelText("来源身份与覆盖").textContent).toContain("模型使用");
+    expect(screen.getByLabelText("来源身份与覆盖").textContent).not.toContain("导出");
     const link = screen.getByRole("link", { name: "Source: The GDELT Project" });
     expect(link.getAttribute("href")).toBe("https://www.gdeltproject.org/");
     expect(link.getAttribute("rel")).toContain("noopener");
+  });
+
+  it("distinguishes search attempts, sourced findings, and a single uncorroborated observation", () => {
+    const single = { version: 1, rows: [{ row_id: "single", title: { zh: "收盘价", en: "Close" }, status: "single_source", badge: "single_source", independent_source_count: 1, cells: [{ fact_id: "f", source_id: "s", source_class: "market_data", display_value: "97.17 USD", quotation_excerpt: "Close 97.17" }] }] };
+    render(<EvidenceViews turn={turn({ reconciliation: single, counter_evidence: { attempts: [{ scope: "external", target: "估值", hypothesis: "需求转弱", status: "completed" }, { scope: "document", target: "估值", hypothesis: "风险", status: "completed", source_id: "s" }], linked_findings: [{ target_claim_id: "c1", source_id: "s2", quotation: "Demand weakened" }] } })} />);
+    expect(screen.getByText(/外部搜索 1 次；文内搜索 1 次；关联反证 1 条/)).toBeTruthy();
+    expect(screen.getByText("Demand weakened")).toBeTruthy();
+    expect(screen.getByText("独立性未核实")).toBeTruthy();
+    expect(screen.getByText("仅单一来源，未交叉核实")).toBeTruthy();
+    expect(screen.getByText("Close 97.17")).toBeTruthy();
   });
 
   it("renders nothing when a turn has no views and ignores malformed ones", () => {

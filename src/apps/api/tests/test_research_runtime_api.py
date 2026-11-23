@@ -294,8 +294,14 @@ def test_question_only_run_can_discover_and_cite_market_data_with_users_own_key(
                     {'formula': 'growth_percent', 'first_fact_id': first['fact_id'], 'second_fact_id': second['fact_id']}
                 ]}, 'calculation')
             assert results[4]['calculations'][0]['value'] == '25.00'
-            return turn('submit_research', {'report': 'The close rose from 100 to 125.', 'claims': [
-                {'text': 'Both closing values are sourced.', 'source_id': source_id, 'quotation': quotes[0], 'role': 'support'},
+            if stage == 5:
+                return turn('checkpoint_question_part', {'question': 'How did the index move?',
+                    'answer': 'The close rose from 100 to 125 USD.',
+                    'fact_ids': [f['fact_id'] for f in results[3]['facts']]}, 'part')
+            return turn('submit_research', {'report': 'The close rose from 100 to 125 USD.', 'claims': [
+                {'text': 'The close rose from 100 to 125 USD.', 'source_id': source_id, 'quotation': quotes[0],
+                 'fact_ids': [f['fact_id'] for f in results[3]['facts']],
+                 'calculation_ids': [results[4]['calculations'][0]['calculation_id']], 'role': 'support'},
             ], 'limitations': [], 'stopping_reason': 'answered'}, 'submit')
 
     def fetch(method, url, headers, body, timeout, **kwargs):
@@ -506,9 +512,9 @@ def test_question_only_run_fetches_open_web_html_and_pdf_and_persists_partial_no
             return turn('submit_research', {
                 'report': partial_notes,
                 'claims': [
-                    {'text': 'IR release states 100 USD revenue.', 'source_id': self.html_sid,
+                    {'text': 'Web revenue was 100 USD.', 'source_id': self.html_sid,
                      'quotation': 'Web revenue was 100 USD.', 'role': 'support'},
-                    {'text': 'IR PDF page 2 states Revenue 200.', 'source_id': self.pdf_sid,
+                    {'text': 'Revenue 200.', 'source_id': self.pdf_sid,
                      'quotation': 'Revenue 200', 'role': 'support'},
                 ],
                 'limitations': ['SEC structured data is unconfigured.'],
@@ -622,8 +628,8 @@ def test_question_only_run_calls_company_financials_and_cites_sec_source(monkeyp
             self.quote = results[1]['results'][0]['text'].splitlines()[0]
             assert 'us-gaap:' in self.quote and 'accn ' in self.quote
             return turn('submit_research', {
-                'report': 'Revenue per SEC XBRL.',
-                'claims': [{'text': 'Revenue per SEC XBRL.', 'source_id': self.sec_sid, 'quotation': self.quote, 'role': 'support'}],
+                'report': 'Revenue: ' + self.quote,
+                'claims': [{'text': 'Revenue: ' + self.quote, 'source_id': self.sec_sid, 'quotation': self.quote, 'role': 'support'}],
                 'limitations': [], 'stopping_reason': 'answered', 'status': 'completed',
             }, 's1')
 

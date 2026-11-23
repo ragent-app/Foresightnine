@@ -1,0 +1,40 @@
+{
+  "input_sha256": {
+    "history.jsonl": "7ec9156f6ccc22fd65e41af307c59e2d4268dc8e33ffb0299e0ad74bb3da5217",
+    "sources.jsonl": "ac9955511a5af7ff9b0020e04e0c134a6382314689a99c7c41ff560633f4547e"
+  },
+  "receipt_totals": {
+    "reported_tokens": 1092587,
+    "unknown_usage_calls": 4,
+    "reserved_estimate_tokens": 791988,
+    "model_calls": 24,
+    "external_search": 3
+  },
+  "fact_batch": {
+    "accepted": 26,
+    "failed": 0,
+    "canonical_original_quotes": 3,
+    "idempotent": true
+  },
+  "initial_model_input_bytes": 196224,
+  "resumed_model_input_bytes": 68998,
+  "repeated_interruption_stopped": true,
+  "question_parts": [
+    {
+      "question": "购入的风险",
+      "status": "unresolved"
+    },
+    {
+      "question": "预期入手时间",
+      "status": "unresolved"
+    },
+    {
+      "question": "持有时间的预估",
+      "status": "unresolved"
+    }
+  ],
+  "numeric_cells": 21,
+  "table_rows": 11,
+  "table_columns": 3,
+  "full_export_permitted": false
+}

@@ -105,6 +105,7 @@ from .research_topics import (AttachSourcesInput, ResearchCalculation, ResearchF
 from .research_clock import build_research_clock
 from .research_progress import build_progress
 from .research_live_stream import ResearchLiveBroker, format_sse_frame, parse_last_event_id
+from .research_answer_evidence import AnswerEvidence, part_references, visible_answer_content
 from .research_turns import merge_turn, prior_research_input
 from .research_turn_persister import ResearchTurnPersister, record_failed_checkpoint_version
 from .research_calculations import BINARY_FORMULAS, CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, MULTI_FACT_FORMULAS, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, verified_direction_proof, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
@@ -124,7 +125,8 @@ from .research_workflow import ResearchWorkflow
 from .research_recovery import (RecoveryJournal, RUNTIME_CHECKPOINT_SCHEMA_VERSION,
     runtime_poison_pill_blocked, _POISON_PILL_MESSAGE,
     runtime_truncation_loop_blocked, _REPEATED_TRUNCATION_MESSAGE,
-    runtime_timeout_loop_blocked, _REPEATED_TIMEOUT_MESSAGE)
+    runtime_timeout_loop_blocked, _REPEATED_TIMEOUT_MESSAGE,
+    runtime_interruption_no_progress_blocked, _REPEATED_INTERRUPTION_MESSAGE)
 from .research_topics import ResearchContent
 from .research_fetch import (
     HTML_EXTRACTION_DISCLOSURE,
@@ -1793,22 +1795,47 @@ def _legacy_calculation_diagnostics(version):
     return version
 
 
-def _topic_with_calculation_diagnostics(topic: ResearchTopic) -> ResearchTopic:
-    versions = [_legacy_calculation_diagnostics(version) for version in topic.versions]
-    return topic.model_copy(update={"versions": versions})
+def _version_reader(topic: ResearchTopic):
+    # Share permission decisions across the versions of this topic for this request only.
+    decisions: dict[str, bool] = {}
+
+    def can_display(source_id: str) -> bool:
+        if source_id not in decisions:
+            try:
+                source = research_sources.get(topic.owner_id, source_id)
+                cutoff = topic.request.as_of
+                decisions[source_id] = bool(source.permissions.display and not source.is_simulated and (
+                    cutoff is None or source.published_at is not None and source.published_at <= cutoff and
+                    (source.revised_at is None or source.revised_at <= cutoff)))
+            except SourceNotFound:
+                decisions[source_id] = False
+        return decisions[source_id]
+
+    def read(version):
+        content = visible_answer_content(version.content, can_display)
+        if content is not version.content:
+            version = version.model_copy(update={"content": content})
+        return _legacy_calculation_diagnostics(version)
+
+    return read
+
+
+def _visible_topic(topic: ResearchTopic) -> ResearchTopic:
+    read = _version_reader(topic)
+    return topic.model_copy(update={"versions": [read(version) for version in topic.versions]})
 
 
 @app.get("/v2/research/topics", response_model=list[ResearchTopic], include_in_schema=False)
 def list_research_topics(authorization: str | None = Header(default=None)) -> list[ResearchTopic]:
     account = _authenticated_account(authorization)
-    return [_topic_with_calculation_diagnostics(topic) for topic in research_topics.list(account.account_id)]
+    return [_visible_topic(topic) for topic in research_topics.list(account.account_id)]
 
 
 @app.get("/v2/research/topics/{topic_id}", response_model=ResearchTopic, include_in_schema=False)
 def get_research_topic(topic_id: str, authorization: str | None = Header(default=None)) -> ResearchTopic:
     account = _authenticated_account(authorization)
     try:
-        return _topic_with_calculation_diagnostics(research_topics.get(account.account_id, topic_id))
+        return _visible_topic(research_topics.get(account.account_id, topic_id))
     except TopicNotFound as error:
         raise ApiProblem(404, "not_found", "Research topic not found.") from error
 
@@ -1823,7 +1850,7 @@ def get_research_version(topic_id: str, version_id: str, authorization: str | No
     version = next((v for v in topic.versions if v.version_id == version_id), None)
     if version is None:
         raise ApiProblem(404, "not_found", "Research version not found.")
-    return _legacy_calculation_diagnostics(version).model_dump(mode="json")
+    return _version_reader(topic)(version).model_dump(mode="json")
 
 
 @app.get("/v2/research/topics/{topic_id}/versions/{version_id}/sources", include_in_schema=False)
@@ -1907,6 +1934,16 @@ def export_research_version(topic_id: str, version_id: str, authorization: str |
     source_ids.update(fact.source_id for fact in version.content.facts)
     source_ids.update(citation.source_id for claim in version.content.claims for citation in claim.citations)
     source_ids.update(item.source_id for turn in version.content.turns for item in turn.read_ranges)
+    evidence = AnswerEvidence(version.content)
+    answer_sources = {sid for analysis in evidence.analyses.values() for sid in analysis.result["source_ids"]}
+    try:
+        for turn in version.content.turns:
+            for part in turn.question_parts:
+                for ref in part_references(part):
+                    answer_sources.update(evidence.source_ids(ref))
+    except KeyError as error:
+        raise ApiProblem(403, "invalid_request", "A research answer references unavailable evidence.") from error
+    source_ids.update(answer_sources)
     chart_source_ids: set[str] = set()
     for chart in version.content.charts:
         chart_source_ids.update(chart.source_ids)
@@ -1914,12 +1951,20 @@ def export_research_version(topic_id: str, version_id: str, authorization: str |
             for point in chart_series.points:
                 chart_source_ids.add(point.provenance.source_id)
     source_ids.update(chart_source_ids)
+    table_source_ids = {source_id for table in version.content.tables for source_id in table.source_ids}
+    table_source_ids.update(cell.provenance.source_id for table in version.content.tables
+                            for row in table.rows for cell in row.cells.values() if cell.provenance)
+    source_ids.update(table_source_ids)
     sources = []
     try:
         for source_id in sorted(source_ids):
             source = research_sources.get(account.account_id, source_id)
             if not source.permissions.export:
                 raise ApiProblem(403, "invalid_request", "A research source is not permitted for export.")
+            if source_id in answer_sources and not source.permissions.display:
+                raise ApiProblem(403, "invalid_request", "An answer references a source that is not permitted for display.")
+            if source_id in table_source_ids and not source.permissions.display:
+                raise ApiProblem(403, "invalid_request", "A table references a source that is not permitted for display.")
             if source_id in chart_source_ids and not source.permissions.display:
                 raise ApiProblem(403, "invalid_request", "A chart references a source that is not permitted for display.")
             metadata = source.model_dump(mode="json", exclude={"text", "owner_id", "url", "original_pdf_base64", "original_html_base64"})
@@ -1986,7 +2031,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
         before = previous.content
         if (content.turns != before.turns or content.sources != before.sources or
                 content.source_candidates != before.source_candidates or content.gaps != before.gaps or
-                content.charts != before.charts):
+                content.charts != before.charts or content.tables != before.tables):
             raise ApiProblem(422, "invalid_request", "Server-produced research records cannot be edited.")
         allowed_sources = set(previous.source_ids)
         loaded: dict[str, ResearchSource] = {}
@@ -2095,7 +2140,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
         for entry in calculations:
             entry.input_status = calculation_input_status(entry.model_dump(mode="json"), fact_rows)
         content.calculations = calculations
-        return research_topics.add_version(account.account_id, topic_id, request.model_copy(update={"content": content}))
+        return _visible_topic(research_topics.add_version(account.account_id, topic_id, request.model_copy(update={"content": content})))
     except TopicNotFound as error:
         raise ApiProblem(404, "not_found", "Research topic not found.") from error
     except TopicVersionConflict as error:
@@ -2110,9 +2155,9 @@ def attach_research_sources(topic_id: str, request: AttachSourcesInput, authoriz
         for source_id in request.source_ids:
             research_sources.get(account.account_id, source_id)
         previous = topic.versions[-1]
-        return research_topics.add_version(account.account_id, topic_id, VersionInput(
+        return _visible_topic(research_topics.add_version(account.account_id, topic_id, VersionInput(
             parent_version_id=request.parent_version_id, content=previous.content,
-            review="draft", note=previous.note), source_ids=request.source_ids)
+            review="draft", note=previous.note), source_ids=request.source_ids))
     except (TopicNotFound, SourceNotFound) as error:
         raise ApiProblem(404, "not_found", "Research topic or source not found.") from error
     except TopicVersionConflict as error:
@@ -2193,8 +2238,8 @@ def create_research_calculation(topic_id: str, request: CreateResearchCalculatio
                        "input_status": "matched", "authorship": "calculation_engine"})
         content = previous.content.model_copy(deep=True)
         content.calculations.append(ResearchCalculation.model_validate(result))
-        return research_topics.add_version(account.account_id, topic_id, VersionInput(
-            parent_version_id=previous.version_id, content=content, note=previous.note))
+        return _visible_topic(research_topics.add_version(account.account_id, topic_id, VersionInput(
+            parent_version_id=previous.version_id, content=content, note=previous.note)))
     except TopicNotFound as error:
         raise ApiProblem(404, "not_found", "Research topic not found.") from error
     except TopicVersionConflict as error:
@@ -2248,8 +2293,8 @@ def recalculate_research(topic_id: str, request: RecalculateRequest,
                        "input_status": "matched", "authorship": "calculation_engine"})
         content = previous.content.model_copy(deep=True)
         content.calculations[request.calculation_index] = ResearchCalculation.model_validate(result)
-        return research_topics.add_version(account.account_id, topic_id, VersionInput(
-            parent_version_id=previous.version_id, content=content, note=previous.note))
+        return _visible_topic(research_topics.add_version(account.account_id, topic_id, VersionInput(
+            parent_version_id=previous.version_id, content=content, note=previous.note)))
     except TopicNotFound as error:
         raise ApiProblem(404, "not_found", "Research topic not found.") from error
     except TopicVersionConflict as error:
@@ -2874,6 +2919,11 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     existing = operations.replay_async(endpoint=f"/v1/research/topics/{topic_id}/runs", idempotency_key=idempotency_key,
         owner_subject=f"account:{account.account_id}", request_payload=run_request_payload)
     if existing is not None:
+        if continuation_input is not None:
+            replay_inputs = RESEARCH_RUN_INPUTS.get(existing.operation.operation_id) or {}
+            if (replay_inputs.get('owner_id') != account.account_id or replay_inputs.get('topic_id') != topic_id
+                    or replay_inputs.get('runtime_previous_operation_id') != continuation_input['operation_id']):
+                raise ApiProblem(409, 'idempotency_conflict', 'The idempotency key belongs to another research run.')
         _mark_replay(response, True)
         return existing
     parent_version = next((item for item in topic.versions if item.version_id == request.parent_version_id), None)
@@ -3244,6 +3294,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             result = persister.finalize_turn(
                 operation_id=operation_id,
                 parent_version=parent_now,
+                operation_started_at=(operations.store.get_operation(operation_id) or {}).get('created_at'),
                 outcome=outcome,
                 runtime_state=last_runtime_state,
                 context=context,
@@ -3416,6 +3467,7 @@ def get_research_recovery_status(topic_id: str, operation_id: str, http_request:
         ):
             reason = 'non_retryable_local_error'
         elif reason is None and runtime_truncation_loop_blocked(checkpoint, saved_turn=saved_turn): reason = 'repeated_truncation'
+        elif reason is None and runtime_interruption_no_progress_blocked(checkpoint): reason = 'repeated_interruption_no_progress'
         elif reason is None and runtime_timeout_loop_blocked(checkpoint, saved_turn=saved_turn): reason = 'repeated_timeout'
         payload: dict[str, Any] = {
             'can_continue': reason is None and not checkpoint.get('submission'),
@@ -3447,6 +3499,27 @@ def continue_research_run(topic_id: str, operation_id: str, response: Response,
     inputs = RESEARCH_RUN_INPUTS.get(operation_id)
     if not inputs or inputs.get('owner_id') != account.account_id or inputs.get('topic_id') != topic_id:
         raise ApiProblem(404, 'not_found', 'Research run inputs not found.')
+    # Resolve an already admitted continuation using its original, server-owned
+    # request before checking today's version. A new key still goes through CAS.
+    continuation_id = inputs.get('runtime_continuation_operation_id')
+    if continuation_id:
+        prior = RESEARCH_RUN_INPUTS.get(continuation_id) or {}
+        if (prior.get('owner_id') == account.account_id and prior.get('topic_id') == topic_id
+                and prior.get('runtime_previous_operation_id') == operation_id and prior.get('runtime_request')):
+            try:
+                replay_request = ResearchRunRequest.model_validate(prior['runtime_request'])
+            except (ValueError, TypeError):
+                replay_request = None
+            if replay_request is not None:
+                existing = operations.replay_async(
+                    endpoint=f'/v1/research/topics/{topic_id}/runs', idempotency_key=idempotency_key,
+                    owner_subject=f'account:{account.account_id}',
+                    request_payload=replay_request.model_dump(mode='json', exclude_unset=True))
+                if existing is not None:
+                    if existing.operation.operation_id != continuation_id:
+                        raise ApiProblem(409, 'idempotency_conflict', 'The idempotency key belongs to another research run.')
+                    _mark_replay(response, True)
+                    return existing
     checkpoint = inputs.get('runtime_checkpoint') or {}
     if not checkpoint or not inputs.get('runtime_request'):
         raise ApiProblem(409, 'lifecycle_conflict', 'No runtime checkpoint is available.')
@@ -3470,6 +3543,8 @@ def continue_research_run(topic_id: str, operation_id: str, response: Response,
         raise ApiProblem(409, 'lifecycle_conflict', _POISON_PILL_MESSAGE)
     if runtime_truncation_loop_blocked(checkpoint, saved_turn=saved_turn):
         raise ApiProblem(409, 'lifecycle_conflict', _REPEATED_TRUNCATION_MESSAGE)
+    if runtime_interruption_no_progress_blocked(checkpoint):
+        raise ApiProblem(409, 'lifecycle_conflict', _REPEATED_INTERRUPTION_MESSAGE)
     if runtime_timeout_loop_blocked(checkpoint, saved_turn=saved_turn):
         raise ApiProblem(409, 'lifecycle_conflict', _REPEATED_TIMEOUT_MESSAGE)
     if parent.version_id != inputs['parent_version_id']:
@@ -5012,10 +5087,54 @@ def attest_client_computation(computation_id: str, request: ClientComputationAtt
     return result
 
 
+def _deliver_cancelled_research(operation_id: str, owner_id: str) -> None:
+    """Publish the last durable observations without resuming or settling an external call."""
+    from types import SimpleNamespace
+    from .research_runtime import run_research_agent
+
+    inputs = RESEARCH_RUN_INPUTS.get(operation_id) or {}
+    checkpoint = inputs.get("runtime_checkpoint") or {}
+    if inputs.get("owner_id") != owner_id or not any(checkpoint.get(k) for k in (
+        "facts", "calculations", "market_analyses", "draft_claims", "question_parts", "read_ranges"
+    )):
+        return
+    try:
+        topic = research_topics.get(owner_id, inputs["topic_id"])
+        parent = topic.versions[-1]
+        if parent.version_id != inputs["parent_version_id"]:
+            return
+        sources = [research_sources.get(owner_id, row["source_id"]) for row in checkpoint["_sources"]]
+        if _stored_form(checkpoint["_sources"]) != _stored_form(_research_source_fingerprints(sources)):
+            return
+        # The stopped branch consumes local observations only. The private checkpoint retains
+        # the actual pending kind so a later recovery still sees any unknown external result.
+        reason = "provider_cancelled"
+        local_state = {**checkpoint, "stopped": reason}
+        accounting = checkpoint.get("_accounting", {})
+        context = SimpleNamespace(calls=accounting.get("calls", 0), usage=accounting.get("usage"),
+                                  accounted_tokens=accounting.get("accounted_tokens"), search_calls=accounting.get("search_calls", 0),
+                                  model_call_receipts=accounting.get("model_call_receipts", {}))
+        outcome = run_research_agent(question=inputs["question"], sources=sources, model=None, context=context,
+                                     as_of=topic.request.as_of, initial_state=local_state)
+        chain = ResearchVersionChain(research_topics, owner_id, topic.topic_id, parent.version_id, [s.source_id for s in sources])
+        meta = {**inputs["turn"], "operation_ids": [oid for oid in inputs["turn"]["operation_ids"] if oid != operation_id]}
+        persister = ResearchTurnPersister(topic.topic_id, parent.version_id, topic.request.as_of, sources, chain, meta)
+        result = persister.finalize_turn(operation_id=operation_id, parent_version=parent, outcome=outcome, runtime_state=local_state,
+                                         context=context, finished_at=lifecycle_clock.now(), default_search_status="not_requested",
+                                         official_fetch_status="partial" if checkpoint.get("acquired_source_ids") else "not_requested")
+        chain.save(parent, result.content)
+    except (SourceNotFound, TopicNotFound, TopicVersionConflict):
+        # Another writer won, or evidence was withdrawn. Never replace their revision.
+        return
+
+
 @app.post("/v1/operations/{operation_id}/cancel", response_model=OperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="cancelOperation")
 def cancel_operation(operation_id: str, request: CancelOperationRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> OperationResponse:
     _validate_request(request, "CancelOperationRequest")
-    result, replayed = operations.cancel(operation_id, request.cancel_token, idempotency_key, owner_subject=_operation_owner_subject(http_request))
+    owner = _operation_owner_subject(http_request)
+    result, replayed = operations.cancel(operation_id, request.cancel_token, idempotency_key, owner_subject=owner)
+    if result.operation.status == "cancelled" and result.operation.endpoint.startswith("/v1/research/topics/") and owner.startswith("account:"):
+        _deliver_cancelled_research(operation_id, owner.removeprefix("account:"))
     # Cancellation does not prove that a provider request was never sent.
     # Known-unsent paths release their own reservations; unknown usage remains.
     _mark_replay(response, replayed)
