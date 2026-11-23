@@ -1696,28 +1696,40 @@ function readEnum(value, allowed, location) {
 
 /** Mirrors ModelConfigUpdate (strict, extra forbid, plus its after-validator). */
 function readModelConfigUpdate(body) {
-  exactKeys(body, ["mode", "protocol", "base_url", "model", "api_key", "clear_api_key", "messages_options"], "body");
+  exactKeys(body, ["mode", "protocol", "base_url", "model", "api_key", "clear_api_key", "messages_options", "generation_parameters"], "body");
   if (body.mode === undefined) throw invalid("Field required.", "body/mode");
   const mode = readEnum(body.mode, ["platform", "personal"], "body/mode");
   const protocol = body.protocol === undefined || body.protocol === null ? null : readEnum(body.protocol, MODEL_PROTOCOLS, "body/protocol");
   const options = body.messages_options ?? null;
   if (options !== null) {
-    exactKeys(options, ["version", "auth_scheme", "max_tokens"], "body/messages_options");
+    exactKeys(options, ["version", "auth_scheme", "max_tokens", "effort"], "body/messages_options");
     if (typeof options.version !== "string" || !/^[!-~]{1,64}$/.test(options.version)) throw invalid("Invalid Messages version.");
     readEnum(options.auth_scheme, ["x-api-key", "bearer"], "body/messages_options/auth_scheme");
+    if (options.effort != null && (typeof options.effort !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(options.effort))) throw invalid("Invalid effort.");
     readInt(options.max_tokens, "body/messages_options/max_tokens", { min: 1 });
+  }
+  const params = body.generation_parameters;
+  if (params != null) {
+    exactKeys(params, ["reasoning_effort", "temperature", "top_p", "seed"], "body/generation_parameters");
+    for (const [name, value] of Object.entries(params)) {
+      if (value === null) continue;
+      const valid = name === "reasoning_effort" ? typeof value === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(value)
+        : name === "seed" ? Number.isInteger(value) : Number.isFinite(value);
+      if (!valid) throw invalid("Invalid generation parameter.", `body/generation_parameters/${name}`);
+    }
   }
   const request = {
     mode,
     protocol,
     messages_options: options,
+    generation_parameters: params,
     base_url: readBounded(body, "base_url", 1, 2048),
     model: readBounded(body, "model", 1, 128),
     api_key: readBounded(body, "api_key", 8, 512),
     clear_api_key: readStrictBool(body, "clear_api_key"),
   };
   if (request.api_key !== null && request.clear_api_key) throw invalid("api_key and clear_api_key are mutually exclusive");
-  if (mode === "platform" && (options !== null || protocol !== null || request.base_url !== null || request.model !== null || request.api_key !== null || request.clear_api_key)) {
+  if (mode === "platform" && (params != null || options !== null || protocol !== null || request.base_url !== null || request.model !== null || request.api_key !== null || request.clear_api_key)) {
     throw invalid("platform mode does not accept personal model fields");
   }
   for (const key of ["base_url", "model", "api_key"]) {
@@ -1798,6 +1810,7 @@ function modelSnapshot(config) {
   return {
     schema_version: "v1", mode: config.mode, configured: true, updated_at: config.updated_at,
     ...(config.key_hint ? { protocol: config.protocol, base_url: config.base_url, model: config.model, key_hint: config.key_hint } : {}),
+    ...(config.generation_parameters ? { generation_parameters: config.generation_parameters } : {}),
     ...(config.messages_options ? { messages_options: config.messages_options } : {}),
     ...(config.research_tools_verified_at ? { research_tools_verified_at: config.research_tools_verified_at } : {}),
   };
@@ -1837,8 +1850,12 @@ function applyModelUpdate(existing, request, now) {
   if (request.messages_options && protocol !== "anthropic_messages") throw modelProblem("Messages options require the Messages protocol.");
   const same = protocol === prior?.protocol && baseUrl === prior?.base_url && model === prior?.model;
   const options = request.messages_options ?? (same ? prior.messages_options : null);
-  const verified = same && request.api_key === null && JSON.stringify(options) === JSON.stringify(prior.messages_options) ? prior.research_tools_verified_at : null;
-  return { mode: "personal", protocol, messages_options: options, research_tools_verified_at: verified, base_url: baseUrl, model, api_key: apiKey, key_hint: hint, updated_at: iso(now) };
+  if (request.generation_parameters != null && protocol !== "openai_chat_completions") throw modelProblem("Generation parameters require Chat Completions.");
+  const selected = request.generation_parameters === undefined && same ? prior.generation_parameters : request.generation_parameters;
+  const entries = Object.entries(selected ?? {}).filter(([, value]) => value !== null).sort(([a], [b]) => a.localeCompare(b));
+  const parameters = entries.length ? Object.fromEntries(entries) : null;
+  const verified = same && JSON.stringify(parameters) === JSON.stringify(prior.generation_parameters ?? null) && request.api_key === null && JSON.stringify(options) === JSON.stringify(prior.messages_options) ? prior.research_tools_verified_at : null;
+  return { mode: "personal", protocol, messages_options: options, generation_parameters: parameters, research_tools_verified_at: verified, base_url: baseUrl, model, api_key: apiKey, key_hint: hint, updated_at: iso(now) };
 }
 
 /** Mirrors MarketDataConfigUpdate (strict, extra forbid, plus its after-validators). */
@@ -3155,6 +3172,14 @@ export function createServer({ tickMs = 1500, heartbeatMs = 15000, maxSsePerAcco
     const data = dataFor(auth.accountId);
     data.modelConfig = null;
     send(res, 200, modelSnapshot(null));
+  });
+  route("POST", "/v1/account/model-config/models", true, ({ res, auth, body }) => {
+    const saved = dataFor(auth.accountId).modelConfig;
+    if (!body.api_key && (!saved?.key_hint || saved.base_url !== body.base_url || saved.protocol !== body.protocol)) {
+      throw modelProblem("Supply the API key for this endpoint.");
+    }
+    const models = [{ id: "example-model", efforts: ["low", "high"], effort_source: "model_api" }];
+    send(res, 200, { models: body.model ? models.filter((entry) => entry.id === body.model) : models });
   });
   route("POST", "/v1/account/model-config/test", true, ({ res, auth }) => {
     const config = dataFor(auth.accountId).modelConfig;

@@ -31,6 +31,14 @@ export interface MessagesOptions {
   version: string;
   auth_scheme: "x-api-key" | "bearer";
   max_tokens: number;
+  effort?: string;
+}
+
+export interface ChatGenerationParameters {
+  reasoning_effort?: string;
+  temperature?: number;
+  top_p?: number;
+  seed?: number;
 }
 
 export interface ModelConfig {
@@ -42,6 +50,7 @@ export interface ModelConfig {
   model?: string;
   key_hint?: string;
   messages_options?: MessagesOptions;
+  generation_parameters?: ChatGenerationParameters;
   research_tools_verified_at?: string;
   updated_at?: string;
 }
@@ -54,6 +63,7 @@ export interface ModelConfigUpdate {
   api_key?: string | null;
   clear_api_key?: boolean;
   messages_options?: MessagesOptions;
+  generation_parameters?: ChatGenerationParameters;
 }
 
 export type ConnectionStatus = "ready" | "unavailable";
@@ -111,8 +121,31 @@ export function deleteModelConfig(): Promise<ModelConfig> {
   return apiRequest<ModelConfig>("/v1/account/model-config", { method: "DELETE" });
 }
 
-export function testModelConfig(): Promise<{ status: ConnectionStatus }> {
-  return apiRequest<{ status: ConnectionStatus }>("/v1/account/model-config/test", { method: "POST" });
+export interface ModelDiscoveryRequest {
+  protocol: ModelProtocol;
+  base_url: string;
+  api_key?: string;
+  version?: string;
+  auth_scheme?: MessagesOptions["auth_scheme"];
+  model?: string;
+}
+
+export interface DiscoveredModel { id: string; efforts?: string[]; effort_source?: "model_api" | "official_docs" }
+
+export function discoverModels(body: ModelDiscoveryRequest, signal: AbortSignal) {
+  return apiRequest<{ models: DiscoveredModel[]; upstream_status?: number }>("/v1/account/model-config/models", {
+    method: "POST", body, signal,
+  });
+}
+
+interface ModelTestResult {
+  status: ConnectionStatus;
+  upstream_status?: number;
+  parameter?: string;
+}
+
+export function testModelConfig(): Promise<ModelTestResult> {
+  return apiRequest<ModelTestResult>("/v1/account/model-config/test", { method: "POST" });
 }
 
 export function getMarketDataConfig(signal?: AbortSignal): Promise<MarketDataConfig> {

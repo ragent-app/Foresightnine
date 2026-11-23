@@ -87,6 +87,32 @@ describe("SettingsPage", () => {
     expect(screen.getByText("OpenAI Chat Completions · example-model")).toBeTruthy();
   });
 
+  it("discovers models without resending the saved key and preserves the chosen effort on verification failure", async () => {
+    const fetchMock = mockApi((url, init) => {
+      if (url.pathname === "/v1/account/model-config/models") {
+        return jsonResponse({ models: [{ id: "example-model", efforts: ["low", "medium"], effort_source: "model_api" }] });
+      }
+      if (url.pathname === "/v1/account/model-config/test") {
+        return jsonResponse({ status: "unavailable", upstream_status: 400, parameter: "reasoning_effort" });
+      }
+      if (url.pathname === "/v1/account/model-config") return jsonResponse(PERSONAL);
+      return undefined;
+    });
+    renderSettings("/settings?tab=model");
+    fireEvent.click(await screen.findByRole("button", { name: "编辑" }));
+    expect(await screen.findByText(/模型接口列出：low、medium/, {}, { timeout: 3000 })).toBeTruthy();
+    expect(bodyOf(fetchMock, "/v1/account/model-config/models", "POST")).toEqual({
+      protocol: "openai_chat_completions", base_url: PERSONAL.base_url,
+    });
+    const effort = screen.getByLabelText("推理强度（effort）") as HTMLInputElement;
+    expect(effort.value).toBe("");
+    expect(Array.from(effort.list!.options, (option) => option.value)).toEqual(["low", "medium"]);
+    fireEvent.change(effort, { target: { value: "medium" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(await screen.findByText(/HTTP 400，请检查参数 reasoning_effort/)).toBeTruthy();
+    expect(bodyOf(fetchMock, "/v1/account/model-config", "PUT")?.generation_parameters).toEqual({ reasoning_effort: "medium" });
+  });
+
   it("keeps the saved configuration when switching to the platform model and reuses it when switching back", async () => {
     let mode: "platform" | "personal" = "personal";
     const fetchMock = mockApi((url, init) => {

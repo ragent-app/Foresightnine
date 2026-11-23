@@ -9,6 +9,7 @@ import os
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Mapping
+from pydantic import BaseModel, ConfigDict, Field
 from .phase3 import ProviderFailure
 
 
@@ -111,12 +112,25 @@ def _invalid() -> ProviderFailure:
     return ProviderFailure('provider_configuration_invalid','Provider capability or schema configuration is invalid.',retryable=False)
 
 
+class ChatGenerationParameters(BaseModel):
+    """User-selected generation controls for a single personal Chat connection."""
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True, allow_inf_nan=False)
+
+    reasoning_effort: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9_-]{1,64}$")
+    temperature: float | None = None
+    top_p: float | None = None
+    seed: int | None = None
+
+
 def research_profile(settings, endpoint: str, protocol: str, version: str) -> CapabilityProfile | None:
     if not getattr(settings, "personal", False):
         return configured_profile(endpoint, settings.model, protocol=protocol)
     if not settings.tools_verified:
         return None
-    return CapabilityProfile(endpoint, settings.model, version, mode="json_object", native_tools=True)
+    parameters = getattr(settings, "generation_parameters", None)
+    names = tuple(parameters.model_dump(exclude_none=True)) if parameters else None
+    return CapabilityProfile(endpoint, settings.model, version, mode="json_object", native_tools=True,
+                             generation_parameters=names)
 
 
 def _registry_entry(raw: str, protocol: str, endpoint: str, model: str) -> dict | None:

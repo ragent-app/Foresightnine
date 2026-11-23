@@ -27,6 +27,7 @@ from time import monotonic, sleep
 from threading import BoundedSemaphore, Event, Lock, Thread
 from typing import Any, BinaryIO, Callable, Mapping, NoReturn, Protocol
 from .model_protocol import ModelResponse
+from .provider_capabilities import ChatGenerationParameters
 from urllib.parse import urlencode, urlsplit
 
 from .phase3 import (
@@ -295,6 +296,7 @@ class OpenAICompatibleSettings:
     allow_private_network: bool = False
     personal: bool = False
     tools_verified: bool = False
+    generation_parameters: ChatGenerationParameters | None = None
 
     @classmethod
     def from_environment(cls) -> "OpenAICompatibleSettings":
@@ -379,30 +381,31 @@ class OpenAICompatibleSettings:
         alias/allow-private escape hatch, and resolves before storage.  The
         default transport resolves again immediately before every connection.
         """
-        parsed = urlsplit(base_url.strip())
-        try:
-            hostname = parsed.hostname
-            port = parsed.port
-        except ValueError as error:
-            raise ProviderFailure("provider_configuration_invalid", "LLM base URL is invalid.", retryable=False) from error
-        if not hostname or port not in {None, 443}:
-            raise ProviderFailure("provider_configuration_invalid", "LLM base URL must use HTTPS port 443.", retryable=False)
-        normalized_host = _normalize_hostname(hostname)
-        if normalized_host in {"metadata.google.internal", "metadata.azure.internal"}:
-            raise ProviderFailure("provider_configuration_invalid", "LLM base URL host is not permitted.", retryable=False)
-        settings = cls.from_values(
-            base_url=base_url,
-            model=model,
-            api_key=api_key,
-            allowlist=normalized_host,
-            allow_private_network=False,
-        )
-        try:
-            _require_public_dns(normalized_host, 443)
-        except _TransportFailure as error:
-            raise ProviderFailure("provider_configuration_invalid", "LLM base URL DNS validation failed.", retryable=False) from error
+        base_url, host = personal_model_endpoint(base_url)
+        settings = cls.from_values(base_url=base_url, model=model, api_key=api_key, allowlist=host)
         return replace(settings, personal=True)
 
+
+
+def personal_model_endpoint(base_url: str) -> tuple[str, str]:
+    """Validate a public personal endpoint for both discovery and generation."""
+    try:
+        parsed = urlsplit(base_url)
+        hostname, port = parsed.hostname, parsed.port
+    except ValueError:
+        raise ProviderFailure("provider_configuration_invalid", "Invalid personal model URL.", retryable=False) from None
+    if (not hostname or parsed.scheme != "https" or port not in (None, 443) or parsed.username is not None
+            or parsed.password is not None or parsed.query or parsed.fragment or "\\" in base_url
+            or any(ord(char) <= 32 for char in base_url)):
+        raise ProviderFailure("provider_configuration_invalid", "A public HTTPS model endpoint is required.", retryable=False)
+    host = _normalize_hostname(hostname)
+    if host in {"metadata.google.internal", "metadata.azure.internal"}:
+        raise ProviderFailure("provider_configuration_invalid", "Personal model host is not permitted.", retryable=False)
+    try:
+        _require_public_dns(host, 443)
+    except _TransportFailure:
+        raise ProviderFailure("provider_configuration_invalid", "Personal model DNS validation failed.", retryable=False) from None
+    return base_url.rstrip("/"), host
 
 
 def _open_and_send_connection(
@@ -1462,6 +1465,8 @@ class OpenAICompatibleLlmProvider(LlmProvider):
             ],
             "response_format": {"type": "json_object"},
         }
+        if self.settings and self.settings.personal and self.settings.generation_parameters:
+            payload.update(self.settings.generation_parameters.model_dump(exclude_none=True))
         if self.policy.max_output_tokens is not None:
             payload['max_tokens'] = self.policy.max_output_tokens
         if contract is not None:
@@ -1544,8 +1549,11 @@ class OpenAICompatibleLlmProvider(LlmProvider):
 
     def generation_parameters_json(self) -> str:
         from .provider_capabilities import chat_generation_parameters
-        if not self.settings or self.settings.personal:
+        if not self.settings:
             return ""
+        if self.settings.personal:
+            parameters = self.settings.generation_parameters
+            return parameters.model_dump_json(exclude_none=True) if parameters else ""
         return chat_generation_parameters(_endpoint(self.settings.base_url), self.settings.model)
 
     def research_capacity_key(self) -> str:
@@ -2058,6 +2066,8 @@ class OpenAICompatibleLlmProvider(LlmProvider):
             raise failure
         if not 200 <= response.status_code < 300:
             failure = ProviderFailure("provider_unavailable" if response.status_code in _RETRYABLE_STATUS_CODES else "provider_request_rejected", "Provider returned no usable result.", retryable=response.status_code in _RETRYABLE_STATUS_CODES)
+            from .research_diagnostics import set_rejection_details
+            set_rejection_details(failure, response)
             failure.provider_response_received = True
             raise failure
         try:

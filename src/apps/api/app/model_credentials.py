@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .openai_compatible import OpenAICompatibleSettings
 from .phase3 import ProviderFailure
+from .provider_capabilities import ChatGenerationParameters
 
 
 class ModelCredentialError(RuntimeError):
@@ -37,6 +38,7 @@ class MessagesOptions(BaseModel):
     version: str = Field(min_length=1, max_length=64, pattern=r"^[!-~]+$")
     auth_scheme: Literal["x-api-key", "bearer"]
     max_tokens: int = Field(gt=0)
+    effort: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9_-]{1,64}$")
 
 
 class ModelConfigUpdate(BaseModel):
@@ -45,6 +47,7 @@ class ModelConfigUpdate(BaseModel):
     mode: Literal["platform", "personal"]
     protocol: Literal["openai_chat_completions", "anthropic_messages"] | None = None
     messages_options: MessagesOptions | None = None
+    generation_parameters: ChatGenerationParameters | None = None
     base_url: str | None = Field(default=None, min_length=1, max_length=2048)
     model: str | None = Field(default=None, min_length=1, max_length=128)
     api_key: str | None = Field(default=None, min_length=8, max_length=512)
@@ -54,7 +57,7 @@ class ModelConfigUpdate(BaseModel):
     def validate_key_action(self) -> "ModelConfigUpdate":
         if self.api_key is not None and self.clear_api_key:
             raise ValueError("api_key and clear_api_key are mutually exclusive")
-        if self.mode == "platform" and any((self.protocol is not None, self.base_url is not None, self.model is not None, self.api_key is not None, self.clear_api_key, self.messages_options is not None)):
+        if self.mode == "platform" and any((self.protocol is not None, self.base_url is not None, self.model is not None, self.api_key is not None, self.clear_api_key, self.messages_options is not None, self.generation_parameters is not None)):
             raise ValueError("platform mode does not accept personal model fields")
         for name in ("base_url", "model", "api_key"):
             value = getattr(self, name)
@@ -76,6 +79,7 @@ class ModelConfigResponse(BaseModel):
     configured: bool
     protocol: Literal["openai_chat_completions", "anthropic_messages"] | None = None
     messages_options: MessagesOptions | None = None
+    generation_parameters: ChatGenerationParameters | None = None
     base_url: str | None = None
     model: str | None = None
     key_hint: str | None = Field(default=None, pattern=r"^••••[A-Za-z0-9]{4}$")
@@ -87,6 +91,8 @@ class ModelConfigTestResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: Literal["ready", "unavailable"]
+    upstream_status: int | None = Field(default=None, ge=400, le=599)
+    parameter: str | None = None
 
 
 class StoredModelConfig(BaseModel):
@@ -97,6 +103,7 @@ class StoredModelConfig(BaseModel):
     mode: Literal["platform", "personal"]
     protocol: Literal["openai_chat_completions", "anthropic_messages"] = "openai_chat_completions"
     messages_options: MessagesOptions | None = None
+    generation_parameters: ChatGenerationParameters | None = None
     base_url: str | None = Field(default=None, max_length=2048)
     model: str | None = Field(default=None, max_length=128)
     encrypted_api_key: str | None = Field(default=None, min_length=32, max_length=4096)
@@ -177,6 +184,7 @@ class AccountModelSettings:
             return ModelConfigResponse(mode=stored.mode, configured=True, updated_at=stored.updated_at)
         return ModelConfigResponse(
             mode=stored.mode, configured=True, protocol=stored.protocol,
+            generation_parameters=stored.generation_parameters,
             messages_options=stored.messages_options, research_tools_verified_at=stored.research_tools_verified_at,
             base_url=stored.base_url, model=stored.model, key_hint=stored.key_hint, updated_at=stored.updated_at,
         )
@@ -199,6 +207,7 @@ class AccountModelSettings:
                 self.repository.put(account_id, StoredModelConfig(
                     account_id=account_id,
                     mode="platform",
+                    generation_parameters=existing.generation_parameters if existing else None,
                     messages_options=existing.messages_options if existing else None,
                     research_tools_verified_at=existing.research_tools_verified_at if existing else None,
                     protocol=existing.protocol if existing else "openai_chat_completions",
@@ -215,9 +224,17 @@ class AccountModelSettings:
             protocol = request.protocol or (existing.protocol if existing else "openai_chat_completions")
             if request.messages_options and protocol != "anthropic_messages":
                 raise ModelCredentialError(422, "validation_error", "Messages options require the Messages protocol.")
+            parameters = request.generation_parameters
+            if parameters is not None and protocol != "openai_chat_completions":
+                raise ModelCredentialError(422, "validation_error", "Generation parameters require Chat Completions.")
             options = request.messages_options
-            if options is None and existing and (protocol, base_url, model) == (existing.protocol, existing.base_url, existing.model):
-                options = existing.messages_options
+            if existing and (protocol, base_url, model) == (existing.protocol, existing.base_url, existing.model):
+                if options is None:
+                    options = existing.messages_options
+                if "generation_parameters" not in request.model_fields_set:
+                    parameters = existing.generation_parameters
+            if parameters is not None and not parameters.model_dump(exclude_none=True):
+                parameters = None
             if existing and existing.base_url and base_url and request.api_key is None:
                 try:
                     old, new = urlsplit(existing.base_url), urlsplit(base_url)
@@ -242,12 +259,13 @@ class AccountModelSettings:
                 raise ModelCredentialError(503, "model_credential_storage_unavailable", "Model credential storage is unavailable.")
             api_key = self.cipher.decrypt(account_id, encrypted)
             _validate_personal_values(base_url, model, api_key)
-            same_binding = existing and (protocol, base_url, model, encrypted, options) == (
-                existing.protocol, existing.base_url, existing.model, existing.encrypted_api_key, existing.messages_options)
+            same_binding = existing and (protocol, base_url, model, encrypted, options, parameters) == (
+                existing.protocol, existing.base_url, existing.model, existing.encrypted_api_key, existing.messages_options, existing.generation_parameters)
             self.repository.put(account_id, StoredModelConfig(
                 account_id=account_id,
                 mode="personal",
                 messages_options=options,
+                generation_parameters=parameters,
                 research_tools_verified_at=existing.research_tools_verified_at if same_binding else None,
                 protocol=protocol,
                 base_url=base_url,
@@ -259,6 +277,15 @@ class AccountModelSettings:
             return self.snapshot(account_id)
 
         return self._mutate(account_id, operation)
+
+    def saved_discovery_key(self, account_id: str, protocol: str, base_url: str) -> str:
+        stored = self._stored(account_id)
+        if (not stored or not stored.base_url or stored.base_url.rstrip("/") != base_url.rstrip("/")
+                or stored.protocol != protocol or not stored.encrypted_api_key):
+            raise ModelCredentialError(422, "validation_error", "Supply the API key for this endpoint.")
+        if self.cipher is None:
+            raise ModelCredentialError(503, "model_credential_storage_unavailable", "Model credential storage is unavailable.")
+        return self.cipher.decrypt(account_id, stored.encrypted_api_key)
 
     def runtime_configuration(self, account_id: str) -> tuple[OpenAICompatibleSettings | None, StoredModelConfig | None]:
         stored = self._stored(account_id)
@@ -275,7 +302,8 @@ class AccountModelSettings:
                 model=stored.model,
                 api_key=api_key,
             )
-            return replace(settings, tools_verified=stored.research_tools_verified_at is not None), stored
+            return replace(settings, tools_verified=stored.research_tools_verified_at is not None,
+                           generation_parameters=stored.generation_parameters), stored
         except ProviderFailure as error:
             raise ModelCredentialError(503, "model_credential_storage_unavailable", "Model credential storage is unavailable.") from error
 

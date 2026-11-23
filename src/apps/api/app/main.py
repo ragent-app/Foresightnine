@@ -240,6 +240,7 @@ from .market_credentials import (
     MarketProviderTestResponse,
     StoredMarketDataConfig,
 )
+from .model_discovery import ModelCatalog, ModelDiscoveryRequest, discover_models
 from .model_credentials import (
     AccountModelSettings,
     ModelConfigResponse,
@@ -761,7 +762,7 @@ def _personal_model_provider(settings: OpenAICompatibleSettings, config: StoredM
         options = config.messages_options
         policy = ProviderPolicy(max_output_tokens=options.max_tokens, timeout_seconds=_llm_timeout_from_environment())
         return AnthropicMessagesProvider(settings, policy, anthropic_version=options.version,
-                                        auth_scheme=options.auth_scheme, max_tokens=options.max_tokens)
+                                        auth_scheme=options.auth_scheme, max_tokens=options.max_tokens, effort=options.effort)
     return OpenAICompatibleLlmProvider(settings)
 
 
@@ -2937,7 +2938,7 @@ def _runtime_provider_binding(provider: Any, request: Request) -> str:
     personal = config if getattr(config, 'mode', None) == 'personal' else None
     parameters = os.environ.get('FORESIGHTNINE_LLM_GENERATION_PARAMETERS')
     if personal:
-        parameters = None
+        parameters = getattr(provider, 'generation_parameters_json', lambda: None)() or None
     elif os.environ.get('FORESIGHTNINE_LLM_CAPABILITY_PROFILES', '').strip():
         parameters = getattr(provider, 'generation_parameters_json', lambda: None)()
     payload = {'provider': getattr(provider, 'name', None), 'protocol': getattr(personal, 'protocol', None) or os.environ.get('FORESIGHTNINE_RESEARCH_MODEL_PROTOCOL', 'openai_chat_completions'), 'endpoint': getattr(settings, 'base_url', None),
@@ -4193,7 +4194,18 @@ def delete_model_config(
     return model_settings.snapshot(account.account_id)
 
 
-@app.post("/v1/account/model-config/test", response_model=ModelConfigTestResponse, include_in_schema=False)
+@app.post("/v1/account/model-config/models", response_model=ModelCatalog, response_model_exclude_none=True, include_in_schema=False)
+def discover_personal_models(request: ModelDiscoveryRequest, response: Response,
+                             authorization: str | None = Header(default=None, alias="Authorization")) -> ModelCatalog:
+    account = _authenticated_account(authorization)
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return discover_models(account.account_id, request, model_settings)
+    except ModelCredentialError as error:
+        raise _model_credential_problem(error) from error
+
+
+@app.post("/v1/account/model-config/test", response_model=ModelConfigTestResponse, response_model_exclude_none=True, include_in_schema=False)
 def test_model_config(
     response: Response,
     authorization: str | None = Header(default=None, alias="Authorization"),
@@ -4220,7 +4232,9 @@ def test_model_config(
         result = adapter.complete_turn(turn, timeout_seconds=30, max_output_tokens=None if chat else 256)
         verified = (result.stop_class == "tool_calls" and len(result.tool_calls) == 1
                     and result.tool_calls[0].name == tool.name and result.tool_calls[0].arguments == {"value": "ok"})
-    except (ModelCredentialError, ProviderFailure, ApiProblem):
+    except ProviderFailure as error:
+        return ModelConfigTestResponse(status="unavailable", upstream_status=error.upstream_status, parameter=error.parameter)
+    except (ModelCredentialError, ApiProblem):
         return ModelConfigTestResponse(status="unavailable")
     recorded = model_settings.record_tools_result(config, verified)
     ready = verified and recorded

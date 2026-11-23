@@ -41,9 +41,10 @@ def _endpoint(base):
 
 class AnthropicMessagesProvider:
     name = 'anthropic_messages'
-    def __init__(self, settings, policy, *, anthropic_version, auth_scheme, max_tokens, transport=None, stream_transport=None, stream_enabled=False):
+    def __init__(self, settings, policy, *, anthropic_version, auth_scheme, max_tokens, transport=None, stream_transport=None, stream_enabled=False, effort=None):
         if not isinstance(anthropic_version, str) or not anthropic_version or any(c in anthropic_version for c in '\r\n') or auth_scheme not in ('x-api-key', 'bearer') or type(max_tokens) is not int or max_tokens <= 0 or type(stream_enabled) is not bool:
             raise ProviderFailure('provider_configuration_invalid', 'Messages configuration is invalid.', retryable=False)
+        self.effort = effort
         self.settings, self.policy = settings, policy
         self.anthropic_version, self.auth_scheme, self.max_tokens = anthropic_version, auth_scheme, max_tokens
         self.transport = transport
@@ -70,6 +71,8 @@ class AnthropicMessagesProvider:
                    'max_tokens': self.max_tokens, 'stream_enabled': self.stream_enabled,
                    'profile': asdict(profile) if profile else None,
                    'input_budget': self.policy.max_input_tokens}
+        if self.effort is not None:
+            binding['effort'] = self.effort
         return sha256(json.dumps(binding, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
     @staticmethod
@@ -236,6 +239,8 @@ class AnthropicMessagesProvider:
             'messages': messages,
             'max_tokens': min(self.max_tokens, cap) if cap is not None else self.max_tokens,
         }
+        if self.effort is not None:
+            wire["output_config"] = {"effort": self.effort}
         if turn.tools:
             wire_tools = [
                 {
@@ -805,6 +810,8 @@ class AnthropicMessagesProvider:
                     failure = ProviderFailure('provider_rate_limited', 'Provider rate limit reached.', retryable=True)
                 else:
                     failure = ProviderFailure('provider_request_rejected', 'Provider rejected the request.', retryable=False)
+                from .research_diagnostics import set_rejection_details
+                set_rejection_details(failure, response)
                 failure.provider_response_received = True
                 raise failure
             try:

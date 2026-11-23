@@ -31,6 +31,7 @@ def test_messages_runs_through_api_with_two_tool_turns(monkeypatch, platform):
     def transport(method, url, headers, body, timeout):
         wire = json.loads(body)
         if wire["tools"][0]["name"] == "verify_connection":
+            assert wire["output_config"] == {"effort": "high"}
             return HttpResponse(200, json.dumps({"role":"assistant","content":[{"type":"tool_use","id":"p1","name":"verify_connection","input":{"value":"ok"}}],"stop_reason":"tool_use"}))
         captured.append((url, headers, wire))
         if len(captured) == 1:
@@ -60,7 +61,7 @@ def test_messages_runs_through_api_with_two_tool_turns(monkeypatch, platform):
         monkeypatch.setattr(api, 'challenge_provider', ChallengeSentinel())
     else:
         config.update(model="another-model", base_url="https://personal.example.test/v1", messages_options={
-            "version": "personal-version", "auth_scheme": "x-api-key", "max_tokens": 1000})
+            "version": "personal-version", "auth_scheme": "x-api-key", "max_tokens": 1000, "effort": "high"})
         saved = client.put('/v1/account/model-config',headers=headers,json=config)
         assert saved.status_code == 200 and saved.json()['protocol'] == 'anthropic_messages'
         with monkeypatch.context() as restricted:
@@ -83,7 +84,7 @@ def test_messages_runs_through_api_with_two_tool_turns(monkeypatch, platform):
     assert len(captured) == 2 and all(x[2]['max_tokens'] == 1000 for x in captured)
     if not platform:
         assert all(url == 'https://personal.example.test/v1/messages' and headers['anthropic-version'] == 'personal-version'
-                   and 'x-api-key' in headers and wire['model'] == 'another-model' for url, headers, wire in captured)
+                   and 'x-api-key' in headers and wire['model'] == 'another-model' and wire['output_config'] == {'effort': 'high'} for url, headers, wire in captured)
     journal = api.RESEARCH_RUN_INPUTS.get(operation_id)
     diagnostics = journal['private_validation_diagnostics']
     from app.model_protocol import canonical_json_dumps

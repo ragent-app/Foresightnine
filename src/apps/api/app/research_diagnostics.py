@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 from typing import AbstractSet, Any
 from pydantic import BaseModel, ValidationError
+from .provider_capabilities import ChatGenerationParameters
 from .transport_diagnostics import VALID_TIMEOUT_KINDS
 
 _finish: ContextVar[str] = ContextVar('research_provider_finish', default='unknown')
@@ -455,6 +456,10 @@ def sanitize_diagnostic_errors(value: object, *, schema: type[BaseModel] | None 
         result.append(safe)
     return result
 
+_PROVIDER_PARAMETERS = frozenset(ChatGenerationParameters.model_fields) | {
+    "model", "max_tokens", "max_completion_tokens", "messages", "tools", "system", "thinking", "stream",
+}
+
 _PROVIDER_ERROR_CODES = frozenset({'invalid_request_error', 'authentication_error', 'permission_error',
     'not_found_error', 'rate_limit_error', 'server_error', 'invalid_api_key',
     'context_length_exceeded', 'rate_limit_exceeded', 'insufficient_quota', 'invalid_request'})
@@ -480,11 +485,20 @@ def safe_provider_error(body: str | bytes) -> dict[str, str]:
         value = error.get(key)
         if key not in error or value is None:
             result[target] = 'absent'
-        elif isinstance(value, str) and value in (_PROVIDER_ERROR_CODES if key != 'param' else {'model', 'max_tokens', 'messages', 'tools', 'system', 'thinking', 'stream'}):
+        elif isinstance(value, str) and value in (_PROVIDER_ERROR_CODES if key != 'param' else _PROVIDER_PARAMETERS):
             result[target] = value
         else:
             result[target] = 'unrecognized'
     return result
+
+def set_rejection_details(failure, response) -> None:
+    if 400 <= response.status_code <= 599:
+        failure.upstream_status = response.status_code
+    details = getattr(response, 'safe_error', None) or safe_provider_error(response.body)
+    parameter = details.get('messages_parameter')
+    if isinstance(parameter, str) and parameter in _PROVIDER_PARAMETERS:
+        failure.parameter = parameter
+
 
 def safe_wire_metadata(wire: object, *, contract: object = None, wire_bytes: int | None = None) -> dict[str, Any]:
     """Select parameters actually present in a submitted request envelope."""
@@ -521,7 +535,7 @@ def safe_messages_error(value: object, status: object, headers: object) -> dict[
     if isinstance(value, dict):
         for key in ('messages_type', 'messages_code', 'messages_parameter'):
             item = value.get(key)
-            allowed = _PROVIDER_ERROR_CODES | {'absent', 'unrecognized'} if key != 'messages_parameter' else {'absent', 'unrecognized', 'model', 'max_tokens', 'messages', 'tools', 'system', 'thinking', 'stream'}
+            allowed = _PROVIDER_ERROR_CODES | {'absent', 'unrecognized'} if key != 'messages_parameter' else _PROVIDER_PARAMETERS | {'absent', 'unrecognized'}
             if isinstance(item, str) and item in allowed:
                 result[key] = item
     if isinstance(headers, dict):

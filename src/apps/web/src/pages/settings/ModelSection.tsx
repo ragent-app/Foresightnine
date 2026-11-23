@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useModelDiscovery } from "./useModelDiscovery";
 import { ApiError } from "../../api/http";
-import { testModelConfig, useAccountSummary, useModelConfig, useSaveModelConfig, type AccountSummary, type ConnectionStatus, type ModelConfig, type MessagesOptions, type ModelProtocol } from "../../api/settings";
+import { testModelConfig, useAccountSummary, useModelConfig, useSaveModelConfig, type AccountSummary, type ChatGenerationParameters, type ConnectionStatus, type ModelConfig, type MessagesOptions, type ModelProtocol } from "../../api/settings";
 import { apiKeyProblem, baseUrlProblem, hasSavedPersonal, keyRequired, modelNameProblem, PROTOCOL_LABEL } from "../../lib/settings";
 import { ConfirmDialog } from "../../ui/ConfirmDialog";
 import { Segmented } from "../../ui/controls";
@@ -37,6 +38,7 @@ export function TestStatus({ state }: { state: TestState }) {
 /** 我的模型 panel (spec §3.2). Saving switches the account to its own model. */
 function MyModelPanel({ saved, onClose, onSaved }: { saved: ModelConfig | undefined; onClose: () => void; onSaved: (config: ModelConfig) => void }) {
   const ids = useId();
+  const form = useRef<HTMLFormElement>(null);
   const save = useSaveModelConfig();
   // Prefill from the saved configuration whether or not it is active.
   const personal = hasSavedPersonal(saved) ? saved : undefined;
@@ -47,20 +49,42 @@ function MyModelPanel({ saved, onClose, onSaved }: { saved: ModelConfig | undefi
   const [authScheme, setAuthScheme] = useState<MessagesOptions["auth_scheme"]>(personal?.messages_options?.auth_scheme ?? "x-api-key");
   const [maxTokens, setMaxTokens] = useState(String(personal?.messages_options?.max_tokens ?? ""));
   const messages = protocol === "anthropic_messages";
+  const sameConnection = personal && protocol === personal.protocol && baseUrl === personal.base_url && model === personal.model;
+  const savedParameters = sameConnection ? personal.generation_parameters : undefined;
   const validOptions = /^[!-~]{1,64}$/.test(version) && Number.isSafeInteger(Number(maxTokens)) && Number(maxTokens) > 0;
   const [apiKey, setApiKey] = useState("");
   const [touched, setTouched] = useState(false);
   const needsKey = keyRequired(saved, protocol, baseUrl);
   const problems = { baseUrl: baseUrlProblem(baseUrl), model: modelNameProblem(model), apiKey: apiKeyProblem(apiKey, needsKey) };
+  const catalogAuth = messages ? authScheme : undefined;
+  const catalogVersion = messages ? version : undefined;
+  const canDiscover = !problems.baseUrl && !problems.apiKey && (apiKey !== "" || personal?.base_url === baseUrl)
+    && (!messages || /^[!-~]{1,64}$/.test(version));
+  const discoveryRequest = useMemo(() => canDiscover ? {
+    protocol, base_url: baseUrl, ...(apiKey ? { api_key: apiKey } : {}),
+    ...(catalogAuth && catalogVersion ? { auth_scheme: catalogAuth, version: catalogVersion } : {}),
+  } : null, [apiKey, baseUrl, canDiscover, catalogAuth, catalogVersion, protocol]);
+  const discovery = useModelDiscovery(discoveryRequest, model);
   const valid = !problems.baseUrl && !problems.model && !problems.apiKey && (!messages || validOptions);
   const show = (problem: string | null) => (touched ? problem : null);
 
   const submit = () => {
     setTouched(true);
-    if (!valid || save.isPending) return;
+    if (!valid || save.isPending || !form.current || !form.current.reportValidity()) return;
+    const parameters: ChatGenerationParameters = {};
+    const fields = new FormData(form.current);
+    const effort = fields.get("effort");
+    if (!messages) {
+      if (typeof effort === "string" && effort) parameters.reasoning_effort = effort;
+      for (const name of ["temperature", "top_p", "seed"] as const) {
+        const value = fields.get(name);
+        if (typeof value === "string" && value) parameters[name] = Number(value);
+      }
+    }
     save.mutate(
       { mode: "personal", protocol, base_url: baseUrl, model,
-        ...(messages ? { messages_options: { version, auth_scheme: authScheme, max_tokens: Number(maxTokens) } } : {}), ...(apiKey ? { api_key: apiKey } : {}) },
+        ...(!messages && (savedParameters || Object.keys(parameters).length) ? { generation_parameters: parameters } : {}),
+        ...(messages ? { messages_options: { version, auth_scheme: authScheme, max_tokens: Number(maxTokens), ...(typeof effort === "string" && effort ? { effort } : {}) } } : {}), ...(apiKey ? { api_key: apiKey } : {}) },
       { onSuccess: (config) => { onSaved(config); onClose(); } },
     );
   };
@@ -71,25 +95,19 @@ function MyModelPanel({ saved, onClose, onSaved }: { saved: ModelConfig | undefi
       onClose={onClose}
       footer={<><button type="button" className="btn plain" onClick={onClose}>取消</button><button type="button" className="btn primary" onClick={submit} disabled={save.isPending || (touched && !valid)}>{save.isPending ? "正在保存…" : "保存"}</button></>}
     >
-      <form className="add-source" onSubmit={(event) => { event.preventDefault(); submit(); }} noValidate>
+      <form ref={form} className="add-source" onSubmit={(event) => { event.preventDefault(); submit(); }} noValidate>
         <div className="field">
           <label htmlFor={`${ids}-protocol`}>协议</label>
-          <select id={`${ids}-protocol`} value={protocol} onChange={(event) => setProtocol(event.target.value as ModelProtocol)}>
+          <select id={`${ids}-protocol`} value={protocol} onChange={(event) => { setProtocol(event.target.value as ModelProtocol); setApiKey(""); }}>
             {(Object.keys(PROTOCOL_LABEL) as ModelProtocol[]).map((value) => <option key={value} value={value}>{PROTOCOL_LABEL[value]}</option>)}
           </select>
           <span className="help">按服务实际支持的接口选择。保存后将用一条测试消息验证研究工具调用，服务商可能计费。</span>
         </div>
         <div className="field">
           <label htmlFor={`${ids}-url`}>服务地址</label>
-          <input id={`${ids}-url`} type="url" inputMode="url" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1"
+          <input id={`${ids}-url`} type="url" inputMode="url" value={baseUrl} onChange={(event) => { if (baseUrl && !baseUrlProblem(baseUrl)) setApiKey(""); setBaseUrl(event.target.value); }} placeholder="https://api.example.com/v1"
             autoCapitalize="off" spellCheck={false} aria-invalid={show(problems.baseUrl) ? true : undefined} />
           {show(problems.baseUrl) ? <span className="err">{problems.baseUrl}</span> : <span className="help">只支持可以从公网访问的 HTTPS 地址（443 端口）。</span>}
-        </div>
-        <div className="field">
-          <label htmlFor={`${ids}-model`}>模型名称</label>
-          <input id={`${ids}-model`} value={model} onChange={(event) => setModel(event.target.value)} placeholder="服务商提供的模型 ID" autoCapitalize="off" spellCheck={false}
-            aria-invalid={show(problems.model) ? true : undefined} />
-          {show(problems.model) ? <span className="err">{problems.model}</span> : null}
         </div>
         <div className="field">
           <label htmlFor={`${ids}-key`}>API Key</label>
@@ -98,6 +116,25 @@ function MyModelPanel({ saved, onClose, onSaved }: { saved: ModelConfig | undefi
           {show(problems.apiKey) ? <span className="err">{problems.apiKey}</span> : (
             <span className="help">{personal?.key_hint && needsKey ? "更换服务地址的域名或协议后，需要重新输入 API Key。" : "密钥加密保存，只用于调用你配置的模型服务。"}</span>
           )}
+        </div>
+        <div className="field">
+          <label htmlFor={`${ids}-model`}>模型名称</label>
+          <input id={`${ids}-model`} list={`${ids}-models`} value={model} onChange={(event) => setModel(event.target.value)} placeholder="服务商提供的模型 ID" autoCapitalize="off" spellCheck={false}
+            aria-invalid={show(problems.model) ? true : undefined} />
+          <datalist id={`${ids}-models`}>{discovery.models.map((item) => <option key={item.id} value={item.id} />)}</datalist>
+          {discovery.message && <span className="help" role="status">{discovery.message}</span>}
+          {show(problems.model) ? <span className="err">{problems.model}</span> : null}
+        </div>
+        <div className="field" key={JSON.stringify([protocol, baseUrl, model])}>
+          <label htmlFor={`${ids}-effort`}>推理强度（effort）</label>
+          <input id={`${ids}-effort`} name="effort" list={`${ids}-efforts`} placeholder="服务商默认"
+            defaultValue={messages && sameConnection ? personal.messages_options?.effort : savedParameters?.reasoning_effort}
+            maxLength={64} pattern="[a-zA-Z0-9_\-]{1,64}" spellCheck={false} />
+          <datalist id={`${ids}-efforts`}>
+            {(discovery.efforts ?? (messages ? ["low", "medium", "high", "max"] : ["none", "minimal", "low", "medium", "high", "xhigh"])).map((level) => <option key={level} value={level} />)}
+          </datalist>
+          <span className="help">{discovery.efforts?.length ? `${discovery.source === "official_docs" ? "官方模型文档" : "模型接口"}列出：${discovery.efforts.join("、")}。当前协议的工具兼容性以验证结果为准。`
+            : discovery.efforts ? "服务商未列出可用档位。留空使用默认值。" : "可手动设置或留空。通用候选值需由当前模型验证。"}</span>
         </div>
         {messages ? <>
           <div className="field">
@@ -115,7 +152,17 @@ function MyModelPanel({ saved, onClose, onSaved }: { saved: ModelConfig | undefi
             <input id={`${ids}-max`} type="number" min="1" step="1" value={maxTokens} onChange={(event) => setMaxTokens(event.target.value)} />
           </div>
           {touched && !validOptions ? <span className="err">请填写协议版本和大于零的整数输出上限。</span> : null}
-        </> : null}
+        </> : <details key={JSON.stringify([baseUrl, model])}>
+          <summary>生成参数（可选）</summary>
+          <p className="help">只填写当前模型支持的值。留空时由服务商决定。</p>
+          {(["temperature", "top_p", "seed"] as const).map((name) => (
+            <div className="field" key={name}>
+              <label htmlFor={`${ids}-${name}`}>{name}</label>
+              <input id={`${ids}-${name}`} name={name} type="number" step={name === "seed" ? "1" : "any"}
+                defaultValue={savedParameters?.[name]} />
+            </div>
+          ))}
+        </details>}
         {save.isError ? <span className="inline-error" role="alert">{modelErrorText(save.error)}</span> : null}
         <button type="submit" hidden />
       </form>
@@ -130,7 +177,7 @@ export function ModelSection() {
   const { setPanelOpen } = useLayout();
   const [panelOpen, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [lastTest, setTest] = useState<{ revision: string | undefined; state: Exclude<TestState, null> } | null>(null);
+  const [lastTest, setTest] = useState<{ revision: string | undefined; state: Exclude<TestState, null>; detail?: string | undefined } | null>(null);
   const testSequence = useRef(0);
   const data = config.data;
   const test = lastTest && lastTest.revision === data?.updated_at ? lastTest.state : null;
@@ -139,7 +186,7 @@ export function ModelSection() {
   if (needsMessagesOptions) toolStatus = "请编辑并填写 Messages 协议参数";
   else if (test === "ready") toolStatus = "研究工具已验证";
   else if (test === "testing") toolStatus = "正在验证…";
-  else if (test === "unavailable" || test === "error") toolStatus = "本次工具验证未通过";
+  else if (test === "unavailable" || test === "error") toolStatus = lastTest?.detail ?? "本次工具验证未通过";
 
   useEffect(() => {
     setPanelOpen(panelOpen);
@@ -152,13 +199,16 @@ export function ModelSection() {
     const sequence = ++testSequence.current;
     setTest({ revision, state: "testing" });
     try {
-      const { status } = await testModelConfig();
+      const { status, upstream_status, parameter } = await testModelConfig();
       if (sequence === testSequence.current) {
-        setTest({ revision, state: status });
+        const detail = upstream_status
+          ? `模型服务返回 HTTP ${upstream_status}${parameter ? `，请检查参数 ${parameter}` : ""}。`
+          : undefined;
+        setTest({ revision, state: status, detail });
         void config.refetch();
       }
-    } catch {
-      if (sequence === testSequence.current) setTest({ revision, state: "error" });
+    } catch (error) {
+      if (sequence === testSequence.current) setTest({ revision, state: "error", detail: describeError(error) });
     }
   };
 

@@ -501,3 +501,69 @@ def test_stale_verification_cannot_approve_a_changed_or_deleted_config(monkeypat
     settings.delete(owner)
     assert not settings.record_tools_result(second, True)
     assert not settings.snapshot(owner).research_tools_verified_at
+
+
+def test_personal_chat_parameter_rejection_then_verified_research_wire(monkeypatch):
+    from app.chat_research_adapter import ChatResearchAdapter
+    from app.model_protocol import ModelToolDefinition, ModelTurnInput
+
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    monkeypatch.setenv("FORESIGHTNINE_LLM_GENERATION_PARAMETERS", '{"temperature":0.9}')
+    monkeypatch.setattr(compatible, "_require_public_dns", lambda *_a: None)
+    monkeypatch.setattr(main.model_settings, "cipher", ModelCredentialCipher(b"p" * 32))
+    client = TestClient(main.app)
+    auth = client.post("/v1/auth/local/register", json={
+        "email": "parameters@example.test", "password": "correct horse battery staple!"
+    }).json()
+    headers = {"Authorization": "Bearer " + auth["access_token"]}
+    account = auth["account"]["account_id"]
+    path = "/v1/account/model-config"
+    sent = []
+
+    def transport(method, url, headers, body, timeout):
+        wire = json.loads(body)
+        sent.append(wire)
+        if wire.get("reasoning_effort") != "none":
+            return compatible.HttpResponse(400, json.dumps({"error": {
+                "param": "reasoning_effort", "message": "private provider text",
+            }}))
+        name = wire["tools"][0]["function"]["name"]
+        return compatible.HttpResponse(200, json.dumps({"choices": [{
+            "finish_reason": "tool_calls",
+            "message": {"role": "assistant", "tool_calls": [{"id": "1", "type": "function",
+                        "function": {"name": name, "arguments": '{"value":"ok"}'}}]},
+        }]}))
+
+    monkeypatch.setattr(main, "OpenAICompatibleLlmProvider",
+                        lambda settings: compatible.OpenAICompatibleLlmProvider(settings, transport=transport))
+    def save(**fields):
+        reply = client.put(path, headers=headers, json={"mode": "personal", **fields})
+        assert reply.status_code == 200, reply.text
+        return reply.json()
+
+    save(base_url="https://model.example.test/v1", model="example-a", api_key=SYNTHETIC_MODEL_KEY)
+    assert client.post(path + "/test", headers=headers).json() == {
+        "status": "unavailable", "upstream_status": 400, "parameter": "reasoning_effort",
+    }
+    assert "reasoning_effort" not in sent[-1] and "temperature" not in sent[-1]
+    values = {"reasoning_effort": "none", "temperature": 0}
+    assert save(generation_parameters=values)["generation_parameters"] == values
+    assert client.post(path + "/test", headers=headers).json() == {"status": "ready"}
+    settings, config = main.model_settings.runtime_configuration(account)
+    assert settings.tools_verified
+    provider = main._personal_model_provider(settings, config, research=True)
+    tool = ModelToolDefinition("read_sources", "Read sources", {"type": "object"})
+    ChatResearchAdapter(provider).complete_turn(ModelTurnInput("system", "research", (tool,), ()))
+    assert [w["reasoning_effort"] for w in sent[1:]] == ["none", "none"]
+    assert all(w["temperature"] == 0 for w in sent[1:])
+    assert json.loads(provider._request_body(None, "structured"))["reasoning_effort"] == "none"
+    assert client.put(path, headers=headers, json={"mode": "platform"}).json()["generation_parameters"] == values
+    assert save()["research_tools_verified_at"]
+    assert "research_tools_verified_at" not in save(generation_parameters={"reasoning_effort": "high"})
+    assert not main.model_settings.record_tools_result(config, True)
+    assert "generation_parameters" not in save(generation_parameters={})
+    save(generation_parameters=values)
+    assert "generation_parameters" not in save(model="example-b")
+    for fields in ({"generation_parameters": {"tools": []}}, {"generation_parameters": {"reasoning_effort": 0}},
+                   {"protocol": "anthropic_messages", "generation_parameters": values, "api_key": SYNTHETIC_MODEL_KEY}):
+        assert client.put(path, headers=headers, json={"mode": "personal", **fields}).status_code == 422

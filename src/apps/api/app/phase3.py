@@ -44,6 +44,8 @@ class ProviderFailure(RuntimeError):
         super().__init__(message)
         self.code = code
         self.retryable = retryable
+        self.upstream_status: int | None = None
+        self.parameter: str | None = None
         self.reported_tokens = reported_tokens if type(reported_tokens) is int and reported_tokens >= 0 else None
 
 
