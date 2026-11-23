@@ -2011,6 +2011,70 @@ describe("TopicPage", () => {
     });
   });
 
+  describe("research actions: rename, pin, delete", () => {
+    function lifecycleApi() {
+      let topic = topicWith([turn(1)]);
+      const other = { ...topicWith([turn(1)]), topic_id: "t2", request: { question: "另一项研究", source_ids: [] } };
+      const fetchMock = mockApi((url, init) => {
+        if (url.pathname === "/v2/research/topics") return jsonResponse([topic, other]);
+        if (url.pathname === "/v2/research/topics/t2" && init.method === "PATCH") {
+          const body = JSON.parse(String(init.body)) as { title?: string; pinned?: boolean };
+          topic = other;
+          return jsonResponse({ ...other, ...(body.title !== undefined ? { title: body.title } : {}), ...(body.pinned ? { pinned_at: NOW } : {}) });
+        }
+        if (url.pathname === "/v2/research/topics/t2" && init.method === "DELETE") return jsonResponse({ topic_id: "t2", deleted_at: NOW, purge_after: NOW });
+        if (url.pathname === "/v2/research/topics/t2/restore") return jsonResponse(other);
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topic);
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+        return undefined;
+      });
+      return fetchMock;
+    }
+    const calls = (fetchMock: ReturnType<typeof vi.fn>, method: string) =>
+      fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === method);
+
+    it("renames a research in place from its row menu", async () => {
+      const fetchMock = lifecycleApi();
+      renderTopic();
+      const nav = await screen.findByRole("navigation", { name: "研究列表" });
+      fireEvent.contextMenu(await within(nav).findByRole("link", { name: "另一项研究" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "重命名" }));
+      const field = await within(nav).findByRole("textbox", { name: "研究名称" });
+      fireEvent.change(field, { target: { value: "云厂商对比" } });
+      fireEvent.keyDown(field, { key: "Enter" });
+      await waitFor(() => expect(calls(fetchMock, "PATCH")).toHaveLength(1));
+      expect(JSON.parse(String((calls(fetchMock, "PATCH")[0]![1] as RequestInit).body))).toEqual({ title: "云厂商对比" });
+      expect(await within(nav).findByRole("link", { name: "云厂商对比" })).toBeTruthy();
+    });
+
+    it("pins a research into its own group", async () => {
+      const fetchMock = lifecycleApi();
+      renderTopic();
+      const nav = await screen.findByRole("navigation", { name: "研究列表" });
+      fireEvent.contextMenu(await within(nav).findByRole("link", { name: "另一项研究" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "置顶" }));
+      await waitFor(() => expect(calls(fetchMock, "PATCH")).toHaveLength(1));
+      expect(JSON.parse(String((calls(fetchMock, "PATCH")[0]![1] as RequestInit).body))).toEqual({ pinned: true });
+      expect(await within(nav).findByText("置顶")).toBeTruthy();
+    });
+
+    it("deletes after confirmation and restores from the undo toast", async () => {
+      const fetchMock = lifecycleApi();
+      renderTopic();
+      const nav = await screen.findByRole("navigation", { name: "研究列表" });
+      fireEvent.contextMenu(await within(nav).findByRole("link", { name: "另一项研究" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "删除…" }));
+      const dialog = await screen.findByRole("alertdialog");
+      expect(within(dialog).getByText(/30 天内可以撤销删除/)).toBeTruthy();
+      fireEvent.click(within(dialog).getByRole("button", { name: "删除" }));
+      await waitFor(() => expect(calls(fetchMock, "DELETE")).toHaveLength(1));
+      await waitFor(() => expect(within(nav).queryByRole("link", { name: "另一项研究" })).toBeNull());
+      fireEvent.click(await screen.findByRole("button", { name: "撤销" }));
+      await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/v2/research/topics/t2/restore"))).toBe(true));
+      expect(await within(nav).findByRole("link", { name: "另一项研究" })).toBeTruthy();
+    });
+  });
+
   describe("research actions: row menus and copying", () => {
     function stubClipboard() {
       const writeText = vi.fn().mockResolvedValue(undefined);

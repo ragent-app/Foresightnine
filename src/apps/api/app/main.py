@@ -101,7 +101,7 @@ from .services import (
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, _drop_legacy_null_fields, build_repository
 from .research_topics import (AttachSourcesInput, ResearchCalculation, ResearchFact, ResearchFullExport, ResearchInput, ResearchMetadataExport,
-    ResearchTopic, ResearchTopics, ResearchTurn, TopicNotFound, TopicVersionConflict, VersionInput)
+    ResearchTopic, ResearchTopics, ResearchTurn, TopicDeletion, TopicMeta, TopicNotFound, TopicUpdate, TopicVersionConflict, VersionInput)
 from .research_clock import build_research_clock
 from .research_progress import build_progress
 from .research_live_stream import ResearchLiveBroker, format_sse_frame, parse_last_event_id
@@ -406,7 +406,8 @@ def _build_entity_repositories(
 
 storage_config = _storage_config()
 RESEARCH_TOPICS = build_repository(storage_config, "research_topics", value_loader=ResearchTopic.model_validate)
-research_topics = ResearchTopics(RESEARCH_TOPICS)
+RESEARCH_TOPIC_META = build_repository(storage_config, "research_topic_meta", value_loader=TopicMeta.model_validate)
+research_topics = ResearchTopics(RESEARCH_TOPICS, RESEARCH_TOPIC_META)
 RESEARCH_SOURCES = build_repository(storage_config, "research_sources", value_loader=ResearchSource.model_validate)
 research_sources = ResearchSources(RESEARCH_SOURCES)
 RESEARCH_RUN_INPUTS = build_repository(storage_config, "research_run_inputs")
@@ -627,6 +628,7 @@ def reset_state() -> None:
     operations.reset()
     research_live_broker.reset()
     RESEARCH_TOPICS.clear()
+    RESEARCH_TOPIC_META.clear()
     RESEARCH_SOURCES.clear()
     RESEARCH_RUN_INPUTS.clear()
     SOURCE_RATE_LIMITS.clear()
@@ -3602,6 +3604,50 @@ def recover_research_run(topic_id: str, operation_id: str, response: Response,
     if not checkpoint or not checkpoint.get('submission'):
         raise ApiProblem(409, 'lifecycle_conflict', 'No completed runtime submission is available for recovery.')
     return continue_research_run(topic_id, operation_id, response, idempotency_key, http_request)
+
+
+def _topic_has_active_run(account_id: str, topic_id: str) -> bool:
+    endpoint = f"/v1/research/topics/{topic_id}/runs"
+    for operation_id, session_id in operations.store.session_ids().items():
+        if session_id != topic_id:
+            continue
+        record = operations.store.get_operation(operation_id)
+        if (record and record.get("endpoint") == endpoint and record.get("owner_subject") == f"account:{account_id}"
+                and record.get("status") in {"pending", "running"}):
+            return True
+    return False
+
+
+@app.patch("/v2/research/topics/{topic_id}", response_model=ResearchTopic, include_in_schema=False)
+def update_research_topic(topic_id: str, request: TopicUpdate, authorization: str | None = Header(default=None)) -> ResearchTopic:
+    """Rename or pin. The title is separate from the research question, which stays as asked."""
+    account = _authenticated_account(authorization)
+    try:
+        return _visible_topic(research_topics.update(account.account_id, topic_id, request))
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+
+
+@app.delete("/v2/research/topics/{topic_id}", response_model=TopicDeletion, include_in_schema=False)
+def delete_research_topic(topic_id: str, authorization: str | None = Header(default=None)) -> TopicDeletion:
+    """Soft delete: hidden at once, restorable until purge_after, purged afterwards."""
+    account = _authenticated_account(authorization)
+    try:
+        research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+    if _topic_has_active_run(account.account_id, topic_id):
+        raise ApiProblem(409, "lifecycle_conflict", "Stop the running research before deleting it.")
+    return research_topics.soft_delete(account.account_id, topic_id)
+
+
+@app.post("/v2/research/topics/{topic_id}/restore", response_model=ResearchTopic, include_in_schema=False)
+def restore_research_topic(topic_id: str, authorization: str | None = Header(default=None)) -> ResearchTopic:
+    account = _authenticated_account(authorization)
+    try:
+        return _visible_topic(research_topics.restore(account.account_id, topic_id))
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
 
 
 @app.get("/v2/research/topics/{topic_id}/runs", response_model=list[OperationResponse], response_model_exclude_none=True, include_in_schema=False)

@@ -2,7 +2,7 @@ import type { ResearchV2 } from "@foresightnine/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useBlocker, useParams } from "react-router-dom";
 import { ApiError } from "../api/http";
-import { useActiveRun, useAttachSources, useCancelRun, useContinueTurn, useRecoverTurn, useRecoveryStatus, useReextractPdf, useRunProgress, useSaveVersion, useStartTurn, useTopic, useVersionSources } from "../api/queries";
+import { useActiveRun, useAttachSources, useCancelRun, useContinueTurn, useRecoverTurn, useRecoveryStatus, useReextractPdf, useRunProgress, useSaveVersion, useStartTurn, useTopic, useTopicActions, useVersionSources } from "../api/queries";
 import { exportFull, exportMetadata, isActiveStatus, latestVersion } from "../api/research";
 import type { AvailableVersionSource, CreatedSource } from "../api/types";
 import { gapText } from "../lib/copy";
@@ -30,6 +30,33 @@ import { LiveCapsule } from "./topic/LiveBar";
 import { ReaderPanel } from "./topic/ReaderPanel";
 import { RecordPanel } from "./topic/RecordPanel";
 import { ReviewPanel, saveErrorText } from "./topic/ReviewPanel";
+
+/** The large title edited in place: Enter or leaving saves, Esc cancels; clearing restores the question. */
+function TitleEditor({ initial, onDone }: { initial: string; onDone: (title: string | null) => void }) {
+  const [value, setValue] = useState(initial);
+  const done = useRef(false);
+  const finish = (title: string | null) => {
+    if (done.current) return;
+    done.current = true;
+    onDone(title);
+  };
+  return (
+    <input
+      className="title-edit"
+      aria-label="研究名称"
+      value={value}
+      maxLength={200}
+      autoFocus
+      onFocus={(event) => event.currentTarget.select()}
+      onChange={(event) => setValue(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); finish(value); }
+        if (event.key === "Escape") { event.preventDefault(); finish(null); }
+      }}
+      onBlur={() => finish(value)}
+    />
+  );
+}
 
 interface PendingAsk {
   question: string;
@@ -72,6 +99,8 @@ export function TopicPage() {
   const [askedOp, setAskedOp] = useState<{ operationId: string; question: string } | null>(null);
   const [pendingContinue, setPendingContinue] = useState<PendingContinue | null>(null);
   const [awayFromLive, setAwayFromLive] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const topicActions = useTopicActions();
   const [evidence, setEvidenceState] = useState<ReadonlyMap<string, boolean>>(new Map());
   const setEvidence = useCallback((turnId: string, open: boolean) => {
     setEvidenceState((previous) => new Map(previous).set(turnId, open));
@@ -555,6 +584,7 @@ export function TopicPage() {
           trigger={<Icon name="more" />}
           triggerClassName="icon-btn"
           items={[
+            { key: "rename", label: "重命名", icon: "pen", onSelect: () => setRenaming(true), disabled: !view },
             { key: "review", label: "复核与版本", icon: "check", onSelect: () => setPanel({ kind: "review" }) },
             { key: "settings", label: "研究设置", icon: "tune", onSelect: () => setPanel({ kind: "settings" }) },
             { key: "add", label: "添加资料", icon: "plus", onSelect: () => setPanel({ kind: "add" }), disabled: locked || !version },
@@ -578,7 +608,21 @@ export function TopicPage() {
           ) : (
             <TopicContext.Provider value={view}>
               <header className="large-title">
-                <h1>{title}</h1>
+                {renaming && topic ? (
+                  <TitleEditor
+                    initial={title}
+                    onDone={(next) => {
+                      setRenaming(false);
+                      const value = next?.trim();
+                      if (next === null || value === title || (!value && !topic.title)) return;
+                      topicActions.update.mutate({ topicId, update: { title: value ?? "" } }, {
+                        onError: (error) => setNotice({ tone: "error", text: `重命名失败：${describeError(error)}` }),
+                      });
+                    }}
+                  />
+                ) : (
+                  <h1 onDoubleClick={() => setRenaming(true)}>{title}</h1>
+                )}
                 {/* Version and turn count live in 复核与版本; the header only names what needs attention. */}
                 {topic!.request.as_of || dirty ? (
                   <div className="meta">

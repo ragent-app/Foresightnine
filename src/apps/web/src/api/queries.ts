@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { nextPollDelay } from "../lib/polling";
 import { ApiError } from "./http";
-import { createCalculation, createVersion, getProgress, getRecoveryStatus, getTopic, getVersionSourceText, isActiveStatus, listRuns, listTopics, listVersionSources, recalculateCalculation, type CreateCalculationRequest } from "./research";
+import { createCalculation, createVersion, deleteTopic, getProgress, getRecoveryStatus, getTopic, getVersionSourceText, isActiveStatus, listRuns, listTopics, listVersionSources, recalculateCalculation, restoreTopic, updateTopic, type CreateCalculationRequest } from "./research";
 import { attachSources, reextractPdfSource } from "./sources";
 import { openResearchRunStream, StreamFallbackError } from "./stream";
 import type { CreatedSource, ProgressEvent, RecoveryStatus, RunProgress, SourceText, TransientStreamState, VersionSource } from "./types";
@@ -25,6 +25,33 @@ export function useTopics() {
     queryKey: queryKeys.topics,
     queryFn: ({ signal }) => listTopics(signal),
   });
+}
+
+/** Rename, pin, delete and restore; caches are updated in place so the list does not refetch. */
+export function useTopicActions() {
+  const queryClient = useQueryClient();
+  const put = (topic: ResearchV2.ResearchTopic) => {
+    queryClient.setQueryData<ResearchV2.ResearchTopic[]>(queryKeys.topics, (list) =>
+      list ? [topic, ...list.filter((item) => item.topic_id !== topic.topic_id)] : [topic]);
+    queryClient.setQueryData(queryKeys.topic(topic.topic_id), topic);
+  };
+  const update = useMutation({
+    mutationFn: ({ topicId, update }: { topicId: string; update: ResearchV2.TopicUpdate }) => updateTopic(topicId, update),
+    onSuccess: (topic) => {
+      queryClient.setQueryData<ResearchV2.ResearchTopic[]>(queryKeys.topics, (list) =>
+        list?.map((item) => (item.topic_id === topic.topic_id ? topic : item)));
+      queryClient.setQueryData(queryKeys.topic(topic.topic_id), topic);
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (topicId: string) => deleteTopic(topicId),
+    onSuccess: (_, topicId) => {
+      queryClient.setQueryData<ResearchV2.ResearchTopic[]>(queryKeys.topics, (list) => list?.filter((item) => item.topic_id !== topicId));
+      queryClient.removeQueries({ queryKey: queryKeys.topic(topicId) });
+    },
+  });
+  const restore = useMutation({ mutationFn: (topicId: string) => restoreTopic(topicId), onSuccess: put });
+  return { update, remove, restore };
 }
 
 export function useTopic(topicId: string) {

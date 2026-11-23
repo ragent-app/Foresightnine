@@ -7,7 +7,7 @@ atomic even when PostgreSQL and multiple API processes are used.
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 from uuid import uuid4
 
@@ -388,6 +388,15 @@ class ResearchVersion(BaseModel):
     created_by: Literal["user", "agent", "unknown"] = "unknown"
 
 
+class TopicOrigin(BaseModel):
+    """Where a forked research came from, so it can be traced back."""
+    model_config = ConfigDict(extra="forbid")
+    topic_id: str
+    version_id: str
+    turn_id: str | None = None
+    turn_index: int | None = None
+
+
 class ResearchTopic(BaseModel):
     schema_version: Literal["1"] = "1"
     topic_id: str
@@ -396,6 +405,45 @@ class ResearchTopic(BaseModel):
     created_at: datetime
     updated_at: datetime
     versions: list[ResearchVersion]
+    # Presentation metadata, merged from TopicMeta when a topic is read.  It is
+    # never written into the topic document: that document's storage revision
+    # tracks its version count for optimistic appends.
+    title: str | None = None
+    pinned_at: datetime | None = None
+    forked_from: TopicOrigin | None = None
+
+
+class TopicMeta(BaseModel):
+    """User-controlled list metadata kept beside the versioned topic document."""
+    model_config = ConfigDict(extra="forbid")
+    topic_id: str
+    owner_id: str
+    title: str | None = None
+    pinned_at: datetime | None = None
+    deleted_at: datetime | None = None
+    forked_from: TopicOrigin | None = None
+
+
+class TopicUpdate(BaseModel):
+    """Rename (a blank or null title restores the question as the name) and pin."""
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    title: str | None = Field(default=None, max_length=200)
+    pinned: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_update(self) -> TopicUpdate:
+        if not self.model_fields_set & {"title", "pinned"}:
+            raise ValueError("Provide a title or a pinned state.")
+        return self
+
+
+class TopicDeletion(BaseModel):
+    topic_id: str
+    deleted_at: datetime
+    purge_after: datetime
+
+
+DELETED_TOPIC_RETENTION = timedelta(days=30)
 
 
 class ResearchFullExport(BaseModel):
@@ -446,8 +494,26 @@ class TopicVersionConflict(Exception):
 
 
 class ResearchTopics:
-    def __init__(self, repository: JsonDocumentRepository[ResearchTopic]):
+    def __init__(self, repository: JsonDocumentRepository[ResearchTopic],
+                 meta_repository: JsonDocumentRepository[TopicMeta] | None = None):
         self.repository = repository
+        self.meta_repository = meta_repository
+
+    def _meta(self, owner: str, topic_id: str) -> TopicMeta | None:
+        if self.meta_repository is None:
+            return None
+        meta = self.meta_repository.get(topic_id)
+        return meta if meta is not None and meta.owner_id == owner else None
+
+    def _with_meta(self, topic: ResearchTopic, meta: TopicMeta | None) -> ResearchTopic:
+        if meta is None:
+            return topic
+        return topic.model_copy(update={"title": meta.title, "pinned_at": meta.pinned_at, "forked_from": meta.forked_from})
+
+    def _put_meta(self, meta: TopicMeta) -> None:
+        if self.meta_repository is None:
+            raise RuntimeError("Topic metadata storage is not configured.")
+        self.meta_repository.put(meta.topic_id, meta)
 
     def create(self, owner: str, request: ResearchInput) -> ResearchTopic:
         now = datetime.now(timezone.utc)
@@ -460,23 +526,77 @@ class ResearchTopics:
         self.repository.put(topic.topic_id, topic)
         return topic.model_copy(deep=True)
 
-    def get(self, owner: str, topic_id: str) -> ResearchTopic:
+    def get(self, owner: str, topic_id: str, *, include_deleted: bool = False) -> ResearchTopic:
+        """A deleted topic reads as missing everywhere (runs, versions, sources) until restored."""
         topic = self.repository.get(topic_id)
         if topic is None or topic.owner_id != owner:
             raise TopicNotFound()
-        return topic.model_copy(deep=True)
+        meta = self._meta(owner, topic_id)
+        if meta is not None and meta.deleted_at is not None and not include_deleted:
+            raise TopicNotFound()
+        return self._with_meta(topic.model_copy(deep=True), meta)
 
-    def list(self, owner: str) -> list[ResearchTopic]:
-        return [topic.model_copy(deep=True) for _, topic in owner_items(self.repository, owner)
-                if topic.owner_id == owner]
+    def list(self, owner: str, *, now: datetime | None = None) -> list[ResearchTopic]:
+        """Visible topics; deleted ones past their retention are purged on the way."""
+        current = now or datetime.now(timezone.utc)
+        result: list[ResearchTopic] = []
+        for _, topic in list(owner_items(self.repository, owner)):
+            if topic.owner_id != owner:
+                continue
+            meta = self._meta(owner, topic.topic_id)
+            if meta is not None and meta.deleted_at is not None:
+                if current - meta.deleted_at >= DELETED_TOPIC_RETENTION:
+                    self.purge(owner, topic.topic_id)
+                continue
+            result.append(self._with_meta(topic.model_copy(deep=True), meta))
+        return result
+
+    def update(self, owner: str, topic_id: str, request: TopicUpdate, *, now: datetime | None = None) -> ResearchTopic:
+        topic = self.get(owner, topic_id)
+        meta = self._meta(owner, topic_id) or TopicMeta(topic_id=topic_id, owner_id=owner)
+        changes: dict[str, object] = {}
+        if "title" in request.model_fields_set:
+            changes["title"] = request.title or None
+        if "pinned" in request.model_fields_set:
+            changes["pinned_at"] = (meta.pinned_at or now or datetime.now(timezone.utc)) if request.pinned else None
+        meta = meta.model_copy(update=changes)
+        self._put_meta(meta)
+        return self._with_meta(topic, meta)
+
+    def soft_delete(self, owner: str, topic_id: str, *, now: datetime | None = None) -> TopicDeletion:
+        self.get(owner, topic_id)
+        deleted_at = now or datetime.now(timezone.utc)
+        meta = self._meta(owner, topic_id) or TopicMeta(topic_id=topic_id, owner_id=owner)
+        self._put_meta(meta.model_copy(update={"deleted_at": deleted_at}))
+        return TopicDeletion(topic_id=topic_id, deleted_at=deleted_at, purge_after=deleted_at + DELETED_TOPIC_RETENTION)
+
+    def restore(self, owner: str, topic_id: str) -> ResearchTopic:
+        self.get(owner, topic_id, include_deleted=True)
+        meta = self._meta(owner, topic_id)
+        if meta is not None and meta.deleted_at is not None:
+            self._put_meta(meta.model_copy(update={"deleted_at": None}))
+        return self.get(owner, topic_id)
+
+    def purge(self, owner: str, topic_id: str) -> None:
+        topic = self.repository.get(topic_id)
+        if topic is None or topic.owner_id != owner:
+            return
+        self.repository.delete(topic_id)
+        if self.meta_repository is not None:
+            self.meta_repository.delete(topic_id)
 
     def delete_owner(self, owner: str) -> None:
-        for topic in self.list(owner):
-            self.repository.delete(topic.topic_id)
+        for _, topic in list(owner_items(self.repository, owner)):
+            if topic.owner_id == owner:
+                self.purge(owner, topic.topic_id)
 
     def add_version(self, owner: str, topic_id: str, request: VersionInput, *, source_ids: list[str] | None = None,
                     created_by: Literal["user", "agent"] = "user") -> ResearchTopic:
-        topic = self.get(owner, topic_id)
+        self.get(owner, topic_id)  # ownership and deletion check
+        stored = self.repository.get(topic_id)
+        assert stored is not None
+        # Append to the stored document itself: merged presentation metadata must not be persisted.
+        topic = stored.model_copy(deep=True, update={"title": None, "pinned_at": None, "forked_from": None})
         if topic.versions[-1].version_id != request.parent_version_id:
             raise TopicVersionConflict()
         now = datetime.now(timezone.utc)
@@ -496,4 +616,4 @@ class ResearchTopics:
             self.repository.put(topic_id, updated, expected_version=len(topic.versions))
         except StorageConflictError as error:
             raise TopicVersionConflict() from error
-        return updated.model_copy(deep=True)
+        return self._with_meta(updated.model_copy(deep=True), self._meta(owner, topic_id))

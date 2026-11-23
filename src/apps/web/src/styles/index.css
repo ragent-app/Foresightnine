@@ -940,3 +940,6 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } .row-more, .ask-tools { transition: none; } }
 @media (max-width: 899px) { .ask-wrap { max-width: 90%; } }
+.large-title .title-edit { width: 100%; margin: 0; padding: 0 0 2px; border: 0; border-bottom: 1.5px solid var(--primary); background: transparent; outline: none;
+  font: inherit; font-size: 28px; font-weight: 600; line-height: 1.3; letter-spacing: -0.02em; color: var(--on-surface); }
+@media (max-width: 899px) { .large-title .title-edit { font-size: 24px; } }

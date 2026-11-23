@@ -33,6 +33,20 @@ export function createTopic(input: ResearchV2.ResearchInput): Promise<ResearchV2
   return apiRequest<ResearchV2.ResearchTopic>("/v2/research/topics", { method: "POST", body: input });
 }
 
+/** Rename (empty title restores the question as the name) or pin; the research question itself never changes. */
+export function updateTopic(topicId: string, update: ResearchV2.TopicUpdate): Promise<ResearchV2.ResearchTopic> {
+  return apiRequest<ResearchV2.ResearchTopic>(topicPath(topicId), { method: "PATCH", body: update });
+}
+
+/** Soft delete; restorable until purge_after. */
+export function deleteTopic(topicId: string): Promise<ResearchV2.TopicDeletion> {
+  return apiRequest<ResearchV2.TopicDeletion>(topicPath(topicId), { method: "DELETE" });
+}
+
+export function restoreTopic(topicId: string): Promise<ResearchV2.ResearchTopic> {
+  return apiRequest<ResearchV2.ResearchTopic>(`${topicPath(topicId)}/restore`, { method: "POST" });
+}
+
 export function startRun(
   topicId: string,
   body: ResearchV2.ResearchRunRequest,

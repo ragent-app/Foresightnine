@@ -2,7 +2,7 @@ import type { ResearchV2 } from "@foresightnine/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useMatch, useNavigate } from "react-router-dom";
-import { useTopics, queryKeys } from "../api/queries";
+import { useTopicActions, useTopics, queryKeys } from "../api/queries";
 import { ApiError } from "../api/http";
 import { exportFull, isActiveStatus, latestVersion, listRuns } from "../api/research";
 import { signOut } from "../auth/account";
@@ -10,6 +10,8 @@ import { useSession } from "../auth/session";
 import { copyText } from "../lib/clipboard";
 import { saveJson } from "../lib/download";
 import { DATE_GROUP_LABEL, dateGroup, type DateGroup } from "../lib/format";
+import { describeError } from "../pages/research/errors";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { topicTitle } from "../lib/research";
 import { StatusDot } from "./controls";
 import { Icon } from "./icons";
@@ -49,10 +51,14 @@ async function exportTopic(topic: ResearchV2.ResearchTopic): Promise<void> {
  * long-press, or the keyboard (Menu key / Shift+F10): the context menu is a shortcut, never the
  * only way to an action.
  */
-function TopicRow({ topic, current, tone, items }: { topic: ResearchV2.ResearchTopic; current: boolean; tone: Tone; items: MenuEntry[] }) {
+function TopicRow({ topic, current, tone, items, renaming, onRename }: {
+  topic: ResearchV2.ResearchTopic; current: boolean; tone: Tone; items: MenuEntry[];
+  renaming: boolean; onRename: (title: string | null) => void;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const longPress = useLongPress(() => setMenuOpen(true));
   const title = topicTitle(topic);
+  if (renaming) return <RenameField initial={title} onDone={onRename} />;
   return (
     <div
       className={`row-wrap${menuOpen ? " menu-open" : ""}`}
@@ -87,6 +93,35 @@ function TopicRow({ topic, current, tone, items }: { topic: ResearchV2.ResearchT
   );
 }
 
+/** Finder-style in-place rename: Enter or leaving the field saves, Esc cancels. */
+function RenameField({ initial, onDone }: { initial: string; onDone: (title: string | null) => void }) {
+  const [value, setValue] = useState(initial);
+  const done = useRef(false);
+  const finish = (title: string | null) => {
+    if (done.current) return;
+    done.current = true;
+    onDone(title);
+  };
+  return (
+    <div className="row-wrap">
+      <input
+        className="row-edit"
+        aria-label="研究名称"
+        value={value}
+        maxLength={200}
+        autoFocus
+        onFocus={(event) => event.currentTarget.select()}
+        onChange={(event) => setValue(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); finish(value); }
+          if (event.key === "Escape") { event.preventDefault(); finish(null); }
+        }}
+        onBlur={() => finish(value)}
+      />
+    </div>
+  );
+}
+
 export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; open: boolean; onClose: () => void; onToggle: () => void }) {
   const navigate = useNavigate();
   const topics = useTopics();
@@ -96,6 +131,9 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
   const asideRef = useRef<HTMLElement>(null);
   const session = useSession();
   const email = session?.account.email ?? "账户";
+  const actions = useTopicActions();
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<ResearchV2.ResearchTopic | null>(null);
 
   // Running state is only known for the open topic; it shares the topic page's runs cache.
   const runs = useQuery({
@@ -118,24 +156,70 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
     return () => document.removeEventListener("keydown", handler);
   }, [drawer, open, onClose]);
 
+  // Pinned topics form their own group on top (most recently pinned first); the rest group by date.
   const groups = useMemo(() => {
     const needle = filter.trim().toLowerCase();
     const sorted = [...(topics.data ?? [])].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+    const pinned: ResearchV2.ResearchTopic[] = [];
     const result = new Map<DateGroup, ResearchV2.ResearchTopic[]>();
     for (const topic of sorted) {
       if (needle && !topicTitle(topic).toLowerCase().includes(needle)) continue;
+      if (topic.pinned_at) { pinned.push(topic); continue; }
       const group = dateGroup(topic.updated_at);
       result.set(group, [...(result.get(group) ?? []), topic]);
     }
-    return GROUP_ORDER.flatMap((group) => (result.has(group) ? [[group, result.get(group)!] as const] : []));
+    pinned.sort((a, b) => Date.parse(b.pinned_at ?? "") - Date.parse(a.pinned_at ?? ""));
+    return [
+      ...(pinned.length > 0 ? [["置顶", pinned] as const] : []),
+      ...GROUP_ORDER.flatMap((group) => (result.has(group) ? [[DATE_GROUP_LABEL[group], result.get(group)!] as const] : [])),
+    ];
   }, [topics.data, filter]);
 
-  const actionsFor = (topic: ResearchV2.ResearchTopic): MenuEntry[] => [
+  const rename = (topic: ResearchV2.ResearchTopic, title: string | null) => {
+    setRenamingId(null);
+    if (title === null) return;
+    const next = title.trim();
+    // Saving the shown name unchanged is a no-op; clearing it restores the question as the name.
+    if (next === topicTitle(topic) || (!next && !topic.title)) return;
+    actions.update.mutate({ topicId: topic.topic_id, update: { title: next } }, {
+      onError: (error) => showToast(`重命名失败：${describeError(error)}`, { tone: "error" }),
+    });
+  };
+
+  const confirmDelete = (topic: ResearchV2.ResearchTopic) => {
+    actions.remove.mutate(topic.topic_id, {
+      onSuccess: () => {
+        setDeleting(null);
+        if (topic.topic_id === currentId) navigate("/research");
+        showToast(`已删除“${topicTitle(topic)}”`, {
+          action: {
+            label: "撤销",
+            onAction: () => actions.restore.mutate(topic.topic_id, {
+              onSuccess: () => showToast("已恢复"),
+              onError: (error) => showToast(`恢复失败：${describeError(error)}`, { tone: "error" }),
+            }),
+          },
+        });
+      },
+    });
+  };
+
+  const actionsFor = (topic: ResearchV2.ResearchTopic, running: boolean): MenuEntry[] => [
+    { key: "rename", label: "重命名", icon: "pen", onSelect: () => setRenamingId(topic.topic_id) },
+    {
+      key: "pin", label: topic.pinned_at ? "取消置顶" : "置顶", icon: "pin",
+      onSelect: () => actions.update.mutate({ topicId: topic.topic_id, update: { pinned: !topic.pinned_at } }, {
+        onError: (error) => showToast(describeError(error), { tone: "error" }),
+      }),
+    },
+    "separator",
     {
       key: "copy-link", label: "复制链接", icon: "link",
       onSelect: () => void copyText(topicLink(topic.topic_id)).then((ok) => showToast(ok ? "已复制链接" : "无法访问剪贴板", { tone: ok ? "info" : "error" })),
     },
     { key: "export", label: "导出完整记录", icon: "download", onSelect: () => void exportTopic(topic) },
+    "separator",
+    { key: "delete", label: running ? "删除（研究进行中）" : "删除…", icon: "trash", destructive: true, disabled: running, onSelect: () => setDeleting(topic) },
   ];
 
   const className = `side${drawer && open ? " open" : ""}`;
@@ -159,17 +243,37 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
       {topics.isError ? <div className="empty">研究列表暂时无法加载。</div> : null}
       {topics.data && groups.length === 0 ? <div className="empty">{filter.trim() ? "没有匹配的研究。" : "还没有研究。"}</div> : null}
       <nav aria-label="研究列表">
-        {groups.map(([group, items]) => (
-          <div key={group}>
-            <div className="group-label">{DATE_GROUP_LABEL[group]}</div>
+        {groups.map(([label, items]) => (
+          <div key={label}>
+            <div className="group-label">{label}</div>
             {items.map((topic) => {
               const current = topic.topic_id === currentId;
-              const tone = current && currentRunning ? "running" : topicTone(topic);
-              return <TopicRow key={topic.topic_id} topic={topic} current={current} tone={tone} items={actionsFor(topic)} />;
+              const running = current && currentRunning;
+              const tone = running ? "running" : topicTone(topic);
+              return (
+                <TopicRow
+                  key={topic.topic_id}
+                  topic={topic}
+                  current={current}
+                  tone={tone}
+                  items={actionsFor(topic, running)}
+                  renaming={renamingId === topic.topic_id}
+                  onRename={(title) => rename(topic, title)}
+                />
+              );
             })}
           </div>
         ))}
       </nav>
+      {deleting ? (
+        <ConfirmDialog
+          title={`删除“${topicTitle(deleting)}”？`}
+          description="这项研究会从列表中移除，30 天内可以撤销删除，之后连同它的版本和结论一起清除。添加过的资料仍保留在你的账户中。"
+          error={actions.remove.isError ? describeError(actions.remove.error) : null}
+          onCancel={() => { setDeleting(null); actions.remove.reset(); }}
+          actions={[{ key: "delete", label: actions.remove.isPending ? "正在删除…" : "删除", tone: "danger", disabled: actions.remove.isPending, onSelect: () => confirmDelete(deleting) }]}
+        />
+      ) : null}
       <div className="foot">
         <Menu
           label="账户"

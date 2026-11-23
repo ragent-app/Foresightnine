@@ -2774,9 +2774,31 @@
             "title": "Created At",
             "type": "string"
           },
+          "forked_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TopicOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "owner_id": {
             "title": "Owner Id",
             "type": "string"
+          },
+          "pinned_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned At"
           },
           "request": {
             "$ref": "#/components/schemas/ResearchInput"
@@ -2786,6 +2808,17 @@
             "default": "1",
             "title": "Schema Version",
             "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
           },
           "topic_id": {
             "title": "Topic Id",
@@ -3766,6 +3799,104 @@
           "cells"
         ],
         "title": "TableRow",
+        "type": "object"
+      },
+      "TopicDeletion": {
+        "properties": {
+          "deleted_at": {
+            "format": "date-time",
+            "title": "Deleted At",
+            "type": "string"
+          },
+          "purge_after": {
+            "format": "date-time",
+            "title": "Purge After",
+            "type": "string"
+          },
+          "topic_id": {
+            "title": "Topic Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic_id",
+          "deleted_at",
+          "purge_after"
+        ],
+        "title": "TopicDeletion",
+        "type": "object"
+      },
+      "TopicOrigin": {
+        "additionalProperties": false,
+        "description": "Where a forked research came from, so it can be traced back.",
+        "properties": {
+          "topic_id": {
+            "title": "Topic Id",
+            "type": "string"
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Id"
+          },
+          "turn_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Index"
+          },
+          "version_id": {
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic_id",
+          "version_id"
+        ],
+        "title": "TopicOrigin",
+        "type": "object"
+      },
+      "TopicUpdate": {
+        "additionalProperties": false,
+        "description": "Rename (a blank or null title restores the question as the name) and pin.",
+        "properties": {
+          "pinned": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "TopicUpdate",
         "type": "object"
       },
       "TurnAttribution": {
@@ -4889,6 +5020,60 @@
       }
     },
     "/v2/research/topics/{topic_id}": {
+      "delete": {
+        "description": "Soft delete: hidden at once, restorable until purge_after, purged afterwards.",
+        "operationId": "delete_research_topic_v2_research_topics__topic_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicDeletion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Research Topic"
+      },
       "get": {
         "operationId": "get_research_topic_v2_research_topics__topic_id__get",
         "parameters": [
@@ -4941,6 +5126,70 @@
           }
         },
         "summary": "Get Research Topic"
+      },
+      "patch": {
+        "description": "Rename or pin. The title is separate from the research question, which stays as asked.",
+        "operationId": "update_research_topic_v2_research_topics__topic_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TopicUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchTopic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Research Topic"
       }
     },
     "/v2/research/topics/{topic_id}/calculations": {
@@ -5201,6 +5450,61 @@
           }
         },
         "summary": "Confirm Research Table"
+      }
+    },
+    "/v2/research/topics/{topic_id}/restore": {
+      "post": {
+        "operationId": "restore_research_topic_v2_research_topics__topic_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchTopic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore Research Topic"
       }
     },
     "/v2/research/topics/{topic_id}/runs": {

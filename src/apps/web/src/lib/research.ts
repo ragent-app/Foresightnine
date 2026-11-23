@@ -601,6 +601,8 @@ export function readCoverage(
 }
 
 export function topicTitle(topic: ResearchTopic): string {
+  const named = topic.title?.trim();
+  if (named) return named;
   const question = topic.request.question?.trim();
   if (question) return question;
   for (let i = topic.versions.length - 1; i >= 0; i -= 1) {
