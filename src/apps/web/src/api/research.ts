@@ -43,6 +43,11 @@ export function deleteTopic(topicId: string): Promise<ResearchV2.TopicDeletion> 
   return apiRequest<ResearchV2.TopicDeletion>(topicPath(topicId), { method: "DELETE" });
 }
 
+/** Appends a server-made copy of an earlier version (for example a replaced answer) as the newest version. */
+export function restoreVersion(topicId: string, versionId: string, parentVersionId: string): Promise<ResearchV2.ResearchTopic> {
+  return apiRequest<ResearchV2.ResearchTopic>(`${versionPath(topicId, versionId)}/restore`, { method: "POST", body: { parent_version_id: parentVersionId } });
+}
+
 export function restoreTopic(topicId: string): Promise<ResearchV2.ResearchTopic> {
   return apiRequest<ResearchV2.ResearchTopic>(`${topicPath(topicId)}/restore`, { method: "POST" });
 }

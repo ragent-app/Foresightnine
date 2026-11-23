@@ -106,6 +106,33 @@ export function AskBubble({ text, focusLabel, tools }: { text: string; focusLabe
   );
 }
 
+/** Edit-and-resend in place of the bubble: Ctrl/⌘+Enter sends, Esc cancels. */
+export function AskEditor({ initial, onDone }: { initial: string; onDone: (question: string | null) => void }) {
+  const [value, setValue] = useState(initial);
+  const ready = value.trim().length > 0;
+  return (
+    <div className="ask-wrap ask-editing">
+      <div className="ask-edit">
+        <textarea
+          aria-label="编辑问题"
+          value={value}
+          autoFocus
+          rows={3}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") { event.preventDefault(); onDone(null); }
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing && ready) { event.preventDefault(); onDone(value.trim()); }
+          }}
+        />
+        <div className="actions-row">
+          <button type="button" className="btn plain" onClick={() => onDone(null)}>取消</button>
+          <button type="button" className="btn primary" disabled={!ready} onClick={() => onDone(value.trim())}>发送</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Extra answer actions supplied by the page (regenerate, fork); copying is always available. */
 export interface AnswerTools {
   primary?: ReactNode;
@@ -427,6 +454,11 @@ export function AnswerBlock({ turn, actions, tools }: { turn: ResearchV2.Researc
             <Icon name="chev" size={14} />
           </button>
         ))}
+        {turn.replaces_turn_id ? (
+          <button type="button" className="foot-btn" title="上一次的回答保留在版本历史中" onClick={() => view.openPanel({ kind: "review" })}>
+            重新生成的回答
+          </button>
+        ) : null}
         <span className="grow" />
         <div className="answer-tools" role="group" aria-label="回答操作">
           {tools?.primary}
@@ -458,7 +490,10 @@ export function AnswerBlock({ turn, actions, tools }: { turn: ResearchV2.Researc
   );
 }
 
-export function TurnView({ turn, actions, first = false }: { turn: ResearchV2.ResearchTurn; actions: TurnActions | null; first?: boolean }) {
+export function TurnView({ turn, actions, first = false, tools, askTools, editing = false, onEditDone }: {
+  turn: ResearchV2.ResearchTurn; actions: TurnActions | null; first?: boolean;
+  tools?: AnswerTools | undefined; askTools?: ReactNode; editing?: boolean; onEditDone?: (question: string | null) => void;
+}) {
   const view = useTopicView();
   const number = displayTurnNumber(turn);
   const focus = turn.focus_citation;
@@ -472,8 +507,12 @@ export function TurnView({ turn, actions, first = false }: { turn: ResearchV2.Re
   return (
     <section className={first ? "turn turn-first" : "turn"} aria-label={`第 ${number} 轮`}>
       {!first ? <TurnStamp number={number} iso={turn.started_at} /> : null}
-      {!first || focusLabel ? <AskBubble text={turn.question} focusLabel={focusLabel} /> : null}
-      <AnswerBlock turn={turn} actions={actions} />
+      {editing && onEditDone ? (
+        <AskEditor initial={turn.question} onDone={onEditDone} />
+      ) : !first || focusLabel ? (
+        <AskBubble text={turn.question} focusLabel={focusLabel} tools={askTools} />
+      ) : null}
+      <AnswerBlock turn={turn} actions={actions} tools={tools} />
     </section>
   );
 }
@@ -504,15 +543,17 @@ export function InterruptedTurn({ number, startedAt, question, status, actions, 
  * The only place a run's state shows while it works: one line (status, what has been found so far,
  * elapsed time) above the live timeline. Stopping lives in the composer's send button.
  */
-export function LiveTurn({ number, startedAt, question, live = null, sectionRef, onDraftGrow, continuing = null, first = false }: {
+export function LiveTurn({ number, startedAt, question, live = null, sectionRef, onDraftGrow, continuing = null, first = false, editedQuestion = null }: {
   number: number;
   startedAt: string;
   question: string;
   live?: LiveRun | null;
   sectionRef?: Ref<HTMLElement>;
   onDraftGrow?: (() => void) | undefined;
-  continuing?: "continue" | "deliver" | null | undefined;
+  continuing?: "continue" | "deliver" | "regenerate" | null | undefined;
   first?: boolean;
+  /** For edit-and-resend: the edited question, shown since it differs from the answer being replaced. */
+  editedQuestion?: string | null;
 }) {
   const view = useTopicView();
   const now = useNow(true);
@@ -527,8 +568,10 @@ export function LiveTurn({ number, startedAt, question, live = null, sectionRef,
   const events = live?.events ?? [];
   const current = progress?.current ?? null;
   const hasTimeline = events.length > 0 || current !== null;
-  const isContinue = continuing === "continue" || continuing === "deliver";
-  const statusTitle = continuing === "deliver"
+  const isContinue = continuing === "continue" || continuing === "deliver" || continuing === "regenerate";
+  const statusTitle = continuing === "regenerate"
+    ? (isPending ? "排队中 · 重新生成" : "正在重新生成")
+    : continuing === "deliver"
     ? (isPending ? "排队中 · 交付已有成果" : "正在交付已有成果")
     : continuing === "continue"
       ? (isPending ? "排队中 · 继续研究" : "正在继续研究")
@@ -538,11 +581,12 @@ export function LiveTurn({ number, startedAt, question, live = null, sectionRef,
     <section
       ref={sectionRef}
       className={isContinue ? "turn turn-continuation" : first ? "turn turn-first" : "turn"}
-      aria-label={isContinue ? `第 ${number} 轮继续研究` : `第 ${number} 轮`}
+      aria-label={continuing === "regenerate" ? `第 ${number} 轮重新生成` : isContinue ? `第 ${number} 轮继续研究` : `第 ${number} 轮`}
       aria-busy="true"
     >
       {!isContinue && !first ? <TurnStamp number={number} iso={startedAt} /> : null}
       {!isContinue && !first && question ? <AskBubble text={question} /> : null}
+      {continuing === "regenerate" && editedQuestion ? <AskBubble text={editedQuestion} /> : null}
       <div className="answer live-turn">
         <div className="live-turn-head">
           <span className="dot running" aria-hidden="true" />

@@ -2531,6 +2531,11 @@
             "title": "Auto Fetch Official",
             "type": "boolean"
           },
+          "discard_review_edits": {
+            "default": false,
+            "title": "Discard Review Edits",
+            "type": "boolean"
+          },
           "discover_sources": {
             "anyOf": [
               {
@@ -2646,6 +2651,19 @@
               }
             ],
             "title": "Question Override"
+          },
+          "replace_turn_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replace Turn Id"
           },
           "selected_source_ids": {
             "anyOf": [
@@ -3035,6 +3053,17 @@
               }
             ],
             "title": "Reconciliation"
+          },
+          "replaces_turn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaces Turn Id"
           },
           "report": {
             "default": "",
@@ -3826,6 +3855,48 @@
         "title": "TopicDeletion",
         "type": "object"
       },
+      "TopicForkInput": {
+        "additionalProperties": false,
+        "description": "Start a new research from one version, up to and including one of its turns.",
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Id"
+          },
+          "version_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version_id"
+        ],
+        "title": "TopicForkInput",
+        "type": "object"
+      },
       "TopicOrigin": {
         "additionalProperties": false,
         "description": "Where a forked research came from, so it can be traced back.",
@@ -4101,6 +4172,23 @@
           "content"
         ],
         "title": "VersionInput",
+        "type": "object"
+      },
+      "VersionRestoreInput": {
+        "additionalProperties": false,
+        "description": "Make an earlier version current again by appending a server-made copy of it.",
+        "properties": {
+          "parent_version_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Parent Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent_version_id"
+        ],
+        "title": "VersionRestoreInput",
         "type": "object"
       }
     }
@@ -5452,6 +5540,72 @@
         "summary": "Confirm Research Table"
       }
     },
+    "/v2/research/topics/{topic_id}/fork": {
+      "post": {
+        "description": "A new research from one version up to a turn; it records where it came from.",
+        "operationId": "fork_research_topic_v2_research_topics__topic_id__fork_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TopicForkInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchTopic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fork Research Topic"
+      }
+    },
     "/v2/research/topics/{topic_id}/restore": {
       "post": {
         "operationId": "restore_research_topic_v2_research_topics__topic_id__restore_post",
@@ -6381,6 +6535,81 @@
           }
         },
         "summary": "Export Research Metadata"
+      }
+    },
+    "/v2/research/topics/{topic_id}/versions/{version_id}/restore": {
+      "post": {
+        "description": "Append a copy of an earlier version (for example a replaced answer) as the newest version.\n\nThe server copies the stored content, so verification records survive; history only grows.",
+        "operationId": "restore_research_version_v2_research_topics__topic_id__versions__version_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionRestoreInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchTopic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore Research Version"
       }
     },
     "/v2/research/topics/{topic_id}/versions/{version_id}/sources": {

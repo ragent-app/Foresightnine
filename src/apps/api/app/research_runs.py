@@ -47,6 +47,11 @@ class ResearchRunRequest(BaseModel):
     max_elapsed_seconds: int | None = Field(default=None, ge=0, strict=True)
     max_total_tokens: int | None = Field(default=None, ge=0, strict=True)
     max_cost_usd: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
+    # Regenerate or edit-and-resend the latest turn: the run starts from the version before that
+    # turn and its result is appended as the newest version, so the replaced answer stays in history.
+    replace_turn_id: str | None = Field(default=None, min_length=1, max_length=100)
+    # Required when review edits made after the replaced turn would not carry over.
+    discard_review_edits: bool = Field(default=False, strict=True)
 
     @field_validator("selected_source_ids")
     @classmethod

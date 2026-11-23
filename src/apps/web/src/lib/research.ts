@@ -600,6 +600,28 @@ export function readCoverage(
   return { ranges, readCharacters, totalCharacters };
 }
 
+/**
+ * Whether a user-made version after ``baseVersionId`` changed content. Regenerating a turn starts
+ * from that base, so such review edits would not carry over (the server enforces the same rule).
+ */
+export function reviewEditsAfter(versions: readonly ResearchV2.ResearchVersion[], baseVersionId: string): boolean {
+  const start = versions.findIndex((version) => version.version_id === baseVersionId);
+  if (start < 0) return false;
+  for (let index = start + 1; index < versions.length; index += 1) {
+    const version = versions[index]!;
+    if (version.created_by === "user" && JSON.stringify(version.content) !== JSON.stringify(versions[index - 1]!.content)) return true;
+  }
+  return false;
+}
+
+/** The newest version that still holds the turn a regenerated turn replaced. */
+export function versionWithTurn(versions: readonly ResearchV2.ResearchVersion[], turnId: string): ResearchV2.ResearchVersion | null {
+  for (let index = versions.length - 1; index >= 0; index -= 1) {
+    if (versions[index]!.content.turns?.some((turn) => turn.turn_id === turnId)) return versions[index]!;
+  }
+  return null;
+}
+
 export function topicTitle(topic: ResearchTopic): string {
   const named = topic.title?.trim();
   if (named) return named;

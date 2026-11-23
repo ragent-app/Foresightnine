@@ -248,6 +248,7 @@ export const RECOVERY_REASON_LABEL: Readonly<Record<string, string>> = {
   no_checkpoint: "没有可恢复的检查点",
   changed: "研究、资料或模型配置已变化",
   unknown_external: "外部请求结果未知",
+  replaced_turn_run: "重新生成没有完成，原来的回答保持不变",
   already_used: "这个检查点已经用过",
   budget_exhausted: "预算已用完",
   repeated_truncation: "连续多次达到模型输出或上下文长度上限，无法再通过“继续研究”恢复；建议缩小问题范围重新提问，或先查看、导出已收集的部分事实",

@@ -209,6 +209,7 @@ def build_research_turn(
         question=turn_meta["question"],
         question_origin=turn_meta["question_origin"],
         focus_citation=turn_meta.get("focus_citation"),
+        replaces_turn_id=turn_meta.get("replaces_turn_id"),
         operation_ids=[*turn_meta["operation_ids"], operation_id],
         parent_version_id=turn_meta["parent_version_id"],
         started_at=started_at,

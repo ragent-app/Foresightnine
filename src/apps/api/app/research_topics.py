@@ -308,6 +308,9 @@ class ResearchTurn(BaseModel):
     question: str
     question_origin: Literal["user", "document_overview_default"]
     focus_citation: TurnFocusCitation | None = None
+    # Set when this turn regenerated (or edited and resent) an earlier answer to the same position;
+    # the replaced turn remains in the version that preceded this one.
+    replaces_turn_id: str | None = None
     operation_ids: list[str] = Field(min_length=1)
     parent_version_id: str
     started_at: datetime
@@ -363,6 +366,12 @@ class VersionInput(BaseModel):
     content: ResearchContent
     review: Literal["draft", "confirmed", "reservation"] = "draft"
     note: str = Field(default="", max_length=10000)
+
+
+class VersionRestoreInput(BaseModel):
+    """Make an earlier version current again by appending a server-made copy of it."""
+    model_config = ConfigDict(extra="forbid")
+    parent_version_id: str = Field(min_length=1, max_length=100)
 
 
 class AttachSourcesInput(BaseModel):
@@ -435,6 +444,41 @@ class TopicUpdate(BaseModel):
         if not self.model_fields_set & {"title", "pinned"}:
             raise ValueError("Provide a title or a pinned state.")
         return self
+
+
+class TopicForkInput(BaseModel):
+    """Start a new research from one version, up to and including one of its turns."""
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    version_id: str = Field(min_length=1, max_length=100)
+    turn_id: str | None = Field(default=None, min_length=1, max_length=100)
+    title: str | None = Field(default=None, max_length=200)
+
+
+def truncate_content(content: ResearchContent, upto_turn_id: str | None) -> ResearchContent:
+    """Content as it stood after ``upto_turn_id``: that turn and earlier ones with their records.
+
+    Up to the last turn this is a full copy. Up to an earlier turn, user-authored records and the
+    latest-turn-only lists (leads, open gaps, the user's summary) are left out, since they may
+    concern later turns; the open gaps become that turn's own.
+    """
+    turn_ids = [turn.turn_id for turn in content.turns]
+    if upto_turn_id is None or (turn_ids and upto_turn_id == turn_ids[-1]):
+        return content.model_copy(deep=True)
+    if upto_turn_id not in turn_ids:
+        raise ValueError("Turn not found in this version.")
+    kept_turns = content.turns[:turn_ids.index(upto_turn_id) + 1]
+    kept = {turn.turn_id for turn in kept_turns}
+    belongs = lambda item: getattr(item, "turn_id", None) in kept  # noqa: E731
+    return ResearchContent(
+        sources=deepcopy(content.sources),
+        facts=[item.model_copy(deep=True) for item in content.facts if belongs(item)],
+        calculations=[item.model_copy(deep=True) for item in content.calculations if belongs(item)],
+        claims=[item.model_copy(deep=True) for item in content.claims if belongs(item)],
+        charts=[item.model_copy(deep=True) for item in content.charts if belongs(item)],
+        tables=[item.model_copy(deep=True) for item in content.tables if belongs(item)],
+        gaps=[gap.model_copy(deep=True) for gap in kept_turns[-1].gaps],
+        turns=[turn.model_copy(deep=True) for turn in kept_turns],
+    )
 
 
 class TopicDeletion(BaseModel):
@@ -584,6 +628,45 @@ class ResearchTopics:
         self.repository.delete(topic_id)
         if self.meta_repository is not None:
             self.meta_repository.delete(topic_id)
+
+    def fork(self, owner: str, topic_id: str, request: TopicForkInput, *, now: datetime | None = None) -> ResearchTopic:
+        """A new topic holding the chosen content, one version per kept turn.
+
+        Each copied turn's ``parent_version_id`` points at the new topic's version before it, so the
+        fork's latest answer can itself be regenerated. Records are copied by the server, so their
+        verification data survives; sources are shared (same account), not duplicated.
+        """
+        source_topic = self.get(owner, topic_id)
+        version = next((item for item in source_topic.versions if item.version_id == request.version_id), None)
+        if version is None:
+            raise TopicNotFound()
+        content = truncate_content(version.content, request.turn_id)
+        created = now or datetime.now(timezone.utc)
+        new_id = f"topic_{uuid4().hex}"
+        source_ids = list(dict.fromkeys([*source_topic.request.source_ids, *version.source_ids]))
+        # ids[k] holds turns[0..k-1]; turn j was asked on the version holding the turns before it, ids[j].
+        ids = [f"version_{uuid4().hex}" for _ in range(len(content.turns) + 1)]
+        versions = [ResearchVersion(version_id=ids[0], created_at=created, content=ResearchContent(), review="draft",
+                                    created_by="user", source_ids=list(dict.fromkeys(source_topic.request.source_ids)))]
+        name = source_topic.title or source_topic.request.question or "研究"
+        for k, turn in enumerate(content.turns, start=1):
+            step = content if k == len(content.turns) else truncate_content(content, turn.turn_id)
+            step = step.model_copy(deep=True)
+            for j, copied in enumerate(step.turns):
+                copied.parent_version_id = ids[j]
+            versions.append(ResearchVersion(
+                version_id=ids[k], parent_version_id=ids[k - 1], created_at=created, content=step, review="draft",
+                created_by="agent", source_ids=source_ids,
+                note=f"分叉自《{name[:80]}》第 {turn.index} 轮" if k == len(content.turns) else ""))
+        topic = ResearchTopic(topic_id=new_id, owner_id=owner, request=source_topic.request.model_copy(deep=True),
+                              created_at=created, updated_at=created, versions=versions)
+        self.repository.put(new_id, topic)
+        origin = TopicOrigin(topic_id=topic_id, version_id=version.version_id,
+                             turn_id=content.turns[-1].turn_id if content.turns else None,
+                             turn_index=content.turns[-1].index if content.turns else None)
+        title = request.title or f"{name[:180]}（分支）"
+        self._put_meta(TopicMeta(topic_id=new_id, owner_id=owner, title=title, forked_from=origin))
+        return self.get(owner, new_id)
 
     def delete_owner(self, owner: str) -> None:
         for _, topic in list(owner_items(self.repository, owner)):

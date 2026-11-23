@@ -3,12 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useBlocker, useParams } from "react-router-dom";
 import { ApiError } from "../api/http";
 import { useActiveRun, useAttachSources, useCancelRun, useContinueTurn, useRecoverTurn, useRecoveryStatus, useReextractPdf, useRunProgress, useSaveVersion, useStartTurn, useTopic, useTopicActions, useVersionSources } from "../api/queries";
-import { exportFull, exportMetadata, isActiveStatus, latestVersion } from "../api/research";
+import { exportFull, exportMetadata, isActiveStatus, latestVersion, restoreVersion } from "../api/research";
 import type { AvailableVersionSource, CreatedSource } from "../api/types";
 import { gapText } from "../lib/copy";
 import { saveJson } from "../lib/download";
 import { displayTurnNumber, formatDateTimeWithOffset } from "../lib/format";
-import { buildCitationIndex, claimRole, suggestionsFor, topicTitle, type AnswerTab } from "../lib/research";
+import { buildCitationIndex, claimRole, reviewEditsAfter, suggestionsFor, topicTitle, versionWithTurn, type AnswerTab } from "../lib/research";
 import { buildVersionInput, draftProblem, isDirty, type ReviewDraft } from "../lib/review";
 import { ineligibility, INELIGIBLE_TEXT } from "../lib/sources";
 import { useLayout } from "../ui/AppLayout";
@@ -25,7 +25,10 @@ import { optionTokens } from "./research/optionTokens";
 import { ResearchSettingsPanel } from "./research/ResearchSettingsPanel";
 import { CitationSheet } from "./topic/Citation";
 import { TopicContext, type FocusCitation, type LiveRun, type PanelState, type TopicView } from "./topic/context";
-import { InterruptedTurn, LiveTurn, TurnView, type TurnActions } from "./topic/Conversation";
+import { InterruptedTurn, LiveTurn, TurnView, type AnswerTools, type TurnActions } from "./topic/Conversation";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../api/queries";
+import { showToast } from "../ui/toast";
 import { LiveCapsule } from "./topic/LiveBar";
 import { ReaderPanel } from "./topic/ReaderPanel";
 import { RecordPanel } from "./topic/RecordPanel";
@@ -66,7 +69,7 @@ interface PendingAsk {
 }
 
 interface PendingContinue {
-  mode: "continue" | "deliver";
+  mode: "continue" | "deliver" | "regenerate";
   targetTurnId: string | null;
   operationId: string | null;
   question: string;
@@ -100,6 +103,10 @@ export function TopicPage() {
   const [pendingContinue, setPendingContinue] = useState<PendingContinue | null>(null);
   const [awayFromLive, setAwayFromLive] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
+  const [regenPrompt, setRegenPrompt] = useState<{ turn: ResearchV2.ResearchTurn; question: string | null } | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const queryClient = useQueryClient();
   const topicActions = useTopicActions();
   const [evidence, setEvidenceState] = useState<ReadonlyMap<string, boolean>>(new Map());
   const setEvidence = useCallback((turnId: string, open: boolean) => {
@@ -391,6 +398,53 @@ export function TopicPage() {
     );
   };
 
+  /**
+   * Regenerate the latest answer, or resend it with an edited question. The run starts from the
+   * version before that turn; the replaced answer stays in history and stays visible until the new
+   * one is saved. Review edits made after the turn would not carry over, so they need confirmation.
+   */
+  const regenerate = (turn: ResearchV2.ResearchTurn, question: string | null, discardConfirmed = false) => {
+    if (!version || !topic || locked || !optionsValid(options)) return;
+    if (dirty) { setNotice({ tone: "error", text: "先保存或放弃复核修改，再重新生成。" }); return; }
+    const edits = reviewEditsAfter(topic.versions, turn.parent_version_id);
+    if (edits && !discardConfirmed) { setRegenPrompt({ turn, question }); return; }
+    const shown = question ?? turn.question;
+    setAskedOp(null);
+    setPendingContinue({ mode: "regenerate", targetTurnId: turn.turn_id, operationId: null, question: shown });
+    startTurn.mutate({
+      parent_version_id: version.version_id,
+      replace_turn_id: turn.turn_id,
+      ...(question !== null ? { question_override: question } : {}),
+      ...(edits ? { discard_review_edits: true } : {}),
+      ...runRequestFields(options),
+    }, {
+      onSuccess: (response) => {
+        setRegenPrompt(null);
+        setPendingContinue({ mode: "regenerate", targetTurnId: turn.turn_id, operationId: response.operation.operation_id, question: shown });
+        followLiveOutput();
+      },
+      onError: (error) => {
+        setPendingContinue(null);
+        // The server's own check found edits the client did not: ask, as above.
+        if (!edits && error instanceof ApiError && error.status === 409 && /confirm/.test(error.message)) setRegenPrompt({ turn, question });
+      },
+    });
+  };
+
+  const restorePrevious = (turn: ResearchV2.ResearchTurn) => {
+    if (!version || !topic || !turn.replaces_turn_id || locked) return;
+    const previous = versionWithTurn(topic.versions, turn.replaces_turn_id);
+    if (!previous) return;
+    setRestoring(true);
+    restoreVersion(topicId, previous.version_id, version.version_id)
+      .then((updated) => {
+        queryClient.setQueryData(queryKeys.topic(topicId), updated);
+        showToast("已恢复上一次的回答");
+      })
+      .catch((error) => setNotice({ tone: "error", text: `恢复失败：${describeError(error)}` }))
+      .finally(() => setRestoring(false));
+  };
+
   const exportVersion = async (kind: "full" | "metadata") => {
     if (!version) return;
     try {
@@ -453,6 +507,33 @@ export function TopicPage() {
   });
 
   const live = view?.live ?? null;
+  const canModifyLast = Boolean(view) && !locked && !live && !orphanRun && !pendingAsk && !startTurn.isPending;
+  const latestTurnControls = (turn: ResearchV2.ResearchTurn) => {
+    const tools: AnswerTools = {
+      primary: (
+        <button type="button" className="icon-btn tool" aria-label="重新生成" title="重新生成这一轮的回答" onClick={() => regenerate(turn, null)}>
+          <Icon name="regenerate" size={15} />
+        </button>
+      ),
+      menu: [
+        { key: "edit", label: "编辑问题并重发", icon: "pen", onSelect: () => setEditingTurnId(turn.turn_id) },
+        ...(turn.replaces_turn_id ? [{ key: "restore", label: restoring ? "正在恢复…" : "恢复上一次的回答", icon: "undo" as const, disabled: restoring, onSelect: () => restorePrevious(turn) }] : []),
+      ],
+    };
+    return {
+      tools,
+      askTools: (
+        <button type="button" className="icon-btn tool" aria-label="编辑问题" title="编辑问题并重发" onClick={() => setEditingTurnId(turn.turn_id)}>
+          <Icon name="pen" size={15} />
+        </button>
+      ),
+      editing: editingTurnId === turn.turn_id,
+      onEditDone: (question: string | null) => {
+        setEditingTurnId(null);
+        if (question !== null) regenerate(turn, question === turn.question ? null : question);
+      },
+    };
+  };
   const liveIndex = live?.progress?.turn.index ?? 0;
   const liveCommitted = live !== null && turns.some((turn) => turn.operation_ids.includes(live.operation.operation_id));
   const liveTerminal = live?.progress != null && !isActiveStatus(live.progress.operation_status);
@@ -636,6 +717,7 @@ export function TopicPage() {
                   key={turn.turn_id}
                   turn={turn}
                   first={index === 0 && turn.question.trim() === title.trim()}
+                  {...(index === turns.length - 1 && canModifyLast ? latestTurnControls(turn) : {})}
                   actions={index === turns.length - 1 && turn.status === "partial" && !orphanRun && !activeRun ? turnActions(turn.question, turn.reason !== "submitted", turn.turn_id) : null}
                 />
               ))}
@@ -659,6 +741,7 @@ export function TopicPage() {
                   live={live}
                   onDraftGrow={onDraftGrow}
                   continuing={continuingMode}
+                  editedQuestion={continuingMode === "regenerate" && pendingContinue && lastTurn && pendingContinue.question !== lastTurn.question ? pendingContinue.question : null}
                   first={turns.length === 0 && liveQuestion.trim() === title.trim()}
                 />
               ) : !live && pendingAsk ? (
@@ -729,6 +812,15 @@ export function TopicPage() {
             <ResearchSettingsPanel mode="topic" options={options} asOfIso={topic!.request.as_of ?? null} scope={topic!.request.scope ?? ""} sources={[...sources.values()]} onApply={setOptions} onClose={() => setPanel(null)} />
           ) : null}
           {panel?.kind === "review" ? <ReviewPanel onClose={() => setPanel(null)} /> : null}
+          {regenPrompt ? (
+            <ConfirmDialog
+              title="重新生成会放弃之后的复核修改"
+              description="这一轮回答之后，你在复核中做过修改。重新生成从这一轮之前的版本开始，这些修改不会带到新的回答里；原来的回答和修改仍保留在版本历史中。"
+              onCancel={() => setRegenPrompt(null)}
+              actions={[{ key: "regen", label: startTurn.isPending ? "正在提交…" : "放弃修改并重新生成", tone: "danger", disabled: startTurn.isPending,
+                onSelect: () => regenPrompt && regenerate(regenPrompt.turn, regenPrompt.question, true) }]}
+            />
+          ) : null}
           {sendPrompt ? (
             <ConfirmDialog
               title="发送新问题前，先保存复核修改吗？"

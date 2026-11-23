@@ -2011,6 +2011,91 @@ describe("TopicPage", () => {
     });
   });
 
+  describe("research actions: regenerate, edit and resend, restore", () => {
+    function runBodies(fetchMock: ReturnType<typeof vi.fn>) {
+      return fetchMock.mock.calls
+        .filter(([input, init]) => String(input).endsWith("/v2/research/topics/t1/runs") && (init as RequestInit | undefined)?.method === "POST")
+        .map(([, init]) => JSON.parse(String((init as RequestInit).body)) as Record<string, unknown>);
+    }
+    function api(topic: ResearchV2.ResearchTopic, extra?: (url: URL, init: RequestInit) => Response | undefined) {
+      return mockApi((url, init) => {
+        const handled = extra?.(url, init);
+        if (handled) return handled;
+        if (url.pathname === "/v2/research/topics/t1/runs" && init.method === "POST") return jsonResponse(operation("op_9", "pending"), { status: 202 });
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topic);
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+        return undefined;
+      });
+    }
+
+    it("regenerates the latest answer from the version before it", async () => {
+      const fetchMock = api(topicWith([turn(1)]));
+      renderTopic();
+      const region = await screen.findByRole("region", { name: "第 1 轮" });
+      fireEvent.click(within(region).getByRole("button", { name: "重新生成" }));
+      await waitFor(() => expect(runBodies(fetchMock)).toHaveLength(1));
+      const body = runBodies(fetchMock)[0]!;
+      expect(body.replace_turn_id).toBe("turn_1");
+      expect(body.parent_version_id).toBe("v2");
+      expect("question_override" in body).toBe(false);
+      expect("discard_review_edits" in body).toBe(false);
+    });
+
+    it("edits the latest question in place and resends it", async () => {
+      const fetchMock = api(topicWith([turn(1)]));
+      renderTopic();
+      const region = await screen.findByRole("region", { name: "第 1 轮" });
+      fireEvent.click(within(region).getByRole("button", { name: "编辑问题" }));
+      const editor = within(region).getByRole("textbox", { name: "编辑问题" });
+      fireEvent.change(editor, { target: { value: "改过的问题" } });
+      fireEvent.click(within(region).getByRole("button", { name: "发送" }));
+      await waitFor(() => expect(runBodies(fetchMock)).toHaveLength(1));
+      expect(runBodies(fetchMock)[0]).toMatchObject({ replace_turn_id: "turn_1", question_override: "改过的问题" });
+    });
+
+    it("asks before discarding review edits made after the answer", async () => {
+      const base = topicWith([turn(1)]);
+      const edited: ResearchV2.ResearchTopic = {
+        ...base,
+        versions: [...base.versions, { version_id: "v3", parent_version_id: "v2", created_at: NOW, created_by: "user", review: "draft",
+          content: { ...base.versions[1]!.content, summary: "我的判断" } }],
+      };
+      const fetchMock = api(edited);
+      renderTopic();
+      const region = await screen.findByRole("region", { name: "第 1 轮" });
+      fireEvent.click(within(region).getByRole("button", { name: "重新生成" }));
+      const dialog = await screen.findByRole("alertdialog");
+      expect(runBodies(fetchMock)).toHaveLength(0);
+      fireEvent.click(within(dialog).getByRole("button", { name: "放弃修改并重新生成" }));
+      await waitFor(() => expect(runBodies(fetchMock)).toHaveLength(1));
+      expect(runBodies(fetchMock)[0]).toMatchObject({ replace_turn_id: "turn_1", discard_review_edits: true, parent_version_id: "v3" });
+    });
+
+    it("restores the answer a regeneration replaced", async () => {
+      const old = turn(1);
+      const regenerated = { ...turn(1, { report: "新回答。" }), turn_id: "turn_1b", replaces_turn_id: "turn_1", parent_version_id: "v1" };
+      const topic: ResearchV2.ResearchTopic = {
+        ...topicWith([old]),
+        versions: [
+          ...topicWith([old]).versions,
+          { version_id: "v3", parent_version_id: "v2", created_at: NOW, created_by: "agent", review: "draft", content: { turns: [regenerated], claims: [], sources: [] } },
+        ],
+      };
+      const fetchMock = api(topic, (url) => (url.pathname === "/v2/research/topics/t1/versions/v2/restore" ? jsonResponse(topicWith([old]), { status: 201 }) : undefined));
+      renderTopic();
+      const region = await screen.findByRole("region", { name: "第 1 轮" });
+      expect(within(region).getByRole("button", { name: "重新生成的回答" })).toBeTruthy();
+      fireEvent.click(within(region).getByRole("button", { name: "更多回答操作" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "恢复上一次的回答" }));
+      await waitFor(() => {
+        const call = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/versions/v2/restore"));
+        expect(call).toBeTruthy();
+        expect(JSON.parse(String((call![1] as RequestInit).body))).toEqual({ parent_version_id: "v3" });
+      });
+      expect(await screen.findByText("已恢复上一次的回答")).toBeTruthy();
+    });
+  });
+
   describe("research actions: rename, pin, delete", () => {
     function lifecycleApi() {
       let topic = topicWith([turn(1)]);

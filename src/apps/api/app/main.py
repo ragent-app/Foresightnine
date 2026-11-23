@@ -101,7 +101,8 @@ from .services import (
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, _drop_legacy_null_fields, build_repository
 from .research_topics import (AttachSourcesInput, ResearchCalculation, ResearchFact, ResearchFullExport, ResearchInput, ResearchMetadataExport,
-    ResearchTopic, ResearchTopics, ResearchTurn, TopicDeletion, TopicMeta, TopicNotFound, TopicUpdate, TopicVersionConflict, VersionInput)
+    ResearchTopic, ResearchTopics, ResearchTurn, TopicDeletion, TopicForkInput, TopicMeta, TopicNotFound, TopicUpdate, TopicVersionConflict,
+    VersionInput, VersionRestoreInput)
 from .research_clock import build_research_clock
 from .research_progress import build_progress
 from .research_live_stream import ResearchLiveBroker, format_sse_frame, parse_last_event_id
@@ -127,7 +128,7 @@ from .research_recovery import (RecoveryJournal, RUNTIME_CHECKPOINT_SCHEMA_VERSI
     runtime_truncation_loop_blocked, _REPEATED_TRUNCATION_MESSAGE,
     runtime_timeout_loop_blocked, _REPEATED_TIMEOUT_MESSAGE,
     runtime_interruption_no_progress_blocked, _REPEATED_INTERRUPTION_MESSAGE)
-from .research_topics import ResearchContent
+from .research_topics import ResearchContent, ResearchVersion
 from .research_fetch import (
     HTML_EXTRACTION_DISCLOSURE,
     MAX_FETCH_BYTES,
@@ -2041,6 +2042,36 @@ def _calculation_identity(calculation: ResearchCalculation) -> dict:
     return calculation.model_dump(mode="json", exclude=_CALCULATION_COMPUTED_FIELDS)
 
 
+@app.post("/v2/research/topics/{topic_id}/versions/{version_id}/restore", response_model=ResearchTopic, status_code=201, include_in_schema=False)
+def restore_research_version(topic_id: str, version_id: str, request: VersionRestoreInput,
+                             authorization: str | None = Header(default=None)) -> ResearchTopic:
+    """Append a copy of an earlier version (for example a replaced answer) as the newest version.
+
+    The server copies the stored content, so verification records survive; history only grows.
+    """
+    account = _authenticated_account(authorization)
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+    source = next((item for item in topic.versions if item.version_id == version_id), None)
+    if source is None:
+        raise ApiProblem(404, "not_found", "Research version not found.")
+    if _topic_has_active_run(account.account_id, topic_id):
+        raise ApiProblem(409, "lifecycle_conflict", "Stop the running research before restoring a version.")
+    head = topic.versions[-1]
+    if head.version_id != request.parent_version_id:
+        raise ApiProblem(409, "lifecycle_conflict", "Research changed; reload before restoring.")
+    number = topic.versions.index(source) + 1
+    try:
+        updated = research_topics.add_version(account.account_id, topic_id, VersionInput(
+            parent_version_id=head.version_id, content=source.content, review="draft", note=f"恢复为 v{number} 的内容"),
+            created_by="user")
+    except TopicVersionConflict as error:
+        raise ApiProblem(409, "lifecycle_conflict", "Research changed; reload before restoring.") from error
+    return _visible_topic(updated)
+
+
 @app.post("/v2/research/topics/{topic_id}/versions", response_model=ResearchTopic, status_code=201, include_in_schema=False)
 def create_research_version(topic_id: str, request: VersionInput, authorization: str | None = Header(default=None)) -> ResearchTopic:
     account = _authenticated_account(authorization)
@@ -2964,6 +2995,27 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     parent_version = next((item for item in topic.versions if item.version_id == request.parent_version_id), None)
     if parent_version is None:
         raise ApiProblem(409, "lifecycle_conflict", "Research changed before the run was admitted.")
+    # Regenerate / edit-and-resend: the run reads the version before the replaced turn, while the
+    # newest version stays the concurrency anchor and receives the result as a new version.
+    rebase_base: ResearchVersion | None = None
+    if request.replace_turn_id is not None and continuation_input is None:
+        head = topic.versions[-1]
+        if head.version_id != request.parent_version_id:
+            raise ApiProblem(409, "lifecycle_conflict", "Research changed before the run was admitted.")
+        replaced = head.content.turns[-1] if head.content.turns else None
+        if replaced is None or replaced.turn_id != request.replace_turn_id:
+            raise ApiProblem(409, "lifecycle_conflict", "Only the latest answer can be regenerated.")
+        base_index = next((index for index, item in enumerate(topic.versions) if item.version_id == replaced.parent_version_id), None)
+        if base_index is None:
+            raise ApiProblem(409, "lifecycle_conflict", "The version before this answer is unavailable.")
+        if not request.discard_review_edits and _review_edits_after(topic.versions, base_index):
+            raise ApiProblem(409, "lifecycle_conflict", "Review edits made after this answer would not carry over; confirm to discard them.")
+        rebase_base = topic.versions[base_index]
+        parent_version = rebase_base
+        if request.question_override is None:
+            user_question = replaced.question
+            question_origin = replaced.question_origin
+            effective_question = replaced.question
     # A turn is one question plus its run. A continuation keeps the original turn;
     # a new turn needs a new question once the topic already has an answer.
     if continuation_input is not None:
@@ -2971,9 +3023,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         if not turn_meta:
             raise ApiProblem(409, 'lifecycle_conflict', 'The saved runtime inputs are unavailable.')
     else:
-        if request.question_override is None and parent_version.content.turns:
+        if request.question_override is None and parent_version.content.turns and rebase_base is None:
             raise ApiProblem(422, "invalid_request", "A follow-up question is required.")
         turn_meta = {'turn_id': 'turn-' + uuid4().hex, 'index': len(parent_version.content.turns) + 1,
+                     'replaces_turn_id': request.replace_turn_id if rebase_base is not None else None,
                      'question': effective_question, 'question_origin': question_origin,
                      'focus_citation': request.focus_citation.model_dump() if request.focus_citation else None,
                      'started_at': lifecycle_clock.now().isoformat(), 'parent_version_id': request.parent_version_id,
@@ -3309,7 +3362,11 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         if continuation_input is not None:
             save_runtime(admitted_continuation['runtime'])
         try:
-            parent_now = research_topics.get(account.account_id, topic_id).versions[-1]
+            latest_topic = research_topics.get(account.account_id, topic_id)
+            parent_now = latest_topic.versions[-1]
+            if rebase_base is not None:
+                # Build on the version before the replaced turn; the head check above still guards the append.
+                parent_now = next(item for item in latest_topic.versions if item.version_id == rebase_base.version_id)
             research_clock = build_research_clock(lifecycle_clock.now())
             outcome = run_research_agent(question=effective_question, sources=sources, model=provider,
                 context=context, discover=discover, acquire=acquire if retrieval_permitted else None,
@@ -3337,6 +3394,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 default_search_status=search_status,
                 official_fetch_status=official_fetch_status,
             )
+            if rebase_base is not None and result.content.turns[-1].reason != 'submitted':
+                # A regeneration only replaces the answer when the model submitted research; a
+                # provider failure, timeout or exhausted budget leaves the previous answer current.
+                raise ApiProblem(409, 'lifecycle_conflict', 'The regenerated answer did not finish; the previous answer is unchanged.')
             return result, topic_id
         except (ProviderFailure, ApiProblem):
             raise
@@ -3463,6 +3524,10 @@ def get_research_recovery_status(topic_id: str, operation_id: str, http_request:
         raise ApiProblem(404, 'not_found', 'Research topic not found.') from error
     inputs = RESEARCH_RUN_INPUTS.get(operation_id)
     operation = operations.store.get_operation(operation_id) or {}
+    if inputs and inputs.get('owner_id') == account.account_id and inputs.get('topic_id') == topic_id and _replaces_turn(inputs):
+        return {'can_continue': False, 'can_deliver': False,
+                'reason': 'running' if operation.get('status') in {'pending', 'running'} else 'replaced_turn_run',
+                'checkpoint': None, 'version_id': None}
     if inputs and inputs.get('owner_id') == account.account_id and inputs.get('topic_id') == topic_id and inputs.get('runtime_checkpoint'):
         checkpoint = inputs['runtime_checkpoint']
         pending = checkpoint.get('pending') or {}
@@ -3534,6 +3599,8 @@ def continue_research_run(topic_id: str, operation_id: str, response: Response,
     inputs = RESEARCH_RUN_INPUTS.get(operation_id)
     if not inputs or inputs.get('owner_id') != account.account_id or inputs.get('topic_id') != topic_id:
         raise ApiProblem(404, 'not_found', 'Research run inputs not found.')
+    if _replaces_turn(inputs):
+        raise ApiProblem(409, 'lifecycle_conflict', 'A regenerated answer cannot be continued; regenerate it again.')
     # Resolve an already admitted continuation using its original, server-owned
     # request before checking today's version. A new key still goes through CAS.
     continuation_id = inputs.get('runtime_continuation_operation_id')
@@ -3606,6 +3673,19 @@ def recover_research_run(topic_id: str, operation_id: str, response: Response,
     return continue_research_run(topic_id, operation_id, response, idempotency_key, http_request)
 
 
+def _review_edits_after(versions: list[ResearchVersion], base_index: int) -> bool:
+    """Whether a user-made version after ``base_index`` changed content (not just attached sources)."""
+    for previous, version in zip(versions[base_index:], versions[base_index + 1:]):
+        if version.created_by == "user" and version.content.model_dump(mode="json") != previous.content.model_dump(mode="json"):
+            return True
+    return False
+
+
+def _replaces_turn(inputs: Mapping[str, Any] | None) -> bool:
+    """Runs that regenerate an answer are not resumable: their partial state would land on the old head."""
+    return bool(((inputs or {}).get("turn") or {}).get("replaces_turn_id"))
+
+
 def _topic_has_active_run(account_id: str, topic_id: str) -> bool:
     endpoint = f"/v1/research/topics/{topic_id}/runs"
     for operation_id, session_id in operations.store.session_ids().items():
@@ -3639,6 +3719,18 @@ def delete_research_topic(topic_id: str, authorization: str | None = Header(defa
     if _topic_has_active_run(account.account_id, topic_id):
         raise ApiProblem(409, "lifecycle_conflict", "Stop the running research before deleting it.")
     return research_topics.soft_delete(account.account_id, topic_id)
+
+
+@app.post("/v2/research/topics/{topic_id}/fork", response_model=ResearchTopic, status_code=201, include_in_schema=False)
+def fork_research_topic(topic_id: str, request: TopicForkInput, authorization: str | None = Header(default=None)) -> ResearchTopic:
+    """A new research from one version up to a turn; it records where it came from."""
+    account = _authenticated_account(authorization)
+    try:
+        return _visible_topic(research_topics.fork(account.account_id, topic_id, request))
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic or version not found.") from error
+    except ValueError as error:
+        raise ApiProblem(422, "invalid_request", "The selected turn is not in this version.") from error
 
 
 @app.post("/v2/research/topics/{topic_id}/restore", response_model=ResearchTopic, include_in_schema=False)
@@ -5173,6 +5265,9 @@ def _deliver_cancelled_research(operation_id: str, owner_id: str) -> None:
 
     inputs = RESEARCH_RUN_INPUTS.get(operation_id) or {}
     checkpoint = inputs.get("runtime_checkpoint") or {}
+    # Stopping a regeneration keeps the answer it was meant to replace.
+    if _replaces_turn(inputs):
+        return
     if inputs.get("owner_id") != owner_id or not any(checkpoint.get(k) for k in (
         "facts", "calculations", "market_analyses", "draft_claims", "question_parts", "read_ranges"
     )):
