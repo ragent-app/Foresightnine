@@ -2,7 +2,7 @@
 import json
 from time import monotonic
 
-from .model_protocol import ModelResponse, ModelToolCall, ModelUsage, canonical_json_dumps
+from .model_protocol import ModelResponse, ModelToolCall, ModelUsage, canonical_json_dumps, render_user_instructions
 from .openai_compatible import _build_transport_failure, _default_transport, _llm_timeout_from_environment
 from .phase3 import ProviderFailure, ProviderPolicy
 from .provider_capabilities import research_profile, resolve_output_token_limit
@@ -96,6 +96,7 @@ class OpenAIResponsesProvider:
                           for result in exchange.results)
         if turn.tail_note:
             inputs.append({"role": "user", "content": turn.tail_note})
+        inputs.extend({"role": "user", "content": instruction} for instruction in render_user_instructions(turn))
         wire = {"model": self.settings.model, "instructions": turn.system, "input": inputs,
                 "store": False, "include": ["reasoning.encrypted_content"]}
         if turn.tools:

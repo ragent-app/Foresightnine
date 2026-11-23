@@ -100,6 +100,107 @@ def _extract_tail_anchor(tail_note: str) -> str:
     return tail_note[start:] if end == -1 else tail_note[start:end]
 
 
+def test_instruction_during_tool_batch_skips_remaining_calls_with_paired_results():
+    source = _source(text='Revenue was 100 USD in FY2025.')
+    recorder = NativeTurnRecorder([
+        _tool_response([
+            ('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'read'}, 'c1'),
+            ('search_source', {'source_id': 's1', 'query': 'Revenue'}, 'c2'),
+        ]),
+        ModelResponse({'role': 'assistant', 'content': 'stop'}, (), ModelUsage(5, 2, 7), 'stop', stop_class='stop'),
+    ])
+    snapshots = []
+    def sync(state, boundary):
+        if boundary == 'tool' and any(event.get('tool_call_id') == 'c1' for event in state['events']):
+            state['user_instructions'] = [{'sequence': 1, 'text': 'Use the annual figure.'}]
+        return bool(state.get('user_instructions')) and state.get('model_instruction_sequence', 0) < 1
+
+    out = run_research_agent(question='Revenue?', sources=[source], model=recorder, context=_ctx(),
+                             sync_instructions=sync, checkpoint=lambda state: snapshots.append(json.loads(json.dumps(state))))
+    assert out.reason == 'no_submission'
+    tool_events = [e for e in out.events if e.get('kind') == 'tool']
+    assert [(e['tool_call_id'], e['status']) for e in tool_events] == [('c1', 'completed'), ('c2', 'skipped')]
+    assert [item.tool_call_id for item in recorder.turns[1].history[-1].results] == ['c1', 'c2']
+    assert snapshots[-1]['acknowledged_instruction_sequence'] == 1
+
+
+def test_unread_core_followup_has_concrete_nonrepeating_authorized_path():
+    from app.research_tool_executor import ToolExecutionContext, _unread_core_path
+    source = _source(text='The filing describes revenue of 100 USD.')
+    state = {'read_ranges': []}
+    ctx = ToolExecutionContext(question='What is revenue?', state=state, sources=[source],
+                               source_by_id={'s1': source}, context=_ctx(), as_of=None, seen=set())
+    requirements = [{'core': True, 'status': 'missing', 'reason': 'Revenue needs evidence.',
+                     'references': [{'source_id': 's1', 'character_start': 0, 'character_end': 12}]}]
+    path = _unread_core_path(ctx, requirements)
+    assert path['tool'] == 'read_sources'
+    assert path['arguments']['reads'][0]['source_id'] == 's1'
+    assert _unread_core_path(ctx, requirements)['tool'] == 'search_library'
+    assert _unread_core_path(ctx, requirements) is None
+    assert _unread_core_path(ctx, [{'core': True, 'status': 'satisfied'}]) is None
+
+
+def test_proposed_external_followup_respects_capability_budget_and_deduplication():
+    from app.research_tool_executor import ToolExecutionContext, _proposed_core_path
+    from app.research_tools_registry import SubmissionNextAction
+    proposal = SubmissionNextAction(tool='news_search', arguments={'query': 'annual disclosure', 'rationale': 'locate primary evidence'},
+                                    requirement='annual disclosure', expected_evidence='A source lead')
+    state = {'read_ranges': [], 'events': []}
+    ctx = ToolExecutionContext(question='Find the disclosure', state=state, sources=[], source_by_id={},
+                               context=_ctx(), as_of=None, seen=set(), news_providers=[object()])
+    assert _proposed_core_path(ctx, [proposal])['tool'] == 'news_search'
+    assert _proposed_core_path(ctx, [proposal]) is None
+    ctx.state['presubmit_paths'] = []
+    ctx.news_providers = []
+    assert _proposed_core_path(ctx, [proposal]) is None
+    ctx.news_providers = [object()]
+    ctx.context.budget = ResearchExecutionBudget(None, 0, None, float('inf'))
+    assert _proposed_core_path(ctx, [proposal]) is None
+
+
+def test_instruction_arriving_at_submit_keeps_candidate_as_draft():
+    source = _source(text='Revenue was 100 USD in FY2025.')
+    recorder = NativeTurnRecorder([
+        _tool_response([('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'read'}, 'r1')]),
+        _tool_response([('submit_research', {'report': 'The figure is unavailable.', 'claims': [],
+                                             'limitations': ['Incomplete.'], 'stopping_reason': 'incomplete',
+                                             'status': 'partial'}, 's1')]),
+        ModelResponse({'role': 'assistant', 'content': 'stop'}, (), ModelUsage(5, 2, 7), 'stop', stop_class='stop'),
+    ])
+    snapshots = []
+    def sync(state, boundary):
+        if boundary == 'submit':
+            assert state.get('submission') and state.get('pending') is None
+            state['user_instructions'] = [{'sequence': 1, 'text': 'Use the latest period.'}]
+        return bool(state.get('user_instructions')) and state.get('model_instruction_sequence', 0) < 1
+    result = run_research_agent(question='Summarize the file.', sources=[source], model=recorder,
+                                context=_ctx(), sync_instructions=sync,
+                                checkpoint=lambda state: snapshots.append(json.loads(json.dumps(state))))
+    assert result.reason == 'no_submission'
+    assert snapshots[-1]['submission_drafts']
+    assert not snapshots[-1].get('submission')
+    receipt = recorder.turns[-1].history[-1].results[-1]
+    assert receipt.tool_call_id == 's1' and json.loads(receipt.content)['status'] == 'skipped'
+
+
+def test_submission_records_unresolved_user_instruction_in_delivery():
+    recorder = NativeTurnRecorder([_tool_response([('submit_research', {
+        'report': 'The requested figure could not be verified.', 'claims': [],
+        'limitations': ['No authorized source was available.'], 'stopping_reason': 'sources unavailable',
+        'status': 'partial', 'instruction_results': [{'sequence': 1, 'status': 'unresolved',
+                                                       'explanation': 'The requested date is not documented.'}],
+    }, 's1')])])
+    snapshots = []
+    def sync(state, boundary):
+        state['user_instructions'] = [{'sequence': 1, 'text': 'Use the requested date.'}]
+        return boundary != 'model' and state.get('model_instruction_sequence', 0) < 1
+    result = run_research_agent(question='Analyze the figure.', sources=[], model=recorder, context=_ctx(),
+                                sync_instructions=sync,
+                                checkpoint=lambda state: snapshots.append(json.loads(json.dumps(state))))
+    assert any('requested date is not documented' in row['message'] for row in result.gaps)
+    assert snapshots[-1]['submission']['instruction_reviews'][0]['status'] == 'unresolved'
+
+
 # --------------------------------------------------------------------------------------------- tail_note & KV-cache prefix
 
 def test_live_tail_note_coverage_and_working_memory_on_tool_updates_and_compaction():

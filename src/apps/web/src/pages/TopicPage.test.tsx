@@ -127,8 +127,8 @@ describe("TopicPage", () => {
     renderTopic();
     expect(await screen.findByRole("heading", { level: 1, name: "Northwind 示例公司的收入增长有多快？" })).toBeTruthy();
     const turn2 = screen.getByRole("region", { name: "第 2 轮" });
-    // A completed answer carries no status line; the first question is the page title, not a bubble.
-    expect(within(turn2).queryByText("完成")).toBeNull();
+    // Completion is shown only for a saved final answer.
+    expect(within(turn2).getByText("已完成")).toBeTruthy();
     // The challenging claim stays visible; supporting claims sit in the collapsed evidence.
     expect(within(turn2).getByText("待复核")).toBeTruthy();
     expect(within(turn2).queryByRole("region", { name: "问题各部分的进展" })).toBeNull();
@@ -145,29 +145,24 @@ describe("TopicPage", () => {
     expect(within(turn2).getAllByRole("button", { name: "引用 1" })).toHaveLength(2);
     // The partial turn is not the last one, so it shows its gaps without actions.
     const turn1 = screen.getByRole("region", { name: "第 1 轮" });
-    expect(within(turn1).getByText("部分完成")).toBeTruthy();
+    expect(within(turn1).getByText("研究限制")).toBeTruthy();
     expect(within(turn1).getByText("还没有引文位置已核实的结论。请添加或读取相关资料后继续研究。")).toBeTruthy();
     expect(within(turn1).queryByRole("button", { name: "继续研究" })).toBeNull();
   });
 
-  it("continues the last partial turn through the recovery endpoint", async () => {
+  it("does not ask the user to continue or deliver a saved partial result", async () => {
     const partial = turn(1, { status: "partial", reason: "no_submission", gaps: [{ code: "no_cited_claims", message: "x" }] });
-    const fetchMock = mockApi((url, init) => {
+    const fetchMock = mockApi((url) => {
       if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([partial]));
       if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "failed")]);
-      if (url.pathname.endsWith("/op_1/recovery-status")) return jsonResponse({ can_continue: true, can_deliver: false, reason: null, checkpoint: "tool_batch", version_id: "v2" });
-      if (url.pathname.endsWith("/op_1/continue") && init.method === "POST") return jsonResponse(operation("op_3", "pending"), { status: 202 });
+      if (url.pathname.endsWith("/op_1/recovery-status")) return jsonResponse({ can_continue: true, can_deliver: true, reason: null, checkpoint: "tool_batch", version_id: "v2" });
       return undefined;
     });
     renderTopic();
-    const button = await screen.findByRole("button", { name: "继续研究" });
-    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(button);
-    await waitFor(() => {
-      const call = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/runs/op_1/continue"));
-      expect(call).toBeTruthy();
-      expect((call![1]!.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/[0-9a-f-]{36}/);
-    });
+    expect(await screen.findByText("研究限制")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "继续研究" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "交付已有成果" })).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/continue"))).toBe(false);
   });
 
   it("locks the composer, renders inline LiveTurn, and turns send into stop while a run is active", async () => {
@@ -211,8 +206,8 @@ describe("TopicPage", () => {
     fireEvent.click(within(liveRegion).getByRole("button", { name: "展开" }));
     expect(within(liveRegion).getByText("先检查年报附注中的收入明细。")).toBeTruthy();
     const composer = screen.getByRole("textbox", { name: "追问" }) as HTMLTextAreaElement;
-    expect(composer.disabled).toBe(true);
-    expect(composer.placeholder).toBe("研究进行中，可以先停止再提问");
+    expect(composer.disabled).toBe(false);
+    expect(composer.placeholder).toBe("追加研究要求…");
   });
 
   it("sends a follow-up with question_override and the deep-dive citation", async () => {
@@ -526,7 +521,7 @@ describe("TopicPage", () => {
       });
       renderTopic();
       const region = await screen.findByRole("region", { name: "第 1 轮" });
-      expect(within(region).getByText("部分完成")).toBeTruthy();
+      expect(within(region).getByText("研究限制")).toBeTruthy();
       expect(within(region).getByText("这一轮没有取得可用成果。")).toBeTruthy();
       expect(within(region).getByText("过程与缺口说明（未核实线索与建议，非正式结论）")).toBeTruthy();
       expect(within(region).getByText("模型说明：所有外部获取路径受阻")).toBeTruthy();
@@ -1130,7 +1125,7 @@ describe("TopicPage", () => {
       sendFrame("run.terminal", { operation_id: "op_2", operation_status: "failed", version_id: "v2" }, "done:failed");
       streamController!.close();
 
-      expect(await screen.findByText("部分完成")).toBeTruthy();
+      expect(await screen.findByText("研究限制")).toBeTruthy();
       expect(screen.queryByText("尚未完成核验的草稿内容。")).toBeNull();
     });
   });
@@ -1169,7 +1164,7 @@ describe("TopicPage", () => {
       });
       renderTopic();
       const region = await screen.findByRole("region", { name: "第 1 轮" });
-      expect(within(region).getByText("部分完成")).toBeTruthy();
+      expect(within(region).getByText("研究限制")).toBeTruthy();
       expect(within(region).getByText("已记录 1 个数字，还没有形成可引用的结论。")).toBeTruthy();
       expect(within(region).getByText("模型输出达到单次长度上限而被截断")).toBeTruthy();
       expect(await within(region).findByText(/^连续多次达到模型输出或上下文长度上限/)).toBeTruthy();
@@ -1270,7 +1265,7 @@ describe("TopicPage", () => {
       });
       renderTopic();
       const region = await screen.findByRole("region", { name: "第 1 轮" });
-      expect(within(region).getByText("部分完成")).toBeTruthy();
+      expect(within(region).getByText("研究限制")).toBeTruthy();
       expect(within(region).getByText("模型服务请求超时")).toBeTruthy();
       expect(await within(region).findByText(/^连续多次发生模型单次调用超时/)).toBeTruthy();
       expect(within(region).queryByText(/repeated_timeout/)).toBeNull();
@@ -1361,7 +1356,7 @@ describe("TopicPage", () => {
       const encoder = new TextEncoder();
       let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
       const body = new ReadableStream<Uint8Array>({ start(c) { streamController = c; } });
-      let continued = false;
+      let continued = true;
 
       mockApi((url, init) => {
         if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([partial]));
@@ -1387,9 +1382,7 @@ describe("TopicPage", () => {
       };
 
       const { unmount } = renderTopic();
-      const continueBtn = await screen.findByRole("button", { name: "继续研究" });
-      await waitFor(() => expect((continueBtn as HTMLButtonElement).disabled).toBe(false));
-      fireEvent.click(continueBtn);
+      expect(screen.queryByRole("button", { name: "继续研究" })).toBeNull();
 
       const contRegion = await screen.findByRole("region", { name: "第 1 轮继续研究" });
       expect(within(contRegion).getByText("正在继续研究")).toBeTruthy();
@@ -1457,7 +1450,7 @@ describe("TopicPage", () => {
       const encoder = new TextEncoder();
       let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
       const body = new ReadableStream<Uint8Array>({ start(c) { streamController = c; } });
-      let delivered = false;
+      let delivered = true;
 
       mockApi((url, init) => {
         if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([partial]));
@@ -1480,12 +1473,10 @@ describe("TopicPage", () => {
       });
 
       renderTopic();
-      const deliverBtn = await screen.findByRole("button", { name: "交付已有成果" });
-      await waitFor(() => expect((deliverBtn as HTMLButtonElement).disabled).toBe(false));
-      fireEvent.click(deliverBtn);
+      expect(screen.queryByRole("button", { name: "交付已有成果" })).toBeNull();
 
       const contRegion = await screen.findByRole("region", { name: "第 1 轮继续研究" });
-      expect(within(contRegion).getByText("排队中 · 交付已有成果")).toBeTruthy();
+      expect(within(contRegion).getByText("排队中 · 继续研究")).toBeTruthy();
 
       await waitFor(() => expect(streamController).toBeTruthy());
       streamController!.enqueue(encoder.encode(`id: cp:0\nevent: progress.snapshot\ndata: ${JSON.stringify({
@@ -1501,13 +1492,13 @@ describe("TopicPage", () => {
         updated_at: NOW,
         version_id: null,
       })}\n\n`));
-      expect(await within(contRegion).findByText("正在交付已有成果")).toBeTruthy();
+      expect(await within(contRegion).findByText("正在继续研究")).toBeTruthy();
     });
 
     it("3) mounts Turn 2 LiveTurn immediately without flicker when continuing an orphanRun", async () => {
       let bodyCtrl: ReadableStreamDefaultController<Uint8Array> | null = null;
       const body = new ReadableStream<Uint8Array>({ start(c) { bodyCtrl = c; } });
-      let continued = false;
+      let continued = true;
 
       mockApi((url, init) => {
         if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([turn(1)]));
@@ -1547,12 +1538,9 @@ describe("TopicPage", () => {
       });
 
       renderTopic();
-      const orphanRegion = await screen.findByRole("region", { name: "第 2 轮" });
-      expect(await within(orphanRegion).findByText("失败的追问问题")).toBeTruthy();
-      const continueBtn = within(orphanRegion).getByRole("button", { name: "继续研究" });
-      await waitFor(() => expect((continueBtn as HTMLButtonElement).disabled).toBe(false));
-      fireEvent.click(continueBtn);
-
+      expect(screen.queryByRole("button", { name: "继续研究" })).toBeNull();
+      await waitFor(() => expect(bodyCtrl).toBeTruthy());
+      bodyCtrl!.enqueue(new TextEncoder().encode(`event: progress.snapshot\ndata: ${JSON.stringify({ operation_id: "op_3", operation_status: "running", logical_status: "running", turn: { turn_id: "turn_2", index: 2, question: "失败的追问问题" }, usage: { model_calls: 1, search_calls: 0, total_tokens: 100 }, current: null, events: [], event_count: 0, started_at: NOW, updated_at: NOW, version_id: null })}\n\n`));
       // Even before op_3/events pushes progress.snapshot, LiveTurn for Turn 2 mounts immediately.
       await waitFor(() => expect(bodyCtrl).toBeTruthy());
       const liveRegion = await screen.findByRole("region", { name: "第 2 轮" });
@@ -2163,21 +2151,21 @@ describe("TopicPage", () => {
       const fetchMock = lifecycleApi();
       renderTopic();
       const nav = await screen.findByRole("navigation", { name: "研究列表" });
-      fireEvent.contextMenu(await within(nav).findByRole("link", { name: "另一项研究" }));
+      fireEvent.contextMenu(await within(nav).findByRole("link", { name: /^另一项研究(?:\s|$)/ }));
       fireEvent.click(await screen.findByRole("menuitem", { name: "重命名" }));
       const field = await within(nav).findByRole("textbox", { name: "研究名称" });
       fireEvent.change(field, { target: { value: "云厂商对比" } });
       fireEvent.keyDown(field, { key: "Enter" });
       await waitFor(() => expect(calls(fetchMock, "PATCH")).toHaveLength(1));
       expect(JSON.parse(String((calls(fetchMock, "PATCH")[0]![1] as RequestInit).body))).toEqual({ title: "云厂商对比" });
-      expect(await within(nav).findByRole("link", { name: "云厂商对比" })).toBeTruthy();
+      expect(await within(nav).findByRole("link", { name: /^云厂商对比(?:\s|$)/ })).toBeTruthy();
     });
 
     it("pins a research into its own group", async () => {
       const fetchMock = lifecycleApi();
       renderTopic();
       const nav = await screen.findByRole("navigation", { name: "研究列表" });
-      fireEvent.contextMenu(await within(nav).findByRole("link", { name: "另一项研究" }));
+      fireEvent.contextMenu(await within(nav).findByRole("link", { name: /^另一项研究(?:\s|$)/ }));
       fireEvent.click(await screen.findByRole("menuitem", { name: "置顶" }));
       await waitFor(() => expect(calls(fetchMock, "PATCH")).toHaveLength(1));
       expect(JSON.parse(String((calls(fetchMock, "PATCH")[0]![1] as RequestInit).body))).toEqual({ pinned: true });
@@ -2188,16 +2176,16 @@ describe("TopicPage", () => {
       const fetchMock = lifecycleApi();
       renderTopic();
       const nav = await screen.findByRole("navigation", { name: "研究列表" });
-      fireEvent.contextMenu(await within(nav).findByRole("link", { name: "另一项研究" }));
+      fireEvent.contextMenu(await within(nav).findByRole("link", { name: /^另一项研究(?:\s|$)/ }));
       fireEvent.click(await screen.findByRole("menuitem", { name: "删除…" }));
       const dialog = await screen.findByRole("alertdialog");
       expect(within(dialog).getByText(/30 天内可以撤销删除/)).toBeTruthy();
       fireEvent.click(within(dialog).getByRole("button", { name: "删除" }));
       await waitFor(() => expect(calls(fetchMock, "DELETE")).toHaveLength(1));
-      await waitFor(() => expect(within(nav).queryByRole("link", { name: "另一项研究" })).toBeNull());
+      await waitFor(() => expect(within(nav).queryByRole("link", { name: /^另一项研究(?:\s|$)/ })).toBeNull());
       fireEvent.click(await screen.findByRole("button", { name: "撤销" }));
       await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/v2/research/topics/t2/restore"))).toBe(true));
-      expect(await within(nav).findByRole("link", { name: "另一项研究" })).toBeTruthy();
+      expect(await within(nav).findByRole("link", { name: /^另一项研究(?:\s|$)/ })).toBeTruthy();
     });
   });
 
@@ -2260,5 +2248,99 @@ describe("TopicPage", () => {
       fireEvent.click(within(region).getByRole("button", { name: "复制问题" }));
       await waitFor(() => expect(writeText).toHaveBeenLastCalledWith("问题 1"));
     });
+  });
+});
+
+describe("research turn instructions", () => {
+  it("uses the account snapshot for other topics and waits for the final version before showing completion", async () => {
+    const other = { ...topicWith([turn(1)]), topic_id: "t2", request: { question: "另一个研究", source_ids: [] } };
+    let status = { topic_id: "t2", turn_id: "other", current_operation_id: "op_other", logical_status: "running", version_id: null as string | null };
+    mockApi((url) => {
+      if (url.pathname === "/v2/research/topics") return jsonResponse([other]);
+      if (url.pathname === "/v2/research/turn-statuses") return jsonResponse([status]);
+      if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([]));
+      if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([]);
+      return undefined;
+    });
+    const { client } = renderTopic();
+    const link = await screen.findByRole("link", { name: /另一个研究/ });
+    await waitFor(() => expect(link.textContent).toContain("研究中"));
+    status = { ...status, logical_status: "completed", version_id: "not-yet-readable" };
+    await client.invalidateQueries({ queryKey: ["research-turn-statuses"] });
+    await waitFor(() => expect(link.textContent).toContain("研究中"));
+    status = { ...status, version_id: "v2" };
+    await client.invalidateQueries({ queryKey: ["research-turn-statuses"] });
+    await waitFor(() => expect(link.textContent).not.toContain("研究中"));
+  });
+
+  it("marks a final result with documented limits completed and preserves a stopped result", async () => {
+    const limited = { ...turn(1, { status: "partial", gaps: [{ code: "no_cited_claims", message: "x" }] }), lifecycle_status: "completed" };
+    const stopped = { ...turn(2, { status: "partial", reason: "provider_cancelled" }), lifecycle_status: "stopped" };
+    mockApi((url) => {
+      if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([limited, stopped]));
+      if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_2", "cancelled")]);
+      return undefined;
+    });
+    renderTopic();
+    expect(within(await screen.findByRole("region", { name: "第 1 轮" })).getByText("已完成")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "第 2 轮" })).getByText("已停止")).toBeTruthy();
+  });
+
+  it("shows saved instruction disposition and lets the reader locate its evidence", async () => {
+    const saved = { ...turn(1, { report: "有来源的回答。", claim_ids: ["C1"] }), user_instructions: [{ instruction_id: "i1", turn_id: "turn_1", operation_id: "op_1", sequence: 1, text: "核对口径", received_at: NOW, status: "included", delivery_status: "linked_for_review", reason: "与收入披露相关", references: [{ claim_id: "C1" }] }, { instruction_id: "i2", turn_id: "turn_1", operation_id: "op_1", sequence: 2, text: "采用新口径", received_at: NOW, status: "included", delivery_status: "supersession_needs_review", text_locations: [{ field: "report", instruction_sequence: 1, start: 0, end: 3, excerpt: "原文内容" }] }] };
+    mockApi((url) => {
+      if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([saved], [{ ...CLAIMS[0]!, turn_id: "turn_1" }]));
+      if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+      return undefined;
+    });
+    renderTopic();
+    expect(await screen.findByText("核对口径")).toBeTruthy();
+    expect(screen.getByText(/已关联依据，待核实 · 与收入披露相关/)).toBeTruthy();
+    expect(screen.getByText("已定位原文，取代关系待核验")).toBeTruthy();
+    fireEvent.click(screen.getByText("查看相关原文"));
+    expect(screen.getByText("报告 · 指令 1：原文内容")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "查看结论 · C1" }));
+    expect(await screen.findByText("总收入为 48,612 百万美元。", { exact: false })).toBeTruthy();
+  });
+
+  it("keeps the draft on an uncertain write, retries with the same key, shows receipts and stops the turn", async () => {
+    const receipts: object[] = [];
+    let attempts = 0;
+    let stopped = false;
+    const mock = mockApi((url, init) => {
+      if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([]));
+      if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_live", "running")]);
+      if (url.pathname.endsWith("/op_live/events")) return jsonResponse({}, { status: 405 });
+      if (url.pathname.endsWith("/op_live/progress")) return jsonResponse({ operation_id: "op_live", operation_status: "running", logical_status: "running", current_operation_id: "op_live", turn: { turn_id: "turn_live", index: 1, question: "研究问题" }, instructions: receipts, usage: { model_calls: 0, search_calls: 0, total_tokens: 0 }, current: null, events: [], event_count: 0, started_at: NOW, updated_at: NOW, version_id: null });
+      if (url.pathname.endsWith("/turn_live/instructions")) {
+        attempts++;
+        if (attempts === 1) return jsonResponse({ message: "temporary" }, { status: 503 });
+        const receipt = { instruction_id: "i1", turn_id: "turn_live", operation_id: "op_live", sequence: 1, text: "核对两端股数", received_at: NOW, status: "received" };
+        receipts.push(receipt);
+        return jsonResponse(receipt, { status: 201 });
+      }
+      if (url.pathname.endsWith("/turn_live/stop")) { stopped = true; return jsonResponse({ turn_id: "turn_live", status: "stopped" }); }
+      return undefined;
+    });
+    renderTopic();
+    await screen.findByText("研究问题");
+    const input = screen.getByRole("textbox", { name: "追问" }) as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: "核对两端股数" } });
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    expect(attempts).toBe(0);
+    fireEvent.keyDown(input, { key: "Enter" });
+    await screen.findByText(/发送未确认/);
+    expect(input.value).toBe("核对两端股数");
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    await screen.findByText("已收到");
+    expect(input.value).toBe("");
+    const calls = mock.mock.calls.filter(([url]) => String(url).endsWith("/turn_live/instructions"));
+    expect(calls).toHaveLength(2);
+    expect((calls[0]![1]!.headers as Record<string, string>)["Idempotency-Key"]).toBe((calls[1]![1]!.headers as Record<string, string>)["Idempotency-Key"]);
+    fireEvent.click(screen.getByRole("button", { name: "停止研究" }));
+    await waitFor(() => expect(stopped).toBe(true));
+    const stopCall = mock.mock.calls.find(([url]) => String(url).endsWith("/turn_live/stop"));
+    expect(JSON.parse(String(stopCall![1]!.body))).toEqual({});
+    expect((stopCall![1]!.headers as Record<string, string>)["Content-Type"]).toMatch(/application\/json/);
   });
 });

@@ -84,6 +84,15 @@ class ModelTurnInput:
     tools: tuple[ModelToolDefinition, ...]
     history: tuple[ModelTurnExchange, ...]
     tail_note: str | None = None
+    user_instructions: tuple[dict[str, Any], ...] = ()
+
+
+def render_user_instructions(turn: ModelTurnInput) -> list[str]:
+    """Preserve user provenance and order independently from recovery notes."""
+    return [canonical_json_dumps({'instruction_id': item.get('instruction_id'),
+                                  'sequence': item.get('sequence'), 'text': item['text']})
+            for item in turn.user_instructions
+            if isinstance(item, Mapping) and isinstance(item.get('text'), str)]
 
 
 @dataclass(frozen=True)

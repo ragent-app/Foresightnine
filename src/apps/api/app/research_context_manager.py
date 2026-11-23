@@ -1805,6 +1805,10 @@ def build_model_turn_input(
             tuple(tools),
             history_items,
             tail_note=tail_note,
+            user_instructions=tuple(dict(item) for item in sorted(
+                (row for row in (state.get('user_instructions') or [])
+                 if isinstance(row, Mapping) and isinstance(row.get('text'), str)),
+                key=lambda row: row.get('sequence') if type(row.get('sequence')) is int else 0)),
         )
     user_text = prompt_user if prompt_history else _user_with_failure_awareness(prompt_user, state)
     return ModelTurnInput(

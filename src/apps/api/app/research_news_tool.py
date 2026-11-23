@@ -62,6 +62,9 @@ class NewsSearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=500, description=(
         'What to look for. Returns unverified news and web leads (clustered by story), not evidence; acquire a lead '
         'with acquire_sources and read it before citing.'))
+    research_target: str | None = Field(default=None, min_length=1, max_length=500, description=(
+        'Exact text identifying the user task, a named entity or an existing research subquestion. '
+        'Used locally to distinguish exhausted research paths; omitted if the association is uncertain.'))
     since: date | None = Field(default=None, description='Optional earliest publication date (YYYY-MM-DD).')
     until: date | None = Field(default=None, description='Optional latest publication date (YYYY-MM-DD).')
     languages: list[str] | None = Field(default=None, max_length=4, description=(

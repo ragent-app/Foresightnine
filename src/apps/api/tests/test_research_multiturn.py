@@ -46,6 +46,14 @@ def read_all(source_id):
     return lambda messages, kwargs: turn('read_sources', {'reads': [{'source_id': source_id}], 'rationale': 'read'}, 'read')
 
 
+def followup_suggested(messages, kwargs):
+    draft = tool_results(messages)[-1]
+    assert draft['reason'] == 'core_evidence_path_available'
+    action = draft['next_action']
+    assert action['tool'] == 'search_library'
+    return turn(action['tool'], action['arguments'], 'followup-search')
+
+
 def record_revenue(source_id):
     def step(messages, kwargs):
         return turn('record_facts', {'rationale': 'record', 'facts': [
@@ -174,7 +182,12 @@ def test_counterargument_challenges_a_prior_claim_without_changing_it(env):
         return submit(sid, role='counterargument', quotation='Costs were 60 USD.',
                       challenges_claim_ids=[seen['claim_id']])(messages, kwargs)
 
-    env.install(Scripted(read_all(sid), record_revenue(sid), submit(sid), bad_challenge, good_challenge))
+    def final_challenge(messages, kwargs):
+        return submit(sid, role='counterargument', quotation='Costs were 60 USD.',
+                      challenges_claim_ids=[seen['claim_id']])(messages, kwargs)
+
+    env.install(Scripted(read_all(sid), record_revenue(sid), submit(sid), bad_challenge, good_challenge,
+                         followup_suggested, read_all(sid), final_challenge))
     env.run()
     before = env.latest()['content']['claims'][0]
     env.run({'question_override': 'Find opposing evidence.'})
@@ -185,8 +198,16 @@ def test_counterargument_challenges_a_prior_claim_without_changing_it(env):
     assert claims[1]['citations'][0]['quotation'] == 'Costs were 60 USD.'  # located through prior read ranges
 
 
+def dispatch_settled_retry(operation_id):
+    """Advance directly to the saved scheduling deadline, without a real backoff."""
+    from datetime import datetime
+    work = api.RESEARCH_WORK[operation_id]
+    api._reconcile_research_attempt(operation_id, work, now=datetime.fromisoformat(work['resume_after']))
+    return api.RESEARCH_RUN_INPUTS[operation_id]['runtime_continuation_operation_id']
+
+
 def test_failed_second_turn_continues_in_place_without_duplicates(env, monkeypatch):
-    # Manual continuation is under test, so automatic pre-send retries are turned off.
+    # Exercise the durable handoff after a known-unsent failure.
     monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRIES', '0')
     sid = env.source_id
 
@@ -198,21 +219,19 @@ def test_failed_second_turn_continues_in_place_without_duplicates(env, monkeypat
         kwargs['diagnostic_callback']({'submission_state': 'not_started', 'stages': [{'stage': 'tls', 'result': 'error', 'elapsed_ms': 1}]})
         raise ProviderFailure('provider_transport_error', 'connection failed', retryable=True)
 
+    costs = submit(sid, quotation='Costs were 60 USD.', role='counterargument')
     provider = Scripted(read_all(sid), record_revenue(sid), submit(sid), record_costs, transport_failure,
-                        submit(sid, quotation='Costs were 60 USD.', role='counterargument'))
+                        costs, followup_suggested, read_all(sid), costs)
     env.install(provider)
     env.run()
-    second_id = env.run({'question_override': 'Check costs.'})
-    partial = env.latest()
-    turn2 = partial['content']['turns'][-1]
-    assert turn2['status'] == 'partial' and turn2['reason'] == 'provider_transport_error'
-    assert [gap['code'] for gap in turn2['gaps']].count('provider_error') == 1
-    assert len(turn2['fact_ids']) == 1 and len(partial['content']['facts']) == 3
-    status = env.client.get(f'{env.path}/runs/{second_id}/recovery-status', headers=env.headers).json()
-    assert status['can_continue'] and status['version_id'] == partial['version_id']
-    continued = env.client.post(f'{env.path}/runs/{second_id}/continue', headers={**env.headers, 'Idempotency-Key': uuid4().hex}, json={})
-    assert continued.status_code == 202, continued.text
-    third_id = continued.json()['operation']['operation_id']
+    second_id = env.start({'question_override': 'Check costs.'}).json()['operation']['operation_id']
+    assert env.wait(second_id)['status'] == 'failed'
+    progress = env.client.get(f'{env.path}/runs/{second_id}/progress', headers=env.headers).json()
+    assert progress['logical_status'] == 'running' and len(env.latest()['content']['turns']) == 1
+    checkpoint = api.RESEARCH_RUN_INPUTS[second_id]['runtime_checkpoint']
+    assert any(event.get('external_state') == 'not_started' for event in checkpoint['events'])
+    assert len(checkpoint['facts']) == 1
+    third_id = dispatch_settled_retry(second_id)
     assert env.wait(third_id)['status'] == 'completed'
     final = env.latest()['content']
     assert len(final['turns']) == 2
@@ -225,10 +244,10 @@ def test_failed_second_turn_continues_in_place_without_duplicates(env, monkeypat
     assert len(final['facts']) == 3 and len({f['fact_id'] for f in final['facts']}) == 3
     assert len(final['claims']) == 2 and turn2['claim_ids'] == [final['claims'][1]['claim_id']]
     assert turn2['fact_ids'] == [final['facts'][2]['fact_id']]
-    assert turn2['usage']['model_calls'] == 2  # The failed request never reached the provider and is not counted.
+    assert turn2['usage']['model_calls'] == 5  # The failed request never reached the provider and is not counted.
     assert sum(1 for event in turn2['events'] if event['kind'] == 'submission') == 1
     assert final['gaps'] == [g for g in turn2['gaps']]
-    assert provider.calls == 6
+    assert provider.calls == 9
 
 
 def test_continuation_works_when_run_inputs_come_back_without_null_fields(env, monkeypatch):
@@ -250,13 +269,12 @@ def test_continuation_works_when_run_inputs_come_back_without_null_fields(env, m
         raise ProviderFailure('provider_timeout', 'connection timed out', retryable=True)
 
     env.install(Scripted(read_all(sid), transport_failure, submit(sid)))
-    first_id = env.run()
-    assert env.latest()['content']['turns'][0]['status'] == 'partial'
+    first_id = env.start().json()['operation']['operation_id']
+    assert env.wait(first_id)['status'] == 'failed'
+    assert env.latest()['content']['turns'] == []
     status = env.client.get(f'{env.path}/runs/{first_id}/recovery-status', headers=env.headers).json()
     assert status['can_continue'], status
-    continued = env.client.post(f'{env.path}/runs/{first_id}/continue', headers={**env.headers, 'Idempotency-Key': uuid4().hex}, json={})
-    assert continued.status_code == 202, continued.text
-    assert env.wait(continued.json()['operation']['operation_id'])['status'] == 'completed'
+    assert env.wait(dispatch_settled_retry(first_id))['status'] == 'completed'
     assert env.latest()['content']['turns'][0]['status'] == 'completed'
 
 
@@ -275,13 +293,12 @@ def test_continuation_works_when_failure_precedes_any_model_usage_and_null_field
         raise ProviderFailure('provider_timeout', 'connection timed out', retryable=True)
 
     env.install(Scripted(immediate_failure, read_all(sid), submit(sid)))
-    first_id = env.run()
-    assert env.latest()['content']['turns'][0]['status'] == 'partial'
+    first_id = env.start().json()['operation']['operation_id']
+    assert env.wait(first_id)['status'] == 'failed'
+    assert env.latest()['content']['turns'] == []
     status = env.client.get(f'{env.path}/runs/{first_id}/recovery-status', headers=env.headers).json()
     assert status['can_continue'], status
-    continued = env.client.post(f'{env.path}/runs/{first_id}/continue', headers={**env.headers, 'Idempotency-Key': uuid4().hex}, json={})
-    assert continued.status_code == 202, continued.text
-    assert env.wait(continued.json()['operation']['operation_id'])['status'] == 'completed'
+    assert env.wait(dispatch_settled_retry(first_id))['status'] == 'completed'
     assert env.latest()['content']['turns'][0]['status'] == 'completed'
 
 
@@ -297,7 +314,8 @@ def test_explanation_only_follow_up_completes_without_new_claims(env):
 
 def test_completed_first_turn_without_any_cited_claim_is_refused(env):
     sid = env.source_id
-    provider = Scripted(submit(sid, claims=False), submit(sid, claims=False, status='partial'))
+    provider = Scripted(submit(sid, claims=False), submit(sid, claims=False, status='partial'),
+                        followup_suggested, read_all(sid), submit(sid, claims=False, status='partial'))
     env.install(provider)
     env.run()
     turn1 = env.latest()['content']['turns'][0]
@@ -311,7 +329,7 @@ def test_gap_codes_for_uncited_partial_and_model_reported_limitations(env):
     def partial(messages, kwargs):
         return turn('submit_research', {'report': 'Not answered.', 'claims': [], 'limitations': ['Only one filing was supplied.'],
                                         'stopping_reason': 'out of material', 'status': 'partial'}, 'submit')
-    env.install(Scripted(partial))
+    env.install(Scripted(partial, followup_suggested, read_all(sid), partial))
     env.run()
     content = env.latest()['content']
     gaps = content['turns'][0]['gaps']
@@ -321,7 +339,7 @@ def test_gap_codes_for_uncited_partial_and_model_reported_limitations(env):
     assert content['gaps'] == gaps  # Open gaps are the latest turn's gaps.
     assert content['turns'][0]['stopping_note'] == 'out of material'
     assert all('semantic support' not in gap['message'] for gap in content['gaps'])
-    assert 'source_selection_partial' in {gap['code'] for gap in gaps}  # No source text was read.
+    assert any(event.get('name') == 'read_sources' for event in content['turns'][0]['events'])
 
 
 def test_prior_research_truncation_in_agent_input():
@@ -584,19 +602,15 @@ def test_continue_after_provider_output_truncated_runs_l2_compaction_and_succeed
         if op['status'] in ('completed', 'failed', 'cancelled'):
             break
         time.sleep(.01)
-    assert op['status'] == 'completed'
-    turn1 = client.get(path, headers=headers).json()['versions'][-1]['content']['turns'][-1]
-    assert turn1['status'] == 'partial' and turn1['reason'] == 'provider_output_truncated'
-    assert turn1['partial_notes']
+    assert op['status'] == 'failed'
+    assert client.get(path, headers=headers).json()['versions'][-1]['content']['turns'] == []
     cp1 = api.RESEARCH_RUN_INPUTS.get(op1)['runtime_checkpoint']
     assert len(cp1.get('failed_attempts', [])) == 1 and cp1['failed_attempts'][0]['reason'] == 'provider_output_truncated'
 
     rec = client.get(f'{path}/runs/{op1}/recovery-status', headers=headers).json()
     assert rec['can_continue'] is True and rec['can_deliver'] is False and rec['reason'] is None
 
-    cont = client.post(f'{path}/runs/{op1}/continue', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={})
-    assert cont.status_code == 202, cont.text
-    op2 = cont.json()['operation']['operation_id']
+    op2 = dispatch_settled_retry(op1)
     for _ in range(300):
         op = client.get(f'{path}/runs/{op2}', headers=headers).json()['operation']
         if op['status'] in ('completed', 'failed', 'cancelled'):
@@ -668,13 +682,11 @@ def test_continue_after_incomplete_model_response_clears_stopped_and_compacts(mo
         if op['status'] in ('completed', 'failed', 'cancelled'):
             break
         time.sleep(.01)
-    assert op['status'] == 'completed'
-    assert client.get(path, headers=headers).json()['versions'][-1]['content']['turns'][-1]['reason'] == 'incomplete_model_response'
+    assert op['status'] == 'failed'
+    assert not client.get(path, headers=headers).json()['versions'][-1]['content']['turns']
     assert api.RESEARCH_RUN_INPUTS.get(op1)['runtime_checkpoint'].get('stopped') == 'incomplete_model_response'
 
-    cont = client.post(f'{path}/runs/{op1}/continue', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={})
-    assert cont.status_code == 202, cont.text
-    op2 = cont.json()['operation']['operation_id']
+    op2 = dispatch_settled_retry(op1)
     for _ in range(300):
         op = client.get(f'{path}/runs/{op2}', headers=headers).json()['operation']
         if op['status'] in ('completed', 'failed', 'cancelled'):
@@ -761,15 +773,12 @@ def test_continue_after_provider_timeout_preserves_unread_sources_and_injects_ti
         if op['status'] in ('completed', 'failed', 'cancelled'):
             break
         time.sleep(.01)
-    assert op['status'] == 'completed'
+    assert op['status'] == 'failed'
     cp1 = api.RESEARCH_RUN_INPUTS.get(op1)['runtime_checkpoint']
     assert len(cp1['failed_attempts']) == 1 and cp1['failed_attempts'][0]['reason'] == 'provider_timeout'
-    v1_turn = client.get(path, headers=headers).json()['versions'][-1]['content']['turns'][-1]
-    assert any(g['code'] == 'provider_timeout' for g in v1_turn['gaps']), v1_turn['gaps']
+    assert not client.get(path, headers=headers).json()['versions'][-1]['content']['turns']
 
-    cont = client.post(f'{path}/runs/{op1}/continue', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={})
-    assert cont.status_code == 202, cont.text
-    op2 = cont.json()['operation']['operation_id']
+    op2 = dispatch_settled_retry(op1)
     for _ in range(300):
         op = client.get(f'{path}/runs/{op2}', headers=headers).json()['operation']
         if op['status'] in ('completed', 'failed', 'cancelled'):

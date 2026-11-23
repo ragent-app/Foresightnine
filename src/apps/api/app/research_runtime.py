@@ -483,7 +483,8 @@ def _invoke_model_turn(
         has_fin_data=fin_data is not None,
     )
     tail_note = getattr(turn, 'tail_note', None)
-    wire = json.dumps({'user': turn.user, **({'tail_note': tail_note} if tail_note else {})}, ensure_ascii=False)
+    wire = json.dumps({'user': turn.user, 'user_instructions': getattr(turn, 'user_instructions', ()),
+                       **({'tail_note': tail_note} if tail_note else {})}, ensure_ascii=False)
     try:
         estimator = getattr(model, 'estimate_turn_input', None)
         if callable(estimator):
@@ -571,6 +572,10 @@ def _invoke_model_turn(
                     retain_location({**row, 'end': row.get('excerpt_end'), 'text': row.get('excerpt')})
         record = {'call_id': call_id, 'stage': 'constructed', 'submission_state': 'not_started',
                   'locations': constructed[:500]}
+        instruction_sequence = state.get('model_instruction_sequence', 0)
+        if instruction_sequence:
+            record['instruction_sequence'] = instruction_sequence
+            context.private_diagnostics[call_id]['instruction_sequence'] = instruction_sequence
         if isinstance(projection, Mapping):
             record['omitted_for_capacity'] = projection.get('omitted_for_capacity', 0)
         elif isinstance(user_payload, Mapping):
@@ -741,6 +746,7 @@ def _invoke_model_turn(
         diag['cache_telemetry'] = usage_cache
     context._persist_diagnostic(call_id)
     # The response and native call correlation are durable before billing settlement.
+    state['acknowledged_instruction_sequence'] = state.get('model_instruction_sequence', 0)
     state['pending'] = {
         'kind': 'model_returned',
         'call_id': call_id,
@@ -923,6 +929,7 @@ def run_research_agent(
     fin_data: FinDataToolbox | None = None,
     capabilities: dict[str, Any] | None = None,
     checkpoint: Callable[[dict], None] | None = None,
+    sync_instructions: Callable[[dict, str], bool] | None = None,
     on_submission: Callable[[], None] | None = None,
     on_stream_event: Callable[[dict[str, Any]], None] | None = None,
     initial_state: dict | None = None,
@@ -1142,6 +1149,7 @@ def run_research_agent(
         save=save,
         outcome_builder=outcome,
         can_afford_presubmit_followup=lambda: _can_afford_presubmit_followup(context),
+        sync_instructions=sync_instructions,
         emit_reset=_emit_reset,
         deps=deps,
     )
@@ -1169,6 +1177,13 @@ def run_research_agent(
                     as_of=as_of,
                 )
         else:
+            if sync_instructions is not None:
+                sync_instructions(state, 'model')
+            state['model_instruction_sequence'] = max(
+                (item.get('sequence', 0) for item in state.get('user_instructions', [])
+                 if isinstance(item, Mapping) and type(item.get('sequence')) is int),
+                default=0,
+            )
             step_status, step_outcome, submission_retries, stream_call_seq, active_call_seq = _invoke_model_turn(
                 state=state,
                 source_by_id=source_by_id,

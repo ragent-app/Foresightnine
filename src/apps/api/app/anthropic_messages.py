@@ -7,6 +7,7 @@ from time import monotonic
 from typing import Any, Callable
 from urllib.parse import urlsplit
 from .model_protocol import (
+    render_user_instructions,
     ModelResponse,
     ModelToolCall,
     ModelUsage,
@@ -227,6 +228,12 @@ class AnthropicMessagesProvider:
                 messages = [{'role': 'user', 'content': [{'type': 'text', 'text': turn.user}, {'type': 'text', 'text': tail_note}]}]
             else:
                 messages = [{'role': 'user', 'content': turn.user}]
+
+        instructions = render_user_instructions(turn)
+        if instructions:
+            content = messages[-1]['content']
+            blocks = content if isinstance(content, list) else [{'type': 'text', 'text': content}]
+            messages[-1] = {**messages[-1], 'content': [*blocks, *({'type': 'text', 'text': text} for text in instructions)]}
 
         system_payload: Any = (
             [{'type': 'text', 'text': turn.system, 'cache_control': {'type': 'ephemeral'}}]

@@ -2,7 +2,7 @@ import type { ResearchV2 } from "@foresightnine/contracts";
 import { readSession } from "../auth/session";
 import { getOrCreateWriteKey, settleWrite, stableStringify } from "../lib/pendingWrites";
 import { ApiError } from "./http";
-import { cancelOperation, continueRun, createTopic, latestVersion, recoverRun, startRun } from "./research";
+import { cancelOperation, continueRun, createTopic, latestVersion, recoverRun, sendInstruction, stopTurn, startRun } from "./research";
 
 export function runScope(accountId: string, topicId: string, parentVersionId: string): string {
   return `run:${accountId}:${topicId}:${parentVersionId}`;
@@ -80,4 +80,14 @@ export function continueTurn(topicId: string, operationId: string): Promise<Rese
 
 export function recoverTurn(topicId: string, operationId: string): Promise<ResearchV2.OperationResponse> {
   return idempotentWrite(`recover:${operationId}`, null, (key) => recoverRun(topicId, operationId, key));
+}
+
+export function appendInstruction(topicId: string, turnId: string, text: string) {
+  const accountId = readSession()?.account.account_id;
+  if (!accountId) throw new Error("no_session");
+  return idempotentWrite(`instruction:${accountId}:${topicId}:${turnId}:${text}`, { text }, (key) => sendInstruction(topicId, turnId, text, key));
+}
+
+export function stopResearchTurn(topicId: string, turnId: string) {
+  return idempotentWrite(`stop:${topicId}:${turnId}`, null, (key) => stopTurn(topicId, turnId, key));
 }

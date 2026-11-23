@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { nextPollDelay } from "../lib/polling";
 import { ApiError } from "./http";
-import { createCalculation, createVersion, deleteTopic, getProgress, getRecoveryStatus, getTopic, getVersionSourceText, forkTopic, isActiveStatus, listRuns, listTopics, listVersionSources, recalculateCalculation, restoreTopic, updateTopic, type CreateCalculationRequest } from "./research";
+import { createCalculation, createVersion, deleteTopic, getProgress, getRecoveryStatus, getTopic, getVersionSourceText, forkTopic, isActiveStatus, listRuns, listTurnStatuses, listTopics, listVersionSources, recalculateCalculation, restoreTopic, updateTopic, type CreateCalculationRequest } from "./research";
 import { attachSources, reextractPdfSource } from "./sources";
 import { openResearchRunStream, StreamFallbackError } from "./stream";
 import type { CreatedSource, ProgressEvent, RecoveryStatus, RunProgress, SourceText, TransientStreamState, VersionSource } from "./types";
@@ -65,8 +65,12 @@ export function useTopic(topicId: string) {
   });
 }
 
+export function useTurnStatuses() {
+  return useQuery({ queryKey: ["research-turn-statuses"], queryFn: ({ signal }) => listTurnStatuses(signal), refetchInterval: 10000 });
+}
+
 export function useRuns(topicId: string) {
-  return useQuery<ResearchV2.OperationResponse[]>({
+  return useQuery<import("./research").ResearchRunResponse[]>({
     queryKey: queryKeys.runs(topicId),
     queryFn: ({ signal }) => listRuns(topicId, signal),
   });
@@ -105,7 +109,7 @@ export function useSourceText(
 export function useActiveRun(topicId: string) {
   const query = useRuns(topicId);
   const runs = query.data;
-  const activeRun = runs?.find((item) => isActiveStatus(item.operation.status))?.operation ?? null;
+  const activeRun = runs?.find((item) => item.logical_status ? item.logical_status === "running" : isActiveStatus(item.operation.status))?.operation ?? null;
   const latestRun = runs?.[0]?.operation ?? null;
   return {
     activeRun,
@@ -236,6 +240,7 @@ export function useRunProgress(topicId: string, operationId: string | null) {
     let delay = nextPollDelay(0);
     let invalidated = false;
     let terminalReceived = false;
+    let refreshLogical = false;
 
     const schedule = (ms: number, fn: () => void) => {
       timer = setTimeout(() => {
@@ -250,10 +255,12 @@ export function useRunProgress(topicId: string, operationId: string | null) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.topic(topicId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.runs(topicId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.topics });
+      void queryClient.invalidateQueries({ queryKey: ["research-turn-statuses"] });
       void queryClient.invalidateQueries({ queryKey: ["recovery", topicId] });
     };
 
     const stop = (error: unknown | null) => {
+      refreshLogical = false;
       setState((prev) => (prev.key === key ? { ...prev, error, stopped: true } : prev));
     };
 
@@ -309,7 +316,8 @@ export function useRunProgress(topicId: string, operationId: string | null) {
         if (controller.signal.aborted) return;
         after = Math.max(after, progress.event_count);
         delay = nextPollDelay(delay);
-        const finished = !isActiveStatus(progress.operation_status);
+        refreshLogical = Boolean(progress.logical_status);
+        const finished = progress.logical_status ? progress.logical_status !== "running" : !isActiveStatus(progress.operation_status);
         setState((prev) =>
           prev.key === key
             ? {
@@ -357,7 +365,8 @@ export function useRunProgress(topicId: string, operationId: string | null) {
           if (frame.event === "progress.snapshot") {
             const snap = frame.data;
             after = Math.max(after, snap.event_count);
-            const finished = !isActiveStatus(snap.operation_status);
+            refreshLogical = Boolean(snap.logical_status);
+            const finished = snap.logical_status ? snap.logical_status !== "running" : !isActiveStatus(snap.operation_status);
             setState((prev) =>
               prev.key === key
                 ? {
@@ -474,6 +483,7 @@ export function useRunProgress(topicId: string, operationId: string | null) {
               return { ...prev, progress: nextProgress, error: null, stopped: true };
             });
             invalidateTerminal();
+            if (refreshLogical) void poll();
             return;
           }
         }
@@ -507,9 +517,23 @@ export function useRunProgress(topicId: string, operationId: string | null) {
       void poll();
     };
 
+    // Snapshots are authoritative for instruction receipts and logical turn state; SSE is a signal.
+    const snapshotTimer = setInterval(() => {
+      if (!refreshLogical) return;
+      void getProgress(topicId, operationId, 0, controller.signal).then((snapshot) => {
+        if (controller.signal.aborted) return;
+        setState((prev) => prev.key === key ? { ...prev, progress: snapshot, events: mergeEvents(prev.events, snapshot.events), error: null } : prev);
+        if (snapshot.logical_status === "running") invalidated = false;
+        if (snapshot.logical_status && snapshot.logical_status !== "running") { refreshLogical = false; invalidateTerminal(); }
+        if (snapshot.current_operation_id && snapshot.current_operation_id !== operationId) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.runs(topicId) });
+        }
+      }).catch(() => undefined);
+    }, 3000);
     void connectSse();
 
     return () => {
+      clearInterval(snapshotTimer);
       controller.abort();
       if (timer !== null) clearTimeout(timer);
       const pending = batchRef.current;
@@ -592,6 +616,7 @@ export function useAttachSources(topicId: string) {
     onSuccess: (topic) => {
       queryClient.setQueryData(queryKeys.topic(topicId), topic);
       void queryClient.invalidateQueries({ queryKey: queryKeys.topics });
+      void queryClient.invalidateQueries({ queryKey: ["research-turn-statuses"] });
     },
     // A 409 means the topic moved on; refetch so the next attempt uses the latest version.
     onError: () => queryClient.invalidateQueries({ queryKey: queryKeys.topic(topicId) }),
@@ -613,6 +638,7 @@ function useTopicWrite<TVariables>(topicId: string, send: (variables: TVariables
     onSuccess: (topic) => {
       queryClient.setQueryData(queryKeys.topic(topicId), topic);
       void queryClient.invalidateQueries({ queryKey: queryKeys.topics });
+      void queryClient.invalidateQueries({ queryKey: ["research-turn-statuses"] });
     },
     // A 409 means the topic moved on; refetch so the user sees the latest version.
     onError: () => queryClient.invalidateQueries({ queryKey: queryKeys.topic(topicId) }),

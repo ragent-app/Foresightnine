@@ -116,10 +116,19 @@ export interface RunUsage {
 }
 
 // apps/api/app/research_progress.py build_progress
+export interface ResearchInstruction {
+  instruction_id: string; turn_id: string; operation_id: string; sequence: number; text: string; received_at: string; status: string;
+  delivery_status?: string | null; reason?: string | null; references?: (string | { fact_id?: string; claim_id?: string; calculation_id?: string })[];
+  text_locations?: { field?: "report" | "partial_notes"; instruction_sequence?: number; start: number; end: number; excerpt: string }[];
+}
+
 export interface RunProgress {
   operation_id: string;
   operation_status: OperationStatus;
-  turn: { index: number; question: string };
+  turn: { index: number; question: string; turn_id?: string };
+  logical_status?: "running" | "completed" | "stopped" | "failed";
+  current_operation_id?: string | null;
+  instructions?: ResearchInstruction[];
   usage: RunUsage;
   current: CurrentActivity | null;
   interim?: InterimSummary | null;

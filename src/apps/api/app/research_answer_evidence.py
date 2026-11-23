@@ -123,6 +123,13 @@ def visible_answer_content(content: ResearchContent, can_display: Callable[[str]
         # Free text, tool events and aggregate views can contain observations from multiple sources.
         # Retain only answers that have their own complete, currently displayable evidence chain.
         turn.report, turn.partial_notes, turn.stopping_note = "", None, None
+        for instruction in turn.user_instructions:
+            instruction.reason = None
+            instruction.references = [ref for ref in instruction.references if allowed(ref)]
+            # A report excerpt can reproduce an observation whose source was withdrawn.
+            instruction.text_locations = [loc for loc in instruction.text_locations if loc.instruction_sequence]
+            if not (instruction.references or instruction.text_locations):
+                instruction.delivery_status = "unresolved"
         turn.events, turn.coverage_map, turn.reconciliation = [], None, None
         turn.market_analyses = [a for a in turn.market_analyses if not hidden.intersection(a.result["source_ids"])]
         turn.counter_evidence = None

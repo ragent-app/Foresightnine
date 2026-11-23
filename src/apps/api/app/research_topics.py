@@ -305,6 +305,33 @@ class ResearchAttempt(BaseModel):
     reason: str
 
 
+class ResearchInstruction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    instruction_id: str
+    turn_id: str
+    operation_id: str
+    sequence: int = Field(ge=1)
+    text: str
+    received_at: datetime
+    status: Literal["received", "awaiting_receipt", "included"]
+
+
+class InstructionTextLocation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    field: Literal["report", "partial_notes"] | None = None
+    instruction_sequence: int | None = Field(default=None, ge=1)
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+    excerpt: str
+
+
+class SavedResearchInstruction(ResearchInstruction):
+    text_locations: list[InstructionTextLocation] = Field(default_factory=list)
+    delivery_status: Literal["linked_for_review", "unresolved", "superseded", "supersession_needs_review"] = "unresolved"
+    reason: str | None = None
+    references: list[QuestionPartReference] = Field(default_factory=list)
+
+
 class ResearchTurn(BaseModel):
     """One question and its run. Immutable once saved, except by continuing the same turn."""
     model_config = ConfigDict(extra="forbid")
@@ -344,6 +371,8 @@ class ResearchTurn(BaseModel):
     reconciliation: dict | None = None
     counter_evidence: dict | None = None
     coverage_map: dict | None = None
+    lifecycle_status: Literal["completed", "stopped"] | None = None
+    user_instructions: list[SavedResearchInstruction] = Field(default_factory=list)
     method_packs: list[MethodPackRef] = Field(default_factory=list)
     attributions: list[TurnAttribution] = Field(default_factory=list)
 

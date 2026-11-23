@@ -16,7 +16,7 @@ import secrets
 import tempfile
 from pathlib import Path
 from time import monotonic
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
 
@@ -26,7 +26,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from pydantic import BaseModel, HttpUrl, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError
 from starlette.middleware.cors import CORSMiddleware
 
 from .contract_models import (
@@ -99,7 +99,7 @@ from .services import (
     validate_probability_semantics,
     validate_worldline_bundle_semantics,
 )
-from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, _drop_legacy_null_fields, build_repository
+from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, _drop_legacy_null_fields, build_repository, owner_items
 from .research_topics import (AttachSourcesInput, ResearchCalculation, ResearchFact, ResearchFullExport, ResearchInput, ResearchMetadataExport,
     ResearchTopic, ResearchTopics, ResearchTurn, TopicDeletion, TopicForkInput, TopicMeta, TopicNotFound, TopicUpdate, TopicVersionConflict,
     VersionInput, VersionRestoreInput)
@@ -128,7 +128,10 @@ from .research_recovery import (RecoveryJournal, RUNTIME_CHECKPOINT_SCHEMA_VERSI
     runtime_truncation_loop_blocked, _REPEATED_TRUNCATION_MESSAGE,
     runtime_timeout_loop_blocked, _REPEATED_TIMEOUT_MESSAGE,
     runtime_interruption_no_progress_blocked, _REPEATED_INTERRUPTION_MESSAGE)
-from .research_topics import ResearchContent, ResearchVersion
+from .research_topics import ResearchContent, ResearchInstruction, SavedResearchInstruction, ResearchVersion
+from .research_run_instructions import (
+    InstructionConflict, InstructionInvalid, InstructionNotFound, ResearchRunInstructions,
+)
 from .research_fetch import (
     HTML_EXTRACTION_DISCLOSURE,
     MAX_FETCH_BYTES,
@@ -293,7 +296,23 @@ ERROR_RESPONSES = {
 async def lifespan(_app: FastAPI):
     """Verify external state before accepting traffic in a persistent runtime."""
     _assert_runtime_ready()
-    yield
+    stopped = asyncio.Event()
+    async def supervise() -> None:
+        while not stopped.is_set():
+            try:
+                await asyncio.to_thread(_reconcile_research_work)
+            except Exception:
+                logging.getLogger(__name__).exception("Research job reconciliation failed")
+            try:
+                await asyncio.wait_for(stopped.wait(), timeout=5)
+            except TimeoutError:
+                pass
+    supervisor = asyncio.create_task(supervise())
+    try:
+        yield
+    finally:
+        stopped.set()
+        await supervisor
 
 
 app = FastAPI(
@@ -413,6 +432,10 @@ research_topics = ResearchTopics(RESEARCH_TOPICS, RESEARCH_TOPIC_META)
 RESEARCH_SOURCES = build_repository(storage_config, "research_sources", value_loader=ResearchSource.model_validate)
 research_sources = ResearchSources(RESEARCH_SOURCES)
 RESEARCH_RUN_INPUTS = build_repository(storage_config, "research_run_inputs")
+TURN_RECORDS = build_repository(storage_config, "research_turn_instructions")
+TURN_STATUS = build_repository(storage_config, "research_turn_status")
+RESEARCH_WORK = build_repository(storage_config, "research_turn_work")
+turn_instructions = ResearchRunInstructions(TURN_RECORDS)
 SOURCE_RATE_LIMITS = build_repository(storage_config, "source_rate_limits")
 (
     SESSIONS,
@@ -476,6 +499,10 @@ def _publish_research_terminal(operation_id: str, status: str) -> None:
         version_id=version.version_id if version else None,
         after=0,
     )
+    turn_id = (inputs.get('turn') or {}).get('turn_id')
+    doc = TURN_RECORDS.get(turn_id) if turn_id else None
+    if doc and doc['account_id'] == owner_id:
+        progress.update(_turn_progress_fields(doc, status, version))
     research_live_broker.publish_terminal(
         operation_id,
         operation_status=status,
@@ -633,6 +660,9 @@ def reset_state() -> None:
     RESEARCH_TOPIC_META.clear()
     RESEARCH_SOURCES.clear()
     RESEARCH_RUN_INPUTS.clear()
+    RESEARCH_WORK.clear()
+    TURN_STATUS.clear()
+    TURN_RECORDS.clear()
     SOURCE_RATE_LIMITS.clear()
     abuse_control.reset()
     telemetry.reset()
@@ -715,6 +745,10 @@ def _model_provider_for_request(request: Request, *, research: bool = False) -> 
         # An explicitly supplied but invalid/expired credential must never turn
         # into an anonymous platform-model request.
         raise _local_auth_problem(error) from error
+    return _model_provider_for_account(account, request, research=research)
+
+
+def _model_provider_for_account(account: LocalAccount, request: Request, *, research: bool) -> tuple[LlmProvider, bool]:
     request.state.model_account = account
     try:
         settings, resolved_config = model_settings.runtime_configuration(account.account_id)
@@ -1496,6 +1530,12 @@ def delete_authenticated_account(authorization: str | None = Header(default=None
 
 
 def _delete_research_run_inputs(owner_id: str) -> None:
+    for key, _ in owner_items(TURN_STATUS, owner_id):
+        TURN_STATUS.delete(key)
+    for repo in (RESEARCH_WORK, TURN_RECORDS):
+        for key, record in list(repo.items()):
+            if record.get("account_id") == owner_id:
+                repo.delete(key)
     for key, record in list(RESEARCH_RUN_INPUTS.items()):
         if record.get("owner_id") == owner_id:
             RESEARCH_RUN_INPUTS.delete(key)
@@ -2990,12 +3030,105 @@ def _merge_official_fetch_status(current: str, next_status: str | None, *, auto_
     return current
 
 
+class ResearchStartResponse(OperationResponse):
+    turn_id: str
+
+
+class ResearchRunListEntry(OperationResponse):
+    turn_id: str | None = None
+    current_operation_id: str | None = None
+    logical_status: Literal["running", "completed", "stopped", "failed"] | None = None
+
+
+class ResearchTurnSummary(BaseModel):
+    topic_id: str
+    turn_id: str
+    current_operation_id: str
+    logical_status: Literal["running", "completed", "stopped", "failed"]
+    version_id: str | None = None
+
+
+class ResearchTurnStopped(BaseModel):
+    turn_id: str
+    status: Literal["stopped"]
+
+
+class ResearchInstructionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(min_length=1, max_length=4000)
+
+
+def _saved_instructions(doc: dict, state: Mapping, content: ResearchContent) -> list[SavedResearchInstruction]:
+    reviews = {row['sequence']: row for row in (state.get('submission') or {}).get('instruction_reviews', [])}
+    saved = []
+    ids = {'claim_id': {item.claim_id for item in content.claims}, 'fact_id': {item.fact_id for item in content.facts},
+           'calculation_id': {item.calculation_id for item in content.calculations}}
+    instructions = _instruction_view(doc)
+    instruction_text = {row['sequence']: row['text'] for row in instructions}
+    turn = content.turns[-1]
+    for item in instructions:
+        review = reviews.get(item['sequence'], {})
+        refs = [ref for ref in review.get('references', [])
+                if ref and all(k in ids and value in ids[k] for k, value in ref.items())]
+        status = review.get('status', 'unresolved')
+        locations = []
+        for ref in review.get('references', []):
+            field = ref.get('field')
+            text = (getattr(turn, field) if field in {'report', 'partial_notes'}
+                    else instruction_text.get(ref.get('instruction_sequence')))
+            start, end = ref.get('start'), ref.get('end')
+            if (text and type(start) is int and type(end) is int and 0 <= start < end <= len(text)
+                    and text[start:end] == ref.get('excerpt')):
+                locations.append(ref)
+        if status in {'linked_for_review', 'supersession_needs_review'} and not (refs or locations):
+            status = 'unresolved'
+        saved.append(SavedResearchInstruction(**item, delivery_status=status, text_locations=locations,
+                                              reason=review.get('reason'), references=refs))
+    return saved
+
+
+def _update_turn_status(topic_id: str, operation_id: str, status: str, version_id: str | None = None) -> None:
+    def update() -> None:
+        summary = TURN_STATUS.get(topic_id)
+        if summary and summary['current_operation_id'] == operation_id:
+            TURN_STATUS.put(topic_id, {**summary, 'logical_status': status, 'version_id': version_id})
+    TURN_STATUS.with_advisory_lock('turn-status:' + topic_id, update)
+
+
+@app.get('/v2/research/turn-statuses', response_model=list[ResearchTurnSummary], include_in_schema=False)
+def get_latest_turn_statuses(http_request: Request) -> list[dict]:
+    account = _authenticated_account(http_request.headers.get('Authorization'))
+    return [{key: row.get(key) for key in ('topic_id', 'turn_id', 'current_operation_id', 'logical_status', 'version_id')}
+            for _, row in owner_items(TURN_STATUS, account.account_id) if row['owner_id'] == account.account_id]
+
+
+def _instruction_view(doc: dict) -> list[dict]:
+    if not doc['sequence']:
+        return []
+    if 'instructions' not in doc:
+        doc = turn_instructions.read(doc['account_id'], doc['topic_id'], doc['turn_id'])
+    return [
+        ResearchInstruction(**{k: row[k] for k in ("instruction_id", "turn_id", "operation_id", "sequence", "text", "received_at")},
+                            status=("included" if row["sequence"] <= doc["acknowledged_sequence"] else
+                                    "awaiting_receipt" if row["sequence"] <= doc.get("awaiting_sequence", 0) else
+                                    "received")).model_dump(mode="json")
+        for row in doc["instructions"]
+    ]
+
+
 @app.post("/v1/research/topics/{topic_id}/runs", response_model=OperationResponse, response_model_exclude_none=True, status_code=202, include_in_schema=False)
-@app.post("/v2/research/topics/{topic_id}/runs", response_model=OperationResponse, response_model_exclude_none=True, status_code=202, include_in_schema=False)
+@app.post("/v2/research/topics/{topic_id}/runs", response_model=ResearchStartResponse, response_model_exclude_none=True, status_code=202, include_in_schema=False)
 def start_research_run(topic_id: str, request: ResearchRunRequest, response: Response,
                        idempotency_key: IdempotencyKey, http_request: Request) -> OperationResponse:
     account = _authenticated_account(http_request.headers.get("Authorization"))
+    return _start_research_for_account(topic_id, request, response, idempotency_key, http_request, account)
+
+
+def _start_research_for_account(topic_id: str, request: ResearchRunRequest, response: Response,
+                                idempotency_key: str, http_request: Request, account: LocalAccount,
+                                *, background: bool = False) -> OperationResponse:
     continuation_input = getattr(http_request.state, 'research_continuation', None)
+    resuming_checkpoint = continuation_input is not None and not continuation_input.get('unstarted')
     try:
         topic = research_topics.get(account.account_id, topic_id)
         available_ids = list(dict.fromkeys([*topic.request.source_ids, *topic.versions[-1].source_ids, *request.source_ids]))
@@ -3028,14 +3161,15 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     or replay_inputs.get('runtime_previous_operation_id') != continuation_input['operation_id']):
                 raise ApiProblem(409, 'idempotency_conflict', 'The idempotency key belongs to another research run.')
         _mark_replay(response, True)
-        return existing
+        stored = RESEARCH_RUN_INPUTS[existing.operation.operation_id]
+        return ResearchStartResponse(operation=existing.operation, turn_id=stored["turn"]["turn_id"])
     parent_version = next((item for item in topic.versions if item.version_id == request.parent_version_id), None)
     if parent_version is None:
         raise ApiProblem(409, "lifecycle_conflict", "Research changed before the run was admitted.")
     # Regenerate / edit-and-resend: the run reads the version before the replaced turn, while the
     # newest version stays the concurrency anchor and receives the result as a new version.
     rebase_base: ResearchVersion | None = None
-    if request.replace_turn_id is not None and continuation_input is None:
+    if request.replace_turn_id is not None and (continuation_input is None or background):
         head = topic.versions[-1]
         if head.version_id != request.parent_version_id:
             raise ApiProblem(409, "lifecycle_conflict", "Research changed before the run was admitted.")
@@ -3082,7 +3216,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         request = resolve_automatic_research_request(request,
             search_available=has_news_search,
             historical_prices_available=historical_available)
-    provider, _personal = _model_provider_for_request(http_request, research=True)
+    provider, _personal = (_model_provider_for_account(account, http_request, research=True)
+                           if background else _model_provider_for_request(http_request, research=True))
+    identity = (account.account_id, topic_id, turn_meta['turn_id'])
     if isinstance(provider, OpenAICompatibleLlmProvider):
         try:
             provider = provider.for_research(request.max_input_tokens_per_call)
@@ -3098,7 +3234,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     version_chain = ResearchVersionChain(research_topics, account.account_id, topic_id, request.parent_version_id, source_ids)
     # A continuation restores the focus from its checkpoint; only a fresh turn resolves it.
     focus: dict[str, Any] | None = None
-    if request.focus_citation is not None and continuation_input is None:
+    if request.focus_citation is not None and not resuming_checkpoint:
         try:
             claim = next(c for c in parent_version.content.claims if c.claim_id == request.focus_citation.claim_id)
             citation = claim.citations[request.focus_citation.citation_index]
@@ -3179,7 +3315,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             settle=settle_research_call,
             reserve_search=lambda: _reserve_search_call(http_request), entitlement_remaining=remaining_entitlement)
         if continuation_input is not None:
-            saved = admitted_continuation['runtime']
+            saved = admitted_continuation.get('runtime') or {}
             accounting = saved.get('_accounting') or {}
             context.calls = accounting.get('calls', 0)
             context.search_calls = accounting.get('search_calls', 0)
@@ -3319,7 +3455,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 official_fetch_status, mapped, auto_fetch_official=request.auto_fetch_official)
         fin_data.on_result = note_fin_result
         last_runtime_state.clear()
-        def save_runtime(state: dict) -> None:
+        def persist_snapshot(state: dict) -> None:
             snapshot = deepcopy(state)
             if snapshot.get('checkpoint_schema_version') is None:
                 snapshot['checkpoint_schema_version'] = RUNTIME_CHECKPOINT_SCHEMA_VERSION
@@ -3347,7 +3483,55 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     version_id=None,
                     after=0,
                 )
+                doc = TURN_RECORDS.get(turn_meta['turn_id'])
+                if doc:
+                    live_progress.update(_turn_progress_fields(doc, 'running', None))
                 research_live_broker.publish_progress(operation_id, live_progress)
+        def save_runtime(state: dict) -> None:
+            # Old workers must not update a checkpoint after another attempt has taken over.
+            def save() -> None:
+                constructed = state.get('_context_input_records') or []
+                if constructed and constructed[-1].get('instruction_sequence'):
+                    attempt = constructed[-1]
+                    if attempt.get('submission_state') == 'not_started':
+                        turn_instructions.awaiting_receipt(*identity, operation_id, 0)
+                    elif (state.get('pending') or {}).get('kind') == 'model':
+                        turn_instructions.awaiting_receipt(*identity, operation_id, attempt['instruction_sequence'])
+                seen = state.get("acknowledged_instruction_sequence", 0)
+                if seen and seen > last_runtime_state.get("acknowledged_instruction_sequence", 0):
+                    turn_instructions.ack(*identity, operation_id, seen)
+                persist_snapshot(state)
+            turn_instructions.fenced(*identity, operation_id, save, allow_sealed=True)
+
+        def sync_instructions(state: dict, boundary: str) -> bool:
+            doc = TURN_RECORDS[identity[-1]]
+            if doc['status'] == 'stopped' or doc['operation_id'] != operation_id:
+                raise ProviderFailure('provider_cancelled', 'Research stopped or superseded.', retryable=False)
+            previous = state.get('user_instructions') or []
+            if not previous or previous[-1]['sequence'] != doc['sequence']:
+                state['user_instructions'] = _instruction_view(doc)
+            expected = state.get('model_instruction_sequence', 0)
+            if boundary == 'submit':
+                return not turn_instructions.seal(*identity, expected, operation_id=operation_id,
+                                                   persist=lambda: persist_snapshot(state))
+            if boundary == 'tool':
+                pending = state.get('pending') or {}
+                action = f"{pending.get('call_id')}:{pending.get('cursor', 0)}"
+                cursor = pending.get('cursor', 0)
+                calls = pending.get('calls', [])
+                tool_name = calls[cursor].get('name') if 0 <= cursor < len(calls) else None
+                local_read = tool_name in {'read_sources', 'outline_source', 'search_source', 'read_pages'}
+                if turn_instructions.claim_action(*identity, operation_id, action, expected, local_read=local_read):
+                    return False
+                disposition = turn_instructions.action_status(*identity, operation_id, action, expected)
+                if disposition == 'claimed_unknown':
+                    raise ApiProblem(409, 'lifecycle_conflict', 'A tool start was recorded without a result.')
+                if disposition != 'instruction_changed':
+                    raise ProviderFailure('provider_cancelled', 'Research stopped or superseded.', retryable=False)
+                state['user_instructions'] = _instruction_view(turn_instructions.read(*identity))
+                return True
+            return doc['sequence'] > expected
+
         def publish_stream_event(event: dict[str, Any]) -> None:
             kind = event.get('type')
             if kind == 'delta':
@@ -3396,7 +3580,11 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 prior_data['failed_source_accesses'] = failed_records[-50:]
             return prior_data
 
-        if continuation_input is not None:
+        if admitted_continuation.get('runtime') is not None:
+            resumed = admitted_continuation['runtime']
+            if (resumed.get('stopped') == 'no_progress'
+                    and TURN_RECORDS[identity[-1]]['sequence'] > resumed.get('model_instruction_sequence', 0)):
+                resumed.pop('stopped', None)
             save_runtime(admitted_continuation['runtime'])
         try:
             latest_topic = research_topics.get(account.account_id, topic_id)
@@ -3412,14 +3600,35 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 issuer_docs=(IssuerDocuments(remaining_seconds=lambda: context.budget.deadline - context.now(),
                                              ensure_running=context.ensure_running, reserve_call=context.reserve_search,
                                              now=lifecycle_clock.now) if retrieval_active else None),
-                checkpoint=save_runtime, initial_state=admitted_continuation.get('runtime'),
+                checkpoint=save_runtime, sync_instructions=sync_instructions, initial_state=admitted_continuation.get('runtime'),
                 on_submission=lambda: setattr(http_request.state, 'model_submission_started', True),
                 on_stream_event=publish_stream_event,
                 as_of=topic.request.as_of,
-                clock=research_clock if continuation_input is None else None,
+                clock=None if resuming_checkpoint else research_clock,
                 now=lifecycle_clock.now, ocr_pages=ocr_pages_callback,
-                prior=_prior_with_failed_sources(parent_now) if continuation_input is None else None, focus=focus)
+                prior=None if resuming_checkpoint else _prior_with_failed_sources(parent_now), focus=focus)
             _raise_if_operation_cancelled(operation_id)
+            job = RESEARCH_WORK[operation_id]
+            pending = last_runtime_state.get('pending') or {}
+            last_failure = next((event for event in reversed(last_runtime_state.get('events', []))
+                                 if event.get('kind') == 'model_failure'), {})
+            retryable_outcome = outcome.reason in {
+                'incomplete_model_response', 'provider_timeout', 'provider_rate_limited', 'provider_output_truncated',
+                'provider_transport_error', 'provider_context_limit'}
+            settled = (not pending and last_failure.get('external_state') != 'unknown'
+                       and not (RESEARCH_RUN_INPUTS.get(operation_id) or {}).get('recovery_pending'))
+            new_guidance = (outcome.reason in {'no_submission', 'no_progress'}
+                            and TURN_RECORDS[identity[-1]]['sequence'] > last_runtime_state.get('model_instruction_sequence', 0))
+            if (retryable_outcome or new_guidance) and settled:
+                signature = content_hash({'reason': outcome.reason, 'reads': last_runtime_state.get('read_ranges'),
+                                          'facts': last_runtime_state.get('facts'),
+                                          'sequence': last_runtime_state.get('model_instruction_sequence', 0)})
+                if signature != job.get('retry_signature') and not any(guard(last_runtime_state) for guard in (
+                        runtime_timeout_loop_blocked, runtime_interruption_no_progress_blocked, runtime_truncation_loop_blocked)):
+                    RESEARCH_WORK.put(operation_id, {**job, 'retry_signature': signature,
+                                      'resume_after': (lifecycle_clock.now() + timedelta(seconds=0 if new_guidance else 5)).isoformat()})
+                    raise ApiProblem(503, 'internal_error', 'Research will resume from its settled checkpoint.',
+                                     retryable=True)
             result = persister.finalize_turn(
                 operation_id=operation_id,
                 parent_version=parent_now,
@@ -3431,10 +3640,32 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 default_search_status=search_status,
                 official_fetch_status=official_fetch_status,
             )
+            doc = turn_instructions.read(*identity)
+            result.content.turns[-1].lifecycle_status = 'completed'
+            result.content.turns[-1].user_instructions = _saved_instructions(doc, last_runtime_state, result.content)
             if rebase_base is not None and result.content.turns[-1].reason != 'submitted':
                 # A regeneration only replaces the answer when the model submitted research; a
                 # provider failure, timeout or exhausted budget leaves the previous answer current.
                 raise ApiProblem(409, 'lifecycle_conflict', 'The regenerated answer did not finish; the previous answer is unchanged.')
+            job = RESEARCH_WORK[operation_id]
+            # The validated candidate permits local delivery after a failed version write.
+            def stage_delivery() -> None:
+                RESEARCH_WORK.put(operation_id, {**job, 'result': result.model_dump(mode='json')})
+            if doc['status'] == 'sealed':
+                turn_instructions.fenced(*identity, operation_id, stage_delivery, allow_sealed=True)
+            else:
+                # Budget and terminal provider failures may prevent another model call.
+                # Finalize the instruction receipts under the same fence as the candidate.
+                def finish_with_limits() -> None:
+                    latest = turn_instructions.read(*identity)
+                    result.content.turns[-1].user_instructions = _saved_instructions(latest, last_runtime_state, result.content)
+                    stage_delivery()
+                closing_sequence = (last_runtime_state.get('model_instruction_sequence', 0)
+                                    if outcome.reason in {'no_submission', 'no_progress'} else doc['sequence'])
+                if not turn_instructions.seal(*identity, closing_sequence, operation_id=operation_id,
+                                              persist=finish_with_limits):
+                    raise ApiProblem(409, 'lifecycle_conflict', 'The research task changed during finalization.',
+                                     retryable=True)
             return result, topic_id
         except (ProviderFailure, ApiProblem):
             raise
@@ -3444,13 +3675,20 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
 
     def commit(_operation_id: str, result: BaseModel) -> None:
         assert isinstance(result, ResearchRunResult)
-        persister.commit_result(
+        saved = persister.commit_result(
             operation_id=_operation_id,
             result=result,
             runtime_state=last_runtime_state,
         )
 
+        _update_turn_status(topic_id, _operation_id, 'completed', saved.version_id)
+        RESEARCH_WORK.delete(_operation_id)
+
     def record_inputs(operation_id: str) -> None:
+        for job_id, job in RESEARCH_WORK.items():
+            if (job['account_id'] == account.account_id and job['topic_id'] == topic_id
+                    and job_id != (continuation_input or {}).get('operation_id')):
+                raise ApiProblem(409, 'lifecycle_conflict', 'The existing research turn is still active.')
         # Write before any external call, within operation admission. Replays do
         # not replace the original snapshot or send the provider another request.
         # The shared topic lock remains held through PostgreSQL admission; the
@@ -3476,6 +3714,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             original = RESEARCH_RUN_INPUTS.get(prior_id) or {}
             prior_operation = operations.store.get_operation(prior_id) or {}
             snapshot = original.get('runtime_checkpoint') or {}
+            unstarted = bool(background and continuation_input.get('unstarted') and not snapshot
+                             and not original.get('recovery_pending'))
             if prior_operation.get('status') in {'pending', 'running'}:
                 raise ApiProblem(409, 'lifecycle_conflict', 'The original run is still active.')
             if (original.get('owner_id') != account.account_id or original.get('topic_id') != topic_id
@@ -3484,7 +3724,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     or original.get('question_sha256') != sha256(effective_question.encode('utf-8')).hexdigest()
                     or original.get('as_of') != (topic.request.as_of.isoformat() if topic.request.as_of else None)
                     or original.get('scope_sha256') != (sha256(topic.request.scope.encode('utf-8')).hexdigest() if topic.request.scope else None)
-                    or _stored_form(snapshot.get('_sources')) != _stored_form(_research_source_fingerprints(sources))
+                    or _stored_form(original.get('sources') if unstarted else snapshot.get('_sources')) != _stored_form(_research_source_fingerprints(sources))
                     or _stored_form({k: v for k, v in (original.get('runtime_request') or {}).items() if k != 'parent_version_id'}) !=
                        _stored_form({k: v for k, v in request.model_dump(mode='json').items() if k != 'parent_version_id'})):
                 raise ApiProblem(409, 'lifecycle_conflict', 'Research inputs or provider configuration changed.')
@@ -3492,11 +3732,28 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             policy_input_limit = getattr(getattr(provider, 'policy', None), 'max_input_tokens', None)
             if type(policy_input_limit) is int and policy_input_limit > 0:
                 max_history_chars = max(2_000, policy_input_limit * 2)
-            admitted_continuation['runtime'] = RecoveryJournal(RESEARCH_RUN_INPUTS, prior_id, account.account_id).claim_runtime_continuation(
-                operation_id,
-                max_history_chars=max_history_chars,
-                saved_turn=_agent_turn_for(parent_version, prior_id),
-            )
+            if not unstarted:
+                admitted_continuation['runtime'] = RecoveryJournal(
+                    RESEARCH_RUN_INPUTS, prior_id, account.account_id,
+                ).claim_runtime_continuation(operation_id, max_history_chars=max_history_chars,
+                                             saved_turn=_agent_turn_for(parent_version, prior_id))
+        previous = continuation_input['operation_id'] if continuation_input else None
+        old_turn = TURN_RECORDS.get(turn_meta['turn_id'])
+        TURN_RECORDS.put(operation_id, {'account_id': account.account_id, 'topic_id': topic_id,
+                                        'turn_id': turn_meta['turn_id']})
+        turn_instructions.begin(*identity, operation_id, previous_operation_id=previous if old_turn else None,
+                                allow_reopen=not background and bool(previous))
+        TURN_STATUS.put(topic_id, {'owner_id': account.account_id, 'topic_id': topic_id,
+                                   'turn_id': turn_meta['turn_id'], 'current_operation_id': operation_id,
+                                   'logical_status': 'running'})
+        RESEARCH_WORK.put(operation_id, {
+            'account_id': account.account_id, 'topic_id': topic_id, 'turn_id': turn_meta['turn_id'],
+            'client_ip': getattr(http_request.state, 'client_ip', '0.0.0.0'),
+            'session_id': getattr(http_request.state, 'session_id', None),
+            'retry_signature': (RESEARCH_WORK.get(previous) or {}).get('retry_signature') if previous else None,
+        })
+        if previous:
+            RESEARCH_WORK.delete(previous)
         policy = getattr(provider, "policy", None)
         RESEARCH_RUN_INPUTS.put(operation_id, {
             "schema_version": "1", "operation_id": operation_id, "owner_id": account.account_id,
@@ -3534,7 +3791,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         request_payload=run_request_payload, result_field="research", build_result=build,
         session_id=topic_id, before_accept=record_inputs, commit_result=commit)
     _mark_replay(response, replayed)
-    return result
+    stored = RESEARCH_RUN_INPUTS[result.operation.operation_id]
+    return ResearchStartResponse(operation=result.operation, turn_id=stored["turn"]["turn_id"])
 
 
 def _agent_turn_for(version: Any, operation_id: str) -> ResearchTurn | None:
@@ -3628,6 +3886,12 @@ def continue_research_run(topic_id: str, operation_id: str, response: Response,
                           idempotency_key: IdempotencyKey, http_request: Request) -> OperationResponse:
     """Continue from a server-owned, fully settled research stage checkpoint."""
     account = _authenticated_account(http_request.headers.get('Authorization'))
+    return _continue_research_for_account(topic_id, operation_id, response, idempotency_key, http_request, account)
+
+
+def _continue_research_for_account(topic_id: str, operation_id: str, response: Response,
+                                   idempotency_key: str, http_request: Request, account: LocalAccount,
+                                   *, background: bool = False) -> OperationResponse:
     operations.require_owner(operation_id, f'account:{account.account_id}')
     try:
         topic = research_topics.get(account.account_id, topic_id)
@@ -3636,7 +3900,7 @@ def continue_research_run(topic_id: str, operation_id: str, response: Response,
     inputs = RESEARCH_RUN_INPUTS.get(operation_id)
     if not inputs or inputs.get('owner_id') != account.account_id or inputs.get('topic_id') != topic_id:
         raise ApiProblem(404, 'not_found', 'Research run inputs not found.')
-    if _replaces_turn(inputs):
+    if _replaces_turn(inputs) and not background:
         raise ApiProblem(409, 'lifecycle_conflict', 'A regenerated answer cannot be continued; regenerate it again.')
     # Resolve an already admitted continuation using its original, server-owned
     # request before checking today's version. A new key still goes through CAS.
@@ -3692,7 +3956,8 @@ def continue_research_run(topic_id: str, operation_id: str, response: Response,
         continuation_request = continuation_request.model_copy(update={'parent_version_id': parent.version_id})
     http_request.state.research_continuation = {'operation_id': operation_id, 'source_ids': source_ids,
         'captured_at': inputs.get('runtime_origin_captured_at', inputs['captured_at']), 'parent_version_id': parent.version_id}
-    return start_research_run(topic_id, continuation_request, response, idempotency_key, http_request)
+    return _start_research_for_account(topic_id, continuation_request, response, idempotency_key,
+                                       http_request, account, background=background)
 
 
 @app.post("/v2/research/topics/{topic_id}/runs/{operation_id}/recover", response_model=OperationResponse,
@@ -3723,7 +3988,198 @@ def _replaces_turn(inputs: Mapping[str, Any] | None) -> bool:
     return bool(((inputs or {}).get("turn") or {}).get("replaces_turn_id"))
 
 
+def _turn_http_error(error: Exception) -> ApiProblem:
+    if isinstance(error, InstructionNotFound):
+        return ApiProblem(404, 'not_found', 'Research turn not found.')
+    if isinstance(error, InstructionInvalid):
+        return ApiProblem(422, 'invalid_request', str(error))
+    code = 'idempotency_conflict' if 'idempotency' in str(error) else 'lifecycle_conflict'
+    return ApiProblem(409, code, str(error))
+
+
+@app.post('/v2/research/topics/{topic_id}/turns/{turn_id}/instructions',
+          status_code=201, response_model=ResearchInstruction, include_in_schema=False)
+def append_research_instruction(topic_id: str, turn_id: str, request: ResearchInstructionInput,
+                                http_request: Request, response: Response, idempotency_key: IdempotencyKey) -> dict:
+    account = _authenticated_account(http_request.headers.get('Authorization'))
+    try:
+        research_topics.get(account.account_id, topic_id)
+        identity = (account.account_id, topic_id, turn_id)
+        item, created = turn_instructions.append(*identity, request.text, idempotency_key)
+        doc = turn_instructions.read(*identity)
+    except TopicNotFound as error:
+        raise ApiProblem(404, 'not_found', 'Research topic not found.') from error
+    except (InstructionNotFound, InstructionConflict, InstructionInvalid) as error:
+        raise _turn_http_error(error) from error
+    response.status_code = 201 if created else 200
+    _mark_replay(response, not created)
+    receipt = _instruction_view(doc)[item['sequence'] - 1]
+    if created:
+        run_id = doc['operation_id']
+        record = RESEARCH_RUN_INPUTS.get(run_id)
+        if record:
+            progress = _build_research_run_progress_view(
+                research_topics.get(account.account_id, topic_id), operations._cache_operation(run_id), record, after=0)
+            research_live_broker.publish_progress(run_id, progress)
+    return receipt
+
+
+@app.post('/v2/research/topics/{topic_id}/turns/{turn_id}/stop', response_model=ResearchTurnStopped, include_in_schema=False)
+def stop_research_turn(topic_id: str, turn_id: str, http_request: Request, idempotency_key: IdempotencyKey) -> dict:
+    account = _authenticated_account(http_request.headers.get('Authorization'))
+    try:
+        research_topics.get(account.account_id, topic_id)
+        doc = turn_instructions.stop(account.account_id, topic_id, turn_id, idempotency_key=idempotency_key)
+    except TopicNotFound as error:
+        raise ApiProblem(404, 'not_found', 'Research topic not found.') from error
+    except (InstructionNotFound, InstructionConflict) as error:
+        raise _turn_http_error(error) from error
+    run_id = doc['operation_id']
+    operation = operations._cache_operation(run_id)
+    if operation.status in {'running', 'pending'}:
+        operations.cancel(run_id, operation.cancel_token, idempotency_key, owner_subject=f'account:{account.account_id}')
+    _deliver_cancelled_research(run_id, account.account_id)
+    _update_turn_status(topic_id, run_id, 'stopped')
+    RESEARCH_WORK.delete(run_id)
+    return {'turn_id': turn_id, 'status': 'stopped'}
+
+
+def _reconcile_research_work() -> None:
+    """Only jobs admitted with automatic continuation are eligible for this sweep."""
+    if not RESEARCH_WORK:
+        return
+    operations.recover_expired_leases()
+    for operation_id, work in list(RESEARCH_WORK.items()):
+        try:
+            _reconcile_research_attempt(operation_id, work)
+        except Exception:
+            # Storage/network outages on one topic must not starve other ready turns.
+            logging.getLogger(__name__).exception('Unable to reconcile research attempt %s', operation_id)
+
+
+def _reconcile_research_attempt(operation_id: str, work: dict, *, now: datetime | None = None) -> None:
+    operation = operations.store.get_operation(operation_id) or {}
+    if operation.get('status') in {'running', 'pending'}:
+        return
+    if work.get('resume_after') and datetime.fromisoformat(work['resume_after']) > (now or lifecycle_clock.now()):
+        return
+    account_id, topic_id, turn_id = (work[key] for key in ('account_id', 'topic_id', 'turn_id'))
+    identity = (account_id, topic_id, turn_id)
+    doc = TURN_RECORDS.get(turn_id) or {}
+    if doc.get('operation_id') != operation_id or doc.get('account_id') != account_id:
+        RESEARCH_WORK.delete(operation_id)
+        return
+    account = ACCOUNTS.get(account_id)
+    if not account or account.deleted_at:
+        RESEARCH_WORK.delete(operation_id)
+        return
+    try:
+        topic = research_topics.get(account_id, topic_id)
+    except TopicNotFound:
+        RESEARCH_WORK.delete(operation_id)
+        return
+    if operation.get('status') == 'cancelled' or doc['status'] == 'stopped':
+        if doc['status'] == 'open':
+            turn_instructions.stop(*identity)
+        _deliver_cancelled_research(operation_id, account_id)
+        _update_turn_status(topic_id, operation_id, 'stopped')
+        RESEARCH_WORK.delete(operation_id)
+        return
+    delivered = next((v for v in reversed(topic.versions) if _agent_turn_for(v, operation_id)), None)
+    if delivered:
+        _update_turn_status(topic_id, operation_id, 'completed', delivered.version_id)
+        RESEARCH_WORK.delete(operation_id)
+        return
+    inputs = RESEARCH_RUN_INPUTS.get(operation_id) or {}
+    cp = inputs.get('runtime_checkpoint') or {}
+    if topic.versions[-1].version_id != inputs.get('parent_version_id'):
+        # A user edit supersedes the candidate. Never publish it over the new head.
+        _update_turn_status(topic_id, operation_id, 'failed')
+        RESEARCH_WORK.delete(operation_id)
+        if doc['status'] == 'open':
+            turn_instructions.seal(*identity, doc['sequence'], operation_id=operation_id)
+        return
+    if work.get('result') or (doc['status'] == 'sealed' and cp.get('submission')):
+        def deliver() -> None:
+            if RESEARCH_WORK.get(operation_id) is None:
+                return
+            if work.get('result'):
+                source_records = cp.get('_sources', [])
+                try:
+                    current_sources = [research_sources.get(account_id, row['source_id']) for row in source_records]
+                except SourceNotFound:
+                    current_sources = []
+                if _stored_form(source_records) != _stored_form(_research_source_fingerprints(current_sources)):
+                    _update_turn_status(topic_id, operation_id, 'failed')
+                    RESEARCH_WORK.delete(operation_id)
+                    return
+                candidate = ResearchRunResult.model_validate(work['result'])
+                sources = list(dict.fromkeys([*topic.versions[-1].source_ids,
+                    *(row['source_id'] for row in cp.get('_sources', []))]))
+                chain = ResearchVersionChain(research_topics, account_id, topic_id, candidate.parent_version_id, sources)
+                saved = chain.save(chain.current(), candidate.content)
+                _update_turn_status(topic_id, operation_id, 'completed', saved.version_id)
+            else:
+                _deliver_saved_research(operation_id, account_id, reason=None)
+            RESEARCH_WORK.delete(operation_id)
+        turn_instructions.fenced(*identity, operation_id, deliver, allow_sealed=True)
+        return
+    pending = cp.get('pending') or {}
+    last_failure = next((e for e in reversed(cp.get('events', [])) if e.get('kind') == 'model_failure'), {})
+    claimed = (pending.get('kind') == 'tool_batch' and turn_instructions.action_status(
+        *identity, operation_id, f"{pending.get('call_id')}:{pending.get('cursor', 0)}",
+        cp.get('model_instruction_sequence', 0)) == 'claimed_unknown')
+    if claimed or last_failure.get('external_state') == 'unknown' or pending.get('kind') not in {
+            None, 'model_returned', 'tool_batch'}:
+        def finish_unknown() -> None:
+            _update_turn_status(topic_id, operation_id, 'failed')
+            _deliver_saved_research(operation_id, account_id, reason='external_result_unknown')
+            RESEARCH_WORK.delete(operation_id)
+        turn_instructions.seal(*identity, doc['sequence'], operation_id=operation_id, persist=finish_unknown)
+        return
+    if not cp:
+        # The seed lives in the admission journal; prior to the first checkpoint no model was sent.
+        # An unstarted worker may be adopted using the same admission guard and original binding.
+        retryable = any(ev.get('event') == 'operation.error' and ev.get('retryable') is True
+                        for ev in operations.store.get_events(operation_id))
+        if not retryable or inputs.get('recovery_pending') or not inputs.get('runtime_request'):
+            def end_without_version() -> None:
+                _update_turn_status(topic_id, operation_id, 'failed')
+                RESEARCH_WORK.delete(operation_id)
+            turn_instructions.seal(*identity, doc['sequence'], operation_id=operation_id,
+                                   persist=end_without_version)
+            return
+    request = Request({'type': 'http', 'headers': [], 'method': 'POST', 'path': '/'})
+    request.state.client_ip = work.get('client_ip', '0.0.0.0')
+    request.state.session_id = work.get('session_id')
+    try:
+        if cp:
+            _continue_research_for_account(topic_id, operation_id, Response(), 'auto-' + operation_id,
+                                           request, account, background=True)
+        else:
+            seed = ResearchRunRequest.model_validate(inputs['runtime_request'])
+            request.state.research_continuation = {
+                'operation_id': operation_id, 'source_ids': [row['source_id'] for row in inputs['sources']],
+                'captured_at': inputs['runtime_origin_captured_at'], 'parent_version_id': inputs['parent_version_id'],
+                'unstarted': True}
+            _start_research_for_account(topic_id, seed, Response(), 'auto-' + operation_id, request, account,
+                                        background=True)
+    except (InstructionConflict, ApiProblem) as error:
+        if RESEARCH_WORK.get(operation_id) is None:
+            return  # Another reconciler admitted the same continuation.
+        if isinstance(error, ApiProblem) and error.retryable:
+            return
+        # Unknown external work or a changed binding cannot authorize another external call.
+        def close_local() -> None:
+            _update_turn_status(topic_id, operation_id, 'failed')
+            _deliver_saved_research(operation_id, account_id, reason='recovery_unavailable')
+            RESEARCH_WORK.delete(operation_id)
+        turn_instructions.seal(*identity, doc['sequence'], operation_id=operation_id, persist=close_local)
+
+
 def _topic_has_active_run(account_id: str, topic_id: str) -> bool:
+    if any(work['account_id'] == account_id and work['topic_id'] == topic_id for work in RESEARCH_WORK.values()):
+        return True
     endpoint = f"/v1/research/topics/{topic_id}/runs"
     for operation_id, session_id in operations.store.session_ids().items():
         if session_id != topic_id:
@@ -3779,11 +4235,11 @@ def restore_research_topic(topic_id: str, authorization: str | None = Header(def
         raise ApiProblem(404, "not_found", "Research topic not found.") from error
 
 
-@app.get("/v2/research/topics/{topic_id}/runs", response_model=list[OperationResponse], response_model_exclude_none=True, include_in_schema=False)
+@app.get("/v2/research/topics/{topic_id}/runs", response_model=list[ResearchRunListEntry], response_model_exclude_none=True, include_in_schema=False)
 def list_research_runs(topic_id: str, http_request: Request) -> list[OperationResponse]:
     account = _authenticated_account(http_request.headers.get("Authorization"))
     try:
-        research_topics.get(account.account_id, topic_id)
+        topic = research_topics.get(account.account_id, topic_id)
     except TopicNotFound as error:
         raise ApiProblem(404, "not_found", "Research topic not found.") from error
     endpoint = f"/v1/research/topics/{topic_id}/runs"
@@ -3794,7 +4250,15 @@ def list_research_runs(topic_id: str, http_request: Request) -> list[OperationRe
         record = operations.store.get_operation(operation_id)
         if not record or record.get("endpoint") != endpoint or record.get("owner_subject") != f"account:{account.account_id}":
             continue
-        result.append(OperationResponse(operation=operations._cache_operation(operation_id)))
+        op = operations._cache_operation(operation_id)
+        turn_id = (TURN_RECORDS.get(operation_id) or {}).get('turn_id')
+        doc = TURN_RECORDS.get(turn_id) if turn_id else None
+        fields = {}
+        if doc and doc['account_id'] == account.account_id:
+            version = next((v for v in reversed(topic.versions) if _agent_turn_for(v, doc['operation_id'])), None)
+            fields = {'turn_id': turn_id, 'current_operation_id': doc['operation_id'],
+                      'logical_status': _logical_run_status(doc, op.status, version)}
+        result.append(ResearchRunListEntry(operation=op, **fields))
     return sorted(result, key=lambda item: item.operation.created_at, reverse=True)
 
 
@@ -3854,7 +4318,7 @@ def _build_research_run_progress_view(
         ),
         None,
     )
-    return build_progress(
+    progress = build_progress(
         operation_id=operation.operation_id,
         operation_status=str(operation.status),
         inputs=inputs,
@@ -3863,6 +4327,31 @@ def _build_research_run_progress_view(
         version_id=version.version_id if version else None,
         after=after,
     )
+
+    turn_id = (inputs.get('turn') or {}).get('turn_id')
+    doc = TURN_RECORDS.get(turn_id) if turn_id else None
+    if doc and doc['account_id'] == topic.owner_id and doc['topic_id'] == topic.topic_id:
+        progress.update(_turn_progress_fields(doc, operation.status, version))
+    return progress
+
+
+def _logical_run_status(doc: dict, operation_status: str, version: ResearchVersion | None) -> str:
+    operation_id = doc['operation_id']
+    if doc['status'] == 'stopped' or operation_status == 'cancelled':
+        status = 'stopped'
+    elif version and _agent_turn_for(version, doc['operation_id']):
+        status = 'completed'
+    elif RESEARCH_WORK.get(operation_id) is not None:
+        status = 'running'
+    else:
+        status = 'failed'
+    return status
+
+
+def _turn_progress_fields(doc: dict, operation_status: str, version: ResearchVersion | None) -> dict:
+    return {'instructions': _instruction_view(doc), 'logical_status': _logical_run_status(doc, operation_status, version),
+            'current_operation_id': doc['operation_id'], 'instruction_sequence': doc['sequence']}
+
 
 
 @app.get("/v2/research/topics/{topic_id}/runs/{operation_id}/progress", include_in_schema=False)
@@ -5324,6 +5813,10 @@ def attest_client_computation(computation_id: str, request: ClientComputationAtt
 
 
 def _deliver_cancelled_research(operation_id: str, owner_id: str) -> None:
+    _deliver_saved_research(operation_id, owner_id, reason="provider_cancelled")
+
+
+def _deliver_saved_research(operation_id: str, owner_id: str, *, reason: str | None) -> None:
     """Publish the last durable observations without resuming or settling an external call."""
     from types import SimpleNamespace
     from .research_runtime import run_research_agent
@@ -5333,9 +5826,9 @@ def _deliver_cancelled_research(operation_id: str, owner_id: str) -> None:
     # Stopping a regeneration keeps the answer it was meant to replace.
     if _replaces_turn(inputs):
         return
-    if inputs.get("owner_id") != owner_id or not any(checkpoint.get(k) for k in (
+    if inputs.get("owner_id") != owner_id or not checkpoint or (reason == "provider_cancelled" and not any(checkpoint.get(k) for k in (
         "facts", "calculations", "market_analyses", "draft_claims", "question_parts", "read_ranges"
-    )):
+    ))):
         return
     try:
         topic = research_topics.get(owner_id, inputs["topic_id"])
@@ -5347,7 +5840,8 @@ def _deliver_cancelled_research(operation_id: str, owner_id: str) -> None:
             return
         # The stopped branch consumes local observations only. The private checkpoint retains
         # the actual pending kind so a later recovery still sees any unknown external result.
-        reason = "provider_cancelled"
+        if reason is None and not checkpoint.get("submission"):
+            raise ValueError("Local delivery requires a submitted checkpoint.")
         local_state = {**checkpoint, "stopped": reason}
         accounting = checkpoint.get("_accounting", {})
         context = SimpleNamespace(private_diagnostics={}, calls=accounting.get("calls", 0), usage=accounting.get("usage"),
@@ -5361,7 +5855,13 @@ def _deliver_cancelled_research(operation_id: str, owner_id: str) -> None:
         result = persister.finalize_turn(operation_id=operation_id, parent_version=parent, outcome=outcome, runtime_state=local_state,
                                          context=context, finished_at=lifecycle_clock.now(), default_search_status="not_requested",
                                          official_fetch_status="partial" if checkpoint.get("acquired_source_ids") else "not_requested")
-        chain.save(parent, result.content)
+        record = TURN_RECORDS.get(meta['turn_id'])
+        if record:
+            result.content.turns[-1].lifecycle_status = 'stopped' if reason == 'provider_cancelled' else 'completed'
+            result.content.turns[-1].user_instructions = _saved_instructions(record, checkpoint, result.content)
+        saved = chain.save(parent, result.content)
+        status = 'stopped' if reason == 'provider_cancelled' else 'completed'
+        _update_turn_status(topic.topic_id, operation_id, status, saved.version_id)
     except (SourceNotFound, TopicNotFound, TopicVersionConflict):
         # Another writer won, or evidence was withdrawn. Never replace their revision.
         return

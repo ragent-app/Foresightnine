@@ -32,7 +32,7 @@ interface ComposerProps {
   addDisabled?: boolean;
   /** Files dropped onto the composer go to the add-sources panel. */
   onDropFiles?: (files: File[]) => void;
-  /** While a run is active the send button becomes the stop button (spec v6). */
+  /** A running turn can be stopped independently of sending a message. */
   onStop?: (() => void) | undefined;
   stopping?: boolean;
 }
@@ -40,7 +40,7 @@ interface ComposerProps {
 const MAX_HEIGHT = 200;
 
 /**
- * Spec §4.3 输入框: glass, grows 1–8 lines, Enter inserts a newline, Ctrl/⌘+Enter sends.
+ * The composer grows with input; Enter sends and Shift+Enter inserts a newline.
  * The send button turns solid only once there is something to send.
  * “+” and dropped files open the add-sources panel (M3).
  */
@@ -85,12 +85,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       <Icon name="tune" />
     </button>
   );
-  const sendButton = onStop ? (
+  const stopButton = onStop ? (
     <button type="button" className="icon-btn send ready stop" onClick={onStop} disabled={stopping} aria-label="停止研究" title={stopping ? "正在停止…" : "停止研究"}>
       <Icon name="stop" size={12} fill="currentColor" />
     </button>
-  ) : (
-    <button type="button" className={`icon-btn send${ready ? " ready" : ""}`} onClick={submit} disabled={!ready} aria-label={submitLabel} title={`${submitLabel}（Ctrl/⌘ + Enter）`}>
+  ) : null;
+  const sendButton = (
+    <button type="button" className={`icon-btn send${ready ? " ready" : ""}`} onClick={submit} disabled={!ready} aria-label={submitLabel} title={`${submitLabel}（Enter）`}>
       <Icon name="send" size={16} />
     </button>
   );
@@ -104,7 +105,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       placeholder={placeholder}
       onChange={(event) => onChange(event.target.value)}
       onKeyDown={(event) => {
-        if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) {
+        if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
           event.preventDefault();
           submit();
         }
@@ -126,7 +127,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             {addButton}
             <span className="grow" />
             {settingsButton}
-            {sendButton}
+            {stopButton}
+          {sendButton}
           </div>
         </>
       ) : (
@@ -134,6 +136,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           {addButton}
           {textarea}
           {settingsButton}
+          {stopButton}
           {sendButton}
         </div>
       )}

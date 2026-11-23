@@ -345,6 +345,30 @@ class CheckpointReportDraftRequest(BaseModel):
     clauses: list[DraftClause] = Field(min_length=1, max_length=100)
 
 
+class InstructionResult(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    sequence: int = Field(ge=1, description='Server sequence of the user instruction.')
+    status: Literal['answered', 'unresolved', 'superseded']
+    claim_ids: list[str] = Field(default_factory=list, max_length=30)
+    fact_ids: list[str] = Field(default_factory=list, max_length=30)
+    calculation_ids: list[str] = Field(default_factory=list, max_length=30)
+    report_excerpt: str | None = Field(default=None, min_length=1, max_length=3000,
+        description='Exact displayed report text for a presentation or format instruction; not proof of factual support.')
+    superseded_by_sequence: int | None = Field(default=None, ge=1,
+        description='Sequence of a later user message proposed as a correction.')
+    superseding_excerpt: str | None = Field(default=None, min_length=1, max_length=3000,
+        description='Exact text from that later user message supporting the proposed correction.')
+    explanation: str = Field(default='', max_length=3000)
+
+
+class SubmissionNextAction(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    tool: Literal['calculate_financials', 'news_search', 'acquire_sources']
+    arguments: dict[str, Any]
+    requirement: str = Field(min_length=1, max_length=1000)
+    expected_evidence: str = Field(min_length=1, max_length=1000)
+
+
 class SubmitRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     report: str = Field(min_length=1, max_length=100000, description=REPORT_FORMAT_GUIDANCE)
@@ -352,6 +376,10 @@ class SubmitRequest(BaseModel):
     limitations: list[str] = Field(max_length=499)
     stopping_reason: str = Field(min_length=1)
     status: Literal['completed', 'partial'] = 'completed'
+    instruction_results: list[InstructionResult] = Field(default_factory=list, max_length=100,
+        description='For each user instruction, bind its sequence to existing evidence or explain its unresolved limitation. Supersession needs an explicit explanation.')
+    next_actions: list[SubmissionNextAction] = Field(default_factory=list, max_length=10,
+        description='Concrete different authorized actions that may resolve a core gap; the server validates permissions, inputs, budget and prior attempts.')
 
 
 class ActivateToolGroupRequest(BaseModel):

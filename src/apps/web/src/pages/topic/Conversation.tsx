@@ -139,40 +139,6 @@ export interface AnswerTools {
   menu?: MenuEntry[];
 }
 
-const BLOCKED_CONTINUATION_REASONS = new Set<string>(["repeated_truncation", "repeated_timeout", "repeated_interruption_no_progress"]);
-
-/** Callout actions follow spec §4.3: one primary decision, the rest under “更多”. */
-function CalloutActions({ actions }: { actions: TurnActions }) {
-  const { recovery } = actions;
-  const continuationBlocked = recovery?.reason ? BLOCKED_CONTINUATION_REASONS.has(recovery.reason) : false;
-  const canContinue = recovery?.can_continue === true && !continuationBlocked;
-  const canDeliver = recovery?.can_deliver === true && actions.deliverable && !continuationBlocked;
-  const disabled = actions.busy || actions.locked;
-  let primary: { label: string; onClick: () => void; disabled: boolean };
-  if (actions.checking && !recovery) primary = { label: "正在检查恢复状态…", onClick: () => undefined, disabled: true };
-  else if (canContinue) primary = { label: "继续研究", onClick: actions.onContinue, disabled };
-  else if (canDeliver) primary = { label: "交付已有成果", onClick: actions.onDeliver, disabled };
-  else primary = { label: "重新提问", onClick: actions.onAskAgain, disabled: actions.locked };
-
-  const more: MenuEntry[] = [];
-  if (canDeliver && canContinue) more.push({ key: "deliver", label: "交付已有成果", icon: "check", onSelect: actions.onDeliver, disabled });
-  if (actions.onFillGap && !continuationBlocked) more.push({ key: "gap", label: "补充缺口", icon: "chev", onSelect: actions.onFillGap, disabled: actions.locked });
-  more.push({ key: "add", label: "添加资料", icon: "plus", onSelect: actions.onAddSources, disabled: actions.locked });
-  if (primary.label !== "重新提问") more.push({ key: "ask", label: "重新提问", icon: "pen", onSelect: actions.onAskAgain, disabled: actions.locked });
-
-  return (
-    <>
-      <div className="actions">
-        <button type="button" className="btn primary" onClick={primary.onClick} disabled={primary.disabled}>
-          {actions.busy ? "正在提交…" : primary.label}
-        </button>
-        {more.length > 0 ? <Menu label="更多" items={more} trigger="更多" triggerClassName="btn" align="start" /> : null}
-      </div>
-      {actions.error ? <span className="inline-error" role="alert">{actions.error}</span> : null}
-    </>
-  );
-}
-
 function missingParts(turn: ResearchV2.ResearchTurn): string[] {
   return (turn.question_parts ?? [])
     .filter((part) => part.status !== "answered")
@@ -203,7 +169,7 @@ export function GapCallout({ turn, actions, tone }: { turn: ResearchV2.ResearchT
   return (
     <div className="callout" role="note">
       <span className="h">
-        <span>{tone === "partial" ? "部分完成" : "仍有缺口"}</span>
+        <span>{tone === "partial" ? "研究限制" : "仍有缺口"}</span>
         {parts.length > 0 ? <span className="h-count">还差 {parts.length} 项</span> : null}
       </span>
       {shown.length > 0 ? (
@@ -219,7 +185,8 @@ export function GapCallout({ turn, actions, tone }: { turn: ResearchV2.ResearchT
       ) : null}
       {stopReason ? <span className="why">{stopReason}</span> : null}
       {recoveryReason ? <span className="why">{recoveryReason}</span> : null}
-      {tone === "partial" && actions ? <CalloutActions actions={actions} /> : null}
+      {tone === "partial" && actions ? <div className="actions"><button type="button" className="btn" disabled={actions.locked} onClick={actions.onAskAgain}>重新提问</button><Menu label="更多" trigger="更多" triggerClassName="btn" items={[{ key: "add", label: "添加资料", icon: "plus", onSelect: actions.onAddSources, disabled: actions.locked }]} /></div> : null}
+
     </div>
   );
 }
@@ -327,6 +294,7 @@ export function AnswerBlock({ turn, actions, tools }: { turn: ResearchV2.Researc
   const view = useTopicView();
   const items = turnContent(view.content, turn);
   const partial = turn.status === "partial";
+  const lifecycle = (turn as ResearchV2.ResearchTurn & { lifecycle_status?: "completed" | "stopped" }).lifecycle_status;
   const reportText = (turn.report ?? "").trim();
   const partialNotes = partial ? (turn.partial_notes ?? "").trim() : "";
   const events = useMemo(() => parseTurnEvents(turn.events), [turn.events]);
@@ -403,7 +371,7 @@ export function AnswerBlock({ turn, actions, tools }: { turn: ResearchV2.Researc
 
   return (
     <div className="answer">
-      {partial ? <GapCallout turn={turn} actions={actions} tone="partial" /> : null}
+      {lifecycle === "stopped" || (!lifecycle && String(turn.reason) === "provider_cancelled") ? <span className="meta">已停止</span> : lifecycle === "completed" || (!lifecycle && turn.status === "completed") ? <span className="meta">已完成</span> : null}
       <ClaimRefContext.Provider value={claimRefs}>
         {lead ? (
           <div className="report answer-lead">
@@ -437,7 +405,7 @@ export function AnswerBlock({ turn, actions, tools }: { turn: ResearchV2.Researc
       {trailingTables.map((table) => <div key={table.table_id}>{tablesById.get(table.table_id)}</div>)}
       <ClaimList claims={elevated} showRole className="claims elevated" />
       <EvidenceViews turn={turn} />
-      {!partial ? <GapCallout turn={turn} actions={actions} tone="completed" /> : null}
+      <GapCallout turn={turn} actions={actions} tone={partial ? "partial" : "completed"} />
       {partial && partialNotes ? <PartialNotesBlock notes={partialNotes} /> : null}
       <div className="answer-foot">
         {supporting.length > 0 ? (
@@ -513,9 +481,41 @@ export function TurnView({ turn, actions, first = false, tools, askTools, editin
       ) : !first || focusLabel ? (
         <AskBubble text={turn.question} focusLabel={focusLabel} tools={askTools} />
       ) : null}
+      {((turn as ResearchV2.ResearchTurn & { user_instructions?: import("../../api/types").ResearchInstruction[] }).user_instructions ?? []).map((instruction) => (
+        <div key={instruction.instruction_id}><AskBubble text={instruction.text} /><span className="meta">{instructionReceiptLabel(instruction.status)}</span><InstructionDelivery instruction={instruction} /></div>
+      ))}
       <AnswerBlock turn={turn} actions={actions} tools={tools} />
     </section>
   );
+}
+
+function instructionReceiptLabel(status: string) {
+  if (status === "included") return "已纳入本次研究";
+  if (status === "awaiting_receipt") return "模型调用回执待确认";
+  return "已收到";
+}
+
+function InstructionDelivery({ instruction }: { instruction: import("../../api/types").ResearchInstruction }) {
+  const view = useTopicView();
+  const labels: Record<string, string> = { linked_for_review: "已关联依据，待核实", unresolved: "尚未核实", limited: "受资料或权限限制", superseded: "已被后续要求取代", supersession_needs_review: "已定位原文，取代关系待核验" };
+  return <div className="meta">
+    {instruction.delivery_status ? (labels[instruction.delivery_status] ?? "尚未核实") : "尚未核实"}
+    {instruction.reason ? ` · ${instruction.reason}` : null}
+    {(instruction.text_locations?.length ?? 0) > 0 ? <details><summary>查看相关原文</summary>{instruction.text_locations!.map((location, index) => <p key={index}>{location.field === "partial_notes" ? "过程说明" : "报告"}{location.instruction_sequence != null ? ` · 指令 ${location.instruction_sequence}` : ""}：{location.excerpt}</p>)}</details> : null}
+    {(instruction.references ?? []).map((ref, index) => {
+      const id = typeof ref === "string" ? ref : ref.claim_id ?? ref.fact_id ?? ref.calculation_id;
+      if (!id) return null;
+      const claim = view.content.claims?.find((item) => item.claim_id === id);
+      const fact = view.content.facts?.find((item) => item.fact_id === id);
+      const calculation = view.content.calculations?.find((item) => item.calculation_id === id);
+      if (!claim && !fact && !calculation) return null;
+      return <button key={`${id}-${index}`} type="button" className="link" onClick={() => {
+        if (claim) view.gotoClaim(id);
+        else if (fact) view.openPanel({ kind: "reader", sourceId: fact.source_id, range: [fact.character_start, fact.character_end] });
+        else view.openPanel({ kind: "record", tab: "numbers", turnKey: instruction.turn_id });
+      }}>查看{claim ? "结论" : fact ? "原文" : "计算"} · {id}</button>;
+    })}
+  </div>;
 }
 
 /** A run that stopped before saving any turn (spec §4.3 回答：中断或已取消). */
@@ -529,10 +529,11 @@ export function InterruptedTurn({ number, startedAt, question, status, actions, 
       {question && !first ? <AskBubble text={question} /> : null}
       <div className="answer">
         <div className="callout error" role="note">
-          <span className="h">{status === "cancelled" ? "已取消" : "运行中断"}</span>
-          <span>{status === "cancelled" ? "这一轮已取消，没有保存新的版本。" : "这一轮没有完成，也没有保存新的版本。"}</span>
+          <span className="h">{status === "cancelled" ? "已停止" : "运行中断"}</span>
+          <span>{status === "cancelled" ? "研究已停止。以下显示已保存的进度。" : "这一轮没有完成，也没有保存新的版本。"}</span>
           {reason ? <span className="why">{reason}</span> : null}
-          <CalloutActions actions={actions} />
+          <div className="actions"><button type="button" className="btn" disabled={actions.locked} onClick={actions.onAskAgain}>重新提问</button><Menu label="更多" trigger="更多" triggerClassName="btn" items={[{ key: "add", label: "添加资料", icon: "plus", onSelect: actions.onAddSources, disabled: actions.locked }]} /></div>
+
         </div>
         {events.length > 0 ? <ProcessTimeline events={events} initialTailLimit={3} /> : null}
       </div>
@@ -588,6 +589,9 @@ export function LiveTurn({ number, startedAt, question, live = null, sectionRef,
       {!isContinue && !first ? <TurnStamp number={number} iso={startedAt} /> : null}
       {!isContinue && !first && question ? <AskBubble text={question} /> : null}
       {continuing === "regenerate" && editedQuestion ? <AskBubble text={editedQuestion} /> : null}
+      {(progress?.instructions ?? []).slice().sort((a, b) => a.sequence - b.sequence).map((instruction) => (
+        <div key={instruction.instruction_id}><AskBubble text={instruction.text} /><span className="meta">{instructionReceiptLabel(instruction.status)}</span></div>
+      ))}
       <div className="answer live-turn">
         <div className="live-turn-head">
           <span className="dot running" aria-hidden="true" />

@@ -556,7 +556,8 @@ def build_progress(*, operation_id: str, operation_status: str, inputs: Mapping[
     return {
         'operation_id': operation_id,
         'operation_status': operation_status if operation_status in _STATUSES else 'failed',
-        'turn': {'index': _int(turn_meta.get('index')) or 0, 'question': str(turn_meta.get('question') or inputs.get('question') or '')},
+        'turn': {**({'turn_id': turn_meta['turn_id']} if turn_meta.get('turn_id') else {}),
+                 'index': _int(turn_meta.get('index')) or 0, 'question': str(turn_meta.get('question') or inputs.get('question') or '')},
         'usage': usage,
         'current': current_activity(checkpoint) if operation_status == 'running' else None,
         'interim': _interim_counts(checkpoint, saved_turn),

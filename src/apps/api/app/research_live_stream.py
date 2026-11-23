@@ -262,6 +262,8 @@ class ResearchLiveBroker:
             current_state = {
                 'operation_status': progress.get('operation_status'),
                 'current': progress.get('current'),
+                **{key: progress[key] for key in ('logical_status', 'instructions', 'current_operation_id')
+                   if key in progress},
                 'usage': progress.get('usage'),
                 'interim': progress.get('interim'),
             }
@@ -347,6 +349,8 @@ class ResearchLiveBroker:
                     'operation_id': operation_id,
                     'operation_status': operation_status,
                     'version_id': version_id,
+                    **{key: progress[key] for key in ('logical_status', 'current_operation_id')
+                       if progress and key in progress},
                 },
             })
             channel.terminal_at = self._clock()

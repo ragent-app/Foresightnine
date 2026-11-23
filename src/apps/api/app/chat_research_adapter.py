@@ -4,6 +4,7 @@ import json
 from .model_protocol import (
     ModelResponse,
     ModelToolCall,
+    render_user_instructions,
     canonical_json_dumps,
     canonicalize_json_string,
     canonicalize_json_value,
@@ -38,6 +39,8 @@ class ChatResearchAdapter:
                 messages.append({'role': 'user', 'content': tail_note})
             else:
                 messages[-1] = {'role': 'user', 'content': f'{user_content}\n\n{tail_note}'}
+        for instruction in render_user_instructions(turn):
+            messages.append({'role': 'user', 'content': instruction})
         tools = [
             {
                 'type': 'function',

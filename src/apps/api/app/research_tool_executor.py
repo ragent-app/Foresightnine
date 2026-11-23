@@ -1424,6 +1424,7 @@ class ToolExecutionContext:
     save: Callable[[], None] = lambda: None
     outcome_builder: Callable[..., Any] | None = None
     can_afford_presubmit_followup: Callable[[], bool] = lambda: True
+    sync_instructions: Callable[[dict, str], bool] | None = None
     emit_reset: Callable[[int | None, str], None] = lambda *_: None
     deps: ToolDependencies = field(default_factory=ToolDependencies)
     batch_call_id: str = ''
@@ -1850,10 +1851,48 @@ def _exec_search_library(ctx: ToolExecutionContext, inv: _CallInvocation) -> Too
     return ToolCallResult(result=result, summary=summary)
 
 
+def _known_discovery_target(ctx: ToolExecutionContext, target: Any) -> str | None:
+    if not isinstance(target, str):
+        return None
+    normalized = ' '.join(target.split()).casefold()
+    if not normalized:
+        return None
+    task_texts = [ctx.question]
+    task_texts.extend(row.get('text', '') for row in ctx.state.get('user_instructions', []) if isinstance(row, dict))
+    task_texts.extend(row.get('question', '') for row in ctx.state.get('question_parts', []) if isinstance(row, dict))
+    def matches(text: str) -> bool:
+        value = ' '.join(text.split()).casefold()
+        if len(normalized) == 1 and normalized.isascii() and normalized.isalnum():
+            return re.search(r'(?<![a-z0-9])' + re.escape(normalized) + r'(?![a-z0-9])', value) is not None
+        return normalized in value
+    if any(matches(text) for text in task_texts if isinstance(text, str)):
+        return normalized
+    return None
+
+
+def _discovery_scope(ctx: ToolExecutionContext, req: Any) -> str | None:
+    """Identify an explicitly linked task route; unknown targets never lock discovery."""
+    target = _known_discovery_target(ctx, req.research_target)
+    if target is None:
+        return None
+    scope = {'target': target, 'since': str(req.since) if req.since else None, 'until': str(req.until) if req.until else None,
+             'languages': sorted(req.languages or []), 'sort_by': req.sort_by,
+             'providers': [type(p).__module__ + '.' + type(p).__qualname__ for p in ctx.news_providers],
+             'sources': sorted((sid, source.content_sha256) for sid, source in ctx.source_by_id.items()),
+             'leads': sorted(str(row.get('url')) for row in ctx.state.get('leads', []) if isinstance(row, dict)),
+             'instruction_sequence': ctx.state.get('model_instruction_sequence', 0)}
+    return sha256(json.dumps(scope, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
 def _exec_news_search(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallResult:
     if not ctx.news_providers or ctx.state.get('search_invalid_response'):
         reason = 'search_response_invalid' if ctx.state.get('search_invalid_response') else 'search_not_authorized_or_unavailable'
         return ToolCallResult(result={'status': 'unavailable', 'reason': reason})
+    scope = _discovery_scope(ctx, inv.req)
+    if scope is not None and scope in ctx.state.get('empty_discovery_scopes', []):
+        return ToolCallResult(result={'status': 'duplicate_action', 'reason': 'discovery_scope_no_progress',
+                                      'message': 'This discovery route returned no leads with the same evidence and scope. A paraphrase alone is not a new route.'},
+                              duplicate_kind='action')
     try:
         ctx.context.start_search()
     except ProviderFailure as error:
@@ -1899,6 +1938,10 @@ def _exec_news_search(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCa
     if news.invalid_response:
         ctx.state['search_invalid_response'] = True
     result, summary = news.result, news.summary
+    if scope is not None and result.get('status') == 'completed' and result.get('reason') == 'search_no_results' and not result.get('providers_partial') and not news.lead_rows:
+        scopes = ctx.state.setdefault('empty_discovery_scopes', [])
+        if scope not in scopes:
+            scopes.append(scope)
     _record_counter_search(ctx, inv, scope='external', result=result)
     if news.denied_count is not None and news.result.get('status') == 'failed':
         summary = None
@@ -2813,8 +2856,193 @@ def _exec_checkpoint_question_part(ctx: ToolExecutionContext, inv: _CallInvocati
     return ToolCallResult(result={'status': 'saved', 'question': row['question']}, summary={'kind': 'checkpoint_question_part', 'status': 'saved'})
 
 
+def _proposed_core_path(ctx: ToolExecutionContext, proposals: Sequence[Any]) -> dict | None:
+    """Admit only a validated, authorized and not-yet-tried proposed action."""
+    for proposal in proposals:
+        name, args = proposal.tool, dict(proposal.arguments)
+        if name == 'news_search' and not args.get('research_target'):
+            target = _known_discovery_target(ctx, proposal.requirement)
+            if target is not None:
+                args['research_target'] = proposal.requirement
+        spec = get_tool_spec(name)
+        try:
+            if spec is None:
+                continue
+            parsed = spec.input_model.model_validate(args)
+        except (ValueError, ValidationError):
+            continue
+        if name == 'news_search':
+            if not ctx.news_providers or ctx.state.get('search_invalid_response') or ctx.context.search_exhaustion() or ctx.context.cost_limited:
+                continue
+            if _discovery_scope(ctx, parsed) in ctx.state.get('empty_discovery_scopes', []):
+                continue
+        elif name == 'acquire_sources':
+            if ctx.acquire is None:
+                continue
+            leads = {row.get('url'): row for row in ctx.state.get('leads', []) if isinstance(row, dict)}
+            allowed = True
+            for raw in parsed.urls:
+                try:
+                    url = canonical_source_url(raw)
+                except ValueError:
+                    allowed = False
+                    break
+                lead = leads.get(url)
+                if not lead or lead.get('acquirable') is False or is_fred_source(url) or ctx.reusable_ids(ctx.acquire_key(url)):
+                    allowed = False
+                    break
+                if not terms_decision(url, initiator=lead.get('initiator') or 'agent').allowed:
+                    allowed = False
+                    break
+            if not allowed:
+                continue
+        elif name == 'calculate_financials':
+            facts = {row.get('fact_id'): row for row in [*(ctx.state.get('prior_facts') or []), *(ctx.state.get('facts') or [])] if isinstance(row, dict)}
+            valid = True
+            for plan in parsed.calculations:
+                ids = plan.fact_ids if plan.fact_ids is not None else [plan.first_fact_id, plan.second_fact_id]
+                selected = []
+                for fact_id in ids:
+                    fact = facts.get(fact_id) or {}
+                    source = ctx.source_by_id.get(fact.get('source_id'))
+                    start, end = fact.get('character_start'), fact.get('character_end')
+                    if (not _is_source_eligible(source, ctx.as_of) or type(start) is not int or type(end) is not int
+                            or not 0 <= start < end <= len(source.text) or source.text[start:end] != fact.get('quotation')):
+                        valid = False
+                        break
+                    selected.append({key: fact.get(key) for key in ('fact_id', 'value', 'unit', 'currency', 'period')})
+                if not valid:
+                    break
+                try:
+                    # The change-contribution formula has additional semantic
+                    # disclosure checks in the executor; do not promise it as
+                    # executable without those checks.
+                    if plan.formula == 'contribution_to_change_percent':
+                        valid = False
+                        break
+                    payload = {'formula': plan.formula, 'decimal_places': plan.decimal_places}
+                    if plan.periods is not None:
+                        payload['periods'] = plan.periods
+                    if plan.weights is not None:
+                        payload['weights'] = plan.weights
+                    if plan.formula in MULTI_FACT_FORMULAS:
+                        payload['facts'] = selected
+                    else:
+                        payload['first'], payload['second'] = selected
+                    calculate(CalculationRequest.model_validate(payload))
+                except (ValueError, ValidationError, KeyError, TypeError):
+                    valid = False
+                    break
+            if not valid:
+                continue
+        action = {key: value for key, value in args.items() if key != 'rationale'}
+        signature = compute_action_signature(name, action, ctx.state)
+        attempts = ctx.state.setdefault('presubmit_paths', [])
+        if signature in ctx.seen or signature in attempts:
+            continue
+        attempts.append(signature)
+        return {'tool': name, 'arguments': args, 'expected_evidence': proposal.expected_evidence,
+                'requirement': proposal.requirement, 'source_versions': {sid: s.content_sha256 for sid, s in ctx.source_by_id.items()}}
+    return None
+
+
+def _unread_core_path(ctx: ToolExecutionContext, requirements: list[dict]) -> dict | None:
+    """Suggest a concrete local retrieval path for a recorded core gap."""
+    unmet = [row for row in requirements if row.get('core', True)
+             and row.get('status') not in ('satisfied', 'not_applicable')]
+    if not unmet:
+        return None
+    attempts = ctx.state.setdefault('presubmit_paths', [])
+    locations = [ref for row in unmet for ref in row.get('references', []) if isinstance(ref, dict)]
+    for exchange in ctx.state.get('history', []):
+        for result in exchange.get('results', []) if isinstance(exchange, dict) else []:
+            try:
+                payload = json.loads(result.get('content', ''))
+            except (TypeError, ValueError):
+                continue
+            if isinstance(payload, dict):
+                locations.extend(hit.get('read_sources') for hit in payload.get('hits', [])
+                                 if isinstance(hit, dict) and isinstance(hit.get('read_sources'), dict))
+    for location in locations:
+        sid = location.get('source_id')
+        source = ctx.source_by_id.get(sid)
+        start = location.get('start', location.get('character_start'))
+        end = location.get('end', location.get('character_end'))
+        if not _is_source_eligible(source, ctx.as_of) or type(start) is not int or type(end) is not int:
+            continue
+        if not 0 <= start < end <= len(source.text) or end - start > MAX_READ_SOURCE_SPAN_CHARS:
+            continue
+        if any(row.get('source_id') == sid and row.get('start', 0) <= start and row.get('end', 0) >= end
+               for row in ctx.state.get('read_ranges', [])):
+            continue
+        key = sha256(json.dumps(['read', sid, source.content_sha256, start, end]).encode()).hexdigest()
+        if key in attempts:
+            continue
+        attempts.append(key)
+        return {'tool': 'read_sources', 'arguments': {'reads': [{'source_id': sid, 'start': start, 'end': end}],
+                'rationale': 'Verify a located passage relevant to the unresolved core requirement.'},
+                'source_version': source.content_sha256, 'expected_evidence': 'A located passage requiring verification.',
+                'missing_requirements': unmet}
+    eligible = []
+    for source in ctx.source_by_id.values():
+        if not _is_source_eligible(source, ctx.as_of) or not source.text:
+            continue
+        covered = 0
+        ranges = sorted((row.get('start'), row.get('end')) for row in ctx.state.get('read_ranges', [])
+                        if row.get('source_id') == source.source_id and type(row.get('start')) is int
+                        and type(row.get('end')) is int)
+        for start, end in ranges:
+            if start > covered:
+                break
+            covered = max(covered, end)
+        if covered < len(source.text):
+            eligible.append(source)
+    if eligible:
+        query = str(unmet[0].get('question') or ctx.question).strip()[:500]
+        versions = sorted((source.source_id, source.content_sha256) for source in eligible)
+        key = sha256(json.dumps(['library', query, versions], ensure_ascii=False).encode()).hexdigest()
+        already_searched = any(
+            isinstance(event, dict) and event.get('kind') == 'tool' and event.get('name') == 'search_library'
+            for event in ctx.state.get('events', [])
+        )
+        if query and key not in attempts and not already_searched:
+            attempts.append(key)
+            return {'tool': 'search_library', 'arguments': {'query': query, 'rationale': 'Locate evidence for the unresolved core requirement.'},
+                    'expected_evidence': 'Candidate source locations requiring verification.', 'missing_requirements': unmet}
+    return None
+
+
+def _authorized_external_core_path(ctx: ToolExecutionContext) -> dict | None:
+    """Use explicitly configured discovery/acquisition without expanding permissions."""
+    for lead in ctx.state.get('leads', []):
+        if not isinstance(lead, dict) or not isinstance(lead.get('url'), str):
+            continue
+        candidate = SimpleNamespace(tool='acquire_sources', arguments={'urls': [lead['url']],
+                                   'rationale': 'Inspect an already discovered source for the core question.'},
+                                   requirement=ctx.question, expected_evidence='An authorized source to inspect.')
+        path = _proposed_core_path(ctx, [candidate])
+        if path:
+            return path
+    if not any(event.get('kind') == 'tool' and event.get('name') == 'news_search'
+               for event in ctx.state.get('events', []) if isinstance(event, dict)):
+        query = ctx.question.strip()[:500]
+        if query:
+            candidate = SimpleNamespace(tool='news_search', arguments={'query': query,
+                                       'rationale': 'Find sources for the unresolved core question.'},
+                                       requirement=ctx.question, expected_evidence='Unverified source leads.')
+            return _proposed_core_path(ctx, [candidate])
+    return None
+
+
 def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallResult:
     req = inv.req
+    instructions = {item['sequence']: item for item in ctx.state.get('user_instructions', [])
+                    if isinstance(item, dict) and type(item.get('sequence')) is int}
+    sequences = [row.sequence for row in req.instruction_results]
+    if len(sequences) != len(set(sequences)):
+        raise ValueError('instruction_results must not contain duplicate sequences.')
+    if any(sequence not in instructions for sequence in sequences):
+        raise ValueError('instruction_results must refer to received user instruction sequences.')
     # Only standalone markers outside fenced code are renderable. Reject unknown IDs
     # instead of silently delivering a report with missing tables.
     known_tables = set(ctx.state.get('prior_table_ids', [])) | {
@@ -2888,6 +3116,50 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
     eligible = {sid for sid, source in ctx.source_by_id.items() if source_eligibility([source], ctx.as_of)[0][1] == 'eligible'}
     assessed_parts = assemble_parts(ctx.question, ctx.state, ctx.source_by_id, eligible, requirements, support_claims)
     missing_answer = any(p.get('core', True) and p.get('status') != 'answered' for p in assessed_parts if p.get('requirements'))
+    calculations = eligible_calculations(ctx.state, ctx.source_by_id, lambda source: _is_source_eligible(source, ctx.as_of))
+    report_issues = report_problems(req.report, support_claims, calculations, partial_notes=req.status == 'partial')
+    displayable_report = not rejected_claims and not report_issues
+    available_claim_ids = {claim.get('claim_id') for claim in support_claims}
+    available_fact_ids = set()
+    for fact in [*(ctx.state.get('facts') or []), *(ctx.state.get('prior_facts') or [])]:
+        if not isinstance(fact, dict) or fact.get('source_id') not in eligible:
+            continue
+        source = ctx.source_by_id[fact['source_id']]
+        start, end = fact.get('character_start'), fact.get('character_end')
+        if (type(start) is int and type(end) is int and 0 <= start < end <= len(source.text)
+                and source.text[start:end] == fact.get('quotation')):
+            available_fact_ids.add(fact.get('fact_id'))
+    available_calc_ids = {calc.get('calculation_id') for calc in calculations}
+    followup_requirements = list(requirements)
+    for instruction in ctx.state.get('user_instructions', []):
+        if not isinstance(instruction, dict) or type(instruction.get('sequence')) is not int:
+            continue
+        rows = [row for row in req.instruction_results if row.sequence == instruction['sequence']]
+        if (len(rows) != 1 or rows[0].status != 'answered'
+                or not (rows[0].claim_ids or rows[0].fact_ids or rows[0].calculation_ids
+                        or (displayable_report and rows[0].report_excerpt and rows[0].report_excerpt in req.report.strip()))
+                or not set(rows[0].claim_ids) <= available_claim_ids
+                or not set(rows[0].fact_ids) <= available_fact_ids
+                or not set(rows[0].calculation_ids) <= available_calc_ids):
+            followup_requirements.append({'id': f"instruction-{instruction['sequence']}", 'core': True,
+                                          'status': 'missing', 'question': str(instruction.get('text') or ''),
+                                          'reason': 'The user instruction has no linked answer.', 'references': []})
+    if ctx.sync_instructions is not None and ctx.can_afford_presubmit_followup() and (incomplete(followup_requirements) or missing_answer):
+        path = (_unread_core_path(ctx, followup_requirements) or _proposed_core_path(ctx, req.next_actions)
+                or _authorized_external_core_path(ctx))
+        if path:
+            ctx.state.setdefault('submission_drafts', []).append({
+                'status': req.status, 'report': req.report, 'limitations': list(req.limitations),
+                'stopping_reason': req.stopping_reason, 'followup_path': path,
+            })
+            if inv.signature:
+                ctx.seen.discard(inv.signature)
+                ctx.state['seen'] = sorted(ctx.seen)
+            ctx.emit_reset(ctx.active_call_seq, 'submission_rejected')
+            ctx.active_call_seq = None
+            return ToolCallResult(result={'status': 'needs_attention', 'reason': 'core_evidence_path_available',
+                                          'message': 'The candidate is a draft. Inspect the identified authorized passage, then reassess the unresolved core requirement.',
+                                          'next_action': path})
     skip_presubmit = (
         req.status == 'partial'
         and (any(text.strip() for text in req.limitations) or not claims)
@@ -2951,8 +3223,45 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
     if filing_gap:
         status = 'partial'
         gaps.append(gap(filing_gap['code'], filing_gap['message']))
-    calculations = eligible_calculations(ctx.state, ctx.source_by_id, lambda source: _is_source_eligible(source, ctx.as_of))
-    report_issues = report_problems(req.report, support_claims, calculations, partial_notes=req.status == 'partial')
+    instruction_reviews = []
+    for instruction in ctx.state.get('user_instructions', []):
+        if not isinstance(instruction, dict) or type(instruction.get('sequence')) is not int:
+            continue
+        sequence = instruction['sequence']
+        matches = [row for row in req.instruction_results if row.sequence == sequence]
+        review = {'sequence': sequence, 'status': 'unresolved', 'references': [],
+                  'reason': 'The instruction has no independently located answer or recorded limitation.'}
+        if len(matches) == 1:
+            row = matches[0]
+            refs = ([{'claim_id': value} for value in row.claim_ids if value in available_claim_ids]
+                    + [{'fact_id': value} for value in row.fact_ids if value in available_fact_ids]
+                    + [{'calculation_id': value} for value in row.calculation_ids if value in available_calc_ids])
+            valid_ids = len(refs) == len(row.claim_ids) + len(row.fact_ids) + len(row.calculation_ids)
+            if row.status == 'answered' and valid_ids and displayable_report and row.report_excerpt and row.report_excerpt in req.report.strip():
+                refs.append({'report_excerpt': row.report_excerpt})
+            if row.status == 'answered' and refs and valid_ids:
+                review.update(status='linked_for_review', references=refs,
+                              reason='References are located; whether they satisfy the instruction requires review.')
+            elif row.status == 'unresolved' and row.explanation.strip():
+                review.update(reason=row.explanation.strip())
+            elif row.status == 'superseded':
+                later = instructions.get(row.superseded_by_sequence)
+                later_text = later.get('text') if later else None
+                if (row.superseded_by_sequence is not None and row.superseded_by_sequence > sequence
+                        and isinstance(later_text, str) and row.superseding_excerpt
+                        and row.superseding_excerpt in later_text):
+                    start = later_text.index(row.superseding_excerpt)
+                    review.update(status='supersession_needs_review',
+                                  references=[{'instruction_sequence': row.superseded_by_sequence,
+                                               'start': start, 'end': start + len(row.superseding_excerpt),
+                                               'excerpt': row.superseding_excerpt}],
+                                  reason='A later user message is located; whether it replaces this instruction requires review.')
+                else:
+                    review.update(reason='The claimed replacement is not linked to an exact later user message; the original instruction remains unresolved.')
+        instruction_reviews.append(review)
+        if review['status'] in ('unresolved', 'supersession_needs_review'):
+            status = 'partial'
+            gaps.append(gap('model_reported', f"补充指令 {sequence}：{review['reason']}"))
     if status == 'completed' and (rejected_claims or report_issues):
         status = 'partial'
         for issue in report_issues[:10]:
@@ -2961,8 +3270,16 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
             gaps.append(gap('model_reported', '部分结论缺少可核对的依据。'))
     report = req.report if status == 'completed' else ''
     partial_notes = (req.report.strip() or None) if status == 'partial' and not (rejected_claims or report_issues) else None
-    ctx.state['events'].append({'kind': 'submission', 'stopping_reason': req.stopping_reason, 'status': status})
-    ctx.state['pending'] = None
+    for review in instruction_reviews:
+        for ref in review['references']:
+            excerpt = ref.pop('report_excerpt', None)
+            if excerpt:
+                displayed = report or partial_notes or ''
+                start = displayed.find(excerpt)
+                if start >= 0:
+                    ref.update({'field': 'report' if report else 'partial_notes', 'start': start,
+                                'end': start + len(excerpt), 'excerpt': excerpt})
+    pending_before_submission = ctx.state.get('pending')
     # Partial output contains only located claims and saved observations;
     # unvalidated free-form report text is not delivered as a conclusion.
     ctx.state['submission'] = {
@@ -2972,7 +3289,20 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
         'claims': claims,
         'gaps': gaps,
         'stopping_reason': req.stopping_reason,
+        'instruction_reviews': instruction_reviews,
     }
+    ctx.state['pending'] = None
+    submission_event = {'kind': 'submission', 'stopping_reason': req.stopping_reason, 'status': status}
+    ctx.state['events'].append(submission_event)
+    if ctx.sync_instructions is not None and ctx.sync_instructions(ctx.state, 'submit'):
+        ctx.state.setdefault('submission_drafts', []).append(ctx.state.pop('submission'))
+        ctx.state['events'].remove(submission_event)
+        ctx.state['pending'] = pending_before_submission
+        if inv.signature:
+            ctx.seen.discard(inv.signature)
+            ctx.state['seen'] = sorted(ctx.seen)
+        return ToolCallResult(result={'status': 'skipped', 'reason': 'user_instruction_updated',
+                                      'message': 'A newer user instruction arrived before final submission; replan.'})
     ctx.emit_reset(ctx.batch_call_seq, 'submission_partial' if status == 'partial' else 'call_completed')
     ctx.active_call_seq = None
     ctx.save()
@@ -3082,6 +3412,22 @@ def execute_tool_batch(
     for index in range(cursor, len(calls)):
         call = calls[index]
         ctx.context.ensure_running()
+        if ctx.sync_instructions is not None and ctx.sync_instructions(ctx.state, 'tool'):
+            # Complete every remaining tool-call/result pair before a new user
+            # message is placed in the next model request. No handler is run.
+            for skipped_index in range(index, len(calls)):
+                skipped = calls[skipped_index]
+                result = {'status': 'skipped', 'reason': 'user_instruction_updated',
+                          'message': 'A newer user instruction arrived; replan before using this call.'}
+                ctx.append_result(skipped.id, result)
+                ctx.state['events'].append({'kind': 'tool', 'tool_call_id': skipped.id,
+                                            'name': skipped.name, 'status': 'skipped',
+                                            'reason': 'user_instruction_updated'})
+                ctx.state['pending'] = ctx.tool_batch_pending(skipped_index + 1)
+                ctx.save()
+            ctx.state['pending'] = None
+            ctx.save()
+            return None, ctx.active_call_seq
         args: dict[str, Any] = {}
         transient_rate_limited = False
         rate_limit_retries = ctx.state.setdefault('rate_limit_retries', [])

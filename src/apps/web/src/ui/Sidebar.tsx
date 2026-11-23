@@ -1,10 +1,9 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
-import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useMatch, useNavigate } from "react-router-dom";
-import { useTopicActions, useTopics, queryKeys } from "../api/queries";
+import { useTopicActions, useTopics, useTurnStatuses } from "../api/queries";
 import { ApiError } from "../api/http";
-import { exportFull, isActiveStatus, latestVersion, listRuns } from "../api/research";
+import { exportFull, latestVersion } from "../api/research";
 import { signOut } from "../auth/account";
 import { useSession } from "../auth/session";
 import { copyText } from "../lib/clipboard";
@@ -19,19 +18,22 @@ import { Menu, type MenuEntry } from "./Menu";
 import { showToast } from "./toast";
 import { useLongPress } from "./useLongPress";
 
-type Tone = "running" | "done" | "partial" | "failed" | "none";
+type Tone = "running" | "done" | "partial" | "failed" | "stopped" | "none";
 
 function topicTone(topic: ResearchV2.ResearchTopic): Tone {
   const versions = topic.versions;
   const turns = versions[versions.length - 1]?.content.turns ?? [];
   const last = turns[turns.length - 1];
   if (!last) return "none";
+  const lifecycle = (last as ResearchV2.ResearchTurn & { lifecycle_status?: "completed" | "stopped" }).lifecycle_status;
+  if (lifecycle === "completed") return "done";
+  if (lifecycle === "stopped" || String(last.reason) === "provider_cancelled") return "stopped";
   return last.status === "partial" ? "partial" : "done";
 }
 
 const GROUP_ORDER: DateGroup[] = ["today", "week", "earlier"];
 /** Only states that differ from “done” are marked; a column of green dots says nothing. */
-const TONE_LABEL: Partial<Record<Tone, string>> = { running: "进行中", partial: "部分完成", failed: "失败" };
+const TONE_LABEL: Partial<Record<Tone, string>> = { running: "研究中", done: "已完成", partial: "研究限制", failed: "失败", stopped: "已停止" };
 
 export function topicLink(topicId: string): string {
   return `${window.location.origin}/research/${encodeURIComponent(topicId)}`;
@@ -78,7 +80,7 @@ function TopicRow({ topic, current, tone, items, renaming, onRename }: {
         }}
       >
         <span className="q">{title}</span>
-        {TONE_LABEL[tone] ? <><StatusDot tone={tone} /><span className="sr-only">{TONE_LABEL[tone]}</span></> : null}
+        {TONE_LABEL[tone] ? <><StatusDot tone={tone === "stopped" ? "failed" : tone} /><span className="sr-only">{TONE_LABEL[tone]}</span></> : null}
       </Link>
       <Menu
         label={`“${title}”的操作`}
@@ -135,13 +137,9 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ResearchV2.ResearchTopic | null>(null);
 
-  // Running state is only known for the open topic; it shares the topic page's runs cache.
-  const runs = useQuery({
-    queryKey: queryKeys.runs(currentId ?? ""),
-    queryFn: ({ signal }) => listRuns(currentId ?? "", signal),
-    enabled: currentId !== null,
-  });
-  const currentRunning = runs.data?.some((item) => isActiveStatus(item.operation.status)) ?? false;
+  // One account-scoped snapshot keeps every visible topic in sync across tabs.
+  const statuses = useTurnStatuses();
+  const statusByTopic = new Map((statuses.data ?? []).map((status) => [status.topic_id, status]));
 
   // A collapsed sidebar or closed drawer must not keep keyboard focus targets.
   useEffect(() => {
@@ -255,15 +253,23 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
             <div className="group-label">{label}</div>
             {items.map((topic) => {
               const current = topic.topic_id === currentId;
-              const running = current && currentRunning;
-              const tone = running ? "running" : topicTone(topic);
+              const status = statusByTopic.get(topic.topic_id);
+              const savedVersion = status?.version_id && topic.versions.some((version) => version.version_id === status.version_id);
+              const currentTone: Tone | null = status
+                ? status.logical_status === "running" ? "running"
+                  : status.logical_status === "stopped" ? "stopped"
+                  : status.logical_status === "failed" ? "failed"
+                  : !savedVersion ? "running"
+                  : "done"
+                : null;
+              const tone = currentTone ?? topicTone(topic);
               return (
                 <TopicRow
                   key={topic.topic_id}
                   topic={topic}
                   current={current}
                   tone={tone}
-                  items={actionsFor(topic, running)}
+                  items={actionsFor(topic, tone === "running")}
                   renaming={renamingId === topic.topic_id}
                   onRename={(title) => rename(topic, title)}
                 />

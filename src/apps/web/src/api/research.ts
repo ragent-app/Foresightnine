@@ -1,7 +1,7 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { apiRequest } from "./http";
 import type { ApiRequestOptions } from "./http";
-import type { OperationStatus, RecoveryStatus, RunProgress, SourceText, VersionSource } from "./types";
+import type { OperationStatus, RecoveryStatus, ResearchInstruction, RunProgress, SourceText, VersionSource } from "./types";
 
 const enc = encodeURIComponent;
 
@@ -69,9 +69,31 @@ export function startRun(
   });
 }
 
+export function sendInstruction(topicId: string, turnId: string, text: string, idempotencyKey: string): Promise<ResearchInstruction> {
+  return apiRequest(`${topicPath(topicId)}/turns/${enc(turnId)}/instructions`, { method: "POST", body: { text }, idempotencyKey });
+}
+
+export function stopTurn(topicId: string, turnId: string, idempotencyKey: string): Promise<{ turn_id: string; status: "stopped" }> {
+  return apiRequest(`${topicPath(topicId)}/turns/${enc(turnId)}/stop`, { method: "POST", body: {}, idempotencyKey });
+}
+
+export interface TurnStatus {
+  topic_id: string; turn_id: string; current_operation_id: string | null;
+  logical_status: "running" | "completed" | "stopped" | "failed"; version_id?: string | null;
+}
+export function listTurnStatuses(signal?: AbortSignal): Promise<TurnStatus[]> {
+  return apiRequest<TurnStatus[]>("/v2/research/turn-statuses", opts(signal));
+}
+
+export type ResearchRunResponse = ResearchV2.OperationResponse & {
+  logical_status?: "running" | "completed" | "stopped" | "failed";
+  current_operation_id?: string | null;
+  turn_id?: string | null;
+};
+
 // Backend returns newest first.
-export function listRuns(topicId: string, signal?: AbortSignal): Promise<ResearchV2.OperationResponse[]> {
-  return apiRequest<ResearchV2.OperationResponse[]>(`${topicPath(topicId)}/runs`, opts(signal));
+export function listRuns(topicId: string, signal?: AbortSignal): Promise<ResearchRunResponse[]> {
+  return apiRequest<ResearchRunResponse[]>(`${topicPath(topicId)}/runs`, opts(signal));
 }
 
 export function getProgress(

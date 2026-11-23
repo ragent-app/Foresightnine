@@ -2,9 +2,10 @@ import type { ResearchV2 } from "@foresightnine/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useBlocker, useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "../api/http";
-import { useActiveRun, useAttachSources, useCancelRun, useContinueTurn, useRecoverTurn, useRecoveryStatus, useReextractPdf, useRunProgress, useSaveVersion, useStartTurn, useTopic, useTopicActions, useVersionSources } from "../api/queries";
+import { readSession } from "../auth/session";
+import { useActiveRun, useAttachSources, useCancelRun, useContinueTurn, useRecoverTurn, useRecoveryStatus, useReextractPdf, useRunProgress, useSaveVersion, useStartTurn, useTopic, useTopicActions, useTurnStatuses, useVersionSources } from "../api/queries";
 import { exportFull, exportMetadata, isActiveStatus, latestVersion, restoreVersion } from "../api/research";
-import type { AvailableVersionSource, CreatedSource } from "../api/types";
+import type { AvailableVersionSource, CreatedSource, ResearchInstruction } from "../api/types";
 import { gapText } from "../lib/copy";
 import { saveJson } from "../lib/download";
 import { displayTurnNumber, formatDateTimeWithOffset } from "../lib/format";
@@ -28,6 +29,7 @@ import { TopicContext, type FocusCitation, type LiveRun, type PanelState, type T
 import { InterruptedTurn, LiveTurn, TurnView, type AnswerTools, type TurnActions } from "./topic/Conversation";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys, useTopics } from "../api/queries";
+import { appendInstruction, stopResearchTurn } from "../api/writes";
 import { showToast } from "../ui/toast";
 import { LiveCapsule } from "./topic/LiveBar";
 import { ReaderPanel } from "./topic/ReaderPanel";
@@ -82,8 +84,12 @@ function flash(element: Element): void {
 
 export function TopicPage() {
   const { topicId = "" } = useParams();
+  const topicIdRef = useRef(topicId);
+  topicIdRef.current = topicId;
+  const draftKey = `research-draft:${readSession()?.account.account_id ?? "anonymous"}:${topicId}`;
   const topicQuery = useTopic(topicId);
   const runs = useActiveRun(topicId);
+  const turnStatuses = useTurnStatuses();
   const inspector = useMedia(MEDIA.inspector);
   const { setPanelOpen } = useLayout();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -96,6 +102,10 @@ export function TopicPage() {
 
   const [panel, setPanel] = useState<PanelState>(null);
   const [text, setText] = useState("");
+  const [instructionBusy, setInstructionBusy] = useState(false);
+  const [instructionError, setInstructionError] = useState<string | null>(null);
+  const [receipts, setReceipts] = useState<ResearchInstruction[]>([]);
+  const [stoppingTurn, setStoppingTurn] = useState(false);
   const [focus, setFocus] = useState<FocusCitation | null>(null);
   const [options, setOptions] = useState<RunOptions>(DEFAULT_OPTIONS);
   const [pendingAsk, setPendingAsk] = useState<PendingAsk | null>(null);
@@ -133,14 +143,17 @@ export function TopicPage() {
   const content: ResearchV2.ResearchContent = version?.content ?? {};
   const turns = content.turns ?? [];
   const lastTurn = turns[turns.length - 1] ?? null;
-  const activeRun = runs.activeRun;
   const latestRun = runs.latestRun;
+  const progress = useRunProgress(topicId, runs.activeRun?.operation_id ?? latestRun?.operation_id ?? null);
+  const batchStatus = turnStatuses.data?.find((item) => item.topic_id === topicId);
+  const logicalRunning = progress.progress?.logical_status === "running" || (!progress.progress && batchStatus?.logical_status === "running");
+  const terminalLogical = progress.progress?.logical_status && progress.progress.logical_status !== "running";
+  const activeRun = terminalLogical ? null : runs.activeRun ?? (logicalRunning ? latestRun : null);
   const orphanRun =
-    latestRun && !isActiveStatus(latestRun.status) && (latestRun.status === "failed" || latestRun.status === "cancelled")
+    latestRun && ((!isActiveStatus(latestRun.status) && (latestRun.status === "failed" || latestRun.status === "cancelled")) || progress.progress?.logical_status === "failed" || progress.progress?.logical_status === "stopped")
       && topic && !turns.some((turn) => turn.operation_ids.includes(latestRun.operation_id))
       ? latestRun
       : null;
-  const progress = useRunProgress(topicId, activeRun?.operation_id ?? orphanRun?.operation_id ?? null);
   const progressMatches = (operationId: string | undefined) => progress.progress?.operation_id === operationId;
   const recoveryOperation = activeRun
     ? null
@@ -155,10 +168,15 @@ export function TopicPage() {
 
   // Reset per-topic state when navigating between topics.
   useEffect(() => {
-    setPanel(null); setText(""); setFocus(null); setPendingAsk(null); setAskedOp(null); setPendingContinue(null); setAwayFromLive(false);
+    setPanel(null); setText((() => { try { return sessionStorage.getItem(draftKey) ?? ""; } catch { return ""; } })()); setReceipts([]); setInstructionBusy(false); setInstructionError(null); setFocus(null); setPendingAsk(null); setAskedOp(null); setPendingContinue(null); setAwayFromLive(false);
     nearBottomRef.current = true; lastScrollTopRef.current = 0; suppressScrollUntilRef.current = 0;
     setNotice(null); setOptions(DEFAULT_OPTIONS); setDraftState({}); setSendPrompt(null);
-  }, [topicId]);
+  }, [topicId, draftKey]);
+
+  const updateText = (value: string) => {
+    setText(value);
+    try { if (value) sessionStorage.setItem(draftKey, value); else sessionStorage.removeItem(draftKey); } catch { /* storage may be unavailable */ }
+  };
 
   const dirty = version ? isDirty(version, draft) : false;
   const setDraft = useCallback((update: (current: ReviewDraft) => ReviewDraft) => setDraftState(update), []);
@@ -284,10 +302,13 @@ export function TopicPage() {
 
   const view: TopicView | null = useMemo(() => {
     if (!topic || !version) return null;
+    const snapshot = progress.progress;
+    const mergedInstructions = new Map<string, ResearchInstruction>();
+    for (const receipt of [...receipts, ...(snapshot?.instructions ?? [])]) if (receipt.turn_id === snapshot?.turn.turn_id) mergedInstructions.set(receipt.instruction_id, receipt);
     const live: LiveRun | null = activeRun
       ? {
           operation: activeRun,
-          progress: progressMatches(activeRun.operation_id) ? progress.progress : null,
+          progress: progressMatches(activeRun.operation_id) && snapshot ? { ...snapshot, instructions: [...mergedInstructions.values()] } : null,
           events: progressMatches(activeRun.operation_id) ? progress.events : [],
           stream: { getSnapshot: progress.getStreamSnapshot, subscribe: progress.subscribeStream },
         }
@@ -345,11 +366,32 @@ export function TopicPage() {
     };
     // progressMatches reads progress.progress, listed below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topic, version, content, turns, citations, sources, activeRun, progress.progress, progress.events, progress.getStreamSnapshot, progress.subscribeStream, turnNumbers, topicId, inspector, locked, addToTopic, draft, setDraft, dirty, saveDraft, saveVersion.isPending, notify, evidence, setEvidence]);
+  }, [topic, version, content, turns, citations, sources, activeRun, progress.progress, progress.events, progress.getStreamSnapshot, progress.subscribeStream, receipts, turnNumbers, topicId, inspector, locked, addToTopic, draft, setDraft, dirty, saveDraft, saveVersion.isPending, notify, evidence, setEvidence]);
   const cancelling = cancel.isPending || (cancel.isSuccess && cancel.variables?.operation_id === activeRun?.operation_id);
 
   const send = () => {
     const question = text.trim();
+    if (activeRun) {
+      const turnId = progress.progress?.turn.turn_id;
+      if (!question || instructionBusy) return;
+      if (!turnId) { setInstructionError("正在取得研究轮次，请稍后发送；草稿已保留。"); return; }
+      if ([...question].length > 4000) { setInstructionError("追加指令不能超过 4000 个字符。"); return; }
+      setInstructionBusy(true); setInstructionError(null);
+      void appendInstruction(topicId, turnId, question).then((receipt) => {
+        if (topicIdRef.current !== topicId) {
+          try { if (sessionStorage.getItem(draftKey)?.trim() === question) sessionStorage.removeItem(draftKey); } catch {}
+          return;
+        }
+        setReceipts((previous) => [...previous.filter((item) => item.instruction_id !== receipt.instruction_id), receipt]);
+        setText((current) => { if (current.trim() !== question) return current; try { sessionStorage.removeItem(draftKey); } catch {} return ""; });
+        followLiveOutput();
+      }).catch((error) => {
+        if (topicIdRef.current !== topicId) return;
+        setInstructionError(error instanceof ApiError && error.status === 409 ? "本轮已结束或指令冲突，内容已保留，可作为下一轮追问。" : `发送未确认，请重试。${describeError(error)}`);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.runs(topicId) });
+      }).finally(() => { if (topicIdRef.current === topicId) setInstructionBusy(false); });
+      return;
+    }
     if (!version || !question || locked || !optionsValid(options)) return;
     if (dirty) { setSendPrompt({ error: null }); return; }
     sendWith(version.version_id);
@@ -379,7 +421,7 @@ export function TopicPage() {
         setPendingContinue(null);
         setAskedOp({ operationId: response.operation.operation_id, question });
         setPendingAsk({ question, at: new Date().toISOString(), turnsAt: turns.length, operationId: response.operation.operation_id });
-        setText("");
+        updateText("");
         setFocus(null);
         followLiveOutput();
       },
@@ -555,7 +597,7 @@ export function TopicPage() {
   };
   const liveIndex = live?.progress?.turn.index ?? 0;
   const liveCommitted = live !== null && turns.some((turn) => turn.operation_ids.includes(live.operation.operation_id));
-  const liveTerminal = live?.progress != null && !isActiveStatus(live.progress.operation_status);
+  const liveTerminal = live?.progress != null && (live.progress.logical_status ? live.progress.logical_status !== "running" : !isActiveStatus(live.progress.operation_status));
   const showLiveTurn = live !== null && !liveCommitted && !liveTerminal;
   const showPendingTurn = showLiveTurn || (!live && pendingAsk !== null);
   const isContinuingLastTurn =
@@ -751,7 +793,7 @@ export function TopicPage() {
                   number={turns.length + 1}
                   startedAt={orphanRun.created_at}
                   question={(progressMatches(orphanRun.operation_id) ? progress.progress?.turn.question : "") || (turns.length === 0 ? topic!.request.question ?? "" : "")}
-                  status={orphanRun.status === "cancelled" ? "cancelled" : "failed"}
+                  status={orphanRun.status === "cancelled" || progress.progress?.logical_status === "stopped" ? "cancelled" : "failed"}
                   events={progressMatches(orphanRun.operation_id) ? progress.events : []}
                   first={turns.length === 0}
                   actions={turnActions((progressMatches(orphanRun.operation_id) ? progress.progress?.turn.question : "") || topic!.request.question || "", true, null)}
@@ -799,26 +841,36 @@ export function TopicPage() {
                 </div>
               ) : null}
               {cancel.isError ? <span className="inline-error" role="alert">{describeError(cancel.error)}</span> : null}
+              {progress.error && activeRun ? <span className="inline-error" role="alert">无法更新研究进度：{describeError(progress.error)}</span> : null}
               <Composer
                 ref={composerRef}
                 variant="dock"
                 value={text}
-                onChange={setText}
+                onChange={updateText}
                 onSubmit={send}
                 onOpenSettings={() => setPanel({ kind: "settings" })}
                 onAddSources={() => setPanel({ kind: "add" })}
                 addDisabled={locked}
                 onDropFiles={(files) => { if (files[0]) setPanel({ kind: "add", initial: { tab: "file", file: files[0] } }); }}
                 label="追问"
-                placeholder={locked ? "研究进行中，可以先停止再提问" : "继续追问…"}
+                placeholder={activeRun ? "追加研究要求…" : "继续追问…"}
                 submitLabel="发送"
-                disabled={locked}
-                onStop={live ? () => cancel.mutate(live.operation) : undefined}
-                stopping={cancelling}
-                busy={startTurn.isPending}
+                disabled={startTurn.isPending && !activeRun}
+                onStop={live ? () => {
+                  const turnId = live.progress?.turn.turn_id;
+                  if (!turnId) { if (live.progress) cancel.mutate(live.operation); else setInstructionError("正在取得研究轮次，请稍后停止。"); return; }
+                  setStoppingTurn(true);
+                  void stopResearchTurn(topicId, turnId).then(() => {
+                    void queryClient.invalidateQueries({ queryKey: queryKeys.runs(topicId) });
+                    void queryClient.invalidateQueries({ queryKey: queryKeys.topic(topicId) });
+                    void queryClient.invalidateQueries({ queryKey: ["research-turn-statuses"] });
+                  }).catch((error) => setInstructionError(describeError(error))).finally(() => setStoppingTurn(false));
+                } : undefined}
+                stopping={cancelling || stoppingTurn}
+                busy={startTurn.isPending || instructionBusy}
                 canSubmit={text.trim().length > 0}
                 tokens={tokens}
-                error={startTurn.isError && turns.length > 0 ? describeError(startTurn.error) : null}
+                error={instructionError ?? (startTurn.isError && turns.length > 0 ? describeError(startTurn.error) : null)}
               />
             </div>
           </div>
