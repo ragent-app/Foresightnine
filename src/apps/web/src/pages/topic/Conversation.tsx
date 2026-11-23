@@ -1,5 +1,5 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
-import { useCallback, useMemo, useState, type Ref } from "react";
+import { useCallback, useMemo, useState, type ReactNode, type Ref } from "react";
 import { Link } from "react-router-dom";
 import type { ProgressEvent, RecoveryStatus } from "../../api/types";
 import { formatInterimParts, formulaLabel, gapText, recoveryReasonLabel, turnReasonLabel, VERIFY_NOTE } from "../../lib/copy";
@@ -10,6 +10,9 @@ import { Icon } from "../../ui/icons";
 import { ClaimRefContext, extractReferencedChartIds, extractReferencedTableIds, MarkdownContent, type ClaimRefs } from "../../ui/MarkdownContent";
 import { useNow } from "../../ui/media";
 import { Menu, type MenuEntry } from "../../ui/Menu";
+import { showToast } from "../../ui/toast";
+import { answerMarkdown, markdownToPlain } from "../../lib/answerCopy";
+import { copyText } from "../../lib/clipboard";
 import { CitationButton } from "./Citation";
 import { EvidenceViews } from "./EvidenceViews";
 import { ChartCard } from "./charts/ChartCard";
@@ -79,13 +82,34 @@ export function TurnStamp({ number, iso }: { number: number; iso: string }) {
   return <div className="stamp">{turnStamp(number, iso)}</div>;
 }
 
-export function AskBubble({ text, focusLabel }: { text: string; focusLabel?: string | null }) {
+async function copyWithToast(text: string, done: string): Promise<boolean> {
+  const ok = await copyText(text);
+  showToast(ok ? done : "无法访问剪贴板", { tone: ok ? "info" : "error" });
+  return ok;
+}
+
+/** The question bubble; copy (and, for the latest turn, edit) appear on hover or focus. */
+export function AskBubble({ text, focusLabel, tools }: { text: string; focusLabel?: string | null; tools?: ReactNode }) {
   return (
-    <div className="ask">
-      {focusLabel ? <span className="focus-ref">{focusLabel}</span> : null}
-      {text}
+    <div className="ask-wrap">
+      <div className="ask">
+        {focusLabel ? <span className="focus-ref">{focusLabel}</span> : null}
+        {text}
+      </div>
+      <div className="ask-tools">
+        {tools}
+        <button type="button" className="icon-btn tool" aria-label="复制问题" title="复制问题" onClick={() => void copyWithToast(text, "已复制问题")}>
+          <Icon name="copy" size={15} />
+        </button>
+      </div>
     </div>
   );
+}
+
+/** Extra answer actions supplied by the page (regenerate, fork); copying is always available. */
+export interface AnswerTools {
+  primary?: ReactNode;
+  menu?: MenuEntry[];
 }
 
 const BLOCKED_CONTINUATION_REASONS = new Set<string>(["repeated_truncation", "repeated_timeout", "repeated_interruption_no_progress"]);
@@ -272,7 +296,7 @@ function FootToggle({ label, open, onToggle }: { label: string; open: boolean; o
  * Spec v6 answer order: what is missing (partial), the answer's lead, key numbers, the report,
  * counter-evidence, then one quiet row for evidence, parts, process and record links.
  */
-export function AnswerBlock({ turn, actions }: { turn: ResearchV2.ResearchTurn; actions: TurnActions | null }) {
+export function AnswerBlock({ turn, actions, tools }: { turn: ResearchV2.ResearchTurn; actions: TurnActions | null; tools?: AnswerTools | undefined }) {
   const view = useTopicView();
   const items = turnContent(view.content, turn);
   const partial = turn.status === "partial";
@@ -333,7 +357,22 @@ export function AnswerBlock({ turn, actions }: { turn: ResearchV2.ResearchTurn; 
   const answered = parts.filter((part) => part.status === "answered").length;
   const recordLinks = answerSummary(turn, view.content).filter((part) => part.tab === "numbers" || part.tab === "sources");
   const steps = toolSteps > 0 ? toolSteps : rows.length;
-  const hasFoot = supporting.length > 0 || parts.length > 0 || rows.length > 0 || recordLinks.length > 0;
+  const [copied, setCopied] = useState(false);
+  const markdown = () => answerMarkdown(turn, {
+    claims: view.content.claims ?? [], turnClaims: items.claims, tables: view.content.tables ?? [], charts: view.content.charts ?? [],
+    citations: view.citations, sources: view.sources, sourceTitle: view.sourceTitle,
+  });
+  const copyAnswer = async () => {
+    if (await copyWithToast(markdown(), "已复制回答")) {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    }
+  };
+  const copyMenu: MenuEntry[] = [
+    { key: "plain", label: "复制为纯文本", icon: "copy", onSelect: () => void copyWithToast(markdownToPlain(markdown()), "已复制回答") },
+    { key: "question", label: "复制问题", icon: "copy", onSelect: () => void copyWithToast(turn.question, "已复制问题") },
+    ...(tools?.menu?.length ? ["separator" as const, ...tools.menu] : []),
+  ];
 
   return (
     <div className="answer">
@@ -372,25 +411,31 @@ export function AnswerBlock({ turn, actions }: { turn: ResearchV2.ResearchTurn; 
       <EvidenceViews turn={turn} />
       {!partial ? <GapCallout turn={turn} actions={actions} tone="completed" /> : null}
       {partial && partialNotes ? <PartialNotesBlock notes={partialNotes} /> : null}
-      {hasFoot ? (
-        <div className="answer-foot">
-          {supporting.length > 0 ? (
-            <FootToggle label={`依据 ${supporting.length} 条`} open={evidenceOpen} onToggle={() => view.setEvidence(turn.turn_id, !evidenceOpen)} />
-          ) : null}
-          {parts.length > 0 ? (
-            <FootToggle label={`已回答 ${answered}/${parts.length} 部分`} open={partsOpen} onToggle={() => setPartsOpen((open) => !open)} />
-          ) : null}
-          {rows.length > 0 ? (
-            <FootToggle label={`过程 ${steps} 步`} open={processOpen} onToggle={() => setProcessOpen((open) => !open)} />
-          ) : null}
-          {recordLinks.map((part) => (
-            <button key={part.tab} type="button" className="foot-btn" onClick={() => view.openPanel({ kind: "record", tab: part.tab, turnKey: turn.turn_id })}>
-              {part.label}
-              <Icon name="chev" size={14} />
-            </button>
-          ))}
+      <div className="answer-foot">
+        {supporting.length > 0 ? (
+          <FootToggle label={`依据 ${supporting.length} 条`} open={evidenceOpen} onToggle={() => view.setEvidence(turn.turn_id, !evidenceOpen)} />
+        ) : null}
+        {parts.length > 0 ? (
+          <FootToggle label={`已回答 ${answered}/${parts.length} 部分`} open={partsOpen} onToggle={() => setPartsOpen((open) => !open)} />
+        ) : null}
+        {rows.length > 0 ? (
+          <FootToggle label={`过程 ${steps} 步`} open={processOpen} onToggle={() => setProcessOpen((open) => !open)} />
+        ) : null}
+        {recordLinks.map((part) => (
+          <button key={part.tab} type="button" className="foot-btn" onClick={() => view.openPanel({ kind: "record", tab: part.tab, turnKey: turn.turn_id })}>
+            {part.label}
+            <Icon name="chev" size={14} />
+          </button>
+        ))}
+        <span className="grow" />
+        <div className="answer-tools" role="group" aria-label="回答操作">
+          {tools?.primary}
+          <button type="button" className="icon-btn tool" aria-label="复制回答" title="复制回答（Markdown，含来源）" onClick={() => void copyAnswer()}>
+            <Icon name={copied ? "check" : "copy"} size={15} />
+          </button>
+          <Menu label="更多回答操作" trigger={<Icon name="more" size={16} />} triggerClassName="icon-btn tool" items={copyMenu} />
         </div>
-      ) : null}
+      </div>
       {supporting.length > 0 ? (
         <div className="evidence" hidden={!evidenceOpen}>
           <div className="gtitle"><span className="role support">支持</span>{supporting.length}</div>

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { useLocation } from "react-router-dom";
 import { MEDIA, useMedia } from "./media";
 import { Sidebar } from "./Sidebar";
+import { Toasts } from "./toast";
 
 const SIDE_KEY = "foresightnine.web.sidebar.v1";
 
@@ -64,6 +65,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         {!wide && drawerOpen ? <div className="side-scrim" onClick={() => setDrawerOpen(false)} aria-hidden="true" /> : null}
         <Sidebar drawer={!wide} open={wide ? !collapsed : drawerOpen} onClose={() => setDrawerOpen(false)} onToggle={toggleSide} />
         <main className="main">{children}</main>
+        <Toasts />
       </div>
     </LayoutContext.Provider>
   );

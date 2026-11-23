@@ -3,14 +3,19 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useMatch, useNavigate } from "react-router-dom";
 import { useTopics, queryKeys } from "../api/queries";
-import { isActiveStatus, listRuns } from "../api/research";
+import { ApiError } from "../api/http";
+import { exportFull, isActiveStatus, latestVersion, listRuns } from "../api/research";
 import { signOut } from "../auth/account";
 import { useSession } from "../auth/session";
+import { copyText } from "../lib/clipboard";
+import { saveJson } from "../lib/download";
 import { DATE_GROUP_LABEL, dateGroup, type DateGroup } from "../lib/format";
 import { topicTitle } from "../lib/research";
 import { StatusDot } from "./controls";
 import { Icon } from "./icons";
-import { Menu } from "./Menu";
+import { Menu, type MenuEntry } from "./Menu";
+import { showToast } from "./toast";
+import { useLongPress } from "./useLongPress";
 
 type Tone = "running" | "done" | "partial" | "failed" | "none";
 
@@ -25,6 +30,62 @@ function topicTone(topic: ResearchV2.ResearchTopic): Tone {
 const GROUP_ORDER: DateGroup[] = ["today", "week", "earlier"];
 /** Only states that differ from “done” are marked; a column of green dots says nothing. */
 const TONE_LABEL: Partial<Record<Tone, string>> = { running: "进行中", partial: "部分完成", failed: "失败" };
+
+export function topicLink(topicId: string): string {
+  return `${window.location.origin}/research/${encodeURIComponent(topicId)}`;
+}
+
+async function exportTopic(topic: ResearchV2.ResearchTopic): Promise<void> {
+  const version = latestVersion(topic);
+  try {
+    saveJson(await exportFull(topic.topic_id, version.version_id), `foresightnine-${topic.topic_id}-${version.version_id}.json`);
+  } catch (error) {
+    showToast(error instanceof ApiError && error.status === 403 ? "有资料不允许导出，无法导出完整记录。" : "导出失败，请稍后重试。", { tone: "error" });
+  }
+}
+
+/**
+ * One research row. The same menu opens from the visible “···” button, a right-click, a touch
+ * long-press, or the keyboard (Menu key / Shift+F10): the context menu is a shortcut, never the
+ * only way to an action.
+ */
+function TopicRow({ topic, current, tone, items }: { topic: ResearchV2.ResearchTopic; current: boolean; tone: Tone; items: MenuEntry[] }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const longPress = useLongPress(() => setMenuOpen(true));
+  const title = topicTitle(topic);
+  return (
+    <div
+      className={`row-wrap${menuOpen ? " menu-open" : ""}`}
+      onContextMenu={(event) => { event.preventDefault(); setMenuOpen(true); }}
+      {...longPress}
+    >
+      <Link
+        className="row"
+        to={`/research/${encodeURIComponent(topic.topic_id)}`}
+        aria-current={current ? "page" : undefined}
+        title={title}
+        onKeyDown={(event) => {
+          if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+            event.preventDefault();
+            setMenuOpen(true);
+          }
+        }}
+      >
+        <span className="q">{title}</span>
+        {TONE_LABEL[tone] ? <><StatusDot tone={tone} /><span className="sr-only">{TONE_LABEL[tone]}</span></> : null}
+      </Link>
+      <Menu
+        label={`“${title}”的操作`}
+        align="start"
+        trigger={<Icon name="more" size={16} />}
+        triggerClassName="row-more"
+        items={items}
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+      />
+    </div>
+  );
+}
 
 export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; open: boolean; onClose: () => void; onToggle: () => void }) {
   const navigate = useNavigate();
@@ -69,6 +130,14 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
     return GROUP_ORDER.flatMap((group) => (result.has(group) ? [[group, result.get(group)!] as const] : []));
   }, [topics.data, filter]);
 
+  const actionsFor = (topic: ResearchV2.ResearchTopic): MenuEntry[] => [
+    {
+      key: "copy-link", label: "复制链接", icon: "link",
+      onSelect: () => void copyText(topicLink(topic.topic_id)).then((ok) => showToast(ok ? "已复制链接" : "无法访问剪贴板", { tone: ok ? "info" : "error" })),
+    },
+    { key: "export", label: "导出完整记录", icon: "download", onSelect: () => void exportTopic(topic) },
+  ];
+
   const className = `side${drawer && open ? " open" : ""}`;
   return (
     <aside ref={asideRef} className={className} aria-label="侧栏">
@@ -96,13 +165,7 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
             {items.map((topic) => {
               const current = topic.topic_id === currentId;
               const tone = current && currentRunning ? "running" : topicTone(topic);
-              const title = topicTitle(topic);
-              return (
-                <Link key={topic.topic_id} className="row" to={`/research/${encodeURIComponent(topic.topic_id)}`} aria-current={current ? "page" : undefined} title={title}>
-                  <span className="q">{title}</span>
-                  {TONE_LABEL[tone] ? <><StatusDot tone={tone} /><span className="sr-only">{TONE_LABEL[tone]}</span></> : null}
-                </Link>
-              );
+              return <TopicRow key={topic.topic_id} topic={topic} current={current} tone={tone} items={actionsFor(topic)} />;
             })}
           </div>
         ))}

@@ -2010,4 +2010,65 @@ describe("TopicPage", () => {
       expect(readerPanel.querySelectorAll("mark.on").length).toBeGreaterThanOrEqual(1);
     });
   });
+
+  describe("research actions: row menus and copying", () => {
+    function stubClipboard() {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+      return writeText;
+    }
+
+    it("opens the same row menu from a right-click and copies the research link", async () => {
+      const writeText = stubClipboard();
+      const topic = topicWith([turn(1)]);
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics") return jsonResponse([topic]);
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topic);
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+        return undefined;
+      });
+      renderTopic();
+      const nav = await screen.findByRole("navigation", { name: "研究列表" });
+      const row = await within(nav).findByRole("link", { name: /Northwind 示例公司/ });
+      // The visible “···” trigger exists for every row; the context menu is only a shortcut to it.
+      expect(within(nav).getByRole("button", { name: /的操作$/ })).toBeTruthy();
+      fireEvent.contextMenu(row);
+      fireEvent.click(await screen.findByRole("menuitem", { name: "复制链接" }));
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/research/t1`));
+      expect(await screen.findByText("已复制链接")).toBeTruthy();
+    });
+
+    it("opens the row menu from the keyboard", async () => {
+      const topic = topicWith([turn(1)]);
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics") return jsonResponse([topic]);
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topic);
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+        return undefined;
+      });
+      renderTopic();
+      const nav = await screen.findByRole("navigation", { name: "研究列表" });
+      fireEvent.keyDown(await within(nav).findByRole("link", { name: /Northwind 示例公司/ }), { key: "F10", shiftKey: true });
+      expect(await screen.findByRole("menuitem", { name: "导出完整记录" })).toBeTruthy();
+    });
+
+    it("copies an answer as Markdown with citation numbers and sources, and copies a question", async () => {
+      const writeText = stubClipboard();
+      const completed = turn(1, { claim_ids: ["C1"], report: "披露收入 [[claim:C1]]。" });
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([completed], [CLAIMS[0]!]));
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+        return undefined;
+      });
+      renderTopic();
+      const region = await screen.findByRole("region", { name: "第 1 轮" });
+      fireEvent.click(within(region).getByRole("button", { name: "复制回答" }));
+      await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+      const copied = writeText.mock.calls[0]![0] as string;
+      expect(copied).toContain("披露收入 [1]。");
+      expect(copied).toContain("## 来源\n[1] 《");
+      fireEvent.click(within(region).getByRole("button", { name: "复制问题" }));
+      await waitFor(() => expect(writeText).toHaveBeenLastCalledWith("问题 1"));
+    });
+  });
 });
