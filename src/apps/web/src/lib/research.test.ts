@@ -307,6 +307,7 @@ describe("partialSummary", () => {
     expect(partialSummary({ facts: 0, calculations: 1, claims: 0 })).toBe("完成 1 项计算，还没有形成可引用的结论。");
     expect(partialSummary({ facts: 0, calculations: 0, claims: 2 })).toBe("形成 2 条结论。");
     expect(partialSummary({ facts: 0, calculations: 0, claims: 0 })).toBe("这一轮没有取得可用成果。");
+    expect(partialSummary({ facts: 0, calculations: 0, claims: 0, groundedParts: 1 })).toBe("已保存 1 项有依据的研究结果或缺口。");
   });
 });
 

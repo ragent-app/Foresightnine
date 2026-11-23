@@ -540,8 +540,10 @@ export function turnCharts(content: ResearchContent, turn: ResearchTurn): Resear
   return all.filter((chart) => chart.turn_id === turn.turn_id);
 }
 
-export function partialSummary({ facts, calculations, claims }: { facts: number; calculations: number; claims: number }): string {
-  if (facts === 0 && calculations === 0 && claims === 0) return "这一轮没有取得可用成果。";
+export function partialSummary({ facts, calculations, claims, groundedParts = 0 }: { facts: number; calculations: number; claims: number; groundedParts?: number }): string {
+  if (facts === 0 && calculations === 0 && claims === 0) return groundedParts > 0
+    ? `已保存 ${groundedParts} 项有依据的研究结果或缺口。`
+    : "这一轮没有取得可用成果。";
   const parts: string[] = [];
   if (facts > 0) parts.push(`已记录 ${facts} 个数字`);
   if (calculations > 0) parts.push(`完成 ${calculations} 项计算`);

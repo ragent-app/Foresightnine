@@ -424,7 +424,8 @@ export function AnswerBlock({ turn, actions, tools }: { turn: ResearchV2.Researc
         ) : null}
       </ClaimRefContext.Provider>
       {!reportText && partial && items.claims.length === 0 ? (
-        <p>{partialSummary({ facts: items.facts.length, calculations: items.calculations.length, claims: items.claims.length })}</p>
+        <p>{partialSummary({ facts: items.facts.length, calculations: items.calculations.length, claims: items.claims.length,
+          groundedParts: parts.filter((part) => Boolean(part.answer?.trim()) && (part.references?.length ?? 0) > 0).length })}</p>
       ) : null}
       {trailingCharts.length > 0 ? (
         <div className="turn-charts">
