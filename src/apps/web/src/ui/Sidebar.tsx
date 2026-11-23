@@ -1,14 +1,16 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, NavLink, useMatch, useNavigate } from "react-router-dom";
+import { Link, useMatch, useNavigate } from "react-router-dom";
 import { useTopics, queryKeys } from "../api/queries";
 import { isActiveStatus, listRuns } from "../api/research";
 import { signOut } from "../auth/account";
+import { useSession } from "../auth/session";
 import { DATE_GROUP_LABEL, dateGroup, type DateGroup } from "../lib/format";
 import { topicTitle } from "../lib/research";
 import { StatusDot } from "./controls";
 import { Icon } from "./icons";
+import { Menu } from "./Menu";
 
 type Tone = "running" | "done" | "partial" | "failed" | "none";
 
@@ -21,6 +23,8 @@ function topicTone(topic: ResearchV2.ResearchTopic): Tone {
 }
 
 const GROUP_ORDER: DateGroup[] = ["today", "week", "earlier"];
+/** Only states that differ from “done” are marked; a column of green dots says nothing. */
+const TONE_LABEL: Partial<Record<Tone, string>> = { running: "进行中", partial: "部分完成", failed: "失败" };
 
 export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; open: boolean; onClose: () => void; onToggle: () => void }) {
   const navigate = useNavigate();
@@ -29,6 +33,8 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
   const currentId = match?.params.topicId ?? null;
   const [filter, setFilter] = useState("");
   const asideRef = useRef<HTMLElement>(null);
+  const session = useSession();
+  const email = session?.account.email ?? "账户";
 
   // Running state is only known for the open topic; it shares the topic page's runs cache.
   const runs = useQuery({
@@ -93,8 +99,8 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
               const title = topicTitle(topic);
               return (
                 <Link key={topic.topic_id} className="row" to={`/research/${encodeURIComponent(topic.topic_id)}`} aria-current={current ? "page" : undefined} title={title}>
-                  <StatusDot tone={tone} />
                   <span className="q">{title}</span>
+                  {TONE_LABEL[tone] ? <><StatusDot tone={tone} /><span className="sr-only">{TONE_LABEL[tone]}</span></> : null}
                 </Link>
               );
             })}
@@ -102,8 +108,17 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
         ))}
       </nav>
       <div className="foot">
-        <NavLink to="/settings"><Icon name="settings" />设置</NavLink>
-        <button type="button" onClick={() => void signOut()}><Icon name="logout" />退出登录</button>
+        <Menu
+          label="账户"
+          align="start"
+          triggerClassName="account"
+          trigger={<><span className="avatar" aria-hidden="true">{email.slice(0, 1).toUpperCase()}</span><span className="q">{email}</span></>}
+          items={[
+            { key: "settings", label: "设置", icon: "settings", onSelect: () => navigate("/settings") },
+            "separator",
+            { key: "logout", label: "退出登录", icon: "logout", onSelect: () => void signOut() },
+          ]}
+        />
       </div>
     </aside>
   );

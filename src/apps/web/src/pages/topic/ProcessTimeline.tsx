@@ -257,8 +257,11 @@ function ToolSummaryView({ summary, live }: { summary: ToolEventSummary; live: b
   }
 }
 
-function TimelineStepRow({ row, live }: { row: StepRow; live: boolean }) {
+function TimelineStepRow({ row, live, inPanel = false }: { row: StepRow; live: boolean; inPanel?: boolean }) {
   if (row.kind === "model") {
+    // Token accounting belongs to the record panel; under the answer a model step just says it ran.
+    const failedCall = row.text.startsWith("模型调用失败");
+    const usageText = inPanel || failedCall ? row.text : null;
     if (row.note) {
       return (
         <li className="pt-row pt-model-note">
@@ -266,7 +269,7 @@ function TimelineStepRow({ row, live }: { row: StepRow; live: boolean }) {
           <div className="pt-main">
             <div className="pt-head">
               <span className="pt-note-label">{PROCESS_NOTE_LABEL}</span>
-              <span className="meta">{row.text}</span>
+              {usageText ? <span className="meta">{usageText}</span> : null}
             </div>
             <div className="pt-note">
               <MarkdownContent content={row.note} variant="inline" />
@@ -282,7 +285,7 @@ function TimelineStepRow({ row, live }: { row: StepRow; live: boolean }) {
           {failed ? <Icon name="alert" size={14} /> : <span className="pt-mini-dot" />}
         </span>
         <div className="pt-main">
-          <span className="pt-model-text">{row.text}</span>
+          <span className="pt-model-text">{usageText ?? row.text.split(" · ")[0]}</span>
         </div>
       </li>
     );
@@ -376,7 +379,7 @@ export function ProcessTimeline({ events, current = null, live = false, stream, 
           </button>
         </li>
       ) : null}
-      {visibleRows.map((row) => <TimelineStepRow key={row.index} row={row} live={live} />)}
+      {visibleRows.map((row) => <TimelineStepRow key={row.index} row={row} live={live} inPanel={inPanel} />)}
       {current ? <CurrentStepRow current={current} stream={live ? stream : undefined} /> : live && stream ? <LiveActiveStreamRow stream={stream} /> : null}
     </ol>
   );

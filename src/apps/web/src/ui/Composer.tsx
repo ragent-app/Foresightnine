@@ -32,6 +32,9 @@ interface ComposerProps {
   addDisabled?: boolean;
   /** Files dropped onto the composer go to the add-sources panel. */
   onDropFiles?: (files: File[]) => void;
+  /** While a run is active the send button becomes the stop button (spec v6). */
+  onStop?: (() => void) | undefined;
+  stopping?: boolean;
 }
 
 const MAX_HEIGHT = 200;
@@ -42,7 +45,7 @@ const MAX_HEIGHT = 200;
  * “+” and dropped files open the add-sources panel (M3).
  */
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(props, ref) {
-  const { variant, value, onChange, onSubmit, onOpenSettings, label, placeholder, submitLabel, disabled, busy, canSubmit, tokens = [], error, onAddSources, addDisabled, onDropFiles } = props;
+  const { variant, value, onChange, onSubmit, onOpenSettings, label, placeholder, submitLabel, disabled, busy, canSubmit, tokens = [], error, onAddSources, addDisabled, onDropFiles, onStop, stopping = false } = props;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [dragging, setDragging] = useState(false);
   const acceptsDrop = Boolean(onDropFiles) && !addDisabled;
@@ -82,7 +85,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       <Icon name="tune" />
     </button>
   );
-  const sendButton = (
+  const sendButton = onStop ? (
+    <button type="button" className="icon-btn send ready stop" onClick={onStop} disabled={stopping} aria-label="停止研究" title={stopping ? "正在停止…" : "停止研究"}>
+      <Icon name="stop" size={12} fill="currentColor" />
+    </button>
+  ) : (
     <button type="button" className={`icon-btn send${ready ? " ready" : ""}`} onClick={submit} disabled={!ready} aria-label={submitLabel} title={`${submitLabel}（Ctrl/⌘ + Enter）`}>
       <Icon name="send" size={16} />
     </button>

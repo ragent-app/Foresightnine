@@ -5,10 +5,10 @@ import { ApiError } from "../api/http";
 import { useActiveRun, useAttachSources, useCancelRun, useContinueTurn, useRecoverTurn, useRecoveryStatus, useReextractPdf, useRunProgress, useSaveVersion, useStartTurn, useTopic, useVersionSources } from "../api/queries";
 import { exportFull, exportMetadata, isActiveStatus, latestVersion } from "../api/research";
 import type { AvailableVersionSource, CreatedSource } from "../api/types";
-import { gapText, REVIEW_LABEL } from "../lib/copy";
+import { gapText } from "../lib/copy";
 import { saveJson } from "../lib/download";
 import { displayTurnNumber, formatDateTimeWithOffset } from "../lib/format";
-import { buildCitationIndex, suggestionsFor, topicTitle, type AnswerTab } from "../lib/research";
+import { buildCitationIndex, claimRole, suggestionsFor, topicTitle, type AnswerTab } from "../lib/research";
 import { buildVersionInput, draftProblem, isDirty, type ReviewDraft } from "../lib/review";
 import { ineligibility, INELIGIBLE_TEXT } from "../lib/sources";
 import { useLayout } from "../ui/AppLayout";
@@ -26,7 +26,7 @@ import { ResearchSettingsPanel } from "./research/ResearchSettingsPanel";
 import { CitationSheet } from "./topic/Citation";
 import { TopicContext, type FocusCitation, type LiveRun, type PanelState, type TopicView } from "./topic/context";
 import { InterruptedTurn, LiveTurn, TurnView, type TurnActions } from "./topic/Conversation";
-import { LiveBar } from "./topic/LiveBar";
+import { LiveCapsule } from "./topic/LiveBar";
 import { ReaderPanel } from "./topic/ReaderPanel";
 import { RecordPanel } from "./topic/RecordPanel";
 import { ReviewPanel, saveErrorText } from "./topic/ReviewPanel";
@@ -72,6 +72,10 @@ export function TopicPage() {
   const [askedOp, setAskedOp] = useState<{ operationId: string; question: string } | null>(null);
   const [pendingContinue, setPendingContinue] = useState<PendingContinue | null>(null);
   const [awayFromLive, setAwayFromLive] = useState(false);
+  const [evidence, setEvidenceState] = useState<ReadonlyMap<string, boolean>>(new Map());
+  const setEvidence = useCallback((turnId: string, open: boolean) => {
+    setEvidenceState((previous) => new Map(previous).set(turnId, open));
+  }, []);
   const [notice, setNotice] = useState<{ text: string; tone: "info" | "error" } | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [draft, setDraftState] = useState<ReviewDraft>({});
@@ -286,17 +290,24 @@ export function TopicPage() {
       },
       gotoClaim: (claimId) => {
         if (!inspector) setPanel(null);
-        requestAnimationFrame(() => {
+        // Supporting claims sit in the collapsed evidence under their answer; open it first.
+        // Counter and challenging claims are always shown, so their evidence stays as it is.
+        const claim = content.claims?.find((item) => item.claim_id === claimId);
+        const owner = turns.find((turn) => (turn.claim_ids ?? []).includes(claimId));
+        if (owner && claim && claimRole(claim) === "support") setEvidence(owner.turn_id, true);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
           const element = document.getElementById(`claim-${claimId}`);
           if (!element) return;
           element.scrollIntoView?.({ block: "center", behavior: prefersReducedMotion() ? "auto" : "smooth" });
           flash(element);
-        });
+        }));
       },
+      evidence,
+      setEvidence,
     };
     // progressMatches reads progress.progress, listed below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topic, version, content, turns, citations, sources, activeRun, progress.progress, progress.events, progress.getStreamSnapshot, progress.subscribeStream, turnNumbers, topicId, inspector, locked, addToTopic, draft, setDraft, dirty, saveDraft, saveVersion.isPending, notify]);
+  }, [topic, version, content, turns, citations, sources, activeRun, progress.progress, progress.events, progress.getStreamSnapshot, progress.subscribeStream, turnNumbers, topicId, inspector, locked, addToTopic, draft, setDraft, dirty, saveDraft, saveVersion.isPending, notify, evidence, setEvidence]);
   const cancelling = cancel.isPending || (cancel.isSuccess && cancel.variables?.operation_id === activeRun?.operation_id);
 
   const send = () => {
@@ -524,7 +535,6 @@ export function TopicPage() {
     ...optionTokens(options, setOptions),
   ];
   const suggestions = view && !locked ? suggestionsFor(content) : [];
-  const versionLabel = version ? `v${topic!.versions.length} ${REVIEW_LABEL[version.review] ?? version.review}` : "";
 
   return (
     <>
@@ -569,16 +579,19 @@ export function TopicPage() {
             <TopicContext.Provider value={view}>
               <header className="large-title">
                 <h1>{title}</h1>
-                <div className="meta">
-                  {topic!.request.as_of ? <><span>截止 {formatDateTimeWithOffset(topic!.request.as_of)}</span><span aria-hidden="true">·</span></> : null}
-                  <button type="button" className="link meta-link" onClick={() => setPanel({ kind: "review" })}>{versionLabel}</button><span aria-hidden="true">·</span><span>{turns.length} 轮</span>
-                  {dirty ? <><span aria-hidden="true">·</span><button type="button" className="link meta-link unsaved" onClick={() => setPanel({ kind: "review" })}>有未保存的修改</button></> : null}
-                </div>
+                {/* Version and turn count live in 复核与版本; the header only names what needs attention. */}
+                {topic!.request.as_of || dirty ? (
+                  <div className="meta">
+                    {topic!.request.as_of ? <span>数据截止 {formatDateTimeWithOffset(topic!.request.as_of)}</span> : null}
+                    {dirty ? <button type="button" className="link meta-link unsaved" onClick={() => setPanel({ kind: "review" })}>有未保存的修改</button> : null}
+                  </div>
+                ) : null}
               </header>
               {turns.map((turn, index) => (
                 <TurnView
                   key={turn.turn_id}
                   turn={turn}
+                  first={index === 0 && turn.question.trim() === title.trim()}
                   actions={index === turns.length - 1 && turn.status === "partial" && !orphanRun && !activeRun ? turnActions(turn.question, turn.reason !== "submitted", turn.turn_id) : null}
                 />
               ))}
@@ -589,6 +602,7 @@ export function TopicPage() {
                   question={(progressMatches(orphanRun.operation_id) ? progress.progress?.turn.question : "") || (turns.length === 0 ? topic!.request.question ?? "" : "")}
                   status={orphanRun.status === "cancelled" ? "cancelled" : "failed"}
                   events={progressMatches(orphanRun.operation_id) ? progress.events : []}
+                  first={turns.length === 0}
                   actions={turnActions((progressMatches(orphanRun.operation_id) ? progress.progress?.turn.question : "") || topic!.request.question || "", true, null)}
                 />
               ) : null}
@@ -601,9 +615,10 @@ export function TopicPage() {
                   live={live}
                   onDraftGrow={onDraftGrow}
                   continuing={continuingMode}
+                  first={turns.length === 0 && liveQuestion.trim() === title.trim()}
                 />
               ) : !live && pendingAsk ? (
-                <LiveTurn sectionRef={liveTurnRef} number={turns.length + 1} startedAt={pendingAsk.at} question={pendingAsk.question} live={null} />
+                <LiveTurn sectionRef={liveTurnRef} number={turns.length + 1} startedAt={pendingAsk.at} question={pendingAsk.question} live={null} first={turns.length === 0 && pendingAsk.question.trim() === title.trim()} />
               ) : null}
               {turns.length === 0 && !live && !orphanRun && !pendingAsk && !runs.isLoading ? (
                 <div className="turn">
@@ -624,14 +639,8 @@ export function TopicPage() {
         <TopicContext.Provider value={view}>
           <div className="dock">
             <div className="dock-inner">
-              {live && awayFromLive ? (
-                <button type="button" className="jump-live glass" onClick={scrollToLive}>
-                  <Icon name="down" size={14} />
-                  回到实时过程
-                </button>
-              ) : null}
               {live ? (
-                <LiveBar live={live} cancelling={cancelling} awayFromLive={awayFromLive} onJumpToLive={scrollToLive} onCancel={() => cancel.mutate(live.operation)} />
+                awayFromLive ? <LiveCapsule live={live} onJump={scrollToLive} /> : null
               ) : suggestions.length > 0 ? (
                 <div className="suggest">
                   {suggestions.map((item) => <button key={item.key} type="button" className="link" onClick={() => prefill(item.prefill)}>{item.label}</button>)}
@@ -649,9 +658,11 @@ export function TopicPage() {
                 addDisabled={locked}
                 onDropFiles={(files) => { if (files[0]) setPanel({ kind: "add", initial: { tab: "file", file: files[0] } }); }}
                 label="追问"
-                placeholder={locked ? "本轮研究进行中，可以先取消再提问" : "继续追问…"}
+                placeholder={locked ? "研究进行中，可以先停止再提问" : "继续追问…"}
                 submitLabel="发送"
                 disabled={locked}
+                onStop={live ? () => cancel.mutate(live.operation) : undefined}
+                stopping={cancelling}
                 busy={startTurn.isPending}
                 canSubmit={text.trim().length > 0}
                 tokens={tokens}

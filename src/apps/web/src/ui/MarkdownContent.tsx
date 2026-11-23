@@ -1,7 +1,9 @@
 import {
   Children,
   Component,
+  createContext,
   isValidElement,
+  useContext,
   memo,
   useCallback,
   useEffect,
@@ -21,6 +23,34 @@ import {
 import { Icon } from "./icons";
 
 export type MarkdownVariant = "report" | "draft" | "notes" | "inline";
+
+/**
+ * Lets a report show each [[claim:ID]] marker as the claim's citation numbers instead of a
+ * text link. Without a provider the marker stays the plain “查看依据” link.
+ */
+export interface ClaimRefs {
+  label: (claimId: string) => string | null;
+  open: (claimId: string) => void;
+}
+export const ClaimRefContext = createContext<ClaimRefs | null>(null);
+
+function ClaimLink({ href, children }: { href: string; children: ReactNode }) {
+  const refs = useContext(ClaimRefContext);
+  const claimId = href.slice("#claim-".length);
+  const label = refs?.label(claimId) ?? null;
+  if (!refs || !label) return <a href={href} className="md-link">{children}</a>;
+  return (
+    <a
+      href={href}
+      className="claim-ref"
+      aria-label="查看依据"
+      title="查看依据"
+      onClick={(event) => { event.preventDefault(); refs.open(claimId); }}
+    >
+      {label}
+    </a>
+  );
+}
 
 export interface MarkdownContentProps<TChart = unknown> {
   content: string;
@@ -265,7 +295,7 @@ function buildComponents(variant: MarkdownVariant): Components {
       return <span className="md-img-fallback">{label ? `[图片：${label}]` : "[图片]"}</span>;
     },
     a: ({ href, children }) => {
-      if (isReport && href && CLAIM_FRAGMENT.test(href)) return <a href={href} className="md-link">{children}</a>;
+      if (isReport && href && CLAIM_FRAGMENT.test(href)) return <ClaimLink href={href}>{children}</ClaimLink>;
       const safe = safeExternalHref(href);
       if (isReport && safe) {
         return (

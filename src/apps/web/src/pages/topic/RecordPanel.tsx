@@ -16,7 +16,7 @@ import { Disclosure, Segmented } from "../../ui/controls";
 import { Icon } from "../../ui/icons";
 import { Panel } from "../../ui/Panel";
 import { describeError } from "../research/errors";
-import { calculationTitle } from "./Conversation";
+import { calculationTitle, TurnUsage } from "./Conversation";
 import { LiveEmptyOrStream } from "./LiveStreamView";
 import { ProcessTimeline } from "./ProcessTimeline";
 import { CONFLICT_TEXT } from "./ReviewPanel";
@@ -495,7 +495,8 @@ function StepsTab({ turnKey, onTurn }: { turnKey: string | undefined; onTurn: (t
   if (options.length === 0) return <p className="empty-note">还没有研究过程。</p>;
   const selected = options.some((option) => option.value === turnKey) ? turnKey! : options[options.length - 1]!.value;
   const liveSelected = Boolean(selected === LIVE_TURN && view.live);
-  const events = liveSelected ? view.live!.events : parseTurnEvents(view.turns.find((turn) => turn.turn_id === selected)?.events);
+  const selectedTurn = liveSelected ? undefined : view.turns.find((turn) => turn.turn_id === selected);
+  const events = liveSelected ? view.live!.events : parseTurnEvents(selectedTurn?.events);
   const rows = stepRows(events);
   const current = liveSelected ? view.live!.progress?.current ?? null : null;
   const stream = liveSelected ? view.live!.stream : undefined;
@@ -505,6 +506,7 @@ function StepsTab({ turnKey, onTurn }: { turnKey: string | undefined; onTurn: (t
     <>
       {options.length > 1 ? <Segmented label="选择轮次" options={options} value={selected} onChange={onTurn} /> : null}
       {interimText ? <p className="meta pt-interim-bar">{interimText}</p> : null}
+      {selectedTurn ? <TurnUsage turn={selectedTurn} /> : null}
       {rows.length === 0 && !current ? (
         liveSelected ? (
           <LiveEmptyOrStream stream={stream} idleText="正在等待研究过程输出…" inPanel />

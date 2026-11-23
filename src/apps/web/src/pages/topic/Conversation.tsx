@@ -2,12 +2,12 @@ import type { ResearchV2 } from "@foresightnine/contracts";
 import { useCallback, useMemo, useState, type Ref } from "react";
 import { Link } from "react-router-dom";
 import type { ProgressEvent, RecoveryStatus } from "../../api/types";
-import { formatInterimParts, formulaLabel, gapText, OPERATION_STATUS_LABEL, recoveryReasonLabel, turnReasonLabel, TURN_STATUS_LABEL, VERIFY_NOTE } from "../../lib/copy";
+import { formatInterimParts, formulaLabel, gapText, recoveryReasonLabel, turnReasonLabel, VERIFY_NOTE } from "../../lib/copy";
 import { displayTurnNumber, formatClock, formatDuration, formatInteger, formatQuantity, turnStamp } from "../../lib/format";
 import { answerSummary, claimRole, parseTurnEvents, partialSummary, ROLE_LABEL, stepRows, toolStepCount, turnCharts, turnContent, turnDurationMs } from "../../lib/research";
 import { Disclosure } from "../../ui/controls";
 import { Icon } from "../../ui/icons";
-import { extractReferencedChartIds, extractReferencedTableIds, MarkdownContent } from "../../ui/MarkdownContent";
+import { ClaimRefContext, extractReferencedChartIds, extractReferencedTableIds, MarkdownContent, type ClaimRefs } from "../../ui/MarkdownContent";
 import { useNow } from "../../ui/media";
 import { Menu, type MenuEntry } from "../../ui/Menu";
 import { CitationButton } from "./Citation";
@@ -16,7 +16,7 @@ import { ChartCard } from "./charts/ChartCard";
 import { LiveDraftPreview, LiveEmptyOrStream } from "./LiveStreamView";
 import { QuestionParts } from "./QuestionParts";
 import { ProcessTimeline } from "./ProcessTimeline";
-import { useTopicView, type LiveRun } from "./context";
+import { LIVE_TURN, useTopicView, type LiveRun } from "./context";
 
 export interface TurnActions {
   recovery: RecoveryStatus | undefined;
@@ -66,7 +66,6 @@ function PartialNotesBlock({ notes }: { notes: string }) {
   const label = "过程与缺口说明（未核实线索与建议，非正式结论）";
   return (
     <Disclosure summary={label} defaultOpen>
-      <p className="note">以下说明来自模型补充，未经原文位置或数据核对，不作为正式结论。</p>
       <div className="callout-lite ok" role="note" aria-label={label}>
         <div className="field">
           <MarkdownContent content={trimmed} variant="notes" />
@@ -123,31 +122,52 @@ function CalloutActions({ actions }: { actions: TurnActions }) {
   );
 }
 
+function missingParts(turn: ResearchV2.ResearchTurn): string[] {
+  return (turn.question_parts ?? [])
+    .filter((part) => part.status !== "answered")
+    .map((part) => {
+      const reason = part.reason?.trim();
+      if (reason) return `${part.question}：${reason}`;
+      return part.status === "partial" ? `${part.question}：只回答了一部分` : part.question;
+    });
+}
+
+/**
+ * What is still missing comes first, in plain words; the technical stop reason only shows when the
+ * run was cut short (a model that submitted its result is not a reason the user can act on).
+ */
 export function GapCallout({ turn, actions, tone }: { turn: ResearchV2.ResearchTurn; actions: TurnActions | null; tone: "partial" | "completed" }) {
   const gaps = turn.gaps ?? [];
+  const parts = tone === "partial" ? missingParts(turn) : [];
   if (tone === "completed" && gaps.length === 0) return null;
-  const shown = gaps.slice(0, 2);
-  const hidden = gaps.length - shown.length;
+  const lines = [...parts, ...gaps.map((gap) => gapText(gap))];
+  const shown = lines.slice(0, 3);
+  const hidden = lines.length - shown.length;
   const needsMarketKey = gaps.some((gap) => gap.code === "market_data_key_required");
+  const explained = turn.reason !== "submitted" || Boolean(turn.stopping_note?.trim());
+  const stopReason = tone === "partial" && explained ? turnReasonLabel(turn.reason, turn.stopping_note) : null;
   const recoveryReason = tone === "partial" && actions?.recovery?.reason
     ? recoveryReasonLabel(actions.recovery.reason)
     : null;
   return (
     <div className="callout" role="note">
-      <span className="h">{tone === "partial" ? "未完成的部分" : "仍有缺口"}</span>
+      <span className="h">
+        <span>{tone === "partial" ? "部分完成" : "仍有缺口"}</span>
+        {parts.length > 0 ? <span className="h-count">还差 {parts.length} 项</span> : null}
+      </span>
       {shown.length > 0 ? (
         <ul>
-          {shown.map((gap, index) => <li key={`${gap.code}-${index}`}>{gapText(gap)}</li>)}
+          {shown.map((line, index) => <li key={index}>{line}</li>)}
         </ul>
       ) : null}
-      {hidden > 0 ? <span className="why">另有 {hidden} 项缺口，在研究记录里查看。</span> : null}
+      {hidden > 0 ? <span className="why">另有 {hidden} 项，在研究记录里查看。</span> : null}
       {needsMarketKey ? (
         <span className="why" data-hint="market-data-key">
           想要行情数据？<Link className="link" to="/settings?tab=data">前往设置，添加自己的 Twelve Data key</Link>
         </span>
       ) : null}
-      {tone === "partial" ? <span className="why">停止原因：{turnReasonLabel(turn.reason, turn.stopping_note)}</span> : null}
-      {recoveryReason ? <span className="why">恢复检查：{recoveryReason}</span> : null}
+      {stopReason ? <span className="why">{stopReason}</span> : null}
+      {recoveryReason ? <span className="why">{recoveryReason}</span> : null}
       {tone === "partial" && actions ? <CalloutActions actions={actions} /> : null}
     </div>
   );
@@ -162,7 +182,7 @@ function StatLine({ calculations, turnId }: { calculations: readonly ResearchV2.
         const quantity = formatQuantity(calc.value, calc.unit, calc.currency);
         return (
           <button key={calc.calculation_id} type="button" className="stat" onClick={() => view.openPanel({ kind: "record", tab: "numbers", turnKey: turnId })}>
-            <b>{quantity.value}{quantity.unit ? <small className="meta"> {quantity.unit}</small> : null}</b>
+            <b>{quantity.value}{quantity.unit ? <small> {quantity.unit}</small> : null}</b>
             <span>{calculationTitle(calc)}</span>
           </button>
         );
@@ -171,34 +191,41 @@ function StatLine({ calculations, turnId }: { calculations: readonly ResearchV2.
   );
 }
 
-function SummaryLinks({ turn }: { turn: ResearchV2.ResearchTurn }) {
-  const view = useTopicView();
-  const parts = answerSummary(turn, view.content);
-  if (parts.length === 0) return null;
+/** Usage and per-attempt accounting; shown in the record panel, not under the answer. */
+export function TurnUsage({ turn }: { turn: ResearchV2.ResearchTurn }) {
   return (
-    <div className="summary">
-      {parts.map((part, index) => (
-        <span key={part.tab} className="summary-part">
-          {index > 0 ? <span className="sep" aria-hidden="true">· </span> : null}
-          <button type="button" className="link" onClick={() => view.openPanel({ kind: "record", tab: part.tab, turnKey: turn.turn_id })}>{part.label}</button>
-        </span>
-      ))}
-      <span aria-hidden="true">›</span>
+    <div className="turn-usage">
+      <p className="meta">{usageMeta(turn)}</p>
+      {turn.attempts?.length ? (
+        <Disclosure summary="每次执行的用量和成果">
+          <ol>{turn.attempts.map((attempt, index) => (
+            <li key={attempt.operation_id}>
+              {index === 0 ? "首次执行" : `续跑 ${index}`} · {attempt.model_calls} 次模型调用 · {attempt.search_calls} 次搜索
+              {attempt.elapsed_seconds != null && ` · ${formatDuration(attempt.elapsed_seconds * 1000)}`}
+              {attempt.reported_tokens != null && ` · 已回执 ${formatInteger(attempt.reported_tokens)} Token`}
+              {Boolean(attempt.unknown_usage_calls) && ` · ${attempt.unknown_usage_calls} 次用量未知`}
+              {attempt.reserved_estimate_tokens != null && attempt.reserved_estimate_tokens > 0 && ` · 预留估算 ${formatInteger(attempt.reserved_estimate_tokens)} Token`}
+              <div>新增事实 {attempt.new_facts} 条、计算 {attempt.new_calculations} 项、主张 {attempt.new_claims} 条，新回答 {attempt.answered_parts} 项。{turnReasonLabel(attempt.reason)}</div>
+            </li>
+          ))}</ol>
+          <p className="note">实际费用未取得供应商账单。</p>
+        </Disclosure>
+      ) : null}
     </div>
   );
 }
 
-function ClaimList({ claims }: { claims: readonly ResearchV2.ResearchClaim[] }) {
+function ClaimList({ claims, showRole, className = "claims" }: { claims: readonly ResearchV2.ResearchClaim[]; showRole: boolean; className?: string }) {
   const view = useTopicView();
   if (claims.length === 0) return null;
   return (
-    <ul className="claims">
+    <ul className={className}>
       {claims.map((claim) => {
         const role = claimRole(claim);
         const claimId = claim.claim_id ?? "";
         return (
           <li key={claimId || claim.text} id={claimId ? `claim-${claimId}` : undefined}>
-            <span className={`role ${role}`}>{ROLE_LABEL[role]}</span>
+            {showRole ? <span className={`role ${role}`}>{ROLE_LABEL[role]}</span> : null}
             <span>
               <MarkdownContent content={claim.text} variant="inline" />
               {(claim.citations ?? []).map((citation, index) => (
@@ -215,6 +242,36 @@ function ClaimList({ claims }: { claims: readonly ResearchV2.ResearchClaim[] }) 
   );
 }
 
+const LIST_START = /^(\s*[-*+]\s|\s*\d+[.)]\s|\s*>|\s*\||\s*```|\s*~~~|\s*\[\[(chart|table):)/;
+
+/**
+ * Splits the report's opening — leading headings and the first prose paragraph — from the rest,
+ * so the direct answer can be set as the lead with the key numbers right under it.
+ */
+export function splitLead(report: string): { lead: string; rest: string } {
+  const lines = report.replace(/\r\n?/g, "\n").split("\n");
+  let index = 0;
+  while (index < lines.length && (lines[index]!.trim() === "" || /^#{1,6}\s/.test(lines[index]!))) index += 1;
+  const start = index;
+  while (index < lines.length && lines[index]!.trim() !== "") index += 1;
+  const paragraph = lines.slice(start, index);
+  if (paragraph.length === 0 || paragraph.some((line) => LIST_START.test(line))) return { lead: "", rest: report };
+  return { lead: lines.slice(0, index).join("\n").trim(), rest: lines.slice(index).join("\n").trim() };
+}
+
+function FootToggle({ label, open, onToggle }: { label: string; open: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" className="foot-btn" aria-expanded={open} onClick={onToggle}>
+      {label}
+      <Icon name={open ? "up" : "down"} size={14} />
+    </button>
+  );
+}
+
+/**
+ * Spec v6 answer order: what is missing (partial), the answer's lead, key numbers, the report,
+ * counter-evidence, then one quiet row for evidence, parts, process and record links.
+ */
 export function AnswerBlock({ turn, actions }: { turn: ResearchV2.ResearchTurn; actions: TurnActions | null }) {
   const view = useTopicView();
   const items = turnContent(view.content, turn);
@@ -225,6 +282,22 @@ export function AnswerBlock({ turn, actions }: { turn: ResearchV2.ResearchTurn; 
   const rows = useMemo(() => stepRows(events), [events]);
   const toolSteps = useMemo(() => toolStepCount(events), [events]);
   const [processOpen, setProcessOpen] = useState(false);
+  const parts = turn.question_parts ?? [];
+  const [partsOpen, setPartsOpen] = useState(partial && !reportText);
+  const { lead, rest } = useMemo(() => splitLead(reportText), [reportText]);
+
+  const supporting = items.claims.filter((claim) => claimRole(claim) === "support");
+  const elevated = items.claims.filter((claim) => claimRole(claim) !== "support");
+  const evidenceOpen = view.evidence.get(turn.turn_id) ?? !reportText;
+
+  const claimRefs = useMemo<ClaimRefs>(() => ({
+    label: (claimId) => {
+      const claim = view.content.claims?.find((item) => item.claim_id === claimId);
+      const numbers = [...new Set((claim?.citations ?? []).map((citation) => view.citations.numberFor(citation)))];
+      return numbers.length > 0 ? numbers.join(",") : null;
+    },
+    open: (claimId) => view.gotoClaim(claimId),
+  }), [view]);
 
   const chartsById = useMemo(() => {
     const map = new Map<string, ResearchV2.ResearchChart>();
@@ -257,73 +330,34 @@ export function AnswerBlock({ turn, actions }: { turn: ResearchV2.ResearchTurn; 
     [],
   );
 
-  let processSummary = "";
-  if (rows.length > 0) {
-    const parts = [
-      toolSteps > 0
-        ? `${partial ? "已执行" : "已完成"} ${toolSteps} 步研究过程`
-        : `已记录 ${rows.length} 条研究过程`,
-    ];
-    if (turn.usage.search_calls > 0) parts.push(`${turn.usage.search_calls} 次搜索`);
-    if (turn.usage.model_calls > 0) parts.push(`${turn.usage.model_calls} 次调用`);
-    processSummary = parts.join(" · ");
-  }
+  const answered = parts.filter((part) => part.status === "answered").length;
+  const recordLinks = answerSummary(turn, view.content).filter((part) => part.tab === "numbers" || part.tab === "sources");
+  const steps = toolSteps > 0 ? toolSteps : rows.length;
+  const hasFoot = supporting.length > 0 || parts.length > 0 || rows.length > 0 || recordLinks.length > 0;
 
   return (
     <div className="answer">
-      <div className="status">
-        <span className={`role ${partial ? "review" : "support"}`}>研究结果：<span>{TURN_STATUS_LABEL[turn.status] ?? turn.status}</span></span>
-        <span className="meta">{usageMeta(turn)}</span>
-      </div>
-      {turn.attempts?.length ? (
-        <Disclosure summary="每次执行的用量和成果">
-          <ol>{turn.attempts.map((attempt, index) => (
-            <li key={attempt.operation_id}>
-              {index === 0 ? "首次执行" : `续跑 ${index}`} · {attempt.model_calls} 次模型调用 · {attempt.search_calls} 次搜索
-              {attempt.elapsed_seconds != null && ` · ${formatDuration(attempt.elapsed_seconds * 1000)}`}
-              {attempt.reported_tokens != null && ` · 已回执 ${formatInteger(attempt.reported_tokens)} Token`}
-              {Boolean(attempt.unknown_usage_calls) && ` · ${attempt.unknown_usage_calls} 次用量未知`}
-              {attempt.reserved_estimate_tokens != null && attempt.reserved_estimate_tokens > 0 && ` · 预留估算 ${formatInteger(attempt.reserved_estimate_tokens)} Token`}
-              <div>新增事实 {attempt.new_facts} 条、计算 {attempt.new_calculations} 项、主张 {attempt.new_claims} 条，新回答 {attempt.answered_parts} 项。{turnReasonLabel(attempt.reason)}</div>
-            </li>
-          ))}</ol>
-          <p className="note">实际费用未取得供应商账单。</p>
-        </Disclosure>
-      ) : null}
-      {rows.length > 0 ? (
-        <div className="turn-process">
-          <button
-            type="button"
-            className="turn-process-toggle"
-            aria-expanded={processOpen}
-            onClick={() => setProcessOpen((open) => !open)}
-          >
-            <span>{processSummary}</span>
-            <Icon name={processOpen ? "up" : "down"} size={14} />
-          </button>
-          {processOpen ? (
-            <div className="turn-process-body">
-              <ProcessTimeline events={events} />
-              <div className="turn-process-foot">
-                <button type="button" className="link" onClick={() => view.openPanel({ kind: "record", tab: "steps", turnKey: turn.turn_id })}>
-                  在研究记录中查看 ›
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-      {reportText ? (
-        <div className="report">
-          <MarkdownContent
-            content={reportText}
-            variant="report"
-            chartsById={chartsById}
-            renderChart={renderChart}
-            tablesById={tablesById}
-          />
-        </div>
-      ) : partial ? (
+      {partial ? <GapCallout turn={turn} actions={actions} tone="partial" /> : null}
+      <ClaimRefContext.Provider value={claimRefs}>
+        {lead ? (
+          <div className="report answer-lead">
+            <MarkdownContent content={lead} variant="report" />
+          </div>
+        ) : null}
+        <StatLine calculations={items.calculations} turnId={turn.turn_id} />
+        {rest ? (
+          <div className="report">
+            <MarkdownContent
+              content={rest}
+              variant="report"
+              chartsById={chartsById}
+              renderChart={renderChart}
+              tablesById={tablesById}
+            />
+          </div>
+        ) : null}
+      </ClaimRefContext.Provider>
+      {!reportText && partial && items.claims.length === 0 ? (
         <p>{partialSummary({ facts: items.facts.length, calculations: items.calculations.length, claims: items.claims.length })}</p>
       ) : null}
       {trailingCharts.length > 0 ? (
@@ -333,20 +367,53 @@ export function AnswerBlock({ turn, actions }: { turn: ResearchV2.ResearchTurn; 
           ))}
         </div>
       ) : null}
-      <QuestionParts turn={turn} />
       {trailingTables.map((table) => <div key={table.table_id}>{tablesById.get(table.table_id)}</div>)}
-      <StatLine calculations={items.calculations} turnId={turn.turn_id} />
-      <ClaimList claims={items.claims} />
-      {items.claims.length > 0 ? <p className="note">{VERIFY_NOTE}</p> : null}
-      <GapCallout turn={turn} actions={actions} tone={partial ? "partial" : "completed"} />
+      <ClaimList claims={elevated} showRole className="claims elevated" />
       <EvidenceViews turn={turn} />
+      {!partial ? <GapCallout turn={turn} actions={actions} tone="completed" /> : null}
       {partial && partialNotes ? <PartialNotesBlock notes={partialNotes} /> : null}
-      <SummaryLinks turn={turn} />
+      {hasFoot ? (
+        <div className="answer-foot">
+          {supporting.length > 0 ? (
+            <FootToggle label={`依据 ${supporting.length} 条`} open={evidenceOpen} onToggle={() => view.setEvidence(turn.turn_id, !evidenceOpen)} />
+          ) : null}
+          {parts.length > 0 ? (
+            <FootToggle label={`已回答 ${answered}/${parts.length} 部分`} open={partsOpen} onToggle={() => setPartsOpen((open) => !open)} />
+          ) : null}
+          {rows.length > 0 ? (
+            <FootToggle label={`过程 ${steps} 步`} open={processOpen} onToggle={() => setProcessOpen((open) => !open)} />
+          ) : null}
+          {recordLinks.map((part) => (
+            <button key={part.tab} type="button" className="foot-btn" onClick={() => view.openPanel({ kind: "record", tab: part.tab, turnKey: turn.turn_id })}>
+              {part.label}
+              <Icon name="chev" size={14} />
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {supporting.length > 0 ? (
+        <div className="evidence" hidden={!evidenceOpen}>
+          <div className="gtitle"><span className="role support">支持</span>{supporting.length}</div>
+          <ClaimList claims={supporting} showRole={false} />
+          <p className="note">{VERIFY_NOTE}</p>
+        </div>
+      ) : items.claims.length > 0 ? <p className="note">{VERIFY_NOTE}</p> : null}
+      {partsOpen ? <QuestionParts turn={turn} /> : null}
+      {processOpen ? (
+        <div className="turn-process-body">
+          <ProcessTimeline events={events} />
+          <div className="turn-process-foot">
+            <button type="button" className="link" onClick={() => view.openPanel({ kind: "record", tab: "steps", turnKey: turn.turn_id })}>
+              在研究记录中查看 ›
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-export function TurnView({ turn, actions }: { turn: ResearchV2.ResearchTurn; actions: TurnActions | null }) {
+export function TurnView({ turn, actions, first = false }: { turn: ResearchV2.ResearchTurn; actions: TurnActions | null; first?: boolean }) {
   const view = useTopicView();
   const number = displayTurnNumber(turn);
   const focus = turn.focus_citation;
@@ -356,38 +423,43 @@ export function TurnView({ turn, actions }: { turn: ResearchV2.ResearchTurn; act
     const citation = claim?.citations?.[focus.citation_index];
     focusLabel = citation ? `深挖引用 ${view.citations.numberFor(citation)}` : "深挖引用";
   }
+  // The first question is already the page's large title; repeating it adds nothing.
   return (
-    <section className="turn" aria-label={`第 ${number} 轮`}>
-      <TurnStamp number={number} iso={turn.started_at} />
-      <AskBubble text={turn.question} focusLabel={focusLabel} />
+    <section className={first ? "turn turn-first" : "turn"} aria-label={`第 ${number} 轮`}>
+      {!first ? <TurnStamp number={number} iso={turn.started_at} /> : null}
+      {!first || focusLabel ? <AskBubble text={turn.question} focusLabel={focusLabel} /> : null}
       <AnswerBlock turn={turn} actions={actions} />
     </section>
   );
 }
 
 /** A run that stopped before saving any turn (spec §4.3 回答：中断或已取消). */
-export function InterruptedTurn({ number, startedAt, question, status, actions, events = [] }: {
-  number: number; startedAt: string; question: string; status: "failed" | "cancelled"; actions: TurnActions; events?: ProgressEvent[];
+export function InterruptedTurn({ number, startedAt, question, status, actions, events = [], first = false }: {
+  number: number; startedAt: string; question: string; status: "failed" | "cancelled"; actions: TurnActions; events?: ProgressEvent[]; first?: boolean;
 }) {
   const reason = actions.recovery?.reason ? recoveryReasonLabel(actions.recovery.reason) : null;
   return (
-    <section className="turn" aria-label={`第 ${number} 轮`}>
-      <TurnStamp number={number} iso={startedAt} />
-      {question ? <AskBubble text={question} /> : null}
+    <section className={first ? "turn turn-first" : "turn"} aria-label={`第 ${number} 轮`}>
+      {!first ? <TurnStamp number={number} iso={startedAt} /> : null}
+      {question && !first ? <AskBubble text={question} /> : null}
       <div className="answer">
-        <div className="status"><span className="role error">{status === "cancelled" ? "已取消" : "运行中断"}</span></div>
-        {events.length > 0 ? <ProcessTimeline events={events} initialTailLimit={3} /> : null}
         <div className="callout error" role="note">
-          <span className="h">{status === "cancelled" ? "这一轮已取消，没有保存新的版本。" : "这一轮没有完成，也没有保存新的版本。"}</span>
-          {reason ? <span className="why">恢复检查：{reason}</span> : null}
+          <span className="h">{status === "cancelled" ? "已取消" : "运行中断"}</span>
+          <span>{status === "cancelled" ? "这一轮已取消，没有保存新的版本。" : "这一轮没有完成，也没有保存新的版本。"}</span>
+          {reason ? <span className="why">{reason}</span> : null}
           <CalloutActions actions={actions} />
         </div>
+        {events.length > 0 ? <ProcessTimeline events={events} initialTailLimit={3} /> : null}
       </div>
     </section>
   );
 }
 
-export function LiveTurn({ number, startedAt, question, live = null, sectionRef, onDraftGrow, continuing = null }: {
+/**
+ * The only place a run's state shows while it works: one line (status, what has been found so far,
+ * elapsed time) above the live timeline. Stopping lives in the composer's send button.
+ */
+export function LiveTurn({ number, startedAt, question, live = null, sectionRef, onDraftGrow, continuing = null, first = false }: {
   number: number;
   startedAt: string;
   question: string;
@@ -395,7 +467,9 @@ export function LiveTurn({ number, startedAt, question, live = null, sectionRef,
   sectionRef?: Ref<HTMLElement>;
   onDraftGrow?: (() => void) | undefined;
   continuing?: "continue" | "deliver" | null | undefined;
+  first?: boolean;
 }) {
+  const view = useTopicView();
   const now = useNow(true);
   const [expanded, setExpanded] = useState(true);
   const progress = live?.progress ?? null;
@@ -404,12 +478,7 @@ export function LiveTurn({ number, startedAt, question, live = null, sectionRef,
   const startIso = progress?.started_at ?? live?.operation.created_at ?? startedAt;
   const startedMs = Date.parse(startIso);
   const elapsed = Number.isNaN(startedMs) ? "" : formatClock(Math.max(0, now - startedMs));
-  const usage = progress?.usage;
-  const metaParts: string[] = [];
-  if (elapsed) metaParts.push(`已用 ${elapsed}`);
-  if (usage && usage.model_calls > 0) metaParts.push(`${usage.model_calls} 次调用`);
-  if (usage && usage.search_calls > 0) metaParts.push(`${usage.search_calls} 次搜索`);
-  metaParts.push(...formatInterimParts(progress?.interim));
+  const found = formatInterimParts(progress?.interim).join(" · ");
   const events = live?.events ?? [];
   const current = progress?.current ?? null;
   const hasTimeline = events.length > 0 || current !== null;
@@ -423,18 +492,27 @@ export function LiveTurn({ number, startedAt, question, live = null, sectionRef,
   return (
     <section
       ref={sectionRef}
-      className={isContinue ? "turn turn-continuation" : "turn"}
+      className={isContinue ? "turn turn-continuation" : first ? "turn turn-first" : "turn"}
       aria-label={isContinue ? `第 ${number} 轮继续研究` : `第 ${number} 轮`}
       aria-busy="true"
     >
-      {!isContinue ? <TurnStamp number={number} iso={startedAt} /> : null}
-      {!isContinue && question ? <AskBubble text={question} /> : null}
+      {!isContinue && !first ? <TurnStamp number={number} iso={startedAt} /> : null}
+      {!isContinue && !first && question ? <AskBubble text={question} /> : null}
       <div className="answer live-turn">
         <div className="live-turn-head">
           <span className="dot running" aria-hidden="true" />
-          <span className="live-turn-title">{statusTitle}</span>
-          <span className="meta">运行状态：{OPERATION_STATUS_LABEL[status] ?? status}</span>
-          {metaParts.length > 0 ? <span className="meta live-turn-meta">{metaParts.join(" · ")}</span> : null}
+          <button
+            type="button"
+            className="live-turn-title"
+            title="打开过程面板"
+            disabled={!live}
+            onClick={() => view.openPanel({ kind: "record", tab: "steps", turnKey: LIVE_TURN })}
+          >
+            {statusTitle}
+          </button>
+          {found ? <span className="live-turn-meta">{found}</span> : null}
+          <span className="grow" />
+          {elapsed ? <span className="live-turn-time">{elapsed}</span> : null}
           <button
             type="button"
             className="link live-turn-toggle"

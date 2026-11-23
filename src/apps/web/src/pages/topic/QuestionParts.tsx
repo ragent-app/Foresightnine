@@ -46,10 +46,8 @@ function EvidenceLink({ reference, turnId }: { reference: ResearchV2.QuestionPar
       查看计算 · {formulaLabel(calc.formula_id)} · {calc.value} {calc.unit}
     </button>;
   }
-  if (reference.claim_id) {
-    const claimId = reference.claim_id;
-    return <button type="button" className="link" onClick={() => view.gotoClaim(claimId)}>查看引证判断</button>;
-  }
+  // Claim references are reached through the citation numbers in the answer itself.
+  if (reference.claim_id) return null;
   if (reference.source_id) {
     const sourceId = reference.source_id;
     const range = reference.character_start != null && reference.character_end != null
@@ -65,14 +63,12 @@ export function QuestionParts({ turn }: { turn: ResearchV2.ResearchTurn }) {
   const parts = turn.question_parts ?? [];
   if (!parts.length) return null;
   return (
-    <section aria-label="问题各部分的进展">
-      <h3>问题各部分的进展</h3>
-      <p className="note">回答由模型整理；数字与原文位置的核对不等于语义核验，数字本身不是投资建议。</p>
+    <section className="parts" aria-label="问题各部分的进展">
       <ol>{parts.map((part, index) => (
-        <li key={part.id ?? `${index}-${part.question}`}>
-          <b>{part.question}</b> · {PART_STATUS[part.status]}
+        <li key={part.id ?? `${index}-${part.question}`} className={`part ${part.status}`}>
+          <div className="part-head"><b>{part.question}</b><span className="part-status">{PART_STATUS[part.status]}</span></div>
           {part.answer ? <p>{part.answer}</p> : null}
-          {part.reason ? <p>{part.reason}</p> : null}
+          {part.reason ? <p className="part-reason">{part.reason}</p> : null}
           {(part.references ?? []).map((ref, i) => (
             <EvidenceLink key={i} reference={ref} turnId={turn.turn_id} />
           ))}

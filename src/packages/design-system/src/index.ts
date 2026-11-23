@@ -1,33 +1,38 @@
+/**
+ * Single source of the product palette, mirrored from the Web workbench tokens
+ * (apps/web/src/styles/index.css :root, light theme). Android reads these values; keep both in step.
+ */
 export const color = {
-  canvas: "#f7f2e9",
-  surface: "#fbf8f2",
-  surfaceMuted: "#f0e8dc",
-  ink: "#2f2119",
-  inkMuted: "#74675d",
-  border: "#d9cdbf",
-  borderStrong: "#b9a897",
-  accent: "#a94325",
-  accentHover: "#a63f22",
-  accentSoft: "#f2d9cc",
-  weak: "#3f6688",
-  weakSoft: "#dce8f1",
-  strong: "#486a43",
-  strongSoft: "#dfe9dc",
-  evidenceB: "#516540",
-  evidenceC: "#6f4b10",
-  evidenceD: "#75431e",
-  evidenceE: "#85392d",
-  warning: "#9b5b1d",
-  danger: "#a3382a",
-  focus: "#c14f2e",
+  canvas: "#ffffff",
+  surface: "#ffffff",
+  surfaceMuted: "#f5f6f8",
+  ink: "#1d1f24",
+  inkMuted: "#5d636e",
+  border: "#e4e6ea",
+  borderStrong: "#c9cdd4",
+  accent: "#000000",
+  accentHover: "#2a2c31",
+  accentSoft: "#eef0f3",
+  weak: "#2b5aa8",
+  weakSoft: "#e6edf8",
+  strong: "#2f7a42",
+  strongSoft: "#e3f0e6",
+  evidenceB: "#2f7a42",
+  evidenceC: "#9a6200",
+  evidenceD: "#9a6200",
+  evidenceE: "#c0262d",
+  warning: "#9a6200",
+  danger: "#c0262d",
+  focus: "#000000",
   white: "#ffffff",
 } as const;
 
+/** One sans family; Android resolves the platform system font from these names. */
 export const typography = {
-  displayFamily: '"Noto Serif SC", "Source Han Serif SC", Georgia, serif',
-  uiFamily: 'Inter, "Noto Sans SC", "Source Han Sans SC", system-ui, sans-serif',
-  monoFamily: '"JetBrains Mono", "SFMono-Regular", Consolas, monospace',
-  size: { xs: 12, sm: 14, md: 16, lg: 20, xl: 28, display: 48 },
+  displayFamily: "sans-serif",
+  uiFamily: "sans-serif",
+  monoFamily: "monospace",
+  size: { xs: 12, sm: 14, md: 16, lg: 20, xl: 28, display: 28 },
   lineHeight: { compact: 1.25, body: 1.6, reading: 1.75 },
 } as const;
 
@@ -46,11 +51,11 @@ export const space = {
   20: 80,
 } as const;
 
-export const radius = { none: 0, sm: 4, md: 8, lg: 12, round: 999 } as const;
+export const radius = { none: 0, sm: 6, md: 10, lg: 14, xl: 22, round: 999 } as const;
 export const elevation = {
   none: "none",
-  raised: "0 8px 28px rgb(47 33 25 / 0.08)",
-  overlay: "0 16px 48px rgb(47 33 25 / 0.14)",
+  raised: "0 6px 20px rgb(20 24 33 / 0.06), 0 1px 2px rgb(20 24 33 / 0.04)",
+  overlay: "0 12px 40px rgb(20 24 33 / 0.08), 0 2px 6px rgb(20 24 33 / 0.04)",
 } as const;
 export const motion = {
   fastMs: 120,
@@ -72,22 +77,22 @@ export const chart = {
   main: { color: color.accent, dash: [] as readonly number[], marker: "circle" },
   weak: { color: color.weak, dash: [8, 5] as readonly number[], marker: "triangle-down" },
   strong: { color: color.strong, dash: [12, 5, 3, 5] as readonly number[], marker: "triangle-up" },
-  intervalFill: "rgb(189 77 44 / 0.16)",
-  grid: "rgb(116 103 93 / 0.18)",
+  intervalFill: "rgb(43 90 168 / 0.14)",
+  grid: "rgb(60 66 80 / 0.10)",
   today: color.inkMuted,
 } as const;
 
 export const semanticPair = {
   action: { foreground: color.white, background: color.accent },
-  weak: { foreground: "#355c7d", background: color.weakSoft },
-  strong: { foreground: "#3e6039", background: color.strongSoft },
-  evidenceA: { foreground: "#3e6039", background: "#e2eadf" },
-  evidenceB: { foreground: color.evidenceB, background: "#e6eadf" },
-  evidenceC: { foreground: color.evidenceC, background: "#f0e3c8" },
-  evidenceD: { foreground: color.evidenceD, background: "#f0ded0" },
-  evidenceE: { foreground: color.evidenceE, background: "#efd9d3" },
-  warning: { foreground: "#6d3c0d", background: "#f4e5cf" },
-  danger: { foreground: "#812b20", background: "#f2d9d3" },
+  weak: { foreground: color.weak, background: color.weakSoft },
+  strong: { foreground: color.strong, background: color.strongSoft },
+  evidenceA: { foreground: color.strong, background: color.strongSoft },
+  evidenceB: { foreground: color.evidenceB, background: color.strongSoft },
+  evidenceC: { foreground: color.evidenceC, background: "#fbf1e1" },
+  evidenceD: { foreground: color.evidenceD, background: "#fbf1e1" },
+  evidenceE: { foreground: color.evidenceE, background: "#fbe7e8" },
+  warning: { foreground: color.warning, background: "#fbf1e1" },
+  danger: { foreground: color.danger, background: "#fbe7e8" },
 } as const;
 
 export const component = {

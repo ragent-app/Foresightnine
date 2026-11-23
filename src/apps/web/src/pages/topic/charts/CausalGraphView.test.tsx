@@ -88,6 +88,8 @@ function makeTopicView(gotoClaim = vi.fn()): TopicView {
     saveDraft: vi.fn(async () => "v2"),
     saving: false,
     notify: vi.fn(),
+    evidence: new Map(),
+    setEvidence: vi.fn(),
   };
 }
 

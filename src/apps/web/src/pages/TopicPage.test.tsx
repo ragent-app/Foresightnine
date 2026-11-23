@@ -87,6 +87,25 @@ function renderTopic(client = new QueryClient({ defaultOptions: { queries: { ret
   };
 }
 
+/** Simulates the reader scrolling up, away from the live turn; returns the scrollTo spy. */
+function scrollAway(container: HTMLElement) {
+  const scroller = container.querySelector('[data-page="TopicPage"]') as HTMLDivElement;
+  const scrollToSpy = vi.fn();
+  scroller.scrollTo = scrollToSpy;
+  Object.defineProperty(scroller, "scrollHeight", { value: 1200, configurable: true });
+  Object.defineProperty(scroller, "clientHeight", { value: 400, configurable: true });
+  Object.defineProperty(scroller, "scrollTop", { value: 100, configurable: true, writable: true });
+  fireEvent.scroll(scroller);
+  return scrollToSpy;
+}
+
+/** Version and review moved from the header into the toolbar's 更多操作 menu (spec v6). */
+async function openReview() {
+  await screen.findByRole("region", { name: "第 1 轮" });
+  fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "复核与版本" }));
+}
+
 const CLAIMS: ResearchV2.ResearchClaim[] = [
   { claim_id: "C1", role: "support", text: "总收入为 48,612 百万美元。", turn_id: "turn_2", citations: [{ source_id: "s1", quotation: QUOTE, location: { character_start: START, character_end: END } }] },
   { claim_id: "C2", role: "counterargument", text: "利润率没有提高。", turn_id: "turn_2", challenges_claim_ids: ["C1"], citations: [{ source_id: "s1", quotation: QUOTE, location: { character_start: START, character_end: END } }] },
@@ -108,11 +127,17 @@ describe("TopicPage", () => {
     renderTopic();
     expect(await screen.findByRole("heading", { level: 1, name: "Northwind 示例公司的收入增长有多快？" })).toBeTruthy();
     const turn2 = screen.getByRole("region", { name: "第 2 轮" });
-    expect(within(turn2).getByText("完成")).toBeTruthy();
-    expect(within(turn2).getByText("支持")).toBeTruthy();
+    // A completed answer carries no status line; the first question is the page title, not a bubble.
+    expect(within(turn2).queryByText("完成")).toBeNull();
+    // The challenging claim stays visible; supporting claims sit in the collapsed evidence.
     expect(within(turn2).getByText("待复核")).toBeTruthy();
+    expect(within(turn2).queryByRole("region", { name: "问题各部分的进展" })).toBeNull();
+    fireEvent.click(within(turn2).getByRole("button", { name: "已回答 1/1 部分" }));
     expect(within(turn2).getByRole("region", { name: "问题各部分的进展" })).toBeTruthy();
+    fireEvent.click(within(turn2).getByRole("button", { name: "依据 1 条" }));
+    expect(within(turn2).getByText("支持")).toBeTruthy();
     const marker = within(turn2).getByRole("link", { name: "查看依据" });
+    expect(marker.textContent).toBe("1");
     expect(marker.getAttribute("href")).toBe("#claim-C1");
     expect(document.getElementById("claim-C1")?.textContent).toContain("48,612");
     expect(within(turn2).getByText("[[claim:C2]]", { selector: "code" })).toBeTruthy();
@@ -145,7 +170,7 @@ describe("TopicPage", () => {
     });
   });
 
-  it("locks the composer, renders inline LiveTurn, and shows the live bar while a run is active", async () => {
+  it("locks the composer, renders inline LiveTurn, and turns send into stop while a run is active", async () => {
     mockApi((url) => {
       if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([turn(1)]));
       if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_2", "running"), operation("op_1", "completed")]);
@@ -172,9 +197,11 @@ describe("TopicPage", () => {
     });
     renderTopic();
     expect(await screen.findByText("第二个问题")).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "取消" })).toHaveLength(1);
-    expect(screen.getByText(/阅读资料：读取年报附注/)).toBeTruthy();
+    // Stopping lives in the composer; the run's state shows once, inside the live turn.
+    expect(screen.getAllByRole("button", { name: "停止研究" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "取消" })).toBeNull();
     const liveRegion = screen.getByRole("region", { name: "第 2 轮" });
+    expect(within(liveRegion).getByText(/读取年报附注/)).toBeTruthy();
     expect(within(liveRegion).getByText("正在研究")).toBeTruthy();
     expect(within(liveRegion).getByText(/发现 3 条线索 · 获取 1 份资料 · 记下 2 个数字/)).toBeTruthy();
     expect(within(liveRegion).getByText("先检查年报附注中的收入明细。")).toBeTruthy();
@@ -185,7 +212,7 @@ describe("TopicPage", () => {
     expect(within(liveRegion).getByText("先检查年报附注中的收入明细。")).toBeTruthy();
     const composer = screen.getByRole("textbox", { name: "追问" }) as HTMLTextAreaElement;
     expect(composer.disabled).toBe(true);
-    expect(composer.placeholder).toBe("本轮研究进行中，可以先取消再提问");
+    expect(composer.placeholder).toBe("研究进行中，可以先停止再提问");
   });
 
   it("sends a follow-up with question_override and the deep-dive citation", async () => {
@@ -232,7 +259,7 @@ describe("TopicPage", () => {
     renderTopic();
     const region = await screen.findByRole("region", { name: "第 2 轮" });
     expect(within(region).getByText("运行中断")).toBeTruthy();
-    expect(await within(region).findByText("恢复检查：外部请求结果未知")).toBeTruthy();
+    expect(await within(region).findByText("外部请求结果未知")).toBeTruthy();
     expect(await within(region).findByText("失败的问题")).toBeTruthy();
     expect(within(region).getByRole("button", { name: "重新提问" })).toBeTruthy();
   });
@@ -356,7 +383,7 @@ describe("TopicPage", () => {
         return undefined;
       });
       renderTopic();
-      fireEvent.click(await screen.findByRole("button", { name: "v2 草稿" }));
+      await openReview();
       fireEvent.change(await screen.findByLabelText("你的研究总结"), { target: { value: "我的判断" } });
       fireEvent.click(screen.getByRole("button", { name: "关闭" }));
       const composer = screen.getByRole("textbox", { name: "追问" });
@@ -380,7 +407,7 @@ describe("TopicPage", () => {
         return undefined;
       });
       renderTopic();
-      fireEvent.click(await screen.findByRole("button", { name: "v2 草稿" }));
+      await openReview();
       fireEvent.click(await screen.findByRole("button", { name: "已确认" }));
       fireEvent.click(screen.getByRole("button", { name: "关闭" }));
       const composer = screen.getByRole("textbox", { name: "追问" });
@@ -502,7 +529,7 @@ describe("TopicPage", () => {
       expect(within(region).getByText("部分完成")).toBeTruthy();
       expect(within(region).getByText("这一轮没有取得可用成果。")).toBeTruthy();
       expect(within(region).getByText("过程与缺口说明（未核实线索与建议，非正式结论）")).toBeTruthy();
-      expect(within(region).getByText("以下说明来自模型补充，未经原文位置或数据核对，不作为正式结论。")).toBeTruthy();
+      expect(within(region).getByText("模型说明：所有外部获取路径受阻")).toBeTruthy();
       const notesRegion = within(region).getByRole("note", { name: "过程与缺口说明（未核实线索与建议，非正式结论）" });
       expect(within(notesRegion).getByText("已尝试检索 SEC 与官网 IR（返回 403）。")).toBeTruthy();
       expect(within(notesRegion).getByText("建议：<b>上传 10-K PDF</b> 后继续。")).toBeTruthy();
@@ -568,7 +595,7 @@ describe("TopicPage", () => {
   });
 
   describe("L1 streaming research progress", () => {
-    it("reads LiveBar current rationale/target/phase directly without borrowing prior tool rationale", async () => {
+    it("reads the live capsule current rationale/target/phase directly without borrowing prior tool rationale", async () => {
       let pollCount = 0;
       mockApi((url) => {
         if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([turn(1)]));
@@ -594,13 +621,16 @@ describe("TopicPage", () => {
         }
         return undefined;
       });
-      renderTopic();
-      const liveBarBtn = await screen.findByTitle("查看研究过程");
-      expect(liveBarBtn.textContent).toContain("阅读资料");
-      expect(liveBarBtn.textContent).not.toContain("旧步骤理由");
+      const { container } = renderTopic();
+      await screen.findByRole("region", { name: "第 2 轮" });
+      // The current activity shows in the capsule once the reader scrolls away from the live turn.
+      scrollAway(container);
+      const capsule = await screen.findByRole("button", { name: "回到实时过程" });
+      expect(capsule.textContent).toContain("阅读资料");
+      expect(capsule.textContent).not.toContain("旧步骤理由");
     });
 
-    it("shows LiveBar model retry phase and pauses auto-scroll when scrolled up with jump-back action", async () => {
+    it("shows the model retry phase in the live capsule and pauses auto-scroll when scrolled up with jump-back action", async () => {
       mockApi((url) => {
         if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([turn(1)]));
         if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_2", "running"), operation("op_1", "completed")]);
@@ -622,18 +652,13 @@ describe("TopicPage", () => {
         return undefined;
       });
       const { container } = renderTopic();
-      const liveBarBtn = await screen.findByTitle("查看研究过程");
-      expect(liveBarBtn.textContent).toContain("重试模型请求（第 2 次）");
-
-      const scroller = container.querySelector('[data-page="TopicPage"]') as HTMLDivElement;
-      const scrollToSpy = vi.fn();
-      scroller.scrollTo = scrollToSpy;
-      Object.defineProperty(scroller, "scrollHeight", { value: 1200, configurable: true });
-      Object.defineProperty(scroller, "clientHeight", { value: 400, configurable: true });
-      Object.defineProperty(scroller, "scrollTop", { value: 100, configurable: true, writable: true });
-      fireEvent.scroll(scroller);
+      await screen.findByRole("region", { name: "第 2 轮" });
+      // Near the live turn there is no floating bar at all.
+      expect(screen.queryByRole("button", { name: "回到实时过程" })).toBeNull();
+      const scrollToSpy = scrollAway(container);
 
       const jumpBtn = await screen.findByRole("button", { name: "回到实时过程" });
+      expect(jumpBtn.textContent).toContain("重试模型请求（第 2 次）");
       fireEvent.click(jumpBtn);
       expect(scrollToSpy).toHaveBeenCalled();
       await waitFor(() => expect(screen.queryByRole("button", { name: "回到实时过程" })).toBeNull());
@@ -668,7 +693,7 @@ describe("TopicPage", () => {
       });
       renderTopic();
       const region = await screen.findByRole("region", { name: "第 1 轮" });
-      const toggle = within(region).getByRole("button", { name: /已完成 2 步研究过程 · 1 次搜索 · 2 次调用/ });
+      const toggle = within(region).getByRole("button", { name: "过程 2 步" });
       expect(toggle.getAttribute("aria-expanded")).toBe("false");
       expect(within(region).queryByText("首先搜索公司官方披露。")).toBeNull();
 
@@ -733,9 +758,14 @@ describe("TopicPage", () => {
       });
       renderTopic();
       const region = await screen.findByRole("region", { name: "第 1 轮" });
-      fireEvent.click(within(region).getByRole("button", { name: /已完成 1 步研究过程/ }));
+      fireEvent.click(within(region).getByRole("button", { name: "过程 1 步" }));
       expect(within(region).getByText("旧版读取")).toBeTruthy();
-      expect(within(region).getByText("模型调用 · 400 输入 / 100 输出 Token")).toBeTruthy();
+      // Under the answer a model step only says it ran; token accounting lives in the record panel.
+      expect(within(region).getByText("模型调用")).toBeTruthy();
+      expect(within(region).queryByText("模型调用 · 400 输入 / 100 输出 Token")).toBeNull();
+      fireEvent.click(within(region).getByRole("button", { name: /在研究记录中查看/ }));
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText("模型调用 · 400 输入 / 100 输出 Token")).toBeTruthy();
     });
   });
 
@@ -799,7 +829,7 @@ describe("TopicPage", () => {
       const liveRegion = await screen.findByRole("region", { name: "第 2 轮" });
       expect(await within(liveRegion).findByText("先通过 SSE 检索年报。")).toBeTruthy();
       expect(within(liveRegion).getByText("Northwind 10-K")).toBeTruthy();
-      expect(screen.getByTitle("查看研究过程").textContent).toContain("搜索线索：搜索年报");
+      expect(within(liveRegion).getAllByText(/搜索年报/).length).toBeGreaterThan(0);
 
       // Send heartbeat, duplicate ev:0, new step.event, current update, and transient L3 stream frames.
       streamController!.enqueue(encoder.encode(": heartbeat\n\n"));
@@ -842,7 +872,7 @@ describe("TopicPage", () => {
       expect(await within(liveRegion).findByText("发现 2 条线索（可用 1 · 受限 1）")).toBeTruthy();
       expect(within(liveRegion).getAllByText("先通过 SSE 检索年报。")).toHaveLength(1);
       expect(within(liveRegion).getByText("《Northwind 10-K》0–8,000 字")).toBeTruthy();
-      expect(screen.getByTitle("查看研究过程").textContent).toContain("阅读资料：精读收入附注");
+      expect(within(liveRegion).getByText(/精读收入附注/)).toBeTruthy();
 
       completed = true;
       sendFrame("done:op_2", "run.terminal", {
@@ -858,7 +888,7 @@ describe("TopicPage", () => {
       expect(await screen.findByText("SSE 完成报告。")).toBeTruthy();
       const completedRegion = await screen.findByRole("region", { name: "第 2 轮" });
       expect(within(completedRegion).getByText("SSE 完成报告。")).toBeTruthy();
-      await waitFor(() => expect(screen.queryByTitle("查看研究过程")).toBeNull());
+      await waitFor(() => expect(screen.queryByTitle("打开过程面板")).toBeNull());
       const progressCalls = fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/op_2/progress"));
       expect(progressCalls).toHaveLength(0);
     });
@@ -1141,8 +1171,8 @@ describe("TopicPage", () => {
       const region = await screen.findByRole("region", { name: "第 1 轮" });
       expect(within(region).getByText("部分完成")).toBeTruthy();
       expect(within(region).getByText("已记录 1 个数字，还没有形成可引用的结论。")).toBeTruthy();
-      expect(within(region).getByText("停止原因：模型输出达到单次长度上限而被截断")).toBeTruthy();
-      expect(await within(region).findByText(/恢复检查：连续多次达到模型输出或上下文长度上限/)).toBeTruthy();
+      expect(within(region).getByText("模型输出达到单次长度上限而被截断")).toBeTruthy();
+      expect(await within(region).findByText(/^连续多次达到模型输出或上下文长度上限/)).toBeTruthy();
       expect(within(region).queryByText(/repeated_truncation/)).toBeNull();
       expect(within(region).queryByText(/provider_output_truncated/)).toBeNull();
 
@@ -1181,7 +1211,7 @@ describe("TopicPage", () => {
       });
       renderTopic();
       const region = await screen.findByRole("region", { name: "第 1 轮" });
-      expect(await within(region).findByText(/恢复检查：连续多次达到模型输出或上下文长度上限/)).toBeTruthy();
+      expect(await within(region).findByText(/^连续多次达到模型输出或上下文长度上限/)).toBeTruthy();
       expect(within(region).queryByRole("button", { name: "继续研究" })).toBeNull();
       expect(within(region).queryByRole("button", { name: "交付已有成果" })).toBeNull();
       expect(within(region).getByRole("button", { name: "重新提问" })).toBeTruthy();
@@ -1215,7 +1245,7 @@ describe("TopicPage", () => {
       const region = await screen.findByRole("region", { name: "第 2 轮" });
       expect(within(region).getByText("运行中断")).toBeTruthy();
       expect(await within(region).findByText("模型调用失败 · 输出达到单次长度上限被截断")).toBeTruthy();
-      expect(await within(region).findByText(/恢复检查：连续多次达到模型输出或上下文长度上限/)).toBeTruthy();
+      expect(await within(region).findByText(/^连续多次达到模型输出或上下文长度上限/)).toBeTruthy();
       expect(within(region).queryByRole("button", { name: "继续研究" })).toBeNull();
       expect(within(region).getByRole("button", { name: "重新提问" })).toBeTruthy();
     });
@@ -1241,8 +1271,8 @@ describe("TopicPage", () => {
       renderTopic();
       const region = await screen.findByRole("region", { name: "第 1 轮" });
       expect(within(region).getByText("部分完成")).toBeTruthy();
-      expect(within(region).getByText("停止原因：模型服务请求超时")).toBeTruthy();
-      expect(await within(region).findByText(/恢复检查：连续多次发生模型单次调用超时/)).toBeTruthy();
+      expect(within(region).getByText("模型服务请求超时")).toBeTruthy();
+      expect(await within(region).findByText(/^连续多次发生模型单次调用超时/)).toBeTruthy();
       expect(within(region).queryByText(/repeated_timeout/)).toBeNull();
       expect(within(region).queryByText(/provider_timeout/)).toBeNull();
 
@@ -1276,7 +1306,7 @@ describe("TopicPage", () => {
       });
       renderTopic();
       const region = await screen.findByRole("region", { name: "第 1 轮" });
-      expect(await within(region).findByText(/恢复检查：连续多次发生模型单次调用超时/)).toBeTruthy();
+      expect(await within(region).findByText(/^连续多次发生模型单次调用超时/)).toBeTruthy();
       expect(within(region).queryByRole("button", { name: "继续研究" })).toBeNull();
       expect(within(region).queryByRole("button", { name: "交付已有成果" })).toBeNull();
       expect(within(region).getByRole("button", { name: "重新提问" })).toBeTruthy();
@@ -1314,7 +1344,7 @@ describe("TopicPage", () => {
       const region = await screen.findByRole("region", { name: "第 2 轮" });
       expect(within(region).getByText("运行中断")).toBeTruthy();
       expect(await within(region).findByText("模型调用失败 · 请求超时")).toBeTruthy();
-      expect(await within(region).findByText(/恢复检查：连续多次发生模型单次调用超时/)).toBeTruthy();
+      expect(await within(region).findByText(/^连续多次发生模型单次调用超时/)).toBeTruthy();
       expect(within(region).queryByRole("button", { name: "继续研究" })).toBeNull();
       expect(within(region).queryByRole("button", { name: "交付已有成果" })).toBeNull();
       expect(within(region).getByRole("button", { name: "重新提问" })).toBeTruthy();
@@ -1622,7 +1652,7 @@ describe("TopicPage", () => {
         version_id: null,
       })}\n\nevent: stream.delta\ndata: ${JSON.stringify({ operation_id: "op_2", call_seq: 1, channel: "thinking", delta: "面板中的实时思考", seq: 0 })}\n\nevent: stream.delta\ndata: ${JSON.stringify({ operation_id: "op_2", call_seq: 1, channel: "tool_status", delta: "面板正在起草报告…", seq: 1 })}\n\n`));
 
-      fireEvent.click(await screen.findByRole("button", { name: "打开过程面板" }));
+      fireEvent.click(await screen.findByTitle("打开过程面板"));
       const dialog = await screen.findByRole("dialog");
       expect(await within(dialog).findByText("面板中的实时思考")).toBeTruthy();
       expect(within(dialog).getByText("面板正在起草报告…")).toBeTruthy();
@@ -1732,10 +1762,11 @@ describe("TopicPage", () => {
         const extLink = within(turn1Region).getByRole("link", { name: /SEC 原文/ }) as HTMLAnchorElement;
         expect(extLink.href).toBe("https://www.sec.gov/Archives/edgar/data/1/a.htm");
         expect(within(turn1Region).getByText("云服务收入").tagName).toBe("STRONG");
+        fireEvent.click(within(turn1Region).getByRole("button", { name: "依据 1 条" }));
         expect(within(turn1Region).getByRole("button", { name: "引用 1" })).toBeTruthy();
 
         // Expand collapsed process summary and confirm inline Markdown in model.note.
-        fireEvent.click(within(turn1Region).getByRole("button", { name: /已完成 1 步研究过程/ }));
+        fireEvent.click(within(turn1Region).getByRole("button", { name: "过程 1 步" }));
         expect(within(turn1Region).getByText("10-K 附注").tagName).toBe("STRONG");
 
         await waitFor(() => expect(streamCtrl).toBeTruthy());
@@ -1772,7 +1803,7 @@ describe("TopicPage", () => {
   });
 
   describe("V1 evidence-bound charts in AnswerBlock", () => {
-    it("renders [[chart:...]] inline, auto-places unreferenced charts before StatLine, ignores invalid anchors, and opens ReaderPanel on provenance click", async () => {
+    it("renders [[chart:...]] inline, auto-places unreferenced charts after the report and key numbers, ignores invalid anchors, and opens ReaderPanel on provenance click", async () => {
       const cCombo: ResearchV2.ResearchChart = {
         chart_id: "c_combo",
         turn_id: "turn_1",
@@ -1959,12 +1990,12 @@ describe("TopicPage", () => {
       expect(within(turnRegion).queryByText("[[chart:bogus_missing_chart]]")).toBeNull();
       expect(turnRegion.querySelector("pre")?.textContent).toContain("[[chart:c_price]]");
 
-      // Ordering: report -> trailing charts -> stats
+      // Ordering (spec v6): key numbers lead, then the report body, then trailing charts.
       const reportEl = turnRegion.querySelector(".report")!;
       const trailingEl = turnRegion.querySelector(".turn-charts")!;
       const statsEl = turnRegion.querySelector(".stats")!;
       expect(reportEl.compareDocumentPosition(trailingEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      expect(trailingEl.compareDocumentPosition(statsEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(statsEl.compareDocumentPosition(trailingEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
       // 2) Switch to table view and click provenance to open ReaderPanel highlighting exact source quotation.
       const comboFigure = screen.getByRole("figure", { name: "内联营业收入与利润率图" });

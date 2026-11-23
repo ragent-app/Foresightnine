@@ -49,6 +49,9 @@ export interface TopicView {
   openPanel: (panel: PanelState) => void;
   deepDive: (focus: FocusCitation) => void;
   gotoClaim: (claimId: string) => void;
+  /** Per-turn override of whether the supporting evidence under an answer is expanded. */
+  evidence: ReadonlyMap<string, boolean>;
+  setEvidence: (turnId: string, open: boolean) => void;
   /** Re-extracts a retained PDF in the other text order and adds the result to the topic. */
   reextractPdf: (source: AvailableVersionSource) => Promise<void>;
   /** Unsaved review changes, kept as a patch over the latest version (spec §4.7). */
