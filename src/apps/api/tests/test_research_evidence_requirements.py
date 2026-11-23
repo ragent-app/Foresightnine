@@ -17,8 +17,25 @@ def fact(fid, label, value, period, start, end, unit='USD', entity='ACME'):
 
 
 def calc(cid, first, second, formula='growth_percent'):
-    return {'calculation_id': cid, 'formula_id': formula, 'inputs': [{'fact_id': first}, {'fact_id': second}],
-            'period_order_check': 'recognized_formats_only', 'period_granularity_check': 'recognized_formats_only'}
+    from app.research_calculations import CalculationRequest, calculate
+    keys = ('fact_id', 'value', 'unit', 'currency', 'period')
+    payload = {'formula': formula, 'first': {k: first[k] for k in keys}, 'second': {k: second[k] for k in keys}}
+    return {**calculate(CalculationRequest.model_validate(payload)), 'calculation_id': cid, 'input_status': 'matched'}
+
+
+def test_changed_calculation_values_or_bound_inputs_do_not_satisfy_comparison():
+    import copy
+    f = [fact('r1', 'revenue', '120', 'FY2024', 4, 7), fact('r0', 'revenue', '100', 'FY2023', 0, 3)]
+    state = {'facts': f, 'calculations': [calc('c', f[0], f[1])]}
+    question = 'Compare revenue growth rate'
+    assert assess_core_requirements(question, state, {'s': source()})[0]['status'] == 'satisfied'
+    for key, value in (('value', '99'), ('input', '999')):
+        altered = copy.deepcopy(state)
+        if key == 'input':
+            altered['calculations'][0]['inputs'][0]['value'] = value
+        else:
+            altered['calculations'][0][key] = value
+        assert assess_core_requirements(question, altered, {'s': source()})[0]['status'] != 'satisfied'
 
 
 def test_financial_comparison_requires_each_metric_and_ordered_comparable_inputs():
@@ -26,11 +43,11 @@ def test_financial_comparison_requires_each_metric_and_ordered_comparable_inputs
     q = 'Compare revenue growth and the change in diluted EPS'
     f = [fact('r0', 'revenue', '100', 'FY2023', 0, 3), fact('r1', 'revenue', '120', 'FY2024', 4, 7),
          fact('e1', 'diluted EPS', '3', 'FY2024', 10, 11)]
-    state = {'facts': f, 'calculations': [calc('r', 'r1', 'r0')]}
+    state = {'facts': f, 'calculations': [calc('r', f[1], f[0])]}
     rows = assess_core_requirements(q, state, {'s': source()})
     assert {x['metric']: x['status'] for x in rows} == {'revenue': 'satisfied', 'diluted_eps': 'partial'}
     state['facts'].append(fact('e0', 'diluted EPS', '2', 'FY2023', 8, 9))
-    state['calculations'].append(calc('e', 'e1', 'e0', 'difference'))
+    state['calculations'].append(calc('e', f[2], f[3], 'difference'))
     assert all(x['status'] == 'satisfied' for x in assess_core_requirements(q, state, {'s': source()}))
     state['facts'][-1]['label'] = 'basic EPS'
     assert assess_core_requirements(q, state, {'s': source()})[1]['status'] == 'partial'
@@ -76,7 +93,7 @@ def test_benchmark_needs_distinct_instruments_and_common_two_date_window():
                       'quotation': quote, 'character_start': start, 'character_end': start + len(quote)})
     by_id = {f['fact_id']: f for f in facts}
     def ret(cid, first, second):
-        row = calc(cid, first, second)
+        row = calc(cid, by_id[first], by_id[second])
         row['return_context'] = price_return_context(row, by_id, {'s': src})
         return row
     state = {'facts': facts, 'calculations': [ret('a', '1', '0'), ret('b', '1', '0')]}

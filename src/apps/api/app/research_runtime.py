@@ -518,6 +518,7 @@ def _invoke_model_turn(
         context.private_diagnostics.setdefault(call_id, {})['input_tool_references'] = input_refs[:500]
         context.private_diagnostics[call_id]['input_references_stage'] = 'constructed_before_serialization'
         projection = None
+        user_payload = None
         try:
             user_payload = json.loads(turn.user)
             if isinstance(user_payload, dict):
@@ -531,6 +532,50 @@ def _invoke_model_turn(
             context.private_diagnostics[call_id]['input_projection'] = {
                 'stage': 'constructed_before_serialization',
                 'references': structured_evidence_ids(projection), 'read_spans': structured_projection_spans(projection)}
+        # A checkpoint describes the constructed request, not an assertion that it
+        # reached the provider. Store only explicit verified text locations.
+        constructed = []
+        def retain_location(row: Any, *, projected: bool = False) -> None:
+            if not isinstance(row, Mapping):
+                return
+            sid, start, end, digest = (row.get('source_id'), row.get('start'), row.get('end'), row.get('content_sha256'))
+            source = source_by_id.get(sid)
+            text = row.get('quotation') if projected else row.get('text')
+            if (source is not None and digest == source.content_sha256 and type(start) is int and type(end) is int
+                    and 0 <= start < end <= len(source.text) and text == source.text[start:end]):
+                loc = {'source_id': sid, 'content_sha256': digest, 'start': start, 'end': end}
+                if loc not in constructed:
+                    constructed.append(loc)
+        for exchange in turn.history:
+            for result in exchange.results:
+                try:
+                    payload = json.loads(result.content)
+                except (TypeError, ValueError):
+                    continue
+                for row in payload.get('results', []) if isinstance(payload, Mapping) else []:
+                    if isinstance(row, Mapping) and row.get('status') == 'read':
+                        retain_location(row)
+        def visit_projection(node: Any) -> None:
+            if isinstance(node, Mapping):
+                retain_location(node, projected=True)
+                for value in node.values():
+                    visit_projection(value)
+            elif isinstance(node, list):
+                for value in node:
+                    visit_projection(value)
+        visit_projection(projection)
+        if isinstance(user_payload, Mapping):
+            for row in user_payload.get('recorded_read_ranges', []):
+                if isinstance(row, Mapping):
+                    retain_location({**row, 'end': row.get('excerpt_end'), 'text': row.get('excerpt')})
+        record = {'call_id': call_id, 'stage': 'constructed', 'submission_state': 'not_started',
+                  'locations': constructed[:500]}
+        if isinstance(projection, Mapping):
+            record['omitted_for_capacity'] = projection.get('omitted_for_capacity', 0)
+        elif isinstance(user_payload, Mapping):
+            record['omitted_for_capacity'] = (user_payload.get('located_evidence_omitted') or {}).get('count', 0)
+        state.setdefault('_context_input_records', []).append(record)
+        state['_context_input_records'] = state['_context_input_records'][-100:]
         context._persist_diagnostic(call_id)
     except ProviderFailure as error:
         _record_failed_attempt(state, call_id=None, reason=error.code, error=error)
@@ -549,6 +594,8 @@ def _invoke_model_turn(
     if submission_retries > 0:
         pending_model['retry_attempt'] = submission_retries
     state['pending'] = pending_model
+    # The checkpoint precedes the external boundary; a crash after it needs reconciliation.
+    record['submission_state'] = 'started_unknown'
     try:
         save()
     except BaseException:
@@ -577,6 +624,7 @@ def _invoke_model_turn(
         tokens = getattr(usage, 'total_tokens', None) if usage is not None else None
     except ProviderFailure as error:
         received = getattr(error, 'provider_response_received', False) is True
+        record['submission_state'] = 'response_received' if received else context.private_diagnostics.get(call_id, {}).get('transport', {}).get('submission_state', 'unknown')
         tokens = error.reported_tokens if received else None
         call_diag = context.private_diagnostics.get(call_id, {})
         diagnostic = call_diag.get('transport', {})
@@ -679,6 +727,7 @@ def _invoke_model_turn(
         return 'outcome', outcome_fn('partial', error.code, gaps=[provider_gap(error)]), submission_retries, stream_call_seq, active_call_seq
 
     submission_retries = 0
+    record['submission_state'] = 'response_received'
     # Record this native turn's finish, not the legacy structured-output context variable.
     context.private_finish[call_id] = response.finish_reason or 'unknown'
     diag = context.private_diagnostics.setdefault(call_id, {})

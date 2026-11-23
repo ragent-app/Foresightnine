@@ -11,6 +11,7 @@ from pydantic import ValidationError
 import app.main as api
 from app.main import app
 from app.model_protocol import ModelResponse, ModelToolCall, ModelUsage
+from app.research_source_policy import summarize_sources
 from app.research_topics import (
     ResearchCalculation,
     ResearchContent,
@@ -144,7 +145,9 @@ def test_legacy_percent_difference_recalculates_as_percentage_points(monkeypatch
     saved = save(client, headers, path, topic["versions"][0], {"facts": [first, second], "calculations": [legacy]}).json()["versions"][-1]
     shown = client.get(path, headers=headers).json()["versions"][-1]
     assert shown["content"]["calculations"][0]["legacy_unit_warning"] == "percentage_difference_requires_recalculation"
-    assert saved["content"]["calculations"][0].get("legacy_unit_warning") is None  # Annotated on read, never stored.
+    assert saved["content"]["calculations"][0]["legacy_unit_warning"] == shown["content"]["calculations"][0]["legacy_unit_warning"]
+    persisted = api.research_topics.get(topic["owner_id"], topic["topic_id"]).versions[-1]
+    assert persisted.content.calculations[0].legacy_unit_warning is None
     response = client.post(path + "/calculations/recalculate", headers=headers,
         json={"parent_version_id": saved["version_id"], "calculation_index": 0})
     assert response.status_code == 201, response.text
@@ -634,7 +637,7 @@ def test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalcula
         claims=[],
         facts=fact_dicts,
         calculations=[calc],
-        sources=[],
+        sources=summarize_sources([api.research_sources.get(topic["owner_id"], sid)], [sid], []),
         source_candidates=[],
     )
     assert len(merged.calculations) == 1
@@ -843,3 +846,16 @@ def test_native_run_persists_cagr_weighted_average_ttm_and_scale_adjustments_thr
         current_vid = recalc_topic.versions[-1].version_id
         assert recalc_topic.versions[-1].content.calculations[idx].result_status == "matched"
 
+
+
+def test_user_cannot_inject_xbrl_consistency_proof(monkeypatch):
+    text = 'Revenue 100 USD.'
+    client, headers, sid, topic, path = start(monkeypatch, text, 'forged-xbrl')
+    item = fact(sid, text, text, '100', '2024', fact_id='a')
+    item.update(quotation_match='table_markup_expanded', table_alignment_unverified=True,
+                table_structure_alignment={'status': 'matched'},
+                xbrl_source_consistency={'method': 'inline_xbrl_source_consistency_v1'})
+    response = save(client, headers, path, topic['versions'][0], {'facts': [item]})
+    assert response.status_code == 201, response.text
+    saved = response.json()['versions'][-1]['content']['facts'][0]
+    assert saved['xbrl_source_consistency'] is None and saved['table_structure_alignment'] is None

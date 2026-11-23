@@ -36,7 +36,7 @@ def incomplete(rows: list[dict]) -> bool:
 
 
 def assemble_parts(question: str, state: dict, source_by_id: dict, eligible_ids: set[str], rows: list[dict], claims: list[dict]) -> list[dict]:
-    checkpoints = checkpoint_parts(question, state, eligible_ids)
+    checkpoints = checkpoint_parts(question, state, eligible_ids, source_by_id)
     claim_by_id = {c.get('claim_id'): c for c in claims}
     facts = {f.get('fact_id'): f for key in ('prior_facts', 'facts') for f in state.get(key, []) if isinstance(f, dict)}
     calculations = {c.get('calculation_id'): c for key in ('prior_calculations', 'calculations') for c in state.get(key, []) if isinstance(c, dict)}
@@ -55,7 +55,7 @@ def assemble_parts(question: str, state: dict, source_by_id: dict, eligible_ids:
         answer = ' '.join(c['text'] for c in referenced_claims if c and c.get('text'))
         if not answer and status == 'satisfied' and len({r.get('source_id') for r in refs if r.get('source_id') in eligible_ids}) >= 2 and 'conflict' in requirement.get('reason', '').casefold():
             answer = '所列资料存在可核对的数值差异。'
-        if not answer and checkpoint and any(any(r.get(k) and r.get(k) == x.get(k) for k in ('fact_id', 'source_id', 'claim_id', 'calculation_id')) for r in checkpoint.get('references', []) for x in refs):
+        if not answer and not any(r.get('calculation_id') for r in refs) and checkpoint and any(any(r.get(k) and r.get(k) == x.get(k) for k in ('fact_id', 'source_id', 'claim_id', 'calculation_id')) for r in checkpoint.get('references', []) for x in refs):
             # Checkpoint answers are independently validated at write time and source-filtered above.
             answer = checkpoint.get('answer', '')
             refs.extend(r for r in checkpoint.get('references', []) if r not in refs)
@@ -82,6 +82,10 @@ def assemble_parts(question: str, state: dict, source_by_id: dict, eligible_ids:
             answer = '；'.join(x for x in snippets if x)
         if status == 'not_applicable' and not answer:
             answer = requirement.get('reason') or '不适用。'
+        if not answer and any(r.get('source_id') and r.get('character_start') is not None for r in refs) and '明确未披露' in (requirement.get('reason') or ''):
+            answer = requirement.get('reason') or ''
+        if not answer and any(r.get('source_id') and r.get('character_start') is not None for r in refs) and status in ('partial', 'missing'):
+            answer = requirement.get('reason') or ''
         part_status = 'answered' if status in ('satisfied', 'not_applicable') and answer else ('partial' if answer else 'unresolved')
         checkpoint_gap = next((p.get('reason') for p in state.get('question_parts', [])
                                if part_status != 'answered' and isinstance(p, dict) and p.get('reason')
@@ -90,7 +94,7 @@ def assemble_parts(question: str, state: dict, source_by_id: dict, eligible_ids:
         requirement_copy['references'] = refs
         result.append({'id': requirement['id'], 'question': excerpt, 'core': True,
                        'status': part_status, 'answer': answer,
-                       'reason': checkpoint_gap or requirement.get('reason') or '', 'references': refs,
+                       'reason': '' if answer and answer == requirement.get('reason') else ((requirement.get('reason') or '') if part_status == 'answered' or any(r.get('source_id') and r.get('character_start') is not None for r in refs) else (checkpoint_gap or requirement.get('reason') or '')), 'references': refs,
                        'requirements': [requirement_copy]})
     # Preserve independently saved grounded components, without replacing assessed rows
     # or adding synthetic unresolved fragments that duplicate those rows.

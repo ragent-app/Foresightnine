@@ -776,12 +776,21 @@ def analyze_market_series(
                 'Target and benchmark need the same known currency for relative returns; '
                 'analyze each native-currency series separately or supply a consistently converted series.'
             )
+        if meta['instrument'].casefold() == bench_meta['instrument'].casefold():
+            raise MarketAnalyticsError('Target and benchmark must be distinct instruments.')
+        if meta['price_basis_applied'] != bench_meta['price_basis_applied']:
+            raise MarketAnalyticsError('Target and benchmark must use comparable price bases.')
         benchmark_result = _compute_benchmark_comparison(
             bars,
             bench_bars,
             bench_meta,
             request.decimal_places,
         )
+        benchmark_result['missing_requested_endpoints'] = [
+            day for day, aligned in ((request.start_date, benchmark_result['aligned_start_date']),
+                                     (request.end_date, benchmark_result['aligned_end_date']))
+            if day and day != aligned
+        ]
         if bench_source.source_id not in used_source_ids:
             used_source_ids.append(bench_source.source_id)
         is_simulated = is_simulated or bench_source.is_simulated

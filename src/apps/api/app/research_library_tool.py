@@ -241,7 +241,10 @@ def requirement_search_query(requirement: Mapping[str, Any]) -> str:
 def run_search_library(req: SearchLibraryRequest, *, library: ResearchLibrary, source_by_id: Mapping[str, ResearchSource],
                        versions: Mapping[str, str], as_of: datetime | None,
                        needs_check: Callable[[ResearchSource, int], bool] | None = None,
-                       requirements: Iterable[Mapping[str, Any]] = ()) -> tuple[dict[str, Any], dict[str, Any] | None]:
+                       requirements: Iterable[Mapping[str, Any]] = (),
+                       selection_mode: str = 'baseline', expand_requirements: bool = True,
+                       selection_max_bytes: int | None = None,
+                       read_ranges: Iterable[Mapping[str, Any]] = ()) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """Retrieve broad candidates and distribute slots across actual unmet requirements.
 
     Lexical matches are leads only; neither selection nor absence proves a requirement satisfied.
@@ -264,7 +267,28 @@ def run_search_library(req: SearchLibraryRequest, *, library: ResearchLibrary, s
     # The broad pool remains bounded; requirement expansion uses local BM25 only.
     primary = library.search(req.query, source_ids=requested, top_k=max(50, req.max_hits * 5))
     queues = [(r['id'], library.search(requirement_search_query(r), source_ids=requested,
-                                      top_k=max(50, req.max_hits * 5), use_vector=False)) for r in active]
+                                      top_k=max(50, req.max_hits * 5), use_vector=False)) for r in active] if expand_requirements else []
+    # Only previously read, still eligible text may suggest a precise follow-up.
+    cues: list[str] = []
+    cue_origins: dict[str, list[tuple[str, int, int]]] = {}
+    for span in read_ranges:
+        source = source_by_id.get(str(span.get('source_id') or ''))
+        start, end = span.get('start'), span.get('end')
+        if (not source or span.get('content_sha256') != source.content_sha256
+                or requested is not None and source.source_id not in requested
+                or source_eligibility([source], as_of)[0][1] != 'eligible'):
+            continue
+        if not isinstance(start, int) or not isinstance(end, int) or not 0 <= start < end <= len(source.text):
+            continue
+        fragment = source.text[start:end]
+        for match in re.findall(r'(?i)\b(?:note|section|clause)\s+\d+[a-z]?\b|(?:附注|条款)\s*\d+', fragment):
+            cue_origins.setdefault(match, []).append((source.source_id, start, end))
+            if match not in cues:
+                cues.append(match)
+        if len(cues) >= 5:
+            break
+    cue_queries = [(cue, library.search(cue, source_ids=requested, top_k=max(50, req.max_hits * 5), use_vector=False))
+                   for cue in cues[:5]] if expand_requirements else []
     candidates: dict[tuple[str, int, int], dict[str, Any]] = {}
     def add(hit: Hit, rid: str | None) -> None:
         key = (hit.source_id, hit.char_start, hit.char_end)
@@ -276,6 +300,9 @@ def run_search_library(req: SearchLibraryRequest, *, library: ResearchLibrary, s
     for rid, hits in queues:
         for hit in hits:
             add(hit, rid)
+    for _, hits in cue_queries:
+        for hit in hits:
+            add(hit, None)
     selected: list[tuple[str, int, int]] = []
     selected_text: set[str] = set()
     seen_terms: set[str] = set()
@@ -331,6 +358,27 @@ def run_search_library(req: SearchLibraryRequest, *, library: ResearchLibrary, s
             break
         if key not in selected and eligible(key) and body(key) not in selected_text:
             pick(key, 'query_retrieval')
+    selection_diagnostics = None
+    if selection_mode in ('combination', 'anchored'):
+        from .research_evidence_selection import select_evidence_candidates
+        eligible_keys = [key for key in ordered if eligible(key) and body(key)]
+        pool = []
+        for rank, key in enumerate(eligible_keys):
+            provenance = source_by_id[key[0]].provenance
+            row = {'source_id': key[0], 'start': key[1], 'end': key[2], 'text': body(key), 'rank': rank, 'header': candidates[key]['hit'].context}
+            for field in ('entity', 'currency', 'period_scope'):
+                value = provenance.get(field)
+                if isinstance(value, str) and value.strip():
+                    row[field] = value.strip()
+            pool.append(row)
+        indices, selection_diagnostics = select_evidence_candidates(
+            pool, active, max_hits=req.max_hits, max_bytes=selection_max_bytes,
+            baseline_indices=[eligible_keys.index(key) for key in selected if key in eligible_keys] if selection_mode == 'anchored' else None)
+        selected = [eligible_keys[i] for i in indices]
+        selected_text = {body(key) for key in selected}
+        reasons = {key: 'combination_retrieval' for key in selected}
+    elif selection_mode != 'baseline':
+        raise ValueError('unknown selection mode')
     trace: list[dict[str, Any]] = []
     for key in ordered:
         hit = candidates[key]['hit']
@@ -360,7 +408,32 @@ def run_search_library(req: SearchLibraryRequest, *, library: ResearchLibrary, s
                                                     'omitted_by_reason': dict(omitted),
                                                     'requirements_searched': len(active)},
                               'requirement_queries': [{'requirement_id': r['id'], 'query': requirement_search_query(r),
-                                                       'reason': 'unmet_or_requested_requirement'} for r in active]}
+                                                       'reason': 'unmet_or_requested_requirement'} for r in active] if expand_requirements else []}
+    if cue_queries:
+        result['read_cue_queries'] = [cue for cue, _ in cue_queries]
+        pointers = []
+        for cue, hits in cue_queries:
+            for hit in hits:
+                key = (hit.source_id, hit.char_start, hit.char_end)
+                if (not eligible(key) or key in selected or cue.casefold() not in body(key).casefold()
+                        or any(sid == hit.source_id and a < hit.char_end and hit.char_start < b
+                               for sid, a, b in cue_origins[cue])):
+                    continue
+                pointers.append({'cue': cue, 'source_id': hit.source_id, 'start': hit.char_start,
+                                 'end': hit.char_end, 'content_sha256': source_by_id[hit.source_id].content_sha256})
+                break
+        if pointers:
+            result['unread_followup_locations'] = pointers
+    if selection_diagnostics is not None:
+        result['combination_diagnostics'] = selection_diagnostics
+        found = {role for i in indices for role in selection_diagnostics['uses'][i]}
+        missing = sorted({role for group in selection_diagnostics['needed_uses'] for role in group} - found)
+        if missing:
+            result['unverified_missing_uses'] = missing
+            result['next_step'] = ('Read the selected locations and search authorized local sources for the missing uses. '
+                                   'If permitted and available, use existing discovery or acquisition tools; '
+                                   'an absent search result does not establish nondisclosure.')
+
     notes: list[str] = []
     if requested is not None and req.source_ids is not None and requested != list(dict.fromkeys(req.source_ids)):
         result['source_versions_applied'] = True

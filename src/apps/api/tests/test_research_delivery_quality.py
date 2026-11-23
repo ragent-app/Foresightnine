@@ -19,9 +19,10 @@ def test_canonical_requirements_do_not_overwrite_missing_with_checkpoint_answer(
 
 
 def test_qualitative_link_produces_answer_with_source_range():
+    from types import SimpleNamespace
     ref = {'source_id': 's', 'character_start': 0, 'character_end': 10, 'origin': 'current'}
     state = {'question_parts': [{'question': 'What terms?', 'answer': 'Ten years.', 'status': 'answered', 'reason': '', 'references': [ref]}]}
     rows = [{'id': 'terms', 'question': 'What terms?', 'status': 'satisfied', 'reason': 'Review semantics.', 'references': [ref], 'core': True}]
-    part = assemble_parts('What terms?', state, {}, {'s'}, rows, [])[0]
+    part = assemble_parts('What terms?', state, {'s': SimpleNamespace(text='Ten years.')}, {'s'}, rows, [])[0]
     assert part['answer'] == 'Ten years.' and part['status'] == 'answered'
     assert part['references'][0]['character_end'] == 10

@@ -34,8 +34,13 @@ def _part_key(value: str) -> str:
     return re.sub(r'^(?:并且|以及|并(?=说明|解释|比较|分析|列出|判断|计算)|(?:and|also|then)\s+)', '', text).strip()
 
 
-def question_parts(question: str, state: Mapping[str, Any], eligible_source_ids: set[str]) -> list[dict]:
+def question_parts(question: str, state: Mapping[str, Any], eligible_source_ids: set[str], source_by_id: Mapping[str, Any] | None = None) -> list[dict]:
     facts = {fact.get('fact_id'): fact for key in ('prior_facts', 'facts') for fact in (state.get(key) or []) if isinstance(fact, Mapping)}
+    if source_by_id is not None:
+        from .research_evidence_requirements import _source_hashes
+        hashes = _source_hashes(state)
+    else:
+        hashes = {}
     rows = []
     for item in state.get('question_parts') or []:
         if not isinstance(item, Mapping) or not item.get('question') or item['question'] not in question:
@@ -43,9 +48,25 @@ def question_parts(question: str, state: Mapping[str, Any], eligible_source_ids:
         refs = [ref for ref in item.get('references', []) if isinstance(ref, Mapping)
                 and (facts.get(ref.get('fact_id'), {}).get('source_id') in eligible_source_ids
                      or (ref.get('source_id') and ref.get('source_id') in eligible_source_ids))]
+        if source_by_id is not None:
+            def current(ref):
+                fact = facts.get(ref.get('fact_id'))
+                sid = fact.get('source_id') if fact else ref.get('source_id')
+                source = source_by_id.get(sid)
+                if not source or (sid in hashes and hashes[sid] != getattr(source, 'content_sha256', None)):
+                    return False
+                start = fact.get('character_start') if fact else ref.get('character_start')
+                end = fact.get('character_end') if fact else ref.get('character_end')
+                if start is not None or end is not None:
+                    if type(start) is not int or type(end) is not int or not 0 <= start < end <= len(source.text):
+                        return False
+                    if fact and fact.get('quotation') != source.text[start:end]:
+                        return False
+                return True
+            refs = [ref for ref in refs if current(ref)]
         if len(refs) != len(item.get('references', [])):
             rows.append({'question': item['question'], 'status': 'unresolved', 'answer': '',
-                         'reason': '相关依据当前不可用，无法展示已保存的回答。', 'references': []})
+                         'reason': '相关依据已变化或不可用，需要重新核验。' if source_by_id is not None else '相关依据当前不可用，无法展示已保存的回答。', 'references': []})
         else:
             rows.append(dict(item))
     for part in _requested_parts(question):
@@ -65,7 +86,7 @@ def question_parts(question: str, state: Mapping[str, Any], eligible_source_ids:
 
 def merge_checkpoint_parts(question: str, state: Mapping[str, Any], eligible_source_ids: set[str], assessed: list[dict], source_by_id: Mapping[str, Any] | None = None) -> list[dict]:
     """Add checkpoint details without replacing assessment identities or satisfied results."""
-    checkpoints = question_parts(question, state, eligible_source_ids)
+    checkpoints = question_parts(question, state, eligible_source_ids, source_by_id)
     if source_by_id is not None:
         facts = {f.get('fact_id'): f for key in ('facts', 'prior_facts') for f in state.get(key, []) if isinstance(f, Mapping)}
         for part in checkpoints:
@@ -101,7 +122,7 @@ def merge_checkpoint_parts(question: str, state: Mapping[str, Any], eligible_sou
                                    for r in existing.get('requirements', []))
                 existing['status'] = 'partial' if missing_core else checkpoint['status']
                 existing['references'] = checkpoint.get('references', [])
-            if _part_key(checkpoint['question']) in saved_keys and checkpoint.get('reason') and not checkpoint.get('answer'):
+            if _part_key(checkpoint['question']) in saved_keys and checkpoint.get('reason') and not checkpoint.get('answer') and not existing.get('references'):
                 existing['reason'] = checkpoint['reason']
     if len(checkpoints) > 1 and not any(p['question'] == question for p in checkpoints):
         # A whole-question assessment can encode a relationship across the

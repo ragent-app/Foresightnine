@@ -29,7 +29,10 @@ from .research_calculations import (
     MULTI_FACT_FORMULAS,
     calculate,
     calculation_input_status,
+    direction_confirmation_fingerprint,
 )
+from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
+from .research_xbrl import match_inline_fact
 from .research_return_context import price_return_context
 from .research_charts import build_research_chart
 from .research_context_manager import _record_failed_attempt, _turn_batch_usage
@@ -1795,12 +1798,40 @@ def _exec_search_library(ctx: ToolExecutionContext, inv: _CallInvocation) -> Too
         result, summary = ctx.deps.run_search_library(
             inv.req,
             requirements=requirements,
+            read_ranges=(ctx.state.get('_context_input_records') or [{}])[-1].get('locations', ()),
             library=ctx.library_box[0],
             source_by_id=ctx.source_by_id,
             versions=ctx.state.get('source_versions') or {},
             as_of=ctx.as_of,
             needs_check=lambda src, page: (lambda dp: dp is not None and _ocr_page_needs_check(dp, page))(_document_pages(src)),
         )
+        if result.get('status') == 'completed':
+            from .research_evidence_routing import gap_routes
+            caps = _user_available_capabilities(ctx.state, ctx.fin_data)
+            chosen_text = []
+            for hit in result.get('hits') or []:
+                span = hit.get('read_sources') or {}
+                source = ctx.source_by_id.get(span.get('source_id'))
+                start, end = span.get('start'), span.get('end')
+                if source and isinstance(start, int) and isinstance(end, int):
+                    chosen_text.append(source.text[start:end])
+            routes = gap_routes(
+                [r for r in requirements if r.get('core', True) and r.get('status') not in ('satisfied', 'not_applicable')],
+                chosen_text, coverage=result.get('library_coverage') or {},
+                explicit_empty=inv.req.source_ids == [],
+                capabilities={'news_search': bool(ctx.news_providers) and not ctx.state.get('search_invalid_response')
+                              and not ctx.context.search_exhaustion() and not ctx.context.cost_limited,
+                              'acquire_sources': ctx.acquire is not None,
+                              'filings': bool(caps.get('filings_available')),
+                              'issuer_documents': bool(caps.get('issuer_documents_available')),
+                              'market_data': any(caps.get(k) for k in ('market_data_available', 'cn_market_data_available', 'hk_market_data_available'))})
+            if routes:
+                result['evidence_gaps'] = routes
+            failed = [entry for entry in ctx.state.get('failed_source_accesses') or [] if isinstance(entry, Mapping)]
+            if failed:
+                result['acquisition_failures'] = [{'host': item.get('host'), 'status': item.get('status'),
+                                                   'reason': item.get('reason')} for item in failed[-10:]]
+                result['acquisition_failures_note'] = 'Recorded run-level failures; they are not attributed to a particular requirement.'
     except Exception:
         result, summary = {
             'status': 'failed',
@@ -2227,6 +2258,7 @@ def _exec_record_facts(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolC
     ocr_warnings: list[dict[str, Any]] = []
     existing = [*ctx.state.get('prior_facts', []), *ctx.state.get('facts', [])]
     fact_failures: list[dict[str, Any]] = []
+    table_traces: dict[tuple[str, int], dict[str, Any]] = {}
     for fact_index, raw_fact in enumerate(inv.req.facts):
         try:
             fact = ProposedFact.model_validate(raw_fact)
@@ -2306,6 +2338,34 @@ def _exec_record_facts(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolC
                 'location': {'character_start': start, 'character_end': end},
                 'verification': 'numeric_and_location_match_semantics_not_verified',
             }
+            # Only issue a source-consistency proof when every traced row is in
+            # a previously read range. A single cell quotation is not evidence
+            # that its header or neighboring rows have entered the research.
+            if source.original_html_base64 and source.permissions.display:
+                row_start = source.text.rfind('\n', 0, start) + 1
+                key = (source.source_id, row_start)
+                if key not in table_traces and len(table_traces) < 2:
+                    table_traces[key] = bounded_table_trace(source, start, end)
+                traced = table_traces.get(key, {})
+                line_end = source.text.find('\n', row_start)
+                line = source.text[row_start:line_end if line_end >= 0 else len(source.text)]
+                if traced.get('status') == 'available' or ' | ' in line:
+                    row['quotation_match'] = 'table_markup_expanded'
+                    row['table_alignment_unverified'] = True
+                if traced.get('status') == 'available':
+                    ranges = ctx.ranges_for_source(fact.source_id)
+                    positions = [source.text.find(r.get('text', '')) for r in traced.get('rows', [])]
+                    read_rows = all(pos >= 0 and source.text.count(r['text']) == 1 and any(span['start'] <= pos and pos + len(r['text']) <= span['end']
+                        for span in ranges) for pos, r in zip(positions, traced.get('rows', [])))
+                    if read_rows:
+                        alignment = annual_table_value_alignment(traced, fact.value, fact.period)
+                        if alignment:
+                            row['table_structure_alignment'] = alignment
+                        matched = match_inline_fact(traced, alignment, value=fact.value, label=fact.label,
+                                                    unit=fact.unit, currency=fact.currency)
+                        if matched:
+                            row['xbrl_source_consistency'] = {**matched, 'method': 'inline_xbrl_source_consistency_v1',
+                                'fact_sha256': direction_confirmation_fingerprint(row)}
             try:
                 validate_persisted_tool_item('record_facts', row, item_index=fact_index)
             except ItemPersistenceValidationError as error:
@@ -2344,85 +2404,76 @@ def _exec_calculate_financials(ctx: ToolExecutionContext, inv: _CallInvocation) 
     rows: list[dict[str, Any]] = []
     facts = {item['fact_id']: item for item in [*ctx.state.get('prior_facts', []), *ctx.state.get('facts', [])]}
     keys = ('fact_id', 'value', 'unit', 'currency', 'period')
-    for calculation in inv.req.calculations:
-        calc_payload: dict[str, Any] = {
-            'formula': calculation.formula,
-            'decimal_places': calculation.decimal_places,
-        }
-        if calculation.periods is not None:
-            calc_payload['periods'] = calculation.periods
-        if calculation.weights is not None:
-            calc_payload['weights'] = calculation.weights
-        if calculation.fact_ids is not None:
-            selected = [facts.get(fid) for fid in calculation.fact_ids]
-            if any(item is None for item in selected):
-                raise ValueError('Calculation requires recorded fact IDs.')
+    for index, calculation in enumerate(inv.req.calculations):
+        try:
+            calc_payload: dict[str, Any] = {
+                'formula': calculation.formula,
+                'decimal_places': calculation.decimal_places,
+            }
+            if calculation.periods is not None:
+                calc_payload['periods'] = calculation.periods
+            if calculation.weights is not None:
+                calc_payload['weights'] = calculation.weights
+            ordered_ids = calculation.fact_ids if calculation.fact_ids is not None else [calculation.first_fact_id, calculation.second_fact_id]
+            selected_facts = [facts.get(fid) for fid in ordered_ids]
+            missing = [fid for fid, item in zip(ordered_ids, selected_facts) if item is None]
+            if missing:
+                raise ValueError(f'Calculation requires recorded fact IDs; unavailable: {missing}.')
             if calculation.formula == 'contribution_to_change_percent':
                 from .research_report_grounding import change_contribution_disclosed
-                quote = str(selected[0].get('quotation') or '')
+                quote = str(selected_facts[0].get('quotation') or '')
                 if not change_contribution_disclosed(quote):
                     raise ValueError('The contribution input requires an explicit change-scoped disclosure; current-period revenue alone is insufficient.')
-            fact_dicts = [{k: item[k] for k in keys} for item in selected]  # type: ignore[index]
+            fact_dicts = [{k: item[k] for k in keys} for item in selected_facts]
             if calculation.formula in MULTI_FACT_FORMULAS:
                 calc_payload['facts'] = fact_dicts
             else:
                 calc_payload['first'], calc_payload['second'] = fact_dicts[0], fact_dicts[1]
-        else:
-            first = facts.get(calculation.first_fact_id or '')
-            second = facts.get(calculation.second_fact_id or '')
-            if first is None or second is None:
-                raise ValueError('Calculation requires recorded fact IDs.')
-            first_dict = {k: first[k] for k in keys}
-            second_dict = {k: second[k] for k in keys}
-            if calculation.formula in MULTI_FACT_FORMULAS:
-                calc_payload['facts'] = [first_dict, second_dict]
-            else:
-                calc_payload['first'] = first_dict
-                calc_payload['second'] = second_dict
-        selected_facts = selected if calculation.fact_ids is not None else [first, second]
-        for item in selected_facts:
-            source = ctx.source_by_id.get(item.get('source_id'))
-            start, end = item.get('character_start'), item.get('character_end')
-            if (source is None or source_eligibility([source], ctx.as_of)[0][1] != 'eligible'
-                    or type(start) is not int or type(end) is not int or not 0 <= start < end <= len(source.text)
-                    or source.text[start:end] != item.get('quotation')):
-                raise ValueError('Calculation input source or quotation is unavailable or has changed.')
-            prior_hash = (ctx.state.get('source_hashes') or {}).get(item.get('source_id'))
-            if prior_hash and prior_hash != source.content_sha256:
-                raise ValueError('Calculation input source version has changed.')
-        if calculation.formula == 'contribution_to_change_percent':
-            contribution, current, prior = selected_facts
-            period_years = [re.search(r'(?<!\d)(?:19|20)\d{2}(?!\d)', str(item.get('period') or '')) for item in (current, prior)]
-            if any(not year or year.group() not in contribution.get('quotation', '') for year in period_years):
-                raise ValueError('Contribution disclosure must identify both comparison periods.')
-            # Source identity alone does not establish the subject of each row
-            # or note: one filing can discuss multiple companies. Require the
-            # same declared subject in every located quotation, even within a
-            # single source. This is not accounting-scope verification.
-            labels = [re.match(r'^([A-Za-z][A-Za-z0-9.-]{2,})\b', str(item.get('label') or '')) for item in selected_facts]
-            declared_name = labels[0].group(1) if all(labels) and len({m.group(1).casefold() for m in labels}) == 1 else None
-            declared = bool(declared_name and all(re.search(r'(?<![A-Za-z0-9])' + re.escape(declared_name) + r'(?![A-Za-z0-9])', item.get('quotation') or '', re.I) for item in selected_facts))
-            from .research_report_grounding import contribution_subject_disclosed
-            declared = declared and contribution_subject_disclosed(contribution.get('quotation') or '', declared_name)
-            if not declared:
-                raise ValueError('Each input needs a located quotation naming the same declared subject; source identity alone is insufficient.')
-            if str(current.get('label', '')).casefold().strip() != str(prior.get('label', '')).casefold().strip():
-                raise ValueError('Current and prior inputs require the same measurement label.')
-        request = CalculationRequest.model_validate(calc_payload)
-        preliminary = price_return_context({'formula_id': request.formula, 'inputs': [item.model_dump(mode='json') for item in request.resolved_facts()]}, facts, ctx.source_by_id)
-        intraday = bool(preliminary and preliminary['identity_verified'] and preliminary['start_date'] == preliminary['end_date'] and preliminary['start_price_type'] == 'open' and preliminary['end_price_type'] == 'close')
-        calculated = ctx.deps.calculate(request, verified_intraday=True) if intraday else ctx.deps.calculate(request)
-        row = {'calculation_id': 'calc-' + uuid4().hex, **calculated}
-        # Same consistency check as user-created calculations, so agent rows do not
-        # wait for a later user save to show their input status (363 acceptance).
-        row['input_status'] = ctx.deps.calculation_input_status(row, list(facts.values()))
-        if calculation.formula == 'contribution_to_change_percent' and row['input_status'] != 'matched':
-            raise ValueError('Contribution calculation inputs require matched, source-supported units, currency and values.')
-        return_context = price_return_context(row, facts, ctx.source_by_id)
-        if return_context is not None:
-            row['return_context'] = return_context
-        validate_persisted_tool_item('calculate_financials', row, item_index=len(rows))
-        rows.append(row)
+            for item in selected_facts:
+                source = ctx.source_by_id.get(item.get('source_id'))
+                start, end = item.get('character_start'), item.get('character_end')
+                if (source is None or source_eligibility([source], ctx.as_of)[0][1] != 'eligible'
+                        or type(start) is not int or type(end) is not int or not 0 <= start < end <= len(source.text)
+                        or source.text[start:end] != item.get('quotation')):
+                    raise ValueError('Calculation input source or quotation is unavailable or has changed.')
+                prior_hash = (ctx.state.get('source_hashes') or {}).get(item.get('source_id'))
+                if prior_hash and prior_hash != source.content_sha256:
+                    raise ValueError('Calculation input source version has changed.')
+            if calculation.formula == 'contribution_to_change_percent':
+                contribution, current, prior = selected_facts
+                period_years = [re.search(r'(?<!\d)(?:19|20)\d{2}(?!\d)', str(item.get('period') or '')) for item in (current, prior)]
+                if any(not year or year.group() not in contribution.get('quotation', '') for year in period_years):
+                    raise ValueError('Contribution disclosure must identify both comparison periods.')
+                # Source identity alone does not establish the subject of each row
+                # or note: one filing can discuss multiple companies. Require the
+                # same declared subject in every located quotation, even within a
+                # single source. This is not accounting-scope verification.
+                labels = [re.match(r'^([A-Za-z][A-Za-z0-9.-]{2,})\b', str(item.get('label') or '')) for item in selected_facts]
+                declared_name = labels[0].group(1) if all(labels) and len({m.group(1).casefold() for m in labels}) == 1 else None
+                declared = bool(declared_name and all(re.search(r'(?<![A-Za-z0-9])' + re.escape(declared_name) + r'(?![A-Za-z0-9])', item.get('quotation') or '', re.I) for item in selected_facts))
+                from .research_report_grounding import contribution_subject_disclosed
+                declared = declared and contribution_subject_disclosed(contribution.get('quotation') or '', declared_name)
+                if not declared:
+                    raise ValueError('Each input needs a located quotation naming the same declared subject; source identity alone is insufficient.')
+                if str(current.get('label', '')).casefold().strip() != str(prior.get('label', '')).casefold().strip():
+                    raise ValueError('Current and prior inputs require the same measurement label.')
+            request = CalculationRequest.model_validate(calc_payload)
+            preliminary = price_return_context({'formula_id': request.formula, 'inputs': [item.model_dump(mode='json') for item in request.resolved_facts()]}, facts, ctx.source_by_id)
+            intraday = bool(preliminary and preliminary['identity_verified'] and preliminary['start_date'] == preliminary['end_date'] and preliminary['start_price_type'] == 'open' and preliminary['end_price_type'] == 'close')
+            calculated = ctx.deps.calculate(request, verified_intraday=True) if intraday else ctx.deps.calculate(request)
+            row = {'calculation_id': 'calc-' + uuid4().hex, **calculated}
+            # Same consistency check as user-created calculations, so agent rows do not
+            # wait for a later user save to show their input status (363 acceptance).
+            row['input_status'] = ctx.deps.calculation_input_status(row, list(facts.values()))
+            if calculation.formula == 'contribution_to_change_percent' and row['input_status'] != 'matched':
+                raise ValueError('Contribution calculation inputs require matched, source-supported units, currency and values.')
+            return_context = price_return_context(row, facts, ctx.source_by_id)
+            if return_context is not None:
+                row['return_context'] = return_context
+            validate_persisted_tool_item('calculate_financials', row, item_index=len(rows))
+            rows.append(row)
+        except ValueError as exc:
+            raise ValueError(f'Calculation {index + 1} ({calculation.formula}): {exc}') from exc
     ctx.state['calculations'].extend(rows)
     summary = {
         'kind': 'calculate_financials',
@@ -2639,13 +2690,15 @@ def _exec_activate_method_pack(ctx: ToolExecutionContext, inv: _CallInvocation) 
 
 
 def _validate_draft_clause(ctx: ToolExecutionContext, clause: Any) -> dict:
-    from .research_report_grounding import clause_problem, change_contribution_disclosed, contribution_subject_disclosed
+    from .research_report_grounding import clause_problem, change_contribution_disclosed, contribution_subject_disclosed, contract_location_complete
     citations = []
     for citation in clause.citations:
         source = ctx.source_by_id.get(citation.source_id)
         if source is None or source_eligibility([source], ctx.as_of)[0][1] != 'eligible':
             raise ValueError('Citation source is unavailable or unauthorized.')
         start, end = ctx.locate(source, citation.quotation, citation.character_start, citation.character_end)
+        if not contract_location_complete(source.text, start, end):
+            raise ValueError('Read and cite the full contract provision and its adjacent exceptions.')
         citations.append({'source_id': citation.source_id, 'quotation': citation.quotation,
                           'location': {'character_start': start, 'character_end': end}})
     facts_by_id = {f['fact_id']: f for f in [*ctx.state.get('prior_facts', []), *ctx.state.get('facts', [])]}
@@ -2738,6 +2791,9 @@ def _exec_checkpoint_question_part(ctx: ToolExecutionContext, inv: _CallInvocati
         if source is None or source_eligibility([source], ctx.as_of)[0][1] != 'eligible':
             raise ValueError('Citation source is unavailable or unauthorized')
         start, end = ctx.locate(source, citation.quotation, citation.character_start, citation.character_end)
+        from .research_report_grounding import contract_location_complete
+        if not contract_location_complete(source.text, start, end):
+            raise ValueError('Cite the full operative provision and exceptions.')
         refs.append({'source_id': citation.source_id, 'character_start': start, 'character_end': end, 'origin': 'current'})
     if req.answer.strip() and not refs:
         raise ValueError('An answer requires an authorized recorded fact or a located quotation')
@@ -2897,7 +2953,7 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
     if filing_gap:
         status = 'partial'
         gaps.append(gap(filing_gap['code'], filing_gap['message']))
-    report_issues = report_problems(req.report, support_claims, eligible_calculations(ctx.state, ctx.source_by_id, lambda source: source_eligibility([source], ctx.as_of)[0][1] == 'eligible')) if status == 'completed' else []
+    report_issues = report_problems(req.report, support_claims, eligible_calculations(ctx.state, ctx.source_by_id, lambda source: source_eligibility([source], ctx.as_of)[0][1] == 'eligible'))
     if status == 'completed' and (rejected_claims or report_issues):
         status = 'partial'
         for issue in report_issues[:10]:
@@ -2905,7 +2961,7 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
         if rejected_claims:
             gaps.append(gap('model_reported', '部分结论缺少可核对的依据。'))
     report = req.report if status == 'completed' else ''
-    partial_notes = (req.report.strip() or None) if status == 'partial' else None
+    partial_notes = (req.report.strip() or None) if status == 'partial' and not (rejected_claims or report_issues) else None
     ctx.state['events'].append({'kind': 'submission', 'stopping_reason': req.stopping_reason, 'status': status})
     ctx.state['pending'] = None
     # Partial output contains only located claims and saved observations;
@@ -3239,7 +3295,7 @@ def execute_tool_batch(
                         decision, reason = row.get('decision'), row.get('reason')
                         if (not trace_identifier(sid) or type(start) is not int or type(end) is not int
                                 or not 0 <= start <= end <= 10**9 or decision not in ('selected', 'omitted')
-                                or reason not in ('requirement_retrieval', 'query_retrieval', 'diverse_candidate', 'source_ineligible', 'identical_passage', 'capacity')):
+                                or reason not in ('requirement_retrieval', 'query_retrieval', 'diverse_candidate', 'combination_retrieval', 'source_ineligible', 'identical_passage', 'capacity')):
                             continue
                         ids = row.get('requirement_ids')
                         ids = [item for item in ids[:100] if trace_identifier(item)] if isinstance(ids, list) else []
@@ -3258,6 +3314,7 @@ def execute_tool_batch(
             ctx.context._persist_diagnostic(ctx.batch_call_id)
         if call.name == 'search_library' and isinstance(result, dict):
             result.pop('selection_trace', None)
+            result.pop('combination_diagnostics', None)
             result.pop('requirement_queries', None)
         ctx.append_result(call.id, result)
         if duplicate_kind is None and isinstance(result, Mapping) and result.get('status') != 'invalid':

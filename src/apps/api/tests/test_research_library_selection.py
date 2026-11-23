@@ -61,3 +61,44 @@ def test_assessed_kinds_build_distinct_queries_without_answer_content():
     assert financial != counter
     assert 'revenue' in financial and 'risk' in counter
     assert base['question'] in financial and base['question'] in counter
+
+
+def test_combination_selects_complementary_leads_with_byte_limit():
+    from app.research_evidence_selection import select_evidence_candidates
+    texts = ['Market commentary about revenue', 'Revenue 2025 120; 2024 100',
+             'Price contributed 10 to growth']
+    pool = [{'source_id': str(i), 'start': 0, 'end': len(t), 'text': t, 'rank': i}
+            for i, t in enumerate(texts)]
+    chosen, info = select_evidence_candidates(pool, [{'kind': 'contribution:revenue', 'question': 'growth drivers'}],
+                                               max_hits=2, max_bytes=100)
+    assert chosen == [1, 2]
+    assert info['match_status'] == 'retrieval_only_unverified'
+    chosen, _ = select_evidence_candidates(pool, [{'kind': 'contribution:revenue', 'question': 'growth drivers'}],
+                                           max_hits=2, max_bytes=30)
+    assert len(chosen) == 1
+
+
+def test_combination_search_respects_revoked_sources():
+    source = make_source('s', 'Revenue 2025 120 and 2024 100')
+    source = source.model_copy(update={'permissions': source.permissions.model_copy(update={'display': True})})
+    lib = ResearchLibrary([], vector_scorer=None)
+    sync_library(lib, {'s': source}, {}, None, vector_scorer=None)
+    revoked = source.model_copy(update={'permissions': source.permissions.model_copy(update={'model_input': False})})
+    result, _ = run_search_library(SearchLibraryRequest(query='revenue'), library=lib,
+                                   source_by_id={'s': revoked}, versions={}, as_of=None,
+                                   selection_mode='combination')
+    assert result['hits'] == []
+
+
+def test_gap_routes_respect_empty_source_scope_and_capabilities():
+    from app.research_evidence_routing import gap_routes
+    req = [{'id': 'r', 'kind': 'market:return', 'question': 'stock and index return'}]
+    caps = {'news_search': True, 'acquire_sources': True, 'market_data': True, 'filings': True}
+    empty = gap_routes(req, [], coverage={'complete': True}, explicit_empty=True, capabilities=caps)[0]
+    assert empty['candidate_tools'] == ['search_library', 'news_search']
+    allowed = gap_routes(req, [], coverage={'complete': True}, explicit_empty=False, capabilities=caps)[0]
+    assert 'market_data' in allowed['candidate_tools']
+    assert 'acquire_sources' in allowed['candidate_tools']
+    excluded = gap_routes(req, [], coverage={'complete': True, 'sources_excluded': [{'reason': 'model_permission_missing'}]},
+                          explicit_empty=False, capabilities={})[0]
+    assert excluded['status'] == 'permission_excluded'

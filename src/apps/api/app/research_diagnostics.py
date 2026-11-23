@@ -525,6 +525,25 @@ def safe_messages_error(value: object, status: object, headers: object) -> dict[
             if isinstance(item, str) and item in allowed:
                 result[key] = item
     if isinstance(headers, dict):
+        if status == 429:
+            from email.utils import parsedate_to_datetime
+            hint = headers.get('retry-after')
+            if isinstance(hint, str) and re.fullmatch(r'[0-9]{1,8}', hint):
+                result['retry_after_seconds'] = int(hint)
+            elif isinstance(hint, str) and 15 <= len(hint) <= 64:
+                try:
+                    parsed = parsedate_to_datetime(hint)
+                    if parsed.tzinfo is not None:
+                        result['retry_after_at'] = parsed.isoformat()
+                except (TypeError, ValueError, OverflowError):
+                    pass
+            # Coordinator re-sanitizes the adapter's structured observation.
+            if isinstance(value, dict):
+                delay, date_hint = value.get('retry_after_seconds'), value.get('retry_after_at')
+                if type(delay) is int and 0 <= delay <= 99999999:
+                    result['retry_after_seconds'] = delay
+                if isinstance(date_hint, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}', date_hint):
+                    result['retry_after_at'] = date_hint
         request_id = headers.get('request-id') or headers.get('x-request-id')
         if isinstance(request_id, str) and _IDENTIFIER.fullmatch(request_id):
             result['request_id'] = request_id

@@ -176,6 +176,13 @@ def map_geometry(
             pattern = r'(?<!\S)' + r'[ \t]+'.join(re.escape(token) for token in tokens) + r'(?!\S)'
             matches = re.finditer(pattern, page_text)
             match = next(matches, None)
+            if match is None:
+                # Poppler sometimes separates adjacent glyphs into words while
+                # layout text joins them (notably CJK dates). Require a unique
+                # exact token sequence even when the inter-token gap is empty.
+                compact = r'(?<!\S)' + r'[ \t]*'.join(re.escape(token) for token in tokens) + r'(?!\S)'
+                matches = re.finditer(compact, page_text)
+                match = next(matches, None)
             if match is None or next(matches, None) is not None:
                 unmatched += 1
                 continue
@@ -400,3 +407,26 @@ def extract_geometry(
                 return None
     finally:
         _WORKERS.release()
+
+
+def split_header_date(text: str, geometry: PdfGeometry, page: int, start: int, end: int) -> tuple[str, tuple[tuple[int, int], ...]] | None:
+    """Join a geometrically adjacent year and CJK date only on one verified header.
+
+    A unique pair must share a vertical band and touch horizontally. All returned
+    pieces remain separately locatable in the unchanged original text.
+    """
+    if sha256(text.encode('utf-8')).hexdigest() != geometry.text_sha256:
+        return None
+    lines = [x for x in geometry.lines if x.page == page and start <= x.start < x.end <= end]
+    years = [x for x in lines if re.fullmatch(r'(?:19|20)\d{2}', text[x.start:x.end].strip())]
+    suffixes = [x for x in lines if re.fullmatch(r'年\s*\d{1,2}\s*月\s*\d{1,2}\s*日', text[x.start:x.end].strip())]
+    pairs = []
+    for year in years:
+        for suffix in suffixes:
+            a, b = year.bounds, suffix.bounds
+            if -1 <= b[0] - a[2] <= 4 and min(a[3], b[3]) > max(a[1], b[1]):
+                pairs.append((year, suffix))
+    if len(pairs) != 1:
+        return None
+    a, b = pairs[0]
+    return text[a.start:a.end].strip() + text[b.start:b.end].strip(), ((a.start, a.end), (b.start, b.end))

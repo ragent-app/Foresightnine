@@ -8,6 +8,7 @@ from typing import Any, Callable, Literal, Mapping
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic.json_schema import SkipJsonSchema
 
 from .issuer_documents import IssuerDocumentsRequest
 from .model_protocol import ModelToolDefinition, canonical_json_dumps, canonicalize_json_value
@@ -181,8 +182,18 @@ class FactsRequest(BaseModel):
     rationale: str = Field(min_length=1)
 
 
+def _calculation_model_schema(schema: dict[str, Any]) -> None:
+    # Wire contract is the ordered array; legacy pairs remain accepted at ingress.
+    prop = schema['properties']['fact_ids']
+    if 'anyOf' in prop:
+        array_schema = next(item for item in prop.pop('anyOf') if item.get('type') == 'array')
+        prop.update(array_schema)
+    prop.pop('default', None)
+    schema.setdefault('required', []).append('fact_ids')
+
+
 class CalculationPlan(BaseModel):
-    model_config = ConfigDict(extra='forbid')
+    model_config = ConfigDict(extra='forbid', json_schema_extra=_calculation_model_schema)
     formula: Literal[
         'growth_percent',
         'margin_percent',
@@ -195,7 +206,7 @@ class CalculationPlan(BaseModel):
         'weighted_average',
         'ttm_sum',
     ]
-    first_fact_id: str | None = Field(
+    first_fact_id: SkipJsonSchema[str | None] = Field(
         default=None,
         min_length=1,
         max_length=200,
@@ -204,7 +215,7 @@ class CalculationPlan(BaseModel):
             'difference/subtract: the minuend (first - second).'
         ),
     )
-    second_fact_id: str | None = Field(
+    second_fact_id: SkipJsonSchema[str | None] = Field(
         default=None,
         min_length=1,
         max_length=200,
@@ -218,8 +229,12 @@ class CalculationPlan(BaseModel):
         min_length=2,
         max_length=32,
         description=(
-            "Ordered recorded fact IDs for multi-fact formulas ('sum', 'subtract', 'weighted_average', 'ttm_sum', 'contribution_to_change_percent' [explicitly disclosed contribution to change, current, prior]) "
-            'or binary [first_fact_id, second_fact_id] inputs.'
+            'Ordered recorded fact IDs. growth_percent/cagr: [current, prior]; '
+            'margin_percent/ratio: [numerator, denominator]; difference/subtract: '
+            '[minuend, subtrahend] (subtract may have more inputs); '
+            'contribution_to_change_percent: [disclosed contribution, current, prior]; '
+            'ttm_sum: exactly four consecutive quarters; sum and weighted_average: '
+            'at least two facts, with weights matching each fact for weighted_average.'
         ),
     )
     weights: list[Decimal] | None = Field(
@@ -239,10 +254,10 @@ class CalculationPlan(BaseModel):
     def _validate_inputs(self) -> CalculationPlan:
         has_pair = self.first_fact_id is not None and self.second_fact_id is not None
         has_half_pair = (self.first_fact_id is None) != (self.second_fact_id is None)
-        if has_half_pair and self.fact_ids is None:
-            raise ValueError('Provide both first_fact_id and second_fact_id, or provide fact_ids.')
-        if has_pair and self.fact_ids is not None:
-            raise ValueError('Provide either first_fact_id/second_fact_id or fact_ids, not both.')
+        if has_half_pair:
+            raise ValueError('Provide both first_fact_id and second_fact_id; a partial pair is invalid.')
+        if has_pair and self.fact_ids is not None and self.fact_ids != [self.first_fact_id, self.second_fact_id]:
+            raise ValueError('fact_ids conflicts with the ordered first_fact_id/second_fact_id pair.')
         if not has_pair and self.fact_ids is None:
             raise ValueError('Calculation requires recorded fact IDs.')
         resolved_count = len(self.fact_ids) if self.fact_ids is not None else 2

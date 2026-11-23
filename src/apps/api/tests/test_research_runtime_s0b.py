@@ -309,5 +309,7 @@ def test_record_facts_fills_currency_from_unit_for_structured_sources_only():
 def test_calculation_plan_fields_describe_operand_order():
     schema = next(t for t in TOOLS if t.name == 'calculate_financials').input_schema
     plan = schema['$defs']['CalculationPlan']['properties']
-    assert 'current' in plan['first_fact_id']['description'] and 'numerator' in plan['first_fact_id']['description']
-    assert 'baseline' in plan['second_fact_id']['description'] and '(first/second - 1) * 100' in plan['second_fact_id']['description']
+    assert 'first_fact_id' not in plan and 'second_fact_id' not in plan
+    assert 'current, prior' in plan['fact_ids']['description']
+    assert 'numerator, denominator' in plan['fact_ids']['description']
+    assert 'fact_ids' in schema['$defs']['CalculationPlan']['required']

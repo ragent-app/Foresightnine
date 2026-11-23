@@ -96,7 +96,9 @@ def test_revoked_source_keeps_independent_complete_group():
     payload = json.loads(turn.user)
     group = next(x for x in payload['located_evidence'] if x.get('calculation', {}).get('calculation_id') == 'calc1')
     assert {row['fact_id'] for row in group['facts']} == {'f1','f2'}
-    assert all(row['citation']['source_id'] == 's2' and row['citation']['quotation'] == TEXT for row in group['facts'])
+    assert all(row['citation']['source_id'] == 's2' for row in group['facts'])
+    assert sum(row['citation'].get('quotation') == TEXT for row in group['facts']) == 1
+    assert any(row['citation'].get('in_existing_input') for row in group['facts'])
 
 
 def test_identical_text_from_another_source_does_not_erase_projected_quote():
@@ -115,3 +117,36 @@ def test_identical_text_from_another_source_does_not_erase_projected_quote():
     state['read_ranges'][0]['source_id'] = 's1'
     turn = build_model_turn_input(state=state, source_by_id={'s1':first,'s2':second})
     assert '"in_existing_input": true' in turn.tail_note and '"quotation"' not in turn.tail_note
+
+
+def test_capacity_selection_deduplicates_before_selecting_and_keeps_counterpoint():
+    text = 'A' * 3100 + 'B' * 2000
+    src = source(text=text)
+    digest = src.content_sha256
+    cite = {'source_id':'s1', 'quotation':text[:3100], 'character_start':0, 'character_end':3100}
+    facts = [{'fact_id': f'f{i}', 'label':'metric', 'value':str(i), **cite} for i in range(4)]
+    state = {'user':json.dumps({'question':'Q', 'research_as_of':NOW.isoformat(), 'sources':[{'source_id':'s1','content_sha256':digest}]}),
+             'history':[], 'read_ranges':[{'source_id':'s1','start':0,'end':len(text)}], 'facts':facts,
+             'claims':[{'claim_id':'c1','role':'counterargument','text':'Risk', 'citations':[cite]}],
+             'calculations':[{'calculation_id':'calc1','formula_id':'sum','inputs':[{'fact_id':f'f{i}'} for i in range(4)]}]}
+    payload = json.loads(build_model_turn_input(state=state, source_by_id={'s1':src}).user)
+    groups = payload['located_evidence']
+    assert any(g.get('claim', {}).get('claim_id') == 'c1' for g in groups)
+    assert any(g.get('calculation', {}).get('calculation_id') == 'calc1' for g in groups)
+    assert json.dumps(groups).count('A' * 3100) == 1
+
+
+def test_question_part_keeps_full_group_and_limit_only_with_current_sources():
+    src = source()
+    fact = {'fact_id':'f1', 'label':'demand', 'value':'declined', 'source_id':'s1',
+            'quotation':TEXT, 'character_start':0, 'character_end':len(TEXT)}
+    state = {'user':json.dumps({'question':'Demand?', 'research_as_of':NOW.isoformat(), 'sources':[{'source_id':'s1','content_sha256':HASH}]}),
+             'history':[], 'read_ranges':[{'source_id':'s1','start':0,'end':len(TEXT)}], 'facts':[fact],
+             'question_parts':[{'question':'Demand?', 'answer':'Declined', 'status':'partial',
+                                'reason':'Future demand is unknown', 'references':[{'fact_id':'f1'}]}]}
+    payload = json.loads(build_model_turn_input(state=state, source_by_id={'s1':src}).user)
+    group = next(g for g in payload['located_evidence'] if 'question_part' in g)
+    assert group['question_part']['reason'] == 'Future demand is unknown'
+    assert group['facts'][0]['citation']['quotation'] == TEXT
+    changed = build_model_turn_input(state=state, source_by_id={'s1':source(text=TEXT+' revised')})
+    assert 'Future demand is unknown' not in changed.user

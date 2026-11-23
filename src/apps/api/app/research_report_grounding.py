@@ -56,6 +56,47 @@ def _numbers(text: str) -> set[Decimal]:
     return out
 
 
+_CONTRACT_ACTION = re.compile(
+    r'\b(?:may|can|cannot|shall|must|right to|entitled to)\b[^.!?\n]{0,60}\b(?:cancel|terminate|rescind)\b'
+    r'|(?:有权|可以|可|不得|不能|无权|禁止)[^。！？\n]{0,16}(?:撤销|撤单|取消|解约|解除)', re.I)
+_CONTRACT_QUALIFIER = re.compile(
+    r'^(?:except|unless|provided|subject to|however|only if|if |this right|但|除非|除外|前提|条件|例外|惟)', re.I)
+
+
+def _contract_text(text: str) -> str:
+    return ' '.join(text.strip(' ，,。.!；;：:').split()).casefold()
+
+
+def contract_location_complete(source_text: str, start: int, end: int) -> bool:
+    """A located excerpt may still omit the governing condition in the same provision."""
+    quote = source_text[start:end]
+    if not _CONTRACT_ACTION.search(quote):
+        return True
+    # Colon introduces operative language. A semicolon can introduce an exception.
+    before = re.split(r'[。.!?！？\n]', source_text[:start])[-1]
+    after = re.split(r'[。.!?！？\n]', source_text[end:])[0]
+    if before.strip() and not before.rstrip().endswith((':', '：')):
+        return False
+    if not quote.rstrip().endswith(('.', '。', '!', '?', '！', '？')) and after.strip():
+        return False
+    following = source_text[end:].lstrip(' 。.!?！？\r\n\t')
+    return not _CONTRACT_QUALIFIER.match(following)
+
+
+def _contract_supported(text: str, quotations: list[str]) -> bool:
+    # Conservative extractive check for operative rights. Do not certify a paraphrase
+    # that can silently change the right holder, notice period, or exception.
+    claim = _contract_text(text)
+    for quote in quotations:
+        original = _contract_text(quote)
+        if original == claim:
+            return True
+        # A source heading can precede the complete operative provision.
+        if re.search(r'[:：]', original) and _contract_text(re.split(r'[:：]', original, maxsplit=1)[1]) == claim:
+            return True
+    return False
+
+
 def clause_problem(text: str, quotations: list[str], facts: list[dict[str, Any]], calculations: list[dict[str, Any]]) -> str | None:
     evidence = ' '.join(quotations)
     if not evidence:
@@ -66,6 +107,8 @@ def clause_problem(text: str, quotations: list[str], facts: list[dict[str, Any]]
     if (_CONTRIBUTION.search(text) and _CHANGE_SCOPE.search(text)
             and not any(change_contribution_disclosed(q) for q in quotations)):
         return 'A contribution to a change requires an explicit change-scoped disclosure; current-period revenue alone is insufficient.'
+    if _CONTRACT_ACTION.search(text) and not _contract_supported(text, quotations):
+        return 'Quote the complete operative provision, including the right holder, notice, cure period and exceptions.'
     allowed = _numbers(evidence)
     for item in [*facts, *calculations]:
         allowed |= _numbers(' '.join(str(item.get(k) or '') for k in ('value', 'period', 'unit', 'currency')))
@@ -120,13 +163,22 @@ def report_problems(report: str, claims: list[dict], calculations: list[dict] | 
         line = line.strip()
         if not line or re.fullmatch(r'\[\[(?:table|chart):[A-Za-z0-9_-]+\]\]', line):
             continue
-        for clause in re.split(r'\.(?!\d)|[。;；\n]', line):
+        # A qualifying exception can follow the operative right in the next
+        # sentence. Validate that provision as one clause, preserving punctuation.
+        fragments = re.findall(r'(?:\.(?=\d)|[^。.;；])+[。.;；]?', line)
+        clauses = []
+        for fragment in fragments:
+            if clauses and _CONTRACT_ACTION.search(clauses[-1]) and _CONTRACT_QUALIFIER.match(fragment.lstrip()):
+                clauses[-1] += fragment
+            else:
+                clauses.append(fragment)
+        for clause in clauses:
             clause = clause.strip(' -*|')
             if not clause:
                 continue
             entities = {e.casefold() for e in _CAMEL.findall(clause) if e not in _IGNORE}
             relevant = [c for c in claims if not entities or any(e in (c.get('text', '') + ' ' + ' '.join(x.get('quotation', '') for x in c.get('citations', []))).casefold() for e in entities)]
-            if not _numbers(clause) and not entities and not _CAUSE.search(clause):
+            if not _numbers(clause) and not entities and not _CAUSE.search(clause) and not _CONTRACT_ACTION.search(clause):
                 continue
             calc_by_id = {c.get('calculation_id'): c for c in calculations or []}
             checks = []
@@ -165,7 +217,9 @@ def recover_draft_claims(state: dict, source_by_id: dict, is_eligible) -> list[d
             source = source_by_id.get(cit.get('source_id'))
             loc = cit.get('location', {})
             start, end = loc.get('character_start'), loc.get('character_end')
-            if not source or not is_eligible(source) or type(start) is not int or type(end) is not int or not 0 <= start < end <= len(source.text) or source.text[start:end] != cit.get('quotation'):
+            if (not source or not is_eligible(source) or type(start) is not int or type(end) is not int
+                    or not 0 <= start < end <= len(source.text) or source.text[start:end] != cit.get('quotation')
+                    or not contract_location_complete(source.text, start, end)):
                 valid = False
                 break
         linked_facts = list(draft.get('fact_ids', []))
@@ -205,10 +259,13 @@ def eligible_prior_claims(state: dict, sources: dict, is_eligible) -> list[dict]
             source = sources.get(citation.get('source_id'))
             location = citation.get('location') or {}
             start, end = location.get('character_start'), location.get('character_end')
-            if not source or not is_eligible(source) or type(start) is not int or type(end) is not int or not 0 <= start < end <= len(source.text) or source.text[start:end] != citation.get('quotation'):
+            if (not source or not is_eligible(source) or type(start) is not int or type(end) is not int
+                    or not 0 <= start < end <= len(source.text) or source.text[start:end] != citation.get('quotation')
+                    or not contract_location_complete(source.text, start, end)):
                 valid = False
                 break
-        if valid:
+        if valid and (not _CONTRACT_ACTION.search(claim.get('text', '')) or
+                      _contract_supported(claim['text'], [citation['quotation'] for citation in citations])):
             result.append(claim)
     return result
 

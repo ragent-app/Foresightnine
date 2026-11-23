@@ -1567,7 +1567,42 @@ def _evidence_projection(state: Mapping[str, Any], source_by_id: Mapping[str, Re
             valid_calculations.add(row['calculation_id'])
             calculation_groups[row['calculation_id']] = {'calculation': {key: row.get(key) for key in ('calculation_id', 'formula_id', 'value', 'unit')},
                                                         'facts': [facts[item] for item in inputs]}
-            groups.append(calculation_groups[row['calculation_id']])
+
+    # A saved question part is atomic: include all of its located references,
+    # answer and unresolved limitation together, or omit the whole part.
+    for part in state.get('question_parts') or []:
+        if not isinstance(part, Mapping) or not isinstance(part.get('question'), str):
+            continue
+        part_facts, part_citations = [], []
+        valid = True
+        for ref in part.get('references') or []:
+            if not isinstance(ref, Mapping):
+                valid = False
+                break
+            if ref.get('fact_id'):
+                fact = facts.get(ref['fact_id'])
+                if fact is None:
+                    valid = False
+                    break
+                part_facts.append(fact)
+            else:
+                src = eligible.get(ref.get('source_id'))
+                start, end = ref.get('character_start'), ref.get('character_end')
+                if src is None or type(start) is not int or type(end) is not int or not 0 <= start < end <= len(src.text):
+                    valid = False
+                    break
+                citation = located({**ref, 'quotation': src.text[start:end]})
+                if citation is None:
+                    valid = False
+                    break
+                part_citations.append(citation)
+        if valid and (part_facts or part_citations):
+            groups.append({'question_part': {key: part.get(key) for key in ('question', 'status', 'answer', 'reason')},
+                           'facts': part_facts, 'citations': part_citations})
+        elif valid and not part.get('answer') and part.get('reason') and all(
+                sid in eligible and digest == eligible[sid].content_sha256 for sid, digest in hashes.items()):
+            groups.append({'question_part': {key: part.get(key) for key in ('question', 'status', 'reason')},
+                           'facts': [], 'citations': []})
     claims = [row for row in [*(state.get('prior_claims') or []), *(state.get('claims') or [])] if isinstance(row, Mapping)]
     claims.sort(key=lambda row: (row.get('role') != 'counterargument', str(row.get('claim_id') or '')))
     for row in claims:
@@ -1578,12 +1613,9 @@ def _evidence_projection(state: Mapping[str, Any], source_by_id: Mapping[str, Re
             groups.append({'claim': {key: row.get(key) for key in ('claim_id', 'role', 'text', 'challenges_claim_ids')},
                            'citations': citations, 'facts': [facts[fid] for fid in (row.get('fact_ids') or [])],
                            'calculations': [calculation_groups[cid] for cid in (row.get('calculation_ids') or [])]})
+    groups.extend(calculation_groups.values())
     groups.extend({'fact': fact} for fact in facts.values())
-    selected: list[dict[str, Any]] = []
-    for group in groups:
-        if len(json.dumps([*selected, group], ensure_ascii=False)) <= 6000:
-            selected.append(group)
-    return selected, len(groups) - len(selected)
+    return groups, 0
 
 
 def build_model_turn_input(
@@ -1711,20 +1743,33 @@ def build_model_turn_input(
             for row in prompt_object.get('recorded_read_ranges', []):
                 if isinstance(row, Mapping):
                     retain(row.get('source_id'), row.get('content_sha256'), row.get('start'), row.get('excerpt_end'), row.get('excerpt'))
-        def dedupe_quotes(node: Any) -> None:
-            if isinstance(node, dict):
-                quote = node.get('quotation')
-                sid, digest, start, end = node.get('source_id'), node.get('content_sha256'), node.get('start'), node.get('end')
-                if (isinstance(quote, str) and quote and type(start) is int and type(end) is int
-                        and any(sid == s and digest == h and a <= start < end <= b for s, h, a, b in retained_ranges)):
-                    node.pop('quotation')
-                    node['in_existing_input'] = True
-                for child in node.values():
-                    dedupe_quotes(child)
-            elif isinstance(node, list):
-                for child in node:
-                    dedupe_quotes(child)
-        dedupe_quotes(projection)
+        # Select whole groups only after accounting for text in this request.
+        selected = []
+        for group in projection:
+            candidate = json.loads(json.dumps(group, ensure_ascii=False))
+            prior = list(retained_ranges)
+            def remove_repeated(node: Any) -> None:
+                if isinstance(node, dict):
+                    sid, digest, start, end, quote = (node.get('source_id'), node.get('content_sha256'),
+                                                       node.get('start'), node.get('end'), node.get('quotation'))
+                    if isinstance(quote, str) and type(start) is int and type(end) is int:
+                        if any(sid == s and digest == h and a <= start < end <= b for s, h, a, b in prior):
+                            node.pop('quotation')
+                            node['in_existing_input'] = True
+                        else:
+                            prior.append((sid, digest, start, end))
+                    for child in node.values():
+                        remove_repeated(child)
+                elif isinstance(node, list):
+                    for child in node:
+                        remove_repeated(child)
+            remove_repeated(candidate)
+            if len(json.dumps([*selected, candidate], ensure_ascii=False)) <= 6000:
+                selected.append(candidate)
+                retained_ranges = prior
+            else:
+                projection_omitted += 1
+        projection = selected
     if (projection or projection_omitted) and not prompt_history:
         try:
             user_object = json.loads(prompt_user)

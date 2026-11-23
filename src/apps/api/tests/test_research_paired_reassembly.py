@@ -52,9 +52,10 @@ def test_cross_example_requires_matching_entity_period_permissions_and_deduplica
         f.append({'fact_id': period, 'label': 'Atlas revenue', 'value': value, 'unit': 'USD million',
                   'currency': 'USD', 'period': period, 'source_id': 'exhibit', 'quotation': quote,
                   'character_start': start, 'character_end': start + len(quote)})
-    calc = {'calculation_id': 'c', 'formula_id': 'growth_percent', 'value': '25.00', 'unit': 'percent',
-            'inputs': [{'fact_id': f[0]['fact_id']}, {'fact_id': f[1]['fact_id']}],
-            'period_order_check': 'recognized_formats_only', 'period_granularity_check': 'recognized_formats_only'}
+    from app.research_calculations import CalculationRequest, calculate
+    keys = ('fact_id', 'value', 'unit', 'currency', 'period')
+    calc = {**calculate(CalculationRequest.model_validate({'formula': 'growth_percent',
+             'first': {k: f[0][k] for k in keys}, 'second': {k: f[1][k] for k in keys}})), 'calculation_id': 'c'}
     q = 'Record both Atlas annual revenues, calculate FY2024 growth, and cite the evidence.'
     state = {'facts': f, 'calculations': [calc], 'read_ranges': [{'source_id': 'exhibit', 'start': 0, 'end': len(text)}],
              'question_parts': [{'question': 'cite the evidence.', 'status': 'unresolved', 'answer': '', 'reason': 'pending', 'references': []}]}

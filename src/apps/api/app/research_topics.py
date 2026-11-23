@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -94,6 +94,10 @@ class ResearchFact(BaseModel):
     character_end: int = Field(gt=0)
     location: SourceLocation
     verification: str
+    quotation_match: str | None = None
+    table_alignment_unverified: bool | None = None
+    table_structure_alignment: dict[str, Any] | None = None
+    xbrl_source_consistency: dict[str, Any] | None = None
     currency_quote_missing: bool | None = None
     scale_quote_missing: bool | None = None
     currency_unspecified: bool | None = None

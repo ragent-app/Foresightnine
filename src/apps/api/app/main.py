@@ -2192,6 +2192,12 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                                _directional_negative_amount(numeric.value, numeric.unit, fact.quotation, numeric.currency))
             saved = fact.model_copy(update={
                 "turn_id": original.turn_id if original is not None else None,
+                # Consistency records are server-derived and must never survive
+                # an edit or be accepted from a newly supplied fact.
+                "quotation_match": original.quotation_match if original is not None else None,
+                "table_alignment_unverified": original.table_alignment_unverified if original is not None else None,
+                "table_structure_alignment": None,
+                "xbrl_source_consistency": None,
                 "verification": ("user_edited_not_independently_verified" if quote_has_value
                                  else "user_edited_value_not_in_quotation")})
             data = saved.model_dump(mode="json")

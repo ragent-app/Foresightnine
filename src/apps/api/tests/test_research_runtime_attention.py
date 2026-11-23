@@ -642,6 +642,8 @@ def test_cache_telemetry_accumulated_in_usage_diagnostics_receipts_and_outcome()
     }
     assert out.cache_usage == expected
     assert saved[-1]['cache_usage'] == expected
+    assert [r['submission_state'] for r in saved[-1]['_context_input_records']] == ['response_received', 'response_received']
+    assert all(r['stage'] == 'constructed' for r in saved[-1]['_context_input_records'])
 
     receipts = saved[-1]['model_receipts']
     assert len(receipts) == 2

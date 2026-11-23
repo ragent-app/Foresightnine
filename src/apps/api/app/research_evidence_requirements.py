@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from hashlib import sha256
+import json
 import re
 from typing import Any
 
@@ -20,7 +21,7 @@ _METRICS = {
     'basic_eps': ('basic eps', 'basic earnings per share', '基本每股收益', '基本eps', '基本 eps'),
     'eps': ('eps', 'earnings per share', '每股收益'),
 }
-_COMPARE = ('compare', 'comparison', 'growth', 'change', 'versus', ' vs ', '同比', '增长', '变化', '比较', '对比', '两年', '跨期')
+_COMPARE = ('compare', 'comparison', 'growth', 'change', 'difference', 'versus', ' vs ', '同比', '增长', '变化', '差额', '百分点', '比较', '对比', '两年', '跨期')
 _BENCHMARK = ('benchmark', 'outperform', 'underperform', 'excess return', '基准', '跑赢', '跑输', '超额收益', '大盘')
 _COUNTER = ('counterargument', 'counter evidence', 'counter-evidence', 'alternative explanation', '反证', '反方', '替代解释')
 
@@ -85,10 +86,13 @@ def _period_key(s: str) -> tuple[int, str] | None:
 
 def _valid_facts(state: Mapping[str, Any], sources: Mapping[str, Any], as_of: datetime | None) -> list[Mapping[str, Any]]:
     out = []
+    hashes = _source_hashes(state)
     for f in [*(state.get('prior_facts') or []), *(state.get('facts') or [])]:
         if not isinstance(f, Mapping) or not f.get('fact_id') or not _eligible(sources.get(f.get('source_id')), as_of):
             continue
         source = sources[f['source_id']]
+        if f['source_id'] in hashes and hashes[f['source_id']] != getattr(source, 'content_sha256', None):
+            continue
         start, end = f.get('character_start'), f.get('character_end')
         if type(start) is not int or type(end) is not int or not 0 <= start < end <= len(source.text):
             continue
@@ -96,6 +100,65 @@ def _valid_facts(state: Mapping[str, Any], sources: Mapping[str, Any], as_of: da
             continue
         out.append(f)
     return out
+
+
+def _source_hashes(state: Mapping[str, Any]) -> dict:
+    try:
+        user = json.loads(state.get('user') or '{}')
+    except (TypeError, ValueError):
+        user = {}
+    if not isinstance(user, Mapping):
+        user = {}
+    snapshots = [*(user.get('sources') or []), *(state.get('_sources') or [])]
+    hashes = {r.get('source_id'): r.get('content_sha256') for r in snapshots if isinstance(r, Mapping)}
+    hashes.update(state.get('source_hashes') or {})
+    return hashes
+
+
+def _read_negative_spans(state: Mapping[str, Any], sources: Mapping[str, Any], as_of: datetime | None):
+    """Only inspect explicitly read text bound to the current source version."""
+    hashes = _source_hashes(state)
+    for read in [*(state.get('read_ranges') or []), *(state.get('prior_read_ranges') or [])]:
+        if not isinstance(read, Mapping):
+            continue
+        sid, start, end = read.get('source_id'), read.get('start'), read.get('end')
+        source = sources.get(sid)
+        if (not _eligible(source, as_of) or not hashes.get(sid) or hashes.get(sid) != getattr(source, 'content_sha256', None)
+                or type(start) is not int or type(end) is not int or not 0 <= start < end <= len(source.text)):
+            continue
+        # Full sentence boundaries are required: a clipped negation is ambiguous.
+        text = source.text[start:end]
+        for match in re.finditer(r'[^.!?。！？]+[.!?。！？]', text):
+            a, b = start + match.start(), start + match.end()
+            if (a and source.text[a - 1] not in '.!?。！？\n' and a == start) or (b == end and end < len(source.text) and source.text[end - 1] not in '.!?。！？'):
+                continue
+            yield source, text[match.start():match.end()].strip(), {'source_id': sid, 'character_start': a, 'character_end': b}
+
+
+def _unambiguous_subject(text: str, names: set[str]) -> bool:
+    """Do not inherit a subject across text naming another possible entity."""
+    if len(names) != 1:
+        return False
+    ignored = {'prior', 'previous', 'current', 'no', 'two', 'the', 'this', 'adjusted', 'benchmark',
+               'revenue', 'diluted', 'basic', 'eps', 'usd', 'fy', 'full', 'issuer', 'it'}
+    tokens = {m.casefold() for m in re.findall(r'(?<![A-Za-z0-9])(?:[A-Z][a-z]{1,}|[A-Z]{2,})(?![A-Za-z0-9])', text)} - ignored
+    return tokens == names
+
+
+def _fully_read(state: Mapping[str, Any], source: Any) -> bool:
+    return any(isinstance(r, Mapping) and r.get('source_id') == source.source_id
+               and r.get('start') == 0 and type(r.get('end')) is int and r['end'] >= len(source.text)
+               for r in [*(state.get('read_ranges') or []), *(state.get('prior_read_ranges') or [])])
+
+
+def _asserted_absence(sentence: str) -> bool:
+    """Exclude questions, conditions, speculation and negated absence."""
+    return not bool(re.search(
+        r'[?？]|\b(?:if|unless|whether|assuming|suppose|hypothetically|might|may|could|would|should)\b|'
+        r'如果|若|假设|是否|可能|或许|未必|不一定|并非|不是没有|'
+        r'\bnot\s+(?:actually\s+)?(?:undisclosed|missing|absent|unavailable)\b|'
+        r'\bno\b[^.!?;]{0,80}\b(?:were|was|are|is)\s+(?:missing|absent|unavailable)\b|'
+        r'\bnot\b[^.!?;]{0,80}\bnot\s+(?:disclosed|reported)\b', sentence, re.I))
 
 
 def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], *, as_of: datetime | None = None,
@@ -119,7 +182,9 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
     def located(cit: Any) -> bool:
         sid, quote = _get(cit, 'source_id'), _get(cit, 'quotation')
         source = sources.get(sid)
-        if not _eligible(source, as_of) or not isinstance(quote, str) or not quote:
+        hashes = _source_hashes(state)
+        if (not _eligible(source, as_of) or (sid in hashes and hashes[sid] != getattr(source, 'content_sha256', None))
+                or not isinstance(quote, str) or not quote):
             return False
         return any(isinstance(r, Mapping) and r.get('source_id') == sid and type(r.get('start')) is int
                    and type(r.get('end')) is int and quote in source.text[r['start']:r['end']]
@@ -129,6 +194,13 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
     calcs = [c for c in [*(state.get('prior_calculations') or []), *(state.get('calculations') or [])] if isinstance(c, Mapping)]
     parts = [p for p in state.get('question_parts') or [] if isinstance(p, Mapping)]
     rows: list[dict[str, Any]] = []
+    negative_cache = None
+
+    def negative_spans():
+        nonlocal negative_cache
+        if negative_cache is None:
+            negative_cache = list(_read_negative_spans(state, sources, as_of))
+        return negative_cache
 
     def add(kind: str, text: str, status: str, reason: str, refs: list[dict[str, Any]], **extra: Any) -> None:
         stable = sha256((q + '\0' + kind).encode()).hexdigest()[:16]
@@ -194,6 +266,7 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
             else:
                 status, reason = 'satisfied', 'Eligible, located facts cover the requested metric and years; semantic interpretation remains subject to review.'
         elif compare:
+            accepted_calcs = []
             for calc in calcs:
                 inputs = calc.get('inputs') or []
                 ids = [i.get('fact_id') for i in inputs if isinstance(i, Mapping)]
@@ -233,13 +306,46 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
                 if calc.get('input_status') in ('invalid', 'stale', 'missing') or calc.get('period_order_check') == 'not_checked' or calc.get('period_granularity_check') == 'not_checked':
                     continue
                 formula = str(calc.get('formula_id') or '')
-                if not any(x in formula for x in ('growth', 'change', 'difference')):
+                if formula not in ('growth_percent', 'subtract', 'difference'):
                     continue
-                if any(word in fragment.lower() for word in ('growth rate', 'percent growth', 'growth percent', '增长率', '增速')) and formula != 'growth_percent':
+                from .research_calculations import calculation_result_status
+                if (calculation_result_status(dict(calc)) != 'matched'
+                        or any(any(inp.get(k) != f.get(k) for k in ('value', 'unit', 'currency', 'period')) for inp, f in zip(inputs, pair))):
                     continue
-                status, reason = 'satisfied', 'Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review.'
-                refs = [_ref_fact(f) for f in pair] + [{'calculation_id': calc.get('calculation_id')}]
-                break
+                accepted_calcs.append((calc, pair))
+            wants_rate = bool(re.search(r'growth rate|percent growth|growth percent|增长率|增速|同比增长率', fragment, re.I))
+            wants_points = bool(re.search(r'percentage[ -]points?|百分点', fragment, re.I))
+            wants_difference = bool(re.search(r'absolute (?:change|difference)|difference in|每股(?:增加|减少|差额)|绝对(?:变化|差额)|差额', fragment, re.I))
+            implicit_per_unit = not wants_rate and not wants_points and not wants_difference and bool(metric.endswith('eps') or re.search(r'每股|per share|per unit|每单位', fragment, re.I))
+            if implicit_per_unit:
+                wants_difference = True
+            selected = [(c, p) for c, p in accepted_calcs if (implicit_per_unit or wants_rate == wants_difference
+                        or (c.get('formula_id') == 'growth_percent') == wants_rate)] if not wants_points else [
+                            (c, p) for c, p in accepted_calcs if (c.get('formula_id') == 'growth_percent' and wants_rate)
+                            or (str(c.get('unit') or '').casefold() in ('percentage points', 'percentage point', '百分点') and c.get('formula_id') != 'growth_percent')]
+            if wants_difference and not wants_points:
+                selected = [(c, p) for c, p in selected if c.get('formula_id') == 'growth_percent'
+                            or str(c.get('unit') or '').casefold() not in ('percentage points', 'percentage point', '百分点')]
+            fallback_only = False
+            if not selected and (wants_difference or wants_points):
+                selected = [(c, p) for c, p in accepted_calcs if c.get('formula_id') == 'growth_percent']
+                fallback_only = bool(selected)
+            if selected:
+                refs = []
+                for calc, pair in selected:
+                    for ref in [*map(_ref_fact, pair), {'calculation_id': calc.get('calculation_id')}]:
+                        if ref not in refs:
+                            refs.append(ref)
+                has_difference = any(c.get('formula_id') != 'growth_percent' for c, _ in selected)
+                has_rate = any(c.get('formula_id') == 'growth_percent' for c, _ in selected)
+                if fallback_only or (implicit_per_unit and not has_difference):
+                    status, reason = 'partial', '已保存相对变化；请求的原单位差额或百分点差尚无可核验计算。'
+                elif (wants_rate and (wants_difference or wants_points) and not (has_rate and has_difference)):
+                    status, reason = 'partial', '已展示可核验的变化；请求的相对增幅和原单位差额尚未全部计算。'
+                elif not wants_rate and not wants_difference and not has_difference:
+                    status, reason = 'satisfied', '已保存相对变化；原单位差额尚无已保存的可核验计算。'
+                else:
+                    status, reason = 'satisfied', 'Two ordered, comparable recorded inputs are bound to saved calculations; entity and scope still require semantic review.'
             if status == 'satisfied' and re.search(r'\b(?:sustain(?:able|ability|ed)?|durable|persist(?:ent)?)\b|持续性|可持续|能否持续', fragment, re.I):
                 status, reason = 'partial', 'The historical change is calculated; its sustainability needs independent supporting and opposing evidence and review conditions.'
         if not compare and not matching:
@@ -262,6 +368,45 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
                 localized = {'diluted_eps': '稀释 EPS', 'basic_eps': '基本 EPS', 'eps': 'EPS', 'revenue': '收入'}.get(metric, label)
                 reason = (f'缺少 {years} 年同口径的{localized}依据。' if re.search(r'[一-龥]', q)
                           else f'Missing comparable {label} evidence for {years}.')
+        asks_disclosure = bool(re.search(r'是否(?:有|已)?披露|(?:did|does|was|is)\b.{0,60}\bdisclos', fragment, re.I))
+        if (compare or asks_disclosure) and status in ('partial', 'missing') and len(requested_years) in (1, 2):
+            for source, sentence, ref in negative_spans():
+                # A relative period is usable only when this same fully read source
+                # identifies the requested subject and both comparison years.
+                if (not _asserted_absence(sentence) or not _fully_read(state, source) or not _unambiguous_subject(source.text, names)
+                        or not all(str(y) in source.text for y in requested_years)):
+                    continue
+                clauses = re.split(r'[,，;；]', sentence)
+                clause = next((part for part in clauses if _metric(part) == metric
+                               and re.search(r'\b(?:is|was|were)\s+not\s+(?:disclosed|reported)\b|\bno disclosure of\b|未披露|没有披露', part, re.I)
+                               and len([name for name, words in _METRICS.items() if name != 'eps' and any(w in part.casefold() for w in words)]) == 1), None)
+                if not clause:
+                    continue
+                years_in_clause = {int(y) for y in re.findall(r'(?<!\d)(?:19|20)\d{2}(?!\d)', clause)}
+                if len(years_in_clause) == 1 and years_in_clause <= requested_years:
+                    missing_year = next(iter(years_in_clause))
+                elif len(requested_years) == 2 and not years_in_clause and re.search(r'\b(?:prior|previous|preceding)\b|上年|上期', clause, re.I):
+                    missing_year = min(requested_years)
+                elif len(requested_years) == 2 and not years_in_clause and re.search(r'\bcurrent\b|本年|本期', clause, re.I):
+                    missing_year = max(requested_years)
+                else:
+                    continue
+                # Resolve "prior" only from a completely read document, not an unrelated fragment.
+                label = {'diluted_eps': '稀释 EPS', 'basic_eps': '基本 EPS', 'eps': 'EPS', 'revenue': '收入'}.get(metric, metric)
+                reason = f'已读取的这份材料明确未披露 {missing_year} 年{label}。'
+                if compare:
+                    other_fact = any((_period_key(str(f.get('period', ''))) or (None,))[0] == missing_year
+                                     and f.get('source_id') != source.source_id for f in matching)
+                    other_material = any(other.source_id != source.source_id and _fully_read(state, other)
+                                         and _unambiguous_subject(other.text, names)
+                                         and str(missing_year) in other.text and any(word in other.text.casefold() for word in _METRICS[metric])
+                                         for other, _, _ in negative_spans())
+                    reason += ('其他材料可能提供对应数据，仍需核验与计算。' if other_fact or other_material
+                               else '因此仅凭该材料无法计算该指标的变化。')
+                elif asks_disclosure:
+                    status = 'satisfied'
+                refs.append(ref)
+                break
         relevant_conflicts = [c for c in conflicts if _metric(str(c.get('metric', ''))) == metric
                               and (not requested_years or any(str(y) in str(c.get('period', '')) for y in requested_years))
                               and (not names or str(c.get('entity_hint') or '').casefold() in names)]
@@ -278,8 +423,13 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
 
     if any(x in lower for x in _BENCHMARK):
         from .research_return_context import price_return_context
+        from .research_calculations import calculation_result_status
         returns = [c for c in calcs if isinstance(c.get('return_context'), Mapping) and c.get('calculation_id')
-                   and price_return_context(c, by_id, sources) == c['return_context']]
+                   and price_return_context(c, by_id, sources) == c['return_context']
+                   and calculation_result_status(dict(c)) == 'matched'
+                   and all(isinstance(inp, Mapping) and inp.get('fact_id') in by_id
+                           and all(inp.get(k) == by_id[inp['fact_id']].get(k) for k in ('value', 'unit', 'currency', 'period'))
+                           for inp in c.get('inputs', []))]
         valid = None
         for i, left in enumerate(returns):
             for right in returns[i + 1:]:
@@ -306,6 +456,7 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
             if valid:
                 break
         market_refs = []
+        shorter_refs = []
         target_refs = []
         if not valid:
             from .research_market_analytics import AnalyzeMarketSeriesRequest, analyze_market_series
@@ -341,18 +492,44 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
                     roles_match = named(target_symbol) and (named(bench_symbol) or (len(explicit_tickers) <= 1 and justified))
                     basis_mismatch = basis != (provenance.get('benchmark_provenance') or {}).get('price_basis_applied')
                     if (not roles_match or basis_mismatch or target_symbol.upper() == bench_symbol.upper() or benchmark.get('aligned_bar_count', 0) < 2
-                        or not all(dates) or dates[0] >= dates[1] or (explicit_dates and (len(explicit_dates) != 2 or tuple(explicit_dates) != dates))):
+                        or not all(dates) or dates[0] >= dates[1]):
+                        continue
+                    if explicit_dates and tuple(explicit_dates) != dates:
+                        if (len(explicit_dates) == 2 and explicit_dates[0] <= dates[0] < dates[1] <= explicit_dates[1]
+                                and entry.get('analysis_id')):
+                            shorter_refs = [{'analysis_id': entry['analysis_id']}]
                         continue
                     market_refs = [{'analysis_id': entry['analysis_id']}] if entry.get('analysis_id') else [{'source_id': sid} for sid in actual['source_ids']]
                     break
                 except (ValueError, TypeError, KeyError, AttributeError):
                     continue
+        if shorter_refs and not (valid or market_refs):
+            add('market:available_window', '实际共同交易日区间的相对收益', 'satisfied',
+                '仅覆盖共同交易日，无法核算完整请求窗口。', shorter_refs)
         add('market:benchmark', q, 'satisfied' if valid or market_refs else 'missing',
             'Distinct instruments have returns over the same dates and price basis; verify their requested roles.' if valid or market_refs else 'Need distinct target and benchmark returns over at least two common dates, using the same price basis.',
             [{'calculation_id': c['calculation_id']} for c in valid] if valid else market_refs)
-        if target_refs and not (valid or market_refs):
-            add('market:target', '标的在可用交易窗口内的收益', 'satisfied',
-                'Standalone target return is verified; matching benchmark observations are still needed.', target_refs)
+        if not valid and not market_refs:
+            for source, sentence, ref in negative_spans():
+                if _asserted_absence(sentence) and re.search(r'\bno benchmark (?:observations?|data|values?)\b|没有基准(?:观测|数据)', sentence, re.I):
+                    names = [n for n in re.findall(r'(?<![A-Za-z0-9_])[A-Z][A-Za-z]{1,}(?![A-Za-z0-9_])', q)
+                             if n.casefold() not in {'compare', 'benchmark', 'adjusted'}]
+                    if not _fully_read(state, source) or not _unambiguous_subject(source.text, {n.casefold() for n in names}):
+                        continue
+                    row = rows[-1]
+                    row['reason'] = '已读取的材料明确没有基准观测，因此无法计算基准收益或超额收益。'
+                    row['references'] = [ref]
+                    for same_source, duplicate, duplicate_ref in negative_spans():
+                        if (same_source.source_id == source.source_id and names and _asserted_absence(duplicate)
+                                and all(re.search(r'(?<![a-z0-9])' + re.escape(n.casefold()) + r'(?![a-z0-9])', duplicate.casefold()) for n in names)
+                                and re.search(r'\b(?:two calls both return|both calls return|duplicate observations?)\b|两次.{0,12}(?:相同|重复)', duplicate, re.I)):
+                            row['reason'] = f'已读取的材料说明两次观测均为 {names[0]}，且明确没有基准观测，因此无法计算基准收益或超额收益。'
+                            row['references'].append(duplicate_ref)
+                            break
+                    break
+        if not (valid or market_refs):
+            add('market:target', '标的在可用交易窗口内的收益', 'satisfied' if target_refs else 'missing',
+                'Standalone target return is verified; matching benchmark observations are still needed.' if target_refs else '缺少可核验的标的收益计算。', target_refs)
 
     if any(x in lower for x in _COUNTER):
         valid = [c for c in claims if _get(c, 'role') == 'counterargument' and _get(c, 'challenges_claim_ids') and

@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation, localcontext
 import json
+from itertools import islice
 import re
 from statistics import median
 from typing import Any, Callable, Literal, Mapping
@@ -543,12 +544,12 @@ def _merge_multiline(items: list[_Item], kind: str) -> tuple[list[_Row], list[_I
 _CUR_CN = {'人民币': 'CNY', '港币': 'HKD', '港元': 'HKD', '美元': 'USD', '日元': 'JPY', '欧元': 'EUR', '英镑': 'GBP',
            '新加坡元': 'SGD', '新台币': 'TWD'}
 _CUR_EN = {'rmb': 'CNY', 'cny': 'CNY', 'hk$': 'HKD', 'hkd': 'HKD', 'us$': 'USD', 'usd': 'USD', 's$': 'SGD',
-           'sgd': 'SGD', 'jpy': 'JPY', 'gbp': 'GBP', 'eur': 'EUR', 'nt$': 'TWD', 'twd': 'TWD', '¥': 'CNY'}
+           'sgd': 'SGD', 'jpy': 'JPY', 'gbp': 'GBP', 'eur': 'EUR', 'nt$': 'TWD', 'twd': 'TWD', '¥': 'CNY', '£': 'GBP'}
 _CN_SCALE = {'': 1, '千': 1_000, '万': 10_000, '百万': 1_000_000, '千万': 10_000_000, '亿': 100_000_000}
 _EN_SCALE = {'000': 1_000, '0,000': 10_000, 'thousand': 1_000, 'thousands': 1_000, 'k': 1_000, 'million': 1_000_000,
              'millions': 1_000_000, 'mn': 1_000_000, 'm': 1_000_000, 'billion': 1_000_000_000, 'billions': 1_000_000_000,
              'bn': 1_000_000_000}
-_CUR_EN_ALT = r'rmb|cny|hk\$|hkd|us\$|usd|s\$|sgd|jpy|gbp|eur|nt\$|twd|¥'
+_CUR_EN_ALT = r'rmb|cny|hk\$|hkd|us\$|usd|s\$|sgd|jpy|gbp|eur|nt\$|twd|¥|£'
 _UNIT_CN = re.compile(r'(?P<c1>人民币|港币|港元|美元|日元|欧元|英镑|新加坡元|新台币)?\s*(?P<s>百万|千万|亿|万|千)?\s*(?P<c2>港元|美元|人民币|日元|欧元|英镑|元)')
 _UNIT_CN_CTX = re.compile(r'单位|金额|币种|[(（]\s*(?:人民币|港币|港元|美元)?\s*(?:百万|千万|亿|万|千)?元\s*[)）]'
                           r'|(?:人民币|港币|港元|美元)\s*(?:百万|千万|亿|万|千)元|(?:百万|千)(?:港元|美元|人民币)')
@@ -1172,6 +1173,14 @@ def extract_statements(req: ExtractStatementsRequest, source: Any, *, document_p
         if n is not None:
             run.append(n)
 
+    # Geometry is optional and only comes from a verified retained PDF.
+    geometry = None
+    unresolved_headers = [c.pages[0] for c in chosen.values()
+                          if c.group and 'period_unresolved' in c.group.warnings and set(c.pages) <= read_pages]
+    if unresolved_headers and getattr(source, 'retrieval_method', None) in ('user_pdf', 'web_pdf'):
+        from .research_pdf_geometry import extract_geometry
+        geometry = extract_geometry(source, first_page=min(unresolved_headers), last_page=max(unresolved_headers))
+
     # ---- rows
     unread_kinds = {u['statement'] for u in unread}
     statements_out: list[dict[str, Any]] = []
@@ -1183,6 +1192,21 @@ def extract_statements(req: ExtractStatementsRequest, source: Any, *, document_p
         group = cand.group
         assert group is not None
         warnings = list(group.warnings)
+        header_geometry = None
+        if geometry is not None and 'period_unresolved' in warnings and not any(
+                by_number[p].status == 'ocr' for p in cand.pages):
+            from .research_pdf_geometry import split_header_date
+            first = cand.segments[0]
+            first_row = min((r.abs_start for r in group.rows if r.page == first.page), default=by_number[first.page].end)
+            header_geometry = split_header_date(text, geometry, first.page, by_number[first.page].start, first_row)
+            if header_geometry:
+                cols, extra = _resolve_columns(kind, [header_geometry[0], *[c.get('label', '') for c in group.columns]], cand.title, group.k, None)
+                if all(c.get('period_end') for c in cols) and set(extra) <= {'period_derived_from_report_date'}:
+                    group.columns = cols
+                    warnings.remove('period_unresolved')
+                    warnings.extend(extra)
+                else:
+                    header_geometry = None
         if cand.scope == 'parent_company':
             warnings.append('only_parent_company_statement_found')
         if not cand.terminal:
@@ -1263,6 +1287,21 @@ def extract_statements(req: ExtractStatementsRequest, source: Any, *, document_p
                 # The note marker is a locator, not the text of the note. The
                 # caller must retrieve it separately before relying on it.
                 row_warns.append('referenced_note_not_bound')
+                # A note number alone is not its content. Bind only a unique,
+                # complete one-line note outside the table, already read from
+                # this same source version; duplicates or OCR remain unknown.
+                marker = re.escape(note.strip())
+                matches = list(islice(re.finditer(r'(?m)(?:^|(?<=\f))[ \t]*' + marker + r'(?!\d)[ \t]+[^\n\r\f]{0,399}[^\s\f](?=[ \t]*(?:[\r\n\f]|$))', text), 2))
+                if len(matches) == 1:
+                    m = matches[0]
+                    note_page = next((p for p in pages if p.start <= m.start() and m.end() <= p.end), None)
+                    covered = any(r.get('source_id') == source_id and r.get('start', -1) <= m.start() and r.get('end', -1) >= m.end() for r in read_ranges)
+                    if note_page and note_page.number not in cand.pages and note_page.status == 'text' and covered:
+                        entry['note_reference'] = {'source_id': source_id, 'content_sha256': getattr(source, 'content_sha256', None),
+                                                   'page': note_page.number, 'character_start': m.start(), 'character_end': m.end(),
+                                                   'quotation': m.group(), 'status': 'located_unverified'}
+                        row_warns.remove('referenced_note_not_bound')
+                        row_warns.append('referenced_note_semantics_unverified')
             entry['page'] = row.page
             quote = text[row.abs_start:row.abs_end]
             if 0 < len(quote) <= MAX_QUOTATION_CHARS:
@@ -1289,6 +1328,12 @@ def extract_statements(req: ExtractStatementsRequest, source: Any, *, document_p
                      'currency': group.unit.currency, 'basis': group.unit.basis,
                      **({'text': group.unit.text} if group.unit.text else {})},
             'columns': group.columns, 'terminal_reached': cand.terminal, 'rows': rows_out,
+            **({'header_geometry': {'page': cand.pages[0], 'pdf_sha256': geometry.pdf_sha256,
+                'text_sha256': geometry.text_sha256, 'method': geometry.method,
+                'parts': [{'character_start': a, 'character_end': b,
+                           'bounds': list(next(line.bounds for line in geometry.lines if line.page == cand.pages[0] and line.start == a and line.end == b))}
+                          for a, b in header_geometry[1]],
+                'reading_order': 'geometric_left_to_right', 'status': 'geometric_alignment_unverified'}} if header_geometry else {}),
             **({'alternatives': alternatives[kind]} if alternatives.get(kind) else {}),
             **({'warnings': sorted(set(warnings))} if warnings else {}),
         })
