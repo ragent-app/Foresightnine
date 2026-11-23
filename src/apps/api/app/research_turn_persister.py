@@ -164,11 +164,14 @@ def build_turn_usage(
 def receipt_breakdown(receipts, events, accounting):
     """Count each admitted call once; keep reservations separate from provider receipts."""
     reported = {}
-    admitted = {key: r for key, r in receipts.items()
-                if r.get('provider') != 'not_invoked' and r.get('settlement') != 'released'}
-    for e in events:
+    receipt_items = receipts.items() if isinstance(receipts, Mapping) else ()
+    admitted = {key: r for key, r in receipt_items if isinstance(r, Mapping)
+                and r.get('provider') != 'not_invoked' and r.get('settlement') != 'released'}
+    for e in events if isinstance(events, (list, tuple)) else ():
+        if not isinstance(e, Mapping):
+            continue
         cid, tokens = e.get('call_id'), e.get('usage')
-        if cid in admitted and type(tokens) is int and tokens >= 0 and e.get('kind') in ('model', 'model_failure'):
+        if isinstance(cid, str) and cid in admitted and type(tokens) is int and tokens >= 0 and e.get('kind') in ('model', 'model_failure'):
             reported[cid] = tokens
     for cid, receipt in admitted.items():
         tokens = receipt.get('reported_tokens')

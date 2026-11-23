@@ -259,7 +259,7 @@ def test_all_eight_tools_current_activity_and_summaries():
         source_id='s_acq',
         owner_id='owner',
         title='NVDA 10-K Filing',
-        text='Revenue was 130 USD in 2025. Revenue was 100 USD in 2024.',
+        text='NVDA revenue was 130 USD in 2025. Revenue was 100 USD in 2024.',
         url='https://www.sec.gov/Archives/edgar/data/1/a.htm',
         kind='official',
         obtained_at=datetime.now(timezone.utc),
@@ -302,7 +302,7 @@ def test_all_eight_tools_current_activity_and_summaries():
                 return turn('record_facts', {
                     'facts': [
                         {'label': '总收入', 'value': 130, 'unit': 'USD', 'currency': 'USD', 'period': '2025',
-                         'source_id': 's_acq', 'quotation': 'Revenue was 130 USD in 2025.'},
+                         'source_id': 's_acq', 'quotation': 'NVDA revenue was 130 USD in 2025.'},
                         {'label': '上年收入', 'value': 100, 'unit': 'USD', 'currency': 'USD', 'period': '2024',
                          'source_id': 's_acq', 'quotation': 'Revenue was 100 USD in 2024.'},
                     ],
@@ -315,9 +315,9 @@ def test_all_eight_tools_current_activity_and_summaries():
                     'rationale': 'Compute revenue growth',
                 }, 'c7')
             return turn('submit_research', {
-                'report': 'SECRET-UNVERIFIED-REPORT Revenue grew 30%.',
-                'claims': [{'text': 'SECRET-CLAIM Revenue was 130 USD.', 'source_id': 's_acq',
-                            'quotation': 'Revenue was 130 USD in 2025.', 'role': 'support'}],
+                'report': 'Research detail: NVDA revenue was 130 USD.',
+                'claims': [{'text': 'Located finding: NVDA revenue was 130 USD.', 'source_id': 's_acq',
+                            'quotation': 'NVDA revenue was 130 USD in 2025.', 'role': 'support'}],
                 'limitations': [],
                 'stopping_reason': 'SECRET-STOPPING answered',
             }, 'c8')
@@ -345,7 +345,7 @@ def test_all_eight_tools_current_activity_and_summaries():
     )
     assert outcome.status == 'completed'
     serialized_activities = json.dumps(recorded_activities, ensure_ascii=False)
-    for secret in ('SECRET-KEY', 'SECRET-TOKEN', 'user:pass', 'FRED SECRET', 'SECRET-UNVERIFIED-REPORT', 'SECRET-CLAIM', 'SECRET-STOPPING'):
+    for secret in ('SECRET-KEY', 'SECRET-TOKEN', 'user:pass', 'FRED SECRET', 'Research detail:', 'Located finding:', 'SECRET-STOPPING'):
         assert secret not in serialized_activities
 
     tool_acts = {act['name']: act for act in recorded_activities if act['kind'] == 'tool'}

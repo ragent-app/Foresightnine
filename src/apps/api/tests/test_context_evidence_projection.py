@@ -39,6 +39,18 @@ def test_prior_and_runtime_never_replay_revoked_or_revised_text():
         assert not turn.history
 
 
+def test_acquired_source_history_survives_resume_only_at_the_authorized_version():
+    state = {
+        'user': json.dumps({'question': 'Q', 'sources': []}),
+        'source_hashes': {'s1': HASH},
+        'history': [{'assistant': {'role': 'assistant', 'content': []},
+                     'results': [{'tool_call_id': 'fetch', 'content': TEXT, 'is_error': False}]}],
+    }
+    assert build_model_turn_input(state=state, source_by_id={'s1': source()}).history
+    for sources in ({}, {'s1': source(allowed=False)}, {'s1': source(text=TEXT + ' revised')}):
+        assert not build_model_turn_input(state=state, source_by_id=sources).history
+
+
 def test_located_counterargument_restored_without_inventing_evidence():
     src = source()
     summary, saved = _prior_research(prior(), [src], NOW)

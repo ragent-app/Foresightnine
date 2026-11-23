@@ -7,6 +7,10 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 _NUMBER = re.compile(r'(?<![A-Za-z0-9])[-+]?\d[\d,]*(?:\.\d+)?(?![A-Za-z0-9])')
+_SCALED_AMOUNT = re.compile(
+    r'(?<![\w.])([-+]?\d[\d,]*(?:\.\d+)?)\s*(?:(?-i:[A-Z]{3})\s+)?'
+    r'(thousands?|millions?|billions?|trillions?|[KMBT])\b', re.I | re.ASCII)
+_SCALE_POWERS = {'k': 3, 'thousand': 3, 'm': 6, 'million': 6, 'b': 9, 'billion': 9, 't': 12, 'trillion': 12}
 _CAUSE = re.compile(r'\b(?:caused|causes|because|due to|led to|driven by)\b|导致|造成|由于|因为|推动', re.I)
 _INFERENCE = re.compile(r'\b(?:may|might|could|hypothesis|inference|scenario)\b|可能|假设|推测|情景', re.I)
 _CAMEL = re.compile(r'\b[A-Z][a-z]+[A-Z][A-Za-z]*\b|\b[A-Z]{2,6}\b')
@@ -45,9 +49,15 @@ def contribution_subject_disclosed(text: str, name: str) -> bool:
     return False
 
 
+def _scaled_amounts(text: str) -> set[Decimal]:
+    return {Decimal(amount.replace(',', '')).scaleb(_SCALE_POWERS[unit.lower().rstrip('s')])
+            for amount, unit in _SCALED_AMOUNT.findall(text)}
+
+
 def _numbers(text: str) -> set[Decimal]:
     out = set()
     text = re.sub(r'(?<=\d)-(?=\d)', ' ', text)
+    text = _SCALED_AMOUNT.sub(r'\1 ', text)
     for value in _NUMBER.findall(text):
         try:
             out.add(Decimal(value.replace(',', '')))
@@ -109,6 +119,13 @@ def clause_problem(text: str, quotations: list[str], facts: list[dict[str, Any]]
         return 'A contribution to a change requires an explicit change-scoped disclosure; current-period revenue alone is insufficient.'
     if _CONTRACT_ACTION.search(text) and not _contract_supported(text, quotations):
         return 'Quote the complete operative provision, including the right holder, notice, cure period and exceptions.'
+    required_amounts = _scaled_amounts(text)
+    if required_amounts:
+        supported = set().union(*(_scaled_amounts(q) for q in quotations))
+        for item in [*facts, *calculations]:
+            supported.update(_scaled_amounts(f"{item.get('value')} {item.get('unit')}"))
+        if required_amounts - supported:
+            return 'The cited evidence does not match the amount at the stated scale.'
     allowed = _numbers(evidence)
     for item in [*facts, *calculations]:
         allowed |= _numbers(' '.join(str(item.get(k) or '') for k in ('value', 'period', 'unit', 'currency')))
@@ -156,7 +173,8 @@ def clause_problem(text: str, quotations: list[str], facts: list[dict[str, Any]]
     return None
 
 
-def report_problems(report: str, claims: list[dict], calculations: list[dict] | None = None) -> list[dict]:
+def report_problems(report: str, claims: list[dict], calculations: list[dict] | None = None, *,
+                    partial_notes: bool = False) -> list[dict]:
     """Check measurable assertions against relevant, locally cited clauses."""
     problems = []
     for line in report.splitlines():
@@ -176,6 +194,12 @@ def report_problems(report: str, claims: list[dict], calculations: list[dict] | 
             clause = clause.strip(' -*|')
             if not clause:
                 continue
+            if partial_notes:
+                # A model can describe retrieval limitations separately from research findings.
+                # An HTTP failure code in an access note is not a quantity in a financial claim.
+                clause = re.sub(r'\b(?:HTTP(?:\s+status)?\s*:?|(?:IR|server|website|endpoint|request)\s+returned)\s*'
+                                r'[45]\d{2}(?=\s*[.;。；]?$)', 'retrieval error', clause, flags=re.I)
+                clause = re.sub(r'\bIR(?=\s+(?:HTML|PDF|website|page)\b)|\b(?:HTML|PDF)\b', 'document', clause)
             entities = {e.casefold() for e in _CAMEL.findall(clause) if e not in _IGNORE}
             relevant = [c for c in claims if not entities or any(e in (c.get('text', '') + ' ' + ' '.join(x.get('quotation', '') for x in c.get('citations', []))).casefold() for e in entities)]
             if not _numbers(clause) and not entities and not _CAUSE.search(clause) and not _CONTRACT_ACTION.search(clause):

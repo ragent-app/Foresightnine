@@ -667,7 +667,7 @@ def test_sse_endpoint_continue_from_partial_streams_cumulative_snapshot_and_delt
         assert continue_release.wait(10)
         submit_json = json.dumps({
             'status': 'completed',
-            'report': 'CONTINUED REPORT',
+            'report': 'Revenue was 100 USD.',
             'claims': [{'text': 'Revenue was 100 USD.', 'source_id': sid, 'quotation': 'Revenue was 100 USD.', 'role': 'support'}],
             'limitations': [],
             'stopping_reason': 'answered',
@@ -756,12 +756,12 @@ def test_sse_endpoint_continue_from_partial_streams_cumulative_snapshot_and_delt
 
     deltas = [f['data'] for f in frames if f.get('event') == 'stream.delta']
     assert any(d['channel'] == 'thinking' and 'Continuing from partial checkpoint.' in d['delta'] for d in deltas)
-    assert any(d['channel'] == 'draft_report' and d['delta'] == 'CONTINUED REPORT' for d in deltas)
+    assert any(d['channel'] == 'draft_report' and d['delta'] == 'Revenue was 100 USD.' for d in deltas)
 
     final_turn = env.latest()['content']['turns'][-1]
     assert final_turn['index'] == 1
     assert final_turn['status'] == 'completed'
-    assert final_turn['report'] == 'CONTINUED REPORT'
+    assert final_turn['report'] == 'Revenue was 100 USD.'
     assert op1 in final_turn['operation_ids'] and op2 in final_turn['operation_ids']
 
 

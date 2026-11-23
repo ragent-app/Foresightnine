@@ -367,6 +367,7 @@ def test_runtime_rejects_invalid_calculation_at_tool_boundary(monkeypatch, caplo
         return out
 
     monkeypatch.setattr(research_runtime, "calculate", poisoned_calculate)
+    src = _make_source("s1", "100 USD. 120 USD.")
 
     initial_state = {
         "user": "Q",
@@ -374,8 +375,10 @@ def test_runtime_rejects_invalid_calculation_at_tool_boundary(monkeypatch, caplo
         "events": [],
         "read_ranges": [],
         "facts": [
-            {"fact_id": "f1", "value": "100", "unit": "USD", "currency": "USD", "period": "2024"},
-            {"fact_id": "f2", "value": "120", "unit": "USD", "currency": "USD", "period": "2025"},
+            {"fact_id": "f1", "value": "100", "unit": "USD", "currency": "USD", "period": "2024",
+             "source_id": src.source_id, "quotation": "100 USD.", "character_start": 0, "character_end": 8},
+            {"fact_id": "f2", "value": "120", "unit": "USD", "currency": "USD", "period": "2025",
+             "source_id": src.source_id, "quotation": "120 USD.", "character_start": 9, "character_end": 17},
         ],
         "calculations": [],
         "charts": [],
@@ -406,7 +409,7 @@ def test_runtime_rejects_invalid_calculation_at_tool_boundary(monkeypatch, caplo
     checkpoints: list[dict[str, Any]] = []
     outcome = research_runtime.run_research_agent(
         question="Q",
-        sources=[],
+        sources=[src],
         model=model,
         context=_context(),
         initial_state=initial_state,
@@ -698,7 +701,7 @@ def test_runtime_rejects_invalid_claim_at_submit_boundary_and_allows_recovery(ca
     model = _ScriptedModel(handler)
     checkpoints: list[dict[str, Any]] = []
     outcome = research_runtime.run_research_agent(
-        question="Q",
+        question="What was the valid finding?",
         sources=[long_src, ok_src],
         model=model,
         context=_context(),
@@ -818,6 +821,7 @@ def test_runtime_valid_multi_formula_fact_chart_claim_flow_passes_seamlessly():
                                 {"formula": "cagr", "first_fact_id": fids[1], "second_fact_id": fids[0], "periods": 3},
                                 {"formula": "weighted_average", "fact_ids": fids[:2], "weights": [1, 3]},
                                 {"formula": "ttm_sum", "fact_ids": fids[2:6]},
+                                {"formula": "growth_percent", "fact_ids": [fids[1], fids[0]]},
                             ],
                             "rationale": "Run binary and multi-fact calculations",
                         },
@@ -826,7 +830,7 @@ def test_runtime_valid_multi_formula_fact_chart_claim_flow_passes_seamlessly():
             )
         if step == 3:
             calc_res = json.loads(turn_obj.history[-1].results[0].content)
-            assert [c["formula_id"] for c in calc_res["calculations"]] == ["ratio", "cagr", "weighted_average", "ttm_sum"]
+            assert [c["formula_id"] for c in calc_res["calculations"]] == ["ratio", "cagr", "weighted_average", "ttm_sum", "growth_percent"]
             fids = [c["inputs"][0]["fact_id"] for c in calc_res["calculations"][:2]]
             return _tool_response(
                 (
@@ -885,7 +889,7 @@ def test_runtime_valid_multi_formula_fact_chart_claim_flow_passes_seamlessly():
     )
     assert outcome.status == "completed"
     assert len(outcome.facts) == 6
-    assert len(outcome.calculations) == 4
+    assert len(outcome.calculations) == 5
     assert len(outcome.charts) == 1
     assert len(outcome.claims) == 1
     for item in [*outcome.facts, *outcome.calculations, *outcome.claims]:
@@ -923,7 +927,7 @@ def test_runtime_valid_multi_formula_fact_chart_claim_flow_passes_seamlessly():
         sources=[],
         source_candidates=[],
     )
-    assert len(merged.calculations) == 4
+    assert len(merged.calculations) == 5
     assert len(merged.facts) == 6
     assert len(merged.charts) == 1
     assert len(merged.claims) == 1

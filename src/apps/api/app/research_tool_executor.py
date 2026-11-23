@@ -1457,6 +1457,20 @@ class ToolExecutionContext:
             baseline=baseline,
         )
 
+    def add_acquired_source(self, source: ResearchSource) -> None:
+        sid = source.source_id
+        previous = self.source_by_id.get(sid)
+        if previous is None:
+            self.sources.append(source)
+        self.source_by_id[sid] = source
+        # Opaque history can contain snippets before any explicit read. Pin the
+        # first observed version so recovery can discard stale or revoked history.
+        self.state.setdefault('source_hashes', {}).setdefault(
+            sid, previous.content_sha256 if previous is not None else source.content_sha256)
+        acquired = self.state.setdefault('acquired_source_ids', [])
+        if sid not in acquired:
+            acquired.append(sid)
+
     def append_result(self, call_id: str, result: Mapping[str, Any]) -> None:
         self.state['history'][-1]['results'].append({
             'tool_call_id': call_id,
@@ -1610,13 +1624,8 @@ def _run_ocr(
         attempts[f'{head_id}|{number}'] = returned.status
     new = returned.source
     if returned.status in ('completed', 'partial') and isinstance(new, ResearchSource) and _is_source_eligible(new, ctx.as_of):
-        ctx.source_by_id[new.source_id] = new
-        if all(item.source_id != new.source_id for item in ctx.sources):
-            ctx.sources.append(new)
+        ctx.add_acquired_source(new)
         ctx.state.setdefault('source_versions', {})[head_id] = new.source_id
-        acquired_list = ctx.state.setdefault('acquired_source_ids', [])
-        if new.source_id not in acquired_list:
-            acquired_list.append(new.source_id)
         for key in keys:
             ctx.state.setdefault('acquired_actions', {})[key] = [new.source_id]
         recognised = [row['page'] for row in returned.pages if row.get('status') == 'ocr']
@@ -2045,15 +2054,11 @@ def _exec_acquire_sources(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
                 'total_characters': None,
             })
             continue
-        ctx.source_by_id[source.source_id] = source
-        ctx.sources.append(source)
+        ctx.add_acquired_source(source)
         acquired_ids[requested_url] = source.source_id
         if isinstance(lead.get('cluster_id'), str) and lead['cluster_id']:
             ctx.state.setdefault('source_clusters', {})[source.source_id] = lead['cluster_id']
         ctx.state.setdefault('acquired_actions', {})['acquire|' + requested_url] = [source.source_id]
-        acquired_source_list = ctx.state.setdefault('acquired_source_ids', [])
-        if source.source_id not in acquired_source_list:
-            acquired_source_list.append(source.source_id)
         rows.append({
             'url': url,
             'source_id': source.source_id,
@@ -2215,12 +2220,7 @@ def _exec_fin_tool(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallR
         if source_eligibility([source], ctx.as_of)[0][1] != 'eligible':
             result = {'status': 'unavailable', 'reason': 'source_not_authorized_or_unavailable'}
         else:
-            if source.source_id not in ctx.source_by_id:
-                ctx.sources.append(source)
-            ctx.source_by_id[source.source_id] = source
-            acquired_list = ctx.state.setdefault('acquired_source_ids', [])
-            if source.source_id not in acquired_list:
-                acquired_list.append(source.source_id)
+            ctx.add_acquired_source(source)
             actions = ctx.state.setdefault('acquired_actions', {})
             for action_key in [k for k in [key, *produced.extra_keys] if k]:
                 actions[action_key] = [source.source_id]
@@ -2366,11 +2366,7 @@ def _exec_record_facts(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolC
                         if matched:
                             row['xbrl_source_consistency'] = {**matched, 'method': 'inline_xbrl_source_consistency_v1',
                                 'fact_sha256': direction_confirmation_fingerprint(row)}
-            try:
-                validate_persisted_tool_item('record_facts', row, item_index=fact_index)
-            except ItemPersistenceValidationError as error:
-                fact_failures.append({'index': fact_index, 'reason': 'invalid_fact', 'message': str(error)[:500]})
-                continue
+            validate_persisted_tool_item('record_facts', row, item_index=fact_index)
             staged.append(row)
         rows.append(row)
     # Commit all accepted entries together with the enclosing tool result checkpoint.
@@ -2472,6 +2468,8 @@ def _exec_calculate_financials(ctx: ToolExecutionContext, inv: _CallInvocation) 
                 row['return_context'] = return_context
             validate_persisted_tool_item('calculate_financials', row, item_index=len(rows))
             rows.append(row)
+        except ItemPersistenceValidationError:
+            raise
         except ValueError as exc:
             raise ValueError(f'Calculation {index + 1} ({calculation.formula}): {exc}') from exc
     ctx.state['calculations'].extend(rows)
@@ -2733,7 +2731,7 @@ def _validate_draft_clause(ctx: ToolExecutionContext, clause: Any) -> dict:
             raise ValueError('The located contribution disclosure does not identify the requested subject.')
     canonical = {'text': clause.text, 'role': clause.role, 'citations': citations,
                  'fact_ids': list(clause.fact_ids), 'calculation_ids': list(clause.calculation_ids)}
-    digest = sha256(json.dumps(canonical, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    digest = sha256(json.dumps([ctx.state.get('claim_namespace'), canonical], sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     return {**canonical, 'claim_id': 'claim-' + digest[:32], 'challenges_claim_ids': []}
 
 
@@ -2953,7 +2951,8 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
     if filing_gap:
         status = 'partial'
         gaps.append(gap(filing_gap['code'], filing_gap['message']))
-    report_issues = report_problems(req.report, support_claims, eligible_calculations(ctx.state, ctx.source_by_id, lambda source: source_eligibility([source], ctx.as_of)[0][1] == 'eligible'))
+    calculations = eligible_calculations(ctx.state, ctx.source_by_id, lambda source: _is_source_eligible(source, ctx.as_of))
+    report_issues = report_problems(req.report, support_claims, calculations, partial_notes=req.status == 'partial')
     if status == 'completed' and (rejected_claims or report_issues):
         status = 'partial'
         for issue in report_issues[:10]:

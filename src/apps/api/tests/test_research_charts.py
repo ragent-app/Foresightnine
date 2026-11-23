@@ -639,7 +639,9 @@ def test_runtime_loop_multiturn_replaces_and_continuation_merge():
                 "t1-c",
             )
         chart_res = json.loads([m for m in messages if m.get("role") == "tool"][-1]["content"])
-        cid = chart_res["chart_id"]
+        assert chart_res["chart_id"]
+        fact_result = next(json.loads(m["content"]) for m in messages
+                           if m.get("role") == "tool" and m.get("tool_call_id") == "t1-b")
         return _tool_turn(
             "submit_research",
             {
@@ -648,6 +650,7 @@ def test_runtime_loop_multiturn_replaces_and_continuation_merge():
                 "claims": [
                     {
                         "text": "Revenue grew from 80M to 100M.",
+                        "fact_ids": [row["fact_id"] for row in fact_result["facts"]],
                         "source_id": "s1",
                         "quotation": "FY2025 revenue 100 million USD.",
                         "role": "support",
@@ -686,6 +689,7 @@ def test_runtime_loop_multiturn_replaces_and_continuation_merge():
         status="completed",
         reason="submitted",
         report=out1.report,
+        read_ranges=[{"source_id": src.source_id, "character_start": 0, "character_end": len(src.text)}],
         claim_ids=[c["claim_id"] for c in out1.claims],
         fact_ids=[f["fact_id"] for f in out1.facts],
         chart_ids=[c["chart_id"] for c in out1.charts],
@@ -701,7 +705,7 @@ def test_runtime_loop_multiturn_replaces_and_continuation_merge():
         facts=out1.facts,
         calculations=out1.calculations,
         charts=out1.charts,
-        sources=[],
+        sources=[{"source_id": src.source_id, "content_sha256": src.content_sha256}],
         source_candidates=[],
     )
     # Re-merge same turn_id (continuation): charts must not duplicate & chart_ids union cleanly
@@ -712,7 +716,7 @@ def test_runtime_loop_multiturn_replaces_and_continuation_merge():
         facts=out1.facts,
         calculations=out1.calculations,
         charts=out1.charts,
-        sources=[],
+        sources=[{"source_id": src.source_id, "content_sha256": src.content_sha256}],
         source_candidates=[],
     )
     assert len(c1_dup.charts) == 1
@@ -882,6 +886,7 @@ def test_export_enforces_chart_source_permissions_and_protects_server_charts(mon
     )
     pub_content = loaded_topic.versions[-1].content.model_copy(deep=True)
     pub_content.charts = [pub_chart]
+    pub_content.sources.append({"source_id": s_pub_hp.source_id, "content_sha256": s_pub_hp.content_sha256})
     updated_pub = api.research_topics.add_version(
         account_id,
         topic_id,
@@ -1245,6 +1250,7 @@ def test_causal_graph_runtime_tool_progress_and_export_permissions(monkeypatch):
         status="completed",
         reason="submitted",
         report=out1.report,
+        read_ranges=[{"source_id": src.source_id, "character_start": 0, "character_end": len(src.text)}],
         claim_ids=[out1.claims[0]["claim_id"]],
         search_status="not_requested",
         official_fetch_status="not_requested",
@@ -1257,7 +1263,7 @@ def test_causal_graph_runtime_tool_progress_and_export_permissions(monkeypatch):
         claims=out1.claims,
         facts=out1.facts,
         calculations=out1.calculations,
-        sources=[],
+        sources=[{"source_id": src.source_id, "content_sha256": src.content_sha256}],
         source_candidates=[],
     )
     v2 = ResearchVersion(

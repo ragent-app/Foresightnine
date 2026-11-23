@@ -539,11 +539,14 @@ def test_api_run_ocr_vision_page_is_billed_in_ledger(monkeypatch, tmp_path, at_i
                            json={'parent_version_id': topic['versions'][0]['version_id']})
     assert run_resp.status_code == 202, run_resp.text
     operation_id = run_resp.json()['operation']['operation_id']
-    for _ in range(600):
-        op = client.get(path + '/runs/' + operation_id, headers=headers).json()['operation']
+    # OCR can take several seconds. Keep polling within the API request limit.
+    for _ in range(30):
+        response = client.get(path + '/runs/' + operation_id, headers=headers)
+        assert response.status_code == 200, response.text
+        op = response.json()['operation']
         if op['status'] in ('completed', 'failed', 'cancelled'):
             break
-        time.sleep(.02)
+        time.sleep(.5)
     assert op['status'] == 'completed', op
     assert len(sent) == 1, 'one vision call for the one scanned page'
     read = seen['read']

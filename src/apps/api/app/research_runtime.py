@@ -380,6 +380,7 @@ def _initialize_runtime_state(
             token_budget=_prior_research_token_budget(model),
         )
     return {
+        'claim_namespace': uuid4().hex,
         'user': json.dumps(payload, ensure_ascii=False),
         'history': [],
         'events': [],

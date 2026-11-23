@@ -540,6 +540,10 @@ def build_progress(*, operation_id: str, operation_status: str, inputs: Mapping[
                  'total_tokens': max(known_usage or 0, _int(accounting.get('accounted_tokens')) or 0),
                  'usage_status': 'partial_unknown' if known_usage is None and calls > 0 else 'complete'}
         events = checkpoint.get('events')
+        receipts = accounting.get('model_call_receipts') or {}
+        if receipts or calls == 0:
+            from .research_turn_persister import receipt_breakdown
+            usage.update(receipt_breakdown(receipts, events or [], accounting.get('accounted_tokens')))
         updated_at = checkpoint.get('_saved_at') if isinstance(checkpoint.get('_saved_at'), str) else None
     elif saved_turn is not None:
         usage = saved_turn.usage.model_dump()

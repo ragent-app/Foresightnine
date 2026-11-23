@@ -115,10 +115,15 @@ def _source_hashes(state: Mapping[str, Any]) -> dict:
     return hashes
 
 
+def _read_ranges(state: Mapping[str, Any]):
+    for key in ('read_ranges', 'prior_read_ranges', 'focus_ranges'):
+        yield from state.get(key) or ()
+
+
 def _read_negative_spans(state: Mapping[str, Any], sources: Mapping[str, Any], as_of: datetime | None):
     """Only inspect explicitly read text bound to the current source version."""
     hashes = _source_hashes(state)
-    for read in [*(state.get('read_ranges') or []), *(state.get('prior_read_ranges') or [])]:
+    for read in _read_ranges(state):
         if not isinstance(read, Mapping):
             continue
         sid, start, end = read.get('source_id'), read.get('start'), read.get('end')
@@ -148,7 +153,7 @@ def _unambiguous_subject(text: str, names: set[str]) -> bool:
 def _fully_read(state: Mapping[str, Any], source: Any) -> bool:
     return any(isinstance(r, Mapping) and r.get('source_id') == source.source_id
                and r.get('start') == 0 and type(r.get('end')) is int and r['end'] >= len(source.text)
-               for r in [*(state.get('read_ranges') or []), *(state.get('prior_read_ranges') or [])])
+               for r in _read_ranges(state))
 
 
 def _asserted_absence(sentence: str) -> bool:
@@ -188,7 +193,7 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
             return False
         return any(isinstance(r, Mapping) and r.get('source_id') == sid and type(r.get('start')) is int
                    and type(r.get('end')) is int and quote in source.text[r['start']:r['end']]
-                   for r in [*(state.get('prior_read_ranges') or []), *(state.get('read_ranges') or [])])
+                   for r in _read_ranges(state))
     facts = _valid_facts(state, sources, as_of)
     by_id = {f['fact_id']: f for f in facts}
     calcs = [c for c in [*(state.get('prior_calculations') or []), *(state.get('calculations') or [])] if isinstance(c, Mapping)]
@@ -655,7 +660,7 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
                 src = sources.get(sid)
                 if (_eligible(src, as_of) and type(start) is int and type(end) is int and 0 <= start < end <= len(src.text)
                     and any(isinstance(r, Mapping) and r.get('source_id') == sid and r.get('start', -1) <= start < end <= r.get('end', -1)
-                            for r in [*(state.get('prior_read_ranges') or []), *(state.get('read_ranges') or [])])):
+                            for r in _read_ranges(state))):
                     refs.append({'source_id': sid, 'character_start': start, 'character_end': end})
         stop = {'what', 'which', 'when', 'where', 'how', 'does', 'did', 'the', 'this', 'that', 'with', 'from', 'have', 'were', 'was', 'are', 'is', 'for', 'and', 'explain', 'summarize', 'disclose', 'provide', 'please'}
         terms = {w for w in re.findall(r'[a-z0-9]{3,}', fragment.lower()) if w not in stop}
@@ -669,7 +674,7 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
                 complete = any(_eligible(sources.get(_get(c, 'source_id')), as_of) and
                                any(isinstance(r, Mapping) and r.get('source_id') == _get(c, 'source_id') and r.get('start') == 0
                                    and r.get('end', 0) >= len(sources[_get(c, 'source_id')].text)
-                                   for r in [*(state.get('prior_read_ranges') or []), *(state.get('read_ranges') or [])])
+                                   for r in _read_ranges(state))
                                for c in (_get(claim, 'citations', []) or []))
                 conditions_requested = any(w in fragment.lower() for w in ('condition', '条件', '限定'))
                 conditions_addressed = any(w in claim_text.lower() for w in ('condition', 'subject to', 'provided that', '条件', '须', '需', '前提', '批准'))

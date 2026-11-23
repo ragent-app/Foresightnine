@@ -1454,6 +1454,7 @@ def _narrow_recovery_view(state: Mapping[str, Any], source_by_id: Mapping[str, R
         row['source_id']: row['content_sha256'] for row in [*(original.get('sources') or []), *(state.get('_sources') or [])]
         if isinstance(row, Mapping) and row.get('source_id') and row.get('content_sha256')
     }
+    recorded_hashes.update(state.get('source_hashes') or {})
     unchanged = {sid for sid, src in eligible.items() if recorded_hashes.get(sid) == src.content_sha256}
     view['sources'] = [{'source_id': src.source_id, 'title': src.title, 'content_sha256': src.content_sha256,
                         'permissions': src.permissions.model_dump()}
@@ -1649,12 +1650,14 @@ def build_model_turn_input(
         snapshots = [*(original.get('sources') or []), *(state.get('_sources') or [])]
         hashes = {row['source_id']: row.get('content_sha256') for row in snapshots
                   if isinstance(row, Mapping) and isinstance(row.get('source_id'), str)}
-        used_ids = {row.get('source_id') for key in ('read_ranges', 'prior_read_ranges', 'facts', 'prior_facts')
+        hashes.update(state.get('source_hashes') or {})
+        used_ids = {row.get('source_id') for key in ('read_ranges', 'focus_ranges', 'prior_read_ranges', 'facts', 'prior_facts')
                     for row in (state.get(key) or []) if isinstance(row, Mapping) and isinstance(row.get('source_id'), str)}
         if state.get('history'):
             # Search results can contain snippets before a read range exists.
             # Conservatively invalidate opaque history if any source that was
             # originally eligible is no longer eligible at the same version.
+            used_ids.update(state.get('source_hashes') or {})
             used_ids.update(row.get('source_id') for row in snapshots if isinstance(row, Mapping)
                             and row.get('eligibility') == 'eligible' and isinstance(row.get('source_id'), str))
         prior_view = original.get('prior_research')

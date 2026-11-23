@@ -5333,7 +5333,7 @@ def _deliver_cancelled_research(operation_id: str, owner_id: str) -> None:
         reason = "provider_cancelled"
         local_state = {**checkpoint, "stopped": reason}
         accounting = checkpoint.get("_accounting", {})
-        context = SimpleNamespace(calls=accounting.get("calls", 0), usage=accounting.get("usage"),
+        context = SimpleNamespace(private_diagnostics={}, calls=accounting.get("calls", 0), usage=accounting.get("usage"),
                                   accounted_tokens=accounting.get("accounted_tokens"), search_calls=accounting.get("search_calls", 0),
                                   model_call_receipts=accounting.get("model_call_receipts", {}))
         outcome = run_research_agent(question=inputs["question"], sources=sources, model=None, context=context,

@@ -214,7 +214,7 @@ def test_reconciliation_appended_to_record_facts_and_gap_and_view_at_submission(
     sub = turn('submit_research', {'report': 'ANT closed at 115.10.', 'claims': [{'text': 'Close 115.10', 'source_id': 'exch',
                'quotation': 'ANT closing price 115.10 USD', 'role': 'support'}], 'limitations': [], 'stopping_reason': 'done'}, 's')
     m, sources = reconciliation_run([sub])
-    out = run_research_agent(question='Q', sources=sources, model=m, context=context())
+    out = run_research_agent(question='What was the close?', sources=sources, model=m, context=context())
     first, second = feedback(m, 2), feedback(m, 3)
     assert 'reconciliation' not in first                      # one source only: nothing to compare
     rec = second['reconciliation']

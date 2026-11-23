@@ -5,6 +5,8 @@ def test_clause_checks_dates_units_entities_and_inference_without_claiming_seman
     quotes = ['QQQ closed at 400 USD on 2025-01-02.']
     assert clause_problem('QQQ closed at 400 USD on 2025-01-02.', quotes, [], []) is None
     assert clause_problem('QQQ closed at 400 USD on 2025-01-03.', quotes, [], [])
+    assert clause_problem('Revenue grew to 133.1B.', ['Revenue was 133.1 billion USD.'], [], []) is None
+    assert clause_problem('Revenue grew to 133.1B.', ['Revenue was 133.1 million USD.'], [], [])
     assert clause_problem('QQQ上涨400%。', quotes, [], [])
     assert clause_problem('BlackRock held QQQ at 400 USD.', quotes, [], [])
     assert clause_problem('QQQ caused revenue to rise.', quotes, [], [])

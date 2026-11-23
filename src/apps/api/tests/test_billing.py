@@ -795,6 +795,8 @@ def test_mid_stream_timeout_zero_message_start_leaves_reservation_unresolved(mon
             "provider": "returned",
             "settlement": "unknown",
             "processing_error": "stream_timeout",
+            "reported_tokens": None,
+            "reserved_estimate_tokens": reservation,
         }
         usage_entry = billing_ledger.usage.get(f"model:{call_id}")
         assert usage_entry is not None

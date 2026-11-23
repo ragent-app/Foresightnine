@@ -78,7 +78,9 @@ def test_calculation_tool_accepts_source_verified_same_day_open_close():
     from app.research_tools_registry import CalculateRequest
     bar = source('bar', 'ANT@NASDAQ | 2026-11-19 | 1day | O 111.5 H 115.099998 L 92.72000 C 97.17000 V 857312300 USD', 'market_data', {'adjustment': 'none'})
     facts = [dict(fact_id='open', value='111.5', label='ANT 首日开盘价', unit='USD', currency='USD', period='2026-11-19', source_id='bar', quotation=bar.text), dict(fact_id='close', value='97.17', label='ANT 首日收盘价', unit='USD', currency='USD', period='2026-11-19', source_id='bar', quotation=bar.text)]
-    ctx = SimpleNamespace(state={'facts': facts, 'calculations': []}, source_by_id={'bar': bar}, deps=SimpleNamespace(calculate=calculate, calculation_input_status=calculation_input_status))
+    for fact in facts:
+        fact.update(character_start=0, character_end=len(bar.text))
+    ctx = SimpleNamespace(as_of=None, state={'facts': facts, 'calculations': []}, source_by_id={'bar': bar}, deps=SimpleNamespace(calculate=calculate, calculation_input_status=calculation_input_status))
     req = CalculateRequest.model_validate({'rationale': 'Compare open and close', 'calculations': [{'formula': 'growth_percent', 'first_fact_id': 'close', 'second_fact_id': 'open'}]})
     result = _exec_calculate_financials(ctx, SimpleNamespace(req=req)).result['calculations'][0]
     assert result['value'] == '-12.85'

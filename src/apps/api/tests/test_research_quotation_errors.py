@@ -17,7 +17,7 @@ READ = turn('read_sources', {'reads': [{'source_id': 'p1'}], 'rationale': 'r'}, 
 
 
 def claim(quote, source_id='p1', **extra):
-    return {'text': 't', 'source_id': source_id, 'quotation': quote, 'role': 'support', **extra}
+    return {'text': quote, 'source_id': source_id, 'quotation': quote, 'role': 'support', **extra}
 
 
 def submit(claims, ident='b'):
@@ -25,7 +25,7 @@ def submit(claims, ident='b'):
 
 
 def run(model, sources):
-    return run_research_agent(question="Q", sources=sources, model=model, context=context())
+    return run_research_agent(question="What was the daily close?", sources=sources, model=model, context=context())
 
 
 def last_tool(model, index):
@@ -70,14 +70,14 @@ def test_record_facts_reports_every_bad_fact_and_commits_nothing():
     def fact(quote, value, label):
         return {'label': label, 'value': value, 'unit': 'USD', 'period': '2025-12-31', 'source_id': 'p1', 'quotation': quote}
     m = Model([READ, turn('record_facts', {'rationale': 'r', 'facts': [
-        fact(GOOD1, '681.92', 'spy'), fact(BAD2, '614.31', 'qqq'), fact('ETF:IWM | nope', '245.10', 'iwm')]}, 'b'),
+        fact(GOOD1, '688', 'spy'), fact('ETF:QQQ | unknown price', '614.31', 'qqq'), fact('ETF:IWM | nope', '245.10', 'iwm')]}, 'b'),
         submit([claim(GOOD1)], 'c')])
     outcome = run(m, [src])
     fb = last_tool(m, 2)
-    assert fb['status'] == 'invalid'
-    assert [f['item'] for f in fb['failures']] == ['facts[1]', 'facts[2]']
-    assert fb['failures'][0]['suggested_quotation'] == GOOD2
-    assert 'suggested_quotation' not in fb['failures'][1]
+    assert fb['facts'] == []
+    assert [f['item'] for f in fb['failures']] == ['facts[0]', 'facts[1]', 'facts[2]']
+    assert fb['failures'][1]['kind'] == 'not_found_anywhere'
+    assert 'suggested_quotation' not in fb['failures'][2]
     assert outcome.facts == []
 
 

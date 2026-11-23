@@ -291,7 +291,9 @@ def test_legacy_annual_rate_difference_is_warned_without_rewriting_history(monke
     calculation = _typed_calculation(facts, 'difference', formula_version='1', unit='annual percent')
     owner = topic['owner_id']
     stored = api.research_topics.add_version(owner, topic['topic_id'], VersionInput(
-        parent_version_id=topic['versions'][0]['version_id'], content=ResearchContent(facts=facts, calculations=[calculation])))
+        parent_version_id=topic['versions'][0]['version_id'], content=ResearchContent(
+            sources=[{"source_id": source_id, "content_sha256": api.research_sources.get(owner, source_id).content_sha256}],
+            facts=facts, calculations=[calculation])))
     version = stored.versions[-1]
     for response in (client.get(path, headers=headers).json()['versions'][-1],
                      client.get(path + '/versions/' + version.version_id, headers=headers).json(),
@@ -319,7 +321,9 @@ def _monetary_case(monkeypatch, prefix, text, quotes, *, currency, repair):
     owner = topic['owner_id']
     stored = api.research_topics.add_version(owner, topic['topic_id'], VersionInput(
         parent_version_id=topic['versions'][0]['version_id'],
-        content=ResearchContent(facts=facts, calculations=[_typed_calculation(facts)])))
+        content=ResearchContent(
+            sources=[{"source_id": source_id, "content_sha256": api.research_sources.get(owner, source_id).content_sha256}],
+            facts=facts, calculations=[_typed_calculation(facts)])))
     version = stored.versions[-1]
     read = client.get(path, headers=headers).json()['versions'][-1]
     exported = client.get(path + '/versions/' + version.version_id + '/export', headers=headers)

@@ -707,7 +707,7 @@ def test_runtime_emits_retrying_on_presend_and_never_retries_post_send_stream_fa
             if on_stream_event:
                 on_stream_event({'channel': 'thinking', 'delta': 'x' * 70})
             from app.model_protocol import ModelResponse, ModelToolCall, ModelUsage
-            args = {'status': 'completed', 'claims': [{'text': 'c', 'source_id': 's1', 'quotation': 'Revenue was 100 USD.', 'role': 'support'}], 'report': 'Ans', 'limitations': [], 'stopping_reason': 'done'}
+            args = {'status': 'completed', 'claims': [{'text': 'Revenue was 100 USD.', 'source_id': 's1', 'quotation': 'Revenue was 100 USD.', 'role': 'support'}], 'report': 'Ans', 'limitations': [], 'stopping_reason': 'done'}
             return ModelResponse({'role': 'assistant', 'content': None}, (ModelToolCall('c1', 'submit_research', args),), ModelUsage(1, 1, 2), 'tool_calls', 'tool_calls')
 
     src = ResearchSource(
@@ -719,7 +719,7 @@ def test_runtime_emits_retrying_on_presend_and_never_retries_post_send_stream_fa
     model_ok = PresendThenOkModel()
     events_seen = []
     res = run_research_agent(
-        question='Q', sources=[src], model=model_ok, context=ctx,
+        question='Revenue?', sources=[src], model=model_ok, context=ctx,
         initial_state={'user': '{}', 'history': [], 'events': [], 'read_ranges': [{'source_id': 's1', 'start': 0, 'end': len(TEXT)}], 'facts': [], 'calculations': [], 'leads': [], 'acquired_source_ids': [], 'pending': None, 'focus_ranges': []},
         on_stream_event=events_seen.append,
     )
@@ -804,7 +804,7 @@ def test_e2e_l3_live_sse_draft_rejection_and_verified_completion(monkeypatch, en
         }),
         _anthropic_round('Fixing quotation...', 'c3', 'submit_research', {
             'status': 'completed',
-            'report': 'VERIFIED FINAL REPORT',
+            'report': 'Revenue was 100 USD.',
             'claims': [{'text': 'Revenue was 100 USD.', 'source_id': sid, 'quotation': 'Revenue was 100 USD.', 'role': 'support'}],
             'limitations': [],
             'stopping_reason': 'done',
@@ -832,7 +832,7 @@ def test_e2e_l3_live_sse_draft_rejection_and_verified_completion(monkeypatch, en
     resets = [f['data'] for f in frames if f.get('event') == 'stream.reset']
     assert any(d['channel'] == 'thinking' and 'disclosure' in d['delta'] for d in deltas)
     assert any(d['channel'] == 'draft_report' and d['delta'] == 'WRONG DRAFT TO RETRACT' for d in deltas)
-    assert any(d['channel'] == 'draft_report' and d['delta'] == 'VERIFIED FINAL REPORT' for d in deltas)
+    assert any(d['channel'] == 'draft_report' and d['delta'] == 'Revenue was 100 USD.' for d in deltas)
     assert 'SIG_HIDDEN' not in json.dumps(frames)
 
     assert ('tool_started') in [r['reason'] for r in resets]
@@ -847,7 +847,7 @@ def test_e2e_l3_live_sse_draft_rejection_and_verified_completion(monkeypatch, en
     assert 'stream.delta' not in json.dumps(stored)
     assert 'Need to read disclosure first.' not in events_dump
     assert 'SIG_HIDDEN' not in events_dump
-    assert env.latest()['content']['turns'][-1]['report'] == 'VERIFIED FINAL REPORT'
+    assert env.latest()['content']['turns'][-1]['report'] == 'Revenue was 100 USD.'
     assert all(ev.get('kind') in ('model', 'tool', 'submission') for ev in env.latest()['content']['turns'][-1]['events'])
 
 
@@ -912,7 +912,7 @@ def test_e2e_l3_live_sse_openai_streaming_provider(monkeypatch, env, live_server
             return None
         submit_args = json.dumps({
             'status': 'completed',
-            'report': 'OPENAI VERIFIED REPORT',
+            'report': 'Reported revenue was 100 USD.',
             'claims': [{'text': 'Revenue 100', 'source_id': sid, 'quotation': 'Revenue was 100 USD.', 'role': 'support'}],
             'limitations': [],
             'stopping_reason': 'done',
@@ -951,9 +951,9 @@ def test_e2e_l3_live_sse_openai_streaming_provider(monkeypatch, env, live_server
     deltas = [f['data'] for f in frames if f.get('event') == 'stream.delta']
     assert any(d['channel'] == 'thinking' and 'Plan read.' in d['delta'] for d in deltas)
     assert any(d['channel'] == 'text' and 'Final step note' in d['delta'] for d in deltas)
-    assert any(d['channel'] == 'draft_report' and d['delta'] == 'OPENAI VERIFIED REPORT' for d in deltas)
+    assert any(d['channel'] == 'draft_report' and d['delta'] == 'Reported revenue was 100 USD.' for d in deltas)
     assert frames[-1]['event'] == 'run.terminal'
-    assert env.latest()['content']['turns'][-1]['report'] == 'OPENAI VERIFIED REPORT'
+    assert env.latest()['content']['turns'][-1]['report'] == 'Reported revenue was 100 USD.'
 
 
 def test_messages_stream_env_flag_gating_and_capacity_key(monkeypatch):
