@@ -34,9 +34,13 @@ secret/configuration manager:
 
 ```text
 FORESIGHTNINE_ENV=production
-FORESIGHTNINE_LLM_PROVIDER=glm_coding
-FORESIGHTNINE_GLM_CODING_API_KEY=<secret-manager-reference>
-FORESIGHTNINE_SEARCH_PROVIDER=glm_coding_mcp
+FORESIGHTNINE_LLM_PROVIDER=openai_chat_completions
+FORESIGHTNINE_LLM_BASE_URL=<approved-platform-base-url>
+FORESIGHTNINE_LLM_MODEL=<deployment-model-id>
+FORESIGHTNINE_LLM_API_KEY=<secret-manager-reference>
+FORESIGHTNINE_LLM_ALLOWED_HOSTS=<approved-platform-host>
+FORESIGHTNINE_LLM_CAPABILITY_PROFILES=<verified-platform-profiles-json>
+FORESIGHTNINE_SEARCH_PROVIDER=<selected-search-connector>
 FORESIGHTNINE_STORAGE_MODE=postgres
 FORESIGHTNINE_POSTGRES_URL=<tls-or-provider-managed-postgres-url>
 FORESIGHTNINE_REDIS_URL=rediss://<managed-redis-host>:<port>/<db>
@@ -56,12 +60,9 @@ set `FORESIGHTNINE_PROXY_MODE=direct` and leave
 release owner must verify the direct peer and forwarded-header path in
 staging; never use a broad placeholder network or a user-controlled value.
 
-The GLM profile is fixed to the official Coding Plan endpoint and `glm-5.3-flash`.
-It uses the server-owned thinking configuration and does not expose or send
-user-selectable `temperature` or `top_p`. The MCP search profile uses the
-fixed Streamable HTTP endpoint and exact tool name returned by `tools/list`.
-The generic OpenAI-compatible provider remains a separate, explicitly
-allowlisted future/BYOK path and must not be substituted silently.
+Research selects the platform wire protocol, endpoint and model from deployment settings.
+Use `FORESIGHTNINE_LLM_CAPABILITY_PROFILES` to register distinct active platform deployments by protocol, full wire URL and model. Each entry has its own revision. For Messages, use the configured wire version. The staging environment example includes both protocols.
+Personal models use their account configuration and a synthetic tool call in Settings to verify research tool support. Changing the endpoint, model, protocol, wire options or key requires fresh verification.
 
 ## 3. Run configuration and provider smoke
 
@@ -73,11 +74,9 @@ Then run:
 
 ```powershell
 corepack pnpm verify:production-preflight -- --approval-manifest <external-manifest-path> --provider-admission-manifest <external-provider-manifest-path>
-uv run --project apps/api python apps/api/scripts/glm_coding_live_smoke.py
-uv run --project apps/api python apps/api/scripts/glm_mcp_live_smoke.py
 ```
 
-Both live smokes must pass using the default transport. A custom transport or
+Validate the selected research protocol with a native tool call through the default transport. Run the selected search connector’s smoke independently. A custom transport or
 the current Windows reserved-DNS mapping is diagnostic evidence only and does
 not satisfy this gate. Preserve only redacted status, protocol, request-id
 (if approved), and validation metadata.

@@ -27,6 +27,12 @@ export type ModelProtocol = "openai_chat_completions" | "anthropic_messages";
  * In platform mode the personal fields, when present, describe a saved but inactive configuration;
  * PUT {mode: "personal"} reuses it without re-entering the key. DELETE removes it.
  */
+export interface MessagesOptions {
+  version: string;
+  auth_scheme: "x-api-key" | "bearer";
+  max_tokens: number;
+}
+
 export interface ModelConfig {
   schema_version: "v1";
   mode: "platform" | "personal";
@@ -35,6 +41,8 @@ export interface ModelConfig {
   base_url?: string;
   model?: string;
   key_hint?: string;
+  messages_options?: MessagesOptions;
+  research_tools_verified_at?: string;
   updated_at?: string;
 }
 
@@ -45,6 +53,7 @@ export interface ModelConfigUpdate {
   model?: string | null;
   api_key?: string | null;
   clear_api_key?: boolean;
+  messages_options?: MessagesOptions;
 }
 
 export type ConnectionStatus = "ready" | "unavailable";

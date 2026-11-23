@@ -5,11 +5,6 @@ export const PROTOCOL_LABEL: Readonly<Record<ModelProtocol, string>> = {
   anthropic_messages: "Anthropic Messages",
 };
 
-/** Only OpenAI-compatible endpoints have a connection probe (main.py test_model_config). */
-export function canTestProtocol(protocol: ModelProtocol | undefined): boolean {
-  return protocol === "openai_chat_completions";
-}
-
 function isPrivateIpv4(host: string): boolean {
   const parts = host.split(".").map(Number);
   if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;

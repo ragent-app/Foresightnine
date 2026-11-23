@@ -1,7 +1,7 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ApiError } from "../../api/http";
-import { testModelConfig, useAccountSummary, useModelConfig, useSaveModelConfig, type AccountSummary, type ConnectionStatus, type ModelConfig, type ModelProtocol } from "../../api/settings";
-import { apiKeyProblem, baseUrlProblem, canTestProtocol, hasSavedPersonal, keyRequired, modelNameProblem, PROTOCOL_LABEL } from "../../lib/settings";
+import { testModelConfig, useAccountSummary, useModelConfig, useSaveModelConfig, type AccountSummary, type ConnectionStatus, type ModelConfig, type MessagesOptions, type ModelProtocol } from "../../api/settings";
+import { apiKeyProblem, baseUrlProblem, hasSavedPersonal, keyRequired, modelNameProblem, PROTOCOL_LABEL } from "../../lib/settings";
 import { ConfirmDialog } from "../../ui/ConfirmDialog";
 import { Segmented } from "../../ui/controls";
 import { useLayout } from "../../ui/AppLayout";
@@ -43,18 +43,24 @@ function MyModelPanel({ saved, onClose, onSaved }: { saved: ModelConfig | undefi
   const [protocol, setProtocol] = useState<ModelProtocol>(personal?.protocol ?? "openai_chat_completions");
   const [baseUrl, setBaseUrl] = useState(personal?.base_url ?? "");
   const [model, setModel] = useState(personal?.model ?? "");
+  const [version, setVersion] = useState(personal?.messages_options?.version ?? "");
+  const [authScheme, setAuthScheme] = useState<MessagesOptions["auth_scheme"]>(personal?.messages_options?.auth_scheme ?? "x-api-key");
+  const [maxTokens, setMaxTokens] = useState(String(personal?.messages_options?.max_tokens ?? ""));
+  const messages = protocol === "anthropic_messages";
+  const validOptions = /^[!-~]{1,64}$/.test(version) && Number.isSafeInteger(Number(maxTokens)) && Number(maxTokens) > 0;
   const [apiKey, setApiKey] = useState("");
   const [touched, setTouched] = useState(false);
   const needsKey = keyRequired(saved, protocol, baseUrl);
   const problems = { baseUrl: baseUrlProblem(baseUrl), model: modelNameProblem(model), apiKey: apiKeyProblem(apiKey, needsKey) };
-  const valid = !problems.baseUrl && !problems.model && !problems.apiKey;
+  const valid = !problems.baseUrl && !problems.model && !problems.apiKey && (!messages || validOptions);
   const show = (problem: string | null) => (touched ? problem : null);
 
   const submit = () => {
     setTouched(true);
     if (!valid || save.isPending) return;
     save.mutate(
-      { mode: "personal", protocol, base_url: baseUrl, model, ...(apiKey ? { api_key: apiKey } : {}) },
+      { mode: "personal", protocol, base_url: baseUrl, model,
+        ...(messages ? { messages_options: { version, auth_scheme: authScheme, max_tokens: Number(maxTokens) } } : {}), ...(apiKey ? { api_key: apiKey } : {}) },
       { onSuccess: (config) => { onSaved(config); onClose(); } },
     );
   };
@@ -71,7 +77,7 @@ function MyModelPanel({ saved, onClose, onSaved }: { saved: ModelConfig | undefi
           <select id={`${ids}-protocol`} value={protocol} onChange={(event) => setProtocol(event.target.value as ModelProtocol)}>
             {(Object.keys(PROTOCOL_LABEL) as ModelProtocol[]).map((value) => <option key={value} value={value}>{PROTOCOL_LABEL[value]}</option>)}
           </select>
-          <span className="help">按服务实际支持的接口选择。研究需要模型支持工具调用。</span>
+          <span className="help">按服务实际支持的接口选择。保存后将用一条测试消息验证研究工具调用，服务商可能计费。</span>
         </div>
         <div className="field">
           <label htmlFor={`${ids}-url`}>服务地址</label>
@@ -93,7 +99,23 @@ function MyModelPanel({ saved, onClose, onSaved }: { saved: ModelConfig | undefi
             <span className="help">{personal?.key_hint && needsKey ? "更换服务地址的域名或协议后，需要重新输入 API Key。" : "密钥加密保存，只用于调用你配置的模型服务。"}</span>
           )}
         </div>
-        {!canTestProtocol(protocol) ? <p className="callout-lite ok" role="note">Anthropic Messages 暂不支持连接测试，保存后可以用一次研究来验证。</p> : null}
+        {messages ? <>
+          <div className="field">
+            <label htmlFor={`${ids}-version`}>Messages 协议版本</label>
+            <input id={`${ids}-version`} value={version} onChange={(event) => setVersion(event.target.value)} placeholder="服务商要求的 anthropic-version" />
+          </div>
+          <div className="field">
+            <label htmlFor={`${ids}-auth`}>认证方式</label>
+            <select id={`${ids}-auth`} value={authScheme} onChange={(event) => setAuthScheme(event.target.value as MessagesOptions["auth_scheme"])}>
+              <option value="x-api-key">x-api-key</option><option value="bearer">Bearer</option>
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor={`${ids}-max`}>每次请求的最大输出 Token</label>
+            <input id={`${ids}-max`} type="number" min="1" step="1" value={maxTokens} onChange={(event) => setMaxTokens(event.target.value)} />
+          </div>
+          {touched && !validOptions ? <span className="err">请填写协议版本和大于零的整数输出上限。</span> : null}
+        </> : null}
         {save.isError ? <span className="inline-error" role="alert">{modelErrorText(save.error)}</span> : null}
         <button type="submit" hidden />
       </form>
@@ -108,20 +130,35 @@ export function ModelSection() {
   const { setPanelOpen } = useLayout();
   const [panelOpen, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [test, setTest] = useState<TestState>(null);
+  const [lastTest, setTest] = useState<{ revision: string | undefined; state: Exclude<TestState, null> } | null>(null);
+  const testSequence = useRef(0);
   const data = config.data;
+  const test = lastTest && lastTest.revision === data?.updated_at ? lastTest.state : null;
+  const needsMessagesOptions = data?.protocol === "anthropic_messages" && !data.messages_options;
+  let toolStatus = data?.research_tools_verified_at ? "研究工具已验证" : "研究工具待验证";
+  if (needsMessagesOptions) toolStatus = "请编辑并填写 Messages 协议参数";
+  else if (test === "ready") toolStatus = "研究工具已验证";
+  else if (test === "testing") toolStatus = "正在验证…";
+  else if (test === "unavailable" || test === "error") toolStatus = "本次工具验证未通过";
 
   useEffect(() => {
     setPanelOpen(panelOpen);
     return () => setPanelOpen(false);
   }, [panelOpen, setPanelOpen]);
 
-  const runTest = async () => {
-    setTest("testing");
+  const runTest = async (selected: ModelConfig) => {
+    if (selected.protocol === "anthropic_messages" && !selected.messages_options) return;
+    const revision = selected.updated_at;
+    const sequence = ++testSequence.current;
+    setTest({ revision, state: "testing" });
     try {
-      setTest((await testModelConfig()).status);
+      const { status } = await testModelConfig();
+      if (sequence === testSequence.current) {
+        setTest({ revision, state: status });
+        void config.refetch();
+      }
     } catch {
-      setTest("error");
+      if (sequence === testSequence.current) setTest({ revision, state: "error" });
     }
   };
 
@@ -129,12 +166,13 @@ export function ModelSection() {
   const saved = hasSavedPersonal(data);
   const switchTo = (mode: "platform" | "personal") => {
     if (!data || mode === data.mode || save.isPending) return;
+    testSequence.current++;
     setTest(null);
     if (mode === "platform") {
       save.mutate({ mode: "platform" });
     } else if (saved) {
       // Reuse the saved configuration and key; nothing needs to be re-entered.
-      save.mutate({ mode: "personal" }, { onSuccess: (next) => { if (canTestProtocol(next.protocol)) void runTest(); } });
+      save.mutate({ mode: "personal" }, { onSuccess: (next) => { if (!next.research_tools_verified_at) void runTest(next); } });
     } else {
       setOpen(true);
     }
@@ -168,8 +206,8 @@ export function ModelSection() {
               <b>{PROTOCOL_LABEL[data.protocol ?? "openai_chat_completions"]} · {data.model}</b>
               <div className="meta">{data.base_url} · 密钥 {data.key_hint}{personal ? "" : " · 已保存，未使用"}</div>
             </div>
-            {personal ? <TestStatus state={canTestProtocol(data.protocol) ? test : null} /> : null}
-            {personal && canTestProtocol(data.protocol) ? <button type="button" className="btn" onClick={() => void runTest()} disabled={test === "testing"}>测试连接</button> : null}
+            {personal ? <span className="meta" role="status">{toolStatus}</span> : null}
+            {personal && !needsMessagesOptions ? <button type="button" className="btn" onClick={() => void runTest(data)} disabled={test === "testing"}>验证研究工具</button> : null}
             <button type="button" className="btn" onClick={() => setOpen(true)}>编辑</button>
           </div>
         ) : null}
@@ -182,11 +220,10 @@ export function ModelSection() {
       </div>
       <p className="note inset">
         密钥加密保存，只用于调用你配置的模型服务，不会出现在研究记录或导出中。切换到平台模型时会保留你的配置，切回时不用重新填写。
-        {personal && !canTestProtocol(data?.protocol) ? " Anthropic Messages 暂不支持连接测试，可以用一次研究来验证。" : ""}
       </p>
       {save.isError && !confirmDelete ? <p className="inline-error" role="alert">{modelErrorText(save.error)}</p> : null}
       {panelOpen ? (
-        <MyModelPanel saved={data} onClose={() => setOpen(false)} onSaved={(next) => { setTest(null); if (canTestProtocol(next.protocol)) void runTest(); }} />
+        <MyModelPanel saved={data} onClose={() => setOpen(false)} onSaved={(next) => { testSequence.current++; setTest(null); if (!next.research_tools_verified_at) void runTest(next); }} />
       ) : null}
       {confirmDelete ? (
         <ConfirmDialog
@@ -195,7 +232,7 @@ export function ModelSection() {
           onCancel={() => setConfirmDelete(false)}
           actions={[{
             key: "delete", label: save.isPending ? "正在删除…" : "删除", tone: "danger", disabled: save.isPending,
-            onSelect: () => save.mutate("delete", { onSuccess: () => { setConfirmDelete(false); setTest(null); } }),
+            onSelect: () => save.mutate("delete", { onSuccess: () => { testSequence.current++; setConfirmDelete(false); setTest(null); } }),
           }]}
           error={save.isError ? modelErrorText(save.error) : null}
         />

@@ -15,7 +15,7 @@ from app.openai_compatible import HttpResponse
 def test_messages_runs_through_api_with_two_tool_turns(monkeypatch, platform):
     monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
     monkeypatch.setenv('FORESIGHTNINE_RESEARCH_MAX_OUTPUT_TOKENS', '1000')
-    monkeypatch.setenv('FORESIGHTNINE_MESSAGES_PERSONAL_BASE_URL', 'https://models.example.test/v1')
+    monkeypatch.delenv('FORESIGHTNINE_MESSAGES_PERSONAL_BASE_URL', raising=False)
     monkeypatch.setenv('FORESIGHTNINE_MESSAGES_NATIVE_TOOLS', 'true')
     monkeypatch.setenv('FORESIGHTNINE_MESSAGES_CONTINUATION', 'true')
     monkeypatch.setenv('FORESIGHTNINE_MESSAGES_CAPABILITY_BASE_URL', 'https://models.example.test/v1')
@@ -30,6 +30,8 @@ def test_messages_runs_through_api_with_two_tool_turns(monkeypatch, platform):
     source_id = None
     def transport(method, url, headers, body, timeout):
         wire = json.loads(body)
+        if wire["tools"][0]["name"] == "verify_connection":
+            return HttpResponse(200, json.dumps({"role":"assistant","content":[{"type":"tool_use","id":"p1","name":"verify_connection","input":{"value":"ok"}}],"stop_reason":"tool_use"}))
         captured.append((url, headers, wire))
         if len(captured) == 1:
             args = {'reads': [{'source_id': source_id}], 'rationale': 'disclosure'}
@@ -57,9 +59,14 @@ def test_messages_runs_through_api_with_two_tool_turns(monkeypatch, platform):
             name = 'unrelated-challenge'
         monkeypatch.setattr(api, 'challenge_provider', ChallengeSentinel())
     else:
+        config.update(model="another-model", base_url="https://personal.example.test/v1", messages_options={
+            "version": "personal-version", "auth_scheme": "x-api-key", "max_tokens": 1000})
         saved = client.put('/v1/account/model-config',headers=headers,json=config)
         assert saved.status_code == 200 and saved.json()['protocol'] == 'anthropic_messages'
-        assert client.post('/v1/account/model-config/test',headers=headers).json()['status'] == 'unavailable'
+        with monkeypatch.context() as restricted:
+            restricted.setenv('FORESIGHTNINE_MESSAGES_PERSONAL_BASE_URL', 'https://allowed.example.test')
+            assert client.post('/v1/account/model-config/test',headers=headers).json()['status'] == 'unavailable'
+        assert client.post('/v1/account/model-config/test',headers=headers).json()['status'] == 'ready'
     source_id = client.post('/v2/research/sources',headers=headers,json={'title':'Report','text':'Revenue was 100 USD.','permissions':{'store':True,'display':True,'model_input':True,'export':True}}).json()['source_id']
     topic = client.post('/v2/research/topics',headers=headers,json={'question':'Revenue?','source_ids':[source_id]}).json()
     path = '/v2/research/topics/'+topic['topic_id']
@@ -74,6 +81,9 @@ def test_messages_runs_through_api_with_two_tool_turns(monkeypatch, platform):
     content = client.get(path,headers=headers).json()['versions'][-1]['content']
     assert content['claims'][0]['citations'][0]['source_id'] == source_id
     assert len(captured) == 2 and all(x[2]['max_tokens'] == 1000 for x in captured)
+    if not platform:
+        assert all(url == 'https://personal.example.test/v1/messages' and headers['anthropic-version'] == 'personal-version'
+                   and 'x-api-key' in headers and wire['model'] == 'another-model' for url, headers, wire in captured)
     journal = api.RESEARCH_RUN_INPUTS.get(operation_id)
     diagnostics = journal['private_validation_diagnostics']
     from app.model_protocol import canonical_json_dumps
@@ -95,8 +105,8 @@ def test_messages_runs_through_api_with_two_tool_turns(monkeypatch, platform):
     assert 'private_validation_diagnostics' not in json.dumps(operation)
     assert 'Revenue was 100 USD.' not in json.dumps(diagnostics)
     assert any(row.get('provider_error', {}).get('status_code') == 200 and row['provider_error'].get('request_id') == 'req-fixture' for row in diagnostics.values())
-    assert captured[0][1]['Authorization'] == 'Bearer fixture-secret-1234'
     if platform:
+        assert captured[0][1]['Authorization'] == 'Bearer fixture-secret-1234'
         ledger = client.get(path+'/runs/'+operation_id+'/settlement', headers=headers).json()['model_ledger']
         assert ledger['settled_calls'] == 2 and ledger['accounted_tokens'] == 60
     assert captured[1][2]['messages'][-1]['content'][0]['tool_use_id'] == '1'

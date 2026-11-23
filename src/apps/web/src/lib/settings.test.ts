@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { marketUpdateFrom, type MarketDataConfig, type ModelConfig } from "../api/settings";
-import { apiKeyProblem, baseUrlProblem, canTestProtocol, keyRequired, modelNameProblem, quotaShare } from "./settings";
+import { apiKeyProblem, baseUrlProblem, keyRequired, modelNameProblem, quotaShare } from "./settings";
 
 const SAVED: ModelConfig = {
   schema_version: "v1", mode: "personal", configured: true, protocol: "openai_chat_completions",
@@ -55,11 +55,6 @@ describe("field checks", () => {
     expect(apiKeyProblem(" sk-12345678", false)).toBe("API Key 前后不能有空格");
     expect(modelNameProblem("")).toBe("请输入模型名称");
     expect(modelNameProblem("m".repeat(129))).toBe("模型名称不能超过 128 个字符");
-  });
-
-  it("only offers a connection test for OpenAI-compatible endpoints", () => {
-    expect(canTestProtocol("openai_chat_completions")).toBe(true);
-    expect(canTestProtocol("anthropic_messages")).toBe(false);
   });
 
   it("splits the quota bar into used and reserved shares", () => {

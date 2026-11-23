@@ -233,3 +233,27 @@ def test_capability_profile_work_context_tokens_and_explicit_cache_control_valid
     assert output == 16384
     assert reservation == 150_000 + 3 + 192 + 16384
     assert 'context_input_tokens' not in ctx.pending_reservation
+
+
+def test_platform_registry_resolves_each_protocol_endpoint_and_model(monkeypatch):
+    from app.provider_capabilities import configured_profile
+    from app.phase3 import ProviderFailure
+    endpoint = "https://gateway.example/v1/chat/completions"
+    base = {"protocol": "openai_chat_completions", "endpoint": endpoint, "model": "first", "version": "r1",
+            "mode": "json_object", "native_tools": True}
+    base.update(generation_parameters=["temperature"], parameter_values={"temperature": 0.25})
+    other = {**base, "model": "second", "version": "r2", "native_tools": False}
+    other.pop("parameter_values")
+    monkeypatch.setenv("FORESIGHTNINE_LLM_CAPABILITY_PROFILES", json.dumps([base, other]))
+    monkeypatch.setenv("FORESIGHTNINE_LLM_GENERATION_PARAMETERS", '{"unrelated": 42}')
+    from app.provider_capabilities import chat_generation_parameters
+    assert json.loads(chat_generation_parameters(endpoint, "first")) == {"temperature": 0.25}
+    assert chat_generation_parameters(endpoint, "second") == ""
+    assert configured_profile(endpoint, "first").native_tools is True
+    assert configured_profile(endpoint, "second").version == "r2"
+    assert configured_profile(endpoint, "second").native_tools is False
+    assert configured_profile(endpoint, "unknown") is None
+    assert configured_profile(endpoint, "first", protocol="anthropic_messages") is None
+    monkeypatch.setenv("FORESIGHTNINE_LLM_CAPABILITY_PROFILES", json.dumps([base, base]))
+    with pytest.raises(ProviderFailure):
+        configured_profile(endpoint, "first")

@@ -7,6 +7,7 @@ request rather than changing the process-wide platform provider.
 from __future__ import annotations
 
 import base64
+from dataclasses import replace
 from datetime import datetime, timezone
 from hashlib import sha256
 import os
@@ -29,11 +30,21 @@ class ModelCredentialError(RuntimeError):
         self.message = message
 
 
+class MessagesOptions(BaseModel):
+    """Wire values supplied for this Messages endpoint."""
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    version: str = Field(min_length=1, max_length=64, pattern=r"^[!-~]+$")
+    auth_scheme: Literal["x-api-key", "bearer"]
+    max_tokens: int = Field(gt=0)
+
+
 class ModelConfigUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     mode: Literal["platform", "personal"]
     protocol: Literal["openai_chat_completions", "anthropic_messages"] | None = None
+    messages_options: MessagesOptions | None = None
     base_url: str | None = Field(default=None, min_length=1, max_length=2048)
     model: str | None = Field(default=None, min_length=1, max_length=128)
     api_key: str | None = Field(default=None, min_length=8, max_length=512)
@@ -43,7 +54,7 @@ class ModelConfigUpdate(BaseModel):
     def validate_key_action(self) -> "ModelConfigUpdate":
         if self.api_key is not None and self.clear_api_key:
             raise ValueError("api_key and clear_api_key are mutually exclusive")
-        if self.mode == "platform" and any((self.protocol is not None, self.base_url is not None, self.model is not None, self.api_key is not None, self.clear_api_key)):
+        if self.mode == "platform" and any((self.protocol is not None, self.base_url is not None, self.model is not None, self.api_key is not None, self.clear_api_key, self.messages_options is not None)):
             raise ValueError("platform mode does not accept personal model fields")
         for name in ("base_url", "model", "api_key"):
             value = getattr(self, name)
@@ -64,9 +75,11 @@ class ModelConfigResponse(BaseModel):
     mode: Literal["platform", "personal"]
     configured: bool
     protocol: Literal["openai_chat_completions", "anthropic_messages"] | None = None
+    messages_options: MessagesOptions | None = None
     base_url: str | None = None
     model: str | None = None
     key_hint: str | None = Field(default=None, pattern=r"^••••[A-Za-z0-9]{4}$")
+    research_tools_verified_at: datetime | None = None
     updated_at: datetime | None = None
 
 
@@ -83,10 +96,12 @@ class StoredModelConfig(BaseModel):
     account_id: str = Field(min_length=8, max_length=80)
     mode: Literal["platform", "personal"]
     protocol: Literal["openai_chat_completions", "anthropic_messages"] = "openai_chat_completions"
+    messages_options: MessagesOptions | None = None
     base_url: str | None = Field(default=None, max_length=2048)
     model: str | None = Field(default=None, max_length=128)
     encrypted_api_key: str | None = Field(default=None, min_length=32, max_length=4096)
     key_hint: str | None = Field(default=None, pattern=r"^••••[A-Za-z0-9]{4}$")
+    research_tools_verified_at: datetime | None = None
     updated_at: datetime
 
     @model_validator(mode="after")
@@ -158,84 +173,92 @@ class AccountModelSettings:
         stored = self._stored(account_id)
         if stored is None:
             return ModelConfigResponse(mode="platform", configured=True)
-        if stored.mode == "platform":
-            saved = all((stored.base_url, stored.model, stored.encrypted_api_key, stored.key_hint))
-            return ModelConfigResponse(
-                mode="platform", configured=True, updated_at=stored.updated_at,
-                **({"protocol": stored.protocol, "base_url": stored.base_url, "model": stored.model, "key_hint": stored.key_hint} if saved else {}),
-            )
+        if not stored.key_hint:
+            return ModelConfigResponse(mode=stored.mode, configured=True, updated_at=stored.updated_at)
         return ModelConfigResponse(
-            mode="personal",
-            configured=True,
-            protocol=stored.protocol,
-            base_url=stored.base_url,
-            model=stored.model,
-            key_hint=stored.key_hint,
-            updated_at=stored.updated_at,
+            mode=stored.mode, configured=True, protocol=stored.protocol,
+            messages_options=stored.messages_options, research_tools_verified_at=stored.research_tools_verified_at,
+            base_url=stored.base_url, model=stored.model, key_hint=stored.key_hint, updated_at=stored.updated_at,
         )
+
+    def _mutate(self, account_id, operation):
+        locker = getattr(self.repository, "with_advisory_lock", None)
+        if callable(locker):
+            return locker(f"model-config:{account_id}", operation)
+        with self._lock:
+            return operation()
 
     def update(self, account_id: str, request: ModelConfigUpdate, *, now: datetime | None = None) -> ModelConfigResponse:
         current_time = now or datetime.now(timezone.utc)
 
         def operation() -> ModelConfigResponse:
-            with self._lock:
-                existing = self._stored(account_id)
-                if request.mode == "platform":
-                    # Keep a saved personal configuration (key still encrypted) so the
-                    # account can switch back without re-entering it; DELETE removes it.
-                    self.repository.put(account_id, StoredModelConfig(
-                        account_id=account_id,
-                        mode="platform",
-                        protocol=existing.protocol if existing else "openai_chat_completions",
-                        base_url=existing.base_url if existing else None,
-                        model=existing.model if existing else None,
-                        encrypted_api_key=existing.encrypted_api_key if existing else None,
-                        key_hint=existing.key_hint if existing else None,
-                        updated_at=current_time,
-                    ))
-                    return self.snapshot(account_id)
-
-                base_url = request.base_url if request.base_url is not None else (existing.base_url if existing else None)
-                model = request.model if request.model is not None else (existing.model if existing else None)
-                protocol = request.protocol or (existing.protocol if existing else "openai_chat_completions")
-                if existing and existing.base_url and base_url and request.api_key is None:
-                    try:
-                        old, new = urlsplit(existing.base_url), urlsplit(base_url)
-                        changed = (old.scheme.lower(), old.hostname, old.port or 443) != (new.scheme.lower(), new.hostname, new.port or 443)
-                    except ValueError:
-                        raise ModelCredentialError(422, "validation_error", "Personal model configuration is invalid.") from None
-                    if changed or protocol != existing.protocol:
-                        raise ModelCredentialError(422, "validation_error", "Changing model origin or protocol requires supplying the API key again.")
-                encrypted = existing.encrypted_api_key if existing else None
-                hint = existing.key_hint if existing else None
-                if request.clear_api_key:
-                    encrypted = None
-                    hint = None
-                elif request.api_key is not None:
-                    if self.cipher is None:
-                        raise ModelCredentialError(503, "model_credential_storage_unavailable", "Model credential storage is unavailable.")
-                    encrypted = self.cipher.encrypt(account_id, request.api_key)
-                    hint = _hint(request.api_key)
-                if not all((base_url, model, encrypted, hint)):
-                    raise ModelCredentialError(422, "validation_error", "Personal model configuration is incomplete.")
-                if self.cipher is None:
-                    raise ModelCredentialError(503, "model_credential_storage_unavailable", "Model credential storage is unavailable.")
-                api_key = self.cipher.decrypt(account_id, encrypted)
-                _validate_personal_values(base_url, model, api_key)
+            existing = self._stored(account_id)
+            if request.mode == "platform":
+                # Keep a saved personal configuration (key still encrypted) so the
+                # account can switch back without re-entering it; DELETE removes it.
                 self.repository.put(account_id, StoredModelConfig(
                     account_id=account_id,
-                    mode="personal",
-                    protocol=protocol,
-                    base_url=base_url,
-                    model=model,
-                    encrypted_api_key=encrypted,
-                    key_hint=hint,
+                    mode="platform",
+                    messages_options=existing.messages_options if existing else None,
+                    research_tools_verified_at=existing.research_tools_verified_at if existing else None,
+                    protocol=existing.protocol if existing else "openai_chat_completions",
+                    base_url=existing.base_url if existing else None,
+                    model=existing.model if existing else None,
+                    encrypted_api_key=existing.encrypted_api_key if existing else None,
+                    key_hint=existing.key_hint if existing else None,
                     updated_at=current_time,
                 ))
                 return self.snapshot(account_id)
 
-        locker = getattr(self.repository, "with_advisory_lock", None)
-        return locker(f"model-config:{account_id}", operation) if callable(locker) else operation()
+            base_url = request.base_url if request.base_url is not None else (existing.base_url if existing else None)
+            model = request.model if request.model is not None else (existing.model if existing else None)
+            protocol = request.protocol or (existing.protocol if existing else "openai_chat_completions")
+            if request.messages_options and protocol != "anthropic_messages":
+                raise ModelCredentialError(422, "validation_error", "Messages options require the Messages protocol.")
+            options = request.messages_options
+            if options is None and existing and (protocol, base_url, model) == (existing.protocol, existing.base_url, existing.model):
+                options = existing.messages_options
+            if existing and existing.base_url and base_url and request.api_key is None:
+                try:
+                    old, new = urlsplit(existing.base_url), urlsplit(base_url)
+                    changed = (old.scheme.lower(), old.hostname, old.port or 443) != (new.scheme.lower(), new.hostname, new.port or 443)
+                except ValueError:
+                    raise ModelCredentialError(422, "validation_error", "Personal model configuration is invalid.") from None
+                if changed or protocol != existing.protocol:
+                    raise ModelCredentialError(422, "validation_error", "Changing model origin or protocol requires supplying the API key again.")
+            encrypted = existing.encrypted_api_key if existing else None
+            hint = existing.key_hint if existing else None
+            if request.clear_api_key:
+                encrypted = None
+                hint = None
+            elif request.api_key is not None:
+                if self.cipher is None:
+                    raise ModelCredentialError(503, "model_credential_storage_unavailable", "Model credential storage is unavailable.")
+                encrypted = self.cipher.encrypt(account_id, request.api_key)
+                hint = _hint(request.api_key)
+            if not all((base_url, model, encrypted, hint)):
+                raise ModelCredentialError(422, "validation_error", "Personal model configuration is incomplete.")
+            if self.cipher is None:
+                raise ModelCredentialError(503, "model_credential_storage_unavailable", "Model credential storage is unavailable.")
+            api_key = self.cipher.decrypt(account_id, encrypted)
+            _validate_personal_values(base_url, model, api_key)
+            same_binding = existing and (protocol, base_url, model, encrypted, options) == (
+                existing.protocol, existing.base_url, existing.model, existing.encrypted_api_key, existing.messages_options)
+            self.repository.put(account_id, StoredModelConfig(
+                account_id=account_id,
+                mode="personal",
+                messages_options=options,
+                research_tools_verified_at=existing.research_tools_verified_at if same_binding else None,
+                protocol=protocol,
+                base_url=base_url,
+                model=model,
+                encrypted_api_key=encrypted,
+                key_hint=hint,
+                updated_at=current_time,
+            ))
+            return self.snapshot(account_id)
+
+        return self._mutate(account_id, operation)
 
     def runtime_configuration(self, account_id: str) -> tuple[OpenAICompatibleSettings | None, StoredModelConfig | None]:
         stored = self._stored(account_id)
@@ -247,19 +270,32 @@ class AccountModelSettings:
             raise ModelCredentialError(503, "model_credential_storage_unavailable", "Model credential storage is unavailable.")
         api_key = self.cipher.decrypt(account_id, stored.encrypted_api_key)
         try:
-            return OpenAICompatibleSettings.from_account_values(
+            settings = OpenAICompatibleSettings.from_account_values(
                 base_url=stored.base_url,
                 model=stored.model,
                 api_key=api_key,
-            ), stored
+            )
+            return replace(settings, tools_verified=stored.research_tools_verified_at is not None), stored
         except ProviderFailure as error:
             raise ModelCredentialError(503, "model_credential_storage_unavailable", "Model credential storage is unavailable.") from error
 
     def runtime_settings(self, account_id: str) -> OpenAICompatibleSettings | None:
         return self.runtime_configuration(account_id)[0]
 
+    def record_tools_result(self, tested: StoredModelConfig, verified: bool) -> bool:
+        """Commit only against the revision actually probed, including its previous verification."""
+        def record() -> bool:
+            current = self._stored(tested.account_id)
+            if current != tested:
+                return False
+            verified_at = datetime.now(timezone.utc) if verified else None
+            if verified_at != current.research_tools_verified_at:
+                self.repository.put(tested.account_id, current.model_copy(update={"research_tools_verified_at": verified_at}))
+            return True
+        return self._mutate(tested.account_id, record)
+
     def delete(self, account_id: str) -> None:
-        self.repository.delete(account_id)
+        self._mutate(account_id, lambda: self.repository.delete(account_id))
 
 
 __all__ = [

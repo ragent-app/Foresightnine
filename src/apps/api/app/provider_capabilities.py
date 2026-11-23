@@ -111,12 +111,61 @@ def _invalid() -> ProviderFailure:
     return ProviderFailure('provider_configuration_invalid','Provider capability or schema configuration is invalid.',retryable=False)
 
 
-def configured_profile(endpoint: str, model: str) -> CapabilityProfile | None:
+def research_profile(settings, endpoint: str, protocol: str, version: str) -> CapabilityProfile | None:
+    if not getattr(settings, "personal", False):
+        return configured_profile(endpoint, settings.model, protocol=protocol)
+    if not settings.tools_verified:
+        return None
+    return CapabilityProfile(endpoint, settings.model, version, mode="json_object", native_tools=True)
+
+
+def _registry_entry(raw: str, protocol: str, endpoint: str, model: str) -> dict | None:
+    try:
+        entries = json.loads(raw)
+        if not isinstance(entries, list):
+            raise ValueError()
+        match = None
+        for entry in entries:
+            if not isinstance(entry, dict) or entry['protocol'] not in ('openai_chat_completions', 'anthropic_messages'):
+                raise ValueError()
+            if (entry['protocol'], entry['endpoint'], entry['model']) == (protocol, endpoint, model):
+                if match is not None:
+                    raise ValueError()
+                match = entry
+        return match
+    except (ValueError, KeyError, TypeError):
+        raise _invalid() from None
+
+
+def chat_generation_parameters(endpoint: str, model: str) -> str:
+    registry = os.environ.get('FORESIGHTNINE_LLM_CAPABILITY_PROFILES', '').strip()
+    if not registry:
+        return os.environ.get('FORESIGHTNINE_LLM_GENERATION_PARAMETERS', '').strip()
+    entry = _registry_entry(registry, 'openai_chat_completions', endpoint, model)
+    if not entry or 'parameter_values' not in entry:
+        return ''
+    return json.dumps(entry['parameter_values'], sort_keys=True, separators=(',', ':'))
+
+
+def configured_profile(endpoint: str, model: str, *, protocol: str = "openai_chat_completions") -> CapabilityProfile | None:
     raw = os.environ.get('FORESIGHTNINE_LLM_CAPABILITY_PROFILE', '').strip()
-    if not raw:
+    registry = os.environ.get('FORESIGHTNINE_LLM_CAPABILITY_PROFILES', '').strip()
+    if not raw and not registry:
         return None
     try:
-        value = json.loads(raw)
+        if registry:
+            entry = _registry_entry(registry, protocol, endpoint, model)
+            if entry is None:
+                return None
+            value = dict(entry)
+            del value['protocol']
+            if 'parameter_values' in value:
+                parameters = value.pop('parameter_values')
+                if (protocol != 'openai_chat_completions' or not isinstance(parameters, dict)
+                        or not set(parameters) <= set(value.get('generation_parameters', []))):
+                    raise ValueError()
+        else:
+            value = json.loads(raw)
         if not isinstance(value, dict) or not {'endpoint','model','version','mode'} <= set(value) or set(value) - _PROFILE_KEYS:
             raise ValueError()
         if any(not isinstance(value[k], str) or not value[k] or len(value[k]) > 512 for k in ('endpoint','model','version','mode')):
@@ -139,10 +188,10 @@ def configured_profile(endpoint: str, model: str) -> CapabilityProfile | None:
         if value['endpoint'] != endpoint or value['model'] != model:
             return None
         active_version = os.environ.get('FORESIGHTNINE_LLM_ENDPOINT_VERSION', '').strip()
-        if not active_version or active_version != value['version']:
+        if not registry and (not active_version or active_version != value['version']):
             return None
         return CapabilityProfile(**value)
-    except (ValueError, TypeError, json.JSONDecodeError):
+    except (ValueError, TypeError, KeyError):
         raise _invalid() from None
 
 
