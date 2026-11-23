@@ -68,11 +68,14 @@ def test_cancel_before_submission():
     assert requests == []
 
 
-def test_http_diagnostic_does_not_disclose_body():
-    provider, _ = fixture(HttpResponse(400, json.dumps({'error':{'type':'invalid_request_error','param':'messages','message':'secret text'}}), {'request-id':'req-123'}), auth='x-api-key')
+@pytest.mark.parametrize(('status', 'code'), [(400, 'provider_request_rejected'), (429, 'provider_rate_limited')])
+def test_http_diagnostic_does_not_disclose_body(status, code):
+    provider, requests = fixture(HttpResponse(status, json.dumps({'error':{'type':'invalid_request_error','param':'messages','message':'secret text'}}), {'request-id':'req-123'}), auth='x-api-key')
     observations = []
-    with pytest.raises(ProviderFailure): provider.complete_turn(turn(), diagnostic_callback=observations.append)
-    assert observations[0]['provider_error']['status_code'] == 400
+    with pytest.raises(ProviderFailure) as caught:
+        provider.complete_turn(turn(), diagnostic_callback=observations.append)
+    assert caught.value.code == code and caught.value.provider_response_received and len(requests) == 1
+    assert observations[0]['provider_error']['status_code'] == status
     assert observations[0]['provider_error']['request_id'] == 'req-123'
     assert 'secret text' not in repr(observations)
 
@@ -761,6 +764,8 @@ def test_mid_stream_timeout_after_zero_message_start_reports_none_and_stream_met
         'provider': 'returned',
         'settlement': 'unknown',
         'processing_error': 'stream_timeout',
+        'reported_tokens': None,
+        'reserved_estimate_tokens': before[2],
     }
     assert ctx.usage is None
     diag = ctx.private_diagnostics['call-zero-abort']

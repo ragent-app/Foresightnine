@@ -233,7 +233,7 @@ from app.research_runtime import SYSTEM, TOOLS  # noqa: E402
 
 def test_tool_registered_before_submit_and_described():
     names = [t.name for t in TOOLS]
-    assert names.index('extract_statements') == len(names) - 2 and names[-1] == 'submit_research'
+    assert names.index('extract_statements') < names.index('submit_research') and names[-1] == 'submit_research'
     schema = next(t for t in TOOLS if t.name == 'extract_statements').input_schema
     assert set(schema['required']) == {'source_id', 'rationale'} and 'statements' in schema['properties']
     assert 'extract_statements' in SYSTEM
@@ -241,13 +241,15 @@ def test_tool_registered_before_submit_and_described():
 
 def test_runtime_extract_then_record_facts_with_returned_quotation():
     source = paged_source(['示例股份有限公司 2025年年度报告', CN_INCOME])
+    from hashlib import sha256
+    source.content_sha256 = sha256(source.text.encode()).hexdigest()
     m = Model([turn('extract_statements', {'source_id': 'pdf', 'statements': ['income'], 'rationale': 'r'}, 'a'), STOP])
     run_agent(m, [source])
     fb = json.loads([msg for msg in m.inputs[1] if msg.get('role') == 'tool'][-1]['content'])
     assert fb['status'] == 'completed'
     rev = next(r for r in fb['statements'][0]['rows'] if r['standard_line'] == 'revenue')
     fact = {'label': '营业总收入', 'value': rev['value_as_stated'][0], 'unit': 'CNY', 'currency': 'CNY', 'period': 'FY2025',
-            'source_id': 'pdf', 'quotation': rev['quotation'], 'character_start': rev['character_start'],
+            'source_id': 'pdf', 'content_sha256': fb['content_sha256'], 'quotation': rev['quotation'], 'character_start': rev['character_start'],
             'character_end': rev['character_end']}
     m2 = Model([turn('extract_statements', {'source_id': 'pdf', 'statements': ['income'], 'rationale': 'r'}, 'a'),
                 turn('record_facts', {'facts': [fact], 'rationale': 'r'}, 'b'), STOP])

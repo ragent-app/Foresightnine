@@ -1,0 +1,37 @@
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+_ test_optional_planning_hints_guide_existing_retrieval_without_changing_question _
+tests/test_research_context.py:114: in test_optional_planning_hints_guide_existing_retrieval_without_changing_question
+    assert prompts[0]['question'] == '收入变化'
+           ^^^^^^^^^^
+E   IndexError: list index out of range
+___________ test_acquisition_can_choose_delivery_with_unread_ranges ____________
+tests/test_research_context_capacity.py:149: in test_acquisition_can_choose_delivery_with_unread_ranges
+    assert coordinator._choose(state)[0] == 'acquisition_decision'
+E   AssertionError: assert 'analysis' == 'acquisition_decision'
+E
+E     - acquisition_decision
+E     + analysis
+_____________ test_api_delegated_two_reads_use_the_selected_source _____________
+tests/test_research_context_capacity.py:237: in test_api_delegated_two_reads_use_the_selected_source
+    assert response.status_code == 202
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+__ test_repeated_continuation_preserves_committed_stages_and_original_budget ___
+tests/test_research_recovery_acceptance.py:98: in test_repeated_continuation_preserves_committed_stages_and_original_budget
+    assert response.status_code == 202, response.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:d4a718f13da7c893e232f0ee","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/plan_research","message":"Extra inputs are not permitted"},{"location":"body/counterpoint_followup","message":"Extra inputs are not permitted"},{"location":"body/gap_followup","message":"Extra inputs are not permitted"},{"location":"body/support_review","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+=============================== warnings summary ===============================
+../../../../../../home/ubuntu/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/ubuntu/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_research_context.py::test_optional_planning_hints_guide_existing_retrieval_without_changing_question
+FAILED tests/test_research_context_capacity.py::test_acquisition_can_choose_delivery_with_unread_ranges
+FAILED tests/test_research_context_capacity.py::test_api_delegated_two_reads_use_the_selected_source
+FAILED tests/test_research_recovery_acceptance.py::test_repeated_continuation_preserves_committed_stages_and_original_budget
+4 failed, 1 warning in 1.46s

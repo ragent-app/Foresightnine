@@ -189,6 +189,7 @@ class CalculationPlan(BaseModel):
         'difference',
         'cagr',
         'ratio',
+        'contribution_to_change_percent',
         'sum',
         'subtract',
         'weighted_average',
@@ -217,7 +218,7 @@ class CalculationPlan(BaseModel):
         min_length=2,
         max_length=32,
         description=(
-            "Ordered recorded fact IDs for multi-fact formulas ('sum', 'subtract', 'weighted_average', 'ttm_sum') "
+            "Ordered recorded fact IDs for multi-fact formulas ('sum', 'subtract', 'weighted_average', 'ttm_sum', 'contribution_to_change_percent' [explicitly disclosed contribution to change, current, prior]) "
             'or binary [first_fact_id, second_fact_id] inputs.'
         ),
     )
@@ -256,6 +257,8 @@ class CalculationPlan(BaseModel):
             raise ValueError('periods is only valid for cagr.')
         if self.formula == 'ttm_sum' and resolved_count != 4:
             raise ValueError('ttm_sum requires exactly 4 consecutive quarterly facts via fact_ids.')
+        if self.formula == 'contribution_to_change_percent' and resolved_count != 3:
+            raise ValueError('contribution_to_change_percent requires contribution, current and prior facts via fact_ids.')
         if self.formula == 'weighted_average':
             if self.weights is None or len(self.weights) != resolved_count:
                 raise ValueError('weighted_average requires weights matching the length of fact_ids.')
@@ -334,6 +337,11 @@ class SubmitRequest(BaseModel):
     limitations: list[str] = Field(max_length=499)
     stopping_reason: str = Field(min_length=1)
     status: Literal['completed', 'partial'] = 'completed'
+
+
+class ActivateToolGroupRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    group: str = Field(min_length=1, max_length=32, description='One of the available groups in the tool description.')
 
 
 class ActivateMethodPackRequest(BaseModel):
@@ -914,6 +922,12 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         activity_summarizer=_rationale_summarizer(_target_request_ocr),
     ),
     ToolSpec(
+        name='activate_tool_group',
+        description='Show the named group of native tools starting with the next model call.',
+        input_model=ActivateToolGroupRequest,
+        updates_coverage=False,
+    ),
+    ToolSpec(
         name='activate_method_pack',
         description=(
             'Activate a domain research method pack mid-run when the task requires earnings review, company comparison, '
@@ -962,7 +976,8 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {spec.name: spec for spec in TOOL_SPECS}
 if len(TOOL_REGISTRY) != len(TOOL_SPECS):
     raise RuntimeError('Duplicate tool names detected in TOOL_SPECS.')
 
-TOOLS: tuple[ModelToolDefinition, ...] = tuple(spec.to_definition() for spec in TOOL_SPECS)
+ALL_TOOL_DEFINITIONS: tuple[ModelToolDefinition, ...] = tuple(spec.to_definition() for spec in TOOL_SPECS)
+TOOLS = tuple(tool for tool in ALL_TOOL_DEFINITIONS if tool.name != 'activate_tool_group')
 TOOL_INPUT_MODELS: dict[str, type[BaseModel]] = {spec.name: spec.input_model for spec in TOOL_SPECS}
 BULK_COMPACT_TOOLS: frozenset[str] = frozenset(spec.name for spec in TOOL_SPECS if spec.compaction_role == 'bulk')
 PROTECTED_COMPACT_TOOLS: frozenset[str] = frozenset(spec.name for spec in TOOL_SPECS if spec.compaction_role == 'protected')

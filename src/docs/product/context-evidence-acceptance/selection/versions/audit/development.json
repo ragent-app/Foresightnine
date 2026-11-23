@@ -1,0 +1,14 @@
+{
+ "note":"Synthetic development-only cases, designed after independent failure. IDs and expected groups are evaluation labels; not used as queries.",
+ "as_of":"2026-10-31T23:59:59+00:00",
+ "cases":[
+  {"id":"V2-D1","question":"Compare Orion revenue for fiscal 2023 and 2022, and explain the change.","query":"Orion revenue growth", "k":2,
+   "sources":[{"id":"d1-statement","kind":"official","text":"Orion consolidated statement: revenue in 2023 was EUR 80 million, compared with EUR 70 million in 2022."},{"id":"d1-note","kind":"official","text":"The annual note attributed the increase to new contracts; it did not quantify the contribution of each contract."},{"id":"d1-copy","kind":"user_supplied","text":"Orion revenue growth was discussed by commentators, with opinions on market sentiment and the outlook."}],"groups":[["d1-statement"],["d1-note"]]},
+  {"id":"V2-D2","question":"请比较晨星公司2021年和2020年的营业收入，并说明增长原因。","query":"晨星 营业收入 增长","k":2,
+   "sources":[{"id":"d2-table","kind":"official","text":"晨星公司合并财务报表：营业收入2021年为人民币90万元，2020年为人民币75万元。"},{"id":"d2-note","kind":"official","text":"管理层说明：营业收入增长主要来自新客户，未量化各因素贡献。"},{"id":"d2-general","kind":"user_supplied","text":"晨星公司营业收入增长，媒体讨论了行业前景、公司经营以及市场趋势。"}],"groups":[["d2-table"],["d2-note"]]},
+  {"id":"V2-D3","question":"What is the deadline and condition for redemption?","query":"redemption deadline condition","k":1,
+   "sources":[{"id":"d3-news","kind":"user_supplied","text":"Redemption requests must be filed by 30 September 2026, subject to regulator approval."},{"id":"d3-vague","kind":"user_supplied","text":"A discussion of redemption, deadlines and conditions offered no specific dates or terms."}],"groups":[["d3-news"]]},
+  {"id":"V2-D4","question":"截至2026年6月30日，该政策的申请截止日期及条件是什么？","query":"政策 申请 截止 条件","k":1,
+   "sources":[{"id":"d4-specific","kind":"official","text":"申请须于2026年5月31日前提交，且以主管机关批准为条件。"},{"id":"d4-vague","kind":"user_supplied","text":"政策申请截止条件受到公众关注，讨论仍在进行。"}],"groups":[["d4-specific"]]}
+ ]
+}

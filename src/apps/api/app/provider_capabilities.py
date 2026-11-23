@@ -83,6 +83,7 @@ class CapabilityProfile:
     explicit_cache_control: bool = False
     generation_parameters: tuple[str, ...] | None = None
     continuation_fields: tuple[str, ...] | None = None
+    dynamic_tool_definitions: bool = False
 
 
 _PROFILE_KEYS = frozenset({
@@ -99,6 +100,7 @@ _PROFILE_KEYS = frozenset({
     'stream',
     'usage',
     'continuation',
+    'dynamic_tool_definitions',
     'explicit_cache_control',
     'generation_parameters',
     'continuation_fields',
@@ -121,7 +123,7 @@ def configured_profile(endpoint: str, model: str) -> CapabilityProfile | None:
             raise ValueError()
         if any(type(value[k]) is not int or value[k] < 1 for k in ('context_tokens','work_context_tokens','output_tokens') if k in value):
             raise ValueError()
-        if any(type(value[k]) is not bool for k in ('native_tools','stream','usage','continuation','explicit_cache_control') if k in value):
+        if any(type(value[k]) is not bool for k in ('native_tools','stream','usage','continuation','explicit_cache_control','dynamic_tool_definitions') if k in value):
             raise ValueError()
         for key in ('generation_parameters', 'continuation_fields'):
             if key in value:

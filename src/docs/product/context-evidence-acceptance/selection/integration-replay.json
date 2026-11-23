@@ -1,0 +1,808 @@
+{
+  "description": "Offline current search_library, no model/network; revocation checked after indexing",
+  "cases": [
+    {
+      "case_id": "S1",
+      "selected": [
+        "annual-table",
+        "annual-note"
+      ],
+      "requirements": [
+        {
+          "id": "two-period-revenue",
+          "question": "Find comparable consolidated revenue for 2025 and 2024.",
+          "status": "missing",
+          "core": true
+        },
+        {
+          "id": "acquisition-increment",
+          "question": "Find disclosed drivers of revenue growth and limitations on attribution.",
+          "status": "missing",
+          "core": true
+        }
+      ],
+      "result": {
+        "status": "completed",
+        "query": "Aster 2025 2024 revenue growth sustainability",
+        "returned_hits": 2,
+        "hits": [
+          {
+            "source_id": "annual-table",
+            "title": "Aster annual consolidated statements",
+            "page": null,
+            "score": 0.5674,
+            "snippet": "Aster consolidated statements of operations. USD millions. Year ended December 31: 2025 revenue 120; 2024 revenue 100.",
+            "matched_terms": [
+              "2024",
+              "2025",
+              "aster",
+              "revenu"
+            ],
+            "reasons": [
+              "lexical_bm25",
+              "number_or_date_exact"
+            ],
+            "read_sources": {
+              "source_id": "annual-table",
+              "start": 0,
+              "end": 118
+            },
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ]
+          },
+          {
+            "source_id": "annual-note",
+            "title": "Aster annual report acquisition note",
+            "page": null,
+            "score": 0.5098,
+            "snippet": "Aster acquisition note. The acquisition contributed 18 million dollars to the increase in 2025 revenue compared with 2024. Other drivers of the remaining increase were not quantified.",
+            "matched_terms": [
+              "2024",
+              "2025",
+              "aster",
+              "revenu"
+            ],
+            "reasons": [
+              "lexical_bm25",
+              "number_or_date_exact"
+            ],
+            "read_sources": {
+              "source_id": "annual-note",
+              "start": 0,
+              "end": 183
+            },
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ]
+          }
+        ],
+        "library_coverage": {
+          "sources_searched": 5,
+          "passages_indexed": 5,
+          "unsearched_page_count": 0,
+          "complete": true,
+          "retrieval_mode": "bm25_only"
+        },
+        "selection_trace": [
+          {
+            "source_id": "release-copy-a",
+            "start": 0,
+            "end": 143,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ],
+            "decision": "omitted",
+            "reason": "capacity"
+          },
+          {
+            "source_id": "release-copy-b",
+            "start": 0,
+            "end": 143,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ],
+            "decision": "omitted",
+            "reason": "capacity"
+          },
+          {
+            "source_id": "release-original",
+            "start": 0,
+            "end": 143,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ],
+            "decision": "omitted",
+            "reason": "capacity"
+          },
+          {
+            "source_id": "annual-table",
+            "start": 0,
+            "end": 118,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ],
+            "decision": "selected",
+            "reason": "requirement_retrieval"
+          },
+          {
+            "source_id": "annual-note",
+            "start": 0,
+            "end": 183,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ],
+            "decision": "selected",
+            "reason": "requirement_retrieval"
+          }
+        ],
+        "selection_summary": {
+          "candidates": 5,
+          "selected": 2,
+          "omitted_by_reason": {
+            "capacity": 3
+          },
+          "requirements_searched": 2
+        },
+        "requirement_queries": [
+          {
+            "requirement_id": "two-period-revenue",
+            "query": "Find comparable consolidated revenue for 2025 and 2024.",
+            "reason": "unmet_or_requested_requirement"
+          },
+          {
+            "requirement_id": "acquisition-increment",
+            "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+            "reason": "unmet_or_requested_requirement"
+          }
+        ],
+        "message": "Hits are leads: read the location with read_sources or read_pages before citing."
+      },
+      "necessary_groups_covered": 2,
+      "necessary_groups_available": 2,
+      "revoked_result": {
+        "status": "completed",
+        "query": "Aster 2025 2024 revenue growth sustainability",
+        "returned_hits": 2,
+        "hits": [
+          {
+            "source_id": "release-copy-a",
+            "title": "News copy A",
+            "page": null,
+            "score": 1.6565,
+            "snippet": "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability.",
+            "matched_terms": [
+              "2024",
+              "2025",
+              "aster",
+              "growth",
+              "revenu",
+              "sustainability"
+            ],
+            "reasons": [
+              "lexical_bm25",
+              "number_or_date_exact"
+            ],
+            "read_sources": {
+              "source_id": "release-copy-a",
+              "start": 0,
+              "end": 143
+            },
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ]
+          },
+          {
+            "source_id": "annual-note",
+            "title": "Aster annual report acquisition note",
+            "page": null,
+            "score": 0.6211,
+            "snippet": "Aster acquisition note. The acquisition contributed 18 million dollars to the increase in 2025 revenue compared with 2024. Other drivers of the remaining increase were not quantified.",
+            "matched_terms": [
+              "2024",
+              "2025",
+              "aster",
+              "revenu"
+            ],
+            "reasons": [
+              "lexical_bm25",
+              "number_or_date_exact"
+            ],
+            "read_sources": {
+              "source_id": "annual-note",
+              "start": 0,
+              "end": 183
+            },
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ]
+          }
+        ],
+        "library_coverage": {
+          "sources_searched": 4,
+          "passages_indexed": 4,
+          "unsearched_page_count": 0,
+          "complete": false,
+          "sources_excluded": [
+            {
+              "source_id": "annual-table",
+              "reason": "model_permission_missing"
+            }
+          ],
+          "notes": [
+            "Excluded sources were not searched."
+          ],
+          "retrieval_mode": "bm25_only"
+        },
+        "selection_trace": [
+          {
+            "source_id": "release-copy-a",
+            "start": 0,
+            "end": 143,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ],
+            "decision": "selected",
+            "reason": "requirement_retrieval"
+          },
+          {
+            "source_id": "release-copy-b",
+            "start": 0,
+            "end": 143,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ],
+            "decision": "omitted",
+            "reason": "identical_passage"
+          },
+          {
+            "source_id": "release-original",
+            "start": 0,
+            "end": 143,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ],
+            "decision": "omitted",
+            "reason": "identical_passage"
+          },
+          {
+            "source_id": "annual-note",
+            "start": 0,
+            "end": 183,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ],
+            "decision": "selected",
+            "reason": "requirement_retrieval"
+          }
+        ],
+        "selection_summary": {
+          "candidates": 4,
+          "selected": 2,
+          "omitted_by_reason": {
+            "identical_passage": 2
+          },
+          "requirements_searched": 2
+        },
+        "requirement_queries": [
+          {
+            "requirement_id": "two-period-revenue",
+            "query": "Find comparable consolidated revenue for 2025 and 2024.",
+            "reason": "unmet_or_requested_requirement"
+          },
+          {
+            "requirement_id": "acquisition-increment",
+            "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+            "reason": "unmet_or_requested_requirement"
+          }
+        ],
+        "message": "Not every page or source could be searched (see library_coverage); a miss here is not evidence that the text is absent. Hits are leads: read the location with read_sources or read_pages before citing."
+      }
+    },
+    {
+      "case_id": "S2",
+      "selected": [
+        "annual-table",
+        "release-copy-a"
+      ],
+      "requirements": [
+        {
+          "id": "two-period-revenue",
+          "question": "Find comparable consolidated revenue for 2025 and 2024.",
+          "status": "missing",
+          "core": true
+        },
+        {
+          "id": "acquisition-increment",
+          "question": "Find disclosed drivers of revenue growth and limitations on attribution.",
+          "status": "missing",
+          "core": true
+        }
+      ],
+      "result": {
+        "status": "completed",
+        "query": "Aster 2025 2024 revenue growth sustainability",
+        "returned_hits": 2,
+        "hits": [
+          {
+            "source_id": "annual-table",
+            "title": "Aster annual consolidated statements",
+            "page": null,
+            "score": 0.6834,
+            "snippet": "Aster consolidated statements of operations. USD millions. Year ended December 31: 2025 revenue 120; 2024 revenue 100.",
+            "matched_terms": [
+              "2024",
+              "2025",
+              "aster",
+              "revenu"
+            ],
+            "reasons": [
+              "lexical_bm25",
+              "number_or_date_exact"
+            ],
+            "read_sources": {
+              "source_id": "annual-table",
+              "start": 0,
+              "end": 118
+            },
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ]
+          },
+          {
+            "source_id": "release-copy-a",
+            "title": "News copy A",
+            "page": null,
+            "score": 1.6414,
+            "snippet": "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability.",
+            "matched_terms": [
+              "2024",
+              "2025",
+              "aster",
+              "growth",
+              "revenu",
+              "sustainability"
+            ],
+            "reasons": [
+              "lexical_bm25",
+              "number_or_date_exact"
+            ],
+            "read_sources": {
+              "source_id": "release-copy-a",
+              "start": 0,
+              "end": 143
+            },
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ]
+          }
+        ],
+        "library_coverage": {
+          "sources_searched": 4,
+          "passages_indexed": 4,
+          "unsearched_page_count": 0,
+          "complete": true,
+          "retrieval_mode": "bm25_only"
+        },
+        "selection_trace": [
+          {
+            "source_id": "release-copy-a",
+            "start": 0,
+            "end": 143,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ],
+            "decision": "selected",
+            "reason": "requirement_retrieval"
+          },
+          {
+            "source_id": "release-copy-b",
+            "start": 0,
+            "end": 143,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ],
+            "decision": "omitted",
+            "reason": "identical_passage"
+          },
+          {
+            "source_id": "release-original",
+            "start": 0,
+            "end": 143,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ],
+            "decision": "omitted",
+            "reason": "identical_passage"
+          },
+          {
+            "source_id": "annual-table",
+            "start": 0,
+            "end": 118,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ],
+            "decision": "selected",
+            "reason": "requirement_retrieval"
+          }
+        ],
+        "selection_summary": {
+          "candidates": 4,
+          "selected": 2,
+          "omitted_by_reason": {
+            "identical_passage": 2
+          },
+          "requirements_searched": 2
+        },
+        "requirement_queries": [
+          {
+            "requirement_id": "two-period-revenue",
+            "query": "Find comparable consolidated revenue for 2025 and 2024.",
+            "reason": "unmet_or_requested_requirement"
+          },
+          {
+            "requirement_id": "acquisition-increment",
+            "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+            "reason": "unmet_or_requested_requirement"
+          }
+        ],
+        "message": "Hits are leads: read the location with read_sources or read_pages before citing."
+      },
+      "necessary_groups_covered": 1,
+      "necessary_groups_available": 1
+    },
+    {
+      "case_id": "S3",
+      "selected": [
+        "annual-table",
+        "annual-note",
+        "contrary"
+      ],
+      "requirements": [
+        {
+          "id": "two-period-revenue",
+          "question": "Find comparable consolidated revenue for 2025 and 2024.",
+          "status": "missing",
+          "core": true
+        },
+        {
+          "id": "acquisition-increment",
+          "question": "Find disclosed drivers of revenue growth and limitations on attribution.",
+          "status": "missing",
+          "core": true
+        },
+        {
+          "id": "important-counterevidence",
+          "question": "Find evidence that could undermine sustainability of revenue growth.",
+          "status": "missing",
+          "core": true
+        }
+      ],
+      "result": {
+        "status": "completed",
+        "query": "Aster 2025 2024 revenue growth sustainability",
+        "returned_hits": 3,
+        "hits": [
+          {
+            "source_id": "annual-table",
+            "title": "Aster annual consolidated statements",
+            "page": null,
+            "score": 2.0104,
+            "snippet": "Aster consolidated statements of operations. USD millions. Year ended December 31: 2025 revenue 120; 2024 revenue 100.",
+            "matched_terms": [
+              "2024",
+              "2025",
+              "aster",
+              "revenu"
+            ],
+            "reasons": [
+              "lexical_bm25",
+              "number_or_date_exact"
+            ],
+            "read_sources": {
+              "source_id": "annual-table",
+              "start": 0,
+              "end": 118
+            },
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment",
+              "important-counterevidence"
+            ]
+          },
+          {
+            "source_id": "annual-note",
+            "title": "Aster annual report acquisition note",
+            "page": null,
+            "score": 1.7844,
+            "snippet": "Aster acquisition note. The acquisition contributed 18 million dollars to the increase in 2025 revenue compared with 2024. Other drivers of the remaining increase were not quantified.",
+            "matched_terms": [
+              "2024",
+              "2025",
+              "aster",
+              "revenu"
+            ],
+            "reasons": [
+              "lexical_bm25",
+              "number_or_date_exact"
+            ],
+            "read_sources": {
+              "source_id": "annual-note",
+              "start": 0,
+              "end": 183
+            },
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment",
+              "important-counterevidence"
+            ]
+          },
+          {
+            "source_id": "contrary",
+            "title": "Aster customer disclosure",
+            "page": null,
+            "score": 0.1553,
+            "snippet": "Aster customer disclosure: a major customer announced that its Aster purchases would decline in 2026; the magnitude is not specified.",
+            "matched_terms": [
+              "aster"
+            ],
+            "reasons": [
+              "lexical_bm25"
+            ],
+            "read_sources": {
+              "source_id": "contrary",
+              "start": 0,
+              "end": 133
+            },
+            "requirement_ids": []
+          }
+        ],
+        "library_coverage": {
+          "sources_searched": 4,
+          "passages_indexed": 4,
+          "unsearched_page_count": 0,
+          "complete": true,
+          "retrieval_mode": "bm25_only"
+        },
+        "selection_trace": [
+          {
+            "source_id": "release-original",
+            "start": 0,
+            "end": 143,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment",
+              "important-counterevidence"
+            ],
+            "decision": "omitted",
+            "reason": "capacity"
+          },
+          {
+            "source_id": "annual-table",
+            "start": 0,
+            "end": 118,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment",
+              "important-counterevidence"
+            ],
+            "decision": "selected",
+            "reason": "requirement_retrieval"
+          },
+          {
+            "source_id": "annual-note",
+            "start": 0,
+            "end": 183,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment",
+              "important-counterevidence"
+            ],
+            "decision": "selected",
+            "reason": "requirement_retrieval"
+          },
+          {
+            "source_id": "contrary",
+            "start": 0,
+            "end": 133,
+            "requirement_ids": [],
+            "decision": "selected",
+            "reason": "diverse_candidate"
+          }
+        ],
+        "selection_summary": {
+          "candidates": 4,
+          "selected": 3,
+          "omitted_by_reason": {
+            "capacity": 1
+          },
+          "requirements_searched": 3
+        },
+        "requirement_queries": [
+          {
+            "requirement_id": "two-period-revenue",
+            "query": "Find comparable consolidated revenue for 2025 and 2024.",
+            "reason": "unmet_or_requested_requirement"
+          },
+          {
+            "requirement_id": "acquisition-increment",
+            "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+            "reason": "unmet_or_requested_requirement"
+          },
+          {
+            "requirement_id": "important-counterevidence",
+            "query": "Find evidence that could undermine sustainability of revenue growth.",
+            "reason": "unmet_or_requested_requirement"
+          }
+        ],
+        "message": "Hits are leads: read the location with read_sources or read_pages before citing."
+      },
+      "necessary_groups_covered": 3,
+      "necessary_groups_available": 3
+    },
+    {
+      "case_id": "S4",
+      "selected": [
+        "annual-table",
+        "annual-note"
+      ],
+      "requirements": [
+        {
+          "id": "two-period-revenue",
+          "question": "Find comparable consolidated revenue for 2025 and 2024.",
+          "status": "missing",
+          "core": true
+        },
+        {
+          "id": "acquisition-increment",
+          "question": "Find disclosed drivers of revenue growth and limitations on attribution.",
+          "status": "missing",
+          "core": true
+        }
+      ],
+      "result": {
+        "status": "completed",
+        "query": "Aster 2025 2024 revenue growth sustainability",
+        "returned_hits": 2,
+        "hits": [
+          {
+            "source_id": "annual-table",
+            "title": "Aster annual consolidated statements",
+            "page": null,
+            "score": 1.189,
+            "snippet": "Aster consolidated statements of operations. USD millions. Year ended December 31: 2025 revenue 120; 2024 revenue 100.",
+            "matched_terms": [
+              "2024",
+              "2025",
+              "aster",
+              "revenu"
+            ],
+            "reasons": [
+              "lexical_bm25",
+              "number_or_date_exact"
+            ],
+            "read_sources": {
+              "source_id": "annual-table",
+              "start": 0,
+              "end": 118
+            },
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ]
+          },
+          {
+            "source_id": "annual-note",
+            "title": "Aster annual report acquisition note",
+            "page": null,
+            "score": 1.0682,
+            "snippet": "Aster acquisition note. The acquisition contributed 18 million dollars to the increase in 2025 revenue compared with 2024. Other drivers of the remaining increase were not quantified.",
+            "matched_terms": [
+              "2024",
+              "2025",
+              "aster",
+              "revenu"
+            ],
+            "reasons": [
+              "lexical_bm25",
+              "number_or_date_exact"
+            ],
+            "read_sources": {
+              "source_id": "annual-note",
+              "start": 0,
+              "end": 183
+            },
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ]
+          }
+        ],
+        "library_coverage": {
+          "sources_searched": 2,
+          "passages_indexed": 2,
+          "unsearched_page_count": 0,
+          "complete": false,
+          "sources_excluded": [
+            {
+              "source_id": "future",
+              "reason": "availability_unestablished"
+            },
+            {
+              "source_id": "revoked",
+              "reason": "model_permission_missing"
+            }
+          ],
+          "notes": [
+            "Excluded sources were not searched."
+          ],
+          "retrieval_mode": "bm25_only"
+        },
+        "selection_trace": [
+          {
+            "source_id": "annual-table",
+            "start": 0,
+            "end": 118,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ],
+            "decision": "selected",
+            "reason": "requirement_retrieval"
+          },
+          {
+            "source_id": "annual-note",
+            "start": 0,
+            "end": 183,
+            "requirement_ids": [
+              "two-period-revenue",
+              "acquisition-increment"
+            ],
+            "decision": "selected",
+            "reason": "requirement_retrieval"
+          }
+        ],
+        "selection_summary": {
+          "candidates": 2,
+          "selected": 2,
+          "omitted_by_reason": {},
+          "requirements_searched": 2
+        },
+        "requirement_queries": [
+          {
+            "requirement_id": "two-period-revenue",
+            "query": "Find comparable consolidated revenue for 2025 and 2024.",
+            "reason": "unmet_or_requested_requirement"
+          },
+          {
+            "requirement_id": "acquisition-increment",
+            "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+            "reason": "unmet_or_requested_requirement"
+          }
+        ],
+        "message": "Not every page or source could be searched (see library_coverage); a miss here is not evidence that the text is absent. Hits are leads: read the location with read_sources or read_pages before citing."
+      },
+      "necessary_groups_covered": 2,
+      "necessary_groups_available": 2
+    }
+  ]
+}

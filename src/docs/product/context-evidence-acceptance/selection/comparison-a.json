@@ -1,0 +1,313 @@
+{
+  "fixture_sha256": "b99754cae6015c9b27770ebc7ced9fb156715c85968098b876c0d4925c30ad59",
+  "baseline_sha256": "a69b3c1416a682715e5307184f528f9bbb69b1d400116eaa1a59fb1e096ed6f4",
+  "requirements_sha256": "f03e4fe7c73a69813e0127ad46813ee0566fc213e23bbb12be38ad041c8fa17e",
+  "byte_measure": "sum of UTF-8 snippet bytes, not full serialized request",
+  "cases": [
+    {
+      "case_id": "S1",
+      "capacity_passages": 2,
+      "byte_limit": 512,
+      "baseline": {
+        "selected_source_ids": [
+          "release-copy-a",
+          "release-copy-b"
+        ],
+        "selected_bytes": 286,
+        "necessary_groups_covered": 0
+      },
+      "selector": {
+        "selected_source_ids": [
+          "annual-table",
+          "annual-note"
+        ],
+        "selected_bytes": 301,
+        "unmatched_requirements": [],
+        "trace": [
+          {
+            "source_id": "release-copy-a",
+            "location": {
+              "source_id": "release-copy-a",
+              "start": 0,
+              "end": 143
+            },
+            "requirement_ids": [],
+            "decision": "omitted",
+            "reason": "no_requirement_match",
+            "candidate_rank": 1
+          },
+          {
+            "source_id": "release-copy-b",
+            "location": {
+              "source_id": "release-copy-b",
+              "start": 0,
+              "end": 143
+            },
+            "requirement_ids": [],
+            "decision": "omitted",
+            "reason": "no_requirement_match",
+            "candidate_rank": 2
+          },
+          {
+            "source_id": "release-original",
+            "location": {
+              "source_id": "release-original",
+              "start": 0,
+              "end": 143
+            },
+            "requirement_ids": [],
+            "decision": "omitted",
+            "reason": "no_requirement_match",
+            "candidate_rank": 3
+          },
+          {
+            "source_id": "annual-table",
+            "location": {
+              "source_id": "annual-table",
+              "start": 0,
+              "end": 118
+            },
+            "requirement_ids": [
+              "two-period-revenue"
+            ],
+            "decision": "selected",
+            "reason": "addresses_requirement",
+            "candidate_rank": 4
+          },
+          {
+            "source_id": "annual-note",
+            "location": {
+              "source_id": "annual-note",
+              "start": 0,
+              "end": 183
+            },
+            "requirement_ids": [
+              "acquisition-increment"
+            ],
+            "decision": "selected",
+            "reason": "addresses_requirement",
+            "candidate_rank": 5
+          }
+        ],
+        "necessary_groups_covered": 2
+      },
+      "necessary_groups_available": 2,
+      "expected_missing": []
+    },
+    {
+      "case_id": "S2",
+      "capacity_passages": 2,
+      "byte_limit": 512,
+      "baseline": {
+        "selected_source_ids": [
+          "release-copy-a",
+          "release-copy-b"
+        ],
+        "selected_bytes": 286,
+        "necessary_groups_covered": 0
+      },
+      "selector": {
+        "selected_source_ids": [
+          "annual-table"
+        ],
+        "selected_bytes": 118,
+        "unmatched_requirements": [
+          "acquisition-increment"
+        ],
+        "trace": [
+          {
+            "source_id": "release-copy-a",
+            "location": {
+              "source_id": "release-copy-a",
+              "start": 0,
+              "end": 143
+            },
+            "requirement_ids": [],
+            "decision": "omitted",
+            "reason": "no_requirement_match",
+            "candidate_rank": 1
+          },
+          {
+            "source_id": "release-copy-b",
+            "location": {
+              "source_id": "release-copy-b",
+              "start": 0,
+              "end": 143
+            },
+            "requirement_ids": [],
+            "decision": "omitted",
+            "reason": "no_requirement_match",
+            "candidate_rank": 2
+          },
+          {
+            "source_id": "release-original",
+            "location": {
+              "source_id": "release-original",
+              "start": 0,
+              "end": 143
+            },
+            "requirement_ids": [],
+            "decision": "omitted",
+            "reason": "no_requirement_match",
+            "candidate_rank": 3
+          },
+          {
+            "source_id": "annual-table",
+            "location": {
+              "source_id": "annual-table",
+              "start": 0,
+              "end": 118
+            },
+            "requirement_ids": [
+              "two-period-revenue"
+            ],
+            "decision": "selected",
+            "reason": "addresses_requirement",
+            "candidate_rank": 4
+          }
+        ],
+        "necessary_groups_covered": 1
+      },
+      "necessary_groups_available": 1,
+      "expected_missing": [
+        "acquisition-increment"
+      ]
+    },
+    {
+      "case_id": "S3",
+      "capacity_passages": 3,
+      "byte_limit": 512,
+      "baseline": {
+        "selected_source_ids": [
+          "release-original",
+          "annual-table",
+          "annual-note"
+        ],
+        "selected_bytes": 444,
+        "necessary_groups_covered": 2
+      },
+      "selector": {
+        "selected_source_ids": [
+          "annual-table",
+          "annual-note",
+          "contrary"
+        ],
+        "selected_bytes": 434,
+        "unmatched_requirements": [],
+        "trace": [
+          {
+            "source_id": "release-original",
+            "location": {
+              "source_id": "release-original",
+              "start": 0,
+              "end": 143
+            },
+            "requirement_ids": [],
+            "decision": "omitted",
+            "reason": "no_requirement_match",
+            "candidate_rank": 1
+          },
+          {
+            "source_id": "annual-table",
+            "location": {
+              "source_id": "annual-table",
+              "start": 0,
+              "end": 118
+            },
+            "requirement_ids": [
+              "two-period-revenue"
+            ],
+            "decision": "selected",
+            "reason": "addresses_requirement",
+            "candidate_rank": 2
+          },
+          {
+            "source_id": "annual-note",
+            "location": {
+              "source_id": "annual-note",
+              "start": 0,
+              "end": 183
+            },
+            "requirement_ids": [
+              "acquisition-increment"
+            ],
+            "decision": "selected",
+            "reason": "addresses_requirement",
+            "candidate_rank": 3
+          },
+          {
+            "source_id": "contrary",
+            "location": {
+              "source_id": "contrary",
+              "start": 0,
+              "end": 133
+            },
+            "requirement_ids": [
+              "important-counterevidence"
+            ],
+            "decision": "selected",
+            "reason": "addresses_requirement",
+            "candidate_rank": 4
+          }
+        ],
+        "necessary_groups_covered": 3
+      },
+      "necessary_groups_available": 3,
+      "expected_missing": []
+    },
+    {
+      "case_id": "S4",
+      "capacity_passages": 2,
+      "byte_limit": 512,
+      "baseline": {
+        "selected_source_ids": [
+          "annual-table",
+          "annual-note"
+        ],
+        "selected_bytes": 301,
+        "necessary_groups_covered": 2
+      },
+      "selector": {
+        "selected_source_ids": [
+          "annual-table",
+          "annual-note"
+        ],
+        "selected_bytes": 301,
+        "unmatched_requirements": [],
+        "trace": [
+          {
+            "source_id": "annual-table",
+            "location": {
+              "source_id": "annual-table",
+              "start": 0,
+              "end": 118
+            },
+            "requirement_ids": [
+              "two-period-revenue"
+            ],
+            "decision": "selected",
+            "reason": "addresses_requirement",
+            "candidate_rank": 1
+          },
+          {
+            "source_id": "annual-note",
+            "location": {
+              "source_id": "annual-note",
+              "start": 0,
+              "end": 183
+            },
+            "requirement_ids": [
+              "acquisition-increment"
+            ],
+            "decision": "selected",
+            "reason": "addresses_requirement",
+            "candidate_rank": 2
+          }
+        ],
+        "necessary_groups_covered": 2
+      },
+      "necessary_groups_available": 2,
+      "expected_missing": []
+    }
+  ]
+}

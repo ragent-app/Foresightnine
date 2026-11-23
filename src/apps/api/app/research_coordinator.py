@@ -265,6 +265,11 @@ class ResearchExecutionContext:
                 diagnostic['transport'] = sanitize_transport_diagnostic(snapshot)
             if isinstance(snapshot.get('request_metadata'), dict):
                 diagnostic.setdefault('context', {}).update(safe_diagnostic_context(**snapshot['request_metadata']))
+            if 'wire_manifest' in snapshot:
+                from .research_diagnostics import sanitize_wire_manifest
+                manifest = sanitize_wire_manifest(snapshot['wire_manifest'])
+                if manifest is not None:
+                    diagnostic['wire_manifest'] = manifest
             if type(snapshot.get('wire_bytes')) is int and 0 <= snapshot['wire_bytes'] <= 10**9:
                 diagnostic.setdefault('context', {})['wire_bytes'] = snapshot['wire_bytes']
             if type(snapshot.get('max_tokens')) is int and 0 < snapshot['max_tokens'] <= 10**9:

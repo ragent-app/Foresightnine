@@ -1,0 +1,22 @@
+[
+ {"id":"J1","question":"Calculate Waven's annual sales growth and identify the quantified pricing contribution to that change.","sources":[
+  ["w3","Weekend letter","Waven annual sales growth and the pricing contribution drew comment after the release."],
+  ["w1","Consolidated accounts","Waven net sales, GBP millions: year ended March 2024, 240; year ended March 2025, 252. Accounting basis unchanged."],
+  ["w4","Morning letter","Waven annual sales growth and the pricing contribution drew comment after the release."],
+  ["w2","Financial review","Waven reported GBP 3 million of the GBP 12 million net sales increase was attributable to pricing; other causes were not quantified."]]},
+ {"id":"J2","question":"青岳的订单能否提前撤销？交货预估还有什么前提？","sources":[
+  ["y3","周报","青岳的订单能否提前撤销成为讨论热点，市场也在关注交货预估。"],
+  ["y2","营运更新","青岳预计将按期交货，前提是客户通过现场验收；截至披露日验收尚未进行。"],
+  ["y4","综合报道","青岳的订单能否提前撤销成为讨论热点，市场也在关注交货预估。"],
+  ["y1","采购协议附件","青岳合同第六条：供应商实质违约且收书面通知后三十日仍未补救时，买方方可提前撤销订单。"]]},
+ {"id":"J3","question":"Compare Tarn stock's local-currency close-to-close return with the index over their shared dates.","sources":[
+  ["t4","Copied commentary","Tarn stock return and the index return over the shared dates attracted attention."],
+  ["t1","Exchange daily list","Tarn stock, closing prices in AUD. June 5: 60; June 6: 62; June 9: 65. Same share class, no adjustments."],
+  ["t3","Weekly commentary","Tarn stock return and the index return over the shared dates attracted attention."],
+  ["t2","Index history","Tarn sector index, AUD price return index, closing points. June 6: 200; June 9: 208."]]},
+ {"id":"J4","question":"星桐两期营业收入变动多少？本期处置子公司能解释多少变化？","sources":[
+  ["s2","合并范围变更","星桐合并范围变更附注：处置子公司在处置日前实现营业收入8百万元，未披露它对集团同比变化的贡献。"],
+  ["s3","快讯","星桐两期营业收入变动和处置子公司受到关注。"],
+  ["s1","年度报告附表","星桐合并利润表，人民币百万元。2023年度营业收入为150，2024年度营业收入为135，两期会计政策相同。"],
+  ["s4","转载快讯","星桐两期营业收入变动和处置子公司受到关注。"]]}
+]

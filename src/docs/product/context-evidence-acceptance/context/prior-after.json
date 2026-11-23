@@ -1,0 +1,177 @@
+{
+  "cases": {
+    "revised": {
+      "prior_state": {
+        "prior_calculations": [],
+        "prior_chart_ids": [],
+        "prior_cited_claims": 0,
+        "prior_claim_ids": [],
+        "prior_claims": [],
+        "prior_claims_meta": [],
+        "prior_facts": [],
+        "prior_read_ranges": [],
+        "prior_table_ids": []
+      },
+      "summary": {
+        "calculations": [],
+        "charts": [],
+        "claims": [],
+        "facts": [],
+        "ineligible_prior_counts": {
+          "claims": 1,
+          "facts": 1
+        },
+        "note": "Prior records from earlier turns; not newly verified evidence.",
+        "open_gaps": [],
+        "read_ranges": [],
+        "tables": [],
+        "user_review": {
+          "note": "",
+          "review": null,
+          "summary": ""
+        }
+      }
+    },
+    "revoked": {
+      "prior_state": {
+        "prior_calculations": [],
+        "prior_chart_ids": [],
+        "prior_cited_claims": 0,
+        "prior_claim_ids": [],
+        "prior_claims": [],
+        "prior_claims_meta": [],
+        "prior_facts": [],
+        "prior_read_ranges": [],
+        "prior_table_ids": []
+      },
+      "summary": {
+        "calculations": [],
+        "charts": [],
+        "claims": [],
+        "facts": [],
+        "ineligible_prior_counts": {
+          "claims": 1,
+          "facts": 1
+        },
+        "note": "Prior records from earlier turns; not newly verified evidence.",
+        "open_gaps": [],
+        "read_ranges": [],
+        "tables": [],
+        "user_review": {
+          "note": "",
+          "review": null,
+          "summary": ""
+        }
+      }
+    },
+    "unchanged": {
+      "prior_state": {
+        "prior_calculations": [],
+        "prior_chart_ids": [],
+        "prior_cited_claims": 1,
+        "prior_claim_ids": [
+          "claim-1"
+        ],
+        "prior_claims": [
+          {
+            "citations": [
+              {
+                "character_end": 166,
+                "character_start": 0,
+                "quotation": "Northport consolidated statements of operations. USD in millions. Year ended December 31: FY2025 FY2024. Net revenue 120 100. Figures reflect consolidated operations.",
+                "source_id": "statement-v1"
+              }
+            ],
+            "claim_id": "claim-1",
+            "role": "support",
+            "text": "FY2025 revenue was USD 120 million."
+          }
+        ],
+        "prior_claims_meta": [
+          {
+            "claim_id": "claim-1",
+            "source_ids": [
+              "statement-v1"
+            ]
+          }
+        ],
+        "prior_facts": [
+          {
+            "character_end": 166,
+            "character_start": 0,
+            "currency": "USD",
+            "fact_id": "fact-2025",
+            "label": "Revenue",
+            "period": "FY2025",
+            "quotation": "Northport consolidated statements of operations. USD in millions. Year ended December 31: FY2025 FY2024. Net revenue 120 100. Figures reflect consolidated operations.",
+            "source_id": "statement-v1",
+            "unit": "USD million",
+            "value": 120
+          }
+        ],
+        "prior_read_ranges": [
+          {
+            "end": 166,
+            "source_id": "statement-v1",
+            "start": 0
+          }
+        ],
+        "prior_table_ids": []
+      },
+      "summary": {
+        "calculations": [],
+        "charts": [],
+        "claims": [
+          {
+            "calculation_ids": [],
+            "citations": [
+              {
+                "content_sha256": "00573f1b28b9a831d56e8b085c4e23cfe86e7a6b46b59318078c83bbbf4f23bc",
+                "location": {
+                  "character_end": 166,
+                  "character_start": 0
+                },
+                "quotation": "Northport consolidated statements of operations. USD in millions. Year ended December 31: FY2025 FY2024. Net revenue 120 100. Figures reflect consolidated operations.",
+                "source_id": "statement-v1"
+              }
+            ],
+            "claim_id": "claim-1",
+            "fact_ids": [],
+            "quotation": "Northport consolidated statements of operations. USD in millions. Year ended December 31: FY2025 FY2024. Net revenue 120 100. Figures reflect consolidated operations.",
+            "role": "support",
+            "source_id": "statement-v1",
+            "text": "FY2025 revenue was USD 120 million."
+          }
+        ],
+        "facts": [
+          {
+            "currency": "USD",
+            "fact_id": "fact-2025",
+            "label": "Revenue",
+            "period": "FY2025",
+            "quotation": "Northport consolidated statements of operations. USD in millions. Year ended December 31: FY2025 FY2024. Net revenue 120 100. Figures reflect consolidated operations.",
+            "source_id": "statement-v1",
+            "unit": "USD million",
+            "value": 120
+          }
+        ],
+        "note": "Prior records from earlier turns; not newly verified evidence.",
+        "open_gaps": [],
+        "read_ranges": [
+          {
+            "character_end": 166,
+            "character_start": 0,
+            "source_id": "statement-v1"
+          }
+        ],
+        "tables": [],
+        "user_review": {
+          "note": "",
+          "review": null,
+          "summary": ""
+        }
+      }
+    }
+  },
+  "fixture_sha256": "78588ccf7251da1cdaf1201434766d3cabc7abea6bc7233c10d763398b2f770c"
+}

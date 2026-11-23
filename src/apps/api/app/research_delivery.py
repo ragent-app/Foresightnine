@@ -74,7 +74,7 @@ def assemble_parts(question: str, state: dict, source_by_id: dict, eligible_ids:
                     data = analysis.get('result') or {}
                     bench = data.get('benchmark') or {}
                     if bench:
-                        snippets.append(f"{data.get('instrument', '')} / {bench.get('benchmark_instrument', '')} {bench.get('aligned_start_date', '')}–{bench.get('aligned_end_date', '')}: {bench.get('asset_aligned_return_percent', '')}% / {bench.get('benchmark_aligned_return_percent', '')}%, excess {bench.get('excess_return_percent', '')}%")
+                        snippets.append(f"{data.get('instrument', '')} / {bench.get('benchmark_instrument', '')} {bench.get('aligned_start_date', '')}–{bench.get('aligned_end_date', '')}: {bench.get('asset_aligned_return_percent', '')}% / {bench.get('benchmark_aligned_return_percent', '')}%, excess {bench.get('excess_return_percent', '')} percentage points")
                     elif data.get('cumulative_return_percent') is not None:
                         snippets.append(f"{data['instrument']} {data['start_date']}–{data['end_date']} · {data['cumulative_return_percent']}%")
                 if calc:

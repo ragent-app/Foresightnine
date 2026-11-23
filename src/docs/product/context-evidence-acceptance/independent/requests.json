@@ -1,0 +1,6 @@
+{
+  "H1": ["Determine the annual sales growth from comparable periods.", "Determine what part of the change can be explained by the disclosed driver."],
+  "H2": ["根据可比年度计算营收增速。", "核对并购对收入增量的贡献是否可以从披露中分离。"],
+  "H3": ["Identify the conditions for early termination.", "Determine the assumptions, if any, behind management guidance."],
+  "H4": ["取得标的在共同交易日的收盘价。", "取得对应日期的基准收盘点位以比较累计收益。"]
+}

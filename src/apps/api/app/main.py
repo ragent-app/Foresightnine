@@ -108,7 +108,7 @@ from .research_live_stream import ResearchLiveBroker, format_sse_frame, parse_la
 from .research_answer_evidence import AnswerEvidence, part_references, visible_answer_content
 from .research_turns import merge_turn, prior_research_input
 from .research_turn_persister import ResearchTurnPersister, record_failed_checkpoint_version
-from .research_calculations import BINARY_FORMULAS, CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, MULTI_FACT_FORMULAS, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, verified_direction_proof, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
+from .research_calculations import BINARY_FORMULAS, CalculationError, CalculationRequest, PublicCalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, MULTI_FACT_FORMULAS, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, verified_direction_proof, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
 from .research_table_provenance import bounded_table_trace
 from .research_analysis import SELECTION_METHOD as RESEARCH_SELECTION_METHOD, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
@@ -1795,23 +1795,44 @@ def _legacy_calculation_diagnostics(version):
     return version
 
 
-def _version_reader(topic: ResearchTopic):
-    # Share permission decisions across the versions of this topic for this request only.
-    decisions: dict[str, bool] = {}
+def _version_source_hashes(version) -> dict[str, str]:
+    content = version.content
+    # Attached, unread sources have no historical citation to resolve. For used
+    # sources a missing or ambiguous version binding cannot authorize old offsets.
+    used = {f.source_id for f in content.facts}
+    used.update(c.source_id for claim in content.claims for c in claim.citations)
+    used.update(r.source_id for turn in content.turns for r in turn.read_ranges)
+    used.update(sid for turn in content.turns for analysis in turn.market_analyses for sid in analysis.result["source_ids"])
+    used.update(sid for artifact in [*content.charts, *content.tables] for sid in artifact.source_ids)
+    hashes: dict[str, str] = {}
+    for row in content.sources:
+        sid, digest = row.get("source_id"), row.get("content_sha256")
+        if isinstance(sid, str):
+            hashes[sid] = digest if isinstance(digest, str) and hashes.get(sid, digest) == digest else ""
+    return {**dict.fromkeys(used, ""), **hashes}
 
-    def can_display(source_id: str) -> bool:
-        if source_id not in decisions:
-            try:
-                source = research_sources.get(topic.owner_id, source_id)
-                cutoff = topic.request.as_of
-                decisions[source_id] = bool(source.permissions.display and not source.is_simulated and (
-                    cutoff is None or source.published_at is not None and source.published_at <= cutoff and
-                    (source.revised_at is None or source.revised_at <= cutoff)))
-            except SourceNotFound:
-                decisions[source_id] = False
-        return decisions[source_id]
+
+def _can_read_version_source(source, cutoff, expected_hash: str | None) -> bool:
+    return bool(source and source.permissions.display and not source.is_simulated
+                and (expected_hash is None or expected_hash == source.content_sha256)
+                and (cutoff is None or source.published_at is not None and source.published_at <= cutoff
+                     and (source.revised_at is None or source.revised_at <= cutoff)))
+
+
+def _version_reader(topic: ResearchTopic):
+    # Different versions can bind different hashes of the same source.
+    current = {}
 
     def read(version):
+        hashes = _version_source_hashes(version)
+        def can_display(source_id: str) -> bool:
+            if source_id not in current:
+                try:
+                    current[source_id] = research_sources.get(topic.owner_id, source_id)
+                except SourceNotFound:
+                    current[source_id] = None
+            return _can_read_version_source(current[source_id], topic.request.as_of, hashes.get(source_id))
+
         content = visible_answer_content(version.content, can_display)
         if content is not version.content:
             version = version.model_copy(update={"content": content})
@@ -1863,11 +1884,15 @@ def list_research_version_sources(topic_id: str, version_id: str, authorization:
     version = next((item for item in topic.versions if item.version_id == version_id), None)
     if version is None:
         raise ApiProblem(404, "not_found", "Research version not found.")
+    hashes = _version_source_hashes(version)
     result = []
     for source_id in version.source_ids:
         try:
             source = research_sources.get(account.account_id, source_id)
         except SourceNotFound:
+            result.append({"source_id": source_id, "status": "unavailable"})
+            continue
+        if not _can_read_version_source(source, topic.request.as_of, hashes.get(source_id)):
             result.append({"source_id": source_id, "status": "unavailable"})
             continue
         metadata = source.model_dump(mode="json", exclude={"text", "owner_id", "url", "original_pdf_base64", "original_html_base64"})
@@ -1907,10 +1932,7 @@ def get_research_version_source_text(topic_id: str, version_id: str, source_id: 
         source = research_sources.get(account.account_id, source_id)
     except SourceNotFound as error:
         raise ApiProblem(404, "not_found", "Research source not found.") from error
-    cutoff = topic.request.as_of
-    if (not source.permissions.display or source.is_simulated or
-            cutoff is not None and (source.published_at is None or source.published_at > cutoff or
-                                    source.revised_at is not None and source.revised_at > cutoff)):
+    if not _can_read_version_source(source, topic.request.as_of, _version_source_hashes(version).get(source_id)):
         raise ApiProblem(403, "invalid_request", "Source text is not available for this research version.")
     return {"source_id": source.source_id, "text": source.text, "content_sha256": source.content_sha256}
 
@@ -1956,17 +1978,18 @@ def export_research_version(topic_id: str, version_id: str, authorization: str |
                             for row in table.rows for cell in row.cells.values() if cell.provenance)
     source_ids.update(table_source_ids)
     sources = []
+    hashes = _version_source_hashes(version)
     try:
         for source_id in sorted(source_ids):
             source = research_sources.get(account.account_id, source_id)
             if not source.permissions.export:
                 raise ApiProblem(403, "invalid_request", "A research source is not permitted for export.")
-            if source_id in answer_sources and not source.permissions.display:
-                raise ApiProblem(403, "invalid_request", "An answer references a source that is not permitted for display.")
-            if source_id in table_source_ids and not source.permissions.display:
-                raise ApiProblem(403, "invalid_request", "A table references a source that is not permitted for display.")
-            if source_id in chart_source_ids and not source.permissions.display:
-                raise ApiProblem(403, "invalid_request", "A chart references a source that is not permitted for display.")
+            if not _can_read_version_source(source, topic.request.as_of, hashes.get(source_id)):
+                if source_id in hashes or source_id in answer_sources | table_source_ids | chart_source_ids:
+                    raise ApiProblem(403, "invalid_request", "A research source is unavailable for display in this version.")
+                # An attached but unused source contributes no text or findings.
+                sources.append({"source_id": source_id, "status": "unavailable"})
+                continue
             metadata = source.model_dump(mode="json", exclude={"text", "owner_id", "url", "original_pdf_base64", "original_html_base64"})
             if pdf_text_spacing_suspect(source):
                 metadata["pdf_text_spacing_warning"] = True
@@ -2029,6 +2052,8 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
         # source inventory, leads and gaps are server-produced records.
         content = request.content.model_copy(deep=True)
         before = previous.content
+        if "sources" not in request.content.model_fields_set:
+            content.sources = deepcopy(before.sources)
         if (content.turns != before.turns or content.sources != before.sources or
                 content.source_candidates != before.source_candidates or content.gaps != before.gaps or
                 content.charts != before.charts or content.tables != before.tables):
@@ -2140,6 +2165,10 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
         for entry in calculations:
             entry.input_status = calculation_input_status(entry.model_dump(mode="json"), fact_rows)
         content.calculations = calculations
+        existing = {row.get("source_id") for row in content.sources}
+        for sid, source in loaded.items():
+            if sid not in existing:
+                content.sources.append({"source_id": sid, "content_sha256": source.content_sha256})
         return _visible_topic(research_topics.add_version(account.account_id, topic_id, request.model_copy(update={"content": content})))
     except TopicNotFound as error:
         raise ApiProblem(404, "not_found", "Research topic not found.") from error
@@ -2261,6 +2290,8 @@ def recalculate_research(topic_id: str, request: RecalculateRequest,
         if request.calculation_index >= len(previous.content.calculations):
             raise ApiProblem(422, "invalid_request", "Calculation does not exist in this version.")
         old = previous.content.calculations[request.calculation_index]
+        if old.formula_id == 'contribution_to_change_percent':
+            raise ApiProblem(422, 'invalid_request', 'This calculation must be repeated through the research evidence tool.')
         if old.formula_version not in {"1", "2"}:
             raise ApiProblem(422, "invalid_request", "Calculation inputs or formula version are unavailable.")
         if old.formula_id in BINARY_FORMULAS:
@@ -2304,8 +2335,10 @@ def recalculate_research(topic_id: str, request: RecalculateRequest,
 
 
 @app.post("/v2/research/calculations", include_in_schema=False)
-def calculate_research(request: CalculationRequest, authorization: str | None = Header(default=None)) -> dict:
+def calculate_research(request: PublicCalculationRequest, authorization: str | None = Header(default=None)) -> dict:
     _authenticated_account(authorization)
+    if request.formula == 'contribution_to_change_percent':
+        raise ApiProblem(422, 'invalid_request', 'This calculation requires the research evidence tool.')
     try:
         return calculate(request)
     except CalculationError as error:

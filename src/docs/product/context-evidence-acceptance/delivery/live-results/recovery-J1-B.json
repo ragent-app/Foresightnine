@@ -1,0 +1,160 @@
+{
+  "case": "J1",
+  "arm": "B",
+  "model": "glm-5.3-flash",
+  "status": "partial",
+  "reason": "provider_request_rejected",
+  "seconds": 1.02,
+  "usage": {
+    "model_calls": 1,
+    "search_calls": 0,
+    "total_tokens": 56899,
+    "reported_tokens": 0,
+    "unknown_usage_calls": 1,
+    "reserved_estimate_tokens": 56899,
+    "usage_status": "partial_unknown"
+  },
+  "report": "",
+  "gaps": [
+    {
+      "code": "provider_error",
+      "message": "Provider rejected the request."
+    },
+    {
+      "code": "source_selection_partial",
+      "message": "Source selection is partial or unknown; absence from unseen material is not established. Review the selected ranges and obtain relevant additional material."
+    }
+  ],
+  "question_parts": [
+    {
+      "id": "req-c348e16125206333",
+      "core": true,
+      "question": "Calculate Waven's annual sales growth",
+      "status": "unresolved",
+      "answer": "",
+      "reason": "No eligible recorded fact matches this metric.",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-c348e16125206333",
+          "question": "Calculate Waven's annual sales growth",
+          "status": "missing",
+          "reason": "No eligible recorded fact matches this metric.",
+          "references": [],
+          "core": true
+        }
+      ]
+    },
+    {
+      "id": "req-5249c346333ecbd0",
+      "core": true,
+      "question": "identify the quantified pricing contribution to that change",
+      "status": "unresolved",
+      "answer": "",
+      "reason": "No eligible recorded fact matches this metric.",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-5249c346333ecbd0",
+          "question": "identify the quantified pricing contribution to that change",
+          "status": "missing",
+          "reason": "No eligible recorded fact matches this metric.",
+          "references": [],
+          "core": true
+        }
+      ]
+    }
+  ],
+  "facts": [],
+  "calculations": [],
+  "claims": [],
+  "tools": [],
+  "receipts": [
+    {
+      "transport": {
+        "submission_state": "response_received",
+        "stages": [
+          {
+            "stage": "dns",
+            "result": "ok",
+            "elapsed_ms": 147
+          },
+          {
+            "stage": "tcp",
+            "result": "ok",
+            "elapsed_ms": 63
+          },
+          {
+            "stage": "tls",
+            "result": "ok",
+            "elapsed_ms": 84
+          },
+          {
+            "stage": "request_write",
+            "result": "ok",
+            "elapsed_ms": 0
+          },
+          {
+            "stage": "response_headers",
+            "result": "ok",
+            "elapsed_ms": 659
+          },
+          {
+            "stage": "response_headers",
+            "result": "ok",
+            "elapsed_ms": 0,
+            "status_code": 429
+          },
+          {
+            "stage": "response_body",
+            "result": "ok",
+            "elapsed_ms": 0
+          }
+        ]
+      },
+      "wire_manifest": {
+        "request_sha256": "ee843b6dcaef461abdefebcd7ef88c873a23a1c6bb19ced37d4ee9a8f4c824a5",
+        "wire_bytes": 52739,
+        "value_bytes": {
+          "system": 6976,
+          "tools": 43709,
+          "messages": 1980,
+          "other": 19
+        },
+        "serialization_overhead_bytes": 55
+      },
+      "finish": "unknown",
+      "delivery": {
+        "status": "partial",
+        "claims": [],
+        "parts": [
+          {
+            "part_id": "req-c348e16125206333",
+            "status": "unresolved",
+            "requirements": [
+              {
+                "requirement_id": "req-c348e16125206333",
+                "status": "missing",
+                "references": {}
+              }
+            ],
+            "references": {}
+          },
+          {
+            "part_id": "req-5249c346333ecbd0",
+            "status": "unresolved",
+            "requirements": [
+              {
+                "requirement_id": "req-5249c346333ecbd0",
+                "status": "missing",
+                "references": {}
+              }
+            ],
+            "references": {}
+          }
+        ],
+        "association": "last_observed_call"
+      }
+    }
+  ]
+}

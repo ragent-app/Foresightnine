@@ -1,0 +1,234 @@
+{
+  "normal": [
+    {
+      "id": "req-fc88f8064b91380e",
+      "question": "Can Northport's FY2025 revenue growth be sustained",
+      "core": true,
+      "status": "partial",
+      "answer": "Northport revenue FY2025 120 USD millions；Northport revenue FY2024 100 USD millions；growth_percent 20.00 percent",
+      "reason": "The historical change is calculated; its sustainability needs independent supporting and opposing evidence and review conditions.",
+      "references": [
+        {
+          "fact_id": "fact-58cb4ff8dc584045ea1949bc343ba6029e68b8a681194ba3c348c39659d5e4cb",
+          "origin": "current"
+        },
+        {
+          "fact_id": "fact-c10b7038abb7d89ba7405f7b1ee917846014f24a52c1c55e5a8d2e51d23b9aae",
+          "origin": "current"
+        },
+        {
+          "calculation_id": "calc-4d0f78e06be84181b780ab1fba594f2f",
+          "origin": "current"
+        }
+      ],
+      "requirements": [
+        {
+          "id": "req-fc88f8064b91380e",
+          "question": "Can Northport's FY2025 revenue growth be sustained",
+          "status": "partial",
+          "reason": "The historical change is calculated; its sustainability needs independent supporting and opposing evidence and review conditions.",
+          "references": [
+            {
+              "fact_id": "fact-58cb4ff8dc584045ea1949bc343ba6029e68b8a681194ba3c348c39659d5e4cb",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-c10b7038abb7d89ba7405f7b1ee917846014f24a52c1c55e5a8d2e51d23b9aae",
+              "origin": "current"
+            },
+            {
+              "calculation_id": "calc-4d0f78e06be84181b780ab1fba594f2f",
+              "origin": "current"
+            }
+          ],
+          "core": true
+        }
+      ]
+    },
+    {
+      "id": "req-b3f05430f7174854",
+      "question": "what drove it",
+      "core": true,
+      "status": "partial",
+      "answer": "Northport acquired business contribution to revenue FY2025 18 USD millions；Northport revenue FY2025 120 USD millions；Northport revenue FY2024 100 USD millions；contribution_to_change_percent 90.00 percent",
+      "reason": "A disclosed contribution and change were calculated; issuer identity, accounting scope, remaining drivers and sustainability still require review.",
+      "references": [
+        {
+          "fact_id": "fact-23d8450b086a904051a16781ec88b143c5fd915a2b19ac4e94c6a22d1540313c",
+          "origin": "current"
+        },
+        {
+          "fact_id": "fact-58cb4ff8dc584045ea1949bc343ba6029e68b8a681194ba3c348c39659d5e4cb",
+          "origin": "current"
+        },
+        {
+          "fact_id": "fact-c10b7038abb7d89ba7405f7b1ee917846014f24a52c1c55e5a8d2e51d23b9aae",
+          "origin": "current"
+        },
+        {
+          "calculation_id": "calc-34496095db804e08aeb718f18378a16e",
+          "origin": "current"
+        }
+      ],
+      "requirements": [
+        {
+          "id": "req-b3f05430f7174854",
+          "question": "what drove it",
+          "status": "partial",
+          "reason": "A disclosed contribution and change were calculated; issuer identity, accounting scope, remaining drivers and sustainability still require review.",
+          "references": [
+            {
+              "fact_id": "fact-23d8450b086a904051a16781ec88b143c5fd915a2b19ac4e94c6a22d1540313c",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-58cb4ff8dc584045ea1949bc343ba6029e68b8a681194ba3c348c39659d5e4cb",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-c10b7038abb7d89ba7405f7b1ee917846014f24a52c1c55e5a8d2e51d23b9aae",
+              "origin": "current"
+            },
+            {
+              "calculation_id": "calc-34496095db804e08aeb718f18378a16e",
+              "origin": "current"
+            }
+          ],
+          "core": true
+        }
+      ]
+    }
+  ],
+  "revoked": [
+    {
+      "id": "req-fc88f8064b91380e",
+      "question": "Can Northport's FY2025 revenue growth be sustained",
+      "core": true,
+      "status": "partial",
+      "answer": "Northport revenue FY2025 120 USD millions；Northport revenue FY2024 100 USD millions；growth_percent 20.00 percent",
+      "reason": "The historical change is calculated; its sustainability needs independent supporting and opposing evidence and review conditions.",
+      "references": [
+        {
+          "fact_id": "fact-58cb4ff8dc584045ea1949bc343ba6029e68b8a681194ba3c348c39659d5e4cb",
+          "origin": "current"
+        },
+        {
+          "fact_id": "fact-c10b7038abb7d89ba7405f7b1ee917846014f24a52c1c55e5a8d2e51d23b9aae",
+          "origin": "current"
+        },
+        {
+          "calculation_id": "calc-4d0f78e06be84181b780ab1fba594f2f",
+          "origin": "current"
+        }
+      ],
+      "requirements": [
+        {
+          "id": "req-fc88f8064b91380e",
+          "question": "Can Northport's FY2025 revenue growth be sustained",
+          "status": "partial",
+          "reason": "The historical change is calculated; its sustainability needs independent supporting and opposing evidence and review conditions.",
+          "references": [
+            {
+              "fact_id": "fact-58cb4ff8dc584045ea1949bc343ba6029e68b8a681194ba3c348c39659d5e4cb",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-c10b7038abb7d89ba7405f7b1ee917846014f24a52c1c55e5a8d2e51d23b9aae",
+              "origin": "current"
+            },
+            {
+              "calculation_id": "calc-4d0f78e06be84181b780ab1fba594f2f",
+              "origin": "current"
+            }
+          ],
+          "core": true
+        }
+      ]
+    },
+    {
+      "id": "req-7d841c62b67a6619",
+      "question": "what drove it",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-7d841c62b67a6619",
+          "question": "what drove it",
+          "status": "missing",
+          "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+          "references": [],
+          "core": true
+        }
+      ]
+    }
+  ],
+  "revised": [
+    {
+      "id": "req-fc88f8064b91380e",
+      "question": "Can Northport's FY2025 revenue growth be sustained",
+      "core": true,
+      "status": "partial",
+      "answer": "Northport revenue FY2025 120 USD millions；Northport revenue FY2024 100 USD millions；growth_percent 20.00 percent",
+      "reason": "The historical change is calculated; its sustainability needs independent supporting and opposing evidence and review conditions.",
+      "references": [
+        {
+          "fact_id": "fact-58cb4ff8dc584045ea1949bc343ba6029e68b8a681194ba3c348c39659d5e4cb",
+          "origin": "current"
+        },
+        {
+          "fact_id": "fact-c10b7038abb7d89ba7405f7b1ee917846014f24a52c1c55e5a8d2e51d23b9aae",
+          "origin": "current"
+        },
+        {
+          "calculation_id": "calc-4d0f78e06be84181b780ab1fba594f2f",
+          "origin": "current"
+        }
+      ],
+      "requirements": [
+        {
+          "id": "req-fc88f8064b91380e",
+          "question": "Can Northport's FY2025 revenue growth be sustained",
+          "status": "partial",
+          "reason": "The historical change is calculated; its sustainability needs independent supporting and opposing evidence and review conditions.",
+          "references": [
+            {
+              "fact_id": "fact-58cb4ff8dc584045ea1949bc343ba6029e68b8a681194ba3c348c39659d5e4cb",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-c10b7038abb7d89ba7405f7b1ee917846014f24a52c1c55e5a8d2e51d23b9aae",
+              "origin": "current"
+            },
+            {
+              "calculation_id": "calc-4d0f78e06be84181b780ab1fba594f2f",
+              "origin": "current"
+            }
+          ],
+          "core": true
+        }
+      ]
+    },
+    {
+      "id": "req-7d841c62b67a6619",
+      "question": "what drove it",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-7d841c62b67a6619",
+          "question": "what drove it",
+          "status": "missing",
+          "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+          "references": [],
+          "core": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "description": "Selector inputs only; independent of expected evidence labels and source IDs.",
+  "byte_limit": 512,
+  "requirements": {
+    "two-period-revenue": {"kind": "comparison", "description": "Find comparable consolidated revenue for 2025 and 2024."},
+    "acquisition-increment": {"kind": "drivers", "description": "Find disclosed drivers of revenue growth and limitations on attribution."},
+    "important-counterevidence": {"kind": "counterevidence", "description": "Find evidence that could undermine sustainability of revenue growth."}
+  }
+}

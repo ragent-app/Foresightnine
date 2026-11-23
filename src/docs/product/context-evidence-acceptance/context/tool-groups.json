@@ -1,0 +1,215 @@
+{
+  "full": {
+    "definitions": [
+      [
+        "read_sources",
+        "outline_source",
+        "search_source",
+        "search_library",
+        "news_search",
+        "acquire_sources",
+        "resolve_entity",
+        "market_data",
+        "company_financials",
+        "filings",
+        "issuer_documents",
+        "record_facts",
+        "calculate_financials",
+        "create_chart",
+        "analyze_market_series",
+        "create_table",
+        "read_pages",
+        "request_ocr",
+        "activate_method_pack",
+        "extract_statements",
+        "checkpoint_question_part",
+        "checkpoint_report_draft",
+        "submit_research"
+      ],
+      [
+        "read_sources",
+        "outline_source",
+        "search_source",
+        "search_library",
+        "news_search",
+        "acquire_sources",
+        "resolve_entity",
+        "market_data",
+        "company_financials",
+        "filings",
+        "issuer_documents",
+        "record_facts",
+        "calculate_financials",
+        "create_chart",
+        "analyze_market_series",
+        "create_table",
+        "read_pages",
+        "request_ocr",
+        "activate_method_pack",
+        "extract_statements",
+        "checkpoint_question_part",
+        "checkpoint_report_draft",
+        "submit_research"
+      ]
+    ],
+    "wire_tools_bytes": [
+      43709,
+      43709
+    ],
+    "recorded_tables": 1,
+    "submitted_tools": [
+      "allowed"
+    ],
+    "transport_requests": 2,
+    "real_model_requests": 0,
+    "replayed_saved_batch": false
+  },
+  "dynamic": {
+    "definitions": [
+      [
+        "read_sources",
+        "outline_source",
+        "search_source",
+        "search_library",
+        "resolve_entity",
+        "record_facts",
+        "calculate_financials",
+        "activate_tool_group",
+        "activate_method_pack",
+        "checkpoint_question_part",
+        "checkpoint_report_draft",
+        "submit_research"
+      ],
+      [
+        "read_sources",
+        "outline_source",
+        "search_source",
+        "search_library",
+        "resolve_entity",
+        "record_facts",
+        "calculate_financials",
+        "create_chart",
+        "create_table",
+        "activate_tool_group",
+        "activate_method_pack",
+        "checkpoint_question_part",
+        "checkpoint_report_draft",
+        "submit_research"
+      ],
+      [
+        "read_sources",
+        "outline_source",
+        "search_source",
+        "search_library",
+        "resolve_entity",
+        "record_facts",
+        "calculate_financials",
+        "create_chart",
+        "create_table",
+        "activate_tool_group",
+        "activate_method_pack",
+        "checkpoint_question_part",
+        "checkpoint_report_draft",
+        "submit_research"
+      ]
+    ],
+    "wire_tools_bytes": [
+      18915,
+      28313,
+      28313
+    ],
+    "recorded_tables": 1,
+    "submitted_tools": [
+      "enable",
+      "early",
+      "unavailable",
+      "allowed"
+    ],
+    "transport_requests": 3,
+    "real_model_requests": 0,
+    "replayed_saved_batch": false
+  },
+  "resume_full": {
+    "definitions": [
+      [
+        "read_sources",
+        "outline_source",
+        "search_source",
+        "search_library",
+        "resolve_entity",
+        "record_facts",
+        "calculate_financials",
+        "activate_tool_group",
+        "activate_method_pack",
+        "checkpoint_question_part",
+        "checkpoint_report_draft",
+        "submit_research"
+      ],
+      [
+        "read_sources",
+        "outline_source",
+        "search_source",
+        "search_library",
+        "news_search",
+        "acquire_sources",
+        "resolve_entity",
+        "market_data",
+        "company_financials",
+        "filings",
+        "issuer_documents",
+        "record_facts",
+        "calculate_financials",
+        "create_chart",
+        "analyze_market_series",
+        "create_table",
+        "read_pages",
+        "request_ocr",
+        "activate_method_pack",
+        "extract_statements",
+        "checkpoint_question_part",
+        "checkpoint_report_draft",
+        "submit_research"
+      ],
+      [
+        "read_sources",
+        "outline_source",
+        "search_source",
+        "search_library",
+        "news_search",
+        "acquire_sources",
+        "resolve_entity",
+        "market_data",
+        "company_financials",
+        "filings",
+        "issuer_documents",
+        "record_facts",
+        "calculate_financials",
+        "create_chart",
+        "analyze_market_series",
+        "create_table",
+        "read_pages",
+        "request_ocr",
+        "activate_method_pack",
+        "extract_statements",
+        "checkpoint_question_part",
+        "checkpoint_report_draft",
+        "submit_research"
+      ]
+    ],
+    "wire_tools_bytes": [
+      18915,
+      43709,
+      43709
+    ],
+    "recorded_tables": 1,
+    "submitted_tools": [
+      "enable",
+      "early",
+      "unavailable",
+      "allowed"
+    ],
+    "transport_requests": 3,
+    "real_model_requests": 0,
+    "replayed_saved_batch": true
+  }
+}

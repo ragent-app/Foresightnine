@@ -85,8 +85,6 @@ def reconcile_saved_answers(content: ResearchContent, turn: ResearchTurn) -> Non
 
 def visible_answer_content(content: ResearchContent, can_display: Callable[[str], bool]) -> ResearchContent:
     """Restrict a read projection after source access changes; keep the stored version immutable."""
-    if not content.turns:
-        return content
     evidence = AnswerEvidence(content)
     used = set(evidence.sources)
     used.update(sid for a in evidence.analyses.values() for sid in a.result["source_ids"])
@@ -130,11 +128,12 @@ def visible_answer_content(content: ResearchContent, can_display: Callable[[str]
         turn.counter_evidence = None
         turn.read_ranges = [r for r in turn.read_ranges if r.source_id not in hidden]
         turn.status, turn.reason = "partial", "source_permission_changed"
-        turn.gaps = [ResearchGap(code="source_permission_changed", message="研究资料的展示权限已变更。")]
+        turn.gaps = [ResearchGap(code="source_permission_changed", message="部分依据的授权、研究时点或来源版本已变更。")]
         for part in turn.question_parts:
             refs = list(part_references(part))
             if not refs or not all(allowed(ref) for ref in refs):
                 part.answer, part.reason, part.status = "", "此项依据当前不可用。", "unresolved"
                 part.references, part.requirements = [], []
-    safe.gaps = list(safe.turns[-1].gaps)
+    safe.gaps = (list(safe.turns[-1].gaps) if safe.turns else
+                 [ResearchGap(code="source_permission_changed", message="部分依据的授权、研究时点或来源版本已变更。")])
     return safe

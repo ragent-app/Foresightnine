@@ -1,0 +1,333 @@
+{
+  "baseline_context_sha256": "14eff18de91d791ba35ac83b40305c5de23d0504635087b3690975dc451fb608",
+  "candidate_context_sha256": "fc45e779fd24cbad873bc4d23a9c8123640c9b11ceff4b3100a5b616db9d88c3",
+  "cases": {
+    "F1-followup": {
+      "arms": {
+        "A": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "note-increment-v1": false,
+            "statement-v1": false
+          },
+          "wire_bytes": 51261,
+          "wire_sha256": "e8f8bf0ceb761e82143f2cff890f5e141ec58eb3331fb36d13e042e67ae0129b"
+        },
+        "B": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "note-increment-v1": true,
+            "statement-v1": true
+          },
+          "wire_bytes": 52368,
+          "wire_sha256": "4d73c33000dd5c296d85fe4187392a24e68ec664c21543f2da2ec5ed47170a52"
+        }
+      },
+      "available_source_ids": [
+        "statement-v1",
+        "note-increment-v1"
+      ],
+      "missing_benchmark_end": false
+    },
+    "F1-normal": {
+      "arms": {
+        "A": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "note-increment-v1": false,
+            "statement-v1": false
+          },
+          "wire_bytes": 51261,
+          "wire_sha256": "e8f8bf0ceb761e82143f2cff890f5e141ec58eb3331fb36d13e042e67ae0129b"
+        },
+        "B": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "note-increment-v1": true,
+            "statement-v1": true
+          },
+          "wire_bytes": 52368,
+          "wire_sha256": "4d73c33000dd5c296d85fe4187392a24e68ec664c21543f2da2ec5ed47170a52"
+        }
+      },
+      "available_source_ids": [
+        "statement-v1",
+        "note-increment-v1"
+      ],
+      "missing_benchmark_end": false
+    },
+    "F1-recovery": {
+      "arms": {
+        "A": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "note-increment-v1": true,
+            "statement-v1": true
+          },
+          "wire_bytes": 52744,
+          "wire_sha256": "e1019e4a4fc2141c48dd2f99e4fc5a9a6a2e48cfe157023d65f97f8ebf739edb"
+        },
+        "B": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "note-increment-v1": true,
+            "statement-v1": true
+          },
+          "wire_bytes": 53851,
+          "wire_sha256": "58fdd4a590338a6acad3657635483b432dfe921a88749a9b45a63a3b96619d70"
+        }
+      },
+      "available_source_ids": [
+        "statement-v1",
+        "note-increment-v1"
+      ],
+      "missing_benchmark_end": false
+    },
+    "F3-followup": {
+      "arms": {
+        "A": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "statement-v1": false
+          },
+          "wire_bytes": 51100,
+          "wire_sha256": "a8e8945bd32742dbb2c4c51a8089e131001755e4bba8d6c7e8da8624c0cfc8ed"
+        },
+        "B": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "statement-v1": true
+          },
+          "wire_bytes": 51721,
+          "wire_sha256": "134f2c007b431bf6b85efb72c7d9d3c267bc84062b05ada02683ad40ede95f23"
+        }
+      },
+      "available_source_ids": [
+        "statement-v1"
+      ],
+      "missing_benchmark_end": false
+    },
+    "F3-normal": {
+      "arms": {
+        "A": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "statement-v1": false
+          },
+          "wire_bytes": 51100,
+          "wire_sha256": "a8e8945bd32742dbb2c4c51a8089e131001755e4bba8d6c7e8da8624c0cfc8ed"
+        },
+        "B": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "statement-v1": true
+          },
+          "wire_bytes": 51721,
+          "wire_sha256": "134f2c007b431bf6b85efb72c7d9d3c267bc84062b05ada02683ad40ede95f23"
+        }
+      },
+      "available_source_ids": [
+        "statement-v1"
+      ],
+      "missing_benchmark_end": false
+    },
+    "F3-recovery": {
+      "arms": {
+        "A": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "statement-v1": true
+          },
+          "wire_bytes": 52116,
+          "wire_sha256": "1185cb2e095aa187fbcc45c1ca6a358416a7b605968d759c30bccabea5f2664e"
+        },
+        "B": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "statement-v1": true
+          },
+          "wire_bytes": 52737,
+          "wire_sha256": "6ef22f3a7523d9c237f520c988f5f747deda67b418ae1fcaf874f89eb5a1723c"
+        }
+      },
+      "available_source_ids": [
+        "statement-v1"
+      ],
+      "missing_benchmark_end": false
+    },
+    "M1-followup": {
+      "arms": {
+        "A": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "prices-M1": false
+          },
+          "wire_bytes": 51100,
+          "wire_sha256": "6fd51ce58274f1e908e040c2a783ad0d46a0ca123a11c0d33e0536353d18357d"
+        },
+        "B": {
+          "benchmark_end_present": true,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "prices-M1": true
+          },
+          "wire_bytes": 51688,
+          "wire_sha256": "1644de44ac5cb47ae83bedbc044cf863a6310f8acd8ef5b8e3c721e2d8869cfa"
+        }
+      },
+      "available_source_ids": [
+        "prices-M1"
+      ],
+      "missing_benchmark_end": false
+    },
+    "M1-normal": {
+      "arms": {
+        "A": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "prices-M1": false
+          },
+          "wire_bytes": 51100,
+          "wire_sha256": "6fd51ce58274f1e908e040c2a783ad0d46a0ca123a11c0d33e0536353d18357d"
+        },
+        "B": {
+          "benchmark_end_present": true,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "prices-M1": true
+          },
+          "wire_bytes": 51688,
+          "wire_sha256": "1644de44ac5cb47ae83bedbc044cf863a6310f8acd8ef5b8e3c721e2d8869cfa"
+        }
+      },
+      "available_source_ids": [
+        "prices-M1"
+      ],
+      "missing_benchmark_end": false
+    },
+    "M1-recovery": {
+      "arms": {
+        "A": {
+          "benchmark_end_present": true,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "prices-M1": true
+          },
+          "wire_bytes": 52043,
+          "wire_sha256": "f8be375eebb43ed3d5d3be826db119ba54370a0f79589c1a4acec59babb4dae8"
+        },
+        "B": {
+          "benchmark_end_present": true,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "prices-M1": true
+          },
+          "wire_bytes": 52631,
+          "wire_sha256": "480980ba71e9ae25811b51d51a377e73747ec139ec453b106e162520a502c45a"
+        }
+      },
+      "available_source_ids": [
+        "prices-M1"
+      ],
+      "missing_benchmark_end": false
+    },
+    "M2-followup": {
+      "arms": {
+        "A": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "prices-M2": false
+          },
+          "wire_bytes": 51100,
+          "wire_sha256": "18d9b5fa9bac3d142dffc912885bff45da00d51016c0bbec2be2ff7259512a36"
+        },
+        "B": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "prices-M2": true
+          },
+          "wire_bytes": 51662,
+          "wire_sha256": "cf6a090598140376d6af7b12511ccba4b31fc34a5f9f78779282fe3ff3d64677"
+        }
+      },
+      "available_source_ids": [
+        "prices-M2"
+      ],
+      "missing_benchmark_end": true
+    },
+    "M2-normal": {
+      "arms": {
+        "A": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "prices-M2": false
+          },
+          "wire_bytes": 51100,
+          "wire_sha256": "18d9b5fa9bac3d142dffc912885bff45da00d51016c0bbec2be2ff7259512a36"
+        },
+        "B": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "prices-M2": true
+          },
+          "wire_bytes": 51662,
+          "wire_sha256": "cf6a090598140376d6af7b12511ccba4b31fc34a5f9f78779282fe3ff3d64677"
+        }
+      },
+      "available_source_ids": [
+        "prices-M2"
+      ],
+      "missing_benchmark_end": true
+    },
+    "M2-recovery": {
+      "arms": {
+        "A": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "prices-M2": true
+          },
+          "wire_bytes": 52017,
+          "wire_sha256": "0cbbc0618dbeee49455be086237f359a6386cfea8ad398b0b25a7832c0289f25"
+        },
+        "B": {
+          "benchmark_end_present": false,
+          "fits_fixed_capacity": true,
+          "located_sources": {
+            "prices-M2": true
+          },
+          "wire_bytes": 52579,
+          "wire_sha256": "6f370142564185f37a85d396cc0608fb6201c50daa04ec4270ff88514038bff5"
+        }
+      },
+      "available_source_ids": [
+        "prices-M2"
+      ],
+      "missing_benchmark_end": true
+    }
+  },
+  "fixture_sha256": "78588ccf7251da1cdaf1201434766d3cabc7abea6bc7233c10d763398b2f770c",
+  "input_capacity_bytes": 120000,
+  "model": "fixture-model",
+  "network_calls": 0,
+  "output_cap": 256,
+  "wire_protocol": "anthropic_messages"
+}

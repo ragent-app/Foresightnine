@@ -227,7 +227,7 @@ def test_as_of_clamping_and_fail_closed_validation():
         f"NVDA@NASDAQ | {d.isoformat()} | 1d | O 100 H 105 L 95 C {100 + i} V 1000 USD"
         for i, d in enumerate(dates)
     )
-    src = _market_source("src-nvda", bars, provenance={"exchange": "NASDAQ"})
+    src = _market_source("src-nvda", bars, published_at=datetime(2025, 1, 1, tzinfo=timezone.utc), provenance={"exchange": "NASDAQ"})
 
     # as_of midpoint clamps later bars out without lookahead.
     cutoff = datetime(dates[4].year, dates[4].month, dates[4].day, 21, 0, tzinfo=timezone.utc)
@@ -274,3 +274,32 @@ def test_as_of_clamping_and_fail_closed_validation():
     )
     with pytest.raises(MarketAnalyticsError, match="unsupported interval"):
         analyze_market_series(AnalyzeMarketSeriesRequest(source_id="src-intra"), sources={"src-intra": intraday})
+
+
+def test_currency_and_cutoff_boundaries_for_market_comparisons():
+    def bars(symbol, currency1, currency2):
+        return (f'{symbol}@X | 2026-02-02 | 1d | O 10 H 10 L 10 C 10 V 100 {currency1} ADJF 1\n'
+                f'{symbol}@X | 2026-02-04 | 1d | O 12 H 12 L 12 C 12 V 100 {currency2} ADJF 1')
+    known_date = datetime(2026, 2, 5, tzinfo=timezone.utc)
+    cutoff = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    mixed = _market_source('mixed', bars('AAA', 'USD', 'EUR'), published_at=known_date)
+    with pytest.raises(MarketAnalyticsError, match='currency'):
+        analyze_market_series(AnalyzeMarketSeriesRequest(source_id='mixed'), sources={'mixed':mixed}, as_of=cutoff)
+
+    usd = _market_source('usd', bars('AAA', 'USD', 'USD'), published_at=known_date)
+    eur = _market_source('eur', bars('BBB', 'EUR', 'EUR'), published_at=known_date)
+    sources = {'usd':usd, 'eur':eur}
+    # Each return is valid in its own stated currency; no implicit FX conversion.
+    assert analyze_market_series(AnalyzeMarketSeriesRequest(source_id='usd'), sources=sources, as_of=cutoff)['cumulative_return_percent'] == '20.00'
+    assert analyze_market_series(AnalyzeMarketSeriesRequest(source_id='eur'), sources=sources, as_of=cutoff)['cumulative_return_percent'] == '20.00'
+    with pytest.raises(MarketAnalyticsError, match='same known currency'):
+        analyze_market_series(AnalyzeMarketSeriesRequest(source_id='usd', benchmark_source_id='eur'), sources=sources, as_of=cutoff)
+    unknown = _market_source('unknown', bars('CCC', '', ''), published_at=known_date)
+    with pytest.raises(MarketAnalyticsError, match='same known currency'):
+        analyze_market_series(AnalyzeMarketSeriesRequest(source_id='usd', benchmark_source_id='unknown'), sources={**sources, 'unknown':unknown}, as_of=cutoff)
+    unpublished = _market_source('undated', bars('AAA', 'USD', 'USD'))
+    with pytest.raises(MarketAnalyticsError, match='availability_unestablished'):
+        analyze_market_series(AnalyzeMarketSeriesRequest(source_id='undated'), sources={'undated':unpublished}, as_of=cutoff)
+    later = _market_source('later', bars('AAA', 'USD', 'USD'), published_at=datetime(2026, 4, 1, tzinfo=timezone.utc))
+    with pytest.raises(MarketAnalyticsError, match='availability_unestablished'):
+        analyze_market_series(AnalyzeMarketSeriesRequest(source_id='later'), sources={'later':later}, as_of=cutoff)

@@ -18,6 +18,7 @@ from .model_protocol import (
     ModelTurnInput,
     ModelUsage,
 )
+from .research_tool_presentation import DEFAULT_TOOLS as TOOLS, DEFAULT_METADATA
 from .research_library import ResearchLibrary
 from .research_source_catalog import canonical_source_url
 from .research_source_policy import source_eligibility
@@ -26,8 +27,6 @@ from .research_tools_registry import (
     BULK_COMPACT_TOOLS,
     PROTECTED_COMPACT_TOOLS,
     SYSTEM,
-    TOOLS,
-    TOOLS_SERIALIZED_CHARS,
     clip_text as _clip,
     utc_now_iso as _now_iso,
 )
@@ -711,7 +710,7 @@ def _l1_compaction_trigger_chars(
     """Compute history compaction watermark honoring tighter provider/budget limits."""
     trigger = default_trigger
     resolved_system_chars = len(SYSTEM) if system_chars is None else system_chars
-    resolved_tools_chars = TOOLS_SERIALIZED_CHARS if tools_chars is None else tools_chars
+    resolved_tools_chars = DEFAULT_METADATA[1] if tools_chars is None else tools_chars
     fixed_chars = resolved_system_chars + len(str(state.get('user') or '')) + resolved_tools_chars
 
     policy = getattr(model, 'policy', None)
@@ -1090,13 +1089,47 @@ def _prior_research(
     facts_all, calcs_all, claims_all, charts_all = (
         list(prior.get(key) or []) for key in ('facts', 'calculations', 'claims', 'charts')
     )
+    original_counts = {'facts': len(facts_all), 'calculations': len(calcs_all), 'claims': len(claims_all), 'charts': len(charts_all)}
+    eligible = {s.source_id: s for s, code in source_eligibility(sources, as_of) if code == 'eligible'}
+    hashes = prior.get('source_hashes') if isinstance(prior.get('source_hashes'), dict) else {}
+    unchanged = {sid for sid, source in eligible.items() if hashes.get(sid) == source.content_sha256}
+    # A prior observation is only safe to replay when its exact source version
+    # remains eligible. Calculations and claims must not outlive their inputs.
+    def source_valid(row: Any) -> bool:
+        return isinstance(row, Mapping) and row.get('source_id') in unchanged
+    def located_prior(row: Any) -> bool:
+        if not source_valid(row):
+            return False
+        source = eligible[row['source_id']]
+        quote = row.get('quotation')
+        if not isinstance(quote, str) or not quote:
+            return False
+        location = row.get('location') if isinstance(row.get('location'), Mapping) else row
+        start, end = location.get('character_start'), location.get('character_end')
+        if type(start) is not int or type(end) is not int or not 0 <= start < end <= len(source.text) or source.text[start:end] != quote:
+            return False
+        return any(isinstance(r, Mapping) and r.get('source_id') == row['source_id']
+                   and type(r.get('character_start')) is int and type(r.get('character_end')) is int
+                   and r['character_start'] <= start < end <= r['character_end'] for r in (prior.get('read_ranges') or []))
+    facts_all = [row for row in facts_all if located_prior(row)]
+    valid_fact_ids = {row.get('fact_id') for row in facts_all if row.get('fact_id')}
+    calcs_all = [row for row in calcs_all if isinstance(row, Mapping) and row.get('inputs')
+                 and all(isinstance(item, Mapping) and item.get('fact_id') in valid_fact_ids for item in row['inputs'])]
+    valid_calc_ids = {row.get('calculation_id') for row in calcs_all if row.get('calculation_id')}
+    claims_all = [row for row in claims_all if isinstance(row, Mapping) and row.get('citations')
+                  and all(located_prior(cit) for cit in row['citations'])
+                  and all(fid in valid_fact_ids for fid in (row.get('fact_ids') or []))
+                  and all(cid in valid_calc_ids for cid in (row.get('calculation_ids') or []))]
+    # Chart and table provenance may have multiple indirect dependencies. Do not
+    # replay opaque objects when any previously recorded source changed.
+    all_sources_unchanged = (bool(hashes) or (not any(original_counts.values()) and not prior.get('summary'))) and all(sid in unchanged for sid in hashes)
+    if not all_sources_unchanged:
+        charts_all = []
     facts_pool = facts_all[-PRIOR_LIMITS['facts']:]
     calcs_pool = calcs_all[-PRIOR_LIMITS['calculations']:]
     claims_pool = claims_all[-PRIOR_LIMITS['claims']:]
     charts_pool = charts_all[-PRIOR_LIMITS['charts']:]
 
-    eligible = {s.source_id: s for s, code in source_eligibility(sources, as_of) if code == 'eligible'}
-    hashes = prior.get('source_hashes') if isinstance(prior.get('source_hashes'), dict) else {}
     ranges_all: list[dict[str, Any]] = []
     for item in prior.get('read_ranges') or []:
         source = eligible.get(item.get('source_id'))
@@ -1138,6 +1171,11 @@ def _prior_research(
                 failed_accesses_deduped.append(clean_access)
     failed_accesses = failed_accesses_deduped[-50:]
     failed_access_count_dropped = max(0, len(failed_accesses_deduped) - len(failed_accesses))
+    if not all_sources_unchanged:
+        # Old free-form gap messages and URLs can themselves quote or identify
+        # a withdrawn source and have no per-source dependency metadata.
+        open_gaps = [{'code': row['code'], 'message': 'Prior gap detail requires rechecking.'} for row in open_gaps]
+        failed_accesses = []
 
     summary: dict[str, Any] = {
         'note': 'Prior records from earlier turns; not newly verified evidence.',
@@ -1148,7 +1186,7 @@ def _prior_research(
         'open_gaps': open_gaps,
         'read_ranges': [],
         'user_review': {'review': prior.get('review'), 'note': _clip(prior.get('note', ''), 1000),
-                        'summary': _clip(prior.get('summary', ''), 2000)},
+                        'summary': _clip(prior.get('summary', ''), 2000) if all_sources_unchanged else ''},
     }
     if failed_accesses:
         summary['failed_source_accesses'] = failed_accesses
@@ -1229,6 +1267,11 @@ def _prior_research(
             remaining -= cost
         else:
             calcs_budget_dropped += 1
+    selected_fact_ids = {row['fact_id'] for row in selected_facts_desc}
+    complete_calcs = [row for row in selected_calcs_desc
+                      if row['input_fact_ids'] and all(fid in selected_fact_ids for fid in row['input_fact_ids'])]
+    incomplete_group_count = len(selected_calcs_desc) - len(complete_calcs)
+    selected_calcs_desc = complete_calcs
 
     # P2: claims and charts (most recent first, deduped; never mid-clip citations)
     unique_claims_desc: list[tuple[dict[str, Any], int]] = []
@@ -1246,13 +1289,24 @@ def _prior_research(
             'claim_id': c['claim_id'], 'role': c['role'], 'text': _clip(c['text'], 500),
             'source_id': cit.get('source_id'),
             'quotation': _clip(cit.get('quotation', ''), 300),
+            'citations': [{'source_id': item['source_id'], 'content_sha256': eligible[item['source_id']].content_sha256,
+                           'quotation': item['quotation'], 'location': item.get('location') or {
+                               'character_start': item.get('character_start'), 'character_end': item.get('character_end')}}
+                          for item in c['citations']],
+            'fact_ids': list(c.get('fact_ids') or []),
+            'calculation_ids': list(c.get('calculation_ids') or []),
         }
         unique_claims_desc.append((row, _prior_tokens(row) + 1))
 
     selected_claims_desc: list[dict[str, Any]] = []
     claims_budget_dropped = 0
+    claims_group_dropped = 0
+    selected_calc_ids = {row['calculation_id'] for row in selected_calcs_desc}
     for row, cost in unique_claims_desc:
-        if cost <= remaining:
+        if not (all(fid in selected_fact_ids for fid in row['fact_ids'])
+                and all(cid in selected_calc_ids for cid in row['calculation_ids'])):
+            claims_group_dropped += 1
+        elif cost <= remaining:
             selected_claims_desc.append(row)
             remaining -= cost
         else:
@@ -1329,11 +1383,17 @@ def _prior_research(
         else:
             reason = 'count_limit'
         prior_omitted[category] = {'count': total_drop, 'reason': reason}
+    invalid_counts = {key: original_counts[key] - len(items) for key, items in
+                      (('facts', facts_all), ('calculations', calcs_all), ('claims', claims_all), ('charts', charts_all))}
+    if any(invalid_counts.values()):
+        summary['ineligible_prior_counts'] = {key: count for key, count in invalid_counts.items() if count}
+    if incomplete_group_count or claims_group_dropped:
+        summary['incomplete_evidence_group_count'] = incomplete_group_count + claims_group_dropped
     if prior_omitted:
         summary['prior_omitted'] = prior_omitted
 
     # Table metadata is bounded; full cells remain in durable content.
-    prior_tables = [t for t in (prior.get('tables') or []) if isinstance(t, Mapping) and isinstance(t.get('table_id'), str)]
+    prior_tables = [t for t in (prior.get('tables') or []) if isinstance(t, Mapping) and isinstance(t.get('table_id'), str)] if all_sources_unchanged else []
     summary['tables'] = prior_tables[-50:]
     prior_state = {
         'prior_table_ids': [t['table_id'] for t in prior_tables],
@@ -1468,6 +1528,64 @@ def _narrow_recovery_view(state: Mapping[str, Any], source_by_id: Mapping[str, R
     return json.dumps(view, ensure_ascii=False), chosen
 
 
+def _evidence_projection(state: Mapping[str, Any], source_by_id: Mapping[str, ResearchSource], hashes: Mapping[str, Any], as_of: datetime | None) -> tuple[list[dict[str, Any]], int]:
+    """Project only located, unchanged, already-read observations as whole groups."""
+    eligible = {s.source_id: s for s, code in source_eligibility(list(source_by_id.values()), as_of) if code == 'eligible'}
+    ranges = [r for key in ('read_ranges', 'prior_read_ranges') for r in (state.get(key) or []) if isinstance(r, Mapping)]
+    def located(row: Mapping[str, Any]) -> dict[str, Any] | None:
+        sid = row.get('source_id')
+        source = eligible.get(sid)
+        if source is None or not hashes.get(sid) or hashes[sid] != source.content_sha256:
+            return None
+        loc = row.get('location') if isinstance(row.get('location'), Mapping) else row
+        start, end = loc.get('character_start'), loc.get('character_end')
+        quote = row.get('quotation')
+        if type(start) is not int or type(end) is not int or not 0 <= start < end <= len(source.text):
+            return None
+        if not isinstance(quote, str) or source.text[start:end] != quote:
+            return None
+        if not any(r.get('source_id') == sid and type(r.get('start')) is int and type(r.get('end')) is int
+                   and r['start'] <= start < end <= r['end'] for r in ranges):
+            return None
+        return {'source_id': sid, 'content_sha256': source.content_sha256, 'start': start, 'end': end, 'quotation': quote}
+    facts: dict[str, dict[str, Any]] = {}
+    for row in [*(state.get('prior_facts') or []), *(state.get('facts') or [])]:
+        if not isinstance(row, Mapping) or not isinstance(row.get('fact_id'), str):
+            continue
+        citation = located(row)
+        if citation:
+            facts[row['fact_id']] = {key: row.get(key) for key in ('fact_id', 'label', 'value', 'unit', 'currency', 'period')}
+            facts[row['fact_id']]['citation'] = citation
+    groups: list[dict[str, Any]] = []
+    valid_calculations: set[str] = set()
+    calculation_groups: dict[str, dict[str, Any]] = {}
+    for row in [*(state.get('prior_calculations') or []), *(state.get('calculations') or [])]:
+        if not isinstance(row, Mapping) or not isinstance(row.get('calculation_id'), str):
+            continue
+        inputs = [item.get('fact_id') for item in (row.get('inputs') or []) if isinstance(item, Mapping)]
+        if inputs and all(item in facts for item in inputs):
+            valid_calculations.add(row['calculation_id'])
+            calculation_groups[row['calculation_id']] = {'calculation': {key: row.get(key) for key in ('calculation_id', 'formula_id', 'value', 'unit')},
+                                                        'facts': [facts[item] for item in inputs]}
+            groups.append(calculation_groups[row['calculation_id']])
+    claims = [row for row in [*(state.get('prior_claims') or []), *(state.get('claims') or [])] if isinstance(row, Mapping)]
+    claims.sort(key=lambda row: (row.get('role') != 'counterargument', str(row.get('claim_id') or '')))
+    for row in claims:
+        citations = [located(cit) for cit in (row.get('citations') or []) if isinstance(cit, Mapping)]
+        if (citations and all(citations) and len(citations) == len(row.get('citations') or [])
+                and all(fid in facts for fid in (row.get('fact_ids') or []))
+                and all(cid in valid_calculations for cid in (row.get('calculation_ids') or []))):
+            groups.append({'claim': {key: row.get(key) for key in ('claim_id', 'role', 'text', 'challenges_claim_ids')},
+                           'citations': citations, 'facts': [facts[fid] for fid in (row.get('fact_ids') or [])],
+                           'calculations': [calculation_groups[cid] for cid in (row.get('calculation_ids') or [])]})
+    groups.extend({'fact': fact} for fact in facts.values())
+    selected: list[dict[str, Any]] = []
+    for group in groups:
+        if len(json.dumps([*selected, group], ensure_ascii=False)) <= 6000:
+            selected.append(group)
+    return selected, len(groups) - len(selected)
+
+
 def build_model_turn_input(
     *,
     state: Mapping[str, Any],
@@ -1478,6 +1596,54 @@ def build_model_turn_input(
     has_fin_data: bool = False,
 ) -> ModelTurnInput:
     """Assemble the immutable prompt prefix and transient tail_note for a native turn."""
+    # Recovery can reopen an old checkpoint after source permissions or contents
+    # changed. Old tool outputs are opaque and may quote those sources, so drop
+    # whole paired exchanges in this case rather than leak or break pairing.
+    try:
+        original = json.loads(state.get('user', ''))
+    except (TypeError, ValueError):
+        original = None
+    revoked = False
+    hashes: dict[str, Any] = {}
+    as_of = None
+    invalid_as_of = False
+    if isinstance(original, dict):
+        try:
+            as_of = datetime.fromisoformat(original['research_as_of']) if original.get('research_as_of') else None
+        except (TypeError, ValueError):
+            as_of = None
+            invalid_as_of = True
+        eligible = {src.source_id: src for src, code in source_eligibility(list(source_by_id.values()), as_of) if code == 'eligible'}
+        snapshots = [*(original.get('sources') or []), *(state.get('_sources') or [])]
+        hashes = {row['source_id']: row.get('content_sha256') for row in snapshots
+                  if isinstance(row, Mapping) and isinstance(row.get('source_id'), str)}
+        used_ids = {row.get('source_id') for key in ('read_ranges', 'prior_read_ranges', 'facts', 'prior_facts')
+                    for row in (state.get(key) or []) if isinstance(row, Mapping) and isinstance(row.get('source_id'), str)}
+        if state.get('history'):
+            # Search results can contain snippets before a read range exists.
+            # Conservatively invalidate opaque history if any source that was
+            # originally eligible is no longer eligible at the same version.
+            used_ids.update(row.get('source_id') for row in snapshots if isinstance(row, Mapping)
+                            and row.get('eligibility') == 'eligible' and isinstance(row.get('source_id'), str))
+        prior_view = original.get('prior_research')
+        if isinstance(prior_view, Mapping):
+            used_ids.update(row.get('source_id') for key in ('facts', 'claims', 'read_ranges')
+                            for row in (prior_view.get(key) or []) if isinstance(row, Mapping)
+                            and isinstance(row.get('source_id'), str))
+        revoked = invalid_as_of or any(sid not in eligible or not hashes.get(sid) or hashes[sid] != eligible[sid].content_sha256
+                      for sid in used_ids)
+        if revoked:
+            safe_user = dict(original)
+            safe_user['sources'] = [row for row in (original.get('sources') or [])
+                                    if isinstance(row, Mapping) and row.get('source_id') in eligible
+                                    and hashes.get(row.get('source_id')) == eligible[row['source_id']].content_sha256]
+            safe_user.pop('focus_citation', None)
+            prior_view = safe_user.get('prior_research')
+            if isinstance(prior_view, Mapping):
+                review = prior_view.get('user_review') if isinstance(prior_view.get('user_review'), Mapping) else {}
+                safe_user['prior_research'] = {'note': 'Some prior evidence is unavailable or changed; recheck before reuse.',
+                    'user_review': {'review': review.get('review'), 'note': review.get('note', ''), 'summary': ''}}
+            state = {**state, 'user': json.dumps(safe_user, ensure_ascii=False), 'history': []}
     failure_payload = _failure_awareness_payload(state)
     lib_cov = None
     if library is not None:
@@ -1498,8 +1664,8 @@ def build_model_turn_input(
         or zero_yield >= 3
         or int(state.get('presubmit_nudges') or 0) > 0
     )
-    narrow_view = _narrow_recovery_view(state, source_by_id)
-    tail_note = insights.build_tail_note(
+    narrow_view = _narrow_recovery_view(state, source_by_id) if not revoked else None
+    tail_note = None if revoked else insights.build_tail_note(
         state,
         source_by_id,
         include_live_attention=include_live,
@@ -1516,7 +1682,64 @@ def build_model_turn_input(
         recent, guidance = failure_payload
         latest = recent[-1] if recent else {}
         tail_note = '[Recovery context: ' + json.dumps({'last_failure': {k: latest[k] for k in ('reason', 'interruption') if k in latest}, 'recovery_guidance': guidance}, ensure_ascii=False, sort_keys=True) + ']'
+    projection, projection_omitted = _evidence_projection(state, source_by_id, hashes, as_of) if not invalid_as_of else ([], 0)
     prompt_user, prompt_history = narrow_view if narrow_view is not None else (state['user'], state['history'])
+    if projection:
+        # Reuse complete text already retained in the request, while keeping its
+        # source/version/range reference in the projected group.
+        retained_ranges: list[tuple[str, str, int, int]] = []
+        def retain(sid: Any, digest: Any, start: Any, end: Any, text: Any) -> None:
+            source = source_by_id.get(sid) if isinstance(sid, str) else None
+            if (source is not None and digest == hashes.get(sid) == source.content_sha256
+                    and type(start) is int and type(end) is int and 0 <= start < end <= len(source.text)
+                    and isinstance(text, str) and text == source.text[start:end]):
+                retained_ranges.append((sid, digest, start, end))
+        for exchange in prompt_history:
+            for result in exchange.get('results', []) if isinstance(exchange, Mapping) else []:
+                try:
+                    payload = json.loads(result.get('content', ''))
+                except (TypeError, ValueError, AttributeError):
+                    continue
+                for row in payload.get('results', []) if isinstance(payload, Mapping) else []:
+                    if isinstance(row, Mapping) and row.get('status') == 'read':
+                        retain(row.get('source_id'), row.get('content_sha256'), row.get('start'), row.get('end'), row.get('text'))
+        try:
+            prompt_object = json.loads(prompt_user)
+        except (TypeError, ValueError):
+            prompt_object = None
+        if isinstance(prompt_object, Mapping):
+            for row in prompt_object.get('recorded_read_ranges', []):
+                if isinstance(row, Mapping):
+                    retain(row.get('source_id'), row.get('content_sha256'), row.get('start'), row.get('excerpt_end'), row.get('excerpt'))
+        def dedupe_quotes(node: Any) -> None:
+            if isinstance(node, dict):
+                quote = node.get('quotation')
+                sid, digest, start, end = node.get('source_id'), node.get('content_sha256'), node.get('start'), node.get('end')
+                if (isinstance(quote, str) and quote and type(start) is int and type(end) is int
+                        and any(sid == s and digest == h and a <= start < end <= b for s, h, a, b in retained_ranges)):
+                    node.pop('quotation')
+                    node['in_existing_input'] = True
+                for child in node.values():
+                    dedupe_quotes(child)
+            elif isinstance(node, list):
+                for child in node:
+                    dedupe_quotes(child)
+        dedupe_quotes(projection)
+    if (projection or projection_omitted) and not prompt_history:
+        try:
+            user_object = json.loads(prompt_user)
+        except (TypeError, ValueError):
+            user_object = None
+        if isinstance(user_object, dict):
+            user_object['located_evidence'] = projection
+            user_object['located_evidence_note'] = 'Locations are checked; semantic support is not verified.'
+            if projection_omitted:
+                user_object['located_evidence_omitted'] = {'count': projection_omitted, 'reason': 'projection_capacity'}
+            prompt_user = json.dumps(user_object, ensure_ascii=False, sort_keys=True)
+            projection = []
+            projection_omitted = 0
+    if projection or projection_omitted:
+        tail_note = (tail_note + '\n' if tail_note else '') + '[Located evidence; semantic support is not verified]\n' + json.dumps({'groups': projection, 'omitted_for_capacity': projection_omitted}, ensure_ascii=False, sort_keys=True)
     history_items = tuple(
         ModelTurnExchange(
             ModelAssistantContinuation(item['assistant']),

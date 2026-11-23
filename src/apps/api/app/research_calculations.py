@@ -18,13 +18,14 @@ FormulaId = Literal[
     "difference",
     "cagr",
     "ratio",
+    "contribution_to_change_percent",
     "sum",
     "subtract",
     "weighted_average",
     "ttm_sum",
 ]
 BINARY_FORMULAS: frozenset[str] = frozenset({"growth_percent", "margin_percent", "difference", "cagr", "ratio"})
-MULTI_FACT_FORMULAS: frozenset[str] = frozenset({"sum", "subtract", "weighted_average", "ttm_sum"})
+MULTI_FACT_FORMULAS: frozenset[str] = frozenset({"sum", "subtract", "weighted_average", "ttm_sum", "contribution_to_change_percent"})
 
 
 class NumericFact(BaseModel):
@@ -91,6 +92,8 @@ class CalculationRequest(BaseModel):
             raise ValueError(f"Formula {self.formula!r} requires exactly 2 facts.")
         if self.formula == "ttm_sum" and len(resolved) != 4:
             raise ValueError("Formula 'ttm_sum' requires exactly 4 quarterly facts.")
+        if self.formula == "contribution_to_change_percent" and len(resolved) != 3:
+            raise ValueError("Contribution to change requires contribution, current and prior facts, in that order.")
 
         if len(resolved) == 2 and self.first is None and self.second is None:
             self.first = resolved[0]
@@ -123,6 +126,12 @@ class RecalculateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     parent_version_id: str = Field(min_length=1, max_length=100)
     calculation_index: int = Field(ge=0, le=1999, strict=True)
+
+
+class PublicCalculationRequest(CalculationRequest):
+    """The standalone calculator cannot establish a disclosed attribution."""
+    formula: Literal['growth_percent', 'margin_percent', 'difference', 'cagr', 'ratio',
+                     'sum', 'subtract', 'weighted_average', 'ttm_sum']
 
 
 class CreateResearchCalculationRequest(BaseModel):
@@ -1083,6 +1092,8 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
         return "unverifiable"
     if formula == "ttm_sum" and len(inputs) != 4:
         return "unverifiable"
+    if formula == "contribution_to_change_percent" and len(inputs) != 3:
+        return "unverifiable"
     fields = ("fact_id", "value", "unit", "currency", "period")
     try:
         expected = [NumericFact.model_validate({key: item[key] for key in fields if key in item}) for item in inputs]
@@ -1225,6 +1236,14 @@ def calculate(request: CalculationRequest, *, verified_intraday: bool = False) -
             raise CalculationError("CAGR requires a non-negative ending value.")
     if request.formula == "ratio" and aligned_values[1] <= 0:
         raise CalculationError("Ratio requires a positive denominator.")
+    if request.formula == "contribution_to_change_percent":
+        contribution, current, prior = inputs
+        cp, pp = _comparable_period(current.period), _comparable_period(prior.period)
+        if contribution.period != current.period or not cp or not pp or cp[0] != pp[0] or cp[1] <= pp[1]:
+            raise CalculationError("Contribution and current periods must match, with an ordered comparable prior period.")
+        if aligned_values[1] == aligned_values[2]:
+            raise CalculationError("Contribution share is undefined when the change is zero.")
+        period_order_check = "recognized_formats_only"
     if request.formula == "ttm_sum":
         if len(inputs) != 4:
             raise CalculationError("ttm_sum requires exactly 4 quarterly facts.")
@@ -1277,6 +1296,10 @@ def calculate(request: CalculationRequest, *, verified_intraday: bool = False) -
                 result = aligned_values[0] / aligned_values[1]
                 expression = "first / second"
                 unit = "ratio"
+            elif request.formula == "contribution_to_change_percent":
+                result = aligned_values[0] / (aligned_values[1] - aligned_values[2]) * 100
+                expression = "contribution / (current - prior) * 100"
+                unit = "percent"
             elif request.formula == "sum":
                 result = sum(aligned_values, Decimal(0))
                 expression = "sum(inputs)"
@@ -1325,7 +1348,7 @@ def calculate(request: CalculationRequest, *, verified_intraday: bool = False) -
             if _growth_granularity_conflict(inputs[0].period, inputs[1].period)
             else "not_established"
         )
-    elif request.formula == "ttm_sum":
+    elif request.formula in {"ttm_sum", "contribution_to_change_percent"}:
         output["period_order_check"] = period_order_check
     if request.formula == "cagr" and request.periods is not None:
         output["periods"] = _plain_decimal_str(request.periods)

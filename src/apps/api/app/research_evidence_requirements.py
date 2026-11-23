@@ -148,7 +148,7 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
     for metric, fragment in metric_requests:
         compare = any(c in fragment.casefold() for c in _COMPARE)
         # Sentence-initial action words and technical metadata are not issuer names.
-        name_stop = {'what', 'which', 'how', 'compare', 'comparison', 'explain', 'record', 'calculate',
+        name_stop = {'what', 'which', 'how', 'can', 'could', 'will', 'would', 'does', 'did', 'is', 'are', 'compare', 'comparison', 'explain', 'record', 'calculate',
                      'show', 'find', 'describe', 'summarize', 'analyse', 'analyze', 'provide', 'identify',
                      'revenue', 'revenues', 'sales', 'eps', 'diluted', 'basic', 'fy', 'usd', 'eur', 'please', 'both', 'then', 'include',
                      'annual', 'quarterly', 'fiscal', 'year', 'years', 'current', 'previous', 'growth',
@@ -240,6 +240,8 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
                 status, reason = 'satisfied', 'Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review.'
                 refs = [_ref_fact(f) for f in pair] + [{'calculation_id': calc.get('calculation_id')}]
                 break
+            if status == 'satisfied' and re.search(r'\b(?:sustain(?:able|ability|ed)?|durable|persist(?:ent)?)\b|持续性|可持续|能否持续', fragment, re.I):
+                status, reason = 'partial', 'The historical change is calculated; its sustainability needs independent supporting and opposing evidence and review conditions.'
         if not compare and not matching:
             # A located direct quotation may answer a single-period disclosure without manufacturing a fact.
             for claim in claims:
@@ -404,6 +406,54 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
     if not rows:
         unknown = [q]
     for fragment in unknown:
+        if re.search(r'\b(?:drivers?|drove|driven|causes?|contribut(?:ion|ed))\b|驱动|原因|归因|贡献', fragment, re.I):
+            for calc in calcs:
+                if calc.get('formula_id') != 'contribution_to_change_percent' or not calc.get('calculation_id'):
+                    continue
+                inputs = calc.get('inputs') or []
+                if len(inputs) != 3 or any(not isinstance(i, Mapping) or i.get('fact_id') not in by_id for i in inputs):
+                    continue
+                contribution, current, prior = [by_id[i['fact_id']] for i in inputs]
+                from .research_report_grounding import change_contribution_disclosed
+                quote = contribution.get('quotation') or ''
+                years = [re.search(r'(?<!\d)(?:19|20)\d{2}(?!\d)', str(f.get('period') or '')) for f in (current, prior)]
+                if (not change_contribution_disclosed(quote)
+                        or any(not y or y.group() not in quote for y in years)
+                        or str(current.get('label') or '').casefold().strip() != str(prior.get('label') or '').casefold().strip()):
+                    continue
+                labels = [re.match(r'^([A-Za-z][A-Za-z0-9.-]{2,})\b', str(f.get('label') or '')) for f in (contribution, current, prior)]
+                name = labels[0].group(1) if all(labels) and len({m.group(1).casefold() for m in labels}) == 1 else None
+                if not name or not all(re.search(r'(?<![A-Za-z0-9])' + re.escape(name) + r'(?![A-Za-z0-9])', f.get('quotation') or '', re.I) for f in (contribution, current, prior)):
+                    continue
+                from .research_report_grounding import contribution_subject_disclosed
+                if not contribution_subject_disclosed(quote, name):
+                    continue
+                from .research_calculations import calculation_input_status, calculation_result_status
+                if calculation_input_status(dict(calc), facts) != 'matched' or calculation_result_status(dict(calc)) != 'matched':
+                    continue
+                refs = [_ref_fact(by_id[i['fact_id']]) for i in inputs] + [{'calculation_id': calc['calculation_id']}]
+                add('contribution:' + fragment, fragment, 'partial',
+                    'A disclosed contribution and change were calculated; issuer identity, accounting scope, remaining drivers and sustainability still require review.', refs)
+                break
+            else:
+                pass
+            if rows and rows[-1].get('kind') == 'contribution:' + fragment:
+                continue
+            # Preserve a located direct disclosure even when the two-period
+            # denominator is missing; it cannot establish a percentage share.
+            from .research_report_grounding import change_contribution_disclosed, contribution_subject_disclosed
+            names = {x.casefold() for x in re.findall(r'(?<![A-Za-z0-9])[A-Z][A-Za-z]{2,}(?![A-Za-z0-9])', q)
+                     if x.casefold() not in {'can', 'could', 'what', 'which', 'how', 'does', 'will', 'compare'}}
+            direct = [c for c in claims if _get(c, 'role') == 'support' and _get(c, 'claim_id')
+                      and change_contribution_disclosed(str(_get(c, 'text', '')))
+                      and any(located(cit) and change_contribution_disclosed(str(_get(cit, 'quotation', '')))
+                              and all(contribution_subject_disclosed(str(_get(cit, 'quotation', '')), name) for name in names)
+                              for cit in (_get(c, 'citations', []) or []))]
+            if len(direct) == 1:
+                add('contribution:' + fragment, fragment, 'partial',
+                    'A contribution is disclosed; the comparable denominator, remaining drivers and sustainability require evidence and review.',
+                    [{'claim_id': _get(direct[0], 'claim_id')}])
+                continue
         if re.search(r'\b(?:cite|citation|citations|reference|references|sources)\b|引用|引文|来源', fragment, re.I):
             relevant_ids = {ref.get('fact_id') for row in rows if row.get('kind', '').startswith('financial:')
                             for ref in row.get('references', []) if ref.get('fact_id')}

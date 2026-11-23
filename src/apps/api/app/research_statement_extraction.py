@@ -1193,6 +1193,32 @@ def extract_statements(req: ExtractStatementsRequest, source: Any, *, document_p
         if any(by_number[p].status == 'ocr' for p in cand.pages):
             warnings.append('statement_pages_from_ocr')
         anchors = {pg: _anchors([r for r in group.rows if r.page == pg], group.k) for pg in {r.page for r in group.rows}}
+        # Continuation pages may reverse or redefine columns. Never bind their
+        # values to the first page's headers when a repeated header disagrees.
+        header_orders: dict[int, tuple[str, ...]] = {}
+        for pg in cand.pages:
+            first_row = min((r.abs_start for r in group.rows if r.page == pg), default=by_number[pg].end)
+            for offset, line in by_number[pg].lines:
+                if offset >= first_row:
+                    break
+                labels = _relative_labels(line)
+                if len(labels) >= group.k:
+                    header_orders[pg] = ('relative', *(role for role, _ in labels[:group.k]))
+                    break
+                tokens = _period_tokens(line)
+                if len(tokens) >= group.k:
+                    header_orders[pg] = ('explicit', *(t.end.isoformat() for t in tokens[:group.k]))
+                    break
+                cells = [c.strip() for c in re.split(r'\s{2,}', _nfkc(line)) if c.strip()]
+                years = [c for c in cells if _bare_year(c)]
+                if len(years) >= group.k:
+                    header_orders[pg] = ('years', *years[:group.k])
+                    break
+        reference_order = header_orders.get(cand.pages[0])
+        conflicting_header_pages = {p for p, order in header_orders.items()
+                                    if reference_order and order[0] == reference_order[0] and order != reference_order}
+        if conflicting_header_pages:
+            warnings.append('continuation_column_header_conflict')
         rows_out: list[dict[str, Any]] = []
         seen_keys: dict[str, int] = {}
         for row in group.rows:
@@ -1222,6 +1248,10 @@ def extract_statements(req: ExtractStatementsRequest, source: Any, *, document_p
                 per_share = per_share or ps
                 values.append(_fmt(scaled))
                 stated.append(dec[1])
+            if row.page in conflicting_header_pages:
+                values = [None] * len(values)
+                stated = [None] * len(stated)
+                row_warns.append('continuation_column_header_conflict')
             entry['value'] = values
             entry['value_as_stated'] = stated
             if nil_cols:
@@ -1230,6 +1260,9 @@ def extract_statements(req: ExtractStatementsRequest, source: Any, *, document_p
                 entry['per_share'] = True
             if note:
                 entry['note_ref'] = note[:40]
+                # The note marker is a locator, not the text of the note. The
+                # caller must retrieve it separately before relying on it.
+                row_warns.append('referenced_note_not_bound')
             entry['page'] = row.page
             quote = text[row.abs_start:row.abs_end]
             if 0 < len(quote) <= MAX_QUOTATION_CHARS:
@@ -1249,6 +1282,9 @@ def extract_statements(req: ExtractStatementsRequest, source: Any, *, document_p
             rows_out.append(entry)
         statements_out.append({
             'statement': kind, 'scope': cand.scope, 'title': cand.title[:120], 'pages': cand.pages,
+            'context_ranges': [{'source_id': source_id, 'page': p, 'character_start': by_number[p].start,
+                                'character_end': by_number[p].end} for p in cand.pages if p in read_pages],
+            'context_note': 'Read the referenced pages for table headers and units; note markers do not establish the contents of separate notes.',
             'unit': {'scale': group.unit.scale, 'scale_label': _scale_label(group.unit), 'stated_as': group.unit.label,
                      'currency': group.unit.currency, 'basis': group.unit.basis,
                      **({'text': group.unit.text} if group.unit.text else {})},
@@ -1306,14 +1342,24 @@ def extract_statements(req: ExtractStatementsRequest, source: Any, *, document_p
         result['status'] = 'partial' if (missing or unread or missing_lines or needs_ocr_for) else 'completed'
         if missing and statements_out:
             messages.append(f'Not found: {missing}. Search their titles with search_library or check another document.')
+    if any('period_unresolved' in st.get('warnings', []) for st in statements_out):
+        result['status'] = 'partial'
+        messages.append('Verify the reporting periods against the original table header before comparing columns.')
+    if any('continuation_column_header_conflict' in st.get('warnings', []) for st in statements_out):
+        result['status'] = 'partial'
+        messages.append('Continuation page headers conflict; affected row values are withheld. Inspect the listed context_ranges and original rows to resolve the period mapping.')
     if any('only_parent_company_statement_found' in st.get('warnings', []) for st in statements_out):
         messages.append('Only a parent-company statement was found for some statements; do not present it as consolidated.')
     if messages:
         result['message'] = ' '.join(messages)
     if statements_out:
+        digest = getattr(source, 'content_sha256', None)
+        if isinstance(digest, str) and re.fullmatch(r'[a-f0-9]{64}', digest):
+            result['content_sha256'] = digest
         result['instructions'] = ('Rows are NOT recorded. To cite a value call record_facts with the row quotation and '
                                   'character_start/character_end, value_as_stated as value, the statement unit scale_label as unit '
-                                  '(per_share rows: the currency per share) and the currency; check warnings first.')
+                                  '(per_share rows: the currency per share) and the currency; check warnings first. '
+                                  'Bind explicit offsets to the source content_sha256. Read context_ranges for headers and locate referenced notes separately.')
     _fit_result(result, max(2_000, result_budget_chars))
     summary = {'kind': 'extract_statements', 'source_id': source_id,
                'statements': [{'statement': st['statement'], 'scope': st['scope'], 'pages': st['pages'][:6], 'rows': len(st['rows'])}

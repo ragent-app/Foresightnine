@@ -1,0 +1,446 @@
+{
+  "fixture_sha256": "b99754cae6015c9b27770ebc7ced9fb156715c85968098b876c0d4925c30ad59",
+  "method": "BM25, vector disabled, top K of same candidate pool",
+  "cases": [
+    {
+      "case_id": "S1",
+      "query": "Aster 2025 2024 revenue growth sustainability",
+      "capacity_passages": 2,
+      "candidate_pool": [
+        {
+          "source_id": "release-copy-a",
+          "title": "News copy A",
+          "page": null,
+          "score": 1.9904,
+          "snippet": "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "growth",
+            "revenu",
+            "sustainability"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "release-copy-a",
+            "start": 0,
+            "end": 143
+          }
+        },
+        {
+          "source_id": "release-copy-b",
+          "title": "News copy B",
+          "page": null,
+          "score": 1.9904,
+          "snippet": "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "growth",
+            "revenu",
+            "sustainability"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "release-copy-b",
+            "start": 0,
+            "end": 143
+          }
+        },
+        {
+          "source_id": "release-original",
+          "title": "Aster revenue release",
+          "page": null,
+          "score": 1.9904,
+          "snippet": "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "growth",
+            "revenu",
+            "sustainability"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "release-original",
+            "start": 0,
+            "end": 143
+          }
+        },
+        {
+          "source_id": "annual-table",
+          "title": "Aster annual consolidated statements",
+          "page": null,
+          "score": 0.5674,
+          "snippet": "Aster consolidated statements of operations. USD millions. Year ended December 31: 2025 revenue 120; 2024 revenue 100.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "revenu"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "annual-table",
+            "start": 0,
+            "end": 118
+          }
+        },
+        {
+          "source_id": "annual-note",
+          "title": "Aster annual report acquisition note",
+          "page": null,
+          "score": 0.5098,
+          "snippet": "Aster acquisition note. The acquisition contributed 18 million dollars to the increase in 2025 revenue compared with 2024. Other drivers of the remaining increase were not quantified.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "revenu"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "annual-note",
+            "start": 0,
+            "end": 183
+          }
+        }
+      ],
+      "coverage": {
+        "sources_searched": 5,
+        "passages_indexed": 5,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selected_source_ids": [
+        "release-copy-a",
+        "release-copy-b"
+      ],
+      "necessary_groups_covered": 0,
+      "necessary_groups_available": 2,
+      "missing_requirements": []
+    },
+    {
+      "case_id": "S2",
+      "query": "Aster 2025 2024 revenue growth sustainability",
+      "capacity_passages": 2,
+      "candidate_pool": [
+        {
+          "source_id": "release-copy-a",
+          "title": "News copy A",
+          "page": null,
+          "score": 1.6414,
+          "snippet": "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "growth",
+            "revenu",
+            "sustainability"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "release-copy-a",
+            "start": 0,
+            "end": 143
+          }
+        },
+        {
+          "source_id": "release-copy-b",
+          "title": "News copy B",
+          "page": null,
+          "score": 1.6414,
+          "snippet": "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "growth",
+            "revenu",
+            "sustainability"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "release-copy-b",
+            "start": 0,
+            "end": 143
+          }
+        },
+        {
+          "source_id": "release-original",
+          "title": "Aster revenue release",
+          "page": null,
+          "score": 1.6414,
+          "snippet": "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "growth",
+            "revenu",
+            "sustainability"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "release-original",
+            "start": 0,
+            "end": 143
+          }
+        },
+        {
+          "source_id": "annual-table",
+          "title": "Aster annual consolidated statements",
+          "page": null,
+          "score": 0.6834,
+          "snippet": "Aster consolidated statements of operations. USD millions. Year ended December 31: 2025 revenue 120; 2024 revenue 100.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "revenu"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "annual-table",
+            "start": 0,
+            "end": 118
+          }
+        }
+      ],
+      "coverage": {
+        "sources_searched": 4,
+        "passages_indexed": 4,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selected_source_ids": [
+        "release-copy-a",
+        "release-copy-b"
+      ],
+      "necessary_groups_covered": 0,
+      "necessary_groups_available": 1,
+      "missing_requirements": [
+        "acquisition-increment"
+      ]
+    },
+    {
+      "case_id": "S3",
+      "query": "Aster 2025 2024 revenue growth sustainability",
+      "capacity_passages": 3,
+      "candidate_pool": [
+        {
+          "source_id": "release-original",
+          "title": "Aster revenue release",
+          "page": null,
+          "score": 5.1011,
+          "snippet": "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "growth",
+            "revenu",
+            "sustainability"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "release-original",
+            "start": 0,
+            "end": 143
+          }
+        },
+        {
+          "source_id": "annual-table",
+          "title": "Aster annual consolidated statements",
+          "page": null,
+          "score": 2.0104,
+          "snippet": "Aster consolidated statements of operations. USD millions. Year ended December 31: 2025 revenue 120; 2024 revenue 100.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "revenu"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "annual-table",
+            "start": 0,
+            "end": 118
+          }
+        },
+        {
+          "source_id": "annual-note",
+          "title": "Aster annual report acquisition note",
+          "page": null,
+          "score": 1.7844,
+          "snippet": "Aster acquisition note. The acquisition contributed 18 million dollars to the increase in 2025 revenue compared with 2024. Other drivers of the remaining increase were not quantified.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "revenu"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "annual-note",
+            "start": 0,
+            "end": 183
+          }
+        },
+        {
+          "source_id": "contrary",
+          "title": "Aster customer disclosure",
+          "page": null,
+          "score": 0.1553,
+          "snippet": "Aster customer disclosure: a major customer announced that its Aster purchases would decline in 2026; the magnitude is not specified.",
+          "matched_terms": [
+            "aster"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "contrary",
+            "start": 0,
+            "end": 133
+          }
+        }
+      ],
+      "coverage": {
+        "sources_searched": 4,
+        "passages_indexed": 4,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selected_source_ids": [
+        "release-original",
+        "annual-table",
+        "annual-note"
+      ],
+      "necessary_groups_covered": 2,
+      "necessary_groups_available": 3,
+      "missing_requirements": []
+    },
+    {
+      "case_id": "S4",
+      "query": "Aster 2025 2024 revenue growth sustainability",
+      "capacity_passages": 2,
+      "candidate_pool": [
+        {
+          "source_id": "annual-table",
+          "title": "Aster annual consolidated statements",
+          "page": null,
+          "score": 1.189,
+          "snippet": "Aster consolidated statements of operations. USD millions. Year ended December 31: 2025 revenue 120; 2024 revenue 100.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "revenu"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "annual-table",
+            "start": 0,
+            "end": 118
+          }
+        },
+        {
+          "source_id": "annual-note",
+          "title": "Aster annual report acquisition note",
+          "page": null,
+          "score": 1.0682,
+          "snippet": "Aster acquisition note. The acquisition contributed 18 million dollars to the increase in 2025 revenue compared with 2024. Other drivers of the remaining increase were not quantified.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "revenu"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "annual-note",
+            "start": 0,
+            "end": 183
+          }
+        }
+      ],
+      "coverage": {
+        "sources_searched": 2,
+        "passages_indexed": 2,
+        "unsearched_page_count": 0,
+        "complete": false,
+        "sources_excluded": [
+          {
+            "source_id": "future",
+            "reason": "availability_unestablished"
+          },
+          {
+            "source_id": "revoked",
+            "reason": "model_permission_missing"
+          }
+        ],
+        "notes": [
+          "Excluded sources were not searched."
+        ],
+        "retrieval_mode": "bm25_only"
+      },
+      "selected_source_ids": [
+        "annual-table",
+        "annual-note"
+      ],
+      "necessary_groups_covered": 2,
+      "necessary_groups_available": 2,
+      "missing_requirements": []
+    }
+  ]
+}

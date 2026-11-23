@@ -1,0 +1,59 @@
+{
+  "baseline_commit": "3e1ca4d458d9a6ccc479c2d7123d5a81ba998d70",
+  "legacy": {
+    "same_failed_tests_on_both": [
+      "tests/test_research_context.py::test_optional_planning_hints_guide_existing_retrieval_without_changing_question",
+      "tests/test_research_context_capacity.py::test_acquisition_can_choose_delivery_with_unread_ranges",
+      "tests/test_research_context_capacity.py::test_api_delegated_two_reads_use_the_selected_source",
+      "tests/test_research_recovery_acceptance.py::test_assertion_links_recovery_edit_and_export_permissions",
+      "tests/test_research_recovery_acceptance.py::test_bad_envelope_repair_is_separate_checkpointed_call[False]",
+      "tests/test_research_recovery_acceptance.py::test_bad_envelope_repair_is_separate_checkpointed_call[True]",
+      "tests/test_research_recovery_acceptance.py::test_checkpoint_is_account_scoped_and_user_revision_blocks_continuation",
+      "tests/test_research_recovery_acceptance.py::test_direction_proof_rejected_when_forged_and_invalidated_by_source_or_location_edits",
+      "tests/test_research_recovery_acceptance.py::test_private_validation_diagnostics_are_bounded_and_not_exported[analysis_schema]",
+      "tests/test_research_recovery_acceptance.py::test_private_validation_diagnostics_are_bounded_and_not_exported[provider_parse]",
+      "tests/test_research_recovery_acceptance.py::test_private_validation_diagnostics_are_bounded_and_not_exported[review_index]",
+      "tests/test_research_recovery_acceptance.py::test_private_validation_diagnostics_are_bounded_and_not_exported[review_schema]",
+      "tests/test_research_recovery_acceptance.py::test_repeated_continuation_preserves_committed_stages_and_original_budget",
+      "tests/test_research_recovery_acceptance.py::test_review_settlement_is_separate_from_result_validation[invalid_schema]",
+      "tests/test_research_recovery_acceptance.py::test_review_settlement_is_separate_from_result_validation[timeout]",
+      "tests/test_research_recovery_acceptance.py::test_settlement_is_account_scoped_and_separates_ledger_from_provider_report",
+      "tests/test_research_recovery_acceptance.py::test_structured_all_invalid_discloses_no_valid_research_result",
+      "tests/test_research_recovery_acceptance.py::test_structured_partial_survives_recovery_and_export_without_rejected_content",
+      "tests/test_research_recovery_acceptance.py::test_truncated_analysis_splits_into_distinct_checkpointed_calls",
+      "tests/test_research_recovery_acceptance.py::test_unresolved_external_call_blocks_replay_but_preserves_partial_delivery"
+    ],
+    "passed_each": 49,
+    "skipped_each": 1
+  },
+  "table_regressions": {
+    "failing_on_baseline_and_original_candidate": [
+      "tests/test_research_statement_extraction.py::test_runtime_extract_then_record_facts_with_returned_quotation",
+      "tests/test_research_statement_extraction.py::test_tool_registered_before_submit_and_described",
+      "tests/test_research_table_provenance.py::test_analysis_keeps_structural_calculation_provisional_and_fails_closed",
+      "tests/test_research_table_provenance.py::test_inline_consistency_never_uses_generic_match_to_bypass_known_metric_mapping",
+      "tests/test_research_table_provenance.py::test_inline_consistency_supports_ifrs_currency_and_exact_other_row",
+      "tests/test_research_table_provenance.py::test_single_cell_citations_can_be_cross_checked_against_original_xbrl",
+      "tests/test_research_table_provenance.py::test_xbrl_metadata_fails_closed_for_namespace_context_units_and_entity_conflicts",
+      "tests/test_research_table_provenance.py::test_xbrl_tags_can_confirm_source_consistency_but_not_source_truth"
+    ],
+    "fixed_in_candidate": [
+      "tests/test_research_statement_extraction.py::test_runtime_extract_then_record_facts_with_returned_quotation",
+      "tests/test_research_statement_extraction.py::test_tool_registered_before_submit_and_described"
+    ],
+    "remaining": [
+      "tests/test_research_table_provenance.py::test_analysis_keeps_structural_calculation_provisional_and_fails_closed",
+      "tests/test_research_table_provenance.py::test_inline_consistency_never_uses_generic_match_to_bypass_known_metric_mapping",
+      "tests/test_research_table_provenance.py::test_inline_consistency_supports_ifrs_currency_and_exact_other_row",
+      "tests/test_research_table_provenance.py::test_single_cell_citations_can_be_cross_checked_against_original_xbrl",
+      "tests/test_research_table_provenance.py::test_xbrl_metadata_fails_closed_for_namespace_context_units_and_entity_conflicts",
+      "tests/test_research_table_provenance.py::test_xbrl_tags_can_confirm_source_consistency_but_not_source_truth"
+    ]
+  },
+  "phase_regression": {
+    "passed": 246,
+    "extraction_followup_passed": 20,
+    "web_typecheck": "passed",
+    "browser_page_errors": 0
+  }
+}

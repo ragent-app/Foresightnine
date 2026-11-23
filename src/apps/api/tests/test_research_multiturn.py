@@ -334,10 +334,15 @@ def test_prior_research_truncation_in_agent_input():
               for i in range(101)]
     saved = []
     src = source()
+    src.text = 'q' * 400
     src.content_sha256 = 'h'
+    for row in facts:
+        row['character_end'] = 400
+    for row in claims:
+        row['citations'][0]['location']['character_end'] = 400
     run_research_agent(question='Q2', sources=[src], model=Model([STOP]), context=context(), checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
         prior={'facts': facts, 'calculations': [], 'claims': claims, 'gaps': [{'code': 'no_progress', 'message': 'x'}],
-               'read_ranges': [{'source_id': 's1', 'character_start': 0, 'character_end': 20},
+               'read_ranges': [{'source_id': 's1', 'character_start': 0, 'character_end': 400},
                                {'source_id': 'gone', 'character_start': 0, 'character_end': 5}],
                'source_hashes': {'s1': 'h'}, 'review': 'confirmed', 'note': 'n' * 1500, 'summary': 's' * 3000})
     prior = json.loads(saved[0]['user'])['prior_research']
@@ -352,12 +357,12 @@ def test_prior_research_truncation_in_agent_input():
     assert prior['prior_omitted']['facts']['count'] == 205 - len(prior['facts'])
     assert prior['prior_omitted']['claims']['count'] == 101 - len(prior['claims'])
     assert prior['prior_omitted'].get('read_ranges', {}).get('count', 0) >= 0
-    assert saved[0]['prior_read_ranges'] == [{'source_id': 's1', 'start': 0, 'end': 20}]
+    assert saved[0]['prior_read_ranges'] == [{'source_id': 's1', 'start': 0, 'end': 400}]
     assert len(saved[0]['prior_claim_ids']) == 101  # Every prior claim stays challengeable.
 
     # With sufficient token_budget (100_000), explicit item caps keep last 200 facts & 100 claims.
     unbounded, _ = _prior_research(
-        {'facts': facts, 'calculations': [], 'claims': claims, 'gaps': [], 'read_ranges': []},
+        {'facts': facts, 'calculations': [], 'claims': claims, 'gaps': [], 'read_ranges': [{'source_id': 's1', 'character_start': 0, 'character_end': 400}], 'source_hashes': {'s1': 'h'}},
         [src],
         None,
         token_budget=100_000,
@@ -384,7 +389,7 @@ def test_completion_counts_prior_claims_and_prior_facts_resolve_for_calculation(
          'quotation': 'Revenue was 100 USD.', 'character_start': 0, 'character_end': 20},
         {'fact_id': 'fact-b', 'label': 'revenue', 'value': '80', 'unit': 'USD', 'currency': 'USD', 'period': '2024', 'source_id': 's1',
          'quotation': 'Revenue was 80 USD.', 'character_start': 21, 'character_end': 40}],
-        'calculations': [], 'gaps': [], 'source_hashes': {}, 'read_ranges': [],
+        'calculations': [], 'gaps': [], 'source_hashes': {'s1': 'hash'}, 'read_ranges': [{'source_id': 's1', 'character_start': 0, 'character_end': 40}],
         'claims': [{'claim_id': 'claim-old', 'role': 'support', 'text': 'x', 'challenges_claim_ids': [],
                     'citations': [{'source_id': 's1', 'quotation': 'Revenue was 100 USD.', 'location': {'character_start': 0, 'character_end': 20}}]}]}
     src = source()
@@ -403,7 +408,7 @@ def test_completion_counts_prior_claims_and_prior_facts_resolve_for_calculation(
     m = Model([turn('submit_research', {'report': 'Grew 25%.', 'claims': [], 'limitations': [], 'stopping_reason': 'answered'}, 'b'),
                STOP])
     result = run_research_agent(question='Q2', sources=[src], model=m, context=context(), prior=prior)
-    assert result.status == 'partial' and 'At least one source-backed claim' in m.inputs[1][-1]['content']
+    assert result.status == 'partial' and any('At least one source-backed claim' in item.get('content', '') for item in m.inputs[1] if item.get('role') == 'tool')
 
 
 def test_user_edits_mark_claims_and_protect_server_records(env):
@@ -815,7 +820,23 @@ def test_prior_research_priority_bucketing_dedupes_includes_failed_sources_and_o
          'citations': [{'source_id': 's1', 'quotation': f'cite-{i} ' + ('z' * 150), 'location': {'character_start': 0, 'character_end': 12}}]}
         for i in range(12)
     ]
-    read_ranges = [{'source_id': 's1', 'character_start': i * 100, 'character_end': i * 100 + 50} for i in range(30)]
+    # Build real located quotations so the prior evidence can be verified.
+    chunks = []
+    offset = 0
+    for row in facts:
+        quote = row['quotation']
+        row['character_start'], row['character_end'] = offset, offset + len(quote)
+        chunks.append(quote)
+        offset += len(quote)
+    for row in claims:
+        citation = row['citations'][0]
+        quote = citation['quotation']
+        citation['location'] = {'character_start': offset, 'character_end': offset + len(quote)}
+        chunks.append(quote)
+        offset += len(quote)
+    src_long.text = ''.join(chunks)
+    read_ranges = ([{'source_id': 's1', 'character_start': 0, 'character_end': len(src_long.text)}] +
+                   [{'source_id': 's1', 'character_start': i * 100, 'character_end': i * 100 + 50} for i in range(29)])
     failed_accesses = [{'url': 'https://example.com/10k', 'host': 'example.com', 'status': 'failed', 'reason': 'http_forbidden_or_challenge'}]
 
     compact_prior, _ = _prior_research(

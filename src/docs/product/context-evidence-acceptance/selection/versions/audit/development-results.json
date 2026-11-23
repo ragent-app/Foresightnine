@@ -1,0 +1,929 @@
+{
+  "fixture_sha256": "477d1db3eccb225f07ea432cf4d04af12b860363c10df253d6baa81b7c690d34",
+  "description": "Pre-analysis requirements from real assess; fixed development materials and same K; no model, vectors, or network",
+  "cases": [
+    {
+      "case_id": "V2-D1",
+      "requirements": [
+        {
+          "id": "req-5d21028e16a36c96",
+          "question": "Compare Orion revenue for fiscal 2023",
+          "status": "missing",
+          "reason": "Missing comparable revenue evidence for 2023.",
+          "references": [],
+          "core": true,
+          "kind": "financial:revenue:0",
+          "metric": "revenue"
+        },
+        {
+          "id": "req-dda4511d5e988113",
+          "question": "explain the change",
+          "status": "missing",
+          "reason": "No eligible recorded fact matches this metric.",
+          "references": [],
+          "core": true,
+          "kind": "financial:revenue:2",
+          "metric": "revenue"
+        },
+        {
+          "id": "req-bd95bb7b1b25cd96",
+          "question": "2022",
+          "status": "missing",
+          "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+          "references": [],
+          "core": true,
+          "kind": "generic:2022"
+        }
+      ],
+      "available_groups": 2,
+      "arms": {
+        "v1": {
+          "selected": [
+            "d1-statement",
+            "d1-copy"
+          ],
+          "groups_covered": 1,
+          "result": {
+            "status": "completed",
+            "query": "Orion revenue growth",
+            "returned_hits": 2,
+            "hits": [
+              {
+                "source_id": "d1-statement",
+                "title": "Source",
+                "page": null,
+                "score": 0.8749,
+                "snippet": "Orion consolidated statement: revenue in 2023 was EUR 80 million, compared with EUR 70 million in 2022.",
+                "matched_terms": [
+                  "orion",
+                  "revenu"
+                ],
+                "reasons": [
+                  "lexical_bm25"
+                ],
+                "read_sources": {
+                  "source_id": "d1-statement",
+                  "start": 0,
+                  "end": 103
+                },
+                "requirement_ids": [
+                  "req-5d21028e16a36c96",
+                  "req-bd95bb7b1b25cd96"
+                ]
+              },
+              {
+                "source_id": "d1-copy",
+                "title": "Source",
+                "page": null,
+                "score": 2.594,
+                "snippet": "Orion revenue growth was discussed by commentators, with opinions on market sentiment and the outlook.",
+                "matched_terms": [
+                  "growth",
+                  "orion",
+                  "revenu"
+                ],
+                "reasons": [
+                  "lexical_bm25",
+                  "phrase"
+                ],
+                "read_sources": {
+                  "source_id": "d1-copy",
+                  "start": 0,
+                  "end": 102
+                },
+                "requirement_ids": [
+                  "req-5d21028e16a36c96"
+                ]
+              }
+            ],
+            "library_coverage": {
+              "sources_searched": 3,
+              "passages_indexed": 3,
+              "unsearched_page_count": 0,
+              "complete": true,
+              "retrieval_mode": "bm25_only"
+            },
+            "selection_trace": [
+              {
+                "source_id": "d1-copy",
+                "start": 0,
+                "end": 102,
+                "requirement_ids": [
+                  "req-5d21028e16a36c96"
+                ],
+                "decision": "selected",
+                "reason": "diverse_candidate"
+              },
+              {
+                "source_id": "d1-statement",
+                "start": 0,
+                "end": 103,
+                "requirement_ids": [
+                  "req-5d21028e16a36c96",
+                  "req-bd95bb7b1b25cd96"
+                ],
+                "decision": "selected",
+                "reason": "requirement_retrieval"
+              }
+            ],
+            "selection_summary": {
+              "candidates": 2,
+              "selected": 2,
+              "omitted_by_reason": {},
+              "requirements_searched": 3
+            },
+            "requirement_queries": [
+              {
+                "requirement_id": "req-5d21028e16a36c96",
+                "query": "Compare Orion revenue for fiscal 2023",
+                "reason": "unmet_or_requested_requirement"
+              },
+              {
+                "requirement_id": "req-dda4511d5e988113",
+                "query": "explain the change",
+                "reason": "unmet_or_requested_requirement"
+              },
+              {
+                "requirement_id": "req-bd95bb7b1b25cd96",
+                "query": "2022",
+                "reason": "unmet_or_requested_requirement"
+              }
+            ],
+            "message": "Hits are leads: read the location with read_sources or read_pages before citing."
+          }
+        },
+        "v2": {
+          "selected": [
+            "d1-statement",
+            "d1-note"
+          ],
+          "groups_covered": 2,
+          "result": {
+            "status": "completed",
+            "query": "Orion revenue growth",
+            "returned_hits": 2,
+            "hits": [
+              {
+                "source_id": "d1-statement",
+                "title": "Source",
+                "page": null,
+                "score": 0.8749,
+                "snippet": "Orion consolidated statement: revenue in 2023 was EUR 80 million, compared with EUR 70 million in 2022.",
+                "matched_terms": [
+                  "orion",
+                  "revenu"
+                ],
+                "reasons": [
+                  "lexical_bm25"
+                ],
+                "read_sources": {
+                  "source_id": "d1-statement",
+                  "start": 0,
+                  "end": 103
+                },
+                "requirement_ids": [
+                  "req-5d21028e16a36c96",
+                  "req-dda4511d5e988113",
+                  "req-bd95bb7b1b25cd96"
+                ],
+                "requirement_match_status": "retrieval_only_unverified"
+              },
+              {
+                "source_id": "d1-note",
+                "title": "Source",
+                "page": null,
+                "score": 0.9808,
+                "snippet": "The annual note attributed the increase to new contracts; it did not quantify the contribution of each contract.",
+                "matched_terms": [
+                  "increas"
+                ],
+                "reasons": [
+                  "lexical_bm25"
+                ],
+                "read_sources": {
+                  "source_id": "d1-note",
+                  "start": 0,
+                  "end": 112
+                },
+                "requirement_ids": [
+                  "req-5d21028e16a36c96",
+                  "req-dda4511d5e988113"
+                ],
+                "requirement_match_status": "retrieval_only_unverified"
+              }
+            ],
+            "library_coverage": {
+              "sources_searched": 3,
+              "passages_indexed": 3,
+              "unsearched_page_count": 0,
+              "complete": true,
+              "retrieval_mode": "bm25_only"
+            },
+            "selection_trace": [
+              {
+                "source_id": "d1-copy",
+                "start": 0,
+                "end": 102,
+                "requirement_ids": [
+                  "req-5d21028e16a36c96",
+                  "req-dda4511d5e988113"
+                ],
+                "decision": "omitted",
+                "reason": "capacity"
+              },
+              {
+                "source_id": "d1-statement",
+                "start": 0,
+                "end": 103,
+                "requirement_ids": [
+                  "req-5d21028e16a36c96",
+                  "req-dda4511d5e988113",
+                  "req-bd95bb7b1b25cd96"
+                ],
+                "decision": "selected",
+                "reason": "requirement_retrieval"
+              },
+              {
+                "source_id": "d1-note",
+                "start": 0,
+                "end": 112,
+                "requirement_ids": [
+                  "req-5d21028e16a36c96",
+                  "req-dda4511d5e988113"
+                ],
+                "decision": "selected",
+                "reason": "requirement_retrieval"
+              }
+            ],
+            "selection_summary": {
+              "candidates": 3,
+              "selected": 2,
+              "omitted_by_reason": {
+                "capacity": 1
+              },
+              "requirements_searched": 3
+            },
+            "requirement_queries": [
+              {
+                "requirement_id": "req-5d21028e16a36c96",
+                "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 Compare Orion revenue for fiscal 2023",
+                "reason": "unmet_or_requested_requirement"
+              },
+              {
+                "requirement_id": "req-dda4511d5e988113",
+                "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 explain the change",
+                "reason": "unmet_or_requested_requirement"
+              },
+              {
+                "requirement_id": "req-bd95bb7b1b25cd96",
+                "query": "2022",
+                "reason": "unmet_or_requested_requirement"
+              }
+            ],
+            "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+          }
+        }
+      }
+    },
+    {
+      "case_id": "V2-D2",
+      "requirements": [
+        {
+          "id": "req-ed9551dd5a60dbc5",
+          "question": "请比较晨星公司2021年和2020年的营业收入",
+          "status": "missing",
+          "reason": "缺少 2020, 2021 年同口径的收入依据。",
+          "references": [],
+          "core": true,
+          "kind": "financial:revenue:0",
+          "metric": "revenue"
+        },
+        {
+          "id": "req-446df1531ee8a187",
+          "question": "并说明增长原因",
+          "status": "missing",
+          "reason": "缺少 2020, 2021 年同口径的收入依据。",
+          "references": [],
+          "core": true,
+          "kind": "financial:revenue:1",
+          "metric": "revenue"
+        }
+      ],
+      "available_groups": 2,
+      "arms": {
+        "v1": {
+          "selected": [
+            "d2-table",
+            "d2-note"
+          ],
+          "groups_covered": 2,
+          "result": {
+            "status": "completed",
+            "query": "晨星 营业收入 增长",
+            "returned_hits": 2,
+            "hits": [
+              {
+                "source_id": "d2-table",
+                "title": "Source",
+                "page": null,
+                "score": 0.8566,
+                "snippet": "晨星公司合并财务报表：营业收入2021年为人民币90万元，2020年为人民币75万元。",
+                "matched_terms": [
+                  "业收",
+                  "收入",
+                  "晨星",
+                  "营业"
+                ],
+                "reasons": [
+                  "lexical_bm25"
+                ],
+                "read_sources": {
+                  "source_id": "d2-table",
+                  "start": 0,
+                  "end": 43
+                },
+                "requirement_ids": [
+                  "req-ed9551dd5a60dbc5"
+                ]
+              },
+              {
+                "source_id": "d2-note",
+                "title": "Source",
+                "page": null,
+                "score": 0.9001,
+                "snippet": "管理层说明：营业收入增长主要来自新客户，未量化各因素贡献。",
+                "matched_terms": [
+                  "业收",
+                  "增长",
+                  "收入",
+                  "营业"
+                ],
+                "reasons": [
+                  "lexical_bm25"
+                ],
+                "read_sources": {
+                  "source_id": "d2-note",
+                  "start": 0,
+                  "end": 29
+                },
+                "requirement_ids": [
+                  "req-ed9551dd5a60dbc5",
+                  "req-446df1531ee8a187"
+                ]
+              }
+            ],
+            "library_coverage": {
+              "sources_searched": 3,
+              "passages_indexed": 3,
+              "unsearched_page_count": 0,
+              "complete": true,
+              "retrieval_mode": "bm25_only"
+            },
+            "selection_trace": [
+              {
+                "source_id": "d2-general",
+                "start": 0,
+                "end": 32,
+                "requirement_ids": [
+                  "req-ed9551dd5a60dbc5",
+                  "req-446df1531ee8a187"
+                ],
+                "decision": "omitted",
+                "reason": "capacity"
+              },
+              {
+                "source_id": "d2-note",
+                "start": 0,
+                "end": 29,
+                "requirement_ids": [
+                  "req-ed9551dd5a60dbc5",
+                  "req-446df1531ee8a187"
+                ],
+                "decision": "selected",
+                "reason": "requirement_retrieval"
+              },
+              {
+                "source_id": "d2-table",
+                "start": 0,
+                "end": 43,
+                "requirement_ids": [
+                  "req-ed9551dd5a60dbc5"
+                ],
+                "decision": "selected",
+                "reason": "requirement_retrieval"
+              }
+            ],
+            "selection_summary": {
+              "candidates": 3,
+              "selected": 2,
+              "omitted_by_reason": {
+                "capacity": 1
+              },
+              "requirements_searched": 2
+            },
+            "requirement_queries": [
+              {
+                "requirement_id": "req-ed9551dd5a60dbc5",
+                "query": "请比较晨星公司2021年和2020年的营业收入",
+                "reason": "unmet_or_requested_requirement"
+              },
+              {
+                "requirement_id": "req-446df1531ee8a187",
+                "query": "并说明增长原因",
+                "reason": "unmet_or_requested_requirement"
+              }
+            ],
+            "message": "Hits are leads: read the location with read_sources or read_pages before citing."
+          }
+        },
+        "v2": {
+          "selected": [
+            "d2-table",
+            "d2-note"
+          ],
+          "groups_covered": 2,
+          "result": {
+            "status": "completed",
+            "query": "晨星 营业收入 增长",
+            "returned_hits": 2,
+            "hits": [
+              {
+                "source_id": "d2-table",
+                "title": "Source",
+                "page": null,
+                "score": 0.8566,
+                "snippet": "晨星公司合并财务报表：营业收入2021年为人民币90万元，2020年为人民币75万元。",
+                "matched_terms": [
+                  "业收",
+                  "收入",
+                  "晨星",
+                  "营业"
+                ],
+                "reasons": [
+                  "lexical_bm25"
+                ],
+                "read_sources": {
+                  "source_id": "d2-table",
+                  "start": 0,
+                  "end": 43
+                },
+                "requirement_ids": [
+                  "req-ed9551dd5a60dbc5",
+                  "req-446df1531ee8a187"
+                ],
+                "requirement_match_status": "retrieval_only_unverified"
+              },
+              {
+                "source_id": "d2-note",
+                "title": "Source",
+                "page": null,
+                "score": 0.9001,
+                "snippet": "管理层说明：营业收入增长主要来自新客户，未量化各因素贡献。",
+                "matched_terms": [
+                  "业收",
+                  "增长",
+                  "收入",
+                  "营业"
+                ],
+                "reasons": [
+                  "lexical_bm25"
+                ],
+                "read_sources": {
+                  "source_id": "d2-note",
+                  "start": 0,
+                  "end": 29
+                },
+                "requirement_ids": [
+                  "req-ed9551dd5a60dbc5",
+                  "req-446df1531ee8a187"
+                ],
+                "requirement_match_status": "retrieval_only_unverified"
+              }
+            ],
+            "library_coverage": {
+              "sources_searched": 3,
+              "passages_indexed": 3,
+              "unsearched_page_count": 0,
+              "complete": true,
+              "retrieval_mode": "bm25_only"
+            },
+            "selection_trace": [
+              {
+                "source_id": "d2-general",
+                "start": 0,
+                "end": 32,
+                "requirement_ids": [
+                  "req-ed9551dd5a60dbc5",
+                  "req-446df1531ee8a187"
+                ],
+                "decision": "omitted",
+                "reason": "capacity"
+              },
+              {
+                "source_id": "d2-note",
+                "start": 0,
+                "end": 29,
+                "requirement_ids": [
+                  "req-ed9551dd5a60dbc5",
+                  "req-446df1531ee8a187"
+                ],
+                "decision": "selected",
+                "reason": "requirement_retrieval"
+              },
+              {
+                "source_id": "d2-table",
+                "start": 0,
+                "end": 43,
+                "requirement_ids": [
+                  "req-ed9551dd5a60dbc5",
+                  "req-446df1531ee8a187"
+                ],
+                "decision": "selected",
+                "reason": "requirement_retrieval"
+              }
+            ],
+            "selection_summary": {
+              "candidates": 3,
+              "selected": 2,
+              "omitted_by_reason": {
+                "capacity": 1
+              },
+              "requirements_searched": 2
+            },
+            "requirement_queries": [
+              {
+                "requirement_id": "req-ed9551dd5a60dbc5",
+                "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 请比较晨星公司2021年和2020年的营业收入",
+                "reason": "unmet_or_requested_requirement"
+              },
+              {
+                "requirement_id": "req-446df1531ee8a187",
+                "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 并说明增长原因",
+                "reason": "unmet_or_requested_requirement"
+              }
+            ],
+            "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+          }
+        }
+      }
+    },
+    {
+      "case_id": "V2-D3",
+      "requirements": [
+        {
+          "id": "req-cadd4a6f3aeff554",
+          "question": "What is the deadline and condition for redemption?",
+          "status": "missing",
+          "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+          "references": [],
+          "core": true,
+          "kind": "generic:What is the deadline and condition for redemption?"
+        }
+      ],
+      "available_groups": 1,
+      "arms": {
+        "v1": {
+          "selected": [
+            "d3-vague"
+          ],
+          "groups_covered": 0,
+          "result": {
+            "status": "completed",
+            "query": "redemption deadline condition",
+            "returned_hits": 1,
+            "hits": [
+              {
+                "source_id": "d3-vague",
+                "title": "Source",
+                "page": null,
+                "score": 1.6433,
+                "snippet": "A discussion of redemption, deadlines and conditions offered no specific dates or terms.",
+                "matched_terms": [
+                  "condition",
+                  "deadlin",
+                  "redemption"
+                ],
+                "reasons": [
+                  "lexical_bm25"
+                ],
+                "read_sources": {
+                  "source_id": "d3-vague",
+                  "start": 0,
+                  "end": 88
+                },
+                "requirement_ids": [
+                  "req-cadd4a6f3aeff554"
+                ]
+              }
+            ],
+            "library_coverage": {
+              "sources_searched": 2,
+              "passages_indexed": 2,
+              "unsearched_page_count": 0,
+              "complete": true,
+              "retrieval_mode": "bm25_only"
+            },
+            "selection_trace": [
+              {
+                "source_id": "d3-vague",
+                "start": 0,
+                "end": 88,
+                "requirement_ids": [
+                  "req-cadd4a6f3aeff554"
+                ],
+                "decision": "selected",
+                "reason": "requirement_retrieval"
+              },
+              {
+                "source_id": "d3-news",
+                "start": 0,
+                "end": 86,
+                "requirement_ids": [
+                  "req-cadd4a6f3aeff554"
+                ],
+                "decision": "omitted",
+                "reason": "capacity"
+              }
+            ],
+            "selection_summary": {
+              "candidates": 2,
+              "selected": 1,
+              "omitted_by_reason": {
+                "capacity": 1
+              },
+              "requirements_searched": 1
+            },
+            "requirement_queries": [
+              {
+                "requirement_id": "req-cadd4a6f3aeff554",
+                "query": "What is the deadline and condition for redemption?",
+                "reason": "unmet_or_requested_requirement"
+              }
+            ],
+            "message": "Hits are leads: read the location with read_sources or read_pages before citing."
+          }
+        },
+        "v2": {
+          "selected": [
+            "d3-news"
+          ],
+          "groups_covered": 1,
+          "result": {
+            "status": "completed",
+            "query": "redemption deadline condition",
+            "returned_hits": 1,
+            "hits": [
+              {
+                "source_id": "d3-news",
+                "title": "Source",
+                "page": null,
+                "score": 0.1744,
+                "snippet": "Redemption requests must be filed by 30 September 2026, subject to regulator approval.",
+                "matched_terms": [
+                  "redemption"
+                ],
+                "reasons": [
+                  "lexical_bm25"
+                ],
+                "read_sources": {
+                  "source_id": "d3-news",
+                  "start": 0,
+                  "end": 86
+                },
+                "requirement_ids": [
+                  "req-cadd4a6f3aeff554"
+                ],
+                "requirement_match_status": "retrieval_only_unverified"
+              }
+            ],
+            "library_coverage": {
+              "sources_searched": 2,
+              "passages_indexed": 2,
+              "unsearched_page_count": 0,
+              "complete": true,
+              "retrieval_mode": "bm25_only"
+            },
+            "selection_trace": [
+              {
+                "source_id": "d3-vague",
+                "start": 0,
+                "end": 88,
+                "requirement_ids": [
+                  "req-cadd4a6f3aeff554"
+                ],
+                "decision": "omitted",
+                "reason": "capacity"
+              },
+              {
+                "source_id": "d3-news",
+                "start": 0,
+                "end": 86,
+                "requirement_ids": [
+                  "req-cadd4a6f3aeff554"
+                ],
+                "decision": "selected",
+                "reason": "requirement_retrieval"
+              }
+            ],
+            "selection_summary": {
+              "candidates": 2,
+              "selected": 1,
+              "omitted_by_reason": {
+                "capacity": 1
+              },
+              "requirements_searched": 1
+            },
+            "requirement_queries": [
+              {
+                "requirement_id": "req-cadd4a6f3aeff554",
+                "query": "What is the deadline and condition for redemption?",
+                "reason": "unmet_or_requested_requirement"
+              }
+            ],
+            "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+          }
+        }
+      }
+    },
+    {
+      "case_id": "V2-D4",
+      "requirements": [
+        {
+          "id": "req-ed62654954ad113c",
+          "question": "截至2026年6月30日，该政策的申请截止日期及条件是什么？",
+          "status": "missing",
+          "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+          "references": [],
+          "core": true,
+          "kind": "generic:截至2026年6月30日，该政策的申请截止日期及条件是什么？"
+        }
+      ],
+      "available_groups": 1,
+      "arms": {
+        "v1": {
+          "selected": [
+            "d4-vague"
+          ],
+          "groups_covered": 0,
+          "result": {
+            "status": "completed",
+            "query": "政策 申请 截止 条件",
+            "returned_hits": 1,
+            "hits": [
+              {
+                "source_id": "d4-vague",
+                "title": "Source",
+                "page": null,
+                "score": 1.7509,
+                "snippet": "政策申请截止条件受到公众关注，讨论仍在进行。",
+                "matched_terms": [
+                  "截止",
+                  "政策",
+                  "条件",
+                  "申请"
+                ],
+                "reasons": [
+                  "lexical_bm25"
+                ],
+                "read_sources": {
+                  "source_id": "d4-vague",
+                  "start": 0,
+                  "end": 22
+                },
+                "requirement_ids": [
+                  "req-ed62654954ad113c"
+                ]
+              }
+            ],
+            "library_coverage": {
+              "sources_searched": 2,
+              "passages_indexed": 2,
+              "unsearched_page_count": 0,
+              "complete": true,
+              "retrieval_mode": "bm25_only"
+            },
+            "selection_trace": [
+              {
+                "source_id": "d4-vague",
+                "start": 0,
+                "end": 22,
+                "requirement_ids": [
+                  "req-ed62654954ad113c"
+                ],
+                "decision": "selected",
+                "reason": "requirement_retrieval"
+              },
+              {
+                "source_id": "d4-specific",
+                "start": 0,
+                "end": 30,
+                "requirement_ids": [
+                  "req-ed62654954ad113c"
+                ],
+                "decision": "omitted",
+                "reason": "capacity"
+              }
+            ],
+            "selection_summary": {
+              "candidates": 2,
+              "selected": 1,
+              "omitted_by_reason": {
+                "capacity": 1
+              },
+              "requirements_searched": 1
+            },
+            "requirement_queries": [
+              {
+                "requirement_id": "req-ed62654954ad113c",
+                "query": "截至2026年6月30日，该政策的申请截止日期及条件是什么？",
+                "reason": "unmet_or_requested_requirement"
+              }
+            ],
+            "message": "Hits are leads: read the location with read_sources or read_pages before citing."
+          }
+        },
+        "v2": {
+          "selected": [
+            "d4-specific"
+          ],
+          "groups_covered": 1,
+          "result": {
+            "status": "completed",
+            "query": "政策 申请 截止 条件",
+            "returned_hits": 1,
+            "hits": [
+              {
+                "source_id": "d4-specific",
+                "title": "Source",
+                "page": null,
+                "score": 0.3646,
+                "snippet": "申请须于2026年5月31日前提交，且以主管机关批准为条件。",
+                "matched_terms": [
+                  "条件",
+                  "申请"
+                ],
+                "reasons": [
+                  "lexical_bm25"
+                ],
+                "read_sources": {
+                  "source_id": "d4-specific",
+                  "start": 0,
+                  "end": 30
+                },
+                "requirement_ids": [
+                  "req-ed62654954ad113c"
+                ],
+                "requirement_match_status": "retrieval_only_unverified"
+              }
+            ],
+            "library_coverage": {
+              "sources_searched": 2,
+              "passages_indexed": 2,
+              "unsearched_page_count": 0,
+              "complete": true,
+              "retrieval_mode": "bm25_only"
+            },
+            "selection_trace": [
+              {
+                "source_id": "d4-vague",
+                "start": 0,
+                "end": 22,
+                "requirement_ids": [
+                  "req-ed62654954ad113c"
+                ],
+                "decision": "omitted",
+                "reason": "capacity"
+              },
+              {
+                "source_id": "d4-specific",
+                "start": 0,
+                "end": 30,
+                "requirement_ids": [
+                  "req-ed62654954ad113c"
+                ],
+                "decision": "selected",
+                "reason": "requirement_retrieval"
+              }
+            ],
+            "selection_summary": {
+              "candidates": 2,
+              "selected": 1,
+              "omitted_by_reason": {
+                "capacity": 1
+              },
+              "requirements_searched": 1
+            },
+            "requirement_queries": [
+              {
+                "requirement_id": "req-ed62654954ad113c",
+                "query": "截至2026年6月30日，该政策的申请截止日期及条件是什么？",
+                "reason": "unmet_or_requested_requirement"
+              }
+            ],
+            "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+          }
+        }
+      }
+    }
+  ]
+}

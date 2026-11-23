@@ -1,0 +1,6 @@
+{
+ "H1":{"required_groups":[["h1a","h1b"]],"verifiable":[{"kind":"growth_percent","value":"20","periods":["FY2025","FY2024"]},{"kind":"increment_contribution","value":"50","required_quotes":["purchased businesses contributed USD 7 million","Net sales for FY2024 were USD 70 million"]}],"limitation":"Remaining USD 7 million not disaggregated; organic attribution unknown."},
+ "H2":{"required_groups":[["h2a","h2b"]],"verifiable":[{"kind":"growth_percent","value":"25","periods":["2025","2024"]},{"kind":"specific_gap","required_quote":"合并前比较期营业收入和增量贡献均未披露"}],"forbidden":"Stating 60 percent as acquisition contribution."},
+ "H3":{"required_groups":[["h3a"],["h3b"]],"limitation":"Material breach, written notice and 45 days uncured are conjunctive. Guidance depends on two pilots converting."},
+ "H4":{"required_groups":[["h4a","h4b"]],"limitation":"Two common dates May 13–14 only; excess is (44/42-155/150)*100 percentage points. Text input is not a structured market receipt."}
+}

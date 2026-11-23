@@ -79,7 +79,7 @@ from .research_tools_registry import (
 # Stable gap codes. The UI localizes by code; the message is the English fallback.
 GAP_CODES = {
     'no_cited_claims': 'No source-backed claims with verified locations were submitted; add or read relevant authorized material and continue research.',
-    'claims_omitted_unverified_location': 'Some submitted claims were omitted because their source location could not be verified.',
+    'claims_omitted_unverified_location': 'Some submitted claims were omitted because their source location or supporting evidence could not be verified.',
     'search_response_invalid': 'Search returned results in an invalid format; the connector must be repaired before it can provide leads.',
     'search_quota_exhausted': 'The search service usage limit is reached, so no new leads could be discovered until it resets.',
     'search_rate_limited': 'The search services were rate limited, so no new leads could be discovered; a later retry may succeed.',
@@ -1736,6 +1736,7 @@ def _exec_extract_statements(ctx: ToolExecutionContext, inv: _CallInvocation) ->
         needs_check=_ocr_page_needs_check,
         ocr_available=ctx.ocr_pages is not None,
     )
+    result['content_sha256'] = ext_source.content_sha256
     if head_id != inv.req.source_id and result.get('status') != 'denied_or_unavailable':
         result['source_version'] = ctx.version_note(inv.req.source_id, head_id)
     return ToolCallResult(result=result, summary=summary)
@@ -1788,8 +1789,12 @@ def _exec_search_library(ctx: ToolExecutionContext, inv: _CallInvocation) -> Too
         if not ctx.library_box:
             ctx.library_box.append(ResearchLibrary())
         ctx.deps.sync_library(ctx.library_box[0], ctx.source_by_id, ctx.state.get('source_versions') or {}, ctx.as_of)
+        from .research_delivery import assess
+        requirements = assess(ctx.question, ctx.state, ctx.source_by_id, as_of=ctx.as_of,
+                              claims=ctx.state.get('draft_claims') or ())
         result, summary = ctx.deps.run_search_library(
             inv.req,
+            requirements=requirements,
             library=ctx.library_box[0],
             source_by_id=ctx.source_by_id,
             versions=ctx.state.get('source_versions') or {},
@@ -2352,6 +2357,11 @@ def _exec_calculate_financials(ctx: ToolExecutionContext, inv: _CallInvocation) 
             selected = [facts.get(fid) for fid in calculation.fact_ids]
             if any(item is None for item in selected):
                 raise ValueError('Calculation requires recorded fact IDs.')
+            if calculation.formula == 'contribution_to_change_percent':
+                from .research_report_grounding import change_contribution_disclosed
+                quote = str(selected[0].get('quotation') or '')
+                if not change_contribution_disclosed(quote):
+                    raise ValueError('The contribution input requires an explicit change-scoped disclosure; current-period revenue alone is insufficient.')
             fact_dicts = [{k: item[k] for k in keys} for item in selected]  # type: ignore[index]
             if calculation.formula in MULTI_FACT_FORMULAS:
                 calc_payload['facts'] = fact_dicts
@@ -2369,6 +2379,35 @@ def _exec_calculate_financials(ctx: ToolExecutionContext, inv: _CallInvocation) 
             else:
                 calc_payload['first'] = first_dict
                 calc_payload['second'] = second_dict
+        selected_facts = selected if calculation.fact_ids is not None else [first, second]
+        for item in selected_facts:
+            source = ctx.source_by_id.get(item.get('source_id'))
+            start, end = item.get('character_start'), item.get('character_end')
+            if (source is None or source_eligibility([source], ctx.as_of)[0][1] != 'eligible'
+                    or type(start) is not int or type(end) is not int or not 0 <= start < end <= len(source.text)
+                    or source.text[start:end] != item.get('quotation')):
+                raise ValueError('Calculation input source or quotation is unavailable or has changed.')
+            prior_hash = (ctx.state.get('source_hashes') or {}).get(item.get('source_id'))
+            if prior_hash and prior_hash != source.content_sha256:
+                raise ValueError('Calculation input source version has changed.')
+        if calculation.formula == 'contribution_to_change_percent':
+            contribution, current, prior = selected_facts
+            period_years = [re.search(r'(?<!\d)(?:19|20)\d{2}(?!\d)', str(item.get('period') or '')) for item in (current, prior)]
+            if any(not year or year.group() not in contribution.get('quotation', '') for year in period_years):
+                raise ValueError('Contribution disclosure must identify both comparison periods.')
+            # Source identity alone does not establish the subject of each row
+            # or note: one filing can discuss multiple companies. Require the
+            # same declared subject in every located quotation, even within a
+            # single source. This is not accounting-scope verification.
+            labels = [re.match(r'^([A-Za-z][A-Za-z0-9.-]{2,})\b', str(item.get('label') or '')) for item in selected_facts]
+            declared_name = labels[0].group(1) if all(labels) and len({m.group(1).casefold() for m in labels}) == 1 else None
+            declared = bool(declared_name and all(re.search(r'(?<![A-Za-z0-9])' + re.escape(declared_name) + r'(?![A-Za-z0-9])', item.get('quotation') or '', re.I) for item in selected_facts))
+            from .research_report_grounding import contribution_subject_disclosed
+            declared = declared and contribution_subject_disclosed(contribution.get('quotation') or '', declared_name)
+            if not declared:
+                raise ValueError('Each input needs a located quotation naming the same declared subject; source identity alone is insufficient.')
+            if str(current.get('label', '')).casefold().strip() != str(prior.get('label', '')).casefold().strip():
+                raise ValueError('Current and prior inputs require the same measurement label.')
         request = CalculationRequest.model_validate(calc_payload)
         preliminary = price_return_context({'formula_id': request.formula, 'inputs': [item.model_dump(mode='json') for item in request.resolved_facts()]}, facts, ctx.source_by_id)
         intraday = bool(preliminary and preliminary['identity_verified'] and preliminary['start_date'] == preliminary['end_date'] and preliminary['start_price_type'] == 'open' and preliminary['end_price_type'] == 'close')
@@ -2377,6 +2416,8 @@ def _exec_calculate_financials(ctx: ToolExecutionContext, inv: _CallInvocation) 
         # Same consistency check as user-created calculations, so agent rows do not
         # wait for a later user save to show their input status (363 acceptance).
         row['input_status'] = ctx.deps.calculation_input_status(row, list(facts.values()))
+        if calculation.formula == 'contribution_to_change_percent' and row['input_status'] != 'matched':
+            raise ValueError('Contribution calculation inputs require matched, source-supported units, currency and values.')
         return_context = price_return_context(row, facts, ctx.source_by_id)
         if return_context is not None:
             row['return_context'] = return_context
@@ -2544,6 +2585,18 @@ def _exec_analyze_market_series(ctx: ToolExecutionContext, inv: _CallInvocation)
     return ToolCallResult(result={'status': 'ok', 'analysis_id': analysis_id, **analysis}, summary=summary)
 
 
+def _exec_activate_tool_group(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallResult:
+    from .research_tool_presentation import available_groups
+    group = inv.req.group
+    available = available_groups(ctx.state)
+    if group not in available:
+        raise ValueError('Requested tool group is unavailable.')
+    active = ctx.state.setdefault('active_tool_groups', [])
+    if group not in active:
+        active.append(group)
+    return ToolCallResult(result={'status': 'active_next_call', 'group': group, 'tools': available[group]})
+
+
 def _exec_activate_method_pack(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallResult:
     pack = get_pack(inv.req.pack_id)
     if pack is None:
@@ -2586,7 +2639,7 @@ def _exec_activate_method_pack(ctx: ToolExecutionContext, inv: _CallInvocation) 
 
 
 def _validate_draft_clause(ctx: ToolExecutionContext, clause: Any) -> dict:
-    from .research_report_grounding import clause_problem
+    from .research_report_grounding import clause_problem, change_contribution_disclosed, contribution_subject_disclosed
     citations = []
     for citation in clause.citations:
         source = ctx.source_by_id.get(citation.source_id)
@@ -2620,6 +2673,11 @@ def _validate_draft_clause(ctx: ToolExecutionContext, clause: Any) -> dict:
     problem = clause_problem(clause.text, [c['quotation'] for c in citations], facts, calculations)
     if problem:
         raise ValueError(problem)
+    if change_contribution_disclosed(clause.text):
+        names = {x for x in re.findall(r'(?<![A-Za-z0-9])[A-Z][A-Za-z]{2,}(?![A-Za-z0-9])', ctx.question)
+                 if x.casefold() not in {'can', 'could', 'what', 'which', 'how', 'does', 'will', 'compare'}}
+        if names and not any(all(contribution_subject_disclosed(c['quotation'], name) for name in names) for c in citations):
+            raise ValueError('The located contribution disclosure does not identify the requested subject.')
     canonical = {'text': clause.text, 'role': clause.role, 'citations': citations,
                  'fact_ids': list(clause.fact_ids), 'calculation_ids': list(clause.calculation_ids)}
     digest = sha256(json.dumps(canonical, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
@@ -2864,8 +2922,7 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
     ctx.active_call_seq = None
     ctx.save()
     assert ctx.outcome_builder is not None
-    return ToolCallResult(
-        early_outcome=ctx.outcome_builder(
+    delivered = ctx.outcome_builder(
             status,
             'submitted',
             report=report,
@@ -2874,7 +2931,12 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
             stopping_note=req.stopping_reason,
             partial_notes=partial_notes,
         )
-    )
+    from .research_diagnostics import delivery_trace, trace_identifier
+    diagnostic = ctx.context.private_diagnostics.setdefault(ctx.batch_call_id, {})
+    diagnostic['delivery'] = {**delivery_trace(delivered), 'association': 'submit_tool',
+                              'tool_call_id': trace_identifier(inv.call.id)}
+    ctx.context._persist_diagnostic(ctx.batch_call_id)
+    return ToolCallResult(early_outcome=delivered)
 
 
 ToolHandler = Callable[[ToolExecutionContext, _CallInvocation], ToolCallResult]
@@ -2898,6 +2960,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     'create_table': _exec_create_table,
     'read_pages': _exec_read_pages,
     'request_ocr': _exec_request_ocr,
+    'activate_tool_group': _exec_activate_tool_group,
     'activate_method_pack': _exec_activate_method_pack,
     'extract_statements': _exec_extract_statements,
     'submit_research': _exec_submit_research,
@@ -2982,6 +3045,12 @@ def execute_tool_batch(
             if call.arguments is None:
                 raise ValueError('Tool arguments must be a valid JSON object.')
             args = call.arguments
+            binding = ctx.state.get('advertised_tools')
+            if binding is not None:
+                if binding.get('call_id') != ctx.batch_call_id or call.name not in binding.get('names', ()):
+                    raise ValueError('Tool was not advertised for this call.')
+            elif call.name == 'activate_tool_group':
+                raise ValueError('Dynamic tool groups are unavailable for this call.')
             spec = get_tool_spec(call.name)
             handler = TOOL_HANDLERS.get(call.name)
             if spec is None or handler is None:
@@ -3102,7 +3171,6 @@ def execute_tool_batch(
                     for old in list(by_sig)[:len(by_sig) - 200]:
                         del by_sig[old]
         _with_guidance(result)
-        ctx.append_result(call.id, result)
         event: dict[str, Any] = {
             'kind': 'tool',
             'tool_call_id': call.id,
@@ -3133,6 +3201,65 @@ def execute_tool_batch(
         if duplicate_kind is not None:
             event['duplicate'] = duplicate_kind
         ctx.state['events'].append(event)
+        # Record IDs from the actual structured receipt, never its text. The
+        # batch ID joins this receipt to the model call which requested it.
+        from .research_diagnostics import structured_evidence_ids, structured_read_spans, trace_identifier
+        refs = structured_evidence_ids(result)
+        if (refs or call.name == 'search_library') and ctx.batch_call_id and trace_identifier(call.id) and trace_identifier(call.name):
+            diag = ctx.context.private_diagnostics.setdefault(ctx.batch_call_id, {})
+            receipts = diag.setdefault('tool_evidence_receipts', [])
+            receipt = {'tool_call_id': call.id, 'tool': call.name, 'references': refs, 'read_spans': structured_read_spans(result)}
+            if call.name == 'search_library':
+                # Older or unlinked searches have no requirement ID; never invent one.
+                receipt['requirement_id'] = None
+                receipt['candidates'] = []
+                for hit in result.get('hits', [])[:20]:
+                    location = hit.get('read_sources') if isinstance(hit, dict) else None
+                    if not isinstance(location, dict):
+                        continue
+                    sid, start, end = location.get('source_id'), location.get('start'), location.get('end')
+                    if trace_identifier(sid) and type(start) is int and type(end) is int and 0 <= start <= end <= 10**9:
+                        source = ctx.source_by_id.get(sid)
+                        digest = getattr(source, 'content_sha256', None)
+                        item = {'source_id': sid, 'start': start, 'end': end}
+                        if isinstance(digest, str) and len(digest) == 64 and all(c in '0123456789abcdef' for c in digest):
+                            item['content_sha256'] = digest
+                        receipt['candidates'].append(item)
+                selection_trace = result.get('selection_trace')
+                if isinstance(selection_trace, list):
+                    receipt['selection_trace'] = []
+                    ordered_trace = ([row for row in selection_trace if isinstance(row, dict) and row.get('decision') == 'selected'] +
+                                     [row for row in selection_trace if isinstance(row, dict) and row.get('decision') != 'selected'])
+                    receipt['selection_trace_total'] = len(selection_trace)
+                    receipt['selection_trace_truncated'] = max(0, len(ordered_trace) - 500)
+                    for row in ordered_trace[:500]:
+                        if not isinstance(row, dict):
+                            continue
+                        sid, start, end = row.get('source_id'), row.get('start'), row.get('end')
+                        decision, reason = row.get('decision'), row.get('reason')
+                        if (not trace_identifier(sid) or type(start) is not int or type(end) is not int
+                                or not 0 <= start <= end <= 10**9 or decision not in ('selected', 'omitted')
+                                or reason not in ('requirement_retrieval', 'query_retrieval', 'diverse_candidate', 'source_ineligible', 'identical_passage', 'capacity')):
+                            continue
+                        ids = row.get('requirement_ids')
+                        ids = [item for item in ids[:100] if trace_identifier(item)] if isinstance(ids, list) else []
+                        receipt['selection_trace'].append({'source_id': sid, 'start': start, 'end': end,
+                            'requirement_ids': ids, 'decision': decision, 'reason': reason})
+                    receipt['selection_trace_filtered'] = len(selection_trace) - receipt['selection_trace_truncated'] - len(receipt['selection_trace'])
+                queries = result.get('requirement_queries')
+                if isinstance(queries, list):
+                    from .research_diagnostics import fingerprint
+                    receipt['requirement_queries'] = [
+                        {'requirement_id': row['requirement_id'], 'query_sha256': fingerprint(row['query']), 'reason': row['reason']}
+                        for row in queries[:100] if isinstance(row, dict) and trace_identifier(row.get('requirement_id'))
+                        and isinstance(row.get('query'), str) and len(row['query']) <= 500
+                        and row.get('reason') == 'unmet_or_requested_requirement']
+            receipts.append(receipt)
+            ctx.context._persist_diagnostic(ctx.batch_call_id)
+        if call.name == 'search_library' and isinstance(result, dict):
+            result.pop('selection_trace', None)
+            result.pop('requirement_queries', None)
+        ctx.append_result(call.id, result)
         if duplicate_kind is None and isinstance(result, Mapping) and result.get('status') != 'invalid':
             if call.name in COVERAGE_UPDATING_TOOLS or (call.name == 'search_source' and ctx.state.get('method_packs')):
                 ctx.state['coverage_attention_active'] = True

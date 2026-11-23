@@ -1,0 +1,1842 @@
+{
+  "baseline_head": "3e1ca4d458d9a6ccc479c2d7123d5a81ba998d70",
+  "cases": {
+    "F1-submitted": {
+      "diagnostics": {
+        "fixture-F1:research-agent:30ef180ce58d4763bc54335d2a06395b": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 56421,
+            "estimated_input_tokens": 56421,
+            "estimated_input_tokens_heuristic": 18807,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 56677
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-F1:research-agent:30ef180ce58d4763bc54335d2a06395b",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-F1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 56357
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 3,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "delivery": {
+            "association": "submit_tool",
+            "claims": [
+              {
+                "claim_id": "claim-8578e76f439af69994c12148b4285d15",
+                "references": {
+                  "claim_id": [
+                    "claim-8578e76f439af69994c12148b4285d15"
+                  ],
+                  "source_id": [
+                    "statement-v1"
+                  ]
+                }
+              }
+            ],
+            "parts": [
+              {
+                "part_id": "req-fc88f8064b91380e",
+                "references": {},
+                "requirements": [
+                  {
+                    "references": {},
+                    "requirement_id": "req-fc88f8064b91380e",
+                    "status": "missing"
+                  }
+                ],
+                "status": "unresolved"
+              },
+              {
+                "part_id": "req-7d841c62b67a6619",
+                "references": {},
+                "requirements": [
+                  {
+                    "references": {},
+                    "requirement_id": "req-7d841c62b67a6619",
+                    "status": "missing"
+                  }
+                ],
+                "status": "unresolved"
+              }
+            ],
+            "status": "partial",
+            "tool_call_id": "submit-1"
+          },
+          "finish": "tool_use",
+          "input_references_stage": "constructed_before_serialization",
+          "input_tool_references": [
+            {
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "tool_call_id": "search-1"
+            },
+            {
+              "read_spans": [
+                {
+                  "content_sha256": "00573f1b28b9a831d56e8b085c4e23cfe86e7a6b46b59318078c83bbbf4f23bc",
+                  "end": 166,
+                  "source_id": "statement-v1",
+                  "start": 0
+                },
+                {
+                  "content_sha256": "032aa2d8a79a8058c409cc71c7bf267388ffa36e03bdb8cf107746973eda55a1",
+                  "end": 139,
+                  "source_id": "note-increment-v1",
+                  "start": 0
+                }
+              ],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "tool_call_id": "read-1"
+            }
+          ],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_definition_set": {
+            "names": [
+              "read_sources",
+              "outline_source",
+              "search_source",
+              "search_library",
+              "news_search",
+              "acquire_sources",
+              "resolve_entity",
+              "market_data",
+              "company_financials",
+              "filings",
+              "issuer_documents",
+              "record_facts",
+              "calculate_financials",
+              "create_chart",
+              "analyze_market_series",
+              "create_table",
+              "read_pages",
+              "request_ocr",
+              "activate_method_pack",
+              "extract_statements",
+              "checkpoint_question_part",
+              "checkpoint_report_draft",
+              "submit_research"
+            ],
+            "sha256": "6c7dc60a470c2341cb8a9cebbcef719c2d57d8fc60903a23ad7e5e7bd33889a5"
+          },
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "290006610354cad7d5f5dfeda179b5f8a0971537493c444da10e8087b2796faa",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 5599,
+              "other": 18,
+              "system": 6976,
+              "tools": 43709
+            },
+            "wire_bytes": 56357
+          }
+        },
+        "fixture-F1:research-agent:822948f580274b478091d1bb431acece": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 52187,
+            "estimated_input_tokens": 52187,
+            "estimated_input_tokens_heuristic": 17396,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 52443
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-F1:research-agent:822948f580274b478091d1bb431acece",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-F1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 52123
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 1,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "finish": "tool_use",
+          "input_references_stage": "constructed_before_serialization",
+          "input_tool_references": [],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_definition_set": {
+            "names": [
+              "read_sources",
+              "outline_source",
+              "search_source",
+              "search_library",
+              "news_search",
+              "acquire_sources",
+              "resolve_entity",
+              "market_data",
+              "company_financials",
+              "filings",
+              "issuer_documents",
+              "record_facts",
+              "calculate_financials",
+              "create_chart",
+              "analyze_market_series",
+              "create_table",
+              "read_pages",
+              "request_ocr",
+              "activate_method_pack",
+              "extract_statements",
+              "checkpoint_question_part",
+              "checkpoint_report_draft",
+              "submit_research"
+            ],
+            "sha256": "6c7dc60a470c2341cb8a9cebbcef719c2d57d8fc60903a23ad7e5e7bd33889a5"
+          },
+          "tool_evidence_receipts": [
+            {
+              "candidates": [
+                {
+                  "content_sha256": "032aa2d8a79a8058c409cc71c7bf267388ffa36e03bdb8cf107746973eda55a1",
+                  "end": 139,
+                  "source_id": "note-increment-v1",
+                  "start": 0
+                },
+                {
+                  "content_sha256": "00573f1b28b9a831d56e8b085c4e23cfe86e7a6b46b59318078c83bbbf4f23bc",
+                  "end": 166,
+                  "source_id": "statement-v1",
+                  "start": 0
+                }
+              ],
+              "read_spans": [],
+              "references": {
+                "requirement_id": [
+                  "req-7d841c62b67a6619",
+                  "req-fc88f8064b91380e"
+                ],
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "requirement_id": null,
+              "requirement_queries": [
+                {
+                  "query_sha256": "bff2083cf16348fc1e45f0b7fb1aca666a13dee8719a315da4f03c9953ef991d",
+                  "reason": "unmet_or_requested_requirement",
+                  "requirement_id": "req-fc88f8064b91380e"
+                },
+                {
+                  "query_sha256": "d325ebe397f6121fc6ea4d9b4762b86f7086e3dd974f4dd183b3becb86383af3",
+                  "reason": "unmet_or_requested_requirement",
+                  "requirement_id": "req-7d841c62b67a6619"
+                }
+              ],
+              "selection_trace": [
+                {
+                  "decision": "selected",
+                  "end": 139,
+                  "reason": "requirement_retrieval",
+                  "requirement_ids": [
+                    "req-fc88f8064b91380e"
+                  ],
+                  "source_id": "note-increment-v1",
+                  "start": 0
+                },
+                {
+                  "decision": "selected",
+                  "end": 166,
+                  "reason": "diverse_candidate",
+                  "requirement_ids": [
+                    "req-fc88f8064b91380e"
+                  ],
+                  "source_id": "statement-v1",
+                  "start": 0
+                }
+              ],
+              "selection_trace_filtered": 0,
+              "selection_trace_total": 2,
+              "selection_trace_truncated": 0,
+              "tool": "search_library",
+              "tool_call_id": "search-1"
+            }
+          ],
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "0f243bcbd0e665b2678c63d54ddb7a86ad757ff93f637cfeb1320c3012dd896a",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 1365,
+              "other": 18,
+              "system": 6976,
+              "tools": 43709
+            },
+            "wire_bytes": 52123
+          }
+        },
+        "fixture-F1:research-agent:acd8d448e420423295b724d269f984db": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 55266,
+            "estimated_input_tokens": 55266,
+            "estimated_input_tokens_heuristic": 18422,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 55522
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-F1:research-agent:acd8d448e420423295b724d269f984db",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-F1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 55202
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 2,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "finish": "tool_use",
+          "input_references_stage": "constructed_before_serialization",
+          "input_tool_references": [
+            {
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "tool_call_id": "search-1"
+            }
+          ],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_definition_set": {
+            "names": [
+              "read_sources",
+              "outline_source",
+              "search_source",
+              "search_library",
+              "news_search",
+              "acquire_sources",
+              "resolve_entity",
+              "market_data",
+              "company_financials",
+              "filings",
+              "issuer_documents",
+              "record_facts",
+              "calculate_financials",
+              "create_chart",
+              "analyze_market_series",
+              "create_table",
+              "read_pages",
+              "request_ocr",
+              "activate_method_pack",
+              "extract_statements",
+              "checkpoint_question_part",
+              "checkpoint_report_draft",
+              "submit_research"
+            ],
+            "sha256": "6c7dc60a470c2341cb8a9cebbcef719c2d57d8fc60903a23ad7e5e7bd33889a5"
+          },
+          "tool_evidence_receipts": [
+            {
+              "read_spans": [
+                {
+                  "content_sha256": "00573f1b28b9a831d56e8b085c4e23cfe86e7a6b46b59318078c83bbbf4f23bc",
+                  "end": 166,
+                  "source_id": "statement-v1",
+                  "start": 0
+                },
+                {
+                  "content_sha256": "032aa2d8a79a8058c409cc71c7bf267388ffa36e03bdb8cf107746973eda55a1",
+                  "end": 139,
+                  "source_id": "note-increment-v1",
+                  "start": 0
+                }
+              ],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "tool": "read_sources",
+              "tool_call_id": "read-1"
+            }
+          ],
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "e31cbe96325e15fdab352ff427b79f4f5b64658ff97299b1ef4f4cf8b93ebde2",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 4444,
+              "other": 18,
+              "system": 6976,
+              "tools": 43709
+            },
+            "wire_bytes": 55202
+          }
+        }
+      },
+      "outcome": "partial",
+      "reason": "submitted",
+      "transport_calls": 3
+    },
+    "F1-truncated": {
+      "diagnostics": {
+        "fixture-F1:research-agent:ca3c260f593544029590f78bba84d1f0": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 55266,
+            "estimated_input_tokens": 55266,
+            "estimated_input_tokens_heuristic": 18422,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 55522
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-F1:research-agent:ca3c260f593544029590f78bba84d1f0",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-F1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 55202
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 2,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "finish": "tool_use",
+          "input_references_stage": "constructed_before_serialization",
+          "input_tool_references": [
+            {
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "tool_call_id": "search-1"
+            }
+          ],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_definition_set": {
+            "names": [
+              "read_sources",
+              "outline_source",
+              "search_source",
+              "search_library",
+              "news_search",
+              "acquire_sources",
+              "resolve_entity",
+              "market_data",
+              "company_financials",
+              "filings",
+              "issuer_documents",
+              "record_facts",
+              "calculate_financials",
+              "create_chart",
+              "analyze_market_series",
+              "create_table",
+              "read_pages",
+              "request_ocr",
+              "activate_method_pack",
+              "extract_statements",
+              "checkpoint_question_part",
+              "checkpoint_report_draft",
+              "submit_research"
+            ],
+            "sha256": "6c7dc60a470c2341cb8a9cebbcef719c2d57d8fc60903a23ad7e5e7bd33889a5"
+          },
+          "tool_evidence_receipts": [
+            {
+              "read_spans": [
+                {
+                  "content_sha256": "00573f1b28b9a831d56e8b085c4e23cfe86e7a6b46b59318078c83bbbf4f23bc",
+                  "end": 166,
+                  "source_id": "statement-v1",
+                  "start": 0
+                },
+                {
+                  "content_sha256": "032aa2d8a79a8058c409cc71c7bf267388ffa36e03bdb8cf107746973eda55a1",
+                  "end": 139,
+                  "source_id": "note-increment-v1",
+                  "start": 0
+                }
+              ],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "tool": "read_sources",
+              "tool_call_id": "read-1"
+            }
+          ],
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "e31cbe96325e15fdab352ff427b79f4f5b64658ff97299b1ef4f4cf8b93ebde2",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 4444,
+              "other": 18,
+              "system": 6976,
+              "tools": 43709
+            },
+            "wire_bytes": 55202
+          }
+        },
+        "fixture-F1:research-agent:e2c9f1322b6d40cfb762f18d1e379fd0": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 52187,
+            "estimated_input_tokens": 52187,
+            "estimated_input_tokens_heuristic": 17396,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 52443
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-F1:research-agent:e2c9f1322b6d40cfb762f18d1e379fd0",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-F1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 52123
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 1,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "finish": "tool_use",
+          "input_references_stage": "constructed_before_serialization",
+          "input_tool_references": [],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_definition_set": {
+            "names": [
+              "read_sources",
+              "outline_source",
+              "search_source",
+              "search_library",
+              "news_search",
+              "acquire_sources",
+              "resolve_entity",
+              "market_data",
+              "company_financials",
+              "filings",
+              "issuer_documents",
+              "record_facts",
+              "calculate_financials",
+              "create_chart",
+              "analyze_market_series",
+              "create_table",
+              "read_pages",
+              "request_ocr",
+              "activate_method_pack",
+              "extract_statements",
+              "checkpoint_question_part",
+              "checkpoint_report_draft",
+              "submit_research"
+            ],
+            "sha256": "6c7dc60a470c2341cb8a9cebbcef719c2d57d8fc60903a23ad7e5e7bd33889a5"
+          },
+          "tool_evidence_receipts": [
+            {
+              "candidates": [
+                {
+                  "content_sha256": "032aa2d8a79a8058c409cc71c7bf267388ffa36e03bdb8cf107746973eda55a1",
+                  "end": 139,
+                  "source_id": "note-increment-v1",
+                  "start": 0
+                },
+                {
+                  "content_sha256": "00573f1b28b9a831d56e8b085c4e23cfe86e7a6b46b59318078c83bbbf4f23bc",
+                  "end": 166,
+                  "source_id": "statement-v1",
+                  "start": 0
+                }
+              ],
+              "read_spans": [],
+              "references": {
+                "requirement_id": [
+                  "req-7d841c62b67a6619",
+                  "req-fc88f8064b91380e"
+                ],
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "requirement_id": null,
+              "requirement_queries": [
+                {
+                  "query_sha256": "bff2083cf16348fc1e45f0b7fb1aca666a13dee8719a315da4f03c9953ef991d",
+                  "reason": "unmet_or_requested_requirement",
+                  "requirement_id": "req-fc88f8064b91380e"
+                },
+                {
+                  "query_sha256": "d325ebe397f6121fc6ea4d9b4762b86f7086e3dd974f4dd183b3becb86383af3",
+                  "reason": "unmet_or_requested_requirement",
+                  "requirement_id": "req-7d841c62b67a6619"
+                }
+              ],
+              "selection_trace": [
+                {
+                  "decision": "selected",
+                  "end": 139,
+                  "reason": "requirement_retrieval",
+                  "requirement_ids": [
+                    "req-fc88f8064b91380e"
+                  ],
+                  "source_id": "note-increment-v1",
+                  "start": 0
+                },
+                {
+                  "decision": "selected",
+                  "end": 166,
+                  "reason": "diverse_candidate",
+                  "requirement_ids": [
+                    "req-fc88f8064b91380e"
+                  ],
+                  "source_id": "statement-v1",
+                  "start": 0
+                }
+              ],
+              "selection_trace_filtered": 0,
+              "selection_trace_total": 2,
+              "selection_trace_truncated": 0,
+              "tool": "search_library",
+              "tool_call_id": "search-1"
+            }
+          ],
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "0f243bcbd0e665b2678c63d54ddb7a86ad757ff93f637cfeb1320c3012dd896a",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 1365,
+              "other": 18,
+              "system": 6976,
+              "tools": 43709
+            },
+            "wire_bytes": 52123
+          }
+        },
+        "fixture-F1:research-agent:ed07c6e5ffdf4460a69fca079df09899": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 56421,
+            "estimated_input_tokens": 56421,
+            "estimated_input_tokens_heuristic": 18807,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 56677
+          },
+          "context": {
+            "call_id": "fixture-F1:research-agent:ed07c6e5ffdf4460a69fca079df09899",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-F1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 56357
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 2,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "delivery": {
+            "association": "last_observed_call",
+            "claims": [],
+            "parts": [
+              {
+                "part_id": "req-fc88f8064b91380e",
+                "references": {},
+                "requirements": [
+                  {
+                    "references": {},
+                    "requirement_id": "req-fc88f8064b91380e",
+                    "status": "missing"
+                  }
+                ],
+                "status": "unresolved"
+              },
+              {
+                "part_id": "req-7d841c62b67a6619",
+                "references": {},
+                "requirements": [
+                  {
+                    "references": {},
+                    "requirement_id": "req-7d841c62b67a6619",
+                    "status": "missing"
+                  }
+                ],
+                "status": "unresolved"
+              }
+            ],
+            "status": "partial"
+          },
+          "exception": {
+            "exception_class": "ProviderFailure",
+            "location": {
+              "file": "anthropic_messages.py",
+              "line": 108
+            }
+          },
+          "finish": "provider_length",
+          "input_references_stage": "constructed_before_serialization",
+          "input_tool_references": [
+            {
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "tool_call_id": "search-1"
+            },
+            {
+              "read_spans": [
+                {
+                  "content_sha256": "00573f1b28b9a831d56e8b085c4e23cfe86e7a6b46b59318078c83bbbf4f23bc",
+                  "end": 166,
+                  "source_id": "statement-v1",
+                  "start": 0
+                },
+                {
+                  "content_sha256": "032aa2d8a79a8058c409cc71c7bf267388ffa36e03bdb8cf107746973eda55a1",
+                  "end": 139,
+                  "source_id": "note-increment-v1",
+                  "start": 0
+                }
+              ],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "tool_call_id": "read-1"
+            }
+          ],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "max_tokens",
+          "tool_definition_set": {
+            "names": [
+              "read_sources",
+              "outline_source",
+              "search_source",
+              "search_library",
+              "news_search",
+              "acquire_sources",
+              "resolve_entity",
+              "market_data",
+              "company_financials",
+              "filings",
+              "issuer_documents",
+              "record_facts",
+              "calculate_financials",
+              "create_chart",
+              "analyze_market_series",
+              "create_table",
+              "read_pages",
+              "request_ocr",
+              "activate_method_pack",
+              "extract_statements",
+              "checkpoint_question_part",
+              "checkpoint_report_draft",
+              "submit_research"
+            ],
+            "sha256": "6c7dc60a470c2341cb8a9cebbcef719c2d57d8fc60903a23ad7e5e7bd33889a5"
+          },
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "290006610354cad7d5f5dfeda179b5f8a0971537493c444da10e8087b2796faa",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 5599,
+              "other": 18,
+              "system": 6976,
+              "tools": 43709
+            },
+            "wire_bytes": 56357
+          }
+        }
+      },
+      "outcome": "partial",
+      "reason": "provider_output_truncated",
+      "transport_calls": 3
+    },
+    "M1-submitted": {
+      "diagnostics": {
+        "fixture-M1:research-agent:65b58077d7474514a8ee7a0936b0ca7f": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 57480,
+            "estimated_input_tokens": 57480,
+            "estimated_input_tokens_heuristic": 19160,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 57736
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-M1:research-agent:65b58077d7474514a8ee7a0936b0ca7f",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-M1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 57416
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 2,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "finish": "tool_use",
+          "input_references_stage": "constructed_before_serialization",
+          "input_tool_references": [
+            {
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "tool_call_id": "search-1"
+            }
+          ],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_definition_set": {
+            "names": [
+              "read_sources",
+              "outline_source",
+              "search_source",
+              "search_library",
+              "news_search",
+              "acquire_sources",
+              "resolve_entity",
+              "market_data",
+              "company_financials",
+              "filings",
+              "issuer_documents",
+              "record_facts",
+              "calculate_financials",
+              "create_chart",
+              "analyze_market_series",
+              "create_table",
+              "read_pages",
+              "request_ocr",
+              "activate_method_pack",
+              "extract_statements",
+              "checkpoint_question_part",
+              "checkpoint_report_draft",
+              "submit_research"
+            ],
+            "sha256": "6c7dc60a470c2341cb8a9cebbcef719c2d57d8fc60903a23ad7e5e7bd33889a5"
+          },
+          "tool_evidence_receipts": [
+            {
+              "read_spans": [
+                {
+                  "content_sha256": "ebf5f4b86f4a57aa539a3a190e1f8ac1e4e8f512b2143b1ee8f75c089f2e4846",
+                  "end": 112,
+                  "source_id": "prices-v1",
+                  "start": 0
+                }
+              ],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "tool": "read_sources",
+              "tool_call_id": "read-1"
+            }
+          ],
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "ff22f326da526b3418d3784b9d913e9647a6b06400f9b669df5c24150f1a3f35",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 6658,
+              "other": 18,
+              "system": 6976,
+              "tools": 43709
+            },
+            "wire_bytes": 57416
+          }
+        },
+        "fixture-M1:research-agent:80425e18fb2d437f9e4c683f3fdb9c00": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 58157,
+            "estimated_input_tokens": 58157,
+            "estimated_input_tokens_heuristic": 19386,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 58413
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-M1:research-agent:80425e18fb2d437f9e4c683f3fdb9c00",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-M1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 58093
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 3,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "delivery": {
+            "association": "submit_tool",
+            "claims": [
+              {
+                "claim_id": "claim-afad1762d2853babc5d3b45af67b06e1",
+                "references": {
+                  "claim_id": [
+                    "claim-afad1762d2853babc5d3b45af67b06e1"
+                  ],
+                  "source_id": [
+                    "prices-v1"
+                  ]
+                }
+              }
+            ],
+            "parts": [
+              {
+                "part_id": "req-3ef8e8f864374d5d",
+                "references": {
+                  "claim_id": [
+                    "claim-afad1762d2853babc5d3b45af67b06e1"
+                  ]
+                },
+                "requirements": [
+                  {
+                    "references": {
+                      "claim_id": [
+                        "claim-afad1762d2853babc5d3b45af67b06e1"
+                      ]
+                    },
+                    "requirement_id": "req-3ef8e8f864374d5d",
+                    "status": "satisfied"
+                  }
+                ],
+                "status": "answered"
+              },
+              {
+                "part_id": "req-1e58ae858710c48b",
+                "references": {},
+                "requirements": [
+                  {
+                    "references": {},
+                    "requirement_id": "req-1e58ae858710c48b",
+                    "status": "missing"
+                  }
+                ],
+                "status": "unresolved"
+              }
+            ],
+            "status": "partial",
+            "tool_call_id": "submit-1"
+          },
+          "finish": "tool_use",
+          "input_references_stage": "constructed_before_serialization",
+          "input_tool_references": [
+            {
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "tool_call_id": "search-1"
+            },
+            {
+              "read_spans": [
+                {
+                  "content_sha256": "ebf5f4b86f4a57aa539a3a190e1f8ac1e4e8f512b2143b1ee8f75c089f2e4846",
+                  "end": 112,
+                  "source_id": "prices-v1",
+                  "start": 0
+                }
+              ],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "tool_call_id": "read-1"
+            }
+          ],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_definition_set": {
+            "names": [
+              "read_sources",
+              "outline_source",
+              "search_source",
+              "search_library",
+              "news_search",
+              "acquire_sources",
+              "resolve_entity",
+              "market_data",
+              "company_financials",
+              "filings",
+              "issuer_documents",
+              "record_facts",
+              "calculate_financials",
+              "create_chart",
+              "analyze_market_series",
+              "create_table",
+              "read_pages",
+              "request_ocr",
+              "activate_method_pack",
+              "extract_statements",
+              "checkpoint_question_part",
+              "checkpoint_report_draft",
+              "submit_research"
+            ],
+            "sha256": "6c7dc60a470c2341cb8a9cebbcef719c2d57d8fc60903a23ad7e5e7bd33889a5"
+          },
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "e95c29bfbd2744269bfe589a67782c44126aacf65027bebe29a6517f53924e07",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 7335,
+              "other": 18,
+              "system": 6976,
+              "tools": 43709
+            },
+            "wire_bytes": 58093
+          }
+        },
+        "fixture-M1:research-agent:a57e053326fb4ffdbd8285d15b70ab8e": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 54777,
+            "estimated_input_tokens": 54777,
+            "estimated_input_tokens_heuristic": 18259,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 55033
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-M1:research-agent:a57e053326fb4ffdbd8285d15b70ab8e",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-M1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 54713
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 1,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "finish": "tool_use",
+          "input_references_stage": "constructed_before_serialization",
+          "input_tool_references": [],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_definition_set": {
+            "names": [
+              "read_sources",
+              "outline_source",
+              "search_source",
+              "search_library",
+              "news_search",
+              "acquire_sources",
+              "resolve_entity",
+              "market_data",
+              "company_financials",
+              "filings",
+              "issuer_documents",
+              "record_facts",
+              "calculate_financials",
+              "create_chart",
+              "analyze_market_series",
+              "create_table",
+              "read_pages",
+              "request_ocr",
+              "activate_method_pack",
+              "extract_statements",
+              "checkpoint_question_part",
+              "checkpoint_report_draft",
+              "submit_research"
+            ],
+            "sha256": "6c7dc60a470c2341cb8a9cebbcef719c2d57d8fc60903a23ad7e5e7bd33889a5"
+          },
+          "tool_evidence_receipts": [
+            {
+              "candidates": [
+                {
+                  "content_sha256": "ebf5f4b86f4a57aa539a3a190e1f8ac1e4e8f512b2143b1ee8f75c089f2e4846",
+                  "end": 112,
+                  "source_id": "prices-v1",
+                  "start": 0
+                }
+              ],
+              "read_spans": [],
+              "references": {
+                "requirement_id": [
+                  "req-1e58ae858710c48b",
+                  "req-3ef8e8f864374d5d"
+                ],
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "requirement_id": null,
+              "requirement_queries": [
+                {
+                  "query_sha256": "cfcf9bd53e44b0ce98d5fa9679f7c9fea9025795b95d1e67ab58f5b39e89cd61",
+                  "reason": "unmet_or_requested_requirement",
+                  "requirement_id": "req-1e58ae858710c48b"
+                },
+                {
+                  "query_sha256": "6d86a9155a7b28971443d8dc486e53b5c43411c06c415256b57e929358b35558",
+                  "reason": "unmet_or_requested_requirement",
+                  "requirement_id": "req-3ef8e8f864374d5d"
+                }
+              ],
+              "selection_trace": [
+                {
+                  "decision": "selected",
+                  "end": 112,
+                  "reason": "requirement_retrieval",
+                  "requirement_ids": [
+                    "req-1e58ae858710c48b",
+                    "req-3ef8e8f864374d5d"
+                  ],
+                  "source_id": "prices-v1",
+                  "start": 0
+                }
+              ],
+              "selection_trace_filtered": 0,
+              "selection_trace_total": 1,
+              "selection_trace_truncated": 0,
+              "tool": "search_library",
+              "tool_call_id": "search-1"
+            }
+          ],
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "78aebfd5eef2dca1461d458079374b3765482d708d80041d24448474c9afa741",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 3955,
+              "other": 18,
+              "system": 6976,
+              "tools": 43709
+            },
+            "wire_bytes": 54713
+          }
+        }
+      },
+      "outcome": "partial",
+      "reason": "submitted",
+      "transport_calls": 3
+    },
+    "M1-truncated": {
+      "diagnostics": {
+        "fixture-M1:research-agent:3c4cd0626a2b41c88631e6f4bef9e38e": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 58157,
+            "estimated_input_tokens": 58157,
+            "estimated_input_tokens_heuristic": 19386,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 58413
+          },
+          "context": {
+            "call_id": "fixture-M1:research-agent:3c4cd0626a2b41c88631e6f4bef9e38e",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-M1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 58093
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 2,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "delivery": {
+            "association": "last_observed_call",
+            "claims": [],
+            "parts": [
+              {
+                "part_id": "req-3ef8e8f864374d5d",
+                "references": {},
+                "requirements": [
+                  {
+                    "references": {},
+                    "requirement_id": "req-3ef8e8f864374d5d",
+                    "status": "missing"
+                  }
+                ],
+                "status": "unresolved"
+              },
+              {
+                "part_id": "req-1e58ae858710c48b",
+                "references": {},
+                "requirements": [
+                  {
+                    "references": {},
+                    "requirement_id": "req-1e58ae858710c48b",
+                    "status": "missing"
+                  }
+                ],
+                "status": "unresolved"
+              }
+            ],
+            "status": "partial"
+          },
+          "exception": {
+            "exception_class": "ProviderFailure",
+            "location": {
+              "file": "anthropic_messages.py",
+              "line": 108
+            }
+          },
+          "finish": "provider_length",
+          "input_references_stage": "constructed_before_serialization",
+          "input_tool_references": [
+            {
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "tool_call_id": "search-1"
+            },
+            {
+              "read_spans": [
+                {
+                  "content_sha256": "ebf5f4b86f4a57aa539a3a190e1f8ac1e4e8f512b2143b1ee8f75c089f2e4846",
+                  "end": 112,
+                  "source_id": "prices-v1",
+                  "start": 0
+                }
+              ],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "tool_call_id": "read-1"
+            }
+          ],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "max_tokens",
+          "tool_definition_set": {
+            "names": [
+              "read_sources",
+              "outline_source",
+              "search_source",
+              "search_library",
+              "news_search",
+              "acquire_sources",
+              "resolve_entity",
+              "market_data",
+              "company_financials",
+              "filings",
+              "issuer_documents",
+              "record_facts",
+              "calculate_financials",
+              "create_chart",
+              "analyze_market_series",
+              "create_table",
+              "read_pages",
+              "request_ocr",
+              "activate_method_pack",
+              "extract_statements",
+              "checkpoint_question_part",
+              "checkpoint_report_draft",
+              "submit_research"
+            ],
+            "sha256": "6c7dc60a470c2341cb8a9cebbcef719c2d57d8fc60903a23ad7e5e7bd33889a5"
+          },
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "e95c29bfbd2744269bfe589a67782c44126aacf65027bebe29a6517f53924e07",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 7335,
+              "other": 18,
+              "system": 6976,
+              "tools": 43709
+            },
+            "wire_bytes": 58093
+          }
+        },
+        "fixture-M1:research-agent:ba65d512e4c44b82a5959793ff79eb44": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 54777,
+            "estimated_input_tokens": 54777,
+            "estimated_input_tokens_heuristic": 18259,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 55033
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-M1:research-agent:ba65d512e4c44b82a5959793ff79eb44",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-M1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 54713
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 1,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "finish": "tool_use",
+          "input_references_stage": "constructed_before_serialization",
+          "input_tool_references": [],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_definition_set": {
+            "names": [
+              "read_sources",
+              "outline_source",
+              "search_source",
+              "search_library",
+              "news_search",
+              "acquire_sources",
+              "resolve_entity",
+              "market_data",
+              "company_financials",
+              "filings",
+              "issuer_documents",
+              "record_facts",
+              "calculate_financials",
+              "create_chart",
+              "analyze_market_series",
+              "create_table",
+              "read_pages",
+              "request_ocr",
+              "activate_method_pack",
+              "extract_statements",
+              "checkpoint_question_part",
+              "checkpoint_report_draft",
+              "submit_research"
+            ],
+            "sha256": "6c7dc60a470c2341cb8a9cebbcef719c2d57d8fc60903a23ad7e5e7bd33889a5"
+          },
+          "tool_evidence_receipts": [
+            {
+              "candidates": [
+                {
+                  "content_sha256": "ebf5f4b86f4a57aa539a3a190e1f8ac1e4e8f512b2143b1ee8f75c089f2e4846",
+                  "end": 112,
+                  "source_id": "prices-v1",
+                  "start": 0
+                }
+              ],
+              "read_spans": [],
+              "references": {
+                "requirement_id": [
+                  "req-1e58ae858710c48b",
+                  "req-3ef8e8f864374d5d"
+                ],
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "requirement_id": null,
+              "requirement_queries": [
+                {
+                  "query_sha256": "cfcf9bd53e44b0ce98d5fa9679f7c9fea9025795b95d1e67ab58f5b39e89cd61",
+                  "reason": "unmet_or_requested_requirement",
+                  "requirement_id": "req-1e58ae858710c48b"
+                },
+                {
+                  "query_sha256": "6d86a9155a7b28971443d8dc486e53b5c43411c06c415256b57e929358b35558",
+                  "reason": "unmet_or_requested_requirement",
+                  "requirement_id": "req-3ef8e8f864374d5d"
+                }
+              ],
+              "selection_trace": [
+                {
+                  "decision": "selected",
+                  "end": 112,
+                  "reason": "requirement_retrieval",
+                  "requirement_ids": [
+                    "req-1e58ae858710c48b",
+                    "req-3ef8e8f864374d5d"
+                  ],
+                  "source_id": "prices-v1",
+                  "start": 0
+                }
+              ],
+              "selection_trace_filtered": 0,
+              "selection_trace_total": 1,
+              "selection_trace_truncated": 0,
+              "tool": "search_library",
+              "tool_call_id": "search-1"
+            }
+          ],
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "78aebfd5eef2dca1461d458079374b3765482d708d80041d24448474c9afa741",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 3955,
+              "other": 18,
+              "system": 6976,
+              "tools": 43709
+            },
+            "wire_bytes": 54713
+          }
+        },
+        "fixture-M1:research-agent:f5f736bdd7a64406a1bd63193c94799f": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 57480,
+            "estimated_input_tokens": 57480,
+            "estimated_input_tokens_heuristic": 19160,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 57736
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-M1:research-agent:f5f736bdd7a64406a1bd63193c94799f",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-M1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 57416
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 2,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "finish": "tool_use",
+          "input_references_stage": "constructed_before_serialization",
+          "input_tool_references": [
+            {
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "tool_call_id": "search-1"
+            }
+          ],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_definition_set": {
+            "names": [
+              "read_sources",
+              "outline_source",
+              "search_source",
+              "search_library",
+              "news_search",
+              "acquire_sources",
+              "resolve_entity",
+              "market_data",
+              "company_financials",
+              "filings",
+              "issuer_documents",
+              "record_facts",
+              "calculate_financials",
+              "create_chart",
+              "analyze_market_series",
+              "create_table",
+              "read_pages",
+              "request_ocr",
+              "activate_method_pack",
+              "extract_statements",
+              "checkpoint_question_part",
+              "checkpoint_report_draft",
+              "submit_research"
+            ],
+            "sha256": "6c7dc60a470c2341cb8a9cebbcef719c2d57d8fc60903a23ad7e5e7bd33889a5"
+          },
+          "tool_evidence_receipts": [
+            {
+              "read_spans": [
+                {
+                  "content_sha256": "ebf5f4b86f4a57aa539a3a190e1f8ac1e4e8f512b2143b1ee8f75c089f2e4846",
+                  "end": 112,
+                  "source_id": "prices-v1",
+                  "start": 0
+                }
+              ],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "tool": "read_sources",
+              "tool_call_id": "read-1"
+            }
+          ],
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "ff22f326da526b3418d3784b9d913e9647a6b06400f9b669df5c24150f1a3f35",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 6658,
+              "other": 18,
+              "system": 6976,
+              "tools": 43709
+            },
+            "wire_bytes": 57416
+          }
+        }
+      },
+      "outcome": "partial",
+      "reason": "provider_output_truncated",
+      "transport_calls": 3
+    }
+  },
+  "fixture_sha256": "78588ccf7251da1cdaf1201434766d3cabc7abea6bc7233c10d763398b2f770c"
+}

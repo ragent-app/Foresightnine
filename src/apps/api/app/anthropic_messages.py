@@ -280,6 +280,7 @@ class AnthropicMessagesProvider:
         diagnostics = TransportDiagnostics()
         response = None
         wire = None
+        body = None
         wire_bytes: int | None = None
         streaming = False
         transport_entered = False
@@ -367,6 +368,9 @@ class AnthropicMessagesProvider:
                     meta = safe_wire_metadata(wire, wire_bytes=wire_bytes)
                     meta['provider'] = 'anthropic_messages'
                     observation['request_metadata'] = meta
+                    if body is not None:
+                        from .research_diagnostics import wire_manifest
+                        observation['wire_manifest'] = wire_manifest(wire, body)
                     if type(wire.get('max_tokens')) is int:
                         observation['max_tokens'] = wire['max_tokens']
                 if type(wire_bytes) is int and wire_bytes >= 0:
@@ -797,7 +801,10 @@ class AnthropicMessagesProvider:
                 failure.reported_tokens = usage.total_tokens if usage else None
                 raise failure
             if not 200 <= response.status_code < 300:
-                failure = ProviderFailure('provider_request_rejected', 'Provider rejected the request.', retryable=False)
+                if response.status_code == 429:
+                    failure = ProviderFailure('provider_rate_limited', 'Provider rate limit reached.', retryable=True)
+                else:
+                    failure = ProviderFailure('provider_request_rejected', 'Provider rejected the request.', retryable=False)
                 failure.provider_response_received = True
                 raise failure
             try:

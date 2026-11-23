@@ -67,7 +67,7 @@ def _market_source() -> ResearchSource:
         title="AAPL Daily Bars",
         text="\n".join(lines),
         kind="market_data",
-        published_at=None,
+        published_at=datetime(2026, 2, 20, tzinfo=timezone.utc),
         obtained_at=datetime(2026, 2, 20, tzinfo=timezone.utc),
         content_sha256="sha-mkt",
         retrieval_method="market_data",

@@ -517,6 +517,10 @@ class ResearchLibrary:
     def __contains__(self, source_id: object) -> bool:
         return source_id in self._indexes
 
+    def indexed_source(self, source_id: str) -> "ResearchSource | None":
+        index = self._indexes.get(source_id)
+        return index.source if index else None
+
     def note_ineligible(self, source_id: str, reason: str = "not_eligible") -> None:
         """Remember a source the caller withheld so ``coverage`` can report why it was not searched."""
         self._ineligible[source_id] = reason
@@ -664,7 +668,7 @@ class ResearchLibrary:
 
     # -- search -------------------------------------------------------------------------------------
     def search(self, query: str, *, source_ids: Sequence[str] | None = None, top_k: int = 10,
-               max_chars_per_hit: int = 360) -> HitList:
+               max_chars_per_hit: int = 360, use_vector: bool = True) -> HitList:
         coverage = self.coverage(source_ids)
         if top_k <= 0 or not query or not query.strip():
             return HitList([], coverage)
@@ -681,7 +685,7 @@ class ResearchLibrary:
         vector_active = False
         fallback_reason: str | None = None
 
-        if self._vector is not None and targets:
+        if use_vector and self._vector is not None and targets:
             try:
                 raw_vec = list(self._vector.query(query, source_ids=targets, limit=pool_limit) or ())
             except Exception as error:

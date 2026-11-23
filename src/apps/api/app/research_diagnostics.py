@@ -232,6 +232,114 @@ def fingerprint(value: str | bytes) -> str:
     """Hash caller-supplied canonical input without persisting it."""
     return hashlib.sha256(value.encode('utf-8') if isinstance(value, str) else value).hexdigest()
 
+def wire_manifest(wire: dict[str, Any], body: bytes) -> dict[str, Any]:
+    """Measure actual serialized JSON values without retaining any request content.
+
+    Categories are disjoint value bytes; keys, punctuation and list separators are
+    assigned to serialization_overhead. The body is authoritative, not an estimate.
+    """
+    import json
+    def size(value: Any) -> int:
+        return len(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8'))
+    categories = {'system': 0, 'tools': 0, 'messages': 0, 'other': 0}
+    for key, value in wire.items():
+        category = key if key in ('system', 'tools', 'messages') else 'other'
+        categories[category] += size(value)
+    overhead = len(body) - sum(categories.values())
+    if overhead < 0:
+        raise ValueError('Wire body does not match its JSON envelope')
+    return {'request_sha256': fingerprint(body), 'wire_bytes': len(body),
+            'value_bytes': categories, 'serialization_overhead_bytes': overhead}
+
+def sanitize_wire_manifest(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    digest, total, overhead, categories = (value.get('request_sha256'), value.get('wire_bytes'),
+        value.get('serialization_overhead_bytes'), value.get('value_bytes'))
+    keys = ('system', 'tools', 'messages', 'other')
+    if not isinstance(digest, str) or not _HASH.fullmatch(digest) or type(total) is not int or not 0 <= total <= 10**9 or type(overhead) is not int or not 0 <= overhead <= total or not isinstance(categories, dict):
+        return None
+    if any(type(categories.get(key)) is not int or not 0 <= categories[key] <= total for key in keys):
+        return None
+    if sum(categories[key] for key in keys) + overhead != total:
+        return None
+    return {'request_sha256': digest, 'wire_bytes': total, 'value_bytes': {key: categories[key] for key in keys}, 'serialization_overhead_bytes': overhead}
+
+def structured_evidence_ids(value: object) -> dict[str, list[str]]:
+    """Extract explicit structured references only; presence is not semantic support."""
+    keys = ('requirement_id', 'part_id', 'source_id', 'fact_id', 'calculation_id', 'claim_id', 'candidate_id')
+    found: dict[str, set[str]] = {key: set() for key in keys}
+    def visit(node: object, depth: int = 0) -> None:
+        if depth > 16:
+            return
+        if isinstance(node, dict):
+            for key, child in list(node.items())[:1000]:
+                if key in found and isinstance(child, str) and _IDENTIFIER.fullmatch(child):
+                    found[key].add(child)
+                elif isinstance(child, (dict, list)):
+                    visit(child, depth + 1)
+        elif isinstance(node, list):
+            for child in node[:1000]:
+                visit(child, depth + 1)
+    visit(value)
+    return {key: sorted(ids)[:500] for key, ids in found.items() if ids}
+
+def trace_identifier(value: object) -> str | None:
+    return value if isinstance(value, str) and _IDENTIFIER.fullmatch(value) else None
+
+def structured_read_spans(value: object) -> list[dict[str, Any]]:
+    """Keep only explicit successful read locations and content fingerprints."""
+    rows = value.get('results') if isinstance(value, dict) else None
+    if not isinstance(rows, list):
+        return []
+    spans = []
+    for row in rows[:500]:
+        if not isinstance(row, dict) or row.get('status') != 'read':
+            continue
+        sid, start, end, digest = row.get('source_id'), row.get('start'), row.get('end'), row.get('content_sha256')
+        if not trace_identifier(sid) or type(start) is not int or type(end) is not int or not 0 <= start <= end <= 10**9:
+            continue
+        span = {'source_id': sid, 'start': start, 'end': end}
+        if isinstance(digest, str) and _HASH.fullmatch(digest):
+            span['content_sha256'] = digest
+        spans.append(span)
+    return spans
+
+def structured_projection_spans(value: object) -> list[dict[str, Any]]:
+    spans: list[dict[str, Any]] = []
+    def visit(node: object, depth: int = 0) -> None:
+        if depth > 16 or len(spans) >= 500:
+            return
+        if isinstance(node, dict):
+            sid, start, end, digest = node.get('source_id'), node.get('start'), node.get('end'), node.get('content_sha256')
+            if trace_identifier(sid) and type(start) is int and type(end) is int and 0 <= start <= end <= 10**9 and isinstance(digest, str) and _HASH.fullmatch(digest):
+                span = {'source_id': sid, 'start': start, 'end': end, 'content_sha256': digest}
+                if span not in spans:
+                    spans.append(span)
+            for child in list(node.values())[:1000]:
+                visit(child, depth + 1)
+        elif isinstance(node, list):
+            for child in node[:1000]:
+                visit(child, depth + 1)
+    visit(value)
+    return spans
+
+def delivery_trace(outcome: Any) -> dict[str, Any]:
+    """Structural output references; never claim semantic validation."""
+    return {
+        'status': outcome.status if outcome.status in ('completed', 'partial', 'failed', 'cancelled') else 'unknown',
+        'claims': [{'claim_id': trace_identifier(row.get('claim_id')), 'references': structured_evidence_ids(row)}
+                   for row in outcome.claims if isinstance(row, dict)],
+        'parts': [{'part_id': trace_identifier(part.get('id')),
+                   'status': part.get('status') if part.get('status') in ('answered', 'partial', 'unresolved') else 'unknown',
+                   'requirements': [{'requirement_id': trace_identifier(req.get('id')),
+                                     'status': req.get('status') if req.get('status') in ('satisfied', 'partial', 'missing', 'unavailable', 'conflict', 'not_applicable') else 'unknown',
+                                     'references': structured_evidence_ids(req.get('references'))}
+                                    for req in part.get('requirements', []) if isinstance(req, dict)],
+                   'references': structured_evidence_ids(part.get('references'))}
+                  for part in outcome.question_parts if isinstance(part, dict)],
+    }
+
 def safe_diagnostic_context(**kwargs: Any) -> dict[str, Any]:
     """Keep only bounded metadata; never retain prompts or arbitrary parameters."""
     result: dict[str, Any] = {}

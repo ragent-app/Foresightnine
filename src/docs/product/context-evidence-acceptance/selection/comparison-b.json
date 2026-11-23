@@ -1,0 +1,361 @@
+{
+  "fixture_sha256": "b99754cae6015c9b27770ebc7ced9fb156715c85968098b876c0d4925c30ad59",
+  "requirements_sha256": "f03e4fe7c73a69813e0127ad46813ee0566fc213e23bbb12be38ad041c8fa17e",
+  "max_local_queries_per_arm": 3,
+  "selector": "first unique exact passage, same K and 512-byte cap",
+  "cases": [
+    {
+      "case_id": "S1",
+      "necessary_groups_available": 2,
+      "topic": {
+        "queries": [
+          {
+            "requirement_id": null,
+            "query": "Aster 2025 2024 revenue growth sustainability",
+            "hit_source_ids": [
+              "release-copy-a",
+              "release-copy-b",
+              "release-original",
+              "annual-table",
+              "annual-note"
+            ]
+          },
+          {
+            "requirement_id": null,
+            "query": "Aster 2025 2024 revenue growth sustainability",
+            "hit_source_ids": [
+              "release-copy-a",
+              "release-copy-b",
+              "release-original",
+              "annual-table",
+              "annual-note"
+            ]
+          },
+          {
+            "requirement_id": null,
+            "query": "Aster 2025 2024 revenue growth sustainability",
+            "hit_source_ids": [
+              "release-copy-a",
+              "release-copy-b",
+              "release-original",
+              "annual-table",
+              "annual-note"
+            ]
+          }
+        ],
+        "candidate_source_ids": [
+          "release-copy-a",
+          "release-copy-b",
+          "release-original",
+          "annual-table",
+          "annual-note"
+        ],
+        "selected_source_ids": [
+          "release-copy-a",
+          "annual-table"
+        ],
+        "selected_bytes": 261,
+        "candidate_groups_covered": 2,
+        "selected_groups_covered": 1
+      },
+      "gap": {
+        "queries": [
+          {
+            "requirement_id": "two-period-revenue",
+            "query": "Find comparable consolidated revenue for 2025 and 2024.",
+            "hit_source_ids": [
+              "annual-table",
+              "release-copy-a",
+              "release-copy-b",
+              "release-original",
+              "annual-note"
+            ]
+          },
+          {
+            "requirement_id": "acquisition-increment",
+            "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+            "hit_source_ids": [
+              "annual-note",
+              "release-copy-a",
+              "release-copy-b",
+              "release-original",
+              "annual-table"
+            ]
+          }
+        ],
+        "candidate_source_ids": [
+          "annual-table",
+          "release-copy-a",
+          "release-copy-b",
+          "release-original",
+          "annual-note"
+        ],
+        "selected_source_ids": [
+          "annual-table",
+          "release-copy-a"
+        ],
+        "selected_bytes": 261,
+        "candidate_groups_covered": 2,
+        "selected_groups_covered": 1
+      }
+    },
+    {
+      "case_id": "S2",
+      "necessary_groups_available": 1,
+      "topic": {
+        "queries": [
+          {
+            "requirement_id": null,
+            "query": "Aster 2025 2024 revenue growth sustainability",
+            "hit_source_ids": [
+              "release-copy-a",
+              "release-copy-b",
+              "release-original",
+              "annual-table"
+            ]
+          },
+          {
+            "requirement_id": null,
+            "query": "Aster 2025 2024 revenue growth sustainability",
+            "hit_source_ids": [
+              "release-copy-a",
+              "release-copy-b",
+              "release-original",
+              "annual-table"
+            ]
+          },
+          {
+            "requirement_id": null,
+            "query": "Aster 2025 2024 revenue growth sustainability",
+            "hit_source_ids": [
+              "release-copy-a",
+              "release-copy-b",
+              "release-original",
+              "annual-table"
+            ]
+          }
+        ],
+        "candidate_source_ids": [
+          "release-copy-a",
+          "release-copy-b",
+          "release-original",
+          "annual-table"
+        ],
+        "selected_source_ids": [
+          "release-copy-a",
+          "annual-table"
+        ],
+        "selected_bytes": 261,
+        "candidate_groups_covered": 1,
+        "selected_groups_covered": 1
+      },
+      "gap": {
+        "queries": [
+          {
+            "requirement_id": "two-period-revenue",
+            "query": "Find comparable consolidated revenue for 2025 and 2024.",
+            "hit_source_ids": [
+              "annual-table",
+              "release-copy-a",
+              "release-copy-b",
+              "release-original"
+            ]
+          },
+          {
+            "requirement_id": "acquisition-increment",
+            "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+            "hit_source_ids": [
+              "release-copy-a",
+              "release-copy-b",
+              "release-original",
+              "annual-table"
+            ]
+          }
+        ],
+        "candidate_source_ids": [
+          "annual-table",
+          "release-copy-a",
+          "release-copy-b",
+          "release-original"
+        ],
+        "selected_source_ids": [
+          "annual-table",
+          "release-copy-a"
+        ],
+        "selected_bytes": 261,
+        "candidate_groups_covered": 1,
+        "selected_groups_covered": 1
+      }
+    },
+    {
+      "case_id": "S3",
+      "necessary_groups_available": 3,
+      "topic": {
+        "queries": [
+          {
+            "requirement_id": null,
+            "query": "Aster 2025 2024 revenue growth sustainability",
+            "hit_source_ids": [
+              "release-original",
+              "annual-table",
+              "annual-note",
+              "contrary"
+            ]
+          },
+          {
+            "requirement_id": null,
+            "query": "Aster 2025 2024 revenue growth sustainability",
+            "hit_source_ids": [
+              "release-original",
+              "annual-table",
+              "annual-note",
+              "contrary"
+            ]
+          },
+          {
+            "requirement_id": null,
+            "query": "Aster 2025 2024 revenue growth sustainability",
+            "hit_source_ids": [
+              "release-original",
+              "annual-table",
+              "annual-note",
+              "contrary"
+            ]
+          }
+        ],
+        "candidate_source_ids": [
+          "release-original",
+          "annual-table",
+          "annual-note",
+          "contrary"
+        ],
+        "selected_source_ids": [
+          "release-original",
+          "annual-table",
+          "annual-note"
+        ],
+        "selected_bytes": 444,
+        "candidate_groups_covered": 3,
+        "selected_groups_covered": 2
+      },
+      "gap": {
+        "queries": [
+          {
+            "requirement_id": "two-period-revenue",
+            "query": "Find comparable consolidated revenue for 2025 and 2024.",
+            "hit_source_ids": [
+              "annual-table",
+              "release-original",
+              "annual-note"
+            ]
+          },
+          {
+            "requirement_id": "acquisition-increment",
+            "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+            "hit_source_ids": [
+              "release-original",
+              "annual-note",
+              "annual-table"
+            ]
+          },
+          {
+            "requirement_id": "important-counterevidence",
+            "query": "Find evidence that could undermine sustainability of revenue growth.",
+            "hit_source_ids": [
+              "release-original",
+              "annual-table",
+              "annual-note"
+            ]
+          }
+        ],
+        "candidate_source_ids": [
+          "annual-table",
+          "release-original",
+          "annual-note"
+        ],
+        "selected_source_ids": [
+          "annual-table",
+          "release-original",
+          "annual-note"
+        ],
+        "selected_bytes": 444,
+        "candidate_groups_covered": 2,
+        "selected_groups_covered": 2
+      }
+    },
+    {
+      "case_id": "S4",
+      "necessary_groups_available": 2,
+      "topic": {
+        "queries": [
+          {
+            "requirement_id": null,
+            "query": "Aster 2025 2024 revenue growth sustainability",
+            "hit_source_ids": [
+              "annual-table",
+              "annual-note"
+            ]
+          },
+          {
+            "requirement_id": null,
+            "query": "Aster 2025 2024 revenue growth sustainability",
+            "hit_source_ids": [
+              "annual-table",
+              "annual-note"
+            ]
+          },
+          {
+            "requirement_id": null,
+            "query": "Aster 2025 2024 revenue growth sustainability",
+            "hit_source_ids": [
+              "annual-table",
+              "annual-note"
+            ]
+          }
+        ],
+        "candidate_source_ids": [
+          "annual-table",
+          "annual-note"
+        ],
+        "selected_source_ids": [
+          "annual-table",
+          "annual-note"
+        ],
+        "selected_bytes": 301,
+        "candidate_groups_covered": 2,
+        "selected_groups_covered": 2
+      },
+      "gap": {
+        "queries": [
+          {
+            "requirement_id": "two-period-revenue",
+            "query": "Find comparable consolidated revenue for 2025 and 2024.",
+            "hit_source_ids": [
+              "annual-table",
+              "annual-note"
+            ]
+          },
+          {
+            "requirement_id": "acquisition-increment",
+            "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+            "hit_source_ids": [
+              "annual-note",
+              "annual-table"
+            ]
+          }
+        ],
+        "candidate_source_ids": [
+          "annual-table",
+          "annual-note"
+        ],
+        "selected_source_ids": [
+          "annual-table",
+          "annual-note"
+        ],
+        "selected_bytes": 301,
+        "candidate_groups_covered": 2,
+        "selected_groups_covered": 2
+      }
+    }
+  ]
+}

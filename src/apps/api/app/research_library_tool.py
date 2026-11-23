@@ -9,8 +9,11 @@ embedding scoring via ``default_vector_scorer``, and how a hit is turned into so
 from __future__ import annotations
 
 from datetime import datetime
+from collections import Counter
+from functools import lru_cache
 import logging
 import os
+import re
 from typing import Any, Callable, Iterable, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -26,7 +29,7 @@ from .research_embeddings import (
     EmbeddingVectorScorer,
     default_embedding_cache,
 )
-from .research_library import _UNSET, Hit, ResearchLibrary, VectorScorer, _Unset
+from .research_library import _UNSET, Hit, ResearchLibrary, VectorScorer, _Unset, _Tokenizer, _is_numeric_term
 from .research_source_policy import source_eligibility
 from .research_sources import ResearchSource
 
@@ -53,6 +56,8 @@ class SearchLibraryRequest(BaseModel):
     max_hits: int = Field(default=DEFAULT_LIBRARY_HITS, ge=1, le=MAX_LIBRARY_HITS,
                           description=f'Maximum number of passages to return (1-{MAX_LIBRARY_HITS}).')
     rationale: str | None = Field(default=None, min_length=1, description='Optional brief reason for this search.')
+    requirement_ids: list[str] | None = Field(default=None, max_length=10, description=(
+        'Optional IDs of existing research evidence requirements to guide retrieval. Omit for current unmet core requirements.'))
 
     @field_validator('query')
     @classmethod
@@ -130,16 +135,20 @@ def sync_library(
         resolved = default_vector_scorer(environ=environ)
         if resolved is not None:
             library.attach_vector_scorer(resolved)
+    # Remove stale entries before any retrieval, including revoked and removed sources.
+    for indexed_id in library.source_ids:
+        current = source_by_id.get(indexed_id)
+        if current is None or head_source_id(indexed_id, versions, source_by_id) != indexed_id:
+            library.remove_source(indexed_id)
+        elif source_eligibility([current], as_of)[0][1] != 'eligible':
+            library.remove_source(indexed_id)
     for source_id, source in source_by_id.items():
         head_id = head_source_id(source_id, versions, source_by_id)
         if head_id != source_id:
             head = source_by_id[head_id]
             if source_eligibility([head], as_of)[0][1] != 'eligible':
                 continue
-            if head_id in library:
-                library.remove_source(source_id)
-            elif source_id in library:
-                library.replace_source(source_id, head)
+            # The current head is processed independently in this loop.
             continue
         code = source_eligibility([source], as_of)[0][1]
         if code != 'eligible':
@@ -147,6 +156,11 @@ def sync_library(
             continue
         if source_id not in library:
             library.add_source(source)
+        else:
+            indexed = library.indexed_source(source_id)
+            if indexed is not None and (indexed.text != source.text or indexed.provenance != source.provenance
+                                        or indexed.content_sha256 != source.content_sha256):
+                library.replace_source(source_id, source)
 
 
 def _page_check(source: ResearchSource | None, page: int | None, needs_check: Callable[[ResearchSource, int], bool] | None) -> bool:
@@ -205,18 +219,148 @@ def compact_coverage(coverage: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
+def requirement_search_query(requirement: Mapping[str, Any]) -> str:
+    """Build retrieval cues from the existing assessed requirement, never from answer labels."""
+    question = str(requirement.get('question') or '').strip()
+    kind = str(requirement.get('kind') or '')
+    metric = requirement.get('metric')
+    hints: list[str] = []
+    if kind.startswith('financial:'):
+        if isinstance(metric, str) and metric:
+            hints.append(metric.replace('_', ' '))
+        hints.append('financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因')
+    elif kind.startswith('contribution:'):
+        hints.append('drivers contribution change 原因 驱动 贡献 变化')
+    elif kind == 'counterevidence':
+        hints.append('risk decline uncertainty alternative 风险 下滑 不确定 反证')
+    elif kind.startswith('market:'):
+        hints.append('price trading date benchmark 价格 交易日 基准')
+    return ' '.join([*hints, question])[:500]
+
+
 def run_search_library(req: SearchLibraryRequest, *, library: ResearchLibrary, source_by_id: Mapping[str, ResearchSource],
                        versions: Mapping[str, str], as_of: datetime | None,
-                       needs_check: Callable[[ResearchSource, int], bool] | None = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """Search the (already synced) library; returns the tool result and its event summary."""
+                       needs_check: Callable[[ResearchSource, int], bool] | None = None,
+                       requirements: Iterable[Mapping[str, Any]] = ()) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Retrieve broad candidates and distribute slots across actual unmet requirements.
+
+    Lexical matches are leads only; neither selection nor absence proves a requirement satisfied.
+    """
     requested: list[str] | None = None
     if req.source_ids is not None:
         requested = list(dict.fromkeys(head_source_id(s, versions, source_by_id) for s in req.source_ids))
-    hits = library.search(req.query, source_ids=requested, top_k=req.max_hits)
-    coverage = compact_coverage(hits.coverage)
-    rows = [hit_row(h, source_by_id.get(h.source_id), needs_check) for h in hits]
+    available = [r for r in requirements if isinstance(r, Mapping) and isinstance(r.get('id'), str)
+                 and isinstance(r.get('question'), str) and r['question'].strip()]
+    if req.requirement_ids is not None:
+        known = {r['id'] for r in available}
+        if any(rid not in known for rid in req.requirement_ids):
+            return {'status': 'invalid', 'reason': 'unknown_requirement_id'}, None
+        wanted = set(req.requirement_ids)
+        active = [r for r in available if r['id'] in wanted]
+    else:
+        active = [r for r in available if r.get('core', True) and r.get('status') not in ('satisfied', 'not_applicable')]
+    active = active[:10]
+    # Query is always first; each requirement has its own retrieval opportunity.
+    # The broad pool remains bounded; requirement expansion uses local BM25 only.
+    primary = library.search(req.query, source_ids=requested, top_k=max(50, req.max_hits * 5))
+    queues = [(r['id'], library.search(requirement_search_query(r), source_ids=requested,
+                                      top_k=max(50, req.max_hits * 5), use_vector=False)) for r in active]
+    candidates: dict[tuple[str, int, int], dict[str, Any]] = {}
+    def add(hit: Hit, rid: str | None) -> None:
+        key = (hit.source_id, hit.char_start, hit.char_end)
+        entry = candidates.setdefault(key, {'hit': hit, 'requirement_ids': []})
+        if rid is not None and rid not in entry['requirement_ids']:
+            entry['requirement_ids'].append(rid)
+    for hit in primary:
+        add(hit, None)
+    for rid, hits in queues:
+        for hit in hits:
+            add(hit, rid)
+    selected: list[tuple[str, int, int]] = []
+    selected_text: set[str] = set()
+    seen_terms: set[str] = set()
+    tokenizer = _Tokenizer()
+    reasons: dict[tuple[str, int, int], str] = {}
+    ordered = list(candidates)
+    @lru_cache(maxsize=1100)
+    def body(key: tuple[str, int, int]) -> str:
+        source = source_by_id.get(key[0])
+        return source.text[key[1]:key[2]] if source else ''
+    @lru_cache(maxsize=1100)
+    def eligible(key: tuple[str, int, int]) -> bool:
+        source = source_by_id.get(key[0])
+        return bool(source and source_eligibility([source], as_of)[0][1] == 'eligible')
+    @lru_cache(maxsize=1100)
+    def terms(key: tuple[str, int, int]) -> set[str]:
+        return {term for term in tokenizer.terms(body(key)) if not _is_numeric_term(term)}
+    def pick(key: tuple[str, int, int], reason: str) -> None:
+        selected.append(key)
+        selected_text.add(body(key))
+        seen_terms.update(terms(key))
+        reasons[key] = reason
+    # Use the assessed requirement's kind and text to distinguish retrieval
+    # goals, then favor precisely locatable source material. A numeric value,
+    # period or condition is only a selection cue, never proof of relevance.
+    for rid, hits in queues:
+        possible = [key for key in ordered if key not in selected and eligible(key) and body(key) not in selected_text]
+        if not possible or len(selected) >= req.max_hits:
+            break
+        rank = {key: i for i, key in enumerate(ordered)}
+        requirement_rank = {(h.source_id, h.char_start, h.char_end): i for i, h in enumerate(hits)}
+        requirement = next(row for row in active if row['id'] == rid)
+        query_terms = {t for t in tokenizer.terms(requirement_search_query(requirement)) if not _is_numeric_term(t)}
+        def selection_key(item: tuple[str, int, int]) -> tuple[int, int, int, int]:
+            item_terms = terms(item)
+            text = body(item)
+            source = source_by_id[item[0]]
+            # Distinct evidence-bearing text is preferable to long generic
+            # commentary. Count kinds of cues, never magnitude or identity.
+            numeric = bool(re.search(r'\d', text))
+            period = bool(re.search(r'(?<!\d)(?:19|20)\d{2}(?!\d)|quarter|year|季度|年度|年', text, re.I))
+            conditional = bool(re.search(r'\b(?:if|unless|subject to|provided|until|before|after|may|risk|decline)\b|如果|除非|须|条件|截至|之前|之后|风险|下滑', text, re.I))
+            direct = source.kind in ('official', 'market_data')
+            specificity = int(numeric and period) + int(conditional) + int(direct)
+            overlap = len(item_terms & query_terms)
+            novel = min(len(item_terms - seen_terms), 24)
+            return ((specificity, int(overlap > 0), novel, -rank[item]) if selected else
+                    (int(overlap > 0), specificity, -requirement_rank.get(item, len(ordered)), -rank[item]))
+        key = max(possible, key=selection_key)
+        pick(key, 'requirement_retrieval' if rid in candidates[key]['requirement_ids'] else 'diverse_candidate')
+    for key in ordered:
+        if len(selected) >= req.max_hits:
+            break
+        if key not in selected and eligible(key) and body(key) not in selected_text:
+            pick(key, 'query_retrieval')
+    trace: list[dict[str, Any]] = []
+    for key in ordered:
+        hit = candidates[key]['hit']
+        if key in reasons:
+            decision, reason = 'selected', reasons[key]
+        elif not eligible(key):
+            decision, reason = 'omitted', 'source_ineligible'
+        elif body(key) and body(key) in selected_text:
+            decision, reason = 'omitted', 'identical_passage'
+        else:
+            decision, reason = 'omitted', 'capacity'
+        trace.append({'source_id': hit.source_id, 'start': hit.char_start, 'end': hit.char_end,
+                      'requirement_ids': candidates[key]['requirement_ids'], 'decision': decision, 'reason': reason})
+    rows = []
+    for key in selected:
+        entry = candidates[key]
+        row = hit_row(entry['hit'], source_by_id.get(key[0]), needs_check)
+        if active:
+            row['requirement_ids'] = entry['requirement_ids']
+            row['requirement_match_status'] = 'retrieval_only_unverified'
+        rows.append(row)
+    coverage = compact_coverage(primary.coverage)
+    omitted = Counter(item['reason'] for item in trace if item['decision'] == 'omitted')
     result: dict[str, Any] = {'status': 'completed', 'query': req.query, 'returned_hits': len(rows), 'hits': rows,
-                              'library_coverage': coverage}
+                              'library_coverage': coverage, 'selection_trace': trace,
+                              'selection_summary': {'candidates': len(trace), 'selected': len(selected),
+                                                    'omitted_by_reason': dict(omitted),
+                                                    'requirements_searched': len(active)},
+                              'requirement_queries': [{'requirement_id': r['id'], 'query': requirement_search_query(r),
+                                                       'reason': 'unmet_or_requested_requirement'} for r in active]}
     notes: list[str] = []
     if requested is not None and req.source_ids is not None and requested != list(dict.fromkeys(req.source_ids)):
         result['source_versions_applied'] = True
@@ -228,7 +372,7 @@ def run_search_library(req: SearchLibraryRequest, *, library: ResearchLibrary, s
         notes.append('Not every page or source could be searched (see library_coverage); a miss here is not evidence '
                      'that the text is absent. Hits are leads: read the location with read_sources or read_pages before citing.')
     elif rows:
-        notes.append('Hits are leads: read the location with read_sources or read_pages before citing.')
+        notes.append('Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable.')
     if notes:
         result['message'] = ' '.join(notes)
     summary = {'kind': 'search_library', 'query': req.query[:120], 'hit_count': len(rows),

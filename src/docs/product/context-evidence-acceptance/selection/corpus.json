@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "description": "Synthetic offline development corpus; all text and entities are fictional. No model or network access.",
+  "as_of": "2026-03-31T23:59:59+00:00",
+  "query": "Aster 2025 2024 revenue growth sustainability",
+  "capacity_passages": 2,
+  "sources": [
+    {"id":"annual-table","title":"Aster annual consolidated statements","published_at":"2026-02-01T00:00:00+00:00","text":"Aster consolidated statements of operations. USD millions. Year ended December 31: 2025 revenue 120; 2024 revenue 100."},
+    {"id":"annual-note","title":"Aster annual report acquisition note","published_at":"2026-02-01T00:00:00+00:00","text":"Aster acquisition note. The acquisition contributed 18 million dollars to the increase in 2025 revenue compared with 2024. Other drivers of the remaining increase were not quantified."},
+    {"id":"release-original","title":"Aster revenue release","published_at":"2026-02-02T00:00:00+00:00","text":"Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability."},
+    {"id":"release-copy-a","title":"News copy A","published_at":"2026-02-03T00:00:00+00:00","original_id":"release-original","text":"Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability."},
+    {"id":"release-copy-b","title":"News copy B","published_at":"2026-02-04T00:00:00+00:00","original_id":"release-original","text":"Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability."},
+    {"id":"contrary","title":"Aster customer disclosure","published_at":"2026-02-15T00:00:00+00:00","text":"Aster customer disclosure: a major customer announced that its Aster purchases would decline in 2026; the magnitude is not specified."},
+    {"id":"future","title":"Aster revision after cutoff","published_at":"2026-04-10T00:00:00+00:00","text":"Aster 2025 2024 revenue growth sustainability revised revenue was 130 million dollars."},
+    {"id":"revoked","title":"Restricted Aster note","published_at":"2026-02-01T00:00:00+00:00","model_input":false,"text":"Aster 2025 2024 revenue growth sustainability restricted source."}
+  ],
+  "cases": [
+    {"id":"S1","included":["annual-table","annual-note","release-original","release-copy-a","release-copy-b"],"requirements":["two-period-revenue","acquisition-increment"],"expected_groups":[["annual-table"],["annual-note"]]},
+    {"id":"S2","included":["annual-table","release-original","release-copy-a","release-copy-b"],"requirements":["two-period-revenue","acquisition-increment"],"expected_groups":[["annual-table"]],"expected_missing":["acquisition-increment"]},
+    {"id":"S3","included":["annual-table","annual-note","contrary","release-original"],"capacity_passages":3,"requirements":["two-period-revenue","acquisition-increment","important-counterevidence"],"expected_groups":[["annual-table"],["annual-note"],["contrary"]]},
+    {"id":"S4","included":["annual-table","annual-note","future","revoked"],"requirements":["two-period-revenue","acquisition-increment"],"expected_groups":[["annual-table"],["annual-note"]],"expected_excluded":{"future":"future","revoked":"permission"}}
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "pdf_sha256": "f46f1893cf18d835967af3eef83e03959b5fdf1dbfef2fb41403975d61e99273",
+  "text_sha256": "243ea2418efc31d08fe029f979fbb641ff9fa0f8316249b73559a1abdd183d1a",
+  "pages": [
+    1,
+    2
+  ],
+  "columns": [
+    {
+      "label": "期末余额",
+      "period_type": "unknown",
+      "basis": "relative_label_unresolved"
+    },
+    {
+      "label": "上年年末余额",
+      "period_type": "unknown",
+      "basis": "relative_label_unresolved"
+    }
+  ],
+  "table_status": "partial",
+  "unit": {
+    "scale": 1,
+    "scale_label": "currency units",
+    "stated_as": "元",
+    "currency": null,
+    "basis": "stated",
+    "text": "单位:元"
+  },
+  "warnings": [
+    "period_unresolved"
+  ],
+  "referenced_note_warning": [
+    "referenced_note_not_bound"
+  ],
+  "before_note": [
+    {
+      "source_id": "sample",
+      "start": 0,
+      "end": 934
+    }
+  ],
+  "after_note": [
+    {
+      "source_id": "sample",
+      "start": 0,
+      "end": 934
+    },
+    {
+      "source_id": "sample",
+      "start": 935,
+      "end": 955
+    }
+  ]
+}

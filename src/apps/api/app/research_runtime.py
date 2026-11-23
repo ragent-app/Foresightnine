@@ -72,6 +72,8 @@ from .research_market_analytics import analyze_market_series
 from .research_news_tool import DiscoverCallableProvider, run_news_search
 from .research_ocr import OcrOutcome
 from .research_source_policy import source_eligibility
+from .research_tool_presentation import (DEFAULT_TOOLS as TOOLS, DEFAULT_METADATA,
+                                         definitions as tool_definitions, definition_metadata)
 from .research_sources import ResearchSource
 from .research_statement_extraction import extract_statements
 from .research_tables import build_research_table
@@ -131,8 +133,7 @@ from .research_tools_registry import (
     REPORT_FORMAT_GUIDANCE,
     SEARCH_SNIPPET_TARGET_CHARS,
     SYSTEM,
-    TOOLS,
-    TOOLS_SERIALIZED_CHARS as _TOOLS_SERIALIZED_CHARS,
+
     AcquireRequest,
     ActivateMethodPackRequest,
     CalculateRequest,
@@ -187,6 +188,9 @@ _PARTIAL_REASON_LABELS = {
     'token_budget_exhausted': 'Token 预算已用完',
     'submitted': '模型已提交部分结果',
 }
+
+
+_TOOLS_SERIALIZED_CHARS = DEFAULT_METADATA[1]
 
 
 def presend_retry_settings() -> tuple[int, float]:
@@ -452,6 +456,11 @@ def _invoke_model_turn(
     if not callable(getattr(model, 'complete_turn', None)):
         return 'outcome', outcome_fn('partial', 'native_tools_unavailable', gaps=[gap('native_tools_unavailable')]), submission_retries, stream_call_seq, active_call_seq
 
+    try:
+        offered = tool_definitions(state, model)
+    except ProviderFailure as error:
+        return 'outcome', outcome_fn('partial', error.code, gaps=[provider_gap(error)]), submission_retries, stream_call_seq, active_call_seq
+    digest, tool_chars = DEFAULT_METADATA if offered is TOOLS else definition_metadata(offered)
     compact_runtime_history(
         state,
         keep_recent=DEFAULT_L1_KEEP_RECENT,
@@ -460,7 +469,7 @@ def _invoke_model_turn(
             model,
             context,
             system_chars=len(SYSTEM),
-            tools_chars=_TOOLS_SERIALIZED_CHARS,
+            tools_chars=tool_chars,
         ),
         force=False,
     )
@@ -468,7 +477,7 @@ def _invoke_model_turn(
         state=state,
         source_by_id=source_by_id,
         system_prompt=SYSTEM,
-        tools=TOOLS,
+        tools=offered,
         library=library_box[0] if library_box else None,
         has_fin_data=fin_data is not None,
     )
@@ -490,6 +499,39 @@ def _invoke_model_turn(
         reservation, output_cap = context.prepare_model_call(budget_provider, wire, SYSTEM)
         call_id = str(context.diagnostic_context.get('operation_id') or 'research') + ':research-agent:' + uuid4().hex
         before = context.start_model(call_id, reservation)
+        names = [tool.name for tool in offered]
+        state['advertised_tools'] = {'call_id': call_id, 'sha256': digest, 'names': names}
+        context.private_diagnostics.setdefault(call_id, {})['tool_definition_set'] = {'sha256': digest, 'names': names}
+        # Only structured references in retained tool results are observable here.
+        # This does not assert semantic adoption or infer missing requirements.
+        from .research_diagnostics import structured_evidence_ids, structured_read_spans, structured_projection_spans, trace_identifier
+        input_refs = []
+        for exchange in turn.history:
+            for result in exchange.results:
+                try:
+                    payload = json.loads(result.content)
+                except (TypeError, ValueError):
+                    continue
+                refs = structured_evidence_ids(payload)
+                if refs and trace_identifier(result.tool_call_id):
+                    input_refs.append({'tool_call_id': result.tool_call_id, 'references': refs, 'read_spans': structured_read_spans(payload)})
+        context.private_diagnostics.setdefault(call_id, {})['input_tool_references'] = input_refs[:500]
+        context.private_diagnostics[call_id]['input_references_stage'] = 'constructed_before_serialization'
+        projection = None
+        try:
+            user_payload = json.loads(turn.user)
+            if isinstance(user_payload, dict):
+                projection = user_payload.get('located_evidence')
+            marker = '[Located evidence; semantic support is not verified]\n'
+            if getattr(turn, 'tail_note', None) and marker in turn.tail_note:
+                projection = json.loads(turn.tail_note.rsplit(marker, 1)[1])
+        except (TypeError, ValueError):
+            projection = None
+        if projection is not None:
+            context.private_diagnostics[call_id]['input_projection'] = {
+                'stage': 'constructed_before_serialization',
+                'references': structured_evidence_ids(projection), 'read_spans': structured_projection_spans(projection)}
+        context._persist_diagnostic(call_id)
     except ProviderFailure as error:
         _record_failed_attempt(state, call_id=None, reason=error.code, error=error)
         save()
@@ -954,7 +996,7 @@ def run_research_agent(
             unique.append(gap('model_reported', '核心问题的依据或可展示答案仍需核验。'))
             if not resolved_partial_notes:
                 resolved_partial_notes = _default_partial_notes(state=state, reason=reason, eligible_sources=[s for s in sources if _is_source_eligible(s, as_of)])
-        return RuntimeOutcome(
+        delivered = RuntimeOutcome(
             status,
             reason,
             report,
@@ -977,6 +1019,15 @@ def run_research_agent(
             tables=list(state.get('tables', [])),
             question_parts=parts,
         )
+        # This is the operation's resulting object. The last observed call is
+        # an ordering association, not a claim that it produced every item.
+        if context.private_diagnostics:
+            from .research_diagnostics import delivery_trace
+            last_call_id = next(reversed(context.private_diagnostics))
+            context.private_diagnostics[last_call_id]['delivery'] = {
+                **delivery_trace(delivered), 'association': 'last_observed_call'}
+            context._persist_diagnostic(last_call_id)
+        return delivered
 
     if state.get('stopped'):
         return outcome('partial', state['stopped'], gaps=[gap('run_stopped')])

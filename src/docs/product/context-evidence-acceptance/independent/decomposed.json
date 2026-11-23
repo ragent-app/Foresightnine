@@ -1,0 +1,42 @@
+[
+  {
+    "id": "H1",
+    "selected": [
+      "h1c",
+      "h1b"
+    ],
+    "evidence_bytes": 252,
+    "complete_groups": 0,
+    "required_groups": 1
+  },
+  {
+    "id": "H2",
+    "selected": [
+      "h2c",
+      "h2b"
+    ],
+    "evidence_bytes": 236,
+    "complete_groups": 0,
+    "required_groups": 1
+  },
+  {
+    "id": "H3",
+    "selected": [
+      "h3c",
+      "h3a"
+    ],
+    "evidence_bytes": 229,
+    "complete_groups": 1,
+    "required_groups": 2
+  },
+  {
+    "id": "H4",
+    "selected": [
+      "h4a",
+      "h4c"
+    ],
+    "evidence_bytes": 201,
+    "complete_groups": 0,
+    "required_groups": 1
+  }
+]

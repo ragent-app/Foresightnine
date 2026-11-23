@@ -184,7 +184,7 @@ export function toolReasonLabel(reason: string | null): string | null {
 }
 
 export const TURN_REASON_LABEL: Readonly<Record<string, string>> = {
-  source_permission_changed: "部分依据的展示权限已变更",
+  source_permission_changed: "部分依据当前不可用，请核对来源版本、研究时点及权限",
   no_submission: "模型没有提交结果就停止了",
   no_progress: "模型重复相同操作，证据没有变化，已停止",
   native_tools_unavailable: "当前模型不支持研究工具调用",
@@ -421,6 +421,7 @@ export function retrievalMethodLabel(method: string): string {
 
 export const FORMULA_LABEL: Readonly<Record<string, string>> = {
   growth_percent: "增长率",
+  contribution_to_change_percent: "已披露贡献占本期变动的比例",
   margin_percent: "利润率",
   difference: "差额",
   ratio: "比率",

@@ -153,111 +153,6 @@
         "title": "CalculationInput",
         "type": "object"
       },
-      "CalculationRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "decimal_places": {
-            "default": 2,
-            "maximum": 8.0,
-            "minimum": 0.0,
-            "title": "Decimal Places",
-            "type": "integer"
-          },
-          "facts": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/NumericFact"
-                },
-                "maxItems": 50,
-                "minItems": 2,
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Facts"
-          },
-          "first": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/NumericFact"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "formula": {
-            "enum": [
-              "growth_percent",
-              "margin_percent",
-              "difference",
-              "cagr",
-              "ratio",
-              "sum",
-              "subtract",
-              "weighted_average",
-              "ttm_sum"
-            ],
-            "title": "Formula",
-            "type": "string"
-          },
-          "periods": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Periods"
-          },
-          "second": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/NumericFact"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "weights": {
-            "anyOf": [
-              {
-                "items": {
-                  "anyOf": [
-                    {
-                      "type": "number"
-                    },
-                    {
-                      "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Weights"
-          }
-        },
-        "required": [
-          "formula"
-        ],
-        "title": "CalculationRequest",
-        "type": "object"
-      },
       "CalculationScaleAdjustment": {
         "additionalProperties": false,
         "properties": {
@@ -1192,6 +1087,112 @@
         "title": "PdfUploadRequest",
         "type": "object"
       },
+      "PublicCalculationRequest": {
+        "additionalProperties": false,
+        "description": "The standalone calculator cannot establish a disclosed attribution.",
+        "properties": {
+          "decimal_places": {
+            "default": 2,
+            "maximum": 8.0,
+            "minimum": 0.0,
+            "title": "Decimal Places",
+            "type": "integer"
+          },
+          "facts": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/NumericFact"
+                },
+                "maxItems": 50,
+                "minItems": 2,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facts"
+          },
+          "first": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NumericFact"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "formula": {
+            "enum": [
+              "growth_percent",
+              "margin_percent",
+              "difference",
+              "cagr",
+              "ratio",
+              "sum",
+              "subtract",
+              "weighted_average",
+              "ttm_sum"
+            ],
+            "title": "Formula",
+            "type": "string"
+          },
+          "periods": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Periods"
+          },
+          "second": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NumericFact"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weights": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights"
+          }
+        },
+        "required": [
+          "formula"
+        ],
+        "title": "PublicCalculationRequest",
+        "type": "object"
+      },
       "QuestionPartReference": {
         "additionalProperties": false,
         "properties": {
@@ -1497,6 +1498,7 @@
               "difference",
               "cagr",
               "ratio",
+              "contribution_to_change_percent",
               "sum",
               "subtract",
               "weighted_average",
@@ -4003,7 +4005,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CalculationRequest"
+                "$ref": "#/components/schemas/PublicCalculationRequest"
               }
             }
           },

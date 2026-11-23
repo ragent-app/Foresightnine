@@ -1,0 +1,44 @@
+[
+  {
+    "id":"H1",
+    "question":"How much did Selden's annual sales grow, and how much of the change can the disclosure explain? Cite the two periods and the driver.",
+    "sources":[
+      ["h1a","Financial statements","Selden consolidated statement of income. Net sales for FY2025 were USD 84 million. Net sales for FY2024 were USD 70 million."],
+      ["h1b","Notes to the accounts","Selden acquisition note. Of the FY2025 increase in net sales versus FY2024, purchased businesses contributed USD 7 million. The balance was not disaggregated."],
+      ["h1c","Regional news service","Selden annual sales growth attracts attention. Investors discussed Selden annual sales growth."],
+      ["h1d","Market bulletin","Selden annual sales growth attracts attention. Investors discussed Selden annual sales growth."],
+      ["h1e","Trading digest","Selden annual sales growth attracts attention. Investors discussed Selden annual sales growth."]
+    ]
+  },
+  {
+    "id":"H2",
+    "question":"白楠公司两年营收增速是多少？能否由现有资料算出并购对营收增量的贡献占比？请引用依据并说明限制。",
+    "sources":[
+      ["h2a","合并财务报表","白楠公司合并利润表，单位：百万元人民币。2024年度营业收入为80百万元。2025年度营业收入为100百万元。"],
+      ["h2b","企业合并附注","白楠公司企业合并附注：被收购业务本期营业收入为12百万元。合并前比较期营业收入和增量贡献均未披露。"],
+      ["h2c","晨间简讯","白楠公司两年营收增速受到关注。投资者讨论白楠公司两年营收增速。"],
+      ["h2d","地方转载","白楠公司两年营收增速受到关注。投资者讨论白楠公司两年营收增速。"],
+      ["h2e","午间资讯","白楠公司两年营收增速受到关注。投资者讨论白楠公司两年营收增速。"]
+    ]
+  },
+  {
+    "id":"H3",
+    "question":"What condition allows Merrow's customer to terminate the agreement early? Is management's guidance unconditional?",
+    "sources":[
+      ["h3a","Signed agreement","Merrow service agreement, section 8. A customer may terminate early only after a material breach that remains uncured for 45 days following written notice."],
+      ["h3b","Quarterly update","Merrow management guidance assumes that the two pilot sites convert to paid contracts. This conversion had not occurred at the reporting date."],
+      ["h3c","Regional wire","Merrow guidance and early termination were discussed at an investor event."],
+      ["h3d","Syndicated bulletin","Merrow guidance and early termination were discussed at an investor event."]
+    ]
+  },
+  {
+    "id":"H4",
+    "question":"根据共同交易日收盘价，岚浦的累计收益是否跑赢基准？",
+    "sources":[
+      ["h4a","岚浦收盘价","岚浦未复权收盘价，人民币。2025-05-12 为 40，2025-05-13 为 42，2025-05-14 为 44。"],
+      ["h4b","基准收盘点位","同币种基准指数。2025-05-13 收盘 150，2025-05-14 收盘 155。"],
+      ["h4c","个股简讯","岚浦的累计收益是否跑赢基准受到关注。岚浦的累计收益在多个渠道被讨论。"],
+      ["h4d","转载","岚浦的累计收益是否跑赢基准受到关注。岚浦的累计收益在多个渠道被讨论。"]
+    ]
+  }
+]

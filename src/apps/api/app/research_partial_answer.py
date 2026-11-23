@@ -80,9 +80,13 @@ def merge_checkpoint_parts(question: str, state: Mapping[str, Any], eligible_sou
                     part.update(status='unresolved', answer='', reason='相关依据已变化或不可用，需要重新核验。', references=[])
                     break
     rows = [dict(row) for row in assessed]
+    whole_assessed = any(_part_key(str(row.get('question', ''))) == _part_key(question)
+                         and row.get('requirements') for row in assessed)
     saved_keys = {_part_key(p['question']) for p in state.get('question_parts', [])
                   if isinstance(p, Mapping) and isinstance(p.get('question'), str)}
     for checkpoint in checkpoints:
+        if whole_assessed and _part_key(checkpoint['question']) != _part_key(question):
+            continue
         existing = next((row for row in rows if _part_key(row.get('question', '')) == _part_key(checkpoint['question'])), None)
         if existing is None:
             rows.append(dict(checkpoint))
@@ -100,7 +104,10 @@ def merge_checkpoint_parts(question: str, state: Mapping[str, Any], eligible_sou
             if _part_key(checkpoint['question']) in saved_keys and checkpoint.get('reason') and not checkpoint.get('answer'):
                 existing['reason'] = checkpoint['reason']
     if len(checkpoints) > 1 and not any(p['question'] == question for p in checkpoints):
-        rows = [row for row in rows if row.get('question') != question]
+        # A whole-question assessment can encode a relationship across the
+        # apparent clauses (for example a target and its benchmark). Splitting
+        # on "and" must not discard that jointly required evidence.
+        rows = [row for row in rows if row.get('question') != question or row.get('requirements')]
     order = {_part_key(part['question']): index for index, part in enumerate(checkpoints)}
     rows.sort(key=lambda row: order.get(_part_key(row['question']), len(order)))
     return rows

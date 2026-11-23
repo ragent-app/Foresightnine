@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .research_clock import EXCHANGES
 from .research_historical_prices import _shift_months
-from .research_source_policy import is_fred_source
+from .research_source_policy import is_fred_source, source_eligibility
 from .research_sources import ResearchSource
 
 PriceBasis = Literal["adjusted", "raw"]
@@ -306,11 +306,12 @@ def _validate_and_load_series(
             "analyze_market_series only accepts persisted market_data or historical_prices sources."
         )
 
-    if as_of is not None:
-        if source.published_at is not None and source.published_at > as_of:
-            raise MarketAnalyticsError(f"Source {source_id!r} was published after as_of.")
-        if source.revised_at is not None and source.revised_at > as_of:
-            raise MarketAnalyticsError(f"Source {source_id!r} was revised after as_of.")
+    # Reuse the run-wide eligibility policy, including unknown publication dates.
+    # Simulated data may only be admitted through the explicit isolated option.
+    eligibility_source = source.model_copy(update={'is_simulated': False}) if allow_simulated and source.is_simulated else source
+    eligibility = source_eligibility([eligibility_source], as_of)[0][1]
+    if eligibility != 'eligible':
+        raise MarketAnalyticsError(f"Source {source_id!r} is not eligible for market analytics: {eligibility}.")
 
     parsed = _parse_source_bars(source)
 
@@ -360,6 +361,10 @@ def _validate_and_load_series(
         raise MarketAnalyticsError(
             f"Source {source_id!r} has no market bars within requested window [{start_date}, {end_date}]."
         )
+
+    currencies = {str(b.currency).upper() if b.currency else None for b in chronological}
+    if len(currencies) != 1:
+        raise MarketAnalyticsError(f"Source {source_id!r} has inconsistent or missing currency across the requested window.")
 
     source_adjustment = str(provenance.get("adjustment") or "").strip().lower() or None
     provider = str(provenance.get("provider") or "").strip().lower() or None
@@ -766,6 +771,11 @@ def analyze_market_series(
             end_date=request.end_date,
             price_basis=request.price_basis,
         )
+        if not meta['currency'] or not bench_meta['currency'] or meta['currency'] != bench_meta['currency']:
+            raise MarketAnalyticsError(
+                'Target and benchmark need the same known currency for relative returns; '
+                'analyze each native-currency series separately or supply a consistently converted series.'
+            )
         benchmark_result = _compute_benchmark_comparison(
             bars,
             bench_bars,

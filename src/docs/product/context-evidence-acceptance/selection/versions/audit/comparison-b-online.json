@@ -1,0 +1,573 @@
+{
+  "fixture_sha256": "b99754cae6015c9b27770ebc7ced9fb156715c85968098b876c0d4925c30ad59",
+  "requirements_sha256": "f03e4fe7c73a69813e0127ad46813ee0566fc213e23bbb12be38ad041c8fa17e",
+  "selector": "current run_search_library, including identical requirement expansion in both arms",
+  "cases": [
+    {
+      "case_id": "S1",
+      "capacity_passages": 2,
+      "byte_limit": 512,
+      "necessary_groups_available": 2,
+      "arms": {
+        "topic": {
+          "primary_query": "Aster 2025 2024 revenue growth sustainability",
+          "requirement_queries": [
+            {
+              "requirement_id": "two-period-revenue",
+              "query": "Find comparable consolidated revenue for 2025 and 2024.",
+              "reason": "unmet_or_requested_requirement"
+            },
+            {
+              "requirement_id": "acquisition-increment",
+              "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+              "reason": "unmet_or_requested_requirement"
+            }
+          ],
+          "selection_trace": [
+            {
+              "source_id": "release-copy-a",
+              "start": 0,
+              "end": 143,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "omitted",
+              "reason": "capacity"
+            },
+            {
+              "source_id": "release-copy-b",
+              "start": 0,
+              "end": 143,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "omitted",
+              "reason": "capacity"
+            },
+            {
+              "source_id": "release-original",
+              "start": 0,
+              "end": 143,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "omitted",
+              "reason": "capacity"
+            },
+            {
+              "source_id": "annual-table",
+              "start": 0,
+              "end": 118,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            },
+            {
+              "source_id": "annual-note",
+              "start": 0,
+              "end": 183,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            }
+          ],
+          "selected_source_ids": [
+            "annual-table",
+            "annual-note"
+          ],
+          "selected_bytes": 301,
+          "local_query_count": 3,
+          "candidate_groups_covered": 2,
+          "selected_groups_covered": 2
+        },
+        "gap": {
+          "primary_query": "Find comparable consolidated revenue for 2025 and 2024. Find disclosed drivers of revenue growth and limitations on attribution.",
+          "requirement_queries": [
+            {
+              "requirement_id": "two-period-revenue",
+              "query": "Find comparable consolidated revenue for 2025 and 2024.",
+              "reason": "unmet_or_requested_requirement"
+            },
+            {
+              "requirement_id": "acquisition-increment",
+              "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+              "reason": "unmet_or_requested_requirement"
+            }
+          ],
+          "selection_trace": [
+            {
+              "source_id": "annual-table",
+              "start": 0,
+              "end": 118,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            },
+            {
+              "source_id": "annual-note",
+              "start": 0,
+              "end": 183,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            },
+            {
+              "source_id": "release-copy-a",
+              "start": 0,
+              "end": 143,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "omitted",
+              "reason": "capacity"
+            },
+            {
+              "source_id": "release-copy-b",
+              "start": 0,
+              "end": 143,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "omitted",
+              "reason": "capacity"
+            },
+            {
+              "source_id": "release-original",
+              "start": 0,
+              "end": 143,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "omitted",
+              "reason": "capacity"
+            }
+          ],
+          "selected_source_ids": [
+            "annual-table",
+            "annual-note"
+          ],
+          "selected_bytes": 301,
+          "local_query_count": 3,
+          "candidate_groups_covered": 2,
+          "selected_groups_covered": 2
+        }
+      }
+    },
+    {
+      "case_id": "S2",
+      "capacity_passages": 2,
+      "byte_limit": 512,
+      "necessary_groups_available": 1,
+      "arms": {
+        "topic": {
+          "primary_query": "Aster 2025 2024 revenue growth sustainability",
+          "requirement_queries": [
+            {
+              "requirement_id": "two-period-revenue",
+              "query": "Find comparable consolidated revenue for 2025 and 2024.",
+              "reason": "unmet_or_requested_requirement"
+            },
+            {
+              "requirement_id": "acquisition-increment",
+              "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+              "reason": "unmet_or_requested_requirement"
+            }
+          ],
+          "selection_trace": [
+            {
+              "source_id": "release-copy-a",
+              "start": 0,
+              "end": 143,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            },
+            {
+              "source_id": "release-copy-b",
+              "start": 0,
+              "end": 143,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "omitted",
+              "reason": "identical_passage"
+            },
+            {
+              "source_id": "release-original",
+              "start": 0,
+              "end": 143,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "omitted",
+              "reason": "identical_passage"
+            },
+            {
+              "source_id": "annual-table",
+              "start": 0,
+              "end": 118,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            }
+          ],
+          "selected_source_ids": [
+            "annual-table",
+            "release-copy-a"
+          ],
+          "selected_bytes": 261,
+          "local_query_count": 3,
+          "candidate_groups_covered": 1,
+          "selected_groups_covered": 1
+        },
+        "gap": {
+          "primary_query": "Find comparable consolidated revenue for 2025 and 2024. Find disclosed drivers of revenue growth and limitations on attribution.",
+          "requirement_queries": [
+            {
+              "requirement_id": "two-period-revenue",
+              "query": "Find comparable consolidated revenue for 2025 and 2024.",
+              "reason": "unmet_or_requested_requirement"
+            },
+            {
+              "requirement_id": "acquisition-increment",
+              "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+              "reason": "unmet_or_requested_requirement"
+            }
+          ],
+          "selection_trace": [
+            {
+              "source_id": "annual-table",
+              "start": 0,
+              "end": 118,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            },
+            {
+              "source_id": "release-copy-a",
+              "start": 0,
+              "end": 143,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            },
+            {
+              "source_id": "release-copy-b",
+              "start": 0,
+              "end": 143,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "omitted",
+              "reason": "identical_passage"
+            },
+            {
+              "source_id": "release-original",
+              "start": 0,
+              "end": 143,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "omitted",
+              "reason": "identical_passage"
+            }
+          ],
+          "selected_source_ids": [
+            "annual-table",
+            "release-copy-a"
+          ],
+          "selected_bytes": 261,
+          "local_query_count": 3,
+          "candidate_groups_covered": 1,
+          "selected_groups_covered": 1
+        }
+      }
+    },
+    {
+      "case_id": "S3",
+      "capacity_passages": 3,
+      "byte_limit": 512,
+      "necessary_groups_available": 3,
+      "arms": {
+        "topic": {
+          "primary_query": "Aster 2025 2024 revenue growth sustainability",
+          "requirement_queries": [
+            {
+              "requirement_id": "two-period-revenue",
+              "query": "Find comparable consolidated revenue for 2025 and 2024.",
+              "reason": "unmet_or_requested_requirement"
+            },
+            {
+              "requirement_id": "acquisition-increment",
+              "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+              "reason": "unmet_or_requested_requirement"
+            },
+            {
+              "requirement_id": "important-counterevidence",
+              "query": "Find evidence that could undermine sustainability of revenue growth.",
+              "reason": "unmet_or_requested_requirement"
+            }
+          ],
+          "selection_trace": [
+            {
+              "source_id": "release-original",
+              "start": 0,
+              "end": 143,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment",
+                "important-counterevidence"
+              ],
+              "decision": "omitted",
+              "reason": "capacity"
+            },
+            {
+              "source_id": "annual-table",
+              "start": 0,
+              "end": 118,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment",
+                "important-counterevidence"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            },
+            {
+              "source_id": "annual-note",
+              "start": 0,
+              "end": 183,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment",
+                "important-counterevidence"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            },
+            {
+              "source_id": "contrary",
+              "start": 0,
+              "end": 133,
+              "requirement_ids": [],
+              "decision": "selected",
+              "reason": "diverse_candidate"
+            }
+          ],
+          "selected_source_ids": [
+            "annual-table",
+            "contrary",
+            "annual-note"
+          ],
+          "selected_bytes": 434,
+          "local_query_count": 4,
+          "candidate_groups_covered": 3,
+          "selected_groups_covered": 3
+        },
+        "gap": {
+          "primary_query": "Find comparable consolidated revenue for 2025 and 2024. Find disclosed drivers of revenue growth and limitations on attribution. Find evidence that could undermine sustainability of revenue growth.",
+          "requirement_queries": [
+            {
+              "requirement_id": "two-period-revenue",
+              "query": "Find comparable consolidated revenue for 2025 and 2024.",
+              "reason": "unmet_or_requested_requirement"
+            },
+            {
+              "requirement_id": "acquisition-increment",
+              "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+              "reason": "unmet_or_requested_requirement"
+            },
+            {
+              "requirement_id": "important-counterevidence",
+              "query": "Find evidence that could undermine sustainability of revenue growth.",
+              "reason": "unmet_or_requested_requirement"
+            }
+          ],
+          "selection_trace": [
+            {
+              "source_id": "release-original",
+              "start": 0,
+              "end": 143,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment",
+                "important-counterevidence"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            },
+            {
+              "source_id": "annual-table",
+              "start": 0,
+              "end": 118,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment",
+                "important-counterevidence"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            },
+            {
+              "source_id": "annual-note",
+              "start": 0,
+              "end": 183,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment",
+                "important-counterevidence"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            }
+          ],
+          "selected_source_ids": [
+            "annual-table",
+            "annual-note",
+            "release-original"
+          ],
+          "selected_bytes": 444,
+          "local_query_count": 4,
+          "candidate_groups_covered": 2,
+          "selected_groups_covered": 2
+        }
+      }
+    },
+    {
+      "case_id": "S4",
+      "capacity_passages": 2,
+      "byte_limit": 512,
+      "necessary_groups_available": 2,
+      "arms": {
+        "topic": {
+          "primary_query": "Aster 2025 2024 revenue growth sustainability",
+          "requirement_queries": [
+            {
+              "requirement_id": "two-period-revenue",
+              "query": "Find comparable consolidated revenue for 2025 and 2024.",
+              "reason": "unmet_or_requested_requirement"
+            },
+            {
+              "requirement_id": "acquisition-increment",
+              "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+              "reason": "unmet_or_requested_requirement"
+            }
+          ],
+          "selection_trace": [
+            {
+              "source_id": "annual-table",
+              "start": 0,
+              "end": 118,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            },
+            {
+              "source_id": "annual-note",
+              "start": 0,
+              "end": 183,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            }
+          ],
+          "selected_source_ids": [
+            "annual-table",
+            "annual-note"
+          ],
+          "selected_bytes": 301,
+          "local_query_count": 3,
+          "candidate_groups_covered": 2,
+          "selected_groups_covered": 2
+        },
+        "gap": {
+          "primary_query": "Find comparable consolidated revenue for 2025 and 2024. Find disclosed drivers of revenue growth and limitations on attribution.",
+          "requirement_queries": [
+            {
+              "requirement_id": "two-period-revenue",
+              "query": "Find comparable consolidated revenue for 2025 and 2024.",
+              "reason": "unmet_or_requested_requirement"
+            },
+            {
+              "requirement_id": "acquisition-increment",
+              "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+              "reason": "unmet_or_requested_requirement"
+            }
+          ],
+          "selection_trace": [
+            {
+              "source_id": "annual-table",
+              "start": 0,
+              "end": 118,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            },
+            {
+              "source_id": "annual-note",
+              "start": 0,
+              "end": 183,
+              "requirement_ids": [
+                "two-period-revenue",
+                "acquisition-increment"
+              ],
+              "decision": "selected",
+              "reason": "requirement_retrieval"
+            }
+          ],
+          "selected_source_ids": [
+            "annual-table",
+            "annual-note"
+          ],
+          "selected_bytes": 301,
+          "local_query_count": 3,
+          "candidate_groups_covered": 2,
+          "selected_groups_covered": 2
+        }
+      }
+    }
+  ]
+}

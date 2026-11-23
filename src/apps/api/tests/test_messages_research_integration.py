@@ -76,6 +76,24 @@ def test_messages_runs_through_api_with_two_tool_turns(monkeypatch, platform):
     assert len(captured) == 2 and all(x[2]['max_tokens'] == 1000 for x in captured)
     journal = api.RESEARCH_RUN_INPUTS.get(operation_id)
     diagnostics = journal['private_validation_diagnostics']
+    from app.model_protocol import canonical_json_dumps
+    from hashlib import sha256
+    manifests = {row['wire_manifest']['request_sha256']: row for row in diagnostics.values() if 'wire_manifest' in row}
+    for _, _, wire in captured:
+        body = canonical_json_dumps(wire).encode()
+        manifest = manifests[sha256(body).hexdigest()]['wire_manifest']
+        assert manifest['wire_bytes'] == len(body)
+        assert sum(manifest['value_bytes'].values()) + manifest['serialization_overhead_bytes'] == len(body)
+    assert any(entry['tool_call_id'] == '1' and source_id in entry['references'].get('source_id', [])
+               for row in diagnostics.values() for entry in row.get('tool_evidence_receipts', []))
+    assert any(entry['tool_call_id'] == '1' and source_id in entry['references'].get('source_id', [])
+               for row in diagnostics.values() for entry in row.get('input_tool_references', []))
+    deliveries = [row['delivery'] for row in diagnostics.values() if 'delivery' in row]
+    assert len(deliveries) == 1 and deliveries[0]['status'] == 'completed'
+    assert any(source_id in claim['references'].get('source_id', []) for claim in deliveries[0]['claims'])
+    assert any(part['status'] == 'answered' and part['references'].get('claim_id') for part in deliveries[0]['parts'])
+    assert 'private_validation_diagnostics' not in json.dumps(operation)
+    assert 'Revenue was 100 USD.' not in json.dumps(diagnostics)
     assert any(row.get('provider_error', {}).get('status_code') == 200 and row['provider_error'].get('request_id') == 'req-fixture' for row in diagnostics.values())
     assert captured[0][1]['Authorization'] == 'Bearer fixture-secret-1234'
     if platform:

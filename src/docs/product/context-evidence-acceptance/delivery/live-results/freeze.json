@@ -1,0 +1,23 @@
+{
+  "models": [
+    "glm-5.3-flash"
+  ],
+  "roots": {
+    "A": "a1fd50d8a448061ed6722203864449a1431e32a8cec10ba4d1f7e4f15fa77426",
+    "B": "8cdc1a602bc0ae9050cc4e2f965cf42a228355a918eae8b1e47d46181e115f7f"
+  },
+  "files": {
+    "paired_live.py": "485b4b5971b3751e8d17f672270568eff0bc44c07df18deb896a7c8b4a3b109e",
+    "run_batch.py": "f1ce4e427cb212bbc97d2c6e1710dab9c3d0109f41ac9df0863a8027048156c1",
+    "e-preregistration.md": "d74476740c439178ecc4b2645f1eb52c7418be2eb3097fb6fa40a2930a75141b",
+    "materials.json": "60dcda5acf41723b094352a2e92a904b72be1d6bcfa16ebf0f37da291aa165b0",
+    "expectations.json": "236b8a794d9c4aec975aee9db6571c13c901cdb4771bd888f78aa9bdac8b5d9c"
+  },
+  "wave_orders": [
+    "AB",
+    "BA",
+    "BA",
+    "AB"
+  ],
+  "started_at": "2026-11-23T06:26:47.398107+00:00"
+}

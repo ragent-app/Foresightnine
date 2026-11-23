@@ -44,6 +44,7 @@ from app.research_tool_executor import (
     validate_persisted_tool_item,
 )
 from app.research_tools_registry import (
+    ALL_TOOL_DEFINITIONS,
     ACQUISITION_TOOLS,
     BULK_COMPACT_TOOLS,
     COVERAGE_UPDATING_TOOLS,
@@ -118,6 +119,9 @@ def test_registry_persistence_models_match_research_content_fields():
             content_list_models[field_name] = args[0]
 
     # Run/turn metadata models (gaps, turns) are produced by runtime/turn assembly, not individual tools.
+    # Tables are constructed by the typed table builder before they reach the state.
+    from app.research_tables import ResearchTable
+    assert content_list_models.pop('tables') is ResearchTable
     assert set(content_list_models) == {'facts', 'calculations', 'claims', 'charts', 'gaps', 'turns'}
     assert content_list_models['gaps'] is ResearchGap
     assert content_list_models['turns'] is ResearchTurn
@@ -153,9 +157,9 @@ def test_registry_persistence_models_match_research_content_fields():
 
 
 def test_registry_specs_handlers_and_definitions_are_consistent():
-    assert len(TOOL_SPECS) == len(TOOL_REGISTRY) == len(TOOLS) == len(TOOL_INPUT_MODELS)
+    assert len(TOOL_SPECS) == len(TOOL_REGISTRY) == len(ALL_TOOL_DEFINITIONS) == len(TOOL_INPUT_MODELS)
     assert set(TOOL_HANDLERS) == set(TOOL_REGISTRY)
-    assert [s.name for s in TOOL_SPECS] == [t.name for t in TOOLS]
+    assert [s.name for s in TOOL_SPECS] == [t.name for t in ALL_TOOL_DEFINITIONS]
     assert TOOLS[-1].name == 'submit_research'
 
     assert BULK_COMPACT_TOOLS.isdisjoint(PROTECTED_COMPACT_TOOLS)
@@ -164,9 +168,9 @@ def test_registry_specs_handlers_and_definitions_are_consistent():
     assert set(PERSISTED_ITEM_TOOLS) <= PROTECTED_COMPACT_TOOLS
     assert 'outline_source' not in COVERAGE_UPDATING_TOOLS
     assert 'search_source' not in COVERAGE_UPDATING_TOOLS
-    assert len(COVERAGE_UPDATING_TOOLS) == len(TOOL_SPECS) - 2
+    assert set(TOOL_REGISTRY) - COVERAGE_UPDATING_TOOLS == {'outline_source', 'search_source', 'activate_tool_group'}
 
-    for spec, definition in zip(TOOL_SPECS, TOOLS, strict=True):
+    for spec, definition in zip(TOOL_SPECS, ALL_TOOL_DEFINITIONS, strict=True):
         assert issubclass(spec.input_model, BaseModel)
         assert spec.description.strip()
         assert callable(spec.activity_summarizer)

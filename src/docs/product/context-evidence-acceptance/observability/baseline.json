@@ -1,0 +1,1278 @@
+{
+  "baseline_head": "3e1ca4d458d9a6ccc479c2d7123d5a81ba998d70",
+  "cases": {
+    "F1-submitted": {
+      "diagnostics": {
+        "fixture-F1:research-agent:8f71b20299d945a7a239d11141b57253": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 55556,
+            "estimated_input_tokens": 55556,
+            "estimated_input_tokens_heuristic": 18519,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 55812
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-F1:research-agent:8f71b20299d945a7a239d11141b57253",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-F1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 55492
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 3,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "delivery": {
+            "claims": [
+              {
+                "claim_id": "claim-8578e76f439af69994c12148b4285d15",
+                "references": {
+                  "claim_id": [
+                    "claim-8578e76f439af69994c12148b4285d15"
+                  ],
+                  "source_id": [
+                    "statement-v1"
+                  ]
+                }
+              }
+            ],
+            "parts": [
+              {
+                "part_id": "req-fc88f8064b91380e",
+                "references": {},
+                "requirements": [
+                  {
+                    "references": {},
+                    "requirement_id": "req-fc88f8064b91380e",
+                    "status": "missing"
+                  }
+                ],
+                "status": "unresolved"
+              },
+              {
+                "part_id": "req-7d841c62b67a6619",
+                "references": {},
+                "requirements": [
+                  {
+                    "references": {},
+                    "requirement_id": "req-7d841c62b67a6619",
+                    "status": "missing"
+                  }
+                ],
+                "status": "unresolved"
+              }
+            ],
+            "status": "partial",
+            "tool_call_id": "submit-1"
+          },
+          "finish": "tool_use",
+          "input_tool_references": [
+            {
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "tool_call_id": "search-1"
+            },
+            {
+              "read_spans": [
+                {
+                  "content_sha256": "00573f1b28b9a831d56e8b085c4e23cfe86e7a6b46b59318078c83bbbf4f23bc",
+                  "end": 166,
+                  "source_id": "statement-v1",
+                  "start": 0
+                },
+                {
+                  "content_sha256": "032aa2d8a79a8058c409cc71c7bf267388ffa36e03bdb8cf107746973eda55a1",
+                  "end": 139,
+                  "source_id": "note-increment-v1",
+                  "start": 0
+                }
+              ],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "tool_call_id": "read-1"
+            }
+          ],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "4935c11bd90e1d0dfb949ecd3123d3d0532d883a2fdb583d65958a6ab5a00331",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 5141,
+              "other": 18,
+              "system": 6976,
+              "tools": 43302
+            },
+            "wire_bytes": 55492
+          }
+        },
+        "fixture-F1:research-agent:e457f30d88694b00a4b10bad5982d120": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 51780,
+            "estimated_input_tokens": 51780,
+            "estimated_input_tokens_heuristic": 17260,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 52036
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-F1:research-agent:e457f30d88694b00a4b10bad5982d120",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-F1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 51716
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 1,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "finish": "tool_use",
+          "input_tool_references": [],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_evidence_receipts": [
+            {
+              "candidates": [
+                {
+                  "content_sha256": "032aa2d8a79a8058c409cc71c7bf267388ffa36e03bdb8cf107746973eda55a1",
+                  "end": 139,
+                  "source_id": "note-increment-v1",
+                  "start": 0
+                },
+                {
+                  "content_sha256": "00573f1b28b9a831d56e8b085c4e23cfe86e7a6b46b59318078c83bbbf4f23bc",
+                  "end": 166,
+                  "source_id": "statement-v1",
+                  "start": 0
+                }
+              ],
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "requirement_id": null,
+              "tool": "search_library",
+              "tool_call_id": "search-1"
+            }
+          ],
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "912c6b9236557d4513e5739cd11a67a018335cb9555f32453bef7058632bea71",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 1365,
+              "other": 18,
+              "system": 6976,
+              "tools": 43302
+            },
+            "wire_bytes": 51716
+          }
+        },
+        "fixture-F1:research-agent:ef132736b73f4852bbc1671c564dedac": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 54401,
+            "estimated_input_tokens": 54401,
+            "estimated_input_tokens_heuristic": 18134,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 54657
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-F1:research-agent:ef132736b73f4852bbc1671c564dedac",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-F1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 54337
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 2,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "finish": "tool_use",
+          "input_tool_references": [
+            {
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "tool_call_id": "search-1"
+            }
+          ],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_evidence_receipts": [
+            {
+              "read_spans": [
+                {
+                  "content_sha256": "00573f1b28b9a831d56e8b085c4e23cfe86e7a6b46b59318078c83bbbf4f23bc",
+                  "end": 166,
+                  "source_id": "statement-v1",
+                  "start": 0
+                },
+                {
+                  "content_sha256": "032aa2d8a79a8058c409cc71c7bf267388ffa36e03bdb8cf107746973eda55a1",
+                  "end": 139,
+                  "source_id": "note-increment-v1",
+                  "start": 0
+                }
+              ],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "tool": "read_sources",
+              "tool_call_id": "read-1"
+            }
+          ],
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "d7b3393d46fdc1671160d0da903aadd8ee7e267311b0ee8c97c597ccf731a7a4",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 3986,
+              "other": 18,
+              "system": 6976,
+              "tools": 43302
+            },
+            "wire_bytes": 54337
+          }
+        }
+      },
+      "outcome": "partial",
+      "reason": "submitted",
+      "transport_calls": 3
+    },
+    "F1-truncated": {
+      "diagnostics": {
+        "fixture-F1:research-agent:940227707b384f61a6b41198560fbb52": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 55556,
+            "estimated_input_tokens": 55556,
+            "estimated_input_tokens_heuristic": 18519,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 55812
+          },
+          "context": {
+            "call_id": "fixture-F1:research-agent:940227707b384f61a6b41198560fbb52",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-F1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 55492
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 2,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "exception": {
+            "exception_class": "ProviderFailure",
+            "location": {
+              "file": "anthropic_messages.py",
+              "line": 108
+            }
+          },
+          "finish": "provider_length",
+          "input_tool_references": [
+            {
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "tool_call_id": "search-1"
+            },
+            {
+              "read_spans": [
+                {
+                  "content_sha256": "00573f1b28b9a831d56e8b085c4e23cfe86e7a6b46b59318078c83bbbf4f23bc",
+                  "end": 166,
+                  "source_id": "statement-v1",
+                  "start": 0
+                },
+                {
+                  "content_sha256": "032aa2d8a79a8058c409cc71c7bf267388ffa36e03bdb8cf107746973eda55a1",
+                  "end": 139,
+                  "source_id": "note-increment-v1",
+                  "start": 0
+                }
+              ],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "tool_call_id": "read-1"
+            }
+          ],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "max_tokens",
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "4935c11bd90e1d0dfb949ecd3123d3d0532d883a2fdb583d65958a6ab5a00331",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 5141,
+              "other": 18,
+              "system": 6976,
+              "tools": 43302
+            },
+            "wire_bytes": 55492
+          }
+        },
+        "fixture-F1:research-agent:ab861d69710b4ca39b47f0498b828676": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 54401,
+            "estimated_input_tokens": 54401,
+            "estimated_input_tokens_heuristic": 18134,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 54657
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-F1:research-agent:ab861d69710b4ca39b47f0498b828676",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-F1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 54337
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 2,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "finish": "tool_use",
+          "input_tool_references": [
+            {
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "tool_call_id": "search-1"
+            }
+          ],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_evidence_receipts": [
+            {
+              "read_spans": [
+                {
+                  "content_sha256": "00573f1b28b9a831d56e8b085c4e23cfe86e7a6b46b59318078c83bbbf4f23bc",
+                  "end": 166,
+                  "source_id": "statement-v1",
+                  "start": 0
+                },
+                {
+                  "content_sha256": "032aa2d8a79a8058c409cc71c7bf267388ffa36e03bdb8cf107746973eda55a1",
+                  "end": 139,
+                  "source_id": "note-increment-v1",
+                  "start": 0
+                }
+              ],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "tool": "read_sources",
+              "tool_call_id": "read-1"
+            }
+          ],
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "d7b3393d46fdc1671160d0da903aadd8ee7e267311b0ee8c97c597ccf731a7a4",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 3986,
+              "other": 18,
+              "system": 6976,
+              "tools": 43302
+            },
+            "wire_bytes": 54337
+          }
+        },
+        "fixture-F1:research-agent:d8dc5fdd538541aa96f7750a7a37e556": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 51780,
+            "estimated_input_tokens": 51780,
+            "estimated_input_tokens_heuristic": 17260,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 52036
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-F1:research-agent:d8dc5fdd538541aa96f7750a7a37e556",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-F1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 51716
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 1,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "finish": "tool_use",
+          "input_tool_references": [],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_evidence_receipts": [
+            {
+              "candidates": [
+                {
+                  "content_sha256": "032aa2d8a79a8058c409cc71c7bf267388ffa36e03bdb8cf107746973eda55a1",
+                  "end": 139,
+                  "source_id": "note-increment-v1",
+                  "start": 0
+                },
+                {
+                  "content_sha256": "00573f1b28b9a831d56e8b085c4e23cfe86e7a6b46b59318078c83bbbf4f23bc",
+                  "end": 166,
+                  "source_id": "statement-v1",
+                  "start": 0
+                }
+              ],
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "note-increment-v1",
+                  "statement-v1"
+                ]
+              },
+              "requirement_id": null,
+              "tool": "search_library",
+              "tool_call_id": "search-1"
+            }
+          ],
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "912c6b9236557d4513e5739cd11a67a018335cb9555f32453bef7058632bea71",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 1365,
+              "other": 18,
+              "system": 6976,
+              "tools": 43302
+            },
+            "wire_bytes": 51716
+          }
+        }
+      },
+      "outcome": "partial",
+      "reason": "provider_output_truncated",
+      "transport_calls": 3
+    },
+    "M1-submitted": {
+      "diagnostics": {
+        "fixture-M1:research-agent:3ad204bc11b949ee804767186b97c3ff": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 56699,
+            "estimated_input_tokens": 56699,
+            "estimated_input_tokens_heuristic": 18900,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 56955
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-M1:research-agent:3ad204bc11b949ee804767186b97c3ff",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-M1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 56635
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 2,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "finish": "tool_use",
+          "input_tool_references": [
+            {
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "tool_call_id": "search-1"
+            }
+          ],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_evidence_receipts": [
+            {
+              "read_spans": [
+                {
+                  "content_sha256": "ebf5f4b86f4a57aa539a3a190e1f8ac1e4e8f512b2143b1ee8f75c089f2e4846",
+                  "end": 112,
+                  "source_id": "prices-v1",
+                  "start": 0
+                }
+              ],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "tool": "read_sources",
+              "tool_call_id": "read-1"
+            }
+          ],
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "20039e8571f13745d81aed46bfb5c6590f578ea5f74a7ffd8acc4238df0e4226",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 6284,
+              "other": 18,
+              "system": 6976,
+              "tools": 43302
+            },
+            "wire_bytes": 56635
+          }
+        },
+        "fixture-M1:research-agent:9fb6b0247713449eaa142ba5f267ae0e": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 57376,
+            "estimated_input_tokens": 57376,
+            "estimated_input_tokens_heuristic": 19126,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 57632
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-M1:research-agent:9fb6b0247713449eaa142ba5f267ae0e",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-M1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 57312
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 3,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "delivery": {
+            "claims": [
+              {
+                "claim_id": "claim-afad1762d2853babc5d3b45af67b06e1",
+                "references": {
+                  "claim_id": [
+                    "claim-afad1762d2853babc5d3b45af67b06e1"
+                  ],
+                  "source_id": [
+                    "prices-v1"
+                  ]
+                }
+              }
+            ],
+            "parts": [
+              {
+                "part_id": "req-3ef8e8f864374d5d",
+                "references": {
+                  "claim_id": [
+                    "claim-afad1762d2853babc5d3b45af67b06e1"
+                  ]
+                },
+                "requirements": [
+                  {
+                    "references": {
+                      "claim_id": [
+                        "claim-afad1762d2853babc5d3b45af67b06e1"
+                      ]
+                    },
+                    "requirement_id": "req-3ef8e8f864374d5d",
+                    "status": "satisfied"
+                  }
+                ],
+                "status": "answered"
+              },
+              {
+                "part_id": null,
+                "references": {},
+                "requirements": [],
+                "status": "unresolved"
+              }
+            ],
+            "status": "partial",
+            "tool_call_id": "submit-1"
+          },
+          "finish": "tool_use",
+          "input_tool_references": [
+            {
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "tool_call_id": "search-1"
+            },
+            {
+              "read_spans": [
+                {
+                  "content_sha256": "ebf5f4b86f4a57aa539a3a190e1f8ac1e4e8f512b2143b1ee8f75c089f2e4846",
+                  "end": 112,
+                  "source_id": "prices-v1",
+                  "start": 0
+                }
+              ],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "tool_call_id": "read-1"
+            }
+          ],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "464bc2d23c1207033cca4e1518b26f33a6b82c43a16bda0a3d7b6bda0ebec4c7",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 6961,
+              "other": 18,
+              "system": 6976,
+              "tools": 43302
+            },
+            "wire_bytes": 57312
+          }
+        },
+        "fixture-M1:research-agent:a084b5831e8f49a58e3cec17668cbb01": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 54370,
+            "estimated_input_tokens": 54370,
+            "estimated_input_tokens_heuristic": 18124,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 54626
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-M1:research-agent:a084b5831e8f49a58e3cec17668cbb01",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-M1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 54306
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 1,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "finish": "tool_use",
+          "input_tool_references": [],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_evidence_receipts": [
+            {
+              "candidates": [
+                {
+                  "content_sha256": "ebf5f4b86f4a57aa539a3a190e1f8ac1e4e8f512b2143b1ee8f75c089f2e4846",
+                  "end": 112,
+                  "source_id": "prices-v1",
+                  "start": 0
+                }
+              ],
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "requirement_id": null,
+              "tool": "search_library",
+              "tool_call_id": "search-1"
+            }
+          ],
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "f206668f3372d48a082f8dd594e6b85105adb4fef9363254b6f0fc5a78cb9f7f",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 3955,
+              "other": 18,
+              "system": 6976,
+              "tools": 43302
+            },
+            "wire_bytes": 54306
+          }
+        }
+      },
+      "outcome": "partial",
+      "reason": "submitted",
+      "transport_calls": 3
+    },
+    "M1-truncated": {
+      "diagnostics": {
+        "fixture-M1:research-agent:5db096125e1f427eaf9d5d0802912c73": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 57376,
+            "estimated_input_tokens": 57376,
+            "estimated_input_tokens_heuristic": 19126,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 57632
+          },
+          "context": {
+            "call_id": "fixture-M1:research-agent:5db096125e1f427eaf9d5d0802912c73",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-M1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 57312
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 2,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "exception": {
+            "exception_class": "ProviderFailure",
+            "location": {
+              "file": "anthropic_messages.py",
+              "line": 108
+            }
+          },
+          "finish": "provider_length",
+          "input_tool_references": [
+            {
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "tool_call_id": "search-1"
+            },
+            {
+              "read_spans": [
+                {
+                  "content_sha256": "ebf5f4b86f4a57aa539a3a190e1f8ac1e4e8f512b2143b1ee8f75c089f2e4846",
+                  "end": 112,
+                  "source_id": "prices-v1",
+                  "start": 0
+                }
+              ],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "tool_call_id": "read-1"
+            }
+          ],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "max_tokens",
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "464bc2d23c1207033cca4e1518b26f33a6b82c43a16bda0a3d7b6bda0ebec4c7",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 6961,
+              "other": 18,
+              "system": 6976,
+              "tools": 43302
+            },
+            "wire_bytes": 57312
+          }
+        },
+        "fixture-M1:research-agent:630d0a248cfc4f138196c408702fd426": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 54370,
+            "estimated_input_tokens": 54370,
+            "estimated_input_tokens_heuristic": 18124,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 54626
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-M1:research-agent:630d0a248cfc4f138196c408702fd426",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-M1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 54306
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 1,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "finish": "tool_use",
+          "input_tool_references": [],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_evidence_receipts": [
+            {
+              "candidates": [
+                {
+                  "content_sha256": "ebf5f4b86f4a57aa539a3a190e1f8ac1e4e8f512b2143b1ee8f75c089f2e4846",
+                  "end": 112,
+                  "source_id": "prices-v1",
+                  "start": 0
+                }
+              ],
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "requirement_id": null,
+              "tool": "search_library",
+              "tool_call_id": "search-1"
+            }
+          ],
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "f206668f3372d48a082f8dd594e6b85105adb4fef9363254b6f0fc5a78cb9f7f",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 3955,
+              "other": 18,
+              "system": 6976,
+              "tools": 43302
+            },
+            "wire_bytes": 54306
+          }
+        },
+        "fixture-M1:research-agent:f4ceb93386c2450f9652de8fbd55d808": {
+          "budget_estimate": {
+            "estimated_input_bytes_upper_bound": 56699,
+            "estimated_input_tokens": 56699,
+            "estimated_input_tokens_heuristic": 18900,
+            "heuristic_method": "ceil_chars_div_3",
+            "method": "utf8_wire_estimate",
+            "output_limit": 256,
+            "reserved_tokens": 56955
+          },
+          "cache_telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": null,
+            "total_input_tokens": 0
+          },
+          "context": {
+            "call_id": "fixture-M1:research-agent:f4ceb93386c2450f9652de8fbd55d808",
+            "contract": "none",
+            "model": "fixture-model",
+            "operation_id": "fixture-M1",
+            "output_mode": "tool",
+            "parameters": {
+              "max_tokens": 256
+            },
+            "provider": "anthropic_messages",
+            "wire_bytes": 56635
+          },
+          "cumulative_cache_usage": {
+            "cache_creation_input_tokens": 0,
+            "cache_hit_ratio": null,
+            "cache_read_input_tokens": 0,
+            "calls_with_cache_telemetry": 0,
+            "calls_with_usage": 2,
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "finish": "tool_use",
+          "input_tool_references": [
+            {
+              "read_spans": [],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "tool_call_id": "search-1"
+            }
+          ],
+          "provider_error": {
+            "category": "unknown",
+            "code": "unknown",
+            "shape": "unknown",
+            "status_code": 200
+          },
+          "stop_reason": "tool_use",
+          "tool_evidence_receipts": [
+            {
+              "read_spans": [
+                {
+                  "content_sha256": "ebf5f4b86f4a57aa539a3a190e1f8ac1e4e8f512b2143b1ee8f75c089f2e4846",
+                  "end": 112,
+                  "source_id": "prices-v1",
+                  "start": 0
+                }
+              ],
+              "references": {
+                "source_id": [
+                  "prices-v1"
+                ]
+              },
+              "tool": "read_sources",
+              "tool_call_id": "read-1"
+            }
+          ],
+          "transport": {
+            "stages": [],
+            "submission_state": "response_received"
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "wire_manifest": {
+            "request_sha256": "20039e8571f13745d81aed46bfb5c6590f578ea5f74a7ffd8acc4238df0e4226",
+            "serialization_overhead_bytes": 55,
+            "value_bytes": {
+              "messages": 6284,
+              "other": 18,
+              "system": 6976,
+              "tools": 43302
+            },
+            "wire_bytes": 56635
+          }
+        }
+      },
+      "outcome": "partial",
+      "reason": "provider_output_truncated",
+      "transport_calls": 3
+    }
+  },
+  "fixture_sha256": "78588ccf7251da1cdaf1201434766d3cabc7abea6bc7233c10d763398b2f770c"
+}

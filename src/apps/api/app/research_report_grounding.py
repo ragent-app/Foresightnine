@@ -11,6 +11,38 @@ _CAUSE = re.compile(r'\b(?:caused|causes|because|due to|led to|driven by)\b|导�
 _INFERENCE = re.compile(r'\b(?:may|might|could|hypothesis|inference|scenario)\b|可能|假设|推测|情景', re.I)
 _CAMEL = re.compile(r'\b[A-Z][a-z]+[A-Z][A-Za-z]*\b|\b[A-Z]{2,6}\b')
 _IGNORE = {'USD', 'EUR', 'CNY', 'HKD', 'FY', 'SEC', 'ETF'}
+_CONTRIBUTION = re.compile(r'\b(?:contribut(?:e|ed|ion)|account(?:s|ed)? for|attribut(?:able|ed))\b|贡献|归因于|占(?:增量|增长)', re.I)
+_CHANGE_SCOPE = re.compile(r'\b(?:increase|growth|change|increment|delta|decrease|decline)\b|增量|增长|变化|下降|减少', re.I)
+
+
+def change_contribution_disclosed(text: str) -> bool:
+    """Necessary lexical screen, not proof that a disclosure supports a claim."""
+    for sentence in re.split(r'[。；;!?！？]|\.(?!\d)', text):
+        if re.search(r'\b(?:not|no|neither|without|cannot|unknown|undisclosed)\b|未|没有|不(?:是|包括|代表|能|可|披露)', sentence, re.I):
+            continue
+        # The contribution must be grammatically connected to the change,
+        # rather than merely co-occurring with a nearby growth sentence.
+        if (re.search(r'\bcontribut(?:e[ds]?|ion)\b[^.;!?]{0,100}\b(?:of|to|towards)\s+(?:the\s+)?(?:increase|growth|change|increment|decrease|decline)\b', sentence, re.I)
+                or re.search(r'\b(?:increase|growth|change|increment|decrease|decline)\b\s+(?:included|reflects?|was attributable to)\b[^.;!?]{0,80}\bcontribution\b', sentence, re.I)
+                or re.search(r'(?:对|占|贡献于)[^。；;]{0,50}(?:增量|增长|变化|下降|减少)[^。；;]{0,30}(?:贡献|占比|来自|归因)|(?:贡献|归因)[^。；;]{0,50}(?:增量|增长|变化|下降|减少)', sentence)):
+            return True
+    return False
+
+
+def contribution_subject_disclosed(text: str, name: str) -> bool:
+    """Require the stated subject in, or immediately before, the contribution sentence."""
+    sentences = [s.strip() for s in re.split(r'[。；;!?！？]|\.(?!\d)', text) if s.strip()]
+    pattern = r'(?<![A-Za-z0-9])' + re.escape(name) + r'(?![A-Za-z0-9])'
+    for index, sentence in enumerate(sentences):
+        if not change_contribution_disclosed(sentence):
+            continue
+        if re.search(pattern, sentence, re.I):
+            return True
+        if (index and re.match(r'^(?:the|it|its)\b', sentence, re.I)
+                and not re.match(r'^The\s+[A-Z][a-z]+\b', sentence)
+                and re.search(pattern, sentences[index - 1], re.I)):
+            return True
+    return False
 
 
 def _numbers(text: str) -> set[Decimal]:
@@ -28,6 +60,12 @@ def clause_problem(text: str, quotations: list[str], facts: list[dict[str, Any]]
     evidence = ' '.join(quotations)
     if not evidence:
         return 'A located quotation is required.'
+    # A current-period contribution is not necessarily a contribution to the
+    # change between periods. Require an explicit change scope in the cited
+    # text; lexical matching remains a necessary check, not semantic proof.
+    if (_CONTRIBUTION.search(text) and _CHANGE_SCOPE.search(text)
+            and not any(change_contribution_disclosed(q) for q in quotations)):
+        return 'A contribution to a change requires an explicit change-scoped disclosure; current-period revenue alone is insufficient.'
     allowed = _numbers(evidence)
     for item in [*facts, *calculations]:
         allowed |= _numbers(' '.join(str(item.get(k) or '') for k in ('value', 'period', 'unit', 'currency')))

@@ -1974,6 +1974,8 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                 try:
                     observation = diagnostics.snapshot()
                     observation['request_metadata'] = safe_wire_metadata(wire)
+                    from .research_diagnostics import wire_manifest
+                    observation['wire_manifest'] = wire_manifest(wire, body)
                     if response is not None and not 200 <= response.status_code < 300:
                         from .research_diagnostics import sanitize_provider_error, safe_provider_error
                         observation['provider_error'] = sanitize_provider_error(getattr(response, 'safe_error', None) or safe_provider_error(response.body))
