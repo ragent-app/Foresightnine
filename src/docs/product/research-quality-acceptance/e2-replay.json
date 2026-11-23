@@ -1,0 +1,31 @@
+{
+  "base_commit": "879de1d",
+  "cases_sha256": "7e62e0cd385e9923ea1030b1fd9825b2fba41ade816d6601e8e57e288cdcd316",
+  "old_trace": {
+    "command": [
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_research_runtime_attention.py::test_presubmit_gate_nudges_once_for_unmet_method_pack_then_accepts"
+    ],
+    "exit_code": 0,
+    "output": ".                                                                        [100%]\n"
+  },
+  "current_tests": {
+    "command": [
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_research_runtime_attention.py::test_presubmit_gate_nudges_once_for_unmet_method_pack_then_accepts",
+      "tests/test_research_evidence_requirements.py::test_financial_comparison_requires_each_metric_and_ordered_comparable_inputs",
+      "tests/test_research_evidence_requirements.py::test_benchmark_needs_distinct_instruments_and_common_two_date_window",
+      "tests/test_research_delivery_quality.py"
+    ],
+    "exit_code": 0,
+    "output": ".....                                                                    [100%]\n"
+  }
+}

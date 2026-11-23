@@ -1,0 +1,91 @@
+{
+  "P1": {
+    "groups": [
+      [
+        [
+          "p1a",
+          "p1b"
+        ]
+      ]
+    ],
+    "limitations": "10% growth; FX explains 25% of the increase; remainder unknown."
+  },
+  "P2": {
+    "groups": [
+      [
+        [
+          "p2a"
+        ]
+      ],
+      [
+        [
+          "p2b"
+        ]
+      ]
+    ],
+    "limitations": "供应商享有终止权；须客户违约、书面通知、六十日未补救；认证未通过。"
+  },
+  "P3": {
+    "groups": [
+      [
+        [
+          "p3a",
+          "p3b"
+        ]
+      ]
+    ],
+    "limitations": "Common dates April 3–4; shares 2.27%, benchmark 2%."
+  },
+  "P4": {
+    "groups": [
+      [
+        [
+          "p4a",
+          "p4b"
+        ]
+      ]
+    ],
+    "limitations": "集团增长10%；8百万元为当期收入，不可作为同比增量。"
+  },
+  "P5": {
+    "groups": [
+      [
+        [
+          "p5a"
+        ]
+      ]
+    ],
+    "limitations": "240 gigawatt-hours in calendar 2024."
+  },
+  "P6": {
+    "groups": [
+      [
+        [
+          "p6a",
+          "p6b"
+        ]
+      ]
+    ],
+    "limitations": "Conditional expectation; a major customer plans a reduction of unspecified magnitude."
+  },
+  "P7": {
+    "groups": [
+      [
+        [
+          "p7a"
+        ]
+      ]
+    ],
+    "limitations": "集团营业利润增加3百万元；部门口径不得混用。"
+  },
+  "P8": {
+    "groups": [
+      [
+        [
+          "p8a"
+        ]
+      ]
+    ],
+    "limitations": "今年0.8元；去年缺少，不可计算变化。"
+  }
+}

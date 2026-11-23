@@ -1,0 +1,698 @@
+{
+  "case": "D1",
+  "arm": "A",
+  "status": "partial",
+  "reason": "provider_budget_exhausted",
+  "report": "",
+  "claims": [],
+  "facts": [
+    {
+      "fact_id": "fact-5958296fdf1375a05436c387ddf1fb157f793d04561ac4f31759a416ea86c1fb",
+      "label": "Alpha revenue",
+      "value": "120",
+      "unit": "USD million",
+      "currency": "USD",
+      "period": "FY2025",
+      "source_id": "exhibit",
+      "quotation": "Alpha 2025 revenue 120 USD million",
+      "character_start": 0,
+      "character_end": 34,
+      "location": {
+        "character_start": 0,
+        "character_end": 34
+      },
+      "verification": "numeric_and_location_match_semantics_not_verified"
+    },
+    {
+      "fact_id": "fact-83398675ae40edbd93f1e0101029f3ce30bd56fabd8ec28575d6c51bf91f5a0b",
+      "label": "Alpha revenue",
+      "value": "100",
+      "unit": "USD million",
+      "currency": "USD",
+      "period": "FY2024",
+      "source_id": "exhibit",
+      "quotation": "2024 revenue 100 USD million",
+      "character_start": 55,
+      "character_end": 83,
+      "location": {
+        "character_start": 55,
+        "character_end": 83
+      },
+      "verification": "numeric_and_location_match_semantics_not_verified"
+    },
+    {
+      "fact_id": "fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7",
+      "label": "Alpha diluted EPS",
+      "value": "3",
+      "unit": "USD per share",
+      "currency": "USD",
+      "period": "FY2025",
+      "source_id": "exhibit",
+      "quotation": "diluted EPS 3 USD",
+      "character_start": 36,
+      "character_end": 53,
+      "location": {
+        "character_start": 36,
+        "character_end": 53
+      },
+      "verification": "numeric_and_location_match_semantics_not_verified"
+    },
+    {
+      "fact_id": "fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79",
+      "label": "Alpha diluted EPS",
+      "value": "2",
+      "unit": "USD per share",
+      "currency": "USD",
+      "period": "FY2024",
+      "source_id": "exhibit",
+      "quotation": "diluted EPS 2 USD",
+      "character_start": 85,
+      "character_end": 102,
+      "location": {
+        "character_start": 85,
+        "character_end": 102
+      },
+      "verification": "numeric_and_location_match_semantics_not_verified"
+    }
+  ],
+  "question_parts": [
+    {
+      "id": "req-93921fd1140995d0",
+      "question": "比较 Alpha 2025 与 2024 年收入增速",
+      "core": true,
+      "status": "answered",
+      "answer": "Alpha revenue FY2025 120 USD million；Alpha revenue FY2024 100 USD million；growth_percent 20.00 percent",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": [
+        {
+          "fact_id": "fact-5958296fdf1375a05436c387ddf1fb157f793d04561ac4f31759a416ea86c1fb",
+          "origin": "current"
+        },
+        {
+          "fact_id": "fact-83398675ae40edbd93f1e0101029f3ce30bd56fabd8ec28575d6c51bf91f5a0b",
+          "origin": "current"
+        },
+        {
+          "calculation_id": "calc-e88b3fe7f444489e82b1dd1db817e914",
+          "origin": "current"
+        }
+      ],
+      "requirements": [
+        {
+          "id": "req-93921fd1140995d0",
+          "question": "比较 Alpha 2025 与 2024 年收入增速",
+          "status": "satisfied",
+          "reason": "Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review.",
+          "references": [
+            {
+              "fact_id": "fact-5958296fdf1375a05436c387ddf1fb157f793d04561ac4f31759a416ea86c1fb",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-83398675ae40edbd93f1e0101029f3ce30bd56fabd8ec28575d6c51bf91f5a0b",
+              "origin": "current"
+            },
+            {
+              "calculation_id": "calc-e88b3fe7f444489e82b1dd1db817e914",
+              "origin": "current"
+            }
+          ],
+          "core": true
+        }
+      ]
+    },
+    {
+      "question": "并说明稀释 EPS 变化",
+      "status": "unresolved",
+      "answer": "",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": []
+    },
+    {
+      "id": "req-79e06e2aa18a6f59",
+      "question": "说明稀释 EPS 变化。",
+      "core": true,
+      "status": "answered",
+      "answer": "Alpha diluted EPS FY2025 3 USD per share；Alpha diluted EPS FY2024 2 USD per share；growth_percent 50.00 percent",
+      "reason": "Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review.",
+      "references": [
+        {
+          "fact_id": "fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7",
+          "origin": "current"
+        },
+        {
+          "fact_id": "fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79",
+          "origin": "current"
+        },
+        {
+          "calculation_id": "calc-44b8efbd37cc41f686a2737c8d5661d0",
+          "origin": "current"
+        }
+      ],
+      "requirements": [
+        {
+          "id": "req-79e06e2aa18a6f59",
+          "question": "说明稀释 EPS 变化。",
+          "status": "satisfied",
+          "reason": "Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review.",
+          "references": [
+            {
+              "fact_id": "fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79",
+              "origin": "current"
+            },
+            {
+              "calculation_id": "calc-44b8efbd37cc41f686a2737c8d5661d0",
+              "origin": "current"
+            }
+          ],
+          "core": true
+        }
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "code": "provider_error",
+      "message": "Model execution budget is unavailable or exhausted."
+    }
+  ],
+  "answered_parts": [
+    "req-93921fd1140995d0",
+    "req-79e06e2aa18a6f59"
+  ],
+  "all_core_answered": false,
+  "calculations": [
+    {
+      "calculation_id": "calc-e88b3fe7f444489e82b1dd1db817e914",
+      "formula_id": "growth_percent",
+      "formula_version": "1",
+      "expression": "(first / second - 1) * 100",
+      "input_verification": "not_verified_by_calculator",
+      "input_precision_status": "not_established",
+      "inputs": [
+        {
+          "fact_id": "fact-5958296fdf1375a05436c387ddf1fb157f793d04561ac4f31759a416ea86c1fb",
+          "value": "120",
+          "unit": "USD million",
+          "currency": "USD",
+          "period": "FY2025"
+        },
+        {
+          "fact_id": "fact-83398675ae40edbd93f1e0101029f3ce30bd56fabd8ec28575d6c51bf91f5a0b",
+          "value": "100",
+          "unit": "USD million",
+          "currency": "USD",
+          "period": "FY2024"
+        }
+      ],
+      "value": "20.00",
+      "unit": "percent",
+      "currency": null,
+      "rounding": "half_up",
+      "decimal_places": 2,
+      "period_order_check": "recognized_formats_only",
+      "period_granularity_check": "not_established",
+      "input_status": "matched"
+    },
+    {
+      "calculation_id": "calc-44b8efbd37cc41f686a2737c8d5661d0",
+      "formula_id": "growth_percent",
+      "formula_version": "1",
+      "expression": "(first / second - 1) * 100",
+      "input_verification": "not_verified_by_calculator",
+      "input_precision_status": "not_established",
+      "inputs": [
+        {
+          "fact_id": "fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7",
+          "value": "3",
+          "unit": "USD per share",
+          "currency": "USD",
+          "period": "FY2025"
+        },
+        {
+          "fact_id": "fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79",
+          "value": "2",
+          "unit": "USD per share",
+          "currency": "USD",
+          "period": "FY2024"
+        }
+      ],
+      "value": "50.00",
+      "unit": "percent",
+      "currency": null,
+      "rounding": "half_up",
+      "decimal_places": 2,
+      "period_order_check": "recognized_formats_only",
+      "period_granularity_check": "not_established",
+      "input_status": "matched"
+    },
+    {
+      "calculation_id": "calc-5ddc99a39cfd4b008392dce7fd5b25d5",
+      "formula_id": "difference",
+      "formula_version": "1",
+      "expression": "first - second",
+      "input_verification": "not_verified_by_calculator",
+      "input_precision_status": "not_established",
+      "inputs": [
+        {
+          "fact_id": "fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7",
+          "value": "3",
+          "unit": "USD per share",
+          "currency": "USD",
+          "period": "FY2025"
+        },
+        {
+          "fact_id": "fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79",
+          "value": "2",
+          "unit": "USD per share",
+          "currency": "USD",
+          "period": "FY2024"
+        }
+      ],
+      "value": "1.00",
+      "unit": "USD per share",
+      "currency": "USD",
+      "rounding": "half_up",
+      "decimal_places": 2,
+      "input_status": "matched"
+    }
+  ],
+  "events": [
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:353e638dbc794bc0aedcc6974cd8e657",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 16595,
+      "usage_detail": {
+        "input_tokens": 15720,
+        "output_tokens": 875,
+        "total_tokens": 16595,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 0
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_6867b028b5e54bf78dc962f4"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 15720,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.0
+      },
+      "note": "我先读取已授权的 exhibit 源文件（仅 103 字符，可整体读取），以获取 Alpha 2025 与 2024 年收入和稀释 EPS 数据。"
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_6867b028b5e54bf78dc962f4",
+      "name": "read_sources",
+      "status": "completed",
+      "rationale": "读取全部 exhibit 内容，提取 Alpha 2025 与 2024 年收入及稀释 EPS 数值，用于增长率与 EPS 变化计算。",
+      "summary": {
+        "kind": "read_sources",
+        "read_count": 1,
+        "items": [
+          {
+            "source_id": "exhibit",
+            "title": "Synthetic exhibit",
+            "start": 0,
+            "end": 103,
+            "total_characters": 103
+          }
+        ]
+      }
+    },
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:a34f9a351a064a61b5f16ce11c1bc2ac",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 18488,
+      "usage_detail": {
+        "input_tokens": 1299,
+        "output_tokens": 1509,
+        "total_tokens": 18488,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 15680
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_1c91c139cfef4fd69c29b738",
+        "call_c0562885902949089b938e87"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 16979,
+        "cache_read_input_tokens": 15680,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.9234937275457918
+      },
+      "note": "已读取 exhibit 全文。现在记录四个数值事实，并同时对该源做一次专门的反向证据检索（检查是否存在一次性项目、会计政策变更或重述等会扭曲比较的信息）。"
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_1c91c139cfef4fd69c29b738",
+      "name": "record_facts",
+      "status": "completed",
+      "rationale": "记录 exhibit 中 Alpha FY2025 与 FY2024 的收入和稀释 EPS 四个数值，作为后续增长率与 EPS 变化计算的依据。",
+      "summary": {
+        "kind": "record_facts",
+        "recorded_count": 0,
+        "facts_preview": []
+      }
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_c0562885902949089b938e87",
+      "name": "search_source",
+      "status": "completed",
+      "rationale": "在 exhibit 内进行专门的反向证据检索：查找一次性项目、会计政策变更、重述或调整口径等可能扭曲 2025 与 2024 比较的信息。"
+    },
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:2c2ffaa59b0d4b7a833acda9f5ca5d7e",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 19829,
+      "usage_detail": {
+        "input_tokens": 3129,
+        "output_tokens": 1020,
+        "total_tokens": 19829,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 15680
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_ed5f6775575e45aeabcaa15f"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 18809,
+        "cache_read_input_tokens": 15680,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.8336434685522888
+      },
+      "note": "部分事实因偏移量不精确未通过校验。由于引文在已读范围内唯一，我改为省略偏移量，由系统在已读范围内定位引文重新记录。"
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_ed5f6775575e45aeabcaa15f",
+      "name": "record_facts",
+      "status": "completed",
+      "rationale": "重新记录 exhibit 中 Alpha FY2025 与 FY2024 的收入和稀释 EPS；引文在已读范围内唯一，故省略字符偏移由系统定位。",
+      "summary": {
+        "kind": "record_facts",
+        "recorded_count": 4,
+        "facts_preview": [
+          {
+            "label": "Alpha revenue",
+            "value": "120",
+            "unit": "USD million",
+            "currency": "USD",
+            "period": "FY2025"
+          },
+          {
+            "label": "Alpha revenue",
+            "value": "100",
+            "unit": "USD million",
+            "currency": "USD",
+            "period": "FY2024"
+          },
+          {
+            "label": "Alpha diluted EPS",
+            "value": "3",
+            "unit": "USD per share",
+            "currency": "USD",
+            "period": "FY2025"
+          },
+          {
+            "label": "Alpha diluted EPS",
+            "value": "2",
+            "unit": "USD per share",
+            "currency": "USD",
+            "period": "FY2024"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:b799ce3cd7af4902a47083ce2a954aeb",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 20854,
+      "usage_detail": {
+        "input_tokens": 3897,
+        "output_tokens": 1277,
+        "total_tokens": 20854,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 15680
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_6a33122971504d2e94b6ad63"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 19577,
+        "cache_read_input_tokens": 15680,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.8009398784287685
+      },
+      "note": "事实已记录（4 条）。反向证据检索也已完成（exhibit 内未发现一次性项目、会计政策变更、重述或口径差异的任何表述）。现在做确定性计算：收入增速、稀释 EPS 增速与绝对变化。"
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_6a33122971504d2e94b6ad63",
+      "name": "calculate_financials",
+      "status": "completed",
+      "rationale": "按同一公式确定性计算：FY2025 收入同比增速、稀释 EPS 同比增速、稀释 EPS 绝对变化（2025 减 2024）。",
+      "summary": {
+        "kind": "calculate_financials",
+        "calculated_count": 3,
+        "calcs_preview": [
+          {
+            "formula_id": "growth_percent",
+            "value": "20.00",
+            "unit": "percent",
+            "currency": null,
+            "expression": "(first / second - 1) * 100"
+          },
+          {
+            "formula_id": "growth_percent",
+            "value": "50.00",
+            "unit": "percent",
+            "currency": null,
+            "expression": "(first / second - 1) * 100"
+          },
+          {
+            "formula_id": "difference",
+            "value": "1.00",
+            "unit": "USD per share",
+            "currency": "USD",
+            "expression": "first - second"
+          }
+        ]
+      }
+    }
+  ],
+  "tool_io": [
+    {
+      "id": "call_6867b028b5e54bf78dc962f4",
+      "tool": "read_sources",
+      "input": {
+        "rationale": "读取全部 exhibit 内容，提取 Alpha 2025 与 2024 年收入及稀释 EPS 数值，用于增长率与 EPS 变化计算。",
+        "reads": [
+          {
+            "source_id": "exhibit",
+            "start": 0
+          }
+        ]
+      },
+      "result": "{\"cleared\":true,\"facts_recorded_count\":4,\"hint\":\"Use search_source or targeted read_sources if re-inspection needed; recorded read_ranges remain valid.\",\"original_chars\":411,\"reason\":\"context_compacted\",\"source_ids\":[\"exhibit\"],\"source_spans\":[{\"end\":103,\"source_id\":\"exhibit\",\"start\":0}],\"tool\":\"read_sources\"}"
+    },
+    {
+      "id": "call_1c91c139cfef4fd69c29b738",
+      "tool": "record_facts",
+      "input": {
+        "facts": [
+          {
+            "character_end": 26,
+            "character_start": 9,
+            "content_sha256": "86999c7c03aa39f42799d31f99103f9397ca94dae821f7f8574a0acec24e4cda",
+            "currency": "USD",
+            "label": "Alpha revenue",
+            "period": "FY2025",
+            "quotation": "Alpha 2025 revenue 120 USD million",
+            "source_id": "exhibit",
+            "unit": "USD million",
+            "value": 120
+          },
+          {
+            "character_end": 103,
+            "character_start": 88,
+            "content_sha256": "86999c7c03aa39f42799d31f99103f9397ca94dae821f7f8574a0acec24e4cda",
+            "currency": "USD",
+            "label": "Alpha revenue",
+            "period": "FY2024",
+            "quotation": "2024 revenue 100 USD million",
+            "source_id": "exhibit",
+            "unit": "USD million",
+            "value": 100
+          },
+          {
+            "character_end": 45,
+            "character_start": 29,
+            "content_sha256": "86999c7c03aa39f42799d31f99103f9397ca94dae821f7f8574a0acec24e4cda",
+            "currency": "USD",
+            "label": "Alpha diluted EPS",
+            "period": "FY2025",
+            "quotation": "diluted EPS 3 USD",
+            "source_id": "exhibit",
+            "unit": "USD per share",
+            "value": 3
+          },
+          {
+            "character_end": 86,
+            "character_start": 69,
+            "content_sha256": "86999c7c03aa39f42799d31f99103f9397ca94dae821f7f8574a0acec24e4cda",
+            "currency": "USD",
+            "label": "Alpha diluted EPS",
+            "period": "FY2024",
+            "quotation": "diluted EPS 2 USD",
+            "source_id": "exhibit",
+            "unit": "USD per share",
+            "value": 2
+          }
+        ],
+        "rationale": "记录 exhibit 中 Alpha FY2025 与 FY2024 的收入和稀释 EPS 四个数值，作为后续增长率与 EPS 变化计算的依据。"
+      },
+      "result": "{\"facts\": [], \"failures\": [{\"index\": 0, \"item\": \"facts[0]\", \"kind\": \"invalid_item\", \"message\": \"Quotation does not match the specified location.\", \"quotation_start\": \"Alpha 2025 revenue 120 USD million\", \"source_id\": \"exhibit\"}, {\"index\": 1, \"item\": \"facts[1]\", \"kind\": \"invalid_item\", \"message\": \"Quotation does not match the specified location.\", \"quotation_start\": \"2024 revenue 100 USD million\", \"source_id\": \"exhibit\"}, {\"index\": 2, \"item\": \"facts[2]\", \"kind\": \"invalid_item\", \"message\": \"Quotation does not match the specified location.\", \"quotation_start\": \"diluted EPS 3 USD\", \"source_id\": \"exhibit\"}, {\"index\": 3, \"item\": \"facts[3]\", \"kind\": \"invalid_item\", \"message\": \"Quotation does not match the specified location.\", \"quotation_start\": \"diluted EPS 2 USD\", \"source_id\": \"exhibit\"}]}"
+    },
+    {
+      "id": "call_c0562885902949089b938e87",
+      "tool": "search_source",
+      "input": {
+        "counter_search": {
+          "hypothesis": "one-off items, accounting policy changes, restatements or adjusted/reported basis differences that would distort the revenue growth and diluted EPS comparison",
+          "target": "Alpha 2025 vs 2024 revenue growth of +20% and diluted EPS change of +50% reflect underlying comparable performance"
+        },
+        "max_hits": 10,
+        "query": "one-off adjusted restatement accounting policy change",
+        "rationale": "在 exhibit 内进行专门的反向证据检索：查找一次性项目、会计政策变更、重述或调整口径等可能扭曲 2025 与 2024 比较的信息。",
+        "source_id": "exhibit"
+      },
+      "result": "{\"case_sensitive\": false, \"hits\": [], \"match_mode\": \"none\", \"query\": \"one-off adjusted restatement accounting policy change\", \"returned_hits\": 0, \"source_id\": \"exhibit\", \"status\": \"completed\", \"title\": \"Synthetic exhibit\", \"total_characters\": 103, \"total_matches\": 0, \"truncated\": false}"
+    },
+    {
+      "id": "call_ed5f6775575e45aeabcaa15f",
+      "tool": "record_facts",
+      "input": {
+        "facts": [
+          {
+            "currency": "USD",
+            "label": "Alpha revenue",
+            "period": "FY2025",
+            "quotation": "Alpha 2025 revenue 120 USD million",
+            "source_id": "exhibit",
+            "unit": "USD million",
+            "value": 120
+          },
+          {
+            "currency": "USD",
+            "label": "Alpha revenue",
+            "period": "FY2024",
+            "quotation": "2024 revenue 100 USD million",
+            "source_id": "exhibit",
+            "unit": "USD million",
+            "value": 100
+          },
+          {
+            "currency": "USD",
+            "label": "Alpha diluted EPS",
+            "period": "FY2025",
+            "quotation": "diluted EPS 3 USD",
+            "source_id": "exhibit",
+            "unit": "USD per share",
+            "value": 3
+          },
+          {
+            "currency": "USD",
+            "label": "Alpha diluted EPS",
+            "period": "FY2024",
+            "quotation": "diluted EPS 2 USD",
+            "source_id": "exhibit",
+            "unit": "USD per share",
+            "value": 2
+          }
+        ],
+        "rationale": "重新记录 exhibit 中 Alpha FY2025 与 FY2024 的收入和稀释 EPS；引文在已读范围内唯一，故省略字符偏移由系统定位。"
+      },
+      "result": "{\"facts\": [{\"character_end\": 34, \"character_start\": 0, \"currency\": \"USD\", \"fact_id\": \"fact-5958296fdf1375a05436c387ddf1fb157f793d04561ac4f31759a416ea86c1fb\", \"label\": \"Alpha revenue\", \"location\": {\"character_end\": 34, \"character_start\": 0}, \"period\": \"FY2025\", \"quotation\": \"Alpha 2025 revenue 120 USD million\", \"source_id\": \"exhibit\", \"unit\": \"USD million\", \"value\": \"120\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 83, \"character_start\": 55, \"currency\": \"USD\", \"fact_id\": \"fact-83398675ae40edbd93f1e0101029f3ce30bd56fabd8ec28575d6c51bf91f5a0b\", \"label\": \"Alpha revenue\", \"location\": {\"character_end\": 83, \"character_start\": 55}, \"period\": \"FY2024\", \"quotation\": \"2024 revenue 100 USD million\", \"source_id\": \"exhibit\", \"unit\": \"USD million\", \"value\": \"100\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 53, \"character_start\": 36, \"currency\": \"USD\", \"fact_id\": \"fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7\", \"label\": \"Alpha diluted EPS\", \"location\": {\"character_end\": 53, \"character_start\": 36}, \"period\": \"FY2025\", \"quotation\": \"diluted EPS 3 USD\", \"source_id\": \"exhibit\", \"unit\": \"USD per share\", \"value\": \"3\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 102, \"character_start\": 85, \"currency\": \"USD\", \"fact_id\": \"fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79\", \"label\": \"Alpha diluted EPS\", \"location\": {\"character_end\": 102, \"character_start\": 85}, \"period\": \"FY2024\", \"quotation\": \"diluted EPS 2 USD\", \"source_id\": \"exhibit\", \"unit\": \"USD per share\", \"value\": \"2\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}], \"failures\": []}"
+    },
+    {
+      "id": "call_6a33122971504d2e94b6ad63",
+      "tool": "calculate_financials",
+      "input": {
+        "calculations": [
+          {
+            "decimal_places": 2,
+            "first_fact_id": "fact-5958296fdf1375a05436c387ddf1fb157f793d04561ac4f31759a416ea86c1fb",
+            "formula": "growth_percent",
+            "second_fact_id": "fact-83398675ae40edbd93f1e0101029f3ce30bd56fabd8ec28575d6c51bf91f5a0b"
+          },
+          {
+            "decimal_places": 2,
+            "first_fact_id": "fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7",
+            "formula": "growth_percent",
+            "second_fact_id": "fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79"
+          },
+          {
+            "decimal_places": 2,
+            "first_fact_id": "fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7",
+            "formula": "difference",
+            "second_fact_id": "fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79"
+          }
+        ],
+        "rationale": "按同一公式确定性计算：FY2025 收入同比增速、稀释 EPS 同比增速、稀释 EPS 绝对变化（2025 减 2024）。"
+      },
+      "result": "{\"calculations\": [{\"calculation_id\": \"calc-e88b3fe7f444489e82b1dd1db817e914\", \"currency\": null, \"decimal_places\": 2, \"expression\": \"(first / second - 1) * 100\", \"formula_id\": \"growth_percent\", \"formula_version\": \"1\", \"input_precision_status\": \"not_established\", \"input_status\": \"matched\", \"input_verification\": \"not_verified_by_calculator\", \"inputs\": [{\"currency\": \"USD\", \"fact_id\": \"fact-5958296fdf1375a05436c387ddf1fb157f793d04561ac4f31759a416ea86c1fb\", \"period\": \"FY2025\", \"unit\": \"USD million\", \"value\": \"120\"}, {\"currency\": \"USD\", \"fact_id\": \"fact-83398675ae40edbd93f1e0101029f3ce30bd56fabd8ec28575d6c51bf91f5a0b\", \"period\": \"FY2024\", \"unit\": \"USD million\", \"value\": \"100\"}], \"period_granularity_check\": \"not_established\", \"period_order_check\": \"recognized_formats_only\", \"rounding\": \"half_up\", \"unit\": \"percent\", \"value\": \"20.00\"}, {\"calculation_id\": \"calc-44b8efbd37cc41f686a2737c8d5661d0\", \"currency\": null, \"decimal_places\": 2, \"expression\": \"(first / second - 1) * 100\", \"formula_id\": \"growth_percent\", \"formula_version\": \"1\", \"input_precision_status\": \"not_established\", \"input_status\": \"matched\", \"input_verification\": \"not_verified_by_calculator\", \"inputs\": [{\"currency\": \"USD\", \"fact_id\": \"fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7\", \"period\": \"FY2025\", \"unit\": \"USD per share\", \"value\": \"3\"}, {\"currency\": \"USD\", \"fact_id\": \"fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79\", \"period\": \"FY2024\", \"unit\": \"USD per share\", \"value\": \"2\"}], \"period_granularity_check\": \"not_established\", \"period_order_check\": \"recognized_formats_only\", \"rounding\": \"half_up\", \"unit\": \"percent\", \"value\": \"50.00\"}, {\"calculation_id\": \"calc-5ddc99a39cfd4b008392dce7fd5b25d5\", \"currency\": \"USD\", \"decimal_places\": 2, \"expression\": \"first - second\", \"formula_id\": \"difference\", \"formula_version\": \"1\", \"input_precision_status\": \"not_established\", \"input_status\": \"matched\", \"input_verification\": \"not_verified_by_calculator\", \"inputs\": [{\"currency\": \"USD\", \"fact_id\": \"fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7\", \"period\": \"FY2025\", \"unit\": \"USD per share\", \"value\": \"3\"}, {\"currency\": \"USD\", \"fact_id\": \"fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79\", \"period\": \"FY2024\", \"unit\": \"USD per share\", \"value\": \"2\"}], \"rounding\": \"half_up\", \"unit\": \"USD per share\", \"value\": \"1.00\"}]}"
+    }
+  ],
+  "calls": 4,
+  "budget_accounted_tokens": 75766,
+  "prompts": [
+    {
+      "turn_sha256": "28df631bdd9cdc09892e0d8980e6ef40b6b9619e3e121881c0a6beaabdaf447b",
+      "tail_note": null
+    },
+    {
+      "turn_sha256": "999f6057fe5f25b2b0f25e844fac0a38cade364db001a758d0816a73d7d2643d",
+      "tail_note": "[Coverage]\n{\"coverage\":{\"categories\":[{\"category\":\"uploads\",\"obtained\":1,\"status\":\"obtained\"}],\"not_attempted\":[\"market_prices\",\"financial_statements\",\"filings\",\"news_web\",\"macro\",\"other\"],\"not_established\":[\"No market prices were requested in this run; nothing is established for this category.\",\"No financial statements were requested in this run; nothing is established for this category.\",\"No filings and official documents were requested in this run; nothing is established for this category.\",\"No news and web were requested in this run; nothing is established for this category.\"],\"note\":\"Generated deterministically from run events; state these limits instead of implying completeness.\",\"run_status\":\"incomplete\"}}\n[Working Memory]\nState: facts=0 calcs=0 charts=0 sources=1\nMethodChecks(company_comparison,earnings_review): entities:n/a, aligned_statements:missing, derived_ratios:missing, entity:n/a, statements:missing, filing_text:missing, prior_compare:missing\nCounterEvidence: needed(0/1)"
+    },
+    {
+      "turn_sha256": "b6e87f0fa76e88e05756f136ccd737572529dd1df74dfad0152ac2f4b9e56a66",
+      "tail_note": "[Coverage]\n{\"coverage\":{\"categories\":[{\"category\":\"uploads\",\"obtained\":1,\"status\":\"obtained\"}],\"not_attempted\":[\"market_prices\",\"financial_statements\",\"filings\",\"news_web\",\"macro\",\"other\"],\"not_established\":[\"No market prices were requested in this run; nothing is established for this category.\",\"No financial statements were requested in this run; nothing is established for this category.\",\"No filings and official documents were requested in this run; nothing is established for this category.\",\"No news and web were requested in this run; nothing is established for this category.\"],\"note\":\"Generated deterministically from run events; state these limits instead of implying completeness.\",\"run_status\":\"incomplete\"}}\n[Working Memory]\nState: facts=0 calcs=0 charts=0 sources=1\nMethodChecks(company_comparison,earnings_review): entities:n/a, aligned_statements:missing, derived_ratios:missing, entity:n/a, statements:missing, filing_text:ok, prior_compare:missing\nCounterEvidence: ok(1/1)"
+    },
+    {
+      "turn_sha256": "a44c1817632dd6050320e3ed7cf776a02ad7c42794eb2978f9a7afed2c7353cd",
+      "tail_note": "[Coverage]\n{\"coverage\":{\"categories\":[{\"category\":\"uploads\",\"obtained\":1,\"status\":\"obtained\"}],\"not_attempted\":[\"market_prices\",\"financial_statements\",\"filings\",\"news_web\",\"macro\",\"other\"],\"not_established\":[\"No market prices were requested in this run; nothing is established for this category.\",\"No financial statements were requested in this run; nothing is established for this category.\",\"No filings and official documents were requested in this run; nothing is established for this category.\",\"No news and web were requested in this run; nothing is established for this category.\"],\"note\":\"Generated deterministically from run events; state these limits instead of implying completeness.\",\"run_status\":\"incomplete\"}}\n[Working Memory]\nState: facts=4 calcs=0 charts=0 sources=1\nMethodChecks(company_comparison,earnings_review): entities:n/a, aligned_statements:missing, derived_ratios:missing, entity:n/a, statements:missing, filing_text:ok, prior_compare:missing\nCounterEvidence: ok(1/1)"
+    }
+  ],
+  "elapsed_seconds": 83.353,
+  "actual_cost": null
+}

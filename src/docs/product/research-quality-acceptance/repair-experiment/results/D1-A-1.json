@@ -1,0 +1,145 @@
+{
+  "case": "D1",
+  "arm": "A",
+  "source": {
+    "source_id": "exhibit",
+    "content_sha256": "86999c7c03aa39f42799d31f99103f9397ca94dae821f7f8574a0acec24e4cda",
+    "permissions": {
+      "store": true,
+      "model_input": true,
+      "display": true,
+      "export": true
+    }
+  },
+  "actual_cost": null,
+  "status": "partial",
+  "reason": "provider_request_rejected",
+  "report": "",
+  "claims": [],
+  "facts": [],
+  "question_parts": [
+    {
+      "id": "req-d6ee812697d9beb7",
+      "question": "比较 Alpha 2025 与 2024 年收入增速",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "缺少 2024, 2025 年同口径的收入依据。",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-d6ee812697d9beb7",
+          "question": "比较 Alpha 2025 与 2024 年收入增速",
+          "status": "missing",
+          "reason": "缺少 2024, 2025 年同口径的收入依据。",
+          "references": [],
+          "core": true
+        }
+      ]
+    },
+    {
+      "id": "req-08c62e44b525d52e",
+      "question": "并说明稀释 EPS 变化",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "缺少 2024, 2025 年同口径的稀释 EPS依据。",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-08c62e44b525d52e",
+          "question": "并说明稀释 EPS 变化",
+          "status": "missing",
+          "reason": "缺少 2024, 2025 年同口径的稀释 EPS依据。",
+          "references": [],
+          "core": true
+        }
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "code": "provider_error",
+      "message": "Provider rejected the request."
+    }
+  ],
+  "calculations": [],
+  "events": [
+    {
+      "kind": "model_failure",
+      "call_id": "research:research-agent:63a4a57b82724585b2a00ed618df356d",
+      "code": "provider_request_rejected",
+      "external_state": "returned",
+      "usage": null,
+      "settlement": "unknown"
+    }
+  ],
+  "tool_io": [],
+  "answered_parts": [],
+  "all_core_answered": false,
+  "submit_research_observed": false,
+  "submit_research_calls": [],
+  "submit_handler_receipts": [],
+  "state_submission": null,
+  "partial_notes": "部分结果已保留：停止原因：模型服务拒绝了本次请求（provider_request_rejected）；已收集资料 1 份，已读片段 0 段，已记录事实 0 条，已完成计算 0 项。",
+  "final_state_projection": {
+    "facts": [],
+    "calculations": [],
+    "claims": null,
+    "draft_claims": null,
+    "question_parts": null,
+    "gaps": null,
+    "submission": null,
+    "market_analyses": null,
+    "read_ranges": []
+  },
+  "submission_acceptance": "not_observed",
+  "record_facts_parallel_turns": [],
+  "usage": {
+    "reported_tokens": 0,
+    "unknown_usage_calls": 1,
+    "reserved_estimate_tokens": 59950
+  },
+  "search_calls": 0,
+  "calls": 1,
+  "budget_accounted_tokens": 59950,
+  "prompts": [
+    {
+      "turn_sha256": "b91f6a80baf5843dad7905864c5940d6dc8bf47a3f45bf9657db665aec6ee560",
+      "tail_note": null,
+      "injected": false
+    }
+  ],
+  "wire_turns": [],
+  "decoded_turns": [],
+  "diagnostics": [
+    {
+      "transport": null,
+      "stream_metrics": null,
+      "finish_reason": null,
+      "stop_reason": null,
+      "usage": null
+    }
+  ],
+  "build_observations": [
+    {
+      "call_candidate": 1,
+      "eligible_last_call": false,
+      "injected": false,
+      "before_sha256": "b91f6a80baf5843dad7905864c5940d6dc8bf47a3f45bf9657db665aec6ee560",
+      "after_sha256": "b91f6a80baf5843dad7905864c5940d6dc8bf47a3f45bf9657db665aec6ee560"
+    }
+  ],
+  "elapsed_seconds": 0.827,
+  "wire_observations": [
+    {
+      "passages": [],
+      "duplicate_passage_bytes": 0,
+      "wire_bytes": 57838,
+      "duplicate_fraction": 0.0,
+      "wire_sha256": "9e8327e2bf45f1fbf9a9a8e79867eca48c9f8c00ab43282a22001a6505642daa",
+      "calc_schema_sha256": "438961829a573d380cc6a48e4188d04ac6f252f8c3c79584f432735970d3d528",
+      "without_calc_sha256": "ad1e093dd533db15d10358d23ad3ad2bb902dd723404926d1714448549f550a6"
+    }
+  ]
+}

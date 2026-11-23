@@ -1,0 +1,584 @@
+[
+  {
+    "id": "S1",
+    "question": "Aster 2025 2024 revenue growth sustainability",
+    "sources": [
+      [
+        "annual-table",
+        "Aster annual consolidated statements",
+        "Aster consolidated statements of operations. USD millions. Year ended December 31: 2025 revenue 120; 2024 revenue 100."
+      ],
+      [
+        "annual-note",
+        "Aster annual report acquisition note",
+        "Aster acquisition note. The acquisition contributed 18 million dollars to the increase in 2025 revenue compared with 2024. Other drivers of the remaining increase were not quantified."
+      ],
+      [
+        "release-original",
+        "Aster revenue release",
+        "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability."
+      ],
+      [
+        "release-copy-a",
+        "News copy A",
+        "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability."
+      ],
+      [
+        "release-copy-b",
+        "News copy B",
+        "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability."
+      ]
+    ],
+    "requirements": [
+      "Find comparable consolidated revenue for 2025 and 2024.",
+      "Find disclosed drivers of revenue growth and limitations on attribution."
+    ],
+    "passages": 2,
+    "source_meta": {
+      "annual-table": {
+        "model_input": true,
+        "published_at": "2026-02-01T00:00:00+00:00"
+      },
+      "annual-note": {
+        "model_input": true,
+        "published_at": "2026-02-01T00:00:00+00:00"
+      },
+      "release-original": {
+        "model_input": true,
+        "published_at": "2026-02-02T00:00:00+00:00"
+      },
+      "release-copy-a": {
+        "model_input": true,
+        "published_at": "2026-02-03T00:00:00+00:00"
+      },
+      "release-copy-b": {
+        "model_input": true,
+        "published_at": "2026-02-04T00:00:00+00:00"
+      }
+    }
+  },
+  {
+    "id": "S2",
+    "question": "Aster 2025 2024 revenue growth sustainability",
+    "sources": [
+      [
+        "annual-table",
+        "Aster annual consolidated statements",
+        "Aster consolidated statements of operations. USD millions. Year ended December 31: 2025 revenue 120; 2024 revenue 100."
+      ],
+      [
+        "release-original",
+        "Aster revenue release",
+        "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability."
+      ],
+      [
+        "release-copy-a",
+        "News copy A",
+        "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability."
+      ],
+      [
+        "release-copy-b",
+        "News copy B",
+        "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability."
+      ]
+    ],
+    "requirements": [
+      "Find comparable consolidated revenue for 2025 and 2024.",
+      "Find disclosed drivers of revenue growth and limitations on attribution."
+    ],
+    "passages": 2,
+    "source_meta": {
+      "annual-table": {
+        "model_input": true,
+        "published_at": "2026-02-01T00:00:00+00:00"
+      },
+      "release-original": {
+        "model_input": true,
+        "published_at": "2026-02-02T00:00:00+00:00"
+      },
+      "release-copy-a": {
+        "model_input": true,
+        "published_at": "2026-02-03T00:00:00+00:00"
+      },
+      "release-copy-b": {
+        "model_input": true,
+        "published_at": "2026-02-04T00:00:00+00:00"
+      }
+    }
+  },
+  {
+    "id": "S3",
+    "question": "Aster 2025 2024 revenue growth sustainability",
+    "sources": [
+      [
+        "annual-table",
+        "Aster annual consolidated statements",
+        "Aster consolidated statements of operations. USD millions. Year ended December 31: 2025 revenue 120; 2024 revenue 100."
+      ],
+      [
+        "annual-note",
+        "Aster annual report acquisition note",
+        "Aster acquisition note. The acquisition contributed 18 million dollars to the increase in 2025 revenue compared with 2024. Other drivers of the remaining increase were not quantified."
+      ],
+      [
+        "contrary",
+        "Aster customer disclosure",
+        "Aster customer disclosure: a major customer announced that its Aster purchases would decline in 2026; the magnitude is not specified."
+      ],
+      [
+        "release-original",
+        "Aster revenue release",
+        "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability."
+      ]
+    ],
+    "requirements": [
+      "Find comparable consolidated revenue for 2025 and 2024.",
+      "Find disclosed drivers of revenue growth and limitations on attribution.",
+      "Find evidence that could undermine sustainability of revenue growth."
+    ],
+    "passages": 3,
+    "source_meta": {
+      "annual-table": {
+        "model_input": true,
+        "published_at": "2026-02-01T00:00:00+00:00"
+      },
+      "annual-note": {
+        "model_input": true,
+        "published_at": "2026-02-01T00:00:00+00:00"
+      },
+      "contrary": {
+        "model_input": true,
+        "published_at": "2026-02-15T00:00:00+00:00"
+      },
+      "release-original": {
+        "model_input": true,
+        "published_at": "2026-02-02T00:00:00+00:00"
+      }
+    }
+  },
+  {
+    "id": "S4",
+    "question": "Aster 2025 2024 revenue growth sustainability",
+    "sources": [
+      [
+        "annual-table",
+        "Aster annual consolidated statements",
+        "Aster consolidated statements of operations. USD millions. Year ended December 31: 2025 revenue 120; 2024 revenue 100."
+      ],
+      [
+        "annual-note",
+        "Aster annual report acquisition note",
+        "Aster acquisition note. The acquisition contributed 18 million dollars to the increase in 2025 revenue compared with 2024. Other drivers of the remaining increase were not quantified."
+      ],
+      [
+        "future",
+        "Aster revision after cutoff",
+        "Aster 2025 2024 revenue growth sustainability revised revenue was 130 million dollars."
+      ],
+      [
+        "revoked",
+        "Restricted Aster note",
+        "Aster 2025 2024 revenue growth sustainability restricted source."
+      ]
+    ],
+    "requirements": [
+      "Find comparable consolidated revenue for 2025 and 2024.",
+      "Find disclosed drivers of revenue growth and limitations on attribution."
+    ],
+    "passages": 2,
+    "source_meta": {
+      "annual-table": {
+        "model_input": true,
+        "published_at": "2026-02-01T00:00:00+00:00"
+      },
+      "annual-note": {
+        "model_input": true,
+        "published_at": "2026-02-01T00:00:00+00:00"
+      },
+      "future": {
+        "model_input": true,
+        "published_at": "2026-04-10T00:00:00+00:00"
+      },
+      "revoked": {
+        "model_input": false,
+        "published_at": "2026-02-01T00:00:00+00:00"
+      }
+    }
+  },
+  {
+    "id": "H1",
+    "question": "How much did Selden's annual sales grow, and how much of the change can the disclosure explain? Cite the two periods and the driver.",
+    "sources": [
+      [
+        "h1a",
+        "Financial statements",
+        "Selden consolidated statement of income. Net sales for FY2025 were USD 84 million. Net sales for FY2024 were USD 70 million."
+      ],
+      [
+        "h1b",
+        "Notes to the accounts",
+        "Selden acquisition note. Of the FY2025 increase in net sales versus FY2024, purchased businesses contributed USD 7 million. The balance was not disaggregated."
+      ],
+      [
+        "h1c",
+        "Regional news service",
+        "Selden annual sales growth attracts attention. Investors discussed Selden annual sales growth."
+      ],
+      [
+        "h1d",
+        "Market bulletin",
+        "Selden annual sales growth attracts attention. Investors discussed Selden annual sales growth."
+      ],
+      [
+        "h1e",
+        "Trading digest",
+        "Selden annual sales growth attracts attention. Investors discussed Selden annual sales growth."
+      ]
+    ]
+  },
+  {
+    "id": "H2",
+    "question": "白楠公司两年营收增速是多少？能否由现有资料算出并购对营收增量的贡献占比？请引用依据并说明限制。",
+    "sources": [
+      [
+        "h2a",
+        "合并财务报表",
+        "白楠公司合并利润表，单位：百万元人民币。2024年度营业收入为80百万元。2025年度营业收入为100百万元。"
+      ],
+      [
+        "h2b",
+        "企业合并附注",
+        "白楠公司企业合并附注：被收购业务本期营业收入为12百万元。合并前比较期营业收入和增量贡献均未披露。"
+      ],
+      [
+        "h2c",
+        "晨间简讯",
+        "白楠公司两年营收增速受到关注。投资者讨论白楠公司两年营收增速。"
+      ],
+      [
+        "h2d",
+        "地方转载",
+        "白楠公司两年营收增速受到关注。投资者讨论白楠公司两年营收增速。"
+      ],
+      [
+        "h2e",
+        "午间资讯",
+        "白楠公司两年营收增速受到关注。投资者讨论白楠公司两年营收增速。"
+      ]
+    ]
+  },
+  {
+    "id": "H3",
+    "question": "What condition allows Merrow's customer to terminate the agreement early? Is management's guidance unconditional?",
+    "sources": [
+      [
+        "h3a",
+        "Signed agreement",
+        "Merrow service agreement, section 8. A customer may terminate early only after a material breach that remains uncured for 45 days following written notice."
+      ],
+      [
+        "h3b",
+        "Quarterly update",
+        "Merrow management guidance assumes that the two pilot sites convert to paid contracts. This conversion had not occurred at the reporting date."
+      ],
+      [
+        "h3c",
+        "Regional wire",
+        "Merrow guidance and early termination were discussed at an investor event."
+      ],
+      [
+        "h3d",
+        "Syndicated bulletin",
+        "Merrow guidance and early termination were discussed at an investor event."
+      ]
+    ]
+  },
+  {
+    "id": "H4",
+    "question": "根据共同交易日收盘价，岚浦的累计收益是否跑赢基准？",
+    "sources": [
+      [
+        "h4a",
+        "岚浦收盘价",
+        "岚浦未复权收盘价，人民币。2025-05-12 为 40，2025-05-13 为 42，2025-05-14 为 44。"
+      ],
+      [
+        "h4b",
+        "基准收盘点位",
+        "同币种基准指数。2025-05-13 收盘 150，2025-05-14 收盘 155。"
+      ],
+      [
+        "h4c",
+        "个股简讯",
+        "岚浦的累计收益是否跑赢基准受到关注。岚浦的累计收益在多个渠道被讨论。"
+      ],
+      [
+        "h4d",
+        "转载",
+        "岚浦的累计收益是否跑赢基准受到关注。岚浦的累计收益在多个渠道被讨论。"
+      ]
+    ]
+  },
+  {
+    "id": "J1",
+    "question": "Calculate Waven's annual sales growth and identify the quantified pricing contribution to that change.",
+    "sources": [
+      [
+        "w3",
+        "Weekend letter",
+        "Waven annual sales growth and the pricing contribution drew comment after the release."
+      ],
+      [
+        "w1",
+        "Consolidated accounts",
+        "Waven net sales, GBP millions: year ended March 2024, 240; year ended March 2025, 252. Accounting basis unchanged."
+      ],
+      [
+        "w4",
+        "Morning letter",
+        "Waven annual sales growth and the pricing contribution drew comment after the release."
+      ],
+      [
+        "w2",
+        "Financial review",
+        "Waven reported GBP 3 million of the GBP 12 million net sales increase was attributable to pricing; other causes were not quantified."
+      ]
+    ]
+  },
+  {
+    "id": "J2",
+    "question": "青岳的订单能否提前撤销？交货预估还有什么前提？",
+    "sources": [
+      [
+        "y3",
+        "周报",
+        "青岳的订单能否提前撤销成为讨论热点，市场也在关注交货预估。"
+      ],
+      [
+        "y2",
+        "营运更新",
+        "青岳预计将按期交货，前提是客户通过现场验收；截至披露日验收尚未进行。"
+      ],
+      [
+        "y4",
+        "综合报道",
+        "青岳的订单能否提前撤销成为讨论热点，市场也在关注交货预估。"
+      ],
+      [
+        "y1",
+        "采购协议附件",
+        "青岳合同第六条：供应商实质违约且收书面通知后三十日仍未补救时，买方方可提前撤销订单。"
+      ]
+    ]
+  },
+  {
+    "id": "J3",
+    "question": "Compare Tarn stock's local-currency close-to-close return with the index over their shared dates.",
+    "sources": [
+      [
+        "t4",
+        "Copied commentary",
+        "Tarn stock return and the index return over the shared dates attracted attention."
+      ],
+      [
+        "t1",
+        "Exchange daily list",
+        "Tarn stock, closing prices in AUD. June 5: 60; June 6: 62; June 9: 65. Same share class, no adjustments."
+      ],
+      [
+        "t3",
+        "Weekly commentary",
+        "Tarn stock return and the index return over the shared dates attracted attention."
+      ],
+      [
+        "t2",
+        "Index history",
+        "Tarn sector index, AUD price return index, closing points. June 6: 200; June 9: 208."
+      ]
+    ]
+  },
+  {
+    "id": "J4",
+    "question": "星桐两期营业收入变动多少？本期处置子公司能解释多少变化？",
+    "sources": [
+      [
+        "s2",
+        "合并范围变更",
+        "星桐合并范围变更附注：处置子公司在处置日前实现营业收入8百万元，未披露它对集团同比变化的贡献。"
+      ],
+      [
+        "s3",
+        "快讯",
+        "星桐两期营业收入变动和处置子公司受到关注。"
+      ],
+      [
+        "s1",
+        "年度报告附表",
+        "星桐合并利润表，人民币百万元。2023年度营业收入为150，2024年度营业收入为135，两期会计政策相同。"
+      ],
+      [
+        "s4",
+        "转载快讯",
+        "星桐两期营业收入变动和处置子公司受到关注。"
+      ]
+    ]
+  },
+  {
+    "id": "L1",
+    "question": "What was Orlin revenue growth and how much of the increase came from volume?",
+    "sources": [
+      [
+        "l1a",
+        "Annual accounts",
+        "Orlin revenue in EUR millions: 2024 was 80 and 2025 was 100, with unchanged accounting scope."
+      ],
+      [
+        "l1b",
+        "Operating review",
+        "Orlin disclosed that volume explained EUR 12 million of the EUR 20 million revenue increase; remaining drivers were not quantified."
+      ],
+      [
+        "l1c",
+        "Commentary",
+        "Orlin revenue growth and volume were discussed after earnings."
+      ]
+    ]
+  },
+  {
+    "id": "L2",
+    "question": "What was Cedar water usage in 2025?",
+    "sources": [
+      [
+        "l2a",
+        "Environmental filing",
+        "Cedar used 14 million cubic metres of water in 2025."
+      ],
+      [
+        "l2b",
+        "Newsletter",
+        "Cedar water usage was discussed in the newsletter."
+      ]
+    ]
+  },
+  {
+    "id": "L3",
+    "question": "Does Dovetail expect demand growth to continue? Give the strongest counterevidence.",
+    "sources": [
+      [
+        "l3a",
+        "Trading update",
+        "Dovetail expects demand growth next year, subject to confirmed orders."
+      ],
+      [
+        "l3b",
+        "Customer notice",
+        "Dovetail largest customer plans to cut orders next year; magnitude is undisclosed."
+      ],
+      [
+        "l3c",
+        "Market note",
+        "Dovetail demand growth attracted investor attention."
+      ]
+    ]
+  },
+  {
+    "id": "L4",
+    "question": "How much of Iver sales growth was due to the purchase?",
+    "sources": [
+      [
+        "l4a",
+        "Accounts",
+        "Iver net sales USD millions: 2024 50; 2025 60."
+      ],
+      [
+        "l4b",
+        "Acquisition note",
+        "Iver acquired business reported USD 8 million sales in 2025; its prior-year sales and contribution to the increase were not disclosed."
+      ],
+      [
+        "l4c",
+        "Commentary",
+        "Iver purchase and sales growth were the subject of discussion."
+      ]
+    ]
+  },
+  {
+    "id": "L5",
+    "question": "柳澄订单何时可取消，交付预测是否确定？",
+    "sources": [
+      [
+        "l5a",
+        "采购合同",
+        "柳澄采购合同：买方仅在供应商实质违约且收到书面通知后四十五日仍未补救时，才可取消订单。"
+      ],
+      [
+        "l5b",
+        "履约公告",
+        "柳澄交付预估取决于监管许可，截至公告日许可尚未取得。"
+      ],
+      [
+        "l5c",
+        "转载",
+        "柳澄订单取消和交付预测引起关注。"
+      ]
+    ]
+  },
+  {
+    "id": "L6",
+    "question": "按共同交易日比较澜川股票与指数的收盘收益。",
+    "sources": [
+      [
+        "l6a",
+        "交易记录",
+        "澜川股票人民币未复权收盘价：6月2日20，6月3日21，6月4日22。"
+      ],
+      [
+        "l6b",
+        "指数记录",
+        "澜川基准价格指数人民币收盘点位：6月3日100，6月4日102。"
+      ],
+      [
+        "l6c",
+        "市场评论",
+        "澜川股票与指数收益受到关注。"
+      ]
+    ]
+  },
+  {
+    "id": "L7",
+    "question": "松樾报告的本期收入和上期收入相差多少？",
+    "sources": [
+      [
+        "l7a",
+        "集团报表",
+        "松樾合并报表人民币百万元：2024年度收入40，2025年度收入44。"
+      ],
+      [
+        "l7b",
+        "分部资料",
+        "松樾子公司收入2024年为20，2025年为30，口径为子公司。"
+      ],
+      [
+        "l7c",
+        "摘要",
+        "松樾收入增长受到关注。"
+      ]
+    ]
+  },
+  {
+    "id": "L8",
+    "question": "北岑今年每股派息是多少，去年是多少？",
+    "sources": [
+      [
+        "l8a",
+        "本年公告",
+        "北岑宣布本年度每股派息人民币0.5元。"
+      ],
+      [
+        "l8b",
+        "资讯",
+        "北岑每股派息引起讨论，未提供去年数值。"
+      ]
+    ]
+  }
+]

@@ -1,0 +1,263 @@
+.......F...................F..FFFF.sFFFF............F.FFFFFFFFF......... [ 75%]
+FFF.F.F...F.............                                                 [100%]
+=================================== FAILURES ===================================
+_ test_optional_planning_hints_guide_existing_retrieval_without_changing_question _
+tests/test_research_context.py:114: in test_optional_planning_hints_guide_existing_retrieval_without_changing_question
+    assert prompts[0]['question'] == '收入变化'
+           ^^^^^^^^^^
+E   IndexError: list index out of range
+___________ test_acquisition_can_choose_delivery_with_unread_ranges ____________
+tests/test_research_context_capacity.py:149: in test_acquisition_can_choose_delivery_with_unread_ranges
+    assert coordinator._choose(state)[0] == 'acquisition_decision'
+E   AssertionError: assert 'analysis' == 'acquisition_decision'
+E     
+E     - acquisition_decision
+E     + analysis
+_____________ test_api_delegated_two_reads_use_the_selected_source _____________
+tests/test_research_context_capacity.py:237: in test_api_delegated_two_reads_use_the_selected_source
+    assert response.status_code == 202
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+__ test_repeated_continuation_preserves_committed_stages_and_original_budget ___
+tests/test_research_recovery_acceptance.py:98: in test_repeated_continuation_preserves_committed_stages_and_original_budget
+    assert response.status_code == 202, response.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:3aae0b350226d80d51a0f3a7","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/plan_research","message":"Extra inputs are not permitted"},{"location":"body/counterpoint_followup","message":"Extra inputs are not permitted"},{"location":"body/gap_followup","message":"Extra inputs are not permitted"},{"location":"body/support_review","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+__ test_unresolved_external_call_blocks_replay_but_preserves_partial_delivery __
+tests/test_research_recovery_acceptance.py:177: in test_unresolved_external_call_blocks_replay_but_preserves_partial_delivery
+    assert started.status_code == 202, started.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:dc2935a7c07f86407e02c057","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/counterpoint_followup","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+___ test_checkpoint_is_account_scoped_and_user_revision_blocks_continuation ____
+tests/test_research_recovery_acceptance.py:223: in test_checkpoint_is_account_scoped_and_user_revision_blocks_continuation
+    assert started.status_code == 202, started.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:228260d31bed647a9779619d","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/require_counterarguments","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+_ test_settlement_is_account_scoped_and_separates_ledger_from_provider_report __
+tests/test_research_recovery_acceptance.py:318: in test_settlement_is_account_scoped_and_separates_ledger_from_provider_report
+    assert response.status_code == 202, response.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:3344922ffae68c250a3b914f","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/plan_research","message":"Extra inputs are not permitted"},{"location":"body/gap_followup","message":"Extra inputs are not permitted"},{"location":"body/support_review","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+_ test_direction_proof_rejected_when_forged_and_invalidated_by_source_or_location_edits _
+tests/test_research_recovery_acceptance.py:356: in test_direction_proof_rejected_when_forged_and_invalidated_by_source_or_location_edits
+    assert saved.status_code == 201, saved.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:0ab969f70622f74d9f80e608","retryable":false,"details":[{"location":"body/content/facts/0/character_start","message":"Field required"},{"location":"body/content/facts/0/character_end","message":"Field required"},{"location":"body/content/facts/0/location","message":"Field required"},{"location":"body/content/facts/0/verification","message":"Field required"},{"location":"body/content/facts/0/direction_derivation","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 201
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+__ test_review_settlement_is_separate_from_result_validation[invalid_schema] ___
+tests/test_research_recovery_acceptance.py:420: in test_review_settlement_is_separate_from_result_validation
+    assert started.status_code == 202, started.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:144303a411ee43be0d13bb63","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/support_review","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+______ test_review_settlement_is_separate_from_result_validation[timeout] ______
+tests/test_research_recovery_acceptance.py:420: in test_review_settlement_is_separate_from_result_validation
+    assert started.status_code == 202, started.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:e6b328fc8870ac250c0b1841","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/support_review","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+__________ test_assertion_links_recovery_edit_and_export_permissions ___________
+tests/test_research_recovery_acceptance.py:530: in test_assertion_links_recovery_edit_and_export_permissions
+    assert started.status_code == 202, started.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:50babf0cfc263587558d972c","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/require_counterarguments","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+_ test_private_validation_diagnostics_are_bounded_and_not_exported[analysis_schema] _
+tests/test_research_recovery_acceptance.py:608: in test_private_validation_diagnostics_are_bounded_and_not_exported
+    assert started.status_code == 202, started.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:93ae822bb59f7fc50f2ea533","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/require_counterarguments","message":"Extra inputs are not permitted"},{"location":"body/support_review","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+_ test_private_validation_diagnostics_are_bounded_and_not_exported[review_schema] _
+tests/test_research_recovery_acceptance.py:608: in test_private_validation_diagnostics_are_bounded_and_not_exported
+    assert started.status_code == 202, started.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:105ca2e353b004a6075ffff6","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/require_counterarguments","message":"Extra inputs are not permitted"},{"location":"body/support_review","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+_ test_private_validation_diagnostics_are_bounded_and_not_exported[review_index] _
+tests/test_research_recovery_acceptance.py:608: in test_private_validation_diagnostics_are_bounded_and_not_exported
+    assert started.status_code == 202, started.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:6def7aa4e0d538e0fa7b0fa5","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/require_counterarguments","message":"Extra inputs are not permitted"},{"location":"body/support_review","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+_ test_private_validation_diagnostics_are_bounded_and_not_exported[provider_parse] _
+tests/test_research_recovery_acceptance.py:608: in test_private_validation_diagnostics_are_bounded_and_not_exported
+    assert started.status_code == 202, started.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:ed35f3c829ee01571dcdc75f","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/require_counterarguments","message":"Extra inputs are not permitted"},{"location":"body/support_review","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+_ test_structured_partial_survives_recovery_and_export_without_rejected_content _
+tests/test_research_recovery_acceptance.py:657: in test_structured_partial_survives_recovery_and_export_without_rejected_content
+    assert started.status_code==202,started.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:8a84e75da1373cd932438d68","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/require_counterarguments","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+________ test_structured_all_invalid_discloses_no_valid_research_result ________
+tests/test_research_recovery_acceptance.py:694: in test_structured_all_invalid_discloses_no_valid_research_result
+    assert started.status_code==202,started.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:f4b35cf2fdeb761ae6e26e3d","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/require_counterarguments","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+________ test_bad_envelope_repair_is_separate_checkpointed_call[False] _________
+tests/test_research_recovery_acceptance.py:734: in test_bad_envelope_repair_is_separate_checkpointed_call
+    assert response.status_code == 202, response.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:dffca9772f6afedecebbf63f","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/plan_research","message":"Extra inputs are not permitted"},{"location":"body/counterpoint_followup","message":"Extra inputs are not permitted"},{"location":"body/gap_followup","message":"Extra inputs are not permitted"},{"location":"body/support_review","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+_________ test_bad_envelope_repair_is_separate_checkpointed_call[True] _________
+tests/test_research_recovery_acceptance.py:734: in test_bad_envelope_repair_is_separate_checkpointed_call
+    assert response.status_code == 202, response.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:a326d240f17ed8e30580a0d9","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/plan_research","message":"Extra inputs are not permitted"},{"location":"body/counterpoint_followup","message":"Extra inputs are not permitted"},{"location":"body/gap_followup","message":"Extra inputs are not permitted"},{"location":"body/support_review","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+_______ test_truncated_analysis_splits_into_distinct_checkpointed_calls ________
+tests/test_research_recovery_acceptance.py:787: in test_truncated_analysis_splits_into_distinct_checkpointed_calls
+    assert response.status_code == 202, response.text
+E   AssertionError: {"schema_version":"v1","error_code":"validation_error","message":"Request failed strict contract validation.","request_id":"request:9888be00f37ea0d490004c39","retryable":false,"details":[{"location":"body/evidence_strategy","message":"Extra inputs are not permitted"},{"location":"body/plan_research","message":"Extra inputs are not permitted"},{"location":"body/counterpoint_followup","message":"Extra inputs are not permitted"},{"location":"body/gap_followup","message":"Extra inputs are not permitted"},{"location":"body/support_review","message":"Extra inputs are not permitted"}]}
+E   assert 422 == 202
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+______ test_xbrl_tags_can_confirm_source_consistency_but_not_source_truth ______
+app/research_analysis.py:2573: in analyze
+    raw, draft_problems, draft_ids = convert_draft(raw, {f['fact_id'] for f in structured_model_facts})
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_output_contract.py:182: in convert_draft
+    raise DraftContractError(errors)
+E   app.research_output_contract.DraftContractError: Invalid research draft
+
+The above exception was the direct cause of the following exception:
+tests/test_research_table_provenance.py:74: in test_xbrl_tags_can_confirm_source_consistency_but_not_source_truth
+    result = analyze_xbrl(source_for(xbrl_fixture()))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_research_table_provenance.py:43: in analyze_xbrl
+    return analyze('Compare total revenue in FY2024 and FY2023.', [source], None, lambda _: (payload, 1))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_analysis.py:2577: in analyze
+    raise failure from error
+E   app.research_analysis.InvalidAnalysis: Model output did not match the research schema.
+____ test_single_cell_citations_can_be_cross_checked_against_original_xbrl _____
+app/research_analysis.py:2573: in analyze
+    raw, draft_problems, draft_ids = convert_draft(raw, {f['fact_id'] for f in structured_model_facts})
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_output_contract.py:182: in convert_draft
+    raise DraftContractError(errors)
+E   app.research_output_contract.DraftContractError: Invalid research draft
+
+The above exception was the direct cause of the following exception:
+tests/test_research_table_provenance.py:95: in test_single_cell_citations_can_be_cross_checked_against_original_xbrl
+    result = analyze('Compare revenue.', [source], None, lambda _: (payload, 1))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_analysis.py:2577: in analyze
+    raise failure from error
+E   app.research_analysis.InvalidAnalysis: Model output did not match the research schema.
+_ test_xbrl_metadata_fails_closed_for_namespace_context_units_and_entity_conflicts _
+app/research_analysis.py:2573: in analyze
+    raw, draft_problems, draft_ids = convert_draft(raw, {f['fact_id'] for f in structured_model_facts})
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_output_contract.py:182: in convert_draft
+    raise DraftContractError(errors)
+E   app.research_output_contract.DraftContractError: Invalid research draft
+
+The above exception was the direct cause of the following exception:
+tests/test_research_table_provenance.py:110: in test_xbrl_metadata_fails_closed_for_namespace_context_units_and_entity_conflicts
+    result = analyze_xbrl(source_for(html))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_research_table_provenance.py:43: in analyze_xbrl
+    return analyze('Compare total revenue in FY2024 and FY2023.', [source], None, lambda _: (payload, 1))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_analysis.py:2577: in analyze
+    raise failure from error
+E   app.research_analysis.InvalidAnalysis: Model output did not match the research schema.
+______ test_inline_consistency_supports_ifrs_currency_and_exact_other_row ______
+app/research_analysis.py:2573: in analyze
+    raw, draft_problems, draft_ids = convert_draft(raw, {f['fact_id'] for f in structured_model_facts})
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_output_contract.py:182: in convert_draft
+    raise DraftContractError(errors)
+E   app.research_output_contract.DraftContractError: Invalid research draft
+
+The above exception was the direct cause of the following exception:
+tests/test_research_table_provenance.py:148: in test_inline_consistency_supports_ifrs_currency_and_exact_other_row
+    result = analyze_xbrl(source_for(html), label='Operating expenses', currency='EUR')
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_research_table_provenance.py:43: in analyze_xbrl
+    return analyze('Compare total revenue in FY2024 and FY2023.', [source], None, lambda _: (payload, 1))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_analysis.py:2577: in analyze
+    raise failure from error
+E   app.research_analysis.InvalidAnalysis: Model output did not match the research schema.
+_ test_inline_consistency_never_uses_generic_match_to_bypass_known_metric_mapping _
+app/research_analysis.py:2573: in analyze
+    raw, draft_problems, draft_ids = convert_draft(raw, {f['fact_id'] for f in structured_model_facts})
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_output_contract.py:182: in convert_draft
+    raise DraftContractError(errors)
+E   app.research_output_contract.DraftContractError: Invalid research draft
+
+The above exception was the direct cause of the following exception:
+tests/test_research_table_provenance.py:175: in test_inline_consistency_never_uses_generic_match_to_bypass_known_metric_mapping
+    result = analyze_xbrl(source_for(html))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_research_table_provenance.py:43: in analyze_xbrl
+    return analyze('Compare total revenue in FY2024 and FY2023.', [source], None, lambda _: (payload, 1))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_analysis.py:2577: in analyze
+    raise failure from error
+E   app.research_analysis.InvalidAnalysis: Model output did not match the research schema.
+___ test_analysis_keeps_structural_calculation_provisional_and_fails_closed ____
+app/research_analysis.py:2573: in analyze
+    raw, draft_problems, draft_ids = convert_draft(raw, {f['fact_id'] for f in structured_model_facts})
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_output_contract.py:182: in convert_draft
+    raise DraftContractError(errors)
+E   app.research_output_contract.DraftContractError: Invalid research draft
+
+The above exception was the direct cause of the following exception:
+tests/test_research_table_provenance.py:256: in test_analysis_keeps_structural_calculation_provisional_and_fails_closed
+    result = run(source)
+             ^^^^^^^^^^^
+tests/test_research_table_provenance.py:251: in run
+    return analyze('Compare revenue.', [material], None, lambda _: ({'facts': facts,
+app/research_analysis.py:2577: in analyze
+    raise failure from error
+E   app.research_analysis.InvalidAnalysis: Model output did not match the research schema.
+=============================== warnings summary ===============================
+.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/ubuntu/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+.venv/lib/python3.13/site-packages/_pytest/cacheprovider.py:469
+  /home/ubuntu/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/_pytest/cacheprovider.py:469: PytestCacheWarning: cache could not write path /home/ubuntu/Foresightnine/src/apps/api/.pytest_cache/v/cache/nodeids: [Errno 13] Permission denied: '/home/ubuntu/Foresightnine/src/apps/api/.pytest_cache/v/cache/nodeids'
+    config.cache.set("cache/nodeids", sorted(self.cached_nodeids))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_research_context.py::test_optional_planning_hints_guide_existing_retrieval_without_changing_question
+FAILED tests/test_research_context_capacity.py::test_acquisition_can_choose_delivery_with_unread_ranges
+FAILED tests/test_research_context_capacity.py::test_api_delegated_two_reads_use_the_selected_source
+FAILED tests/test_research_recovery_acceptance.py::test_repeated_continuation_preserves_committed_stages_and_original_budget
+FAILED tests/test_research_recovery_acceptance.py::test_unresolved_external_call_blocks_replay_but_preserves_partial_delivery
+FAILED tests/test_research_recovery_acceptance.py::test_checkpoint_is_account_scoped_and_user_revision_blocks_continuation
+FAILED tests/test_research_recovery_acceptance.py::test_settlement_is_account_scoped_and_separates_ledger_from_provider_report
+FAILED tests/test_research_recovery_acceptance.py::test_direction_proof_rejected_when_forged_and_invalidated_by_source_or_location_edits
+FAILED tests/test_research_recovery_acceptance.py::test_review_settlement_is_separate_from_result_validation[invalid_schema]
+FAILED tests/test_research_recovery_acceptance.py::test_review_settlement_is_separate_from_result_validation[timeout]
+FAILED tests/test_research_recovery_acceptance.py::test_assertion_links_recovery_edit_and_export_permissions
+FAILED tests/test_research_recovery_acceptance.py::test_private_validation_diagnostics_are_bounded_and_not_exported[analysis_schema]
+FAILED tests/test_research_recovery_acceptance.py::test_private_validation_diagnostics_are_bounded_and_not_exported[review_schema]
+FAILED tests/test_research_recovery_acceptance.py::test_private_validation_diagnostics_are_bounded_and_not_exported[review_index]
+FAILED tests/test_research_recovery_acceptance.py::test_private_validation_diagnostics_are_bounded_and_not_exported[provider_parse]
+FAILED tests/test_research_recovery_acceptance.py::test_structured_partial_survives_recovery_and_export_without_rejected_content
+FAILED tests/test_research_recovery_acceptance.py::test_structured_all_invalid_discloses_no_valid_research_result
+FAILED tests/test_research_recovery_acceptance.py::test_bad_envelope_repair_is_separate_checkpointed_call[False]
+FAILED tests/test_research_recovery_acceptance.py::test_bad_envelope_repair_is_separate_checkpointed_call[True]
+FAILED tests/test_research_recovery_acceptance.py::test_truncated_analysis_splits_into_distinct_checkpointed_calls
+FAILED tests/test_research_table_provenance.py::test_xbrl_tags_can_confirm_source_consistency_but_not_source_truth
+FAILED tests/test_research_table_provenance.py::test_single_cell_citations_can_be_cross_checked_against_original_xbrl
+FAILED tests/test_research_table_provenance.py::test_xbrl_metadata_fails_closed_for_namespace_context_units_and_entity_conflicts
+FAILED tests/test_research_table_provenance.py::test_inline_consistency_supports_ifrs_currency_and_exact_other_row
+FAILED tests/test_research_table_provenance.py::test_inline_consistency_never_uses_generic_match_to_bypass_known_metric_mapping
+FAILED tests/test_research_table_provenance.py::test_analysis_keeps_structural_calculation_provisional_and_fails_closed

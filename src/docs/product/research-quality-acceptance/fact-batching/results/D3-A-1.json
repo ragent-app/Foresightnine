@@ -1,0 +1,876 @@
+{
+  "case": "D3",
+  "arm": "A",
+  "source": {
+    "source_id": "exhibit",
+    "content_sha256": "b12b7ec0c75f488a7a4bae6b4c216a9f08f8df1be26f71e39b465609044fa7fc",
+    "permissions": {
+      "store": true,
+      "model_input": true,
+      "display": true,
+      "export": true
+    }
+  },
+  "actual_cost": null,
+  "status": "partial",
+  "reason": "provider_budget_exhausted",
+  "report": "",
+  "claims": [],
+  "facts": [
+    {
+      "fact_id": "fact-30d1adb7b01be2799414dbec7a1c6e8f3eab051bff934cff5a50cefc4bcc5ad1",
+      "label": "Gamma adjusted close, day 1",
+      "value": "10",
+      "unit": "adjusted close, currency not stated",
+      "currency": null,
+      "period": "day 1 (exhibit-labeled common trading day)",
+      "source_id": "exhibit",
+      "quotation": "Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.",
+      "character_start": 0,
+      "character_end": 73,
+      "location": {
+        "character_start": 0,
+        "character_end": 73
+      },
+      "verification": "numeric_and_location_match_semantics_not_verified"
+    },
+    {
+      "fact_id": "fact-7490aa2374bfd2ba91ca31913a83a00c3c4be3e5afde7c968eaa7d4008e36b6a",
+      "label": "Gamma adjusted close, day 2",
+      "value": "12",
+      "unit": "adjusted close, currency not stated",
+      "currency": null,
+      "period": "day 2 (exhibit-labeled common trading day)",
+      "source_id": "exhibit",
+      "quotation": "Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.",
+      "character_start": 0,
+      "character_end": 73,
+      "location": {
+        "character_start": 0,
+        "character_end": 73
+      },
+      "verification": "numeric_and_location_match_semantics_not_verified"
+    },
+    {
+      "fact_id": "fact-0de5787a3a942015cadaa5edb1ea11f47044b0e24eef75dd41833df96aeaba47",
+      "label": "Benchmark adjusted close, day 1",
+      "value": "100",
+      "unit": "adjusted close, currency not stated",
+      "currency": null,
+      "period": "day 1 (exhibit-labeled common trading day)",
+      "source_id": "exhibit",
+      "quotation": "Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.",
+      "character_start": 0,
+      "character_end": 73,
+      "location": {
+        "character_start": 0,
+        "character_end": 73
+      },
+      "verification": "numeric_and_location_match_semantics_not_verified"
+    },
+    {
+      "fact_id": "fact-476206603d3c4c5e511cb04a726803eb1dadd13f75fd5885a73f7cbc3799536d",
+      "label": "Benchmark adjusted close, day 2",
+      "value": "110",
+      "unit": "adjusted close, currency not stated",
+      "currency": null,
+      "period": "day 2 (exhibit-labeled common trading day)",
+      "source_id": "exhibit",
+      "quotation": "Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.",
+      "character_start": 0,
+      "character_end": 73,
+      "location": {
+        "character_start": 0,
+        "character_end": 73
+      },
+      "verification": "numeric_and_location_match_semantics_not_verified"
+    }
+  ],
+  "question_parts": [
+    {
+      "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益",
+      "status": "unresolved",
+      "answer": "",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": []
+    },
+    {
+      "id": "req-6e97ee1f1ecb924b",
+      "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益。",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-6e97ee1f1ecb924b",
+          "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益。",
+          "status": "missing",
+          "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+          "references": [],
+          "core": true
+        }
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "code": "provider_error",
+      "message": "Model execution budget is unavailable or exhausted."
+    }
+  ],
+  "calculations": [
+    {
+      "calculation_id": "calc-ba040dd4cf544ed3bfcc85baea0e8fd6",
+      "formula_id": "growth_percent",
+      "formula_version": "1",
+      "expression": "(first / second - 1) * 100",
+      "input_verification": "not_verified_by_calculator",
+      "input_precision_status": "not_established",
+      "inputs": [
+        {
+          "fact_id": "fact-7490aa2374bfd2ba91ca31913a83a00c3c4be3e5afde7c968eaa7d4008e36b6a",
+          "value": "12",
+          "unit": "adjusted close, currency not stated",
+          "currency": null,
+          "period": "day 2 (exhibit-labeled common trading day)"
+        },
+        {
+          "fact_id": "fact-30d1adb7b01be2799414dbec7a1c6e8f3eab051bff934cff5a50cefc4bcc5ad1",
+          "value": "10",
+          "unit": "adjusted close, currency not stated",
+          "currency": null,
+          "period": "day 1 (exhibit-labeled common trading day)"
+        }
+      ],
+      "value": "20.0000",
+      "unit": "percent",
+      "currency": null,
+      "rounding": "half_up",
+      "decimal_places": 4,
+      "period_order_check": "not_checked",
+      "period_granularity_check": "not_established",
+      "input_status": "matched"
+    },
+    {
+      "calculation_id": "calc-87b07eae980542729257af8161d6b1da",
+      "formula_id": "growth_percent",
+      "formula_version": "1",
+      "expression": "(first / second - 1) * 100",
+      "input_verification": "not_verified_by_calculator",
+      "input_precision_status": "not_established",
+      "inputs": [
+        {
+          "fact_id": "fact-476206603d3c4c5e511cb04a726803eb1dadd13f75fd5885a73f7cbc3799536d",
+          "value": "110",
+          "unit": "adjusted close, currency not stated",
+          "currency": null,
+          "period": "day 2 (exhibit-labeled common trading day)"
+        },
+        {
+          "fact_id": "fact-0de5787a3a942015cadaa5edb1ea11f47044b0e24eef75dd41833df96aeaba47",
+          "value": "100",
+          "unit": "adjusted close, currency not stated",
+          "currency": null,
+          "period": "day 1 (exhibit-labeled common trading day)"
+        }
+      ],
+      "value": "10.0000",
+      "unit": "percent",
+      "currency": null,
+      "rounding": "half_up",
+      "decimal_places": 4,
+      "period_order_check": "not_checked",
+      "period_granularity_check": "not_established",
+      "input_status": "matched"
+    }
+  ],
+  "events": [
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:64fe072ce88f43dab6ae73757cf6fced",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 16111,
+      "usage_detail": {
+        "input_tokens": 14980,
+        "output_tokens": 1131,
+        "total_tokens": 16111,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 0
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_6accd7025d894232bedaf5fe"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 14980,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.0
+      },
+      "note": "我先读取授权的 exhibit 源（仅 73 字符），获取 Gamma 与基准在两个共同交易日的调整收盘价。"
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_6accd7025d894232bedaf5fe",
+      "name": "read_sources",
+      "status": "completed",
+      "rationale": "题目要求比较 Gamma 与基准在两个共同交易日的调整收盘收益；exhibit 是本次运行唯一授权来源且仅 73 字符，需全文读取以提取两标的的调整收盘价与日期。",
+      "summary": {
+        "kind": "read_sources",
+        "read_count": 1,
+        "items": [
+          {
+            "source_id": "exhibit",
+            "title": "Synthetic exhibit",
+            "start": 0,
+            "end": 73,
+            "total_characters": 73
+          }
+        ]
+      }
+    },
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:b9ef7f61b02249a9b3b438018c730ffd",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 17669,
+      "usage_detail": {
+        "input_tokens": 1538,
+        "output_tokens": 1155,
+        "total_tokens": 17669,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 14976
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_1ec56b6cf56a4c89a47c6502",
+        "call_7486ede765d74d8ea59b1db9"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 16514,
+        "cache_read_input_tokens": 14976,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.9068669008114327
+      },
+      "note": "Exhibit 已读：Gamma 调整收盘 day 1 = 10、day 2 = 12；Benchmark day 1 = 100、day 2 = 110。下面记录事实，并按方法包要求执行一次专门的反证检索（检验价格是否实为未调整价、或两个日期并非共同交易日）。"
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_1ec56b6cf56a4c89a47c6502",
+      "name": "record_facts",
+      "status": "completed",
+      "rationale": "将 exhibit 中 Gamma 与基准在两个共同交易日（day 1、day 2）的调整收盘价逐项记录为可引用事实，供后续收益计算与比较表绑定。",
+      "summary": {
+        "kind": "record_facts",
+        "recorded_count": 4,
+        "facts_preview": [
+          {
+            "label": "Gamma adjusted close, day 1",
+            "value": "10",
+            "unit": "adjusted close, currency not stated",
+            "currency": null,
+            "period": "day 1 (exhibit-labeled common trading day)"
+          },
+          {
+            "label": "Gamma adjusted close, day 2",
+            "value": "12",
+            "unit": "adjusted close, currency not stated",
+            "currency": null,
+            "period": "day 2 (exhibit-labeled common trading day)"
+          },
+          {
+            "label": "Benchmark adjusted close, day 1",
+            "value": "100",
+            "unit": "adjusted close, currency not stated",
+            "currency": null,
+            "period": "day 1 (exhibit-labeled common trading day)"
+          },
+          {
+            "label": "Benchmark adjusted close, day 2",
+            "value": "110",
+            "unit": "adjusted close, currency not stated",
+            "currency": null,
+            "period": "day 2 (exhibit-labeled common trading day)"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_7486ede765d74d8ea59b1db9",
+      "name": "search_source",
+      "status": "completed",
+      "rationale": "方法包要求的专门反证检索：检验 exhibit 中的价格是否为未调整价、day 1/day 2 是否并非两标的共同交易日，或是否存在仅影响单边的一次性调整。"
+    },
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:17619df537e74e83aa0485a53f5e7011",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 19262,
+      "usage_detail": {
+        "input_tokens": 3592,
+        "output_tokens": 694,
+        "total_tokens": 19262,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 14976
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_67eef1404a744596a281ea3b"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 18568,
+        "cache_read_input_tokens": 14976,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.8065489013356312
+      },
+      "note": "反证检索确认 exhibit 仅有这一行价格数据，未见\"未调整价/非共同交易日\"的反证。现在用同一公式（growth_percent）分别计算 Gamma 与基准 day 1 → day 2 的调整收盘收益。"
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_67eef1404a744596a281ea3b",
+      "name": "calculate_financials",
+      "status": "completed",
+      "rationale": "用同一公式 growth_percent 对 Gamma 与基准分别计算 day 1 至 day 2 的调整收盘收益，保证两标的口径一致。",
+      "summary": {
+        "kind": "calculate_financials",
+        "calculated_count": 2,
+        "calcs_preview": [
+          {
+            "formula_id": "growth_percent",
+            "value": "20.0000",
+            "unit": "percent",
+            "currency": null,
+            "expression": "(first / second - 1) * 100"
+          },
+          {
+            "formula_id": "growth_percent",
+            "value": "10.0000",
+            "unit": "percent",
+            "currency": null,
+            "expression": "(first / second - 1) * 100"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:c8c6d5504f044ca89609ecc3bbd82534",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 20399,
+      "usage_detail": {
+        "input_tokens": 3668,
+        "output_tokens": 475,
+        "total_tokens": 20399,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 16256
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_4ec069acc53240089bdb6c37"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 19924,
+        "cache_read_input_tokens": 16256,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.815900421602088
+      },
+      "note": "两标的同口径收益已算出（Gamma +20.0000%，基准 +10.0000%）。接着用同一 difference 公式计算超额收益（Gamma − 基准），并建立比较表。"
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_4ec069acc53240089bdb6c37",
+      "name": "calculate_financials",
+      "status": "invalid",
+      "rationale": "用同一公式 difference 将 Gamma 与基准在两个共同交易日的调整收盘收益相减，得到超额收益（百分点）。"
+    }
+  ],
+  "tool_io": [
+    {
+      "turn": 1,
+      "id": "call_6accd7025d894232bedaf5fe",
+      "tool": "read_sources",
+      "input": {
+        "rationale": "题目要求比较 Gamma 与基准在两个共同交易日的调整收盘收益；exhibit 是本次运行唯一授权来源且仅 73 字符，需全文读取以提取两标的的调整收盘价与日期。",
+        "reads": [
+          {
+            "source_id": "exhibit",
+            "start": 0
+          }
+        ]
+      },
+      "result": "{\"rationale\": \"题目要求比较 Gamma 与基准在两个共同交易日的调整收盘收益；exhibit 是本次运行唯一授权来源且仅 73 字符，需全文读取以提取两标的的调整收盘价与日期。\", \"results\": [{\"content_sha256\": \"b12b7ec0c75f488a7a4bae6b4c216a9f08f8df1be26f71e39b465609044fa7fc\", \"end\": 73, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.\", \"total_characters\": 73, \"truncated\": false}]}"
+    },
+    {
+      "turn": 2,
+      "id": "call_1ec56b6cf56a4c89a47c6502",
+      "tool": "record_facts",
+      "input": {
+        "facts": [
+          {
+            "label": "Gamma adjusted close, day 1",
+            "period": "day 1 (exhibit-labeled common trading day)",
+            "quotation": "Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.",
+            "source_id": "exhibit",
+            "unit": "adjusted close, currency not stated",
+            "value": 10
+          },
+          {
+            "label": "Gamma adjusted close, day 2",
+            "period": "day 2 (exhibit-labeled common trading day)",
+            "quotation": "Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.",
+            "source_id": "exhibit",
+            "unit": "adjusted close, currency not stated",
+            "value": 12
+          },
+          {
+            "label": "Benchmark adjusted close, day 1",
+            "period": "day 1 (exhibit-labeled common trading day)",
+            "quotation": "Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.",
+            "source_id": "exhibit",
+            "unit": "adjusted close, currency not stated",
+            "value": 100
+          },
+          {
+            "label": "Benchmark adjusted close, day 2",
+            "period": "day 2 (exhibit-labeled common trading day)",
+            "quotation": "Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.",
+            "source_id": "exhibit",
+            "unit": "adjusted close, currency not stated",
+            "value": 110
+          }
+        ],
+        "rationale": "将 exhibit 中 Gamma 与基准在两个共同交易日（day 1、day 2）的调整收盘价逐项记录为可引用事实，供后续收益计算与比较表绑定。"
+      },
+      "result": "{\"facts\": [{\"character_end\": 73, \"character_start\": 0, \"currency\": null, \"fact_id\": \"fact-30d1adb7b01be2799414dbec7a1c6e8f3eab051bff934cff5a50cefc4bcc5ad1\", \"label\": \"Gamma adjusted close, day 1\", \"location\": {\"character_end\": 73, \"character_start\": 0}, \"period\": \"day 1 (exhibit-labeled common trading day)\", \"quotation\": \"Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.\", \"source_id\": \"exhibit\", \"unit\": \"adjusted close, currency not stated\", \"value\": \"10\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 73, \"character_start\": 0, \"currency\": null, \"fact_id\": \"fact-7490aa2374bfd2ba91ca31913a83a00c3c4be3e5afde7c968eaa7d4008e36b6a\", \"label\": \"Gamma adjusted close, day 2\", \"location\": {\"character_end\": 73, \"character_start\": 0}, \"period\": \"day 2 (exhibit-labeled common trading day)\", \"quotation\": \"Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.\", \"source_id\": \"exhibit\", \"unit\": \"adjusted close, currency not stated\", \"value\": \"12\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 73, \"character_start\": 0, \"currency\": null, \"fact_id\": \"fact-0de5787a3a942015cadaa5edb1ea11f47044b0e24eef75dd41833df96aeaba47\", \"label\": \"Benchmark adjusted close, day 1\", \"location\": {\"character_end\": 73, \"character_start\": 0}, \"period\": \"day 1 (exhibit-labeled common trading day)\", \"quotation\": \"Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.\", \"source_id\": \"exhibit\", \"unit\": \"adjusted close, currency not stated\", \"value\": \"100\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 73, \"character_start\": 0, \"currency\": null, \"fact_id\": \"fact-476206603d3c4c5e511cb04a726803eb1dadd13f75fd5885a73f7cbc3799536d\", \"label\": \"Benchmark adjusted close, day 2\", \"location\": {\"character_end\": 73, \"character_start\": 0}, \"period\": \"day 2 (exhibit-labeled common trading day)\", \"quotation\": \"Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.\", \"source_id\": \"exhibit\", \"unit\": \"adjusted close, currency not stated\", \"value\": \"110\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}], \"failures\": []}"
+    },
+    {
+      "turn": 2,
+      "id": "call_7486ede765d74d8ea59b1db9",
+      "tool": "search_source",
+      "input": {
+        "counter_search": {
+          "hypothesis": "The exhibit actually lists unadjusted closes, or the two dates are not common trading days for both instruments, or a one-off adjustment affects only one instrument.",
+          "target": "Gamma and benchmark prices are adjusted closes on two common trading days (day 1 and day 2)"
+        },
+        "max_hits": 5,
+        "query": "Adjusted close",
+        "rationale": "方法包要求的专门反证检索：检验 exhibit 中的价格是否为未调整价、day 1/day 2 是否并非两标的共同交易日，或是否存在仅影响单边的一次性调整。",
+        "source_id": "exhibit"
+      },
+      "result": "{\"cleared\":true,\"facts_recorded_count\":4,\"hint\":\"Use search_source or targeted read_sources if re-inspection needed; recorded read_ranges remain valid.\",\"original_chars\":421,\"query\":\"Adjusted close\",\"reason\":\"context_compacted\",\"source_ids\":[\"exhibit\"],\"source_spans\":[],\"tool\":\"search_source\",\"total_matches\":1}"
+    },
+    {
+      "turn": 3,
+      "id": "call_67eef1404a744596a281ea3b",
+      "tool": "calculate_financials",
+      "input": {
+        "calculations": [
+          {
+            "decimal_places": 4,
+            "first_fact_id": "fact-7490aa2374bfd2ba91ca31913a83a00c3c4be3e5afde7c968eaa7d4008e36b6a",
+            "formula": "growth_percent",
+            "second_fact_id": "fact-30d1adb7b01be2799414dbec7a1c6e8f3eab051bff934cff5a50cefc4bcc5ad1"
+          },
+          {
+            "decimal_places": 4,
+            "first_fact_id": "fact-476206603d3c4c5e511cb04a726803eb1dadd13f75fd5885a73f7cbc3799536d",
+            "formula": "growth_percent",
+            "second_fact_id": "fact-0de5787a3a942015cadaa5edb1ea11f47044b0e24eef75dd41833df96aeaba47"
+          }
+        ],
+        "rationale": "用同一公式 growth_percent 对 Gamma 与基准分别计算 day 1 至 day 2 的调整收盘收益，保证两标的口径一致。"
+      },
+      "result": "{\"calculations\": [{\"calculation_id\": \"calc-ba040dd4cf544ed3bfcc85baea0e8fd6\", \"currency\": null, \"decimal_places\": 4, \"expression\": \"(first / second - 1) * 100\", \"formula_id\": \"growth_percent\", \"formula_version\": \"1\", \"input_precision_status\": \"not_established\", \"input_status\": \"matched\", \"input_verification\": \"not_verified_by_calculator\", \"inputs\": [{\"currency\": null, \"fact_id\": \"fact-7490aa2374bfd2ba91ca31913a83a00c3c4be3e5afde7c968eaa7d4008e36b6a\", \"period\": \"day 2 (exhibit-labeled common trading day)\", \"unit\": \"adjusted close, currency not stated\", \"value\": \"12\"}, {\"currency\": null, \"fact_id\": \"fact-30d1adb7b01be2799414dbec7a1c6e8f3eab051bff934cff5a50cefc4bcc5ad1\", \"period\": \"day 1 (exhibit-labeled common trading day)\", \"unit\": \"adjusted close, currency not stated\", \"value\": \"10\"}], \"period_granularity_check\": \"not_established\", \"period_order_check\": \"not_checked\", \"rounding\": \"half_up\", \"unit\": \"percent\", \"value\": \"20.0000\"}, {\"calculation_id\": \"calc-87b07eae980542729257af8161d6b1da\", \"currency\": null, \"decimal_places\": 4, \"expression\": \"(first / second - 1) * 100\", \"formula_id\": \"growth_percent\", \"formula_version\": \"1\", \"input_precision_status\": \"not_established\", \"input_status\": \"matched\", \"input_verification\": \"not_verified_by_calculator\", \"inputs\": [{\"currency\": null, \"fact_id\": \"fact-476206603d3c4c5e511cb04a726803eb1dadd13f75fd5885a73f7cbc3799536d\", \"period\": \"day 2 (exhibit-labeled common trading day)\", \"unit\": \"adjusted close, currency not stated\", \"value\": \"110\"}, {\"currency\": null, \"fact_id\": \"fact-0de5787a3a942015cadaa5edb1ea11f47044b0e24eef75dd41833df96aeaba47\", \"period\": \"day 1 (exhibit-labeled common trading day)\", \"unit\": \"adjusted close, currency not stated\", \"value\": \"100\"}], \"period_granularity_check\": \"not_established\", \"period_order_check\": \"not_checked\", \"rounding\": \"half_up\", \"unit\": \"percent\", \"value\": \"10.0000\"}]}"
+    },
+    {
+      "turn": 4,
+      "id": "call_4ec069acc53240089bdb6c37",
+      "tool": "calculate_financials",
+      "input": {
+        "calculations": [
+          {
+            "decimal_places": 4,
+            "first_fact_id": "calc-ba040dd4cf544ed3bfcc85baea0e8fd6",
+            "formula": "difference",
+            "second_fact_id": "calc-87b07eae980542729257af8161d6b1da"
+          }
+        ],
+        "rationale": "用同一公式 difference 将 Gamma 与基准在两个共同交易日的调整收盘收益相减，得到超额收益（百分点）。"
+      },
+      "result": "{\"reason\": \"Calculation requires recorded fact IDs.\", \"status\": \"invalid\"}"
+    }
+  ],
+  "answered_parts": [],
+  "all_core_answered": false,
+  "submit_research_observed": false,
+  "submit_research_calls": [],
+  "submission_acceptance": "not_observed",
+  "record_facts_parallel_turns": [],
+  "usage": {
+    "reported_tokens": 73441,
+    "unknown_usage_calls": 0,
+    "reserved_estimate_tokens": 0
+  },
+  "search_calls": 0,
+  "calls": 4,
+  "budget_accounted_tokens": 73441,
+  "prompts": [
+    {
+      "turn_sha256": "cf398427371d370cddc17dba89e449a5dd3789f8baf0fb42514d576ab8e4caa1",
+      "tail_note": null
+    },
+    {
+      "turn_sha256": "a6700c42fbd23e65a48e97d0291908bfdf30223a9aa40a16b3cd651fb444f898",
+      "tail_note": "[Coverage]\n{\"coverage\":{\"categories\":[{\"category\":\"uploads\",\"obtained\":1,\"status\":\"obtained\"}],\"not_attempted\":[\"market_prices\",\"financial_statements\",\"filings\",\"news_web\",\"macro\",\"other\"],\"not_established\":[\"No market prices were requested in this run; nothing is established for this category.\",\"No financial statements were requested in this run; nothing is established for this category.\",\"No filings and official documents were requested in this run; nothing is established for this category.\",\"No news and web were requested in this run; nothing is established for this category.\"],\"note\":\"Generated deterministically from run events; state these limits instead of implying completeness.\",\"run_status\":\"incomplete\"}}\n[Working Memory]\nState: facts=0 calcs=0 charts=0 sources=1\nCore evidence needed: market:benchmark: Need distinct target and benchmark returns over at least two common dates, using the same price basis.\nMethodChecks(company_comparison): entities:n/a, aligned_statements:missing, derived_ratios:missing\nCounterEvidence: needed(0/1)"
+    },
+    {
+      "turn_sha256": "93725ef3fc02bd1cae364445eb237c57679313f13f1806bb6501aa725866df14",
+      "tail_note": "[Coverage]\n{\"coverage\":{\"categories\":[{\"category\":\"uploads\",\"obtained\":1,\"status\":\"obtained\"}],\"not_attempted\":[\"market_prices\",\"financial_statements\",\"filings\",\"news_web\",\"macro\",\"other\"],\"not_established\":[\"No market prices were requested in this run; nothing is established for this category.\",\"No financial statements were requested in this run; nothing is established for this category.\",\"No filings and official documents were requested in this run; nothing is established for this category.\",\"No news and web were requested in this run; nothing is established for this category.\"],\"note\":\"Generated deterministically from run events; state these limits instead of implying completeness.\",\"run_status\":\"incomplete\"}}\n[Working Memory]\nState: facts=4 calcs=0 charts=0 sources=1\nCore evidence needed: market:benchmark: Need distinct target and benchmark returns over at least two common dates, using the same price basis.\nMethodChecks(company_comparison): entities:n/a, aligned_statements:missing, derived_ratios:missing\nCounterEvidence: ok(1/1)"
+    },
+    {
+      "turn_sha256": "03e1a58d9d209d8c38f6f17ae177f2e956752e1a247848a3438dc38872b77db7",
+      "tail_note": "[Coverage]\n{\"coverage\":{\"categories\":[{\"category\":\"uploads\",\"obtained\":1,\"status\":\"obtained\"}],\"not_attempted\":[\"market_prices\",\"financial_statements\",\"filings\",\"news_web\",\"macro\",\"other\"],\"not_established\":[\"No market prices were requested in this run; nothing is established for this category.\",\"No financial statements were requested in this run; nothing is established for this category.\",\"No filings and official documents were requested in this run; nothing is established for this category.\",\"No news and web were requested in this run; nothing is established for this category.\"],\"note\":\"Generated deterministically from run events; state these limits instead of implying completeness.\",\"run_status\":\"incomplete\"}}\n[Working Memory]\nState: facts=4 calcs=2 charts=0 sources=1\nCore evidence needed: market:benchmark: Need distinct target and benchmark returns over at least two common dates, using the same price basis.\nMethodChecks(company_comparison): entities:n/a, aligned_statements:missing, derived_ratios:ok\nCounterEvidence: ok(1/1)"
+    }
+  ],
+  "wire_turns": [],
+  "decoded_turns": [
+    {
+      "finish_reason": "tool_use",
+      "blocks": [
+        {
+          "type": "thinking",
+          "chars": 5002
+        },
+        {
+          "type": "text",
+          "chars": 54
+        },
+        {
+          "type": "tool_use",
+          "name": "read_sources",
+          "arguments_shape": {
+            "rationale": {
+              "chars": 81
+            },
+            "reads": {
+              "items": 1,
+              "item_shapes": [
+                {
+                  "source_id": {
+                    "chars": 7
+                  },
+                  "start": {
+                    "type": "int"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "raw_output_saved": false
+    },
+    {
+      "finish_reason": "tool_use",
+      "blocks": [
+        {
+          "type": "thinking",
+          "chars": 2173
+        },
+        {
+          "type": "text",
+          "chars": 131
+        },
+        {
+          "type": "tool_use",
+          "name": "record_facts",
+          "arguments_shape": {
+            "facts": {
+              "items": 4,
+              "item_shapes": [
+                {
+                  "label": {
+                    "chars": 27
+                  },
+                  "period": {
+                    "chars": 42
+                  },
+                  "quotation": {
+                    "chars": 73
+                  },
+                  "source_id": {
+                    "chars": 7
+                  },
+                  "unit": {
+                    "chars": 35
+                  },
+                  "value": {
+                    "type": "int"
+                  }
+                },
+                {
+                  "label": {
+                    "chars": 27
+                  },
+                  "period": {
+                    "chars": 42
+                  },
+                  "quotation": {
+                    "chars": 73
+                  },
+                  "source_id": {
+                    "chars": 7
+                  },
+                  "unit": {
+                    "chars": 35
+                  },
+                  "value": {
+                    "type": "int"
+                  }
+                },
+                {
+                  "label": {
+                    "chars": 31
+                  },
+                  "period": {
+                    "chars": 42
+                  },
+                  "quotation": {
+                    "chars": 73
+                  },
+                  "source_id": {
+                    "chars": 7
+                  },
+                  "unit": {
+                    "chars": 35
+                  },
+                  "value": {
+                    "type": "int"
+                  }
+                },
+                {
+                  "label": {
+                    "chars": 31
+                  },
+                  "period": {
+                    "chars": 42
+                  },
+                  "quotation": {
+                    "chars": 73
+                  },
+                  "source_id": {
+                    "chars": 7
+                  },
+                  "unit": {
+                    "chars": 35
+                  },
+                  "value": {
+                    "type": "int"
+                  }
+                }
+              ]
+            },
+            "rationale": {
+              "chars": 73
+            }
+          }
+        },
+        {
+          "type": "tool_use",
+          "name": "search_source",
+          "arguments_shape": {
+            "counter_search": {
+              "hypothesis": {
+                "chars": 165
+              },
+              "target": {
+                "chars": 91
+              }
+            },
+            "max_hits": {
+              "type": "int"
+            },
+            "query": {
+              "chars": 14
+            },
+            "rationale": {
+              "chars": 78
+            },
+            "source_id": {
+              "chars": 7
+            }
+          }
+        }
+      ],
+      "raw_output_saved": false
+    },
+    {
+      "finish_reason": "tool_use",
+      "blocks": [
+        {
+          "type": "thinking",
+          "chars": 1659
+        },
+        {
+          "type": "text",
+          "chars": 104
+        },
+        {
+          "type": "tool_use",
+          "name": "calculate_financials",
+          "arguments_shape": {
+            "calculations": {
+              "items": 2,
+              "item_shapes": [
+                {
+                  "decimal_places": {
+                    "type": "int"
+                  },
+                  "first_fact_id": {
+                    "chars": 69
+                  },
+                  "formula": {
+                    "chars": 14
+                  },
+                  "second_fact_id": {
+                    "chars": 69
+                  }
+                },
+                {
+                  "decimal_places": {
+                    "type": "int"
+                  },
+                  "first_fact_id": {
+                    "chars": 69
+                  },
+                  "formula": {
+                    "chars": 14
+                  },
+                  "second_fact_id": {
+                    "chars": 69
+                  }
+                }
+              ]
+            },
+            "rationale": {
+              "chars": 69
+            }
+          }
+        }
+      ],
+      "raw_output_saved": false
+    },
+    {
+      "finish_reason": "tool_use",
+      "blocks": [
+        {
+          "type": "thinking",
+          "chars": 1431
+        },
+        {
+          "type": "text",
+          "chars": 87
+        },
+        {
+          "type": "tool_use",
+          "name": "calculate_financials",
+          "arguments_shape": {
+            "calculations": {
+              "items": 1,
+              "item_shapes": [
+                {
+                  "decimal_places": {
+                    "type": "int"
+                  },
+                  "first_fact_id": {
+                    "chars": 37
+                  },
+                  "formula": {
+                    "chars": 10
+                  },
+                  "second_fact_id": {
+                    "chars": 37
+                  }
+                }
+              ]
+            },
+            "rationale": {
+              "chars": 58
+            }
+          }
+        }
+      ],
+      "raw_output_saved": false
+    }
+  ],
+  "diagnostics": [
+    {
+      "transport": null,
+      "stream_metrics": null,
+      "finish_reason": null,
+      "stop_reason": null,
+      "usage": {
+        "input_tokens": 14980,
+        "output_tokens": 1131,
+        "total_tokens": 16111,
+        "cache_read_input_tokens": 0
+      }
+    },
+    {
+      "transport": null,
+      "stream_metrics": null,
+      "finish_reason": null,
+      "stop_reason": null,
+      "usage": {
+        "input_tokens": 1538,
+        "output_tokens": 1155,
+        "total_tokens": 17669,
+        "cache_read_input_tokens": 14976
+      }
+    },
+    {
+      "transport": null,
+      "stream_metrics": null,
+      "finish_reason": null,
+      "stop_reason": null,
+      "usage": {
+        "input_tokens": 3592,
+        "output_tokens": 694,
+        "total_tokens": 19262,
+        "cache_read_input_tokens": 14976
+      }
+    },
+    {
+      "transport": null,
+      "stream_metrics": null,
+      "finish_reason": null,
+      "stop_reason": null,
+      "usage": {
+        "input_tokens": 3668,
+        "output_tokens": 475,
+        "total_tokens": 20399,
+        "cache_read_input_tokens": 16256
+      }
+    }
+  ],
+  "elapsed_seconds": 81.177
+}

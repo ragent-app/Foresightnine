@@ -1,0 +1,1045 @@
+[
+  {
+    "id": "N1",
+    "requirements": [
+      {
+        "id": "req-5763dc95cf9d8678",
+        "question": "What was Bexler annual revenue change",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:0",
+        "metric": "revenue"
+      },
+      {
+        "id": "req-d6534d6c5669be4e",
+        "question": "how much came from higher unit prices",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:how much came from higher unit prices"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "What was Bexler annual revenue change and how much came from higher unit prices?",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "n1a",
+          "title": "Annual statement",
+          "page": null,
+          "score": 0.2741,
+          "snippet": "Bexler revenue in CAD millions: 2024 90; 2025 108, consistent scope.",
+          "matched_terms": [
+            "bexler",
+            "revenu"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "n1a",
+            "start": 0,
+            "end": 68
+          },
+          "requirement_ids": [
+            "req-5763dc95cf9d8678"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "n1c",
+          "title": "Market summary",
+          "page": null,
+          "score": 4.0533,
+          "snippet": "Bexler annual revenue change and higher unit prices were discussed.",
+          "matched_terms": [
+            "annual",
+            "bexler",
+            "chang",
+            "higher",
+            "pric",
+            "revenu",
+            "unit"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "n1c",
+            "start": 0,
+            "end": 67
+          },
+          "requirement_ids": [
+            "req-5763dc95cf9d8678",
+            "req-d6534d6c5669be4e"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "n1c",
+          "start": 0,
+          "end": 67,
+          "requirement_ids": [
+            "req-5763dc95cf9d8678",
+            "req-d6534d6c5669be4e"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        },
+        {
+          "source_id": "n1b",
+          "start": 0,
+          "end": 95,
+          "requirement_ids": [
+            "req-5763dc95cf9d8678",
+            "req-d6534d6c5669be4e"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "n1a",
+          "start": 0,
+          "end": 68,
+          "requirement_ids": [
+            "req-5763dc95cf9d8678"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 2
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-5763dc95cf9d8678",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 What was Bexler annual revenue change",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-d6534d6c5669be4e",
+          "query": "how much came from higher unit prices",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "N2",
+    "requirements": [
+      {
+        "id": "req-504d3b504c0f6871",
+        "question": "雁禾合同可否取消，预测发运的条件是什么？",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:雁禾合同可否取消，预测发运的条件是什么？"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "雁禾合同可否取消，预测发运的条件是什么？",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "n2c",
+          "title": "周报",
+          "page": null,
+          "score": 4.2254,
+          "snippet": "雁禾取消合同和预测发运受到关注。",
+          "matched_terms": [
+            "发运",
+            "取消",
+            "合同",
+            "测发",
+            "雁禾",
+            "预测"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "n2c",
+            "start": 0,
+            "end": 16
+          },
+          "requirement_ids": [
+            "req-504d3b504c0f6871"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "n2b",
+          "title": "发运计划",
+          "page": null,
+          "score": 1.1114,
+          "snippet": "雁禾预测按期发运取决于港口恢复通行，披露时尚未恢复。",
+          "matched_terms": [
+            "发运",
+            "雁禾",
+            "预测"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "n2b",
+            "start": 0,
+            "end": 26
+          },
+          "requirement_ids": [
+            "req-504d3b504c0f6871"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "n2c",
+          "start": 0,
+          "end": 16,
+          "requirement_ids": [
+            "req-504d3b504c0f6871"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        },
+        {
+          "source_id": "n2b",
+          "start": 0,
+          "end": 26,
+          "requirement_ids": [
+            "req-504d3b504c0f6871"
+          ],
+          "decision": "selected",
+          "reason": "query_retrieval"
+        },
+        {
+          "source_id": "n2a",
+          "start": 0,
+          "end": 42,
+          "requirement_ids": [
+            "req-504d3b504c0f6871"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-504d3b504c0f6871",
+          "query": "雁禾合同可否取消，预测发运的条件是什么？",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "N3",
+    "requirements": [
+      {
+        "id": "req-18bf6a7e09effba6",
+        "question": "Compare Fenn shares against its benchmark over common close dates.",
+        "status": "missing",
+        "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+        "references": [],
+        "core": true,
+        "kind": "market:benchmark"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "Compare Fenn shares against its benchmark over common close dates.",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "n3b",
+          "title": "Index series",
+          "page": null,
+          "score": 1.0395,
+          "snippet": "Fenn benchmark price index close: May 2 120, May 5 126.",
+          "matched_terms": [
+            "benchmark",
+            "clos",
+            "fenn"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "n3b",
+            "start": 0,
+            "end": 55
+          },
+          "requirement_ids": [
+            "req-18bf6a7e09effba6"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "n3c",
+          "title": "Weekly review",
+          "page": null,
+          "score": 1.2836,
+          "snippet": "Fenn shares and benchmark comparison were discussed.",
+          "matched_terms": [
+            "benchmark",
+            "fenn",
+            "shar"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "n3c",
+            "start": 0,
+            "end": 52
+          },
+          "requirement_ids": [
+            "req-18bf6a7e09effba6"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "n3c",
+          "start": 0,
+          "end": 52,
+          "requirement_ids": [
+            "req-18bf6a7e09effba6"
+          ],
+          "decision": "selected",
+          "reason": "query_retrieval"
+        },
+        {
+          "source_id": "n3b",
+          "start": 0,
+          "end": 55,
+          "requirement_ids": [
+            "req-18bf6a7e09effba6"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        },
+        {
+          "source_id": "n3a",
+          "start": 0,
+          "end": 64,
+          "requirement_ids": [
+            "req-18bf6a7e09effba6"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-18bf6a7e09effba6",
+          "query": "price trading date benchmark 价格 交易日 基准 Compare Fenn shares against its benchmark over common close dates.",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "N4",
+    "requirements": [
+      {
+        "id": "req-3c48b8e4f881c2a7",
+        "question": "榆陌集团收入变化有多少",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:0",
+        "metric": "revenue"
+      },
+      {
+        "id": "req-a7b04f065e8ca2ae",
+        "question": "处置贡献是多少",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:处置贡献是多少"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "榆陌集团收入变化有多少，处置贡献是多少？",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "n4a",
+          "title": "合并报表",
+          "page": null,
+          "score": 1.7976,
+          "snippet": "榆陌集团收入人民币百万元：2024年度200，2025年度180。",
+          "matched_terms": [
+            "团收",
+            "收入",
+            "榆陌",
+            "陌集",
+            "集团"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "n4a",
+            "start": 0,
+            "end": 33
+          },
+          "requirement_ids": [
+            "req-3c48b8e4f881c2a7"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "n4b",
+          "title": "范围附注",
+          "page": null,
+          "score": 1.2229,
+          "snippet": "榆陌处置业务本期处置前实现收入30百万元，未披露其对同比变动的贡献。",
+          "matched_terms": [
+            "处置",
+            "收入",
+            "榆陌",
+            "贡献"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "n4b",
+            "start": 0,
+            "end": 34
+          },
+          "requirement_ids": [
+            "req-3c48b8e4f881c2a7",
+            "req-a7b04f065e8ca2ae"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "n4c",
+          "start": 0,
+          "end": 18,
+          "requirement_ids": [
+            "req-3c48b8e4f881c2a7",
+            "req-a7b04f065e8ca2ae"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "n4a",
+          "start": 0,
+          "end": 33,
+          "requirement_ids": [
+            "req-3c48b8e4f881c2a7"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        },
+        {
+          "source_id": "n4b",
+          "start": 0,
+          "end": 34,
+          "requirement_ids": [
+            "req-3c48b8e4f881c2a7",
+            "req-a7b04f065e8ca2ae"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 2
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-3c48b8e4f881c2a7",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 榆陌集团收入变化有多少",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-a7b04f065e8ca2ae",
+          "query": "处置贡献是多少",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "N5",
+    "requirements": [
+      {
+        "id": "req-f7a5a38b3bfc8c0d",
+        "question": "What was Corven headcount at year end 2025?",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:What was Corven headcount at year end 2025?"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "What was Corven headcount at year end 2025?",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "n5a",
+          "title": "Workforce report",
+          "page": null,
+          "score": 2.6961,
+          "snippet": "Corven year-end 2025 headcount was 1,240 employees.",
+          "matched_terms": [
+            "2025",
+            "corven",
+            "end",
+            "headcount",
+            "year"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "n5a",
+            "start": 0,
+            "end": 51
+          },
+          "requirement_ids": [
+            "req-f7a5a38b3bfc8c0d"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "n5b",
+          "title": "Newsletter",
+          "page": null,
+          "score": 0.436,
+          "snippet": "Corven headcount was discussed.",
+          "matched_terms": [
+            "corven",
+            "headcount"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "n5b",
+            "start": 0,
+            "end": 31
+          },
+          "requirement_ids": [
+            "req-f7a5a38b3bfc8c0d"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 2,
+        "passages_indexed": 2,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "n5a",
+          "start": 0,
+          "end": 51,
+          "requirement_ids": [
+            "req-f7a5a38b3bfc8c0d"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        },
+        {
+          "source_id": "n5b",
+          "start": 0,
+          "end": 31,
+          "requirement_ids": [
+            "req-f7a5a38b3bfc8c0d"
+          ],
+          "decision": "selected",
+          "reason": "query_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 2,
+        "selected": 2,
+        "omitted_by_reason": {},
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-f7a5a38b3bfc8c0d",
+          "query": "What was Corven headcount at year end 2025?",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "N6",
+    "requirements": [
+      {
+        "id": "req-910f6c494574b895",
+        "question": "泊舟毛利率是否会持续上升？请列出最强反证。",
+        "status": "missing",
+        "reason": "A targeted counterargument or scoped negative search needs an identified claim, alternative and eligible source; a generic search is insufficient.",
+        "references": [],
+        "core": true,
+        "kind": "counterevidence"
+      },
+      {
+        "id": "req-3bc54d174dd053e9",
+        "question": "泊舟毛利率是否会持续上升",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:泊舟毛利率是否会持续上升"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "泊舟毛利率是否会持续上升？请列出最强反证。",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "n6b",
+          "title": "采购披露",
+          "page": null,
+          "score": 1.0601,
+          "snippet": "泊舟主要原材料价格已上涨，持续时间尚不确定。",
+          "matched_terms": [
+            "持续",
+            "泊舟"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "n6b",
+            "start": 0,
+            "end": 22
+          },
+          "requirement_ids": [
+            "req-910f6c494574b895",
+            "req-3bc54d174dd053e9"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "n6a",
+          "title": "经营报告",
+          "page": null,
+          "score": 2.7536,
+          "snippet": "泊舟预计毛利率继续上升，但预测取决于原材料价格。",
+          "matched_terms": [
+            "上升",
+            "利率",
+            "毛利",
+            "泊舟",
+            "续上"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "n6a",
+            "start": 0,
+            "end": 24
+          },
+          "requirement_ids": [
+            "req-910f6c494574b895",
+            "req-3bc54d174dd053e9"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "n6a",
+          "start": 0,
+          "end": 24,
+          "requirement_ids": [
+            "req-910f6c494574b895",
+            "req-3bc54d174dd053e9"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        },
+        {
+          "source_id": "n6c",
+          "start": 0,
+          "end": 12,
+          "requirement_ids": [
+            "req-910f6c494574b895",
+            "req-3bc54d174dd053e9"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "n6b",
+          "start": 0,
+          "end": 22,
+          "requirement_ids": [
+            "req-910f6c494574b895",
+            "req-3bc54d174dd053e9"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 2
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-910f6c494574b895",
+          "query": "risk decline uncertainty alternative 风险 下滑 不确定 反证 泊舟毛利率是否会持续上升？请列出最强反证。",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-3bc54d174dd053e9",
+          "query": "泊舟毛利率是否会持续上升",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "N7",
+    "requirements": [
+      {
+        "id": "req-fa6f0fd32c4f2b6f",
+        "question": "What is the change in group operating profit for Vellar?",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:What is the change in group operating profit for Vellar?"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "What is the change in group operating profit for Vellar?",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "n7a",
+          "title": "Consolidated accounts",
+          "page": null,
+          "score": 0.819,
+          "snippet": "Vellar group operating profit EUR millions: 2024 30, 2025 36.",
+          "matched_terms": [
+            "group",
+            "operat",
+            "profit",
+            "vellar"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "n7a",
+            "start": 0,
+            "end": 61
+          },
+          "requirement_ids": [
+            "req-fa6f0fd32c4f2b6f"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "n7c",
+          "title": "Summary",
+          "page": null,
+          "score": 2.118,
+          "snippet": "Vellar group operating profit change was discussed.",
+          "matched_terms": [
+            "chang",
+            "group",
+            "operat",
+            "profit",
+            "vellar"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "n7c",
+            "start": 0,
+            "end": 51
+          },
+          "requirement_ids": [
+            "req-fa6f0fd32c4f2b6f"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "n7c",
+          "start": 0,
+          "end": 51,
+          "requirement_ids": [
+            "req-fa6f0fd32c4f2b6f"
+          ],
+          "decision": "selected",
+          "reason": "query_retrieval"
+        },
+        {
+          "source_id": "n7a",
+          "start": 0,
+          "end": 61,
+          "requirement_ids": [
+            "req-fa6f0fd32c4f2b6f"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        },
+        {
+          "source_id": "n7b",
+          "start": 0,
+          "end": 64,
+          "requirement_ids": [
+            "req-fa6f0fd32c4f2b6f"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-fa6f0fd32c4f2b6f",
+          "query": "What is the change in group operating profit for Vellar?",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "N8",
+    "requirements": [
+      {
+        "id": "req-4fb6c351a89a01ec",
+        "question": "青屿去年与今年资本开支分别多少？",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:青屿去年与今年资本开支分别多少？"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "青屿去年与今年资本开支分别多少？",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "n8a",
+          "title": "年度公告",
+          "page": null,
+          "score": 2.1793,
+          "snippet": "青屿今年资本开支为人民币12亿元。",
+          "matched_terms": [
+            "今年",
+            "年资",
+            "开支",
+            "本开",
+            "资本",
+            "青屿"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "n8a",
+            "start": 0,
+            "end": 17
+          },
+          "requirement_ids": [
+            "req-4fb6c351a89a01ec"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "n8b",
+          "title": "新闻",
+          "page": null,
+          "score": 1.382,
+          "snippet": "青屿资本开支受到关注，未列示去年金额。",
+          "matched_terms": [
+            "去年",
+            "开支",
+            "本开",
+            "资本",
+            "青屿"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "n8b",
+            "start": 0,
+            "end": 19
+          },
+          "requirement_ids": [
+            "req-4fb6c351a89a01ec"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 2,
+        "passages_indexed": 2,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "n8a",
+          "start": 0,
+          "end": 17,
+          "requirement_ids": [
+            "req-4fb6c351a89a01ec"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        },
+        {
+          "source_id": "n8b",
+          "start": 0,
+          "end": 19,
+          "requirement_ids": [
+            "req-4fb6c351a89a01ec"
+          ],
+          "decision": "selected",
+          "reason": "query_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 2,
+        "selected": 2,
+        "omitted_by_reason": {},
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-4fb6c351a89a01ec",
+          "query": "青屿去年与今年资本开支分别多少？",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  }
+]

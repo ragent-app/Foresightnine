@@ -1,0 +1,790 @@
+[
+  {
+    "id": "S1",
+    "corpus_oracle": {
+      "ids": [
+        "annual-note",
+        "annual-table"
+      ],
+      "complete_items": 2,
+      "bytes": 301
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "annual-note",
+        "annual-table"
+      ],
+      "complete_items": 2,
+      "bytes": 301
+    },
+    "candidate_ids": [
+      "release-copy-a",
+      "release-copy-b",
+      "release-original",
+      "annual-table",
+      "annual-note"
+    ],
+    "selected_full_sources": [
+      "annual-table",
+      "annual-note"
+    ],
+    "selected_bytes": 301,
+    "selected_items": 2,
+    "total_items": 2,
+    "complete": true,
+    "first_loss": "none_observed",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": [],
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "S2",
+    "corpus_oracle": {
+      "ids": [
+        "annual-table"
+      ],
+      "complete_items": 1,
+      "bytes": 118
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "annual-table"
+      ],
+      "complete_items": 1,
+      "bytes": 118
+    },
+    "candidate_ids": [
+      "release-copy-a",
+      "release-copy-b",
+      "release-original",
+      "annual-table"
+    ],
+    "selected_full_sources": [
+      "annual-table",
+      "release-copy-a"
+    ],
+    "selected_bytes": 261,
+    "selected_items": 1,
+    "total_items": 1,
+    "complete": true,
+    "first_loss": "none_observed",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": [
+      "acquisition-increment"
+    ],
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "S3",
+    "corpus_oracle": {
+      "ids": [
+        "annual-note",
+        "annual-table",
+        "contrary"
+      ],
+      "complete_items": 3,
+      "bytes": 434
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "annual-note",
+        "annual-table",
+        "contrary"
+      ],
+      "complete_items": 3,
+      "bytes": 434
+    },
+    "candidate_ids": [
+      "release-original",
+      "annual-table",
+      "annual-note",
+      "contrary"
+    ],
+    "selected_full_sources": [
+      "annual-table",
+      "contrary",
+      "annual-note"
+    ],
+    "selected_bytes": 434,
+    "selected_items": 3,
+    "total_items": 3,
+    "complete": true,
+    "first_loss": "none_observed",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": [],
+    "capacity_passages": 3,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "S4",
+    "corpus_oracle": {
+      "ids": [
+        "annual-note",
+        "annual-table"
+      ],
+      "complete_items": 2,
+      "bytes": 301
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "annual-note",
+        "annual-table"
+      ],
+      "complete_items": 2,
+      "bytes": 301
+    },
+    "candidate_ids": [
+      "annual-table",
+      "annual-note"
+    ],
+    "selected_full_sources": [
+      "annual-table",
+      "annual-note"
+    ],
+    "selected_bytes": 301,
+    "selected_items": 2,
+    "total_items": 2,
+    "complete": true,
+    "first_loss": "none_observed",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": [],
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "H1",
+    "corpus_oracle": {
+      "ids": [
+        "h1a",
+        "h1b"
+      ],
+      "complete_items": 1,
+      "bytes": 282
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "h1a",
+        "h1b"
+      ],
+      "complete_items": 1,
+      "bytes": 282
+    },
+    "candidate_ids": [
+      "h1c",
+      "h1d",
+      "h1e",
+      "h1a",
+      "h1b"
+    ],
+    "selected_full_sources": [
+      "h1a",
+      "h1b"
+    ],
+    "selected_bytes": 282,
+    "selected_items": 1,
+    "total_items": 1,
+    "complete": true,
+    "first_loss": "none_observed",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "Remaining USD 7 million not disaggregated; organic attribution unknown.",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "H2",
+    "corpus_oracle": {
+      "ids": [
+        "h2a",
+        "h2b"
+      ],
+      "complete_items": 1,
+      "bytes": 282
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "h2a",
+        "h2b"
+      ],
+      "complete_items": 1,
+      "bytes": 282
+    },
+    "candidate_ids": [
+      "h2c",
+      "h2d",
+      "h2e",
+      "h2b",
+      "h2a"
+    ],
+    "selected_full_sources": [
+      "h2a",
+      "h2b"
+    ],
+    "selected_bytes": 282,
+    "selected_items": 1,
+    "total_items": 1,
+    "complete": true,
+    "first_loss": "none_observed",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "Stating 60 percent as acquisition contribution.",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "H3",
+    "corpus_oracle": {
+      "ids": [
+        "h3a",
+        "h3b"
+      ],
+      "complete_items": 2,
+      "bytes": 297
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "h3a",
+        "h3b"
+      ],
+      "complete_items": 2,
+      "bytes": 297
+    },
+    "candidate_ids": [
+      "h3a",
+      "h3b",
+      "h3c",
+      "h3d"
+    ],
+    "selected_full_sources": [
+      "h3a",
+      "h3b"
+    ],
+    "selected_bytes": 297,
+    "selected_items": 2,
+    "total_items": 2,
+    "complete": true,
+    "first_loss": "none_observed",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "Material breach, written notice and 45 days uncured are conjunctive. Guidance depends on two pilots converting.",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "H4",
+    "corpus_oracle": {
+      "ids": [
+        "h4a",
+        "h4b"
+      ],
+      "complete_items": 1,
+      "bytes": 171
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "h4a",
+        "h4b"
+      ],
+      "complete_items": 1,
+      "bytes": 171
+    },
+    "candidate_ids": [
+      "h4c",
+      "h4d",
+      "h4a",
+      "h4b"
+    ],
+    "selected_full_sources": [
+      "h4a",
+      "h4b"
+    ],
+    "selected_bytes": 171,
+    "selected_items": 1,
+    "total_items": 1,
+    "complete": true,
+    "first_loss": "none_observed",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "Two common dates May 13–14 only; excess is (44/42-155/150)*100 percentage points. Text input is not a structured market receipt.",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "J1",
+    "corpus_oracle": {
+      "ids": [
+        "w1",
+        "w2"
+      ],
+      "complete_items": 1,
+      "bytes": 246
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "w1",
+        "w2"
+      ],
+      "complete_items": 1,
+      "bytes": 246
+    },
+    "candidate_ids": [
+      "w3",
+      "w4",
+      "w2",
+      "w1"
+    ],
+    "selected_full_sources": [
+      "w3",
+      "w1"
+    ],
+    "selected_bytes": 200,
+    "selected_items": 0,
+    "total_items": 1,
+    "complete": false,
+    "first_loss": "selection_or_capacity",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "J2",
+    "corpus_oracle": {
+      "ids": [
+        "y1",
+        "y2"
+      ],
+      "complete_items": 2,
+      "bytes": 228
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "y1",
+        "y2"
+      ],
+      "complete_items": 2,
+      "bytes": 228
+    },
+    "candidate_ids": [
+      "y3",
+      "y4",
+      "y2",
+      "y1"
+    ],
+    "selected_full_sources": [
+      "y2",
+      "y3"
+    ],
+    "selected_bytes": 189,
+    "selected_items": 1,
+    "total_items": 2,
+    "complete": false,
+    "first_loss": "selection_or_capacity",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "J3",
+    "corpus_oracle": {
+      "ids": [
+        "t1",
+        "t2"
+      ],
+      "complete_items": 1,
+      "bytes": 188
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "t1",
+        "t2"
+      ],
+      "complete_items": 1,
+      "bytes": 188
+    },
+    "candidate_ids": [
+      "t3",
+      "t4",
+      "t2",
+      "t1"
+    ],
+    "selected_full_sources": [
+      "t3",
+      "t2"
+    ],
+    "selected_bytes": 165,
+    "selected_items": 0,
+    "total_items": 1,
+    "complete": false,
+    "first_loss": "selection_or_capacity",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "J4",
+    "corpus_oracle": {
+      "ids": [
+        "s1",
+        "s2"
+      ],
+      "complete_items": 1,
+      "bytes": 273
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "s1",
+        "s2"
+      ],
+      "complete_items": 1,
+      "bytes": 273
+    },
+    "candidate_ids": [
+      "s3",
+      "s4",
+      "s2",
+      "s1"
+    ],
+    "selected_full_sources": [
+      "s1",
+      "s2"
+    ],
+    "selected_bytes": 273,
+    "selected_items": 1,
+    "total_items": 1,
+    "complete": true,
+    "first_loss": "none_observed",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "L1",
+    "corpus_oracle": {
+      "ids": [
+        "l1a",
+        "l1b"
+      ],
+      "complete_items": 1,
+      "bytes": 224
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "l1a",
+        "l1b"
+      ],
+      "complete_items": 1,
+      "bytes": 224
+    },
+    "candidate_ids": [
+      "l1c",
+      "l1b",
+      "l1a"
+    ],
+    "selected_full_sources": [
+      "l1c",
+      "l1a"
+    ],
+    "selected_bytes": 155,
+    "selected_items": 0,
+    "total_items": 1,
+    "complete": false,
+    "first_loss": "selection_or_capacity",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "Growth 25%; volume 60% of increase; remaining drivers unknown.",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "L2",
+    "corpus_oracle": {
+      "ids": [
+        "l2a"
+      ],
+      "complete_items": 1,
+      "bytes": 52
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "l2a"
+      ],
+      "complete_items": 1,
+      "bytes": 52
+    },
+    "candidate_ids": [
+      "l2a",
+      "l2b"
+    ],
+    "selected_full_sources": [
+      "l2a",
+      "l2b"
+    ],
+    "selected_bytes": 102,
+    "selected_items": 1,
+    "total_items": 1,
+    "complete": true,
+    "first_loss": "none_observed",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "14 million cubic metres.",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "L3",
+    "corpus_oracle": {
+      "ids": [
+        "l3a",
+        "l3b"
+      ],
+      "complete_items": 1,
+      "bytes": 152
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "l3a",
+        "l3b"
+      ],
+      "complete_items": 1,
+      "bytes": 152
+    },
+    "candidate_ids": [
+      "l3a",
+      "l3c",
+      "l3b"
+    ],
+    "selected_full_sources": [
+      "l3a",
+      "l3c"
+    ],
+    "selected_bytes": 122,
+    "selected_items": 0,
+    "total_items": 1,
+    "complete": false,
+    "first_loss": "selection_or_capacity",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "Forecast is conditional; customer reduction is counterevidence.",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "L4",
+    "corpus_oracle": {
+      "ids": [
+        "l4a",
+        "l4b"
+      ],
+      "complete_items": 1,
+      "bytes": 180
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "l4a",
+        "l4b"
+      ],
+      "complete_items": 1,
+      "bytes": 180
+    },
+    "candidate_ids": [
+      "l4c",
+      "l4a",
+      "l4b"
+    ],
+    "selected_full_sources": [
+      "l4b",
+      "l4c"
+    ],
+    "selected_bytes": 196,
+    "selected_items": 0,
+    "total_items": 1,
+    "complete": false,
+    "first_loss": "selection_or_capacity",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "Growth 20%; do not claim 80% contribution.",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "L5",
+    "corpus_oracle": {
+      "ids": [
+        "l5a",
+        "l5b"
+      ],
+      "complete_items": 2,
+      "bytes": 207
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "l5a",
+        "l5b"
+      ],
+      "complete_items": 2,
+      "bytes": 207
+    },
+    "candidate_ids": [
+      "l5c",
+      "l5a",
+      "l5b"
+    ],
+    "selected_full_sources": [
+      "l5b",
+      "l5c"
+    ],
+    "selected_bytes": 126,
+    "selected_items": 1,
+    "total_items": 2,
+    "complete": false,
+    "first_loss": "selection_or_capacity",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "违约、书面通知、四十五日和未补救共同必要；许可未取得。",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "L6",
+    "corpus_oracle": {
+      "ids": [
+        "l6a",
+        "l6b"
+      ],
+      "complete_items": 1,
+      "bytes": 157
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "l6a",
+        "l6b"
+      ],
+      "complete_items": 1,
+      "bytes": 157
+    },
+    "candidate_ids": [
+      "l6c",
+      "l6a",
+      "l6b"
+    ],
+    "selected_full_sources": [
+      "l6c",
+      "l6a"
+    ],
+    "selected_bytes": 123,
+    "selected_items": 0,
+    "total_items": 1,
+    "complete": false,
+    "first_loss": "selection_or_capacity",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "共同日期6月3日至4日；股票约4.762%，指数2%。",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "L7",
+    "corpus_oracle": {
+      "ids": [
+        "l7a"
+      ],
+      "complete_items": 1,
+      "bytes": 81
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "l7a"
+      ],
+      "complete_items": 1,
+      "bytes": 81
+    },
+    "candidate_ids": [
+      "l7c",
+      "l7a",
+      "l7b"
+    ],
+    "selected_full_sources": [
+      "l7a",
+      "l7c"
+    ],
+    "selected_bytes": 114,
+    "selected_items": 1,
+    "total_items": 1,
+    "complete": true,
+    "first_loss": "none_observed",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "集团增加4百万元；不可混入子公司口径。",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "L8",
+    "corpus_oracle": {
+      "ids": [
+        "l8a"
+      ],
+      "complete_items": 1,
+      "bytes": 51
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "l8a"
+      ],
+      "complete_items": 1,
+      "bytes": 51
+    },
+    "candidate_ids": [
+      "l8b",
+      "l8a"
+    ],
+    "selected_full_sources": [
+      "l8a",
+      "l8b"
+    ],
+    "selected_bytes": 108,
+    "selected_items": 1,
+    "total_items": 1,
+    "complete": true,
+    "first_loss": "none_observed",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "本期0.5元；去年未披露，不能计算变化。",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  }
+]

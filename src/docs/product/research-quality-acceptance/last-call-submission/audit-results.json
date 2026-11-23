@@ -1,0 +1,2763 @@
+{
+  "interpretation": "Rows are non-blind local audit, not independent human validation. Evidence yes for negative item requires source read and its explicit text, not delivered disclosure. Passive visible output is a result projection, not proof of rendered UI. D1-A-1 EPS pair and 50% lack a saved absolute difference and is conservatively partial; D1-A-2 saved subtraction 1 is not shown in its question_part.",
+  "planned": 16,
+  "started": 14,
+  "not_started": [
+    "D4-B-2",
+    "D4-A-2"
+  ],
+  "formal_accepted": 0,
+  "formal_omission_denominator": 0,
+  "passive_complete_evidence_items": 9,
+  "passive_complete_evidence_omitted": 6,
+  "rows": [
+    {
+      "run": "D1-A-1",
+      "result_path": "src/docs/product/research-quality-acceptance/last-call-submission/results/D1-A-1.json",
+      "sha256": "a5fb6ce82ea012622e6ba03c11c488d26f0cd71f260e7c1065fd0a65942b2cdd",
+      "outcome": "partial",
+      "reason": "provider_budget_exhausted",
+      "calls": 4,
+      "exposure": "not_applicable_control",
+      "formal_submission": "not accepted; no handler receipt or persistent submission",
+      "formal_delivery_items": [
+        "not applicable",
+        "not applicable"
+      ],
+      "model_claim_completion": "not observed in executed submit; truncated contents unknown",
+      "server_completed": "no",
+      "accepted_partial_honesty": "not applicable",
+      "pre_submission_evidence_eligible": [
+        "not applicable",
+        "not applicable"
+      ],
+      "passive_final_complete_evidence": [
+        "yes",
+        "no"
+      ],
+      "passive_visible_items": [
+        "yes",
+        "partial"
+      ],
+      "passive_evidence_omitted": [
+        "no",
+        "not applicable"
+      ],
+      "source_read": true,
+      "fact_refs": [
+        {
+          "id": "fact-9fae399b63a13cc43ca18c28f6d71de1850fdb58e1f334ca9755da4e88be0fbf",
+          "label": "Alpha revenue",
+          "value": "120",
+          "period": "FY2025",
+          "source": "exhibit",
+          "start": 0,
+          "end": 103
+        },
+        {
+          "id": "fact-1f5465a1655a588e386bf074d1eec33a6f91d00435135d2f822fb57b57b9a606",
+          "label": "Alpha revenue",
+          "value": "100",
+          "period": "FY2024",
+          "source": "exhibit",
+          "start": 0,
+          "end": 103
+        },
+        {
+          "id": "fact-a4df15ff04159fae518415cd4f99bce0237e1b0ff94d2d5a746110c1b58d30a3",
+          "label": "Alpha diluted EPS",
+          "value": "3",
+          "period": "FY2025",
+          "source": "exhibit",
+          "start": 0,
+          "end": 103
+        },
+        {
+          "id": "fact-66c772473b1432ea8df3735e7a8185b0fdd1b2f69144724b396a079d77c9a2bc",
+          "label": "Alpha diluted EPS",
+          "value": "2",
+          "period": "FY2024",
+          "source": "exhibit",
+          "start": 0,
+          "end": 103
+        }
+      ],
+      "calculation_refs": [
+        {
+          "id": "calc-a3435f39fa994e8ba644893d2814ef1d",
+          "formula": "growth_percent",
+          "expression": "(first / second - 1) * 100",
+          "value": "20.00",
+          "unit": "percent",
+          "inputs": [
+            {
+              "fact_id": "fact-9fae399b63a13cc43ca18c28f6d71de1850fdb58e1f334ca9755da4e88be0fbf",
+              "value": "120",
+              "unit": "USD million",
+              "currency": null,
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-1f5465a1655a588e386bf074d1eec33a6f91d00435135d2f822fb57b57b9a606",
+              "value": "100",
+              "unit": "USD million",
+              "currency": null,
+              "period": "FY2024"
+            }
+          ]
+        },
+        {
+          "id": "calc-8598b2a9b55344a58e1018373ffefc78",
+          "formula": "growth_percent",
+          "expression": "(first / second - 1) * 100",
+          "value": "50.00",
+          "unit": "percent",
+          "inputs": [
+            {
+              "fact_id": "fact-a4df15ff04159fae518415cd4f99bce0237e1b0ff94d2d5a746110c1b58d30a3",
+              "value": "3",
+              "unit": "USD per share",
+              "currency": null,
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-66c772473b1432ea8df3735e7a8185b0fdd1b2f69144724b396a079d77c9a2bc",
+              "value": "2",
+              "unit": "USD per share",
+              "currency": null,
+              "period": "FY2024"
+            }
+          ]
+        }
+      ],
+      "passive_question_parts": [
+        {
+          "id": "req-93921fd1140995d0",
+          "question": "比较 Alpha 2025 与 2024 年收入增速",
+          "core": true,
+          "status": "answered",
+          "answer": "Alpha revenue FY2025 120 USD million；Alpha revenue FY2024 100 USD million；growth_percent 20.00 percent",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": [
+            {
+              "fact_id": "fact-9fae399b63a13cc43ca18c28f6d71de1850fdb58e1f334ca9755da4e88be0fbf",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-1f5465a1655a588e386bf074d1eec33a6f91d00435135d2f822fb57b57b9a606",
+              "origin": "current"
+            },
+            {
+              "calculation_id": "calc-a3435f39fa994e8ba644893d2814ef1d",
+              "origin": "current"
+            }
+          ],
+          "requirements": [
+            {
+              "id": "req-93921fd1140995d0",
+              "question": "比较 Alpha 2025 与 2024 年收入增速",
+              "status": "satisfied",
+              "reason": "Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review.",
+              "references": [
+                {
+                  "fact_id": "fact-9fae399b63a13cc43ca18c28f6d71de1850fdb58e1f334ca9755da4e88be0fbf",
+                  "origin": "current"
+                },
+                {
+                  "fact_id": "fact-1f5465a1655a588e386bf074d1eec33a6f91d00435135d2f822fb57b57b9a606",
+                  "origin": "current"
+                },
+                {
+                  "calculation_id": "calc-a3435f39fa994e8ba644893d2814ef1d",
+                  "origin": "current"
+                }
+              ],
+              "core": true
+            }
+          ]
+        },
+        {
+          "question": "并说明稀释 EPS 变化",
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": []
+        },
+        {
+          "id": "req-79e06e2aa18a6f59",
+          "question": "说明稀释 EPS 变化。",
+          "core": true,
+          "status": "answered",
+          "answer": "Alpha diluted EPS FY2025 3 USD per share；Alpha diluted EPS FY2024 2 USD per share；growth_percent 50.00 percent",
+          "reason": "Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review.",
+          "references": [
+            {
+              "fact_id": "fact-a4df15ff04159fae518415cd4f99bce0237e1b0ff94d2d5a746110c1b58d30a3",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-66c772473b1432ea8df3735e7a8185b0fdd1b2f69144724b396a079d77c9a2bc",
+              "origin": "current"
+            },
+            {
+              "calculation_id": "calc-8598b2a9b55344a58e1018373ffefc78",
+              "origin": "current"
+            }
+          ],
+          "requirements": [
+            {
+              "id": "req-79e06e2aa18a6f59",
+              "question": "说明稀释 EPS 变化。",
+              "status": "satisfied",
+              "reason": "Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review.",
+              "references": [
+                {
+                  "fact_id": "fact-a4df15ff04159fae518415cd4f99bce0237e1b0ff94d2d5a746110c1b58d30a3",
+                  "origin": "current"
+                },
+                {
+                  "fact_id": "fact-66c772473b1432ea8df3735e7a8185b0fdd1b2f69144724b396a079d77c9a2bc",
+                  "origin": "current"
+                },
+                {
+                  "calculation_id": "calc-8598b2a9b55344a58e1018373ffefc78",
+                  "origin": "current"
+                }
+              ],
+              "core": true
+            }
+          ]
+        }
+      ],
+      "partial_notes": "部分结果已保留：停止原因：已达到本次研究或账户的用量/时间预算上限（provider_budget_exhausted）；已收集资料 1 份，已读片段 1 段，已记录事实 4 条，已完成计算 2 项。",
+      "executed_tools": [
+        {
+          "turn": 1,
+          "tool": "read_sources",
+          "id": "call_ab73f98e379a48b1b0b23593",
+          "result": "{\"cleared\":true,\"facts_recorded_count\":4,\"hint\":\"Use search_source or targeted read_sources if re-inspection needed; recorded read_ranges remain valid.\",\"original_chars\":417,\"reason\":\"context_compacted\",\"source_ids\":[\"exhibit\"],\"source_spans\":[{\"end\":103,\"source_id\":\"exhibit\",\"start\":0}],\"tool\":\"read_sources\"}"
+        },
+        {
+          "turn": 2,
+          "tool": "record_facts",
+          "id": "call_fed8730ac29940039461e3f8",
+          "result": "{\"facts\": [{\"character_end\": 103, \"character_start\": 0, \"currency\": null, \"fact_id\": \"fact-9fae399b63a13cc43ca18c28f6d71de1850fdb58e1f334ca9755da4e88be0fbf\", \"label\": \"Alpha revenue\", \"location\": {\"character_end\": 103, \"character_start\": 0}, \"period\": \"FY2025\", \"quotation\": \"Alpha 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million, diluted EPS 2 USD.\", \"source_id\": \"exhibit\", \"unit\": \"USD million\", \"value\": \"120\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 103, \"character_start\": 0, \"currency\": null, \"fact_id\": \"fact-1f5465a1655a588e386bf074d1eec33a6f91d00435135d2f822fb57b57b9a606\", \"label\": \"Alpha revenue\", \"location\": {\"character_end\": 103, \"character_start\": 0}, \"period\": \"FY2024\", \"quotation\": \"Alpha 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million, diluted EPS 2 USD.\", \"source_id\": \"exhibit\", \"unit\": \"USD million\", \"value\": \"100\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 103, \"character_start\": 0, \"currency\": null, \"fact_id\": \"fact-a4df15ff04159fae518415cd4f99bce0237e1b0ff94d2d5a746110c1b58d30a3\", \"label\": \"Alpha diluted EPS\", \"location\": {\"character_end\": 103, \"character_start\": 0}, \"period\": \"FY2025\", \"quotation\": \"Alpha 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million, diluted EPS 2 USD.\", \"source_id\": \"exhibit\", \"unit\": \"USD per share\", \"value\": \"3\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 103, \"character_start\": 0, \"currency\": null, \"fact_id\": \"fact-66c772473b1432ea8df3735e7a8185b0fdd1b2f69144724b396a079d77c9a2bc\", \"label\": \"Alpha diluted EPS\", \"location\": {\"character_end\": 103, \"character_start\": 0}, \"period\": \"FY2024\", \"quotation\": \"Alpha 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million, diluted EPS 2 USD.\", \"source_id\": \"exhibit\", \"unit\": \"USD per share\", \"value\": \"2\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}], \"failures\": []}"
+        },
+        {
+          "turn": 2,
+          "tool": "search_source",
+          "id": "call_b019726a8e1f4cc4a583722c",
+          "result": "{\"case_sensitive\": false, \"hits\": [], \"match_mode\": \"none\", \"query\": \"one-off restated adjusted accounting change\", \"returned_hits\": 0, \"source_id\": \"exhibit\", \"status\": \"completed\", \"title\": \"Synthetic exhibit\", \"total_characters\": 103, \"total_matches\": 0, \"truncated\": false}"
+        },
+        {
+          "turn": 3,
+          "tool": "calculate_financials",
+          "id": "call_82d50e358cec481797e53dbd",
+          "result": "{\"reason\": \"Invalid arguments: calculations[0]: Value error, Provide either first_fact_id/second_fact_id or fact_ids, not both.; calculations[1]: Value error, Provide either first_fact_id/second_fact_id or fact_ids, not both..\", \"status\": \"invalid\"}"
+        },
+        {
+          "turn": 4,
+          "tool": "calculate_financials",
+          "id": "call_09837961a9554ed8b1c30ee5",
+          "result": "{\"calculations\": [{\"calculation_id\": \"calc-a3435f39fa994e8ba644893d2814ef1d\", \"currency\": null, \"decimal_places\": 2, \"expression\": \"(first / second - 1) * 100\", \"formula_id\": \"growth_percent\", \"formula_version\": \"1\", \"input_precision_status\": \"not_established\", \"input_status\": \"unverifiable\", \"input_verification\": \"not_verified_by_calculator\", \"inputs\": [{\"currency\": null, \"fact_id\": \"fact-9fae399b63a13cc43ca18c28f6d71de1850fdb58e1f334ca9755da4e88be0fbf\", \"period\": \"FY2025\", \"unit\": \"USD million\", \"value\": \"120\"}, {\"currency\": null, \"fact_id\": \"fact-1f5465a1655a588e386bf074d1eec33a6f91d00435135d2f822fb57b57b9a606\", \"period\": \"FY2024\", \"unit\": \"USD million\", \"value\": \"100\"}], \"period_granularity_check\": \"not_established\", \"period_order_check\": \"recognized_formats_only\", \"rounding\": \"half_up\", \"unit\": \"percent\", \"value\": \"20.00\"}, {\"calculation_id\": \"calc-8598b2a9b55344a58e1018373ffefc78\", \"currency\": null, \"decimal_places\": 2, \"expression\": \"(first / second - 1) * 100\", \"formula_id\": \"growth_percent\", \"formula_version\": \"1\", \"input_precision_status\": \"not_established\", \"input_status\": \"matched\", \"input_verification\": \"not_verified_by_calculator\", \"inputs\": [{\"currency\": null, \"fact_id\": \"fact-a4df15ff04159fae518415cd4f99bce0237e1b0ff94d2d5a746110c1b58d30a3\", \"period\": \"FY2025\", \"unit\": \"USD per share\", \"value\": \"3\"}, {\"currency\": null, \"fact_id\": \"fact-66c772473b1432ea8df3735e7a8185b0fdd1b2f69144724b396a079d77c9a2bc\", \"period\": \"FY2024\", \"unit\": \"USD per share\", \"value\": \"2\"}], \"period_granularity_check\": \"not_established\", \"period_order_check\": \"recognized_formats_only\", \"rounding\": \"half_up\", \"unit\": \"percent\", \"value\": \"50.00\"}]}"
+        }
+      ],
+      "last_decoded_finish": "tool_use",
+      "last_decoded_tools": [
+        "calculate_financials"
+      ],
+      "handler_receipts": [],
+      "submission": null,
+      "settlement_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:0853d3883c5f428f90b1ec7ae89746f3",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 16727,
+          "usage_detail": {
+            "input_tokens": 15720,
+            "output_tokens": 1007,
+            "total_tokens": 16727,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 0
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_ab73f98e379a48b1b0b23593"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 15720,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.0
+          },
+          "note": "我先读取用户提供的 exhibit 来源（仅 103 字符，可整读），确认 Alpha 2025 与 2024 年的收入与稀释 EPS 数字。"
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:a14cd486b15c46b39003288ba63eb325",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 18478,
+          "usage_detail": {
+            "input_tokens": 1466,
+            "output_tokens": 1332,
+            "total_tokens": 18478,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_fed8730ac29940039461e3f8",
+            "call_b019726a8e1f4cc4a583722c"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 17146,
+            "cache_read_input_tokens": 15680,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.9144990085151056
+          },
+          "note": "Exhibit 已读取：2025 收入 120（百万美元）、稀释 EPS 3 美元；2024 收入 100、稀释 EPS 2 美元。接下来并行：(1) 将四个数值记录为 facts；(2) 针对唯一授权来源做一次专用反证搜索（查找一次性项目、会计政策变更或追溯重述等可能扭曲比较的因素）。"
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:4b64257f052c4b28b077a92b43c3bc5a",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 19900,
+          "usage_detail": {
+            "input_tokens": 3601,
+            "output_tokens": 619,
+            "total_tokens": 19900,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_82d50e358cec481797e53dbd"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 19281,
+            "cache_read_input_tokens": 15680,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.813235828017219
+          },
+          "note": "事实已登记、反证搜索完成（唯一来源中未见任何一次性/重述/会计变更表述）。现在用确定性公式计算收入增速与稀释 EPS 变化。"
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:9fbb9ce841b742c888bc5ceff52d899c",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 20311,
+          "usage_detail": {
+            "input_tokens": 3068,
+            "output_tokens": 347,
+            "total_tokens": 20311,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 16896
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_09837961a9554ed8b1c30ee5"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 19964,
+            "cache_read_input_tokens": 16896,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.8463233820877579
+          },
+          "note": "计算调用参数有误（fact_ids 与 first/second 不可同时提供）。改为仅用 first_fact_id/second_fact_id 重试。"
+        }
+      ],
+      "reported_tokens": 75416,
+      "budget_accounted_tokens": 75416,
+      "elapsed_seconds": 70.819,
+      "actual_cost": null
+    },
+    {
+      "run": "D1-A-2",
+      "result_path": "src/docs/product/research-quality-acceptance/last-call-submission/results/D1-A-2.json",
+      "sha256": "5a89fd2fc1835809a98a111dee574f6faa7d1b4044e5ec0d4cd7862082aacff7",
+      "outcome": "partial",
+      "reason": "provider_budget_exhausted",
+      "calls": 4,
+      "exposure": "not_applicable_control",
+      "formal_submission": "not accepted; no handler receipt or persistent submission",
+      "formal_delivery_items": [
+        "not applicable",
+        "not applicable"
+      ],
+      "model_claim_completion": "not observed in executed submit; truncated contents unknown",
+      "server_completed": "no",
+      "accepted_partial_honesty": "not applicable",
+      "pre_submission_evidence_eligible": [
+        "not applicable",
+        "not applicable"
+      ],
+      "passive_final_complete_evidence": [
+        "yes",
+        "yes"
+      ],
+      "passive_visible_items": [
+        "yes",
+        "partial"
+      ],
+      "passive_evidence_omitted": [
+        "no",
+        "yes"
+      ],
+      "source_read": true,
+      "fact_refs": [
+        {
+          "id": "fact-23ad09e397740d0a8e9a8c5dac3873133188a14547c8a57ed89542cf158cf79e",
+          "label": "Alpha revenue",
+          "value": "120",
+          "period": "FY2025",
+          "source": "exhibit",
+          "start": 0,
+          "end": 53
+        },
+        {
+          "id": "fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7",
+          "label": "Alpha diluted EPS",
+          "value": "3",
+          "period": "FY2025",
+          "source": "exhibit",
+          "start": 36,
+          "end": 53
+        },
+        {
+          "id": "fact-5b35d687ba4e156a92f2a3f02570ac0396f3a64c204a2e55f4af7378876d29e8",
+          "label": "Alpha revenue",
+          "value": "100",
+          "period": "FY2024",
+          "source": "exhibit",
+          "start": 55,
+          "end": 83
+        },
+        {
+          "id": "fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79",
+          "label": "Alpha diluted EPS",
+          "value": "2",
+          "period": "FY2024",
+          "source": "exhibit",
+          "start": 85,
+          "end": 102
+        }
+      ],
+      "calculation_refs": [
+        {
+          "id": "calc-b6452e2c25c8457f80b700548562de33",
+          "formula": "growth_percent",
+          "expression": "(first / second - 1) * 100",
+          "value": "20.00",
+          "unit": "percent",
+          "inputs": [
+            {
+              "fact_id": "fact-23ad09e397740d0a8e9a8c5dac3873133188a14547c8a57ed89542cf158cf79e",
+              "value": "120",
+              "unit": "million USD",
+              "currency": "USD",
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-5b35d687ba4e156a92f2a3f02570ac0396f3a64c204a2e55f4af7378876d29e8",
+              "value": "100",
+              "unit": "million USD",
+              "currency": "USD",
+              "period": "FY2024"
+            }
+          ]
+        },
+        {
+          "id": "calc-f4c78662f6da431590df150b547d8aff",
+          "formula": "growth_percent",
+          "expression": "(first / second - 1) * 100",
+          "value": "50.00",
+          "unit": "percent",
+          "inputs": [
+            {
+              "fact_id": "fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7",
+              "value": "3",
+              "unit": "USD per share",
+              "currency": "USD",
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79",
+              "value": "2",
+              "unit": "USD per share",
+              "currency": "USD",
+              "period": "FY2024"
+            }
+          ]
+        },
+        {
+          "id": "calc-ca10f60bfdc3482c8751c293a7a8f7ab",
+          "formula": "subtract",
+          "expression": "inputs[0] - sum(inputs[1:])",
+          "value": "1.00",
+          "unit": "USD per share",
+          "inputs": [
+            {
+              "fact_id": "fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7",
+              "value": "3",
+              "unit": "USD per share",
+              "currency": "USD",
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79",
+              "value": "2",
+              "unit": "USD per share",
+              "currency": "USD",
+              "period": "FY2024"
+            }
+          ]
+        }
+      ],
+      "passive_question_parts": [
+        {
+          "id": "req-93921fd1140995d0",
+          "question": "比较 Alpha 2025 与 2024 年收入增速",
+          "core": true,
+          "status": "answered",
+          "answer": "Alpha revenue FY2025 120 million USD；Alpha revenue FY2024 100 million USD；growth_percent 20.00 percent",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": [
+            {
+              "fact_id": "fact-23ad09e397740d0a8e9a8c5dac3873133188a14547c8a57ed89542cf158cf79e",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-5b35d687ba4e156a92f2a3f02570ac0396f3a64c204a2e55f4af7378876d29e8",
+              "origin": "current"
+            },
+            {
+              "calculation_id": "calc-b6452e2c25c8457f80b700548562de33",
+              "origin": "current"
+            }
+          ],
+          "requirements": [
+            {
+              "id": "req-93921fd1140995d0",
+              "question": "比较 Alpha 2025 与 2024 年收入增速",
+              "status": "satisfied",
+              "reason": "Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review.",
+              "references": [
+                {
+                  "fact_id": "fact-23ad09e397740d0a8e9a8c5dac3873133188a14547c8a57ed89542cf158cf79e",
+                  "origin": "current"
+                },
+                {
+                  "fact_id": "fact-5b35d687ba4e156a92f2a3f02570ac0396f3a64c204a2e55f4af7378876d29e8",
+                  "origin": "current"
+                },
+                {
+                  "calculation_id": "calc-b6452e2c25c8457f80b700548562de33",
+                  "origin": "current"
+                }
+              ],
+              "core": true
+            }
+          ]
+        },
+        {
+          "question": "并说明稀释 EPS 变化",
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": []
+        },
+        {
+          "id": "req-79e06e2aa18a6f59",
+          "question": "说明稀释 EPS 变化。",
+          "core": true,
+          "status": "answered",
+          "answer": "Alpha diluted EPS FY2025 3 USD per share；Alpha diluted EPS FY2024 2 USD per share；growth_percent 50.00 percent",
+          "reason": "Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review.",
+          "references": [
+            {
+              "fact_id": "fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79",
+              "origin": "current"
+            },
+            {
+              "calculation_id": "calc-f4c78662f6da431590df150b547d8aff",
+              "origin": "current"
+            }
+          ],
+          "requirements": [
+            {
+              "id": "req-79e06e2aa18a6f59",
+              "question": "说明稀释 EPS 变化。",
+              "status": "satisfied",
+              "reason": "Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review.",
+              "references": [
+                {
+                  "fact_id": "fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7",
+                  "origin": "current"
+                },
+                {
+                  "fact_id": "fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79",
+                  "origin": "current"
+                },
+                {
+                  "calculation_id": "calc-f4c78662f6da431590df150b547d8aff",
+                  "origin": "current"
+                }
+              ],
+              "core": true
+            }
+          ]
+        }
+      ],
+      "partial_notes": "部分结果已保留：停止原因：已达到本次研究或账户的用量/时间预算上限（provider_budget_exhausted）；已收集资料 1 份，已读片段 1 段，已记录事实 4 条，已完成计算 3 项。",
+      "executed_tools": [
+        {
+          "turn": 1,
+          "tool": "read_sources",
+          "id": "call_db9bc31820c448549640fc7f",
+          "result": "{\"cleared\":true,\"facts_recorded_count\":4,\"hint\":\"Use search_source or targeted read_sources if re-inspection needed; recorded read_ranges remain valid.\",\"original_chars\":546,\"reason\":\"context_compacted\",\"source_ids\":[\"exhibit\"],\"source_spans\":[{\"end\":103,\"source_id\":\"exhibit\",\"start\":0}],\"tool\":\"read_sources\"}"
+        },
+        {
+          "turn": 2,
+          "tool": "record_facts",
+          "id": "call_0500117a694348cab1899369",
+          "result": "{\"facts\": [{\"character_end\": 53, \"character_start\": 0, \"currency\": \"USD\", \"fact_id\": \"fact-23ad09e397740d0a8e9a8c5dac3873133188a14547c8a57ed89542cf158cf79e\", \"label\": \"Alpha revenue\", \"location\": {\"character_end\": 53, \"character_start\": 0}, \"period\": \"FY2025\", \"quotation\": \"Alpha 2025 revenue 120 USD million, diluted EPS 3 USD\", \"source_id\": \"exhibit\", \"unit\": \"million USD\", \"value\": \"120\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 53, \"character_start\": 36, \"currency\": \"USD\", \"fact_id\": \"fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7\", \"label\": \"Alpha diluted EPS\", \"location\": {\"character_end\": 53, \"character_start\": 36}, \"period\": \"FY2025\", \"quotation\": \"diluted EPS 3 USD\", \"source_id\": \"exhibit\", \"unit\": \"USD per share\", \"value\": \"3\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 83, \"character_start\": 55, \"currency\": \"USD\", \"fact_id\": \"fact-5b35d687ba4e156a92f2a3f02570ac0396f3a64c204a2e55f4af7378876d29e8\", \"label\": \"Alpha revenue\", \"location\": {\"character_end\": 83, \"character_start\": 55}, \"period\": \"FY2024\", \"quotation\": \"2024 revenue 100 USD million\", \"source_id\": \"exhibit\", \"unit\": \"million USD\", \"value\": \"100\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 102, \"character_start\": 85, \"currency\": \"USD\", \"fact_id\": \"fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79\", \"label\": \"Alpha diluted EPS\", \"location\": {\"character_end\": 102, \"character_start\": 85}, \"period\": \"FY2024\", \"quotation\": \"diluted EPS 2 USD\", \"source_id\": \"exhibit\", \"unit\": \"USD per share\", \"value\": \"2\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}], \"failures\": []}"
+        },
+        {
+          "turn": 2,
+          "tool": "search_source",
+          "id": "call_f38873ce2c604d0db85bd647",
+          "result": "{\"case_sensitive\": false, \"hits\": [], \"match_mode\": \"none\", \"query\": \"one-off restatement accounting change adjustment\", \"returned_hits\": 0, \"source_id\": \"exhibit\", \"status\": \"completed\", \"title\": \"Synthetic exhibit\", \"total_characters\": 103, \"total_matches\": 0, \"truncated\": false}"
+        },
+        {
+          "turn": 3,
+          "tool": "calculate_financials",
+          "id": "call_5d3ca7bc817c488293dd0ab4",
+          "result": "{\"reason\": \"Invalid arguments: calculations[0]: Value error, Provide either first_fact_id/second_fact_id or fact_ids, not both..\", \"status\": \"invalid\"}"
+        },
+        {
+          "turn": 4,
+          "tool": "calculate_financials",
+          "id": "call_5c15e44bcebd44a08b68aa85",
+          "result": "{\"calculations\": [{\"calculation_id\": \"calc-b6452e2c25c8457f80b700548562de33\", \"currency\": null, \"decimal_places\": 2, \"expression\": \"(first / second - 1) * 100\", \"formula_id\": \"growth_percent\", \"formula_version\": \"1\", \"input_precision_status\": \"not_established\", \"input_status\": \"matched\", \"input_verification\": \"not_verified_by_calculator\", \"inputs\": [{\"currency\": \"USD\", \"fact_id\": \"fact-23ad09e397740d0a8e9a8c5dac3873133188a14547c8a57ed89542cf158cf79e\", \"period\": \"FY2025\", \"unit\": \"million USD\", \"value\": \"120\"}, {\"currency\": \"USD\", \"fact_id\": \"fact-5b35d687ba4e156a92f2a3f02570ac0396f3a64c204a2e55f4af7378876d29e8\", \"period\": \"FY2024\", \"unit\": \"million USD\", \"value\": \"100\"}], \"period_granularity_check\": \"not_established\", \"period_order_check\": \"recognized_formats_only\", \"rounding\": \"half_up\", \"unit\": \"percent\", \"value\": \"20.00\"}, {\"calculation_id\": \"calc-f4c78662f6da431590df150b547d8aff\", \"currency\": null, \"decimal_places\": 2, \"expression\": \"(first / second - 1) * 100\", \"formula_id\": \"growth_percent\", \"formula_version\": \"1\", \"input_precision_status\": \"not_established\", \"input_status\": \"matched\", \"input_verification\": \"not_verified_by_calculator\", \"inputs\": [{\"currency\": \"USD\", \"fact_id\": \"fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7\", \"period\": \"FY2025\", \"unit\": \"USD per share\", \"value\": \"3\"}, {\"currency\": \"USD\", \"fact_id\": \"fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79\", \"period\": \"FY2024\", \"unit\": \"USD per share\", \"value\": \"2\"}], \"period_granularity_check\": \"not_established\", \"period_order_check\": \"recognized_formats_only\", \"rounding\": \"half_up\", \"unit\": \"percent\", \"value\": \"50.00\"}, {\"calculation_id\": \"calc-ca10f60bfdc3482c8751c293a7a8f7ab\", \"currency\": \"USD\", \"decimal_places\": 2, \"expression\": \"inputs[0] - sum(inputs[1:])\", \"formula_id\": \"subtract\", \"formula_version\": \"1\", \"input_precision_status\": \"not_established\", \"input_status\": \"matched\", \"input_verification\": \"not_verified_by_calculator\", \"inputs\": [{\"currency\": \"USD\", \"fact_id\": \"fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7\", \"period\": \"FY2025\", \"unit\": \"USD per share\", \"value\": \"3\"}, {\"currency\": \"USD\", \"fact_id\": \"fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79\", \"period\": \"FY2024\", \"unit\": \"USD per share\", \"value\": \"2\"}], \"rounding\": \"half_up\", \"unit\": \"USD per share\", \"value\": \"1.00\"}]}"
+        }
+      ],
+      "last_decoded_finish": "tool_use",
+      "last_decoded_tools": [
+        "calculate_financials"
+      ],
+      "handler_receipts": [],
+      "submission": null,
+      "settlement_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:6b2c1a8f101d4d7c97bd3f8de0ea8abe",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 16220,
+          "usage_detail": {
+            "input_tokens": 40,
+            "output_tokens": 500,
+            "total_tokens": 16220,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_db9bc31820c448549640fc7f"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 15720,
+            "cache_read_input_tokens": 15680,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.9974554707379135
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:2133215235f743b8840c45f39ca71f70",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 18109,
+          "usage_detail": {
+            "input_tokens": 967,
+            "output_tokens": 1462,
+            "total_tokens": 18109,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_0500117a694348cab1899369",
+            "call_f38873ce2c604d0db85bd647"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 16647,
+            "cache_read_input_tokens": 15680,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.9419114555175107
+          },
+          "note": "该展示文件内容简短且完整：Alpha 2025年收入为1.2亿美元，摊薄后每股收益（EPS）为3美元；2024年收入为1亿美元，摊薄后EPS为2美元。现在我将记录这四个数值，然后计算增长率，并进行一次专门的逆向证据搜索。"
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:380c2d25e9884aedaeff01f9cc9f2d1f",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 19521,
+          "usage_detail": {
+            "input_tokens": 3146,
+            "output_tokens": 695,
+            "total_tokens": 19521,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_5d3ca7bc817c488293dd0ab4"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 18826,
+            "cache_read_input_tokens": 15680,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.8328906830978434
+          },
+          "note": "已记录事实；反证据搜索未发现任何命中结果（展示报告未提及任何一次性项目、重述或会计政策变更——在此处没有任何内容推翻该比较，尽管它也无法证实可比性）。现在进行确定性计算："
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:d5c6568ef6f1434ea16418be8ab9d76e",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 20031,
+          "usage_detail": {
+            "input_tokens": 3178,
+            "output_tokens": 469,
+            "total_tokens": 20031,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 16384
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_5c15e44bcebd44a08b68aa85"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 19562,
+            "cache_read_input_tokens": 16384,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.8375421736018812
+          },
+          "note": "计算调用失败，原因是参数重复——正在尝试仅使用 `first_fact_id` 和 `second_fact_id` 进行重试："
+        }
+      ],
+      "reported_tokens": 73881,
+      "budget_accounted_tokens": 73881,
+      "elapsed_seconds": 65.551,
+      "actual_cost": null
+    },
+    {
+      "run": "D1-B-1",
+      "result_path": "src/docs/product/research-quality-acceptance/last-call-submission/results/D1-B-1.json",
+      "sha256": "1d87b9903e213f9dbddc0b790d8399d539ee675247ca22fff06f757823871a1e",
+      "outcome": "partial",
+      "reason": "provider_output_truncated",
+      "calls": 4,
+      "exposure": "provider_entered",
+      "formal_submission": "not accepted; no handler receipt or persistent submission",
+      "formal_delivery_items": [
+        "not applicable",
+        "not applicable"
+      ],
+      "model_claim_completion": "not observed in executed submit; truncated contents unknown",
+      "server_completed": "no",
+      "accepted_partial_honesty": "not applicable",
+      "pre_submission_evidence_eligible": [
+        "not applicable",
+        "not applicable"
+      ],
+      "passive_final_complete_evidence": [
+        "no",
+        "no"
+      ],
+      "passive_visible_items": [
+        "partial",
+        "partial"
+      ],
+      "passive_evidence_omitted": [
+        "not applicable",
+        "not applicable"
+      ],
+      "source_read": true,
+      "fact_refs": [
+        {
+          "id": "fact-05f9870f8924bb8b66c4430308c16a70f445a1054664c5ca7dd716b40c8771b9",
+          "label": "revenue",
+          "value": "120",
+          "period": "FY2025",
+          "source": "exhibit",
+          "start": 0,
+          "end": 103
+        },
+        {
+          "id": "fact-34afbf75ddd2318a6576a430a6aebcc8feac260d38f912240dd7240630e66af3",
+          "label": "diluted EPS",
+          "value": "3",
+          "period": "FY2025",
+          "source": "exhibit",
+          "start": 0,
+          "end": 103
+        },
+        {
+          "id": "fact-a59bc4eea4dce0a45974d929df651785adc40b3011af8f0eefb0362f6fa95c45",
+          "label": "revenue",
+          "value": "100",
+          "period": "FY2024",
+          "source": "exhibit",
+          "start": 0,
+          "end": 103
+        },
+        {
+          "id": "fact-d8507550c4a07ff2051eebcd6f74a0bb5ab2ec3676f0ab61b6b490b1d8de6d7f",
+          "label": "diluted EPS",
+          "value": "2",
+          "period": "FY2024",
+          "source": "exhibit",
+          "start": 0,
+          "end": 103
+        }
+      ],
+      "calculation_refs": [],
+      "passive_question_parts": [
+        {
+          "id": "req-93921fd1140995d0",
+          "question": "比较 Alpha 2025 与 2024 年收入增速",
+          "core": true,
+          "status": "partial",
+          "answer": "revenue FY2025 120 USD million；revenue FY2024 100 USD million",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": [
+            {
+              "fact_id": "fact-05f9870f8924bb8b66c4430308c16a70f445a1054664c5ca7dd716b40c8771b9",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-a59bc4eea4dce0a45974d929df651785adc40b3011af8f0eefb0362f6fa95c45",
+              "origin": "current"
+            }
+          ],
+          "requirements": [
+            {
+              "id": "req-93921fd1140995d0",
+              "question": "比较 Alpha 2025 与 2024 年收入增速",
+              "status": "partial",
+              "reason": "Recorded evidence exists; comparable periods and the requested calculation still need verification.",
+              "references": [
+                {
+                  "fact_id": "fact-05f9870f8924bb8b66c4430308c16a70f445a1054664c5ca7dd716b40c8771b9",
+                  "origin": "current"
+                },
+                {
+                  "fact_id": "fact-a59bc4eea4dce0a45974d929df651785adc40b3011af8f0eefb0362f6fa95c45",
+                  "origin": "current"
+                }
+              ],
+              "core": true
+            }
+          ]
+        },
+        {
+          "question": "并说明稀释 EPS 变化",
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": []
+        },
+        {
+          "id": "req-79e06e2aa18a6f59",
+          "question": "说明稀释 EPS 变化。",
+          "core": true,
+          "status": "partial",
+          "answer": "diluted EPS FY2025 3 USD per share；diluted EPS FY2024 2 USD per share",
+          "reason": "Recorded evidence exists; comparable periods and the requested calculation still need verification.",
+          "references": [
+            {
+              "fact_id": "fact-34afbf75ddd2318a6576a430a6aebcc8feac260d38f912240dd7240630e66af3",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-d8507550c4a07ff2051eebcd6f74a0bb5ab2ec3676f0ab61b6b490b1d8de6d7f",
+              "origin": "current"
+            }
+          ],
+          "requirements": [
+            {
+              "id": "req-79e06e2aa18a6f59",
+              "question": "说明稀释 EPS 变化。",
+              "status": "partial",
+              "reason": "Recorded evidence exists; comparable periods and the requested calculation still need verification.",
+              "references": [
+                {
+                  "fact_id": "fact-34afbf75ddd2318a6576a430a6aebcc8feac260d38f912240dd7240630e66af3",
+                  "origin": "current"
+                },
+                {
+                  "fact_id": "fact-d8507550c4a07ff2051eebcd6f74a0bb5ab2ec3676f0ab61b6b490b1d8de6d7f",
+                  "origin": "current"
+                }
+              ],
+              "core": true
+            }
+          ]
+        }
+      ],
+      "partial_notes": "部分结果已保留：停止原因：模型输出达到单次长度上限而被截断（provider_output_truncated）；已收集资料 1 份，已读片段 1 段，已记录事实 4 条，已完成计算 0 项。",
+      "executed_tools": [
+        {
+          "turn": 1,
+          "tool": "read_sources",
+          "id": "call_3c007cc8564049468a936eba",
+          "result": "{\"rationale\": \"The user asks to compare Alpha's 2025 vs 2024 revenue growth and diluted EPS change; the only authorized source is the synthetic exhibit (103 characters), so I must read it in full before citing any figures.\", \"results\": [{\"content_sha256\": \"86999c7c03aa39f42799d31f99103f9397ca94dae821f7f8574a0acec24e4cda\", \"end\": 103, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Alpha 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million, diluted EPS 2 USD.\", \"total_characters\": 103, \"truncated\": false}]}"
+        },
+        {
+          "turn": 2,
+          "tool": "record_facts",
+          "id": "call_daa4285f8e314d26ad202691",
+          "result": "{\"facts\": [{\"character_end\": 103, \"character_start\": 0, \"currency\": null, \"fact_id\": \"fact-05f9870f8924bb8b66c4430308c16a70f445a1054664c5ca7dd716b40c8771b9\", \"label\": \"revenue\", \"location\": {\"character_end\": 103, \"character_start\": 0}, \"period\": \"FY2025\", \"quotation\": \"Alpha 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million, diluted EPS 2 USD.\", \"source_id\": \"exhibit\", \"unit\": \"USD million\", \"value\": \"120\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 103, \"character_start\": 0, \"currency\": null, \"fact_id\": \"fact-34afbf75ddd2318a6576a430a6aebcc8feac260d38f912240dd7240630e66af3\", \"label\": \"diluted EPS\", \"location\": {\"character_end\": 103, \"character_start\": 0}, \"period\": \"FY2025\", \"quotation\": \"Alpha 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million, diluted EPS 2 USD.\", \"source_id\": \"exhibit\", \"unit\": \"USD per share\", \"value\": \"3\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 103, \"character_start\": 0, \"currency\": null, \"fact_id\": \"fact-a59bc4eea4dce0a45974d929df651785adc40b3011af8f0eefb0362f6fa95c45\", \"label\": \"revenue\", \"location\": {\"character_end\": 103, \"character_start\": 0}, \"period\": \"FY2024\", \"quotation\": \"Alpha 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million, diluted EPS 2 USD.\", \"source_id\": \"exhibit\", \"unit\": \"USD million\", \"value\": \"100\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 103, \"character_start\": 0, \"currency\": null, \"fact_id\": \"fact-d8507550c4a07ff2051eebcd6f74a0bb5ab2ec3676f0ab61b6b490b1d8de6d7f\", \"label\": \"diluted EPS\", \"location\": {\"character_end\": 103, \"character_start\": 0}, \"period\": \"FY2024\", \"quotation\": \"Alpha 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million, diluted EPS 2 USD.\", \"source_id\": \"exhibit\", \"unit\": \"USD per share\", \"value\": \"2\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}], \"failures\": []}"
+        },
+        {
+          "turn": 2,
+          "tool": "search_source",
+          "id": "call_cb804cc9ffbd4c3cb673505d",
+          "result": "{\"case_sensitive\": false, \"hits\": [], \"match_mode\": \"none\", \"query\": \"restated one-off adjusted accounting\", \"returned_hits\": 0, \"source_id\": \"exhibit\", \"status\": \"completed\", \"title\": \"Synthetic exhibit\", \"total_characters\": 103, \"total_matches\": 0, \"truncated\": false}"
+        },
+        {
+          "turn": 3,
+          "tool": "calculate_financials",
+          "id": "call_adb28e4671a64560b9b6621c",
+          "result": "{\"reason\": \"Invalid arguments: calculations[0]: Value error, Provide either first_fact_id/second_fact_id or fact_ids, not both..\", \"status\": \"invalid\"}"
+        }
+      ],
+      "last_decoded_finish": "max_tokens",
+      "last_decoded_tools": [
+        "submit_research"
+      ],
+      "handler_receipts": [],
+      "submission": null,
+      "settlement_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:4538dddd90654af98ae379de31837469",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 16406,
+          "usage_detail": {
+            "input_tokens": 40,
+            "output_tokens": 686,
+            "total_tokens": 16406,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_3c007cc8564049468a936eba"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 15720,
+            "cache_read_input_tokens": 15680,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.9974554707379135
+          },
+          "note": "我将首先阅读提供的综合展示，以了解有哪些数据可用于 Alpha 的 2025 年与 2024 年对比。"
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:ad125729160d49f5917e2daa8250eaca",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 17870,
+          "usage_detail": {
+            "input_tokens": 1154,
+            "output_tokens": 1036,
+            "total_tokens": 17870,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_daa4285f8e314d26ad202691",
+            "call_cb804cc9ffbd4c3cb673505d"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 16834,
+            "cache_read_input_tokens": 15680,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.9314482594748723
+          },
+          "note": "The exhibit gives both periods' revenue and diluted EPS. I'll record these as facts and simultaneously run the required dedicated counter-evidence search (checking for restatements, one-offs, or non-comparability that could distort the growth comparison)."
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:bdd853617353434198b89cb8b60390e2",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 19467,
+          "usage_detail": {
+            "input_tokens": 2987,
+            "output_tokens": 800,
+            "total_tokens": 19467,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_adb28e4671a64560b9b6621c"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 18667,
+            "cache_read_input_tokens": 15680,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.8399850002678524
+          },
+          "note": "已从展示材料中记录事实；反证搜索在展示材料中未发现重述、一次性项目或会计变动迹象。现在我将通过确定性计算推导出增长率。"
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:52045422d6684238a62dacf605243181",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "usage": 21585,
+          "settlement": "settled"
+        }
+      ],
+      "reported_tokens": 75328,
+      "budget_accounted_tokens": 75328,
+      "elapsed_seconds": 96.771,
+      "actual_cost": null
+    },
+    {
+      "run": "D1-B-2",
+      "result_path": "src/docs/product/research-quality-acceptance/last-call-submission/results/D1-B-2.json",
+      "sha256": "ead28514c47ee908cc05f4a4cf58a68408a0331d0cdcfe294a614c9201faca7d",
+      "outcome": "partial",
+      "reason": "provider_output_truncated",
+      "calls": 4,
+      "exposure": "provider_entered",
+      "formal_submission": "not accepted; no handler receipt or persistent submission",
+      "formal_delivery_items": [
+        "not applicable",
+        "not applicable"
+      ],
+      "model_claim_completion": "not observed in executed submit; truncated contents unknown",
+      "server_completed": "no",
+      "accepted_partial_honesty": "not applicable",
+      "pre_submission_evidence_eligible": [
+        "not applicable",
+        "not applicable"
+      ],
+      "passive_final_complete_evidence": [
+        "no",
+        "no"
+      ],
+      "passive_visible_items": [
+        "partial",
+        "no"
+      ],
+      "passive_evidence_omitted": [
+        "not applicable",
+        "not applicable"
+      ],
+      "source_read": true,
+      "fact_refs": [
+        {
+          "id": "fact-045b89819b8725efed91a29845a7751cda84afbd4e20b2e1c4d88a4763298f41",
+          "label": "revenue",
+          "value": "120",
+          "period": "FY2025",
+          "source": "exhibit",
+          "start": 0,
+          "end": 34
+        },
+        {
+          "id": "fact-36dca21006235b0f0110b1707ae8abce4348e7aaf1594d13b769c9a3a52806ef",
+          "label": "revenue",
+          "value": "100",
+          "period": "FY2024",
+          "source": "exhibit",
+          "start": 55,
+          "end": 83
+        },
+        {
+          "id": "fact-c583e6b9af78c16d135d5f1fc1d1f5c25fde02b70022290229ad0a6c2d7947e8",
+          "label": "diluted EPS",
+          "value": "3",
+          "period": "FY2025",
+          "source": "exhibit",
+          "start": 36,
+          "end": 53
+        },
+        {
+          "id": "fact-ed373845f636917eb4168b6401bf3a4e22c2c328b8aabdb540ae3ca842ae6331",
+          "label": "diluted EPS",
+          "value": "2",
+          "period": "FY2024",
+          "source": "exhibit",
+          "start": 85,
+          "end": 102
+        }
+      ],
+      "calculation_refs": [],
+      "passive_question_parts": [
+        {
+          "id": "req-93921fd1140995d0",
+          "question": "比较 Alpha 2025 与 2024 年收入增速",
+          "core": true,
+          "status": "partial",
+          "answer": "revenue FY2025 120 USD million",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": [
+            {
+              "fact_id": "fact-045b89819b8725efed91a29845a7751cda84afbd4e20b2e1c4d88a4763298f41",
+              "origin": "current"
+            }
+          ],
+          "requirements": [
+            {
+              "id": "req-93921fd1140995d0",
+              "question": "比较 Alpha 2025 与 2024 年收入增速",
+              "status": "partial",
+              "reason": "Recorded evidence exists; comparable periods and the requested calculation still need verification.",
+              "references": [
+                {
+                  "fact_id": "fact-045b89819b8725efed91a29845a7751cda84afbd4e20b2e1c4d88a4763298f41",
+                  "origin": "current"
+                }
+              ],
+              "core": true
+            }
+          ]
+        },
+        {
+          "question": "并说明稀释 EPS 变化",
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": []
+        },
+        {
+          "id": "req-79e06e2aa18a6f59",
+          "question": "说明稀释 EPS 变化。",
+          "core": true,
+          "status": "unresolved",
+          "answer": "",
+          "reason": "No eligible recorded fact matches this metric.",
+          "references": [],
+          "requirements": [
+            {
+              "id": "req-79e06e2aa18a6f59",
+              "question": "说明稀释 EPS 变化。",
+              "status": "missing",
+              "reason": "No eligible recorded fact matches this metric.",
+              "references": [],
+              "core": true
+            }
+          ]
+        }
+      ],
+      "partial_notes": "部分结果已保留：停止原因：模型输出达到单次长度上限而被截断（provider_output_truncated）；已收集资料 1 份，已读片段 1 段，已记录事实 4 条，已完成计算 0 项。",
+      "executed_tools": [
+        {
+          "turn": 1,
+          "tool": "read_sources",
+          "id": "call_493b58286ab0460fba38dfba",
+          "result": "{\"rationale\": \"需要读取唯一授权来源 exhibit 的全文（103 字符），提取 Alpha 2025 与 2024 年收入和稀释 EPS 的原始数值用于比较。\", \"results\": [{\"content_sha256\": \"86999c7c03aa39f42799d31f99103f9397ca94dae821f7f8574a0acec24e4cda\", \"end\": 103, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Alpha 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million, diluted EPS 2 USD.\", \"total_characters\": 103, \"truncated\": false}]}"
+        },
+        {
+          "turn": 2,
+          "tool": "record_facts",
+          "id": "call_87adf0d51ba24690953d4fb7",
+          "result": "{\"facts\": [{\"character_end\": 34, \"character_start\": 0, \"currency\": \"USD\", \"fact_id\": \"fact-045b89819b8725efed91a29845a7751cda84afbd4e20b2e1c4d88a4763298f41\", \"label\": \"revenue\", \"location\": {\"character_end\": 34, \"character_start\": 0}, \"period\": \"FY2025\", \"quotation\": \"Alpha 2025 revenue 120 USD million\", \"source_id\": \"exhibit\", \"unit\": \"USD million\", \"value\": \"120\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 83, \"character_start\": 55, \"currency\": \"USD\", \"fact_id\": \"fact-36dca21006235b0f0110b1707ae8abce4348e7aaf1594d13b769c9a3a52806ef\", \"label\": \"revenue\", \"location\": {\"character_end\": 83, \"character_start\": 55}, \"period\": \"FY2024\", \"quotation\": \"2024 revenue 100 USD million\", \"source_id\": \"exhibit\", \"unit\": \"USD million\", \"value\": \"100\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 53, \"character_start\": 36, \"currency\": \"USD\", \"fact_id\": \"fact-c583e6b9af78c16d135d5f1fc1d1f5c25fde02b70022290229ad0a6c2d7947e8\", \"label\": \"diluted EPS\", \"location\": {\"character_end\": 53, \"character_start\": 36}, \"period\": \"FY2025\", \"quotation\": \"diluted EPS 3 USD\", \"source_id\": \"exhibit\", \"unit\": \"USD per share\", \"value\": \"3\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 102, \"character_start\": 85, \"currency\": \"USD\", \"fact_id\": \"fact-ed373845f636917eb4168b6401bf3a4e22c2c328b8aabdb540ae3ca842ae6331\", \"label\": \"diluted EPS\", \"location\": {\"character_end\": 102, \"character_start\": 85}, \"period\": \"FY2024\", \"quotation\": \"diluted EPS 2 USD\", \"source_id\": \"exhibit\", \"unit\": \"USD per share\", \"value\": \"2\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}], \"failures\": []}"
+        },
+        {
+          "turn": 2,
+          "tool": "search_source",
+          "id": "call_96eb2590309d4ba790e203e5",
+          "result": "{\"case_sensitive\": false, \"hits\": [{\"end\": 18, \"match_mode\": \"exact\", \"snippet\": \"Alpha 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million, diluted EPS 2 USD.\", \"snippet_end\": 103, \"snippet_start\": 0, \"start\": 11}, {\"end\": 67, \"match_mode\": \"exact\", \"snippet\": \"Alpha 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million, diluted EPS 2 USD.\", \"snippet_end\": 103, \"snippet_start\": 0, \"start\": 60}], \"match_mode\": \"exact\", \"query\": \"revenue\", \"returned_hits\": 2, \"source_id\": \"exhibit\", \"status\": \"completed\", \"title\": \"Synthetic exhibit\", \"total_characters\": 103, \"total_matches\": 2, \"truncated\": false}"
+        },
+        {
+          "turn": 2,
+          "tool": "search_library",
+          "id": "call_4e1952038083419c8b3fdba7",
+          "result": "{\"hits\": [], \"library_coverage\": {\"complete\": true, \"passages_indexed\": 1, \"retrieval_mode\": \"bm25_only\", \"sources_searched\": 1, \"unsearched_page_count\": 0}, \"message\": \"No passage matched this query.\", \"query\": \"one-off non-recurring restatement adjusted accounting policy change\", \"reason\": \"no_hits\", \"returned_hits\": 0, \"status\": \"completed\"}"
+        },
+        {
+          "turn": 3,
+          "tool": "calculate_financials",
+          "id": "call_0c9fcff18ff64f69a2438fc3",
+          "result": "{\"reason\": \"Invalid arguments: calculations[0]: Value error, Provide either first_fact_id/second_fact_id or fact_ids, not both..\", \"status\": \"invalid\"}"
+        }
+      ],
+      "last_decoded_finish": "max_tokens",
+      "last_decoded_tools": [],
+      "handler_receipts": [],
+      "submission": null,
+      "settlement_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:d43d6a4ac250456380a86e5d28a80265",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 16477,
+          "usage_detail": {
+            "input_tokens": 40,
+            "output_tokens": 757,
+            "total_tokens": 16477,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_493b58286ab0460fba38dfba"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 15720,
+            "cache_read_input_tokens": 15680,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.9974554707379135
+          },
+          "note": "我先读取授权来源 `exhibit`（共 103 字符，可整篇读取），以获取 Alpha 2025 与 2024 年收入及稀释 EPS 数据。"
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:ffc4804a94ef4a7e989cb516575359d1",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 18477,
+          "usage_detail": {
+            "input_tokens": 1214,
+            "output_tokens": 1583,
+            "total_tokens": 18477,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_87adf0d51ba24690953d4fb7",
+            "call_96eb2590309d4ba790e203e5",
+            "call_4e1952038083419c8b3fdba7"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 16894,
+            "cache_read_input_tokens": 15680,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.9281401681070203
+          },
+          "note": "已读取 exhibit 全文。现在记录四条核心数值事实（2025/2024 收入与稀释 EPS），同时发起专门的反向证据检索（检查是否存在一次性项目、重述或口径调整等会扭曲比较的信息）。"
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:da024e0ff7d543a8b85e8296db018483",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 20200,
+          "usage_detail": {
+            "input_tokens": 3739,
+            "output_tokens": 781,
+            "total_tokens": 20200,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_0c9fcff18ff64f69a2438fc3"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 19419,
+            "cache_read_input_tokens": 15680,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.8074566146557495
+          },
+          "note": "事实已记录、反向证据检索已完成（未发现一次性/重述/口径调整线索）。现在用确定性公式计算收入增速与稀释 EPS 变化。"
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:c4da8338be3442c6992a3e80de7b8fb7",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "usage": 22318,
+          "settlement": "settled"
+        }
+      ],
+      "reported_tokens": 77472,
+      "budget_accounted_tokens": 77472,
+      "elapsed_seconds": 111.3,
+      "actual_cost": null
+    },
+    {
+      "run": "D2-A-1",
+      "result_path": "src/docs/product/research-quality-acceptance/last-call-submission/results/D2-A-1.json",
+      "sha256": "9fcbef19f2b6bc5b36bbb86910bdcaba27bcd4f032aa973612c475e3c5390169",
+      "outcome": "partial",
+      "reason": "provider_output_truncated",
+      "calls": 4,
+      "exposure": "not_applicable_control",
+      "formal_submission": "not accepted; no handler receipt or persistent submission",
+      "formal_delivery_items": [
+        "not applicable",
+        "not applicable"
+      ],
+      "model_claim_completion": "not observed in executed submit; truncated contents unknown",
+      "server_completed": "no",
+      "accepted_partial_honesty": "not applicable",
+      "pre_submission_evidence_eligible": [
+        "not applicable",
+        "not applicable"
+      ],
+      "passive_final_complete_evidence": [
+        "yes",
+        "yes"
+      ],
+      "passive_visible_items": [
+        "yes",
+        "no"
+      ],
+      "passive_evidence_omitted": [
+        "no",
+        "yes"
+      ],
+      "source_read": true,
+      "fact_refs": [
+        {
+          "id": "fact-c2094a8d0f761185beef40d6f6b8f1d52a5030d0d8f3b807fb9e8f7c8205d737",
+          "label": "Beta revenue",
+          "value": "120",
+          "period": "FY2025",
+          "source": "exhibit",
+          "start": 0,
+          "end": 33
+        },
+        {
+          "id": "fact-ddf9fcfa4be297a9800e9f8212abe172ba4de303f47bd69a327fb29263c7ee9f",
+          "label": "Beta revenue",
+          "value": "100",
+          "period": "FY2024",
+          "source": "exhibit",
+          "start": 54,
+          "end": 82
+        },
+        {
+          "id": "fact-2e372e8d217c0596f7009962846c8e3c20d4457a916fc35644d714313e8e59b1",
+          "label": "Beta diluted EPS",
+          "value": "3",
+          "period": "FY2025",
+          "source": "exhibit",
+          "start": 35,
+          "end": 52
+        }
+      ],
+      "calculation_refs": [
+        {
+          "id": "calc-345ffad4b7254746bfea44703bf62778",
+          "formula": "growth_percent",
+          "expression": "(first / second - 1) * 100",
+          "value": "20.00",
+          "unit": "percent",
+          "inputs": [
+            {
+              "fact_id": "fact-c2094a8d0f761185beef40d6f6b8f1d52a5030d0d8f3b807fb9e8f7c8205d737",
+              "value": "120",
+              "unit": "USD million",
+              "currency": null,
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-ddf9fcfa4be297a9800e9f8212abe172ba4de303f47bd69a327fb29263c7ee9f",
+              "value": "100",
+              "unit": "USD million",
+              "currency": null,
+              "period": "FY2024"
+            }
+          ]
+        },
+        {
+          "id": "calc-11e4abc8e6254a1588348d96d7e436ba",
+          "formula": "difference",
+          "expression": "first - second",
+          "value": "20.00",
+          "unit": "USD million",
+          "inputs": [
+            {
+              "fact_id": "fact-c2094a8d0f761185beef40d6f6b8f1d52a5030d0d8f3b807fb9e8f7c8205d737",
+              "value": "120",
+              "unit": "USD million",
+              "currency": null,
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-ddf9fcfa4be297a9800e9f8212abe172ba4de303f47bd69a327fb29263c7ee9f",
+              "value": "100",
+              "unit": "USD million",
+              "currency": null,
+              "period": "FY2024"
+            }
+          ]
+        }
+      ],
+      "passive_question_parts": [
+        {
+          "id": "req-56f8ee0e34983287",
+          "question": "比较 Beta 2025 与 2024 年收入增速",
+          "core": true,
+          "status": "answered",
+          "answer": "Beta revenue FY2025 120 USD million；Beta revenue FY2024 100 USD million；growth_percent 20.00 percent",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": [
+            {
+              "fact_id": "fact-c2094a8d0f761185beef40d6f6b8f1d52a5030d0d8f3b807fb9e8f7c8205d737",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-ddf9fcfa4be297a9800e9f8212abe172ba4de303f47bd69a327fb29263c7ee9f",
+              "origin": "current"
+            },
+            {
+              "calculation_id": "calc-345ffad4b7254746bfea44703bf62778",
+              "origin": "current"
+            }
+          ],
+          "requirements": [
+            {
+              "id": "req-56f8ee0e34983287",
+              "question": "比较 Beta 2025 与 2024 年收入增速",
+              "status": "satisfied",
+              "reason": "Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review.",
+              "references": [
+                {
+                  "fact_id": "fact-c2094a8d0f761185beef40d6f6b8f1d52a5030d0d8f3b807fb9e8f7c8205d737",
+                  "origin": "current"
+                },
+                {
+                  "fact_id": "fact-ddf9fcfa4be297a9800e9f8212abe172ba4de303f47bd69a327fb29263c7ee9f",
+                  "origin": "current"
+                },
+                {
+                  "calculation_id": "calc-345ffad4b7254746bfea44703bf62778",
+                  "origin": "current"
+                }
+              ],
+              "core": true
+            }
+          ]
+        },
+        {
+          "question": "并说明稀释 EPS 变化",
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": []
+        },
+        {
+          "id": "req-74db7fbcf38fcc08",
+          "question": "说明稀释 EPS 变化。",
+          "core": true,
+          "status": "partial",
+          "answer": "Beta diluted EPS FY2025 3 USD per diluted share",
+          "reason": "Recorded evidence exists; comparable periods and the requested calculation still need verification.",
+          "references": [
+            {
+              "fact_id": "fact-2e372e8d217c0596f7009962846c8e3c20d4457a916fc35644d714313e8e59b1",
+              "origin": "current"
+            }
+          ],
+          "requirements": [
+            {
+              "id": "req-74db7fbcf38fcc08",
+              "question": "说明稀释 EPS 变化。",
+              "status": "partial",
+              "reason": "Recorded evidence exists; comparable periods and the requested calculation still need verification.",
+              "references": [
+                {
+                  "fact_id": "fact-2e372e8d217c0596f7009962846c8e3c20d4457a916fc35644d714313e8e59b1",
+                  "origin": "current"
+                }
+              ],
+              "core": true
+            }
+          ]
+        }
+      ],
+      "partial_notes": "部分结果已保留：停止原因：模型输出达到单次长度上限而被截断（provider_output_truncated）；已收集资料 1 份，已读片段 1 段，已记录事实 3 条，已完成计算 2 项。",
+      "executed_tools": [
+        {
+          "turn": 1,
+          "tool": "read_sources",
+          "id": "call_8a718bc1332f403db33a9dbb",
+          "result": "{\"rationale\": \"用户询问 Beta 2025 vs 2024 收入增速及稀释 EPS 变化；需读取已授权的 exhibit 源获取收入与稀释 EPS 数据。\", \"results\": [{\"content_sha256\": \"906ddf95cb167bf624ed37596f39b7098b34b3aafd919d81fd855123d756b796\", \"end\": 136, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million. Prior diluted EPS is not disclosed in this snapshot.\", \"total_characters\": 136, \"truncated\": false}]}"
+        },
+        {
+          "turn": 2,
+          "tool": "record_facts",
+          "id": "call_fa8c25866279483d9c5d13f2",
+          "result": "{\"facts\": [{\"character_end\": 33, \"character_start\": 0, \"currency\": null, \"fact_id\": \"fact-c2094a8d0f761185beef40d6f6b8f1d52a5030d0d8f3b807fb9e8f7c8205d737\", \"label\": \"Beta revenue\", \"location\": {\"character_end\": 33, \"character_start\": 0}, \"period\": \"FY2025\", \"quotation\": \"Beta 2025 revenue 120 USD million\", \"source_id\": \"exhibit\", \"unit\": \"USD million\", \"value\": \"120\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 82, \"character_start\": 54, \"currency\": null, \"fact_id\": \"fact-ddf9fcfa4be297a9800e9f8212abe172ba4de303f47bd69a327fb29263c7ee9f\", \"label\": \"Beta revenue\", \"location\": {\"character_end\": 82, \"character_start\": 54}, \"period\": \"FY2024\", \"quotation\": \"2024 revenue 100 USD million\", \"source_id\": \"exhibit\", \"unit\": \"USD million\", \"value\": \"100\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 52, \"character_start\": 35, \"currency\": null, \"fact_id\": \"fact-2e372e8d217c0596f7009962846c8e3c20d4457a916fc35644d714313e8e59b1\", \"label\": \"Beta diluted EPS\", \"location\": {\"character_end\": 52, \"character_start\": 35}, \"period\": \"FY2025\", \"quotation\": \"diluted EPS 3 USD\", \"source_id\": \"exhibit\", \"unit\": \"USD per diluted share\", \"value\": \"3\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}], \"failures\": []}"
+        },
+        {
+          "turn": 2,
+          "tool": "search_source",
+          "id": "call_72ec297c9f4c4a599b590254",
+          "result": "{\"case_sensitive\": false, \"hits\": [{\"end\": 46, \"match_mode\": \"exact\", \"snippet\": \"Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million. Prior diluted EPS is not disclosed in this snapshot.\", \"snippet_end\": 136, \"snippet_start\": 0, \"start\": 35}, {\"end\": 101, \"match_mode\": \"exact\", \"snippet\": \"Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million. Prior diluted EPS is not disclosed in this snapshot.\", \"snippet_end\": 136, \"snippet_start\": 0, \"start\": 90}], \"match_mode\": \"exact\", \"query\": \"diluted EPS\", \"returned_hits\": 2, \"source_id\": \"exhibit\", \"status\": \"completed\", \"title\": \"Synthetic exhibit\", \"total_characters\": 136, \"total_matches\": 2, \"truncated\": false}"
+        },
+        {
+          "turn": 3,
+          "tool": "calculate_financials",
+          "id": "call_62c2d429924241e7b7821778",
+          "result": "{\"calculations\": [{\"calculation_id\": \"calc-345ffad4b7254746bfea44703bf62778\", \"currency\": null, \"decimal_places\": 2, \"expression\": \"(first / second - 1) * 100\", \"formula_id\": \"growth_percent\", \"formula_version\": \"1\", \"input_precision_status\": \"not_established\", \"input_status\": \"unverifiable\", \"input_verification\": \"not_verified_by_calculator\", \"inputs\": [{\"currency\": null, \"fact_id\": \"fact-c2094a8d0f761185beef40d6f6b8f1d52a5030d0d8f3b807fb9e8f7c8205d737\", \"period\": \"FY2025\", \"unit\": \"USD million\", \"value\": \"120\"}, {\"currency\": null, \"fact_id\": \"fact-ddf9fcfa4be297a9800e9f8212abe172ba4de303f47bd69a327fb29263c7ee9f\", \"period\": \"FY2024\", \"unit\": \"USD million\", \"value\": \"100\"}], \"period_granularity_check\": \"not_established\", \"period_order_check\": \"recognized_formats_only\", \"rounding\": \"half_up\", \"unit\": \"percent\", \"value\": \"20.00\"}, {\"calculation_id\": \"calc-11e4abc8e6254a1588348d96d7e436ba\", \"currency\": null, \"decimal_places\": 2, \"expression\": \"first - second\", \"formula_id\": \"difference\", \"formula_version\": \"1\", \"input_precision_status\": \"not_established\", \"input_status\": \"unverifiable\", \"input_verification\": \"not_verified_by_calculator\", \"inputs\": [{\"currency\": null, \"fact_id\": \"fact-c2094a8d0f761185beef40d6f6b8f1d52a5030d0d8f3b807fb9e8f7c8205d737\", \"period\": \"FY2025\", \"unit\": \"USD million\", \"value\": \"120\"}, {\"currency\": null, \"fact_id\": \"fact-ddf9fcfa4be297a9800e9f8212abe172ba4de303f47bd69a327fb29263c7ee9f\", \"period\": \"FY2024\", \"unit\": \"USD million\", \"value\": \"100\"}], \"rounding\": \"half_up\", \"unit\": \"USD million\", \"value\": \"20.00\"}]}"
+        }
+      ],
+      "last_decoded_finish": "max_tokens",
+      "last_decoded_tools": [
+        "checkpoint_question_part",
+        "create_table"
+      ],
+      "handler_receipts": [],
+      "submission": null,
+      "settlement_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:71901d7d838143c9b0f8fb775c45e87f",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 15898,
+          "usage_detail": {
+            "input_tokens": 15716,
+            "output_tokens": 182,
+            "total_tokens": 15898,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 0
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_8a718bc1332f403db33a9dbb"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 15716,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.0
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:6c90789992454282921bc0d8a107a72a",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 17582,
+          "usage_detail": {
+            "input_tokens": 638,
+            "output_tokens": 1264,
+            "total_tokens": 17582,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_fa8c25866279483d9c5d13f2",
+            "call_72ec297c9f4c4a599b590254"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 16318,
+            "cache_read_input_tokens": 15680,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.9609020713322711
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:706a5abfd578498e958c6bf8d92909ef",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 18662,
+          "usage_detail": {
+            "input_tokens": 2607,
+            "output_tokens": 375,
+            "total_tokens": 18662,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_62c2d429924241e7b7821778"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 18287,
+            "cache_read_input_tokens": 15680,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.8574397112703013
+          }
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:8b13581834434d4282d9feb2a7472d88",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "usage": 21288,
+          "settlement": "settled"
+        }
+      ],
+      "reported_tokens": 73430,
+      "budget_accounted_tokens": 73430,
+      "elapsed_seconds": 77.334,
+      "actual_cost": null
+    },
+    {
+      "run": "D2-A-2",
+      "result_path": "src/docs/product/research-quality-acceptance/last-call-submission/results/D2-A-2.json",
+      "sha256": "20fd6559583e363807424ae3b1678ca59746d98c95178a48e6be14bf5d97ed0c",
+      "outcome": "partial",
+      "reason": "provider_output_truncated",
+      "calls": 2,
+      "exposure": "not_applicable_control",
+      "formal_submission": "not accepted; no handler receipt or persistent submission",
+      "formal_delivery_items": [
+        "not applicable",
+        "not applicable"
+      ],
+      "model_claim_completion": "not observed in executed submit; truncated contents unknown",
+      "server_completed": "no",
+      "accepted_partial_honesty": "not applicable",
+      "pre_submission_evidence_eligible": [
+        "not applicable",
+        "not applicable"
+      ],
+      "passive_final_complete_evidence": [
+        "no",
+        "yes"
+      ],
+      "passive_visible_items": [
+        "no",
+        "no"
+      ],
+      "passive_evidence_omitted": [
+        "not applicable",
+        "yes"
+      ],
+      "source_read": true,
+      "fact_refs": [],
+      "calculation_refs": [],
+      "passive_question_parts": [
+        {
+          "id": "req-56f8ee0e34983287",
+          "question": "比较 Beta 2025 与 2024 年收入增速",
+          "core": true,
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": [],
+          "requirements": [
+            {
+              "id": "req-56f8ee0e34983287",
+              "question": "比较 Beta 2025 与 2024 年收入增速",
+              "status": "missing",
+              "reason": "No eligible recorded fact matches this metric.",
+              "references": [],
+              "core": true
+            }
+          ]
+        },
+        {
+          "question": "并说明稀释 EPS 变化",
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": []
+        },
+        {
+          "id": "req-74db7fbcf38fcc08",
+          "question": "说明稀释 EPS 变化。",
+          "core": true,
+          "status": "unresolved",
+          "answer": "",
+          "reason": "No eligible recorded fact matches this metric.",
+          "references": [],
+          "requirements": [
+            {
+              "id": "req-74db7fbcf38fcc08",
+              "question": "说明稀释 EPS 变化。",
+              "status": "missing",
+              "reason": "No eligible recorded fact matches this metric.",
+              "references": [],
+              "core": true
+            }
+          ]
+        }
+      ],
+      "partial_notes": "部分结果已保留：停止原因：模型输出达到单次长度上限而被截断（provider_output_truncated）；已收集资料 1 份，已读片段 1 段，已记录事实 0 条，已完成计算 0 项。",
+      "executed_tools": [
+        {
+          "turn": 1,
+          "tool": "read_sources",
+          "id": "call_c07a67d1f4b54dcf87375cde",
+          "result": "{\"rationale\": \"需要读取用户提供的 exhibit 源文件，获取 Beta 2025 与 2024 年的收入及稀释 EPS 数据以比较收入增速并解释 EPS 变化。\", \"results\": [{\"content_sha256\": \"906ddf95cb167bf624ed37596f39b7098b34b3aafd919d81fd855123d756b796\", \"end\": 136, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million. Prior diluted EPS is not disclosed in this snapshot.\", \"total_characters\": 136, \"truncated\": false}]}"
+        }
+      ],
+      "last_decoded_finish": "max_tokens",
+      "last_decoded_tools": [],
+      "handler_receipts": [],
+      "submission": null,
+      "settlement_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:19d8972584c6406e8ed0c9fc5c8b7e51",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 15896,
+          "usage_detail": {
+            "input_tokens": 36,
+            "output_tokens": 180,
+            "total_tokens": 15896,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_c07a67d1f4b54dcf87375cde"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 15716,
+            "cache_read_input_tokens": 15680,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.9977093407991855
+          }
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:1166967e40a84ae599cbafe708a51aa0",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "usage": 18364,
+          "settlement": "settled"
+        }
+      ],
+      "reported_tokens": 34260,
+      "budget_accounted_tokens": 34260,
+      "elapsed_seconds": 51.487,
+      "actual_cost": null
+    },
+    {
+      "run": "D2-B-1",
+      "result_path": "src/docs/product/research-quality-acceptance/last-call-submission/results/D2-B-1.json",
+      "sha256": "78ec946b1c75e593211c7d04894f92c2c68ac353d1c7ef4d77f5f5632c1c21fe",
+      "outcome": "partial",
+      "reason": "provider_output_truncated",
+      "calls": 2,
+      "exposure": "not_sent",
+      "formal_submission": "not accepted; no handler receipt or persistent submission",
+      "formal_delivery_items": [
+        "not applicable",
+        "not applicable"
+      ],
+      "model_claim_completion": "not observed in executed submit; truncated contents unknown",
+      "server_completed": "no",
+      "accepted_partial_honesty": "not applicable",
+      "pre_submission_evidence_eligible": [
+        "not applicable",
+        "not applicable"
+      ],
+      "passive_final_complete_evidence": [
+        "no",
+        "yes"
+      ],
+      "passive_visible_items": [
+        "no",
+        "no"
+      ],
+      "passive_evidence_omitted": [
+        "not applicable",
+        "yes"
+      ],
+      "source_read": true,
+      "fact_refs": [],
+      "calculation_refs": [],
+      "passive_question_parts": [
+        {
+          "id": "req-56f8ee0e34983287",
+          "question": "比较 Beta 2025 与 2024 年收入增速",
+          "core": true,
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": [],
+          "requirements": [
+            {
+              "id": "req-56f8ee0e34983287",
+              "question": "比较 Beta 2025 与 2024 年收入增速",
+              "status": "missing",
+              "reason": "No eligible recorded fact matches this metric.",
+              "references": [],
+              "core": true
+            }
+          ]
+        },
+        {
+          "question": "并说明稀释 EPS 变化",
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": []
+        },
+        {
+          "id": "req-74db7fbcf38fcc08",
+          "question": "说明稀释 EPS 变化。",
+          "core": true,
+          "status": "unresolved",
+          "answer": "",
+          "reason": "No eligible recorded fact matches this metric.",
+          "references": [],
+          "requirements": [
+            {
+              "id": "req-74db7fbcf38fcc08",
+              "question": "说明稀释 EPS 变化。",
+              "status": "missing",
+              "reason": "No eligible recorded fact matches this metric.",
+              "references": [],
+              "core": true
+            }
+          ]
+        }
+      ],
+      "partial_notes": "部分结果已保留：停止原因：模型输出达到单次长度上限而被截断（provider_output_truncated）；已收集资料 1 份，已读片段 1 段，已记录事实 0 条，已完成计算 0 项。",
+      "executed_tools": [
+        {
+          "turn": 1,
+          "tool": "read_sources",
+          "id": "call_341402de855d470081083981",
+          "result": "{\"rationale\": \"读取唯一的授权来源 exhibit（共136字符），获取 Beta 公司 2025 与 2024 年收入及稀释 EPS 数据，以便记录事实并计算增速与变化。\", \"results\": [{\"content_sha256\": \"906ddf95cb167bf624ed37596f39b7098b34b3aafd919d81fd855123d756b796\", \"end\": 136, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million. Prior diluted EPS is not disclosed in this snapshot.\", \"total_characters\": 136, \"truncated\": false}]}"
+        }
+      ],
+      "last_decoded_finish": "max_tokens",
+      "last_decoded_tools": [],
+      "handler_receipts": [],
+      "submission": null,
+      "settlement_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:37fb760821f640d88928a04ca0536955",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 16355,
+          "usage_detail": {
+            "input_tokens": 36,
+            "output_tokens": 639,
+            "total_tokens": 16355,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_341402de855d470081083981"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 15716,
+            "cache_read_input_tokens": 15680,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.9977093407991855
+          }
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:e15e2d412c3a453b882e444af6262f89",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "usage": 18823,
+          "settlement": "settled"
+        }
+      ],
+      "reported_tokens": 35178,
+      "budget_accounted_tokens": 35178,
+      "elapsed_seconds": 60.89,
+      "actual_cost": null
+    },
+    {
+      "run": "D2-B-2",
+      "result_path": "src/docs/product/research-quality-acceptance/last-call-submission/results/D2-B-2.json",
+      "sha256": "cb749fd111726ca1501f5177b48d92a0e0392de4d635160a0152363fd1e552e2",
+      "outcome": "partial",
+      "reason": "provider_output_truncated",
+      "calls": 2,
+      "exposure": "not_sent",
+      "formal_submission": "not accepted; no handler receipt or persistent submission",
+      "formal_delivery_items": [
+        "not applicable",
+        "not applicable"
+      ],
+      "model_claim_completion": "not observed in executed submit; truncated contents unknown",
+      "server_completed": "no",
+      "accepted_partial_honesty": "not applicable",
+      "pre_submission_evidence_eligible": [
+        "not applicable",
+        "not applicable"
+      ],
+      "passive_final_complete_evidence": [
+        "no",
+        "yes"
+      ],
+      "passive_visible_items": [
+        "no",
+        "no"
+      ],
+      "passive_evidence_omitted": [
+        "not applicable",
+        "yes"
+      ],
+      "source_read": true,
+      "fact_refs": [],
+      "calculation_refs": [],
+      "passive_question_parts": [
+        {
+          "id": "req-56f8ee0e34983287",
+          "question": "比较 Beta 2025 与 2024 年收入增速",
+          "core": true,
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": [],
+          "requirements": [
+            {
+              "id": "req-56f8ee0e34983287",
+              "question": "比较 Beta 2025 与 2024 年收入增速",
+              "status": "missing",
+              "reason": "No eligible recorded fact matches this metric.",
+              "references": [],
+              "core": true
+            }
+          ]
+        },
+        {
+          "question": "并说明稀释 EPS 变化",
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": []
+        },
+        {
+          "id": "req-74db7fbcf38fcc08",
+          "question": "说明稀释 EPS 变化。",
+          "core": true,
+          "status": "unresolved",
+          "answer": "",
+          "reason": "No eligible recorded fact matches this metric.",
+          "references": [],
+          "requirements": [
+            {
+              "id": "req-74db7fbcf38fcc08",
+              "question": "说明稀释 EPS 变化。",
+              "status": "missing",
+              "reason": "No eligible recorded fact matches this metric.",
+              "references": [],
+              "core": true
+            }
+          ]
+        }
+      ],
+      "partial_notes": "部分结果已保留：停止原因：模型输出达到单次长度上限而被截断（provider_output_truncated）；已收集资料 1 份，已读片段 1 段，已记录事实 0 条，已完成计算 0 项。",
+      "executed_tools": [
+        {
+          "turn": 1,
+          "tool": "read_sources",
+          "id": "call_128e03256c7c471086ad490a",
+          "result": "{\"rationale\": \"需要完整读取合成 exhibit（136 字符）以获取 Beta 2025 与 2024 年的收入和稀释 EPS 数据，用于增速比较。\", \"results\": [{\"content_sha256\": \"906ddf95cb167bf624ed37596f39b7098b34b3aafd919d81fd855123d756b796\", \"end\": 136, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million. Prior diluted EPS is not disclosed in this snapshot.\", \"total_characters\": 136, \"truncated\": false}]}"
+        }
+      ],
+      "last_decoded_finish": "max_tokens",
+      "last_decoded_tools": [],
+      "handler_receipts": [],
+      "submission": null,
+      "settlement_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:63b08f33dafe4f86a3b230b4c3483c6b",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 16232,
+          "usage_detail": {
+            "input_tokens": 36,
+            "output_tokens": 516,
+            "total_tokens": 16232,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_128e03256c7c471086ad490a"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 15716,
+            "cache_read_input_tokens": 15680,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.9977093407991855
+          },
+          "note": "我先读取授权来源 exhibit（总字符数仅136，可一次完整读取），以获取 Beta 2025 与 2024 年收入及稀释 EPS 数据。"
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:d2700f38d3d14dac8b09738f9b32d306",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "usage": 18695,
+          "settlement": "settled"
+        }
+      ],
+      "reported_tokens": 34927,
+      "budget_accounted_tokens": 34927,
+      "elapsed_seconds": 45.122,
+      "actual_cost": null
+    },
+    {
+      "run": "D3-A-1",
+      "result_path": "src/docs/product/research-quality-acceptance/last-call-submission/results/D3-A-1.json",
+      "sha256": "fac696783cf3df2820eeb6dff5fb9bebfdff5af98a79a902e9dcc67b1ed1d170",
+      "outcome": "partial",
+      "reason": "provider_output_truncated",
+      "calls": 2,
+      "exposure": "not_applicable_control",
+      "formal_submission": "not accepted; no handler receipt or persistent submission",
+      "formal_delivery_items": [
+        "not applicable",
+        "not applicable"
+      ],
+      "model_claim_completion": "not observed in executed submit; truncated contents unknown",
+      "server_completed": "no",
+      "accepted_partial_honesty": "not applicable",
+      "pre_submission_evidence_eligible": [
+        "not applicable",
+        "not applicable"
+      ],
+      "passive_final_complete_evidence": [
+        "no",
+        "no"
+      ],
+      "passive_visible_items": [
+        "no",
+        "no"
+      ],
+      "passive_evidence_omitted": [
+        "not applicable",
+        "not applicable"
+      ],
+      "source_read": true,
+      "fact_refs": [],
+      "calculation_refs": [],
+      "passive_question_parts": [
+        {
+          "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益",
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": []
+        },
+        {
+          "id": "req-6e97ee1f1ecb924b",
+          "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益。",
+          "core": true,
+          "status": "unresolved",
+          "answer": "",
+          "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+          "references": [],
+          "requirements": [
+            {
+              "id": "req-6e97ee1f1ecb924b",
+              "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益。",
+              "status": "missing",
+              "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+              "references": [],
+              "core": true
+            }
+          ]
+        }
+      ],
+      "partial_notes": "部分结果已保留：停止原因：模型输出达到单次长度上限而被截断（provider_output_truncated）；已收集资料 1 份，已读片段 1 段，已记录事实 0 条，已完成计算 0 项。",
+      "executed_tools": [
+        {
+          "turn": 1,
+          "tool": "read_sources",
+          "id": "call_41011a566ac145bba9bfe0f1",
+          "result": "{\"rationale\": \"读取唯一授权来源 exhibit 的全部内容（73 字符），以获取 Gamma 与基准在共同交易日的调整收盘数据，用于比较调整收盘收益。\", \"results\": [{\"content_sha256\": \"b12b7ec0c75f488a7a4bae6b4c216a9f08f8df1be26f71e39b465609044fa7fc\", \"end\": 73, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.\", \"total_characters\": 73, \"truncated\": false}]}"
+        }
+      ],
+      "last_decoded_finish": "max_tokens",
+      "last_decoded_tools": [
+        "record_facts",
+        "search_source"
+      ],
+      "handler_receipts": [],
+      "submission": null,
+      "settlement_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:64c9beb286374aca8df32bb4d1f16c74",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 15196,
+          "usage_detail": {
+            "input_tokens": 14980,
+            "output_tokens": 216,
+            "total_tokens": 15196,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 0
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_41011a566ac145bba9bfe0f1"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 14980,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.0
+          }
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:c55e7efc88ab45bea393c611e1c6c1c5",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "usage": 17635,
+          "settlement": "settled"
+        }
+      ],
+      "reported_tokens": 32831,
+      "budget_accounted_tokens": 32831,
+      "elapsed_seconds": 54.305,
+      "actual_cost": null
+    },
+    {
+      "run": "D3-A-2",
+      "result_path": "src/docs/product/research-quality-acceptance/last-call-submission/results/D3-A-2.json",
+      "sha256": "8037a6847f2c485483bf2425f9d8d612a9a407b7072b4509c61e66e85cd422ea",
+      "outcome": "partial",
+      "reason": "provider_output_truncated",
+      "calls": 2,
+      "exposure": "not_applicable_control",
+      "formal_submission": "not accepted; no handler receipt or persistent submission",
+      "formal_delivery_items": [
+        "not applicable",
+        "not applicable"
+      ],
+      "model_claim_completion": "not observed in executed submit; truncated contents unknown",
+      "server_completed": "no",
+      "accepted_partial_honesty": "not applicable",
+      "pre_submission_evidence_eligible": [
+        "not applicable",
+        "not applicable"
+      ],
+      "passive_final_complete_evidence": [
+        "no",
+        "no"
+      ],
+      "passive_visible_items": [
+        "no",
+        "no"
+      ],
+      "passive_evidence_omitted": [
+        "not applicable",
+        "not applicable"
+      ],
+      "source_read": true,
+      "fact_refs": [],
+      "calculation_refs": [],
+      "passive_question_parts": [
+        {
+          "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益",
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": []
+        },
+        {
+          "id": "req-6e97ee1f1ecb924b",
+          "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益。",
+          "core": true,
+          "status": "unresolved",
+          "answer": "",
+          "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+          "references": [],
+          "requirements": [
+            {
+              "id": "req-6e97ee1f1ecb924b",
+              "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益。",
+              "status": "missing",
+              "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+              "references": [],
+              "core": true
+            }
+          ]
+        }
+      ],
+      "partial_notes": "部分结果已保留：停止原因：模型输出达到单次长度上限而被截断（provider_output_truncated）；已收集资料 1 份，已读片段 1 段，已记录事实 0 条，已完成计算 0 项。",
+      "executed_tools": [
+        {
+          "turn": 1,
+          "tool": "read_sources",
+          "id": "call_7c0fe05bbd1448dcb063a6f4",
+          "result": "{\"rationale\": \"The question asks to compare Gamma vs benchmark adjusted closing returns on two common trading days; the sole authorized source is a 73-character synthetic exhibit that likely holds those prices. Read it fully before citing.\", \"results\": [{\"content_sha256\": \"b12b7ec0c75f488a7a4bae6b4c216a9f08f8df1be26f71e39b465609044fa7fc\", \"end\": 73, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.\", \"total_characters\": 73, \"truncated\": false}]}"
+        }
+      ],
+      "last_decoded_finish": "max_tokens",
+      "last_decoded_tools": [],
+      "handler_receipts": [],
+      "submission": null,
+      "settlement_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:968fdc7aa4d34e538e086c418378a693",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 15508,
+          "usage_detail": {
+            "input_tokens": 4,
+            "output_tokens": 528,
+            "total_tokens": 15508,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_7c0fe05bbd1448dcb063a6f4"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 14980,
+            "cache_read_input_tokens": 14976,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.9997329773030708
+          },
+          "note": "我先读取授权的合成展示文件（synthetic exhibit），以获取 Gamma 和基准在两个共同交易日的调整后收盘价。"
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:c679131b058b452a85d0656025f265cc",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "usage": 17954,
+          "settlement": "settled"
+        }
+      ],
+      "reported_tokens": 33462,
+      "budget_accounted_tokens": 33462,
+      "elapsed_seconds": 61.514,
+      "actual_cost": null
+    },
+    {
+      "run": "D3-B-1",
+      "result_path": "src/docs/product/research-quality-acceptance/last-call-submission/results/D3-B-1.json",
+      "sha256": "180c48de2166a81875f2067d458d0d1588a3633b4ee699a6e5b526b39a4e8ac2",
+      "outcome": "partial",
+      "reason": "provider_output_truncated",
+      "calls": 2,
+      "exposure": "not_sent",
+      "formal_submission": "not accepted; no handler receipt or persistent submission",
+      "formal_delivery_items": [
+        "not applicable",
+        "not applicable"
+      ],
+      "model_claim_completion": "not observed in executed submit; truncated contents unknown",
+      "server_completed": "no",
+      "accepted_partial_honesty": "not applicable",
+      "pre_submission_evidence_eligible": [
+        "not applicable",
+        "not applicable"
+      ],
+      "passive_final_complete_evidence": [
+        "no",
+        "no"
+      ],
+      "passive_visible_items": [
+        "no",
+        "no"
+      ],
+      "passive_evidence_omitted": [
+        "not applicable",
+        "not applicable"
+      ],
+      "source_read": true,
+      "fact_refs": [],
+      "calculation_refs": [],
+      "passive_question_parts": [
+        {
+          "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益",
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": []
+        },
+        {
+          "id": "req-6e97ee1f1ecb924b",
+          "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益。",
+          "core": true,
+          "status": "unresolved",
+          "answer": "",
+          "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+          "references": [],
+          "requirements": [
+            {
+              "id": "req-6e97ee1f1ecb924b",
+              "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益。",
+              "status": "missing",
+              "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+              "references": [],
+              "core": true
+            }
+          ]
+        }
+      ],
+      "partial_notes": "部分结果已保留：停止原因：模型输出达到单次长度上限而被截断（provider_output_truncated）；已收集资料 1 份，已读片段 1 段，已记录事实 0 条，已完成计算 0 项。",
+      "executed_tools": [
+        {
+          "turn": 1,
+          "tool": "read_sources",
+          "id": "call_c244db54bc194490980016fd",
+          "result": "{\"rationale\": \"The question asks to compare Gamma vs benchmark adjusted closing returns on two common trading days; market data is unavailable in this run, so the eligible synthetic exhibit is the sole evidence source and must be read before citing any prices.\", \"results\": [{\"content_sha256\": \"b12b7ec0c75f488a7a4bae6b4c216a9f08f8df1be26f71e39b465609044fa7fc\", \"end\": 73, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.\", \"total_characters\": 73, \"truncated\": false}]}"
+        }
+      ],
+      "last_decoded_finish": "max_tokens",
+      "last_decoded_tools": [],
+      "handler_receipts": [],
+      "submission": null,
+      "settlement_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:3563191a69454806847d31cf35346521",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 15956,
+          "usage_detail": {
+            "input_tokens": 4,
+            "output_tokens": 976,
+            "total_tokens": 15956,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_c244db54bc194490980016fd"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 14980,
+            "cache_read_input_tokens": 14976,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.9997329773030708
+          }
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:f1f2774a022e4f2ca4c1d3ad3f278a99",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "usage": 18406,
+          "settlement": "settled"
+        }
+      ],
+      "reported_tokens": 34362,
+      "budget_accounted_tokens": 34362,
+      "elapsed_seconds": 61.923,
+      "actual_cost": null
+    },
+    {
+      "run": "D3-B-2",
+      "result_path": "src/docs/product/research-quality-acceptance/last-call-submission/results/D3-B-2.json",
+      "sha256": "c51791807de239a07c985e10667866f54aea1c1826f293fe053f4bfec0b40114",
+      "outcome": "partial",
+      "reason": "provider_output_truncated",
+      "calls": 2,
+      "exposure": "not_sent",
+      "formal_submission": "not accepted; no handler receipt or persistent submission",
+      "formal_delivery_items": [
+        "not applicable",
+        "not applicable"
+      ],
+      "model_claim_completion": "not observed in executed submit; truncated contents unknown",
+      "server_completed": "no",
+      "accepted_partial_honesty": "not applicable",
+      "pre_submission_evidence_eligible": [
+        "not applicable",
+        "not applicable"
+      ],
+      "passive_final_complete_evidence": [
+        "no",
+        "no"
+      ],
+      "passive_visible_items": [
+        "no",
+        "no"
+      ],
+      "passive_evidence_omitted": [
+        "not applicable",
+        "not applicable"
+      ],
+      "source_read": true,
+      "fact_refs": [],
+      "calculation_refs": [],
+      "passive_question_parts": [
+        {
+          "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益",
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": []
+        },
+        {
+          "id": "req-6e97ee1f1ecb924b",
+          "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益。",
+          "core": true,
+          "status": "unresolved",
+          "answer": "",
+          "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+          "references": [],
+          "requirements": [
+            {
+              "id": "req-6e97ee1f1ecb924b",
+              "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益。",
+              "status": "missing",
+              "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+              "references": [],
+              "core": true
+            }
+          ]
+        }
+      ],
+      "partial_notes": "部分结果已保留：停止原因：模型输出达到单次长度上限而被截断（provider_output_truncated）；已收集资料 1 份，已读片段 1 段，已记录事实 0 条，已完成计算 0 项。",
+      "executed_tools": [
+        {
+          "turn": 1,
+          "tool": "read_sources",
+          "id": "call_5483b8d8a5364ee7b82a7e46",
+          "result": "{\"rationale\": \"Need the full content of the 73-character synthetic exhibit to find Gamma and benchmark adjusted closes on the two common trading days.\", \"results\": [{\"content_sha256\": \"b12b7ec0c75f488a7a4bae6b4c216a9f08f8df1be26f71e39b465609044fa7fc\", \"end\": 73, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.\", \"total_characters\": 73, \"truncated\": false}]}"
+        }
+      ],
+      "last_decoded_finish": "max_tokens",
+      "last_decoded_tools": [
+        "record_facts"
+      ],
+      "handler_receipts": [],
+      "submission": null,
+      "settlement_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:3de779bfc09e4396bda3c23426a1dfe0",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 15532,
+          "usage_detail": {
+            "input_tokens": 4,
+            "output_tokens": 552,
+            "total_tokens": 15532,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_5483b8d8a5364ee7b82a7e46"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 14980,
+            "cache_read_input_tokens": 14976,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.9997329773030708
+          },
+          "note": "I'll start by reading the authorized exhibit to see what data it contains for Gamma and the benchmark."
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:18d9b7bae96240379af0552cc4a93ecf",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "usage": 17963,
+          "settlement": "settled"
+        }
+      ],
+      "reported_tokens": 33495,
+      "budget_accounted_tokens": 33495,
+      "elapsed_seconds": 88.018,
+      "actual_cost": null
+    },
+    {
+      "run": "D4-A-1",
+      "result_path": "src/docs/product/research-quality-acceptance/last-call-submission/results/D4-A-1.json",
+      "sha256": "c30a57fef815a540cfe0ad6ab4a88b3d67158403321a51925e71ffce3e2209aa",
+      "outcome": "partial",
+      "reason": "provider_output_truncated",
+      "calls": 2,
+      "exposure": "not_applicable_control",
+      "formal_submission": "not accepted; no handler receipt or persistent submission",
+      "formal_delivery_items": [
+        "not applicable",
+        "not applicable"
+      ],
+      "model_claim_completion": "not observed in executed submit; truncated contents unknown",
+      "server_completed": "no",
+      "accepted_partial_honesty": "not applicable",
+      "pre_submission_evidence_eligible": [
+        "not applicable",
+        "not applicable"
+      ],
+      "passive_final_complete_evidence": [
+        "no",
+        "yes"
+      ],
+      "passive_visible_items": [
+        "no",
+        "no"
+      ],
+      "passive_evidence_omitted": [
+        "not applicable",
+        "yes"
+      ],
+      "source_read": true,
+      "fact_refs": [],
+      "calculation_refs": [],
+      "passive_question_parts": [
+        {
+          "question": "比较 Delta 与基准在两个共同交易日的调整收盘收益",
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": []
+        },
+        {
+          "id": "req-636503a7e7667ec1",
+          "question": "比较 Delta 与基准在两个共同交易日的调整收盘收益。",
+          "core": true,
+          "status": "unresolved",
+          "answer": "",
+          "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+          "references": [],
+          "requirements": [
+            {
+              "id": "req-636503a7e7667ec1",
+              "question": "比较 Delta 与基准在两个共同交易日的调整收盘收益。",
+              "status": "missing",
+              "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+              "references": [],
+              "core": true
+            }
+          ]
+        }
+      ],
+      "partial_notes": "部分结果已保留：停止原因：模型输出达到单次长度上限而被截断（provider_output_truncated）；已收集资料 1 份，已读片段 1 段，已记录事实 0 条，已完成计算 0 项。",
+      "executed_tools": [
+        {
+          "turn": 1,
+          "tool": "read_sources",
+          "id": "call_e666ff038d504ba0b995fcfc",
+          "result": "{\"rationale\": \"Read the full synthetic exhibit (88 characters) to find the adjusted close prices for Delta and the benchmark on the two common trading days.\", \"results\": [{\"content_sha256\": \"315692a39d0542cf4887d5f9d0a20cddbc49c919df9627cb04ac99efc70e8793\", \"end\": 88, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Two calls both return Delta adjusted close day 1 10, day 2 12. No benchmark observation.\", \"total_characters\": 88, \"truncated\": false}]}"
+        }
+      ],
+      "last_decoded_finish": "max_tokens",
+      "last_decoded_tools": [],
+      "handler_receipts": [],
+      "submission": null,
+      "settlement_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:b449a3aff81c4e2e8d347737d76493ed",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "usage": 15230,
+          "usage_detail": {
+            "input_tokens": 14977,
+            "output_tokens": 253,
+            "total_tokens": 15230,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 0
+          },
+          "settlement": "settled",
+          "protocol_status": "normalized",
+          "evidence_status": "not_assessed",
+          "task_status": "in_progress",
+          "tool_call_ids": [
+            "call_e666ff038d504ba0b995fcfc"
+          ],
+          "cache_telemetry": {
+            "total_input_tokens": 14977,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": null,
+            "cache_hit_ratio": 0.0
+          }
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:8230c9bc789e498dabd74c494430d363",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "usage": 17654,
+          "settlement": "settled"
+        }
+      ],
+      "reported_tokens": 32884,
+      "budget_accounted_tokens": 32884,
+      "elapsed_seconds": 50.695,
+      "actual_cost": null
+    },
+    {
+      "run": "D4-B-1",
+      "result_path": "src/docs/product/research-quality-acceptance/last-call-submission/results/D4-B-1.json",
+      "sha256": "af2568ba4117331a6bdf90717739518a097eb6ea4b282afbf6caa1113db2cf32",
+      "outcome": "partial",
+      "reason": "provider_request_rejected",
+      "calls": 1,
+      "exposure": "not_sent",
+      "formal_submission": "not accepted; no handler receipt or persistent submission",
+      "formal_delivery_items": [
+        "not applicable",
+        "not applicable"
+      ],
+      "model_claim_completion": "not observed in executed submit; truncated contents unknown",
+      "server_completed": "no",
+      "accepted_partial_honesty": "not applicable",
+      "pre_submission_evidence_eligible": [
+        "not applicable",
+        "not applicable"
+      ],
+      "passive_final_complete_evidence": [
+        "no",
+        "no"
+      ],
+      "passive_visible_items": [
+        "no",
+        "no"
+      ],
+      "passive_evidence_omitted": [
+        "not applicable",
+        "not applicable"
+      ],
+      "source_read": false,
+      "fact_refs": [],
+      "calculation_refs": [],
+      "passive_question_parts": [
+        {
+          "question": "比较 Delta 与基准在两个共同交易日的调整收盘收益",
+          "status": "unresolved",
+          "answer": "",
+          "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+          "references": []
+        },
+        {
+          "id": "req-636503a7e7667ec1",
+          "question": "比较 Delta 与基准在两个共同交易日的调整收盘收益。",
+          "core": true,
+          "status": "unresolved",
+          "answer": "",
+          "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+          "references": [],
+          "requirements": [
+            {
+              "id": "req-636503a7e7667ec1",
+              "question": "比较 Delta 与基准在两个共同交易日的调整收盘收益。",
+              "status": "missing",
+              "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+              "references": [],
+              "core": true
+            }
+          ]
+        }
+      ],
+      "partial_notes": "部分结果已保留：停止原因：模型服务拒绝了本次请求（provider_request_rejected）；已收集资料 1 份，已读片段 0 段，已记录事实 0 条，已完成计算 0 项。",
+      "executed_tools": [],
+      "last_decoded_finish": null,
+      "last_decoded_tools": [],
+      "handler_receipts": [],
+      "submission": null,
+      "settlement_events": [
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:7da5be0b1fec4d608e8ecba46d1480c5",
+          "code": "provider_request_rejected",
+          "external_state": "returned",
+          "usage": null,
+          "settlement": "unknown"
+        }
+      ],
+      "reported_tokens": 0,
+      "budget_accounted_tokens": 56423,
+      "elapsed_seconds": 0.92,
+      "actual_cost": null
+    }
+  ]
+}

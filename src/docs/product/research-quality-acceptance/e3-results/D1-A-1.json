@@ -1,0 +1,25 @@
+{
+  "case": "D1",
+  "arm": "A",
+  "request_sha256": "1f0e221dd19f6b160122ad74f2d536032ae65e88aab56a896f4a59b0a0ab48cd",
+  "tool_calls": [
+    {
+      "id": "call_5b3c665e569b4d688714f3b2",
+      "name": "submit_answer",
+      "arguments": {
+        "report": "Alpha 2025 年收入为 1.20 亿美元，2024 年为 1.00 亿美元，收入同比增长 20%（(120-100)/100 = 20%）。稀释每股收益（Diluted EPS）从 2024 年的 2 美元升至 2025 年的 3 美元，增加 1 美元/股，同比增长 50%（(3-2)/2 = 50%）。EPS 增速（50%）远高于收入增速（20%），表明盈利能力提升快于收入增长，可能得益于利润率改善、费用控制或其他非经营性收益因素。"
+      },
+      "raw_arguments": null
+    }
+  ],
+  "usage": {
+    "input_tokens": 237,
+    "output_tokens": 235,
+    "total_tokens": 472,
+    "cache_creation_input_tokens": null,
+    "cache_read_input_tokens": 0
+  },
+  "finish_reason": "tool_use",
+  "elapsed_seconds": 9.612,
+  "actual_cost": null
+}

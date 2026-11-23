@@ -1,0 +1,152 @@
+{
+  "case": "D1",
+  "arm": "A",
+  "status": "partial",
+  "reason": "provider_output_truncated",
+  "report": "",
+  "claims": [],
+  "facts": [],
+  "question_parts": [
+    {
+      "id": "req-93921fd1140995d0",
+      "question": "比较 Alpha 2025 与 2024 年收入增速",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-93921fd1140995d0",
+          "question": "比较 Alpha 2025 与 2024 年收入增速",
+          "status": "missing",
+          "reason": "No eligible recorded fact matches this metric.",
+          "references": [],
+          "core": true
+        }
+      ]
+    },
+    {
+      "question": "并说明稀释 EPS 变化",
+      "status": "unresolved",
+      "answer": "",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": []
+    },
+    {
+      "id": "req-79e06e2aa18a6f59",
+      "question": "说明稀释 EPS 变化。",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "No eligible recorded fact matches this metric.",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-79e06e2aa18a6f59",
+          "question": "说明稀释 EPS 变化。",
+          "status": "missing",
+          "reason": "No eligible recorded fact matches this metric.",
+          "references": [],
+          "core": true
+        }
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "code": "provider_error",
+      "message": "Provider output was truncated."
+    }
+  ],
+  "answered_parts": [],
+  "all_core_answered": false,
+  "calculations": [],
+  "events": [
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:abe17ce182e74706a76da25209a7724c",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 15899,
+      "usage_detail": {
+        "input_tokens": 40,
+        "output_tokens": 179,
+        "total_tokens": 15899,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 15680
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_b3d1ad7809f44167949ccaf9"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 15720,
+        "cache_read_input_tokens": 15680,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.9974554707379135
+      }
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_b3d1ad7809f44167949ccaf9",
+      "name": "read_sources",
+      "status": "completed",
+      "rationale": "Read the full exhibit (103 characters) to obtain Alpha's 2025 and 2024 revenue and diluted EPS figures for the growth and EPS comparison.",
+      "summary": {
+        "kind": "read_sources",
+        "read_count": 1,
+        "items": [
+          {
+            "source_id": "exhibit",
+            "title": "Synthetic exhibit",
+            "start": 0,
+            "end": 103,
+            "total_characters": 103
+          }
+        ]
+      }
+    },
+    {
+      "kind": "model_failure",
+      "call_id": "research:research-agent:cef7b05c5aef42e6a69016c3c60713f6",
+      "code": "provider_output_truncated",
+      "external_state": "returned",
+      "usage": 18330,
+      "settlement": "settled"
+    }
+  ],
+  "tool_io": [
+    {
+      "id": "call_b3d1ad7809f44167949ccaf9",
+      "tool": "read_sources",
+      "input": {
+        "rationale": "Read the full exhibit (103 characters) to obtain Alpha's 2025 and 2024 revenue and diluted EPS figures for the growth and EPS comparison.",
+        "reads": [
+          {
+            "source_id": "exhibit",
+            "start": 0
+          }
+        ]
+      },
+      "result": "{\"rationale\": \"Read the full exhibit (103 characters) to obtain Alpha's 2025 and 2024 revenue and diluted EPS figures for the growth and EPS comparison.\", \"results\": [{\"content_sha256\": \"86999c7c03aa39f42799d31f99103f9397ca94dae821f7f8574a0acec24e4cda\", \"end\": 103, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Alpha 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million, diluted EPS 2 USD.\", \"total_characters\": 103, \"truncated\": false}]}"
+    }
+  ],
+  "calls": 2,
+  "budget_accounted_tokens": 34229,
+  "prompts": [
+    {
+      "turn_sha256": "28df631bdd9cdc09892e0d8980e6ef40b6b9619e3e121881c0a6beaabdaf447b",
+      "tail_note": null
+    },
+    {
+      "turn_sha256": "3da5c0b6bda374a8726b87804a540a24a7aec75a6295c129fc4c48a9d3e4c304",
+      "tail_note": "[Coverage]\n{\"coverage\":{\"categories\":[{\"category\":\"uploads\",\"obtained\":1,\"status\":\"obtained\"}],\"not_attempted\":[\"market_prices\",\"financial_statements\",\"filings\",\"news_web\",\"macro\",\"other\"],\"not_established\":[\"No market prices were requested in this run; nothing is established for this category.\",\"No financial statements were requested in this run; nothing is established for this category.\",\"No filings and official documents were requested in this run; nothing is established for this category.\",\"No news and web were requested in this run; nothing is established for this category.\"],\"note\":\"Generated deterministically from run events; state these limits instead of implying completeness.\",\"run_status\":\"incomplete\"}}\n[Working Memory]\nState: facts=0 calcs=0 charts=0 sources=1\nMethodChecks(company_comparison,earnings_review): entities:n/a, aligned_statements:missing, derived_ratios:missing, entity:n/a, statements:missing, filing_text:missing, prior_compare:missing\nCounterEvidence: needed(0/1)"
+    }
+  ],
+  "elapsed_seconds": 43.636,
+  "actual_cost": null
+}

@@ -1,0 +1,151 @@
+{
+  "case": "D2",
+  "arm": "A",
+  "status": "partial",
+  "reason": "provider_output_truncated",
+  "report": "",
+  "claims": [],
+  "facts": [],
+  "question_parts": [
+    {
+      "id": "req-56f8ee0e34983287",
+      "question": "比较 Beta 2025 与 2024 年收入增速",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-56f8ee0e34983287",
+          "question": "比较 Beta 2025 与 2024 年收入增速",
+          "status": "missing",
+          "reason": "No eligible recorded fact matches this metric.",
+          "references": [],
+          "core": true
+        }
+      ]
+    },
+    {
+      "question": "并说明稀释 EPS 变化",
+      "status": "unresolved",
+      "answer": "",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": []
+    },
+    {
+      "id": "req-74db7fbcf38fcc08",
+      "question": "说明稀释 EPS 变化。",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "No eligible recorded fact matches this metric.",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-74db7fbcf38fcc08",
+          "question": "说明稀释 EPS 变化。",
+          "status": "missing",
+          "reason": "No eligible recorded fact matches this metric.",
+          "references": [],
+          "core": true
+        }
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "code": "provider_error",
+      "message": "Provider output was truncated."
+    }
+  ],
+  "answered_parts": [],
+  "all_core_answered": false,
+  "calculations": [],
+  "events": [
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:9463d85f685e41e9894fe2268c263dbe",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 16152,
+      "usage_detail": {
+        "input_tokens": 36,
+        "output_tokens": 436,
+        "total_tokens": 16152,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 15680
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_3edafea257f34f37a09f2903"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 15716,
+        "cache_read_input_tokens": 15680,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.9977093407991855
+      }
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_3edafea257f34f37a09f2903",
+      "name": "read_sources",
+      "status": "completed",
+      "rationale": "Read the only authorized source (synthetic exhibit, 136 chars) to obtain Beta's 2025 and 2024 revenue and diluted EPS figures needed for the growth and EPS comparison.",
+      "summary": {
+        "kind": "read_sources",
+        "read_count": 1,
+        "items": [
+          {
+            "source_id": "exhibit",
+            "title": "Synthetic exhibit",
+            "start": 0,
+            "end": 136,
+            "total_characters": 136
+          }
+        ]
+      }
+    },
+    {
+      "kind": "model_failure",
+      "call_id": "research:research-agent:ab58868238a34d03bc3b2762a2f7dd0b",
+      "code": "provider_output_truncated",
+      "external_state": "returned",
+      "usage": 18590,
+      "settlement": "settled"
+    }
+  ],
+  "tool_io": [
+    {
+      "id": "call_3edafea257f34f37a09f2903",
+      "tool": "read_sources",
+      "input": {
+        "rationale": "Read the only authorized source (synthetic exhibit, 136 chars) to obtain Beta's 2025 and 2024 revenue and diluted EPS figures needed for the growth and EPS comparison.",
+        "reads": [
+          {
+            "source_id": "exhibit"
+          }
+        ]
+      },
+      "result": "{\"rationale\": \"Read the only authorized source (synthetic exhibit, 136 chars) to obtain Beta's 2025 and 2024 revenue and diluted EPS figures needed for the growth and EPS comparison.\", \"results\": [{\"content_sha256\": \"906ddf95cb167bf624ed37596f39b7098b34b3aafd919d81fd855123d756b796\", \"end\": 136, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million. Prior diluted EPS is not disclosed in this snapshot.\", \"total_characters\": 136, \"truncated\": false}]}"
+    }
+  ],
+  "calls": 2,
+  "budget_accounted_tokens": 34742,
+  "prompts": [
+    {
+      "turn_sha256": "bd12ca3f7ed588cb022591edcffe5139ddf177bc9d17d5732594dbe995ac14b4",
+      "tail_note": null
+    },
+    {
+      "turn_sha256": "768504641d85586d8baaed4d5513d27af6b5c7e3643120e59a426228c5c4e167",
+      "tail_note": "[Coverage]\n{\"coverage\":{\"categories\":[{\"category\":\"uploads\",\"obtained\":1,\"status\":\"obtained\"}],\"not_attempted\":[\"market_prices\",\"financial_statements\",\"filings\",\"news_web\",\"macro\",\"other\"],\"not_established\":[\"No market prices were requested in this run; nothing is established for this category.\",\"No financial statements were requested in this run; nothing is established for this category.\",\"No filings and official documents were requested in this run; nothing is established for this category.\",\"No news and web were requested in this run; nothing is established for this category.\"],\"note\":\"Generated deterministically from run events; state these limits instead of implying completeness.\",\"run_status\":\"incomplete\"}}\n[Working Memory]\nState: facts=0 calcs=0 charts=0 sources=1\nMethodChecks(company_comparison,earnings_review): entities:n/a, aligned_statements:missing, derived_ratios:missing, entity:n/a, statements:missing, filing_text:missing, prior_compare:missing\nCounterEvidence: needed(0/1)"
+    }
+  ],
+  "elapsed_seconds": 51.04,
+  "actual_cost": null
+}

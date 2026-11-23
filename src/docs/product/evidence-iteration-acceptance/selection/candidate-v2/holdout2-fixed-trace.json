@@ -1,0 +1,970 @@
+[
+  {
+    "id": "N1",
+    "requirements": [
+      {
+        "id": "req-5763dc95cf9d8678",
+        "question": "What was Bexler annual revenue change",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:0",
+        "metric": "revenue"
+      },
+      {
+        "id": "req-d6534d6c5669be4e",
+        "question": "how much came from higher unit prices",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:how much came from higher unit prices"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "What was Bexler annual revenue change and how much came from higher unit prices?",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "n1c",
+          "read_sources": {
+            "source_id": "n1c",
+            "start": 0,
+            "end": 67
+          }
+        },
+        {
+          "source_id": "n1a",
+          "read_sources": {
+            "source_id": "n1a",
+            "start": 0,
+            "end": 68
+          }
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "n1c",
+          "start": 0,
+          "end": 67,
+          "requirement_ids": [
+            "req-5763dc95cf9d8678",
+            "req-d6534d6c5669be4e"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        },
+        {
+          "source_id": "n1b",
+          "start": 0,
+          "end": 95,
+          "requirement_ids": [
+            "req-5763dc95cf9d8678",
+            "req-d6534d6c5669be4e"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "n1a",
+          "start": 0,
+          "end": 68,
+          "requirement_ids": [
+            "req-5763dc95cf9d8678"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 2
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-5763dc95cf9d8678",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 What was Bexler annual revenue change",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-d6534d6c5669be4e",
+          "query": "how much came from higher unit prices",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    },
+    "fixed_pool_diagnostics": {
+      "pool_size": 3,
+      "shortlist_size": 3,
+      "pruned_count": 0,
+      "uses": [
+        [
+          "fact"
+        ],
+        [
+          "attribution",
+          "fact"
+        ],
+        [
+          "fact",
+          "periods"
+        ]
+      ],
+      "needed_uses": [
+        [
+          "periods"
+        ],
+        [
+          "fact"
+        ]
+      ],
+      "bytes": 135,
+      "match_status": "retrieval_only_unverified"
+    }
+  },
+  {
+    "id": "N2",
+    "requirements": [
+      {
+        "id": "req-504d3b504c0f6871",
+        "question": "雁禾合同可否取消，预测发运的条件是什么？",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:雁禾合同可否取消，预测发运的条件是什么？"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "雁禾合同可否取消，预测发运的条件是什么？",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "n2c",
+          "read_sources": {
+            "source_id": "n2c",
+            "start": 0,
+            "end": 16
+          }
+        },
+        {
+          "source_id": "n2b",
+          "read_sources": {
+            "source_id": "n2b",
+            "start": 0,
+            "end": 26
+          }
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "n2c",
+          "start": 0,
+          "end": 16,
+          "requirement_ids": [
+            "req-504d3b504c0f6871"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        },
+        {
+          "source_id": "n2b",
+          "start": 0,
+          "end": 26,
+          "requirement_ids": [
+            "req-504d3b504c0f6871"
+          ],
+          "decision": "selected",
+          "reason": "query_retrieval"
+        },
+        {
+          "source_id": "n2a",
+          "start": 0,
+          "end": 42,
+          "requirement_ids": [
+            "req-504d3b504c0f6871"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-504d3b504c0f6871",
+          "query": "雁禾合同可否取消，预测发运的条件是什么？",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    },
+    "fixed_pool_diagnostics": {
+      "pool_size": 3,
+      "shortlist_size": 3,
+      "pruned_count": 0,
+      "uses": [
+        [
+          "condition",
+          "fact"
+        ],
+        [
+          "counter",
+          "fact"
+        ],
+        [
+          "condition",
+          "fact"
+        ]
+      ],
+      "needed_uses": [
+        [
+          "condition",
+          "performance"
+        ]
+      ],
+      "bytes": 126,
+      "match_status": "retrieval_only_unverified"
+    }
+  },
+  {
+    "id": "N3",
+    "requirements": [
+      {
+        "id": "req-18bf6a7e09effba6",
+        "question": "Compare Fenn shares against its benchmark over common close dates.",
+        "status": "missing",
+        "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+        "references": [],
+        "core": true,
+        "kind": "market:benchmark"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "Compare Fenn shares against its benchmark over common close dates.",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "n3b",
+          "read_sources": {
+            "source_id": "n3b",
+            "start": 0,
+            "end": 55
+          }
+        },
+        {
+          "source_id": "n3a",
+          "read_sources": {
+            "source_id": "n3a",
+            "start": 0,
+            "end": 64
+          }
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "n3c",
+          "start": 0,
+          "end": 52,
+          "requirement_ids": [
+            "req-18bf6a7e09effba6"
+          ],
+          "decision": "selected",
+          "reason": "query_retrieval"
+        },
+        {
+          "source_id": "n3b",
+          "start": 0,
+          "end": 55,
+          "requirement_ids": [
+            "req-18bf6a7e09effba6"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        },
+        {
+          "source_id": "n3a",
+          "start": 0,
+          "end": 64,
+          "requirement_ids": [
+            "req-18bf6a7e09effba6"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-18bf6a7e09effba6",
+          "query": "price trading date benchmark 价格 交易日 基准 Compare Fenn shares against its benchmark over common close dates.",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    },
+    "fixed_pool_diagnostics": {
+      "pool_size": 3,
+      "shortlist_size": 3,
+      "pruned_count": 0,
+      "uses": [
+        [
+          "fact"
+        ],
+        [
+          "attribution",
+          "fact",
+          "market_second"
+        ],
+        [
+          "attribution",
+          "fact",
+          "market_first"
+        ]
+      ],
+      "needed_uses": [
+        [
+          "market_first",
+          "market_second"
+        ]
+      ],
+      "bytes": 119,
+      "match_status": "retrieval_only_unverified"
+    }
+  },
+  {
+    "id": "N4",
+    "requirements": [
+      {
+        "id": "req-3c48b8e4f881c2a7",
+        "question": "榆陌集团收入变化有多少",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:0",
+        "metric": "revenue"
+      },
+      {
+        "id": "req-a7b04f065e8ca2ae",
+        "question": "处置贡献是多少",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:处置贡献是多少"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "榆陌集团收入变化有多少，处置贡献是多少？",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "n4a",
+          "read_sources": {
+            "source_id": "n4a",
+            "start": 0,
+            "end": 33
+          }
+        },
+        {
+          "source_id": "n4b",
+          "read_sources": {
+            "source_id": "n4b",
+            "start": 0,
+            "end": 34
+          }
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "n4c",
+          "start": 0,
+          "end": 18,
+          "requirement_ids": [
+            "req-3c48b8e4f881c2a7",
+            "req-a7b04f065e8ca2ae"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "n4a",
+          "start": 0,
+          "end": 33,
+          "requirement_ids": [
+            "req-3c48b8e4f881c2a7"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        },
+        {
+          "source_id": "n4b",
+          "start": 0,
+          "end": 34,
+          "requirement_ids": [
+            "req-3c48b8e4f881c2a7",
+            "req-a7b04f065e8ca2ae"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 2
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-3c48b8e4f881c2a7",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 榆陌集团收入变化有多少",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-a7b04f065e8ca2ae",
+          "query": "处置贡献是多少",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    },
+    "fixed_pool_diagnostics": {
+      "pool_size": 3,
+      "shortlist_size": 3,
+      "pruned_count": 0,
+      "uses": [
+        [
+          "fact"
+        ],
+        [
+          "fact",
+          "periods"
+        ],
+        [
+          "attribution",
+          "counter",
+          "fact"
+        ]
+      ],
+      "needed_uses": [
+        [
+          "periods"
+        ],
+        [
+          "attribution",
+          "periods"
+        ]
+      ],
+      "bytes": 169,
+      "match_status": "retrieval_only_unverified"
+    }
+  },
+  {
+    "id": "N5",
+    "requirements": [
+      {
+        "id": "req-f7a5a38b3bfc8c0d",
+        "question": "What was Corven headcount at year end 2025?",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:What was Corven headcount at year end 2025?"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "What was Corven headcount at year end 2025?",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "n5a",
+          "read_sources": {
+            "source_id": "n5a",
+            "start": 0,
+            "end": 51
+          }
+        },
+        {
+          "source_id": "n5b",
+          "read_sources": {
+            "source_id": "n5b",
+            "start": 0,
+            "end": 31
+          }
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 2,
+        "passages_indexed": 2,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "n5a",
+          "start": 0,
+          "end": 51,
+          "requirement_ids": [
+            "req-f7a5a38b3bfc8c0d"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        },
+        {
+          "source_id": "n5b",
+          "start": 0,
+          "end": 31,
+          "requirement_ids": [
+            "req-f7a5a38b3bfc8c0d"
+          ],
+          "decision": "selected",
+          "reason": "query_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 2,
+        "selected": 2,
+        "omitted_by_reason": {},
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-f7a5a38b3bfc8c0d",
+          "query": "What was Corven headcount at year end 2025?",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    },
+    "fixed_pool_diagnostics": {
+      "pool_size": 2,
+      "shortlist_size": 2,
+      "pruned_count": 0,
+      "uses": [
+        [
+          "fact"
+        ],
+        [
+          "fact"
+        ]
+      ],
+      "needed_uses": [
+        [
+          "fact"
+        ]
+      ],
+      "bytes": 82,
+      "match_status": "retrieval_only_unverified"
+    }
+  },
+  {
+    "id": "N6",
+    "requirements": [
+      {
+        "id": "req-910f6c494574b895",
+        "question": "泊舟毛利率是否会持续上升？请列出最强反证。",
+        "status": "missing",
+        "reason": "A targeted counterargument or scoped negative search needs an identified claim, alternative and eligible source; a generic search is insufficient.",
+        "references": [],
+        "core": true,
+        "kind": "counterevidence"
+      },
+      {
+        "id": "req-3bc54d174dd053e9",
+        "question": "泊舟毛利率是否会持续上升",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:泊舟毛利率是否会持续上升"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "泊舟毛利率是否会持续上升？请列出最强反证。",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "n6a",
+          "read_sources": {
+            "source_id": "n6a",
+            "start": 0,
+            "end": 24
+          }
+        },
+        {
+          "source_id": "n6b",
+          "read_sources": {
+            "source_id": "n6b",
+            "start": 0,
+            "end": 22
+          }
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "n6a",
+          "start": 0,
+          "end": 24,
+          "requirement_ids": [
+            "req-910f6c494574b895",
+            "req-3bc54d174dd053e9"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        },
+        {
+          "source_id": "n6c",
+          "start": 0,
+          "end": 12,
+          "requirement_ids": [
+            "req-910f6c494574b895",
+            "req-3bc54d174dd053e9"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "n6b",
+          "start": 0,
+          "end": 22,
+          "requirement_ids": [
+            "req-910f6c494574b895",
+            "req-3bc54d174dd053e9"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 2
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-910f6c494574b895",
+          "query": "risk decline uncertainty alternative 风险 下滑 不确定 反证 泊舟毛利率是否会持续上升？请列出最强反证。",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-3bc54d174dd053e9",
+          "query": "泊舟毛利率是否会持续上升",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    },
+    "fixed_pool_diagnostics": {
+      "pool_size": 3,
+      "shortlist_size": 3,
+      "pruned_count": 0,
+      "uses": [
+        [
+          "fact"
+        ],
+        [
+          "fact"
+        ],
+        [
+          "counter",
+          "fact"
+        ]
+      ],
+      "needed_uses": [
+        [
+          "counter"
+        ],
+        [
+          "fact"
+        ]
+      ],
+      "bytes": 138,
+      "match_status": "retrieval_only_unverified"
+    }
+  },
+  {
+    "id": "N7",
+    "requirements": [
+      {
+        "id": "req-fa6f0fd32c4f2b6f",
+        "question": "What is the change in group operating profit for Vellar?",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:What is the change in group operating profit for Vellar?"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "What is the change in group operating profit for Vellar?",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "n7c",
+          "read_sources": {
+            "source_id": "n7c",
+            "start": 0,
+            "end": 51
+          }
+        },
+        {
+          "source_id": "n7a",
+          "read_sources": {
+            "source_id": "n7a",
+            "start": 0,
+            "end": 61
+          }
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "n7c",
+          "start": 0,
+          "end": 51,
+          "requirement_ids": [
+            "req-fa6f0fd32c4f2b6f"
+          ],
+          "decision": "selected",
+          "reason": "query_retrieval"
+        },
+        {
+          "source_id": "n7a",
+          "start": 0,
+          "end": 61,
+          "requirement_ids": [
+            "req-fa6f0fd32c4f2b6f"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        },
+        {
+          "source_id": "n7b",
+          "start": 0,
+          "end": 64,
+          "requirement_ids": [
+            "req-fa6f0fd32c4f2b6f"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-fa6f0fd32c4f2b6f",
+          "query": "What is the change in group operating profit for Vellar?",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    },
+    "fixed_pool_diagnostics": {
+      "pool_size": 3,
+      "shortlist_size": 3,
+      "pruned_count": 0,
+      "uses": [
+        [
+          "fact"
+        ],
+        [
+          "fact",
+          "periods"
+        ],
+        [
+          "fact",
+          "periods"
+        ]
+      ],
+      "needed_uses": [
+        [
+          "periods"
+        ]
+      ],
+      "bytes": 112,
+      "match_status": "retrieval_only_unverified"
+    }
+  },
+  {
+    "id": "N8",
+    "requirements": [
+      {
+        "id": "req-4fb6c351a89a01ec",
+        "question": "青屿去年与今年资本开支分别多少？",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:青屿去年与今年资本开支分别多少？"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "青屿去年与今年资本开支分别多少？",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "n8a",
+          "read_sources": {
+            "source_id": "n8a",
+            "start": 0,
+            "end": 17
+          }
+        },
+        {
+          "source_id": "n8b",
+          "read_sources": {
+            "source_id": "n8b",
+            "start": 0,
+            "end": 19
+          }
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 2,
+        "passages_indexed": 2,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "n8a",
+          "start": 0,
+          "end": 17,
+          "requirement_ids": [
+            "req-4fb6c351a89a01ec"
+          ],
+          "decision": "selected",
+          "reason": "requirement_retrieval"
+        },
+        {
+          "source_id": "n8b",
+          "start": 0,
+          "end": 19,
+          "requirement_ids": [
+            "req-4fb6c351a89a01ec"
+          ],
+          "decision": "selected",
+          "reason": "query_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 2,
+        "selected": 2,
+        "omitted_by_reason": {},
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-4fb6c351a89a01ec",
+          "query": "青屿去年与今年资本开支分别多少？",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    },
+    "fixed_pool_diagnostics": {
+      "pool_size": 2,
+      "shortlist_size": 2,
+      "pruned_count": 0,
+      "uses": [
+        [
+          "fact"
+        ],
+        [
+          "fact"
+        ]
+      ],
+      "needed_uses": [
+        [
+          "fact"
+        ]
+      ],
+      "bytes": 104,
+      "match_status": "retrieval_only_unverified"
+    }
+  }
+]

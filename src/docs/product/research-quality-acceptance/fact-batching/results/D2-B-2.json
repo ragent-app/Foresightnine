@@ -1,0 +1,279 @@
+{
+  "case": "D2",
+  "arm": "B",
+  "source": {
+    "source_id": "exhibit",
+    "content_sha256": "906ddf95cb167bf624ed37596f39b7098b34b3aafd919d81fd855123d756b796",
+    "permissions": {
+      "store": true,
+      "model_input": true,
+      "display": true,
+      "export": true
+    }
+  },
+  "actual_cost": null,
+  "status": "partial",
+  "reason": "provider_output_truncated",
+  "report": "",
+  "claims": [],
+  "facts": [],
+  "question_parts": [
+    {
+      "id": "req-56f8ee0e34983287",
+      "question": "比较 Beta 2025 与 2024 年收入增速",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-56f8ee0e34983287",
+          "question": "比较 Beta 2025 与 2024 年收入增速",
+          "status": "missing",
+          "reason": "No eligible recorded fact matches this metric.",
+          "references": [],
+          "core": true
+        }
+      ]
+    },
+    {
+      "question": "并说明稀释 EPS 变化",
+      "status": "unresolved",
+      "answer": "",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": []
+    },
+    {
+      "id": "req-74db7fbcf38fcc08",
+      "question": "说明稀释 EPS 变化。",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "No eligible recorded fact matches this metric.",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-74db7fbcf38fcc08",
+          "question": "说明稀释 EPS 变化。",
+          "status": "missing",
+          "reason": "No eligible recorded fact matches this metric.",
+          "references": [],
+          "core": true
+        }
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "code": "provider_error",
+      "message": "Provider output was truncated."
+    }
+  ],
+  "calculations": [],
+  "events": [
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:5037ee27af7f41ae953b22f7337fba48",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 17285,
+      "usage_detail": {
+        "input_tokens": 2,
+        "output_tokens": 1539,
+        "total_tokens": 17285,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 15744
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_996a06eefb494d2db0d4ee87",
+        "call_72f9bb6e19fa480d9da4d11c"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 15746,
+        "cache_read_input_tokens": 15744,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.9998729836148863
+      },
+      "note": "我先读取这个 136 字符的合成 exhibit 全文，同时尝试解析 \"Beta\" 实体（方法包要求），以确认是否可建立实体映射。"
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_996a06eefb494d2db0d4ee87",
+      "name": "read_sources",
+      "status": "completed",
+      "rationale": "用户问题需要 Beta 公司 2025 与 2024 年收入增速及稀释 EPS 变化；唯一授权来源是 136 字符的 exhibit，直接全文读取。",
+      "summary": {
+        "kind": "read_sources",
+        "read_count": 1,
+        "items": [
+          {
+            "source_id": "exhibit",
+            "title": "Synthetic exhibit",
+            "start": 0,
+            "end": 136,
+            "total_characters": 136
+          }
+        ]
+      }
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_72f9bb6e19fa480d9da4d11c",
+      "name": "resolve_entity",
+      "status": "unavailable",
+      "rationale": "方法包步骤1要求将公司解析为实体；\"Beta\" 名称高度含糊，需确认是否存在与合成 exhibit 对应的真实实体。",
+      "reason": "fin_data_unavailable"
+    },
+    {
+      "kind": "model_failure",
+      "call_id": "research:research-agent:750fb7ce881345e288e2f3913b51231e",
+      "code": "provider_output_truncated",
+      "external_state": "returned",
+      "usage": 19772,
+      "settlement": "settled"
+    }
+  ],
+  "tool_io": [
+    {
+      "turn": 1,
+      "id": "call_996a06eefb494d2db0d4ee87",
+      "tool": "read_sources",
+      "input": {
+        "rationale": "用户问题需要 Beta 公司 2025 与 2024 年收入增速及稀释 EPS 变化；唯一授权来源是 136 字符的 exhibit，直接全文读取。",
+        "reads": [
+          {
+            "end": 136,
+            "source_id": "exhibit",
+            "start": 0
+          }
+        ]
+      },
+      "result": "{\"rationale\": \"用户问题需要 Beta 公司 2025 与 2024 年收入增速及稀释 EPS 变化；唯一授权来源是 136 字符的 exhibit，直接全文读取。\", \"results\": [{\"content_sha256\": \"906ddf95cb167bf624ed37596f39b7098b34b3aafd919d81fd855123d756b796\", \"end\": 136, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million. Prior diluted EPS is not disclosed in this snapshot.\", \"total_characters\": 136, \"truncated\": false}]}"
+    },
+    {
+      "turn": 1,
+      "id": "call_72f9bb6e19fa480d9da4d11c",
+      "tool": "resolve_entity",
+      "input": {
+        "query": "Beta",
+        "rationale": "方法包步骤1要求将公司解析为实体；\"Beta\" 名称高度含糊，需确认是否存在与合成 exhibit 对应的真实实体。"
+      },
+      "result": "{\"reason\": \"fin_data_unavailable\", \"status\": \"unavailable\"}"
+    }
+  ],
+  "answered_parts": [],
+  "all_core_answered": false,
+  "submit_research_observed": false,
+  "submit_research_calls": [],
+  "submission_acceptance": "not_observed",
+  "record_facts_parallel_turns": [],
+  "usage": {
+    "reported_tokens": 37057,
+    "unknown_usage_calls": 0,
+    "reserved_estimate_tokens": 0
+  },
+  "search_calls": 0,
+  "calls": 2,
+  "budget_accounted_tokens": 37057,
+  "prompts": [
+    {
+      "turn_sha256": "51d63442874faa91886b8640a136b7b228adcc58c8b60bf204a76930472f47ad",
+      "tail_note": null
+    },
+    {
+      "turn_sha256": "1b19282fff3ac9f5ff5455a3479b7c52a18c19cdc547e379df6d213bb0fe24d5",
+      "tail_note": "[Coverage]\n{\"coverage\":{\"categories\":[{\"category\":\"uploads\",\"obtained\":1,\"status\":\"obtained\"}],\"not_attempted\":[\"market_prices\",\"financial_statements\",\"filings\",\"news_web\",\"macro\",\"other\"],\"not_established\":[\"No market prices were requested in this run; nothing is established for this category.\",\"No financial statements were requested in this run; nothing is established for this category.\",\"No filings and official documents were requested in this run; nothing is established for this category.\",\"No news and web were requested in this run; nothing is established for this category.\"],\"note\":\"Generated deterministically from run events; state these limits instead of implying completeness.\",\"run_status\":\"incomplete\"}}\n[Working Memory]\nState: facts=0 calcs=0 charts=0 sources=1\nCore evidence needed: financial:revenue: No eligible recorded fact matches this metric.; financial:diluted_eps: No eligible recorded fact matches this metric.\nMethodChecks(company_comparison,earnings_review): entities:n/a, aligned_statements:missing, derived_ratios:missing, entity:n/a, statements:missing, filing_text:missing, prior_compare:missing\nCounterEvidence: needed(0/1)"
+    }
+  ],
+  "wire_turns": [],
+  "decoded_turns": [
+    {
+      "finish_reason": "tool_use",
+      "blocks": [
+        {
+          "type": "thinking",
+          "chars": 6369
+        },
+        {
+          "type": "text",
+          "chars": 65
+        },
+        {
+          "type": "tool_use",
+          "name": "read_sources",
+          "arguments_shape": {
+            "rationale": {
+              "chars": 74
+            },
+            "reads": {
+              "items": 1,
+              "item_shapes": [
+                {
+                  "end": {
+                    "type": "int"
+                  },
+                  "source_id": {
+                    "chars": 7
+                  },
+                  "start": {
+                    "type": "int"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "tool_use",
+          "name": "resolve_entity",
+          "arguments_shape": {
+            "query": {
+              "chars": 4
+            },
+            "rationale": {
+              "chars": 58
+            }
+          }
+        }
+      ],
+      "raw_output_saved": false
+    },
+    {
+      "finish_reason": "max_tokens",
+      "blocks": [
+        {
+          "type": "thinking",
+          "chars": 7196
+        }
+      ],
+      "raw_output_saved": false
+    }
+  ],
+  "diagnostics": [
+    {
+      "transport": null,
+      "stream_metrics": null,
+      "finish_reason": null,
+      "stop_reason": null,
+      "usage": {
+        "input_tokens": 2,
+        "output_tokens": 1539,
+        "total_tokens": 17285,
+        "cache_read_input_tokens": 15744
+      }
+    },
+    {
+      "transport": null,
+      "stream_metrics": null,
+      "finish_reason": null,
+      "stop_reason": null,
+      "usage": null
+    }
+  ],
+  "elapsed_seconds": 75.842
+}

@@ -1,0 +1,133 @@
+{
+  "case": "D3",
+  "arm": "A",
+  "status": "partial",
+  "reason": "provider_output_truncated",
+  "report": "",
+  "claims": [],
+  "facts": [],
+  "question_parts": [
+    {
+      "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益",
+      "status": "unresolved",
+      "answer": "",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": []
+    },
+    {
+      "id": "req-6e97ee1f1ecb924b",
+      "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益。",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-6e97ee1f1ecb924b",
+          "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益。",
+          "status": "missing",
+          "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+          "references": [],
+          "core": true
+        }
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "code": "provider_error",
+      "message": "Provider output was truncated."
+    }
+  ],
+  "answered_parts": [],
+  "all_core_answered": false,
+  "calculations": [],
+  "events": [
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:ff20bd56dba8407b9a31cfa5489df4ca",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 15303,
+      "usage_detail": {
+        "input_tokens": 4,
+        "output_tokens": 323,
+        "total_tokens": 15303,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 14976
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_d8093ec9a82c44909cdc24bc"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 14980,
+        "cache_read_input_tokens": 14976,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.9997329773030708
+      }
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_d8093ec9a82c44909cdc24bc",
+      "name": "read_sources",
+      "status": "completed",
+      "rationale": "The exhibit is only 73 characters; I need its full contents to find Gamma and benchmark adjusted closes on the two common trading days before computing returns.",
+      "summary": {
+        "kind": "read_sources",
+        "read_count": 1,
+        "items": [
+          {
+            "source_id": "exhibit",
+            "title": "Synthetic exhibit",
+            "start": 0,
+            "end": 73,
+            "total_characters": 73
+          }
+        ]
+      }
+    },
+    {
+      "kind": "model_failure",
+      "call_id": "research:research-agent:d874b870acbb4fcba4246ed25bbe0386",
+      "code": "provider_output_truncated",
+      "external_state": "returned",
+      "usage": 17712,
+      "settlement": "settled"
+    }
+  ],
+  "tool_io": [
+    {
+      "id": "call_d8093ec9a82c44909cdc24bc",
+      "tool": "read_sources",
+      "input": {
+        "rationale": "The exhibit is only 73 characters; I need its full contents to find Gamma and benchmark adjusted closes on the two common trading days before computing returns.",
+        "reads": [
+          {
+            "source_id": "exhibit",
+            "start": 0
+          }
+        ]
+      },
+      "result": "{\"rationale\": \"The exhibit is only 73 characters; I need its full contents to find Gamma and benchmark adjusted closes on the two common trading days before computing returns.\", \"results\": [{\"content_sha256\": \"b12b7ec0c75f488a7a4bae6b4c216a9f08f8df1be26f71e39b465609044fa7fc\", \"end\": 73, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.\", \"total_characters\": 73, \"truncated\": false}]}"
+    }
+  ],
+  "calls": 2,
+  "budget_accounted_tokens": 33015,
+  "prompts": [
+    {
+      "turn_sha256": "cf398427371d370cddc17dba89e449a5dd3789f8baf0fb42514d576ab8e4caa1",
+      "tail_note": null
+    },
+    {
+      "turn_sha256": "38d42ee162d519063f4a515844f02b963dab229b4d94fe04405783a4d7f78076",
+      "tail_note": "[Coverage]\n{\"coverage\":{\"categories\":[{\"category\":\"uploads\",\"obtained\":1,\"status\":\"obtained\"}],\"not_attempted\":[\"market_prices\",\"financial_statements\",\"filings\",\"news_web\",\"macro\",\"other\"],\"not_established\":[\"No market prices were requested in this run; nothing is established for this category.\",\"No financial statements were requested in this run; nothing is established for this category.\",\"No filings and official documents were requested in this run; nothing is established for this category.\",\"No news and web were requested in this run; nothing is established for this category.\"],\"note\":\"Generated deterministically from run events; state these limits instead of implying completeness.\",\"run_status\":\"incomplete\"}}\n[Working Memory]\nState: facts=0 calcs=0 charts=0 sources=1\nMethodChecks(company_comparison): entities:n/a, aligned_statements:missing, derived_ratios:missing\nCounterEvidence: needed(0/1)"
+    }
+  ],
+  "elapsed_seconds": 53.226,
+  "actual_cost": null
+}

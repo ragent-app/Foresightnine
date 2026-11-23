@@ -1,0 +1,8 @@
+{
+  "case": "D1",
+  "arm": "A",
+  "request_sha256": "1f0e221dd19f6b160122ad74f2d536032ae65e88aab56a896f4a59b0a0ab48cd",
+  "error_type": "ProviderFailure",
+  "elapsed_seconds": 231.485,
+  "actual_cost": null
+}

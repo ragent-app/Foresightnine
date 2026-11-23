@@ -1,0 +1,918 @@
+[
+  {
+    "id": "S1",
+    "requested_reads": [
+      {
+        "source_id": "annual-table",
+        "start": 0,
+        "end": 118
+      },
+      {
+        "source_id": "annual-note",
+        "start": 0,
+        "end": 183
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "annual-table",
+        "start": 0,
+        "end": 118
+      },
+      {
+        "source_id": "annual-note",
+        "start": 0,
+        "end": 183
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "annual-table",
+        "start": 0,
+        "end": 118,
+        "content_sha256": "78763a9ab4509b59284bdce42b530b1636c118f878b0943db4371f1f84468885"
+      },
+      {
+        "source_id": "annual-note",
+        "start": 0,
+        "end": 183,
+        "content_sha256": "348690cc28a32388f8f7c53125540a02a7e31915d17b4538fe57fa55820c8910"
+      }
+    ],
+    "wire_sha256": "f3ddcd2a1ecaf47f90a129804d422efed21f54842c0bdc562c5728725a27a6c6",
+    "wire_bytes": 56193,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "S2",
+    "requested_reads": [
+      {
+        "source_id": "annual-table",
+        "start": 0,
+        "end": 118
+      },
+      {
+        "source_id": "release-copy-a",
+        "start": 0,
+        "end": 143
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "annual-table",
+        "start": 0,
+        "end": 118
+      },
+      {
+        "source_id": "release-copy-a",
+        "start": 0,
+        "end": 143
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "annual-table",
+        "start": 0,
+        "end": 118,
+        "content_sha256": "78763a9ab4509b59284bdce42b530b1636c118f878b0943db4371f1f84468885"
+      },
+      {
+        "source_id": "release-copy-a",
+        "start": 0,
+        "end": 143,
+        "content_sha256": "ad1e6bdb1a6a593d59bccf284e47ace34cbfb31a27268477510e34b3c427b8ec"
+      }
+    ],
+    "wire_sha256": "81226a69d7890360b3196fd86fa79312bf0cdaf7049c7eea88760732966ac606",
+    "wire_bytes": 56085,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "S3",
+    "requested_reads": [
+      {
+        "source_id": "annual-table",
+        "start": 0,
+        "end": 118
+      },
+      {
+        "source_id": "contrary",
+        "start": 0,
+        "end": 133
+      },
+      {
+        "source_id": "annual-note",
+        "start": 0,
+        "end": 183
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "annual-table",
+        "start": 0,
+        "end": 118
+      },
+      {
+        "source_id": "contrary",
+        "start": 0,
+        "end": 133
+      },
+      {
+        "source_id": "annual-note",
+        "start": 0,
+        "end": 183
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "annual-table",
+        "start": 0,
+        "end": 118,
+        "content_sha256": "78763a9ab4509b59284bdce42b530b1636c118f878b0943db4371f1f84468885"
+      },
+      {
+        "source_id": "contrary",
+        "start": 0,
+        "end": 133,
+        "content_sha256": "ac18e9975f8205ee6e4ecbf7ea7a2725e9f7b9b0879359301b8b97dea68200b7"
+      },
+      {
+        "source_id": "annual-note",
+        "start": 0,
+        "end": 183,
+        "content_sha256": "348690cc28a32388f8f7c53125540a02a7e31915d17b4538fe57fa55820c8910"
+      }
+    ],
+    "wire_sha256": "3e04a26d035fd11adc25f6fb66c8993b6d1c39acb874c969b148c884a94782d5",
+    "wire_bytes": 56969,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "S4",
+    "requested_reads": [
+      {
+        "source_id": "annual-table",
+        "start": 0,
+        "end": 118
+      },
+      {
+        "source_id": "annual-note",
+        "start": 0,
+        "end": 183
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "annual-table",
+        "start": 0,
+        "end": 118
+      },
+      {
+        "source_id": "annual-note",
+        "start": 0,
+        "end": 183
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "annual-table",
+        "start": 0,
+        "end": 118,
+        "content_sha256": "78763a9ab4509b59284bdce42b530b1636c118f878b0943db4371f1f84468885"
+      },
+      {
+        "source_id": "annual-note",
+        "start": 0,
+        "end": 183,
+        "content_sha256": "348690cc28a32388f8f7c53125540a02a7e31915d17b4538fe57fa55820c8910"
+      }
+    ],
+    "wire_sha256": "863fb191abaab9ba2fd0a51a7fde9775968b7b54e2ac78b7b9bc608d0ec70a39",
+    "wire_bytes": 55353,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "H1",
+    "requested_reads": [
+      {
+        "source_id": "h1a",
+        "start": 0,
+        "end": 124
+      },
+      {
+        "source_id": "h1b",
+        "start": 0,
+        "end": 158
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "h1a",
+        "start": 0,
+        "end": 124
+      },
+      {
+        "source_id": "h1b",
+        "start": 0,
+        "end": 158
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "h1a",
+        "start": 0,
+        "end": 124,
+        "content_sha256": "2eb5cc3ca3620a5b73ed270459749b07c2cb6ca683faa93d782d3f84fe8618e1"
+      },
+      {
+        "source_id": "h1b",
+        "start": 0,
+        "end": 158,
+        "content_sha256": "21a146695eaa1183b78414a6a0eaad6542d4a37b50b4b10c6ffe107f671de1ea"
+      }
+    ],
+    "wire_sha256": "319840b665163632c565fa40e5d5eb56d5e51e792ea47a0f7a4e5668e44f307a",
+    "wire_bytes": 56716,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "H2",
+    "requested_reads": [
+      {
+        "source_id": "h2a",
+        "start": 0,
+        "end": 55
+      },
+      {
+        "source_id": "h2b",
+        "start": 0,
+        "end": 49
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "h2a",
+        "start": 0,
+        "end": 55
+      },
+      {
+        "source_id": "h2b",
+        "start": 0,
+        "end": 49
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "h2a",
+        "start": 0,
+        "end": 55,
+        "content_sha256": "0e8be4c295715e0483eb4ea2dc79834573c8db379606991dd02bd6ed3a1bf87b"
+      },
+      {
+        "source_id": "h2b",
+        "start": 0,
+        "end": 49,
+        "content_sha256": "fcecc77ebfcc6559fb89efe110522d7dd8f9549d8a6bee15a6cafa320c93833f"
+      }
+    ],
+    "wire_sha256": "dba96067485200876bec857cb73bde213759d9abfb02aa44cb27f27c5ccebc03",
+    "wire_bytes": 56679,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "H3",
+    "requested_reads": [
+      {
+        "source_id": "h3a",
+        "start": 0,
+        "end": 155
+      },
+      {
+        "source_id": "h3b",
+        "start": 0,
+        "end": 142
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "h3a",
+        "start": 0,
+        "end": 155
+      },
+      {
+        "source_id": "h3b",
+        "start": 0,
+        "end": 142
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "h3a",
+        "start": 0,
+        "end": 155,
+        "content_sha256": "b2cfaa957e7a02b171c3082c1da6a8b8a3d6853122a6fdff9d67415fa5ab4517"
+      },
+      {
+        "source_id": "h3b",
+        "start": 0,
+        "end": 142,
+        "content_sha256": "832accd4b05acdf2c38699c1e108b916ee36a33b926d69af70ae576ed638e47d"
+      }
+    ],
+    "wire_sha256": "1b5b71eb3079b9036ab50259b2f01d646f90c3743f541149682459d72872f248",
+    "wire_bytes": 55758,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "H4",
+    "requested_reads": [
+      {
+        "source_id": "h4a",
+        "start": 0,
+        "end": 61
+      },
+      {
+        "source_id": "h4b",
+        "start": 0,
+        "end": 44
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "h4a",
+        "start": 0,
+        "end": 61
+      },
+      {
+        "source_id": "h4b",
+        "start": 0,
+        "end": 44
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "h4a",
+        "start": 0,
+        "end": 61,
+        "content_sha256": "afc23298e970100c05bf271a684437f43b00cff163bd5fb4389a3cd23b06b7bd"
+      },
+      {
+        "source_id": "h4b",
+        "start": 0,
+        "end": 44,
+        "content_sha256": "752a61829fc62a227d2f3b33d90fbb5256861f747686a01671649e2b30783276"
+      }
+    ],
+    "wire_sha256": "d512ff0716a1f4e318e98a3a036c60d80297ecb6469730bd5e4282eac2159b4e",
+    "wire_bytes": 55891,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "J1",
+    "requested_reads": [
+      {
+        "source_id": "w2",
+        "start": 0,
+        "end": 132
+      },
+      {
+        "source_id": "w1",
+        "start": 0,
+        "end": 114
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "w2",
+        "start": 0,
+        "end": 132
+      },
+      {
+        "source_id": "w1",
+        "start": 0,
+        "end": 114
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "w2",
+        "start": 0,
+        "end": 132,
+        "content_sha256": "f213ec3b27058d0d294a01e3cc4ba95c24c61066074ebb54a8cad3aee0816ef1"
+      },
+      {
+        "source_id": "w1",
+        "start": 0,
+        "end": 114,
+        "content_sha256": "ce56aa3769c686e4b1711c5bbdc6228d16e429d1c8ad884cf437eba2c1416778"
+      }
+    ],
+    "wire_sha256": "71a34cf27b8176298c454ffb46e7dc870dc084ece1c07303fc33272059a574db",
+    "wire_bytes": 55941,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "J2",
+    "requested_reads": [
+      {
+        "source_id": "y2",
+        "start": 0,
+        "end": 34
+      },
+      {
+        "source_id": "y1",
+        "start": 0,
+        "end": 42
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "y2",
+        "start": 0,
+        "end": 34
+      },
+      {
+        "source_id": "y1",
+        "start": 0,
+        "end": 42
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "y2",
+        "start": 0,
+        "end": 34,
+        "content_sha256": "124f67069dc25d15bfd6995bc900b85a5274db12ebcd617c20dd56ddb02ef87d"
+      },
+      {
+        "source_id": "y1",
+        "start": 0,
+        "end": 42,
+        "content_sha256": "e0eb42ac7106350905cf5510b1dbc09ac35b917f42078f7c6111b32c9a2296e4"
+      }
+    ],
+    "wire_sha256": "35218284782c11ab868f56151196ab0e9de97ccc1ebf96da6fb124c68ee083b8",
+    "wire_bytes": 55422,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "J3",
+    "requested_reads": [
+      {
+        "source_id": "t1",
+        "start": 0,
+        "end": 104
+      },
+      {
+        "source_id": "t2",
+        "start": 0,
+        "end": 84
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "t1",
+        "start": 0,
+        "end": 104
+      },
+      {
+        "source_id": "t2",
+        "start": 0,
+        "end": 84
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "t1",
+        "start": 0,
+        "end": 104,
+        "content_sha256": "8cc943414bdd89ed0c8862d20503d7cfe39ae4fbf6b95564b0a41315d7db3eb6"
+      },
+      {
+        "source_id": "t2",
+        "start": 0,
+        "end": 84,
+        "content_sha256": "35ed3f4c26f3ba5630761dc0c8c8d39de5d2f78ae2ea2da4140134ddbfd5b97e"
+      }
+    ],
+    "wire_sha256": "6498c9c8f54a29e409510d79da130b90f9300099ca524252f9b80667436866e3",
+    "wire_bytes": 55399,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "J4",
+    "requested_reads": [
+      {
+        "source_id": "s1",
+        "start": 0,
+        "end": 54
+      },
+      {
+        "source_id": "s2",
+        "start": 0,
+        "end": 47
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "s1",
+        "start": 0,
+        "end": 54
+      },
+      {
+        "source_id": "s2",
+        "start": 0,
+        "end": 47
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "s1",
+        "start": 0,
+        "end": 54,
+        "content_sha256": "5cfbb7c989a44afe362c21e0c67da78a689560e3978a8a4c1079b4b623b83530"
+      },
+      {
+        "source_id": "s2",
+        "start": 0,
+        "end": 47,
+        "content_sha256": "a9f5773b591834604df0af48eb3d211dbc505600804aecd4ef8c2f64b2cc016c"
+      }
+    ],
+    "wire_sha256": "b39266235e86942850bd097b1ad55874d00ff4deabad0b0cd4b69f953046641f",
+    "wire_bytes": 56009,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "L1",
+    "requested_reads": [
+      {
+        "source_id": "l1c",
+        "start": 0,
+        "end": 62
+      },
+      {
+        "source_id": "l1a",
+        "start": 0,
+        "end": 93
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "l1c",
+        "start": 0,
+        "end": 62
+      },
+      {
+        "source_id": "l1a",
+        "start": 0,
+        "end": 93
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "l1c",
+        "start": 0,
+        "end": 62,
+        "content_sha256": "6a9960a68b8b5013ffcefdea48f81449fb993521acefa1860ec5cc6101cd83ba"
+      },
+      {
+        "source_id": "l1a",
+        "start": 0,
+        "end": 93,
+        "content_sha256": "a232bf9ea7e3da55a767e7b692199ef2f29e8a1a1fc379abdac0225fa699e20f"
+      }
+    ],
+    "wire_sha256": "c7b5126ebf4e6ce38a1f29afc52e5c08e8c73bea05cfb165ce30e219e2a2d926",
+    "wire_bytes": 55175,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "L2",
+    "requested_reads": [
+      {
+        "source_id": "l2a",
+        "start": 0,
+        "end": 52
+      },
+      {
+        "source_id": "l2b",
+        "start": 0,
+        "end": 50
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "l2a",
+        "start": 0,
+        "end": 52
+      },
+      {
+        "source_id": "l2b",
+        "start": 0,
+        "end": 50
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "l2a",
+        "start": 0,
+        "end": 52,
+        "content_sha256": "fe7d2216bc88caafef3d3fbe9ff12ba5f278784b07c42b5903a18be5c9d8f2d8"
+      },
+      {
+        "source_id": "l2b",
+        "start": 0,
+        "end": 50,
+        "content_sha256": "84098a1994e9781e670182c6cf90b418c987749bb77402ba7945429757e32343"
+      }
+    ],
+    "wire_sha256": "7ab07c270cddc95bdd25b944807eb24de099930ea10c7e22c4bba0f63e4c5b41",
+    "wire_bytes": 54253,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "L3",
+    "requested_reads": [
+      {
+        "source_id": "l3a",
+        "start": 0,
+        "end": 70
+      },
+      {
+        "source_id": "l3c",
+        "start": 0,
+        "end": 52
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "l3a",
+        "start": 0,
+        "end": 70
+      },
+      {
+        "source_id": "l3c",
+        "start": 0,
+        "end": 52
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "l3a",
+        "start": 0,
+        "end": 70,
+        "content_sha256": "29480655c3c268fe6366533425770fedaac7019b0fb9a0170bd5307b58942ac7"
+      },
+      {
+        "source_id": "l3c",
+        "start": 0,
+        "end": 52,
+        "content_sha256": "c03b5e8ec6e8b2e4ec5cedd8535c588889c20715a7b1544f70dca766313075fd"
+      }
+    ],
+    "wire_sha256": "34f50315754554755a64b106d1e2268107bb4639e4085acd615ab0f5ed947fd0",
+    "wire_bytes": 55091,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "L4",
+    "requested_reads": [
+      {
+        "source_id": "l4b",
+        "start": 0,
+        "end": 134
+      },
+      {
+        "source_id": "l4c",
+        "start": 0,
+        "end": 62
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "l4b",
+        "start": 0,
+        "end": 134
+      },
+      {
+        "source_id": "l4c",
+        "start": 0,
+        "end": 62
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "l4b",
+        "start": 0,
+        "end": 134,
+        "content_sha256": "e9d3ebe4a6946c096c9a67ed88d20e12e261620dd044677927f664ba906c9b1c"
+      },
+      {
+        "source_id": "l4c",
+        "start": 0,
+        "end": 62,
+        "content_sha256": "0b113a3575671876a5c1569b73eab47885ae8c69ea44a3f4baf8ca1f957917cf"
+      }
+    ],
+    "wire_sha256": "df3feadfc02fe93d14949613a7cc16251a73f6ec2045fcb214d50ea839ddade5",
+    "wire_bytes": 55266,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "L5",
+    "requested_reads": [
+      {
+        "source_id": "l5b",
+        "start": 0,
+        "end": 26
+      },
+      {
+        "source_id": "l5c",
+        "start": 0,
+        "end": 16
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "l5b",
+        "start": 0,
+        "end": 26
+      },
+      {
+        "source_id": "l5c",
+        "start": 0,
+        "end": 16
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "l5b",
+        "start": 0,
+        "end": 26,
+        "content_sha256": "e57bc2576852c0f6db0db3151eb19e079cb244d58f10b3132a270c23d4e3eef1"
+      },
+      {
+        "source_id": "l5c",
+        "start": 0,
+        "end": 16,
+        "content_sha256": "4d7d80e1eb9349a59f85034c965fdf099ee071d13e982c1c34b134abd32cc15a"
+      }
+    ],
+    "wire_sha256": "d0b284e441179bf0b0879bfb499958c84020c73794b9bd9241d4e80c035692f7",
+    "wire_bytes": 54814,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "L6",
+    "requested_reads": [
+      {
+        "source_id": "l6c",
+        "start": 0,
+        "end": 14
+      },
+      {
+        "source_id": "l6a",
+        "start": 0,
+        "end": 35
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "l6c",
+        "start": 0,
+        "end": 14
+      },
+      {
+        "source_id": "l6a",
+        "start": 0,
+        "end": 35
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "l6c",
+        "start": 0,
+        "end": 14,
+        "content_sha256": "420f77b854e32171413fdda10a6f528d604302d984f76488d55cc7f9f5b52198"
+      },
+      {
+        "source_id": "l6a",
+        "start": 0,
+        "end": 35,
+        "content_sha256": "4df9a3a6f11b8b30a62770c213cfcc1bce11216d18c72108501ebc81334d7bf5"
+      }
+    ],
+    "wire_sha256": "b52bca41ed0f364a83b2c535d7095ddb37828486c52496afc4d1b9dbceb59bd9",
+    "wire_bytes": 55139,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "L7",
+    "requested_reads": [
+      {
+        "source_id": "l7a",
+        "start": 0,
+        "end": 35
+      },
+      {
+        "source_id": "l7c",
+        "start": 0,
+        "end": 11
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "l7a",
+        "start": 0,
+        "end": 35
+      },
+      {
+        "source_id": "l7c",
+        "start": 0,
+        "end": 11
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "l7a",
+        "start": 0,
+        "end": 35,
+        "content_sha256": "20870fa46c0df6848f4c56b50c9afb3cc9133728c2faad35a00844c94ac37d56"
+      },
+      {
+        "source_id": "l7c",
+        "start": 0,
+        "end": 11,
+        "content_sha256": "d4fb6e9fe3531e5cab0de30d15f1914be514af58e803ad6b728916cc894ba20a"
+      }
+    ],
+    "wire_sha256": "1e58c8eac223626952bd599f334a4e29fddcdffe33f56847446a2682d5356597",
+    "wire_bytes": 54784,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "L8",
+    "requested_reads": [
+      {
+        "source_id": "l8a",
+        "start": 0,
+        "end": 19
+      },
+      {
+        "source_id": "l8b",
+        "start": 0,
+        "end": 19
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "l8a",
+        "start": 0,
+        "end": 19
+      },
+      {
+        "source_id": "l8b",
+        "start": 0,
+        "end": 19
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "l8a",
+        "start": 0,
+        "end": 19,
+        "content_sha256": "881898216cb187f8214f8aeca0e105e0ce55f244128763f26020058ef3bb08ad"
+      },
+      {
+        "source_id": "l8b",
+        "start": 0,
+        "end": 19,
+        "content_sha256": "bad3b6fc9a60fa5e4d9d8be8eb3aad383be8c739eb534098b29bb664cec6d18c"
+      }
+    ],
+    "wire_sha256": "6c5b7d14d7556f1320368449b20c55418989dbdd9c538cc84b51764e7aa8413f",
+    "wire_bytes": 54347,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  }
+]

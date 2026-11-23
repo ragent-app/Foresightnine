@@ -1,0 +1,109 @@
+{
+  "case": "D3",
+  "arm": "A",
+  "source": {
+    "source_id": "exhibit",
+    "content_sha256": "b12b7ec0c75f488a7a4bae6b4c216a9f08f8df1be26f71e39b465609044fa7fc",
+    "permissions": {
+      "store": true,
+      "model_input": true,
+      "display": true,
+      "export": true
+    }
+  },
+  "actual_cost": null,
+  "status": "partial",
+  "reason": "provider_output_truncated",
+  "report": "",
+  "claims": [],
+  "facts": [],
+  "question_parts": [
+    {
+      "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益",
+      "status": "unresolved",
+      "answer": "",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": []
+    },
+    {
+      "id": "req-6e97ee1f1ecb924b",
+      "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益。",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-6e97ee1f1ecb924b",
+          "question": "比较 Gamma 与基准在两个共同交易日的调整收盘收益。",
+          "status": "missing",
+          "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+          "references": [],
+          "core": true
+        }
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "code": "provider_error",
+      "message": "Provider output was truncated."
+    }
+  ],
+  "calculations": [],
+  "events": [
+    {
+      "kind": "model_failure",
+      "call_id": "research:research-agent:0b1b53624171421c90f8eff97c851588",
+      "code": "provider_output_truncated",
+      "external_state": "returned",
+      "usage": 17028,
+      "settlement": "settled"
+    }
+  ],
+  "tool_io": [],
+  "answered_parts": [],
+  "all_core_answered": false,
+  "submit_research_observed": false,
+  "submit_research_calls": [],
+  "submission_acceptance": "not_observed",
+  "record_facts_parallel_turns": [],
+  "usage": {
+    "reported_tokens": 17028,
+    "unknown_usage_calls": 0,
+    "reserved_estimate_tokens": 0
+  },
+  "search_calls": 0,
+  "calls": 1,
+  "budget_accounted_tokens": 17028,
+  "prompts": [
+    {
+      "turn_sha256": "cf398427371d370cddc17dba89e449a5dd3789f8baf0fb42514d576ab8e4caa1",
+      "tail_note": null
+    }
+  ],
+  "wire_turns": [],
+  "decoded_turns": [
+    {
+      "finish_reason": "max_tokens",
+      "blocks": [
+        {
+          "type": "thinking",
+          "chars": 9508
+        }
+      ],
+      "raw_output_saved": false
+    }
+  ],
+  "diagnostics": [
+    {
+      "transport": null,
+      "stream_metrics": null,
+      "finish_reason": null,
+      "stop_reason": null,
+      "usage": null
+    }
+  ],
+  "elapsed_seconds": 45.846
+}

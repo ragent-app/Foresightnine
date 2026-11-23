@@ -1,0 +1,17 @@
+{
+  "base_commit": "879de1d",
+  "cases_sha256": "7e62e0cd385e9923ea1030b1fd9825b2fba41ade816d6601e8e57e288cdcd316",
+  "old_trace": {
+    "command": [
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_research_runtime_attention.py::test_presubmit_gate_nudges_once_for_unmet_method_pack_then_accepts"
+    ],
+    "exit_code": 0,
+    "output": ".                                                                        [100%]\n"
+  },
+  "current_tests": null
+}

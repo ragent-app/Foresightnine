@@ -1,0 +1,989 @@
+{
+  "case": "D2",
+  "arm": "A",
+  "source": {
+    "source_id": "exhibit",
+    "content_sha256": "906ddf95cb167bf624ed37596f39b7098b34b3aafd919d81fd855123d756b796",
+    "permissions": {
+      "store": true,
+      "model_input": true,
+      "display": true,
+      "export": true
+    }
+  },
+  "actual_cost": null,
+  "status": "partial",
+  "reason": "provider_budget_exhausted",
+  "report": "",
+  "claims": [
+    {
+      "claim_id": "claim-d6708c3922b11834b0df0e394c61eed9",
+      "text": "Beta FY2025 revenue was 120 USD million vs FY2024 100 USD million (both quoted, USD million), a computed year-over-year growth of +20.00% (calculation calc-606a105aa1fc483cb3495b677ba59f47).",
+      "role": "support",
+      "citations": [
+        {
+          "source_id": "exhibit",
+          "quotation": "Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million.",
+          "location": {
+            "character_start": 0,
+            "character_end": 83
+          }
+        }
+      ],
+      "challenges_claim_ids": [],
+      "fact_ids": [
+        "fact-f86665a7a2936c4c42629af2cdd1d06c9ac326f86c101f26e8612bb6a876fa4d",
+        "fact-6848722c994463b590fc61bb3743d4271120ff4681e927b40191819c3f5b0935"
+      ],
+      "calculation_ids": [
+        "calc-606a105aa1fc483cb3495b677ba59f47"
+      ]
+    },
+    {
+      "claim_id": "claim-24d8e0169968afddc738f5ca2835e3c6",
+      "text": "Beta's FY2025 diluted EPS is quoted at 3 USD per share, but the exhibit explicitly states \"Prior diluted EPS is not disclosed in this snapshot\"; without an FY2024 diluted EPS baseline, the diluted EPS change cannot be quantified — direction and magnitude are unknown from available evidence.",
+      "role": "support",
+      "citations": [
+        {
+          "source_id": "exhibit",
+          "quotation": "Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million.",
+          "location": {
+            "character_start": 0,
+            "character_end": 83
+          }
+        },
+        {
+          "source_id": "exhibit",
+          "quotation": "Prior diluted EPS is not disclosed in this snapshot.",
+          "location": {
+            "character_start": 84,
+            "character_end": 136
+          }
+        }
+      ],
+      "challenges_claim_ids": [],
+      "fact_ids": [
+        "fact-aa0d9aa03e84c074ae967027ddd65f806233b4df14c45ae6e54eb65ede1f8ee3"
+      ],
+      "calculation_ids": []
+    }
+  ],
+  "facts": [
+    {
+      "fact_id": "fact-f86665a7a2936c4c42629af2cdd1d06c9ac326f86c101f26e8612bb6a876fa4d",
+      "label": "Beta revenue FY2025",
+      "value": "120",
+      "unit": "USD million",
+      "currency": "USD",
+      "period": "FY2025",
+      "source_id": "exhibit",
+      "quotation": "Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million.",
+      "character_start": 0,
+      "character_end": 83,
+      "location": {
+        "character_start": 0,
+        "character_end": 83
+      },
+      "verification": "numeric_and_location_match_semantics_not_verified"
+    },
+    {
+      "fact_id": "fact-6848722c994463b590fc61bb3743d4271120ff4681e927b40191819c3f5b0935",
+      "label": "Beta revenue FY2024",
+      "value": "100",
+      "unit": "USD million",
+      "currency": "USD",
+      "period": "FY2024",
+      "source_id": "exhibit",
+      "quotation": "Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million.",
+      "character_start": 0,
+      "character_end": 83,
+      "location": {
+        "character_start": 0,
+        "character_end": 83
+      },
+      "verification": "numeric_and_location_match_semantics_not_verified"
+    },
+    {
+      "fact_id": "fact-aa0d9aa03e84c074ae967027ddd65f806233b4df14c45ae6e54eb65ede1f8ee3",
+      "label": "Beta diluted EPS FY2025",
+      "value": "3",
+      "unit": "USD per share",
+      "currency": "USD",
+      "period": "FY2025",
+      "source_id": "exhibit",
+      "quotation": "Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million.",
+      "character_start": 0,
+      "character_end": 83,
+      "location": {
+        "character_start": 0,
+        "character_end": 83
+      },
+      "verification": "numeric_and_location_match_semantics_not_verified"
+    }
+  ],
+  "question_parts": [
+    {
+      "id": "req-56f8ee0e34983287",
+      "question": "比较 Beta 2025 与 2024 年收入增速",
+      "core": true,
+      "status": "answered",
+      "answer": "Beta revenue FY2025 FY2025 120 USD million；Beta revenue FY2024 FY2024 100 USD million；growth_percent 20.00 percent",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": [
+        {
+          "fact_id": "fact-f86665a7a2936c4c42629af2cdd1d06c9ac326f86c101f26e8612bb6a876fa4d",
+          "origin": "current"
+        },
+        {
+          "fact_id": "fact-6848722c994463b590fc61bb3743d4271120ff4681e927b40191819c3f5b0935",
+          "origin": "current"
+        },
+        {
+          "calculation_id": "calc-606a105aa1fc483cb3495b677ba59f47",
+          "origin": "current"
+        }
+      ],
+      "requirements": [
+        {
+          "id": "req-56f8ee0e34983287",
+          "question": "比较 Beta 2025 与 2024 年收入增速",
+          "status": "satisfied",
+          "reason": "Two ordered, comparable recorded inputs are bound to a saved change calculation; entity and scope still require semantic review.",
+          "references": [
+            {
+              "fact_id": "fact-f86665a7a2936c4c42629af2cdd1d06c9ac326f86c101f26e8612bb6a876fa4d",
+              "origin": "current"
+            },
+            {
+              "fact_id": "fact-6848722c994463b590fc61bb3743d4271120ff4681e927b40191819c3f5b0935",
+              "origin": "current"
+            },
+            {
+              "calculation_id": "calc-606a105aa1fc483cb3495b677ba59f47",
+              "origin": "current"
+            }
+          ],
+          "core": true
+        }
+      ]
+    },
+    {
+      "question": "并说明稀释 EPS 变化",
+      "status": "unresolved",
+      "answer": "",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": []
+    },
+    {
+      "id": "req-74db7fbcf38fcc08",
+      "question": "说明稀释 EPS 变化。",
+      "core": true,
+      "status": "partial",
+      "answer": "Beta diluted EPS FY2025 FY2025 3 USD per share",
+      "reason": "Recorded evidence exists; comparable periods and the requested calculation still need verification.",
+      "references": [
+        {
+          "fact_id": "fact-aa0d9aa03e84c074ae967027ddd65f806233b4df14c45ae6e54eb65ede1f8ee3",
+          "origin": "current"
+        }
+      ],
+      "requirements": [
+        {
+          "id": "req-74db7fbcf38fcc08",
+          "question": "说明稀释 EPS 变化。",
+          "status": "partial",
+          "reason": "Recorded evidence exists; comparable periods and the requested calculation still need verification.",
+          "references": [
+            {
+              "fact_id": "fact-aa0d9aa03e84c074ae967027ddd65f806233b4df14c45ae6e54eb65ede1f8ee3",
+              "origin": "current"
+            }
+          ],
+          "core": true
+        }
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "code": "provider_error",
+      "message": "Model execution budget is unavailable or exhausted."
+    }
+  ],
+  "calculations": [
+    {
+      "calculation_id": "calc-606a105aa1fc483cb3495b677ba59f47",
+      "formula_id": "growth_percent",
+      "formula_version": "1",
+      "expression": "(first / second - 1) * 100",
+      "input_verification": "not_verified_by_calculator",
+      "input_precision_status": "not_established",
+      "inputs": [
+        {
+          "fact_id": "fact-f86665a7a2936c4c42629af2cdd1d06c9ac326f86c101f26e8612bb6a876fa4d",
+          "value": "120",
+          "unit": "USD million",
+          "currency": "USD",
+          "period": "FY2025"
+        },
+        {
+          "fact_id": "fact-6848722c994463b590fc61bb3743d4271120ff4681e927b40191819c3f5b0935",
+          "value": "100",
+          "unit": "USD million",
+          "currency": "USD",
+          "period": "FY2024"
+        }
+      ],
+      "value": "20.00",
+      "unit": "percent",
+      "currency": null,
+      "rounding": "half_up",
+      "decimal_places": 2,
+      "period_order_check": "recognized_formats_only",
+      "period_granularity_check": "not_established",
+      "input_status": "matched"
+    }
+  ],
+  "events": [
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:ada520c27e8c4a998af2a292c0dffa77",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 16177,
+      "usage_detail": {
+        "input_tokens": 15716,
+        "output_tokens": 461,
+        "total_tokens": 16177,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 0
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_1055ded76efe490a88c6a317"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 15716,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.0
+      }
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_1055ded76efe490a88c6a317",
+      "name": "read_sources",
+      "status": "completed",
+      "rationale": "Read the full synthetic exhibit (136 characters) to obtain Beta's 2025 and 2024 revenue and diluted EPS figures needed for the growth and EPS-change comparison.",
+      "summary": {
+        "kind": "read_sources",
+        "read_count": 1,
+        "items": [
+          {
+            "source_id": "exhibit",
+            "title": "Synthetic exhibit",
+            "start": 0,
+            "end": 136,
+            "total_characters": 136
+          }
+        ]
+      }
+    },
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:c06008505fa545628b85733d4e08a8e1",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 17911,
+      "usage_detail": {
+        "input_tokens": 914,
+        "output_tokens": 1317,
+        "total_tokens": 17911,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 15680
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_63d24e6072a64c93a79678ba",
+        "call_7d30c9e9f1374110b46f1326"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 16594,
+        "cache_read_input_tokens": 15680,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.944919850548391
+      },
+      "note": "该展品载有2025年收入（1.2亿美元）、2024年收入（1亿美元）以及2025年稀释每股收益（3美元）——但明确没有披露2024年的稀释每股收益。让我记录下这些事实，并进行专门的证据反查，以寻找任何一次性项目或上一年度的EPS。"
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_63d24e6072a64c93a79678ba",
+      "name": "record_facts",
+      "status": "completed",
+      "rationale": "Record the three numeric observations from the fully read exhibit (revenue 2025 and 2024, diluted EPS 2025) as the basis for the growth calculation; the exhibit explicitly does not disclose 2024 diluted EPS, so no fact can be recorded for it.",
+      "summary": {
+        "kind": "record_facts",
+        "recorded_count": 3,
+        "facts_preview": [
+          {
+            "label": "Beta revenue FY2025",
+            "value": "120",
+            "unit": "USD million",
+            "currency": "USD",
+            "period": "FY2025"
+          },
+          {
+            "label": "Beta revenue FY2024",
+            "value": "100",
+            "unit": "USD million",
+            "currency": "USD",
+            "period": "FY2024"
+          },
+          {
+            "label": "Beta diluted EPS FY2025",
+            "value": "3",
+            "unit": "USD per share",
+            "currency": "USD",
+            "period": "FY2025"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_7d30c9e9f1374110b46f1326",
+      "name": "search_source",
+      "status": "completed",
+      "rationale": "Dedicated counter-evidence search: look for any disclosed prior-year diluted EPS, one-off items, or accounting/segment notes in the exhibit that could distort the 20% revenue growth or enable an EPS change calculation."
+    },
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:8ba98ad730054cebacc35a18d3639529",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 18991,
+      "usage_detail": {
+        "input_tokens": 2988,
+        "output_tokens": 323,
+        "total_tokens": 18991,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 15680
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_d94934eccba546ea97630ecc"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 18668,
+        "cache_read_input_tokens": 15680,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.8399400042854082
+      },
+      "note": "反驳搜索确认了该展示文档中的唯一提及内容：\"Prior diluted EPS is not disclosed in this snapshot\" —— 任何地方都没有往年 EPS、一次性项目或会计政策注释。现在让我确定性地计算收入增长。"
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_d94934eccba546ea97630ecc",
+      "name": "calculate_financials",
+      "status": "completed",
+      "rationale": "Compute Beta's FY2025 vs FY2024 revenue growth deterministically from the two recorded revenue facts (120 vs 100 USD million). Diluted EPS change cannot be computed because FY2024 diluted EPS is not disclosed in the exhibit.",
+      "summary": {
+        "kind": "calculate_financials",
+        "calculated_count": 1,
+        "calcs_preview": [
+          {
+            "formula_id": "growth_percent",
+            "value": "20.00",
+            "unit": "percent",
+            "currency": null,
+            "expression": "(first / second - 1) * 100"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:98f57defc49d4cbdb7ec7da9d0d9c944",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 20636,
+      "usage_detail": {
+        "input_tokens": 2970,
+        "output_tokens": 1346,
+        "total_tokens": 20636,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 16320
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_1ebe5a0fb792436db4e19ee5"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 19290,
+        "cache_read_input_tokens": 16320,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.8460342146189735
+      },
+      "note": "增长率计算已完成（+20.00%）。已确认覆盖范围：仅获取了上传的展示内容；本次运行中无法使用报表/归档/新闻/价格。让我先对引用的子句进行检查点保存，然后提交。"
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_1ebe5a0fb792436db4e19ee5",
+      "name": "checkpoint_report_draft",
+      "status": "completed",
+      "rationale": null,
+      "summary": {
+        "kind": "checkpoint_report_draft",
+        "accepted": 2,
+        "rejected": 0
+      }
+    }
+  ],
+  "tool_io": [
+    {
+      "turn": 1,
+      "id": "call_1055ded76efe490a88c6a317",
+      "tool": "read_sources",
+      "input": {
+        "rationale": "Read the full synthetic exhibit (136 characters) to obtain Beta's 2025 and 2024 revenue and diluted EPS figures needed for the growth and EPS-change comparison.",
+        "reads": [
+          {
+            "source_id": "exhibit",
+            "start": 0
+          }
+        ]
+      },
+      "result": "{\"cleared\":true,\"facts_recorded_count\":3,\"hint\":\"Use search_source or targeted read_sources if re-inspection needed; recorded read_ranges remain valid.\",\"original_chars\":537,\"reason\":\"context_compacted\",\"source_ids\":[\"exhibit\"],\"source_spans\":[{\"end\":136,\"source_id\":\"exhibit\",\"start\":0}],\"tool\":\"read_sources\"}"
+    },
+    {
+      "turn": 2,
+      "id": "call_63d24e6072a64c93a79678ba",
+      "tool": "record_facts",
+      "input": {
+        "facts": [
+          {
+            "currency": "USD",
+            "label": "Beta revenue FY2025",
+            "period": "FY2025",
+            "quotation": "Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million.",
+            "source_id": "exhibit",
+            "unit": "USD million",
+            "value": 120
+          },
+          {
+            "currency": "USD",
+            "label": "Beta revenue FY2024",
+            "period": "FY2024",
+            "quotation": "Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million.",
+            "source_id": "exhibit",
+            "unit": "USD million",
+            "value": 100
+          },
+          {
+            "currency": "USD",
+            "label": "Beta diluted EPS FY2025",
+            "period": "FY2025",
+            "quotation": "Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million.",
+            "source_id": "exhibit",
+            "unit": "USD per share",
+            "value": 3
+          }
+        ],
+        "rationale": "Record the three numeric observations from the fully read exhibit (revenue 2025 and 2024, diluted EPS 2025) as the basis for the growth calculation; the exhibit explicitly does not disclose 2024 diluted EPS, so no fact can be recorded for it."
+      },
+      "result": "{\"facts\": [{\"character_end\": 83, \"character_start\": 0, \"currency\": \"USD\", \"fact_id\": \"fact-f86665a7a2936c4c42629af2cdd1d06c9ac326f86c101f26e8612bb6a876fa4d\", \"label\": \"Beta revenue FY2025\", \"location\": {\"character_end\": 83, \"character_start\": 0}, \"period\": \"FY2025\", \"quotation\": \"Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million.\", \"source_id\": \"exhibit\", \"unit\": \"USD million\", \"value\": \"120\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 83, \"character_start\": 0, \"currency\": \"USD\", \"fact_id\": \"fact-6848722c994463b590fc61bb3743d4271120ff4681e927b40191819c3f5b0935\", \"label\": \"Beta revenue FY2024\", \"location\": {\"character_end\": 83, \"character_start\": 0}, \"period\": \"FY2024\", \"quotation\": \"Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million.\", \"source_id\": \"exhibit\", \"unit\": \"USD million\", \"value\": \"100\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}, {\"character_end\": 83, \"character_start\": 0, \"currency\": \"USD\", \"fact_id\": \"fact-aa0d9aa03e84c074ae967027ddd65f806233b4df14c45ae6e54eb65ede1f8ee3\", \"label\": \"Beta diluted EPS FY2025\", \"location\": {\"character_end\": 83, \"character_start\": 0}, \"period\": \"FY2025\", \"quotation\": \"Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million.\", \"source_id\": \"exhibit\", \"unit\": \"USD per share\", \"value\": \"3\", \"verification\": \"numeric_and_location_match_semantics_not_verified\"}], \"failures\": []}"
+    },
+    {
+      "turn": 2,
+      "id": "call_7d30c9e9f1374110b46f1326",
+      "tool": "search_source",
+      "input": {
+        "counter_search": {
+          "hypothesis": "2025 revenue includes a one-off item or accounting/segment change that distorts the +20% growth; or prior-year diluted EPS is disclosed elsewhere in the exhibit enabling an EPS change calculation",
+          "target": "Beta 2025 revenue grew ~20% over 2024 and diluted EPS change is computable"
+        },
+        "max_hits": 5,
+        "query": "EPS",
+        "rationale": "Dedicated counter-evidence search: look for any disclosed prior-year diluted EPS, one-off items, or accounting/segment notes in the exhibit that could distort the 20% revenue growth or enable an EPS change calculation.",
+        "source_id": "exhibit"
+      },
+      "result": "{\"cleared\":true,\"facts_recorded_count\":3,\"hint\":\"Use search_source or targeted read_sources if re-inspection needed; recorded read_ranges remain valid.\",\"original_chars\":717,\"query\":\"EPS\",\"reason\":\"context_compacted\",\"source_ids\":[\"exhibit\"],\"source_spans\":[],\"tool\":\"search_source\",\"total_matches\":2}"
+    },
+    {
+      "turn": 3,
+      "id": "call_d94934eccba546ea97630ecc",
+      "tool": "calculate_financials",
+      "input": {
+        "calculations": [
+          {
+            "decimal_places": 2,
+            "first_fact_id": "fact-f86665a7a2936c4c42629af2cdd1d06c9ac326f86c101f26e8612bb6a876fa4d",
+            "formula": "growth_percent",
+            "second_fact_id": "fact-6848722c994463b590fc61bb3743d4271120ff4681e927b40191819c3f5b0935"
+          }
+        ],
+        "rationale": "Compute Beta's FY2025 vs FY2024 revenue growth deterministically from the two recorded revenue facts (120 vs 100 USD million). Diluted EPS change cannot be computed because FY2024 diluted EPS is not disclosed in the exhibit."
+      },
+      "result": "{\"calculations\": [{\"calculation_id\": \"calc-606a105aa1fc483cb3495b677ba59f47\", \"currency\": null, \"decimal_places\": 2, \"expression\": \"(first / second - 1) * 100\", \"formula_id\": \"growth_percent\", \"formula_version\": \"1\", \"input_precision_status\": \"not_established\", \"input_status\": \"matched\", \"input_verification\": \"not_verified_by_calculator\", \"inputs\": [{\"currency\": \"USD\", \"fact_id\": \"fact-f86665a7a2936c4c42629af2cdd1d06c9ac326f86c101f26e8612bb6a876fa4d\", \"period\": \"FY2025\", \"unit\": \"USD million\", \"value\": \"120\"}, {\"currency\": \"USD\", \"fact_id\": \"fact-6848722c994463b590fc61bb3743d4271120ff4681e927b40191819c3f5b0935\", \"period\": \"FY2024\", \"unit\": \"USD million\", \"value\": \"100\"}], \"period_granularity_check\": \"not_established\", \"period_order_check\": \"recognized_formats_only\", \"rounding\": \"half_up\", \"unit\": \"percent\", \"value\": \"20.00\"}]}"
+    },
+    {
+      "turn": 4,
+      "id": "call_1ebe5a0fb792436db4e19ee5",
+      "tool": "checkpoint_report_draft",
+      "input": {
+        "clauses": [
+          {
+            "citations": [
+              {
+                "character_end": 83,
+                "character_start": 0,
+                "quotation": "Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million.",
+                "source_id": "exhibit"
+              }
+            ],
+            "fact_ids": [
+              "fact-f86665a7a2936c4c42629af2cdd1d06c9ac326f86c101f26e8612bb6a876fa4d",
+              "fact-6848722c994463b590fc61bb3743d4271120ff4681e927b40191819c3f5b0935"
+            ],
+            "calculation_ids": [
+              "calc-606a105aa1fc483cb3495b677ba59f47"
+            ],
+            "role": "support",
+            "text": "Beta FY2025 revenue was 120 USD million vs FY2024 100 USD million (both quoted, USD million), a computed year-over-year growth of +20.00% (calculation calc-606a105aa1fc483cb3495b677ba59f47)."
+          },
+          {
+            "citations": [
+              {
+                "character_end": 83,
+                "character_start": 0,
+                "quotation": "Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million.",
+                "source_id": "exhibit"
+              },
+              {
+                "quotation": "Prior diluted EPS is not disclosed in this snapshot.",
+                "source_id": "exhibit"
+              }
+            ],
+            "fact_ids": [
+              "fact-aa0d9aa03e84c074ae967027ddd65f806233b4df14c45ae6e54eb65ede1f8ee3"
+            ],
+            "role": "support",
+            "text": "Beta's FY2025 diluted EPS is quoted at 3 USD per share, but the exhibit explicitly states \"Prior diluted EPS is not disclosed in this snapshot\"; without an FY2024 diluted EPS baseline, the diluted EPS change cannot be quantified — direction and magnitude are unknown from available evidence."
+          }
+        ]
+      },
+      "result": "{\"accepted\": [{\"claim_id\": \"claim-d6708c3922b11834b0df0e394c61eed9\", \"index\": 0}, {\"claim_id\": \"claim-24d8e0169968afddc738f5ca2835e3c6\", \"index\": 1}], \"rejected\": []}"
+    }
+  ],
+  "answered_parts": [
+    "req-56f8ee0e34983287"
+  ],
+  "all_core_answered": false,
+  "submit_research_observed": false,
+  "submit_research_calls": [],
+  "submission_acceptance": "not_observed",
+  "record_facts_parallel_turns": [],
+  "usage": {
+    "reported_tokens": 73715,
+    "unknown_usage_calls": 0,
+    "reserved_estimate_tokens": 0
+  },
+  "search_calls": 0,
+  "calls": 4,
+  "budget_accounted_tokens": 73715,
+  "prompts": [
+    {
+      "turn_sha256": "bd12ca3f7ed588cb022591edcffe5139ddf177bc9d17d5732594dbe995ac14b4",
+      "tail_note": null
+    },
+    {
+      "turn_sha256": "ce026530542948b1e7ece76e3ca2c2962718db79425dbc6bf67a1c22220e8df2",
+      "tail_note": "[Coverage]\n{\"coverage\":{\"categories\":[{\"category\":\"uploads\",\"obtained\":1,\"status\":\"obtained\"}],\"not_attempted\":[\"market_prices\",\"financial_statements\",\"filings\",\"news_web\",\"macro\",\"other\"],\"not_established\":[\"No market prices were requested in this run; nothing is established for this category.\",\"No financial statements were requested in this run; nothing is established for this category.\",\"No filings and official documents were requested in this run; nothing is established for this category.\",\"No news and web were requested in this run; nothing is established for this category.\"],\"note\":\"Generated deterministically from run events; state these limits instead of implying completeness.\",\"run_status\":\"incomplete\"}}\n[Working Memory]\nState: facts=0 calcs=0 charts=0 sources=1\nCore evidence needed: financial:revenue: No eligible recorded fact matches this metric.; financial:diluted_eps: No eligible recorded fact matches this metric.\nMethodChecks(company_comparison,earnings_review): entities:n/a, aligned_statements:missing, derived_ratios:missing, entity:n/a, statements:missing, filing_text:missing, prior_compare:missing\nCounterEvidence: needed(0/1)"
+    },
+    {
+      "turn_sha256": "3f5f31bd7061697d99e6f35f68581ccca3aaac32f8f033b85ce98a9daccab363",
+      "tail_note": "[Coverage]\n{\"coverage\":{\"categories\":[{\"category\":\"uploads\",\"obtained\":1,\"status\":\"obtained\"}],\"not_attempted\":[\"market_prices\",\"financial_statements\",\"filings\",\"news_web\",\"macro\",\"other\"],\"not_established\":[\"No market prices were requested in this run; nothing is established for this category.\",\"No financial statements were requested in this run; nothing is established for this category.\",\"No filings and official documents were requested in this run; nothing is established for this category.\",\"No news and web were requested in this run; nothing is established for this category.\"],\"note\":\"Generated deterministically from run events; state these limits instead of implying completeness.\",\"run_status\":\"incomplete\"}}\n[Working Memory]\nState: facts=3 calcs=0 charts=0 sources=1\nCore evidence needed: financial:revenue: Recorded evidence exists; comparable periods and the requested calculation still need verification.; financial:diluted_eps: Recorded evidence exists; comparable periods and the requested calculation still need verification.\nMethodChecks(company_comparison,earnings_review): entities:n/a, aligned_statements:missing, derived_ratios:missing, entity:n/a, statements:missing, filing_text:ok, prior_compare:missing\nCounterEvidence: ok(1/1)"
+    },
+    {
+      "turn_sha256": "0d2fc7c20a0b908f706e43dccb94a6386148b43aa9b6c9f08a4fed9f420aeb3d",
+      "tail_note": "[Coverage]\n{\"coverage\":{\"categories\":[{\"category\":\"uploads\",\"obtained\":1,\"status\":\"obtained\"}],\"not_attempted\":[\"market_prices\",\"financial_statements\",\"filings\",\"news_web\",\"macro\",\"other\"],\"not_established\":[\"No market prices were requested in this run; nothing is established for this category.\",\"No financial statements were requested in this run; nothing is established for this category.\",\"No filings and official documents were requested in this run; nothing is established for this category.\",\"No news and web were requested in this run; nothing is established for this category.\"],\"note\":\"Generated deterministically from run events; state these limits instead of implying completeness.\",\"run_status\":\"incomplete\"}}\n[Working Memory]\nState: facts=3 calcs=1 charts=0 sources=1\nCore evidence needed: financial:diluted_eps: Recorded evidence exists; comparable periods and the requested calculation still need verification.\nMethodChecks(company_comparison,earnings_review): entities:n/a, aligned_statements:missing, derived_ratios:ok, entity:n/a, statements:missing, filing_text:ok, prior_compare:ok\nCounterEvidence: ok(1/1)"
+    }
+  ],
+  "wire_turns": [],
+  "decoded_turns": [
+    {
+      "finish_reason": "tool_use",
+      "blocks": [
+        {
+          "type": "thinking",
+          "chars": 1787
+        },
+        {
+          "type": "tool_use",
+          "name": "read_sources",
+          "arguments_shape": {
+            "rationale": {
+              "chars": 160
+            },
+            "reads": {
+              "items": 1,
+              "item_shapes": [
+                {
+                  "source_id": {
+                    "chars": 7
+                  },
+                  "start": {
+                    "type": "int"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "raw_output_saved": false
+    },
+    {
+      "finish_reason": "tool_use",
+      "blocks": [
+        {
+          "type": "thinking",
+          "chars": 3432
+        },
+        {
+          "type": "text",
+          "chars": 115
+        },
+        {
+          "type": "tool_use",
+          "name": "record_facts",
+          "arguments_shape": {
+            "facts": {
+              "items": 3,
+              "item_shapes": [
+                {
+                  "currency": {
+                    "chars": 3
+                  },
+                  "label": {
+                    "chars": 19
+                  },
+                  "period": {
+                    "chars": 6
+                  },
+                  "quotation": {
+                    "chars": 83
+                  },
+                  "source_id": {
+                    "chars": 7
+                  },
+                  "unit": {
+                    "chars": 11
+                  },
+                  "value": {
+                    "type": "int"
+                  }
+                },
+                {
+                  "currency": {
+                    "chars": 3
+                  },
+                  "label": {
+                    "chars": 19
+                  },
+                  "period": {
+                    "chars": 6
+                  },
+                  "quotation": {
+                    "chars": 83
+                  },
+                  "source_id": {
+                    "chars": 7
+                  },
+                  "unit": {
+                    "chars": 11
+                  },
+                  "value": {
+                    "type": "int"
+                  }
+                },
+                {
+                  "currency": {
+                    "chars": 3
+                  },
+                  "label": {
+                    "chars": 23
+                  },
+                  "period": {
+                    "chars": 6
+                  },
+                  "quotation": {
+                    "chars": 83
+                  },
+                  "source_id": {
+                    "chars": 7
+                  },
+                  "unit": {
+                    "chars": 13
+                  },
+                  "value": {
+                    "type": "int"
+                  }
+                }
+              ]
+            },
+            "rationale": {
+              "chars": 242
+            }
+          }
+        },
+        {
+          "type": "tool_use",
+          "name": "search_source",
+          "arguments_shape": {
+            "counter_search": {
+              "hypothesis": {
+                "chars": 195
+              },
+              "target": {
+                "chars": 74
+              }
+            },
+            "max_hits": {
+              "type": "int"
+            },
+            "query": {
+              "chars": 3
+            },
+            "rationale": {
+              "chars": 218
+            },
+            "source_id": {
+              "chars": 7
+            }
+          }
+        }
+      ],
+      "raw_output_saved": false
+    },
+    {
+      "finish_reason": "tool_use",
+      "blocks": [
+        {
+          "type": "thinking",
+          "chars": 432
+        },
+        {
+          "type": "text",
+          "chars": 120
+        },
+        {
+          "type": "tool_use",
+          "name": "calculate_financials",
+          "arguments_shape": {
+            "calculations": {
+              "items": 1,
+              "item_shapes": [
+                {
+                  "decimal_places": {
+                    "type": "int"
+                  },
+                  "first_fact_id": {
+                    "chars": 69
+                  },
+                  "formula": {
+                    "chars": 14
+                  },
+                  "second_fact_id": {
+                    "chars": 69
+                  }
+                }
+              ]
+            },
+            "rationale": {
+              "chars": 224
+            }
+          }
+        }
+      ],
+      "raw_output_saved": false
+    },
+    {
+      "finish_reason": "tool_use",
+      "blocks": [
+        {
+          "type": "thinking",
+          "chars": 3692
+        },
+        {
+          "type": "text",
+          "chars": 81
+        },
+        {
+          "type": "tool_use",
+          "name": "checkpoint_report_draft",
+          "arguments_shape": {
+            "clauses": {
+              "items": 2,
+              "item_shapes": [
+                {
+                  "citations": {
+                    "items": 1,
+                    "item_shapes": [
+                      {
+                        "character_end": {
+                          "type": "int"
+                        },
+                        "character_start": {
+                          "type": "int"
+                        },
+                        "quotation": {
+                          "chars": 83
+                        },
+                        "source_id": {
+                          "chars": 7
+                        }
+                      }
+                    ]
+                  },
+                  "fact_ids": {
+                    "items": 2,
+                    "item_shapes": [
+                      {
+                        "chars": 69
+                      },
+                      {
+                        "chars": 69
+                      }
+                    ]
+                  },
+                  "calculation_ids": {
+                    "items": 1,
+                    "item_shapes": [
+                      {
+                        "chars": 37
+                      }
+                    ]
+                  },
+                  "role": {
+                    "chars": 7
+                  },
+                  "text": {
+                    "chars": 190
+                  }
+                },
+                {
+                  "citations": {
+                    "items": 2,
+                    "item_shapes": [
+                      {
+                        "character_end": {
+                          "type": "int"
+                        },
+                        "character_start": {
+                          "type": "int"
+                        },
+                        "quotation": {
+                          "chars": 83
+                        },
+                        "source_id": {
+                          "chars": 7
+                        }
+                      },
+                      {
+                        "quotation": {
+                          "chars": 52
+                        },
+                        "source_id": {
+                          "chars": 7
+                        }
+                      }
+                    ]
+                  },
+                  "fact_ids": {
+                    "items": 1,
+                    "item_shapes": [
+                      {
+                        "chars": 69
+                      }
+                    ]
+                  },
+                  "role": {
+                    "chars": 7
+                  },
+                  "text": {
+                    "chars": 291
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "raw_output_saved": false
+    }
+  ],
+  "diagnostics": [
+    {
+      "transport": null,
+      "stream_metrics": null,
+      "finish_reason": null,
+      "stop_reason": null,
+      "usage": {
+        "input_tokens": 15716,
+        "output_tokens": 461,
+        "total_tokens": 16177,
+        "cache_read_input_tokens": 0
+      }
+    },
+    {
+      "transport": null,
+      "stream_metrics": null,
+      "finish_reason": null,
+      "stop_reason": null,
+      "usage": {
+        "input_tokens": 914,
+        "output_tokens": 1317,
+        "total_tokens": 17911,
+        "cache_read_input_tokens": 15680
+      }
+    },
+    {
+      "transport": null,
+      "stream_metrics": null,
+      "finish_reason": null,
+      "stop_reason": null,
+      "usage": {
+        "input_tokens": 2988,
+        "output_tokens": 323,
+        "total_tokens": 18991,
+        "cache_read_input_tokens": 15680
+      }
+    },
+    {
+      "transport": null,
+      "stream_metrics": null,
+      "finish_reason": null,
+      "stop_reason": null,
+      "usage": {
+        "input_tokens": 2970,
+        "output_tokens": 1346,
+        "total_tokens": 20636,
+        "cache_read_input_tokens": 16320
+      }
+    }
+  ],
+  "elapsed_seconds": 74.287
+}

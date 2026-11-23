@@ -1,0 +1,10 @@
+[
+  {
+    "name": "D1-A-1",
+    "sha256": "8f2bcc29b8f0e056ab9bdbd757e7069869bcd8abb2e7296888daeda46f863550",
+    "reason": "provider_request_rejected",
+    "worker_exit_code": 0,
+    "hard_timeout": false,
+    "stop": true
+  }
+]

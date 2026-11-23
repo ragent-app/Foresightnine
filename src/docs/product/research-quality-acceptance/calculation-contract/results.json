@@ -1,0 +1,731 @@
+{
+  "batches": [
+    {
+      "trace": "D1-A-1.json",
+      "trace_sha256": "a5fb6ce82ea012622e6ba03c11c488d26f0cd71f260e7c1065fd0a65942b2cdd",
+      "call_id": "call_82d50e358cec481797e53dbd",
+      "original_input": {
+        "calculations": [
+          {
+            "fact_ids": [
+              "fact-9fae399b63a13cc43ca18c28f6d71de1850fdb58e1f334ca9755da4e88be0fbf",
+              "fact-1f5465a1655a588e386bf074d1eec33a6f91d00435135d2f822fb57b57b9a606"
+            ],
+            "formula": "growth_percent",
+            "second_fact_id": "fact-1f5465a1655a588e386bf074d1eec33a6f91d00435135d2f822fb57b57b9a606",
+            "first_fact_id": "fact-9fae399b63a13cc43ca18c28f6d71de1850fdb58e1f334ca9755da4e88be0fbf"
+          },
+          {
+            "fact_ids": [
+              "fact-a4df15ff04159fae518415cd4f99bce0237e1b0ff94d2d5a746110c1b58d30a3",
+              "fact-66c772473b1432ea8df3735e7a8185b0fdd1b2f69144724b396a079d77c9a2bc"
+            ],
+            "formula": "growth_percent",
+            "second_fact_id": "fact-66c772473b1432ea8df3735e7a8185b0fdd1b2f69144724b396a079d77c9a2bc",
+            "first_fact_id": "fact-a4df15ff04159fae518415cd4f99bce0237e1b0ff94d2d5a746110c1b58d30a3"
+          }
+        ],
+        "rationale": "按同一公式计算 Alpha 2025 vs 2024 收入增速与稀释 EPS 增速，作为先期比较的两项确定性派生指标。"
+      },
+      "results": [
+        {
+          "calculation_id": "calc-efb92c0907954beab5ccf442f254a273",
+          "formula_id": "growth_percent",
+          "formula_version": "1",
+          "expression": "(first / second - 1) * 100",
+          "input_verification": "not_verified_by_calculator",
+          "input_precision_status": "not_established",
+          "inputs": [
+            {
+              "fact_id": "fact-9fae399b63a13cc43ca18c28f6d71de1850fdb58e1f334ca9755da4e88be0fbf",
+              "value": "120",
+              "unit": "USD million",
+              "currency": null,
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-1f5465a1655a588e386bf074d1eec33a6f91d00435135d2f822fb57b57b9a606",
+              "value": "100",
+              "unit": "USD million",
+              "currency": null,
+              "period": "FY2024"
+            }
+          ],
+          "value": "20.00",
+          "unit": "percent",
+          "currency": null,
+          "rounding": "half_up",
+          "decimal_places": 2,
+          "period_order_check": "recognized_formats_only",
+          "period_granularity_check": "not_established",
+          "input_status": "unverifiable"
+        },
+        {
+          "calculation_id": "calc-94200ea711f54834b078e578d1715d76",
+          "formula_id": "growth_percent",
+          "formula_version": "1",
+          "expression": "(first / second - 1) * 100",
+          "input_verification": "not_verified_by_calculator",
+          "input_precision_status": "not_established",
+          "inputs": [
+            {
+              "fact_id": "fact-a4df15ff04159fae518415cd4f99bce0237e1b0ff94d2d5a746110c1b58d30a3",
+              "value": "3",
+              "unit": "USD per share",
+              "currency": null,
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-66c772473b1432ea8df3735e7a8185b0fdd1b2f69144724b396a079d77c9a2bc",
+              "value": "2",
+              "unit": "USD per share",
+              "currency": null,
+              "period": "FY2024"
+            }
+          ],
+          "value": "50.00",
+          "unit": "percent",
+          "currency": null,
+          "rounding": "half_up",
+          "decimal_places": 2,
+          "period_order_check": "recognized_formats_only",
+          "period_granularity_check": "not_established",
+          "input_status": "matched"
+        }
+      ]
+    },
+    {
+      "trace": "D1-A-2.json",
+      "trace_sha256": "5a89fd2fc1835809a98a111dee574f6faa7d1b4044e5ec0d4cd7862082aacff7",
+      "call_id": "call_5d3ca7bc817c488293dd0ab4",
+      "original_input": {
+        "calculations": [
+          {
+            "decimal_places": 2,
+            "fact_ids": [
+              "fact-23ad09e397740d0a8e9a8c5dac3873133188a14547c8a57ed89542cf158cf79e",
+              "fact-5b35d687ba4e156a92f2a3f02570ac0396f3a64c204a2e55f4af7378876d29e8"
+            ],
+            "first_fact_id": "fact-23ad09e397740d0a8e9a8c5dac3873133188a14547c8a57ed89542cf158cf79e",
+            "formula": "growth_percent",
+            "second_fact_id": "fact-5b35d687ba4e156a92f2a3f02570ac0396f3a64c204a2e55f4af7378876d29e8"
+          },
+          {
+            "decimal_places": 2,
+            "first_fact_id": "fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7",
+            "formula": "growth_percent",
+            "second_fact_id": "fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79"
+          },
+          {
+            "decimal_places": 2,
+            "first_fact_id": "fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7",
+            "formula": "subtract",
+            "second_fact_id": "fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79"
+          }
+        ],
+        "rationale": "Compute Alpha's FY2025 vs FY2024 revenue growth percent, diluted EPS growth percent, and the absolute change in diluted EPS, all from recorded fact IDs with one consistent formula per metric."
+      },
+      "results": [
+        {
+          "calculation_id": "calc-b6742047e2e94f04b2258e841da096c0",
+          "formula_id": "growth_percent",
+          "formula_version": "1",
+          "expression": "(first / second - 1) * 100",
+          "input_verification": "not_verified_by_calculator",
+          "input_precision_status": "not_established",
+          "inputs": [
+            {
+              "fact_id": "fact-23ad09e397740d0a8e9a8c5dac3873133188a14547c8a57ed89542cf158cf79e",
+              "value": "120",
+              "unit": "million USD",
+              "currency": "USD",
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-5b35d687ba4e156a92f2a3f02570ac0396f3a64c204a2e55f4af7378876d29e8",
+              "value": "100",
+              "unit": "million USD",
+              "currency": "USD",
+              "period": "FY2024"
+            }
+          ],
+          "value": "20.00",
+          "unit": "percent",
+          "currency": null,
+          "rounding": "half_up",
+          "decimal_places": 2,
+          "period_order_check": "recognized_formats_only",
+          "period_granularity_check": "not_established",
+          "input_status": "matched"
+        },
+        {
+          "calculation_id": "calc-d5999c5fee3740b1b42571e883ab850d",
+          "formula_id": "growth_percent",
+          "formula_version": "1",
+          "expression": "(first / second - 1) * 100",
+          "input_verification": "not_verified_by_calculator",
+          "input_precision_status": "not_established",
+          "inputs": [
+            {
+              "fact_id": "fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7",
+              "value": "3",
+              "unit": "USD per share",
+              "currency": "USD",
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79",
+              "value": "2",
+              "unit": "USD per share",
+              "currency": "USD",
+              "period": "FY2024"
+            }
+          ],
+          "value": "50.00",
+          "unit": "percent",
+          "currency": null,
+          "rounding": "half_up",
+          "decimal_places": 2,
+          "period_order_check": "recognized_formats_only",
+          "period_granularity_check": "not_established",
+          "input_status": "matched"
+        },
+        {
+          "calculation_id": "calc-3e4a3bef4bbc42c7938c409c5f351e8d",
+          "formula_id": "subtract",
+          "formula_version": "1",
+          "expression": "inputs[0] - sum(inputs[1:])",
+          "input_verification": "not_verified_by_calculator",
+          "input_precision_status": "not_established",
+          "inputs": [
+            {
+              "fact_id": "fact-77c17b7d24943875fd5badcd1c1e5c22a158c712402b689dfb20fb03530b7ce7",
+              "value": "3",
+              "unit": "USD per share",
+              "currency": "USD",
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-7973ec170c440dfbffed3eaedade50c3ff171f9565556a95821d09b9d6d4db79",
+              "value": "2",
+              "unit": "USD per share",
+              "currency": "USD",
+              "period": "FY2024"
+            }
+          ],
+          "value": "1.00",
+          "unit": "USD per share",
+          "currency": "USD",
+          "rounding": "half_up",
+          "decimal_places": 2,
+          "input_status": "matched"
+        }
+      ]
+    },
+    {
+      "trace": "D1-B-1.json",
+      "trace_sha256": "1d87b9903e213f9dbddc0b790d8399d539ee675247ca22fff06f757823871a1e",
+      "call_id": "call_adb28e4671a64560b9b6621c",
+      "original_input": {
+        "calculations": [
+          {
+            "fact_ids": [
+              "fact-05f9870f8924bb8b66c4430308c16a70f445a1054664c5ca7dd716b40c8771b9",
+              "fact-a59bc4eea4dce0a45974d929df651785adc40b3011af8f0eefb0362f6fa95c45"
+            ],
+            "first_fact_id": "fact-05f9870f8924bb8b66c4430308c16a70f445a1054664c5ca7dd716b40c8771b9",
+            "formula": "growth_percent",
+            "second_fact_id": "fact-a59bc4eea4dce0a45974d929df651785adc40b3011af8f0eefb0362f6fa95c45"
+          },
+          {
+            "first_fact_id": "fact-34afbf75ddd2318a6576a430a6aebcc8feac260d38f912240dd7240630e66af3",
+            "formula": "growth_percent",
+            "second_fact_id": "fact-d8507550c4a07ff2051eebcd6f74a0bb5ab2ec3676f0ab61b6b490b1d8de6d7f"
+          },
+          {
+            "first_fact_id": "fact-34afbf75ddd2318a6576a430a6aebcc8feac260d38f912240dd7240630e66af3",
+            "formula": "difference",
+            "second_fact_id": "fact-d8507550c4a07ff2051eebcd6f74a0bb5ab2ec3676f0ab61b6b490b1d8de6d7f"
+          }
+        ],
+        "rationale": "Compute FY2025 revenue growth vs FY2024, FY2025 diluted EPS growth, and the absolute diluted EPS change, all deterministically from the recorded exhibit facts."
+      },
+      "results": [
+        {
+          "calculation_id": "calc-8da546393aa84887bb4cd1b372eea821",
+          "formula_id": "growth_percent",
+          "formula_version": "1",
+          "expression": "(first / second - 1) * 100",
+          "input_verification": "not_verified_by_calculator",
+          "input_precision_status": "not_established",
+          "inputs": [
+            {
+              "fact_id": "fact-05f9870f8924bb8b66c4430308c16a70f445a1054664c5ca7dd716b40c8771b9",
+              "value": "120",
+              "unit": "USD million",
+              "currency": null,
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-a59bc4eea4dce0a45974d929df651785adc40b3011af8f0eefb0362f6fa95c45",
+              "value": "100",
+              "unit": "USD million",
+              "currency": null,
+              "period": "FY2024"
+            }
+          ],
+          "value": "20.00",
+          "unit": "percent",
+          "currency": null,
+          "rounding": "half_up",
+          "decimal_places": 2,
+          "period_order_check": "recognized_formats_only",
+          "period_granularity_check": "not_established",
+          "input_status": "unverifiable"
+        },
+        {
+          "calculation_id": "calc-24d2623518434c718b84c0241ec97784",
+          "formula_id": "growth_percent",
+          "formula_version": "1",
+          "expression": "(first / second - 1) * 100",
+          "input_verification": "not_verified_by_calculator",
+          "input_precision_status": "not_established",
+          "inputs": [
+            {
+              "fact_id": "fact-34afbf75ddd2318a6576a430a6aebcc8feac260d38f912240dd7240630e66af3",
+              "value": "3",
+              "unit": "USD per share",
+              "currency": null,
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-d8507550c4a07ff2051eebcd6f74a0bb5ab2ec3676f0ab61b6b490b1d8de6d7f",
+              "value": "2",
+              "unit": "USD per share",
+              "currency": null,
+              "period": "FY2024"
+            }
+          ],
+          "value": "50.00",
+          "unit": "percent",
+          "currency": null,
+          "rounding": "half_up",
+          "decimal_places": 2,
+          "period_order_check": "recognized_formats_only",
+          "period_granularity_check": "not_established",
+          "input_status": "matched"
+        },
+        {
+          "calculation_id": "calc-0c146f4c3cbb486b8125b061ff2b55f7",
+          "formula_id": "difference",
+          "formula_version": "1",
+          "expression": "first - second",
+          "input_verification": "not_verified_by_calculator",
+          "input_precision_status": "not_established",
+          "inputs": [
+            {
+              "fact_id": "fact-34afbf75ddd2318a6576a430a6aebcc8feac260d38f912240dd7240630e66af3",
+              "value": "3",
+              "unit": "USD per share",
+              "currency": null,
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-d8507550c4a07ff2051eebcd6f74a0bb5ab2ec3676f0ab61b6b490b1d8de6d7f",
+              "value": "2",
+              "unit": "USD per share",
+              "currency": null,
+              "period": "FY2024"
+            }
+          ],
+          "value": "1.00",
+          "unit": "USD per share",
+          "currency": null,
+          "rounding": "half_up",
+          "decimal_places": 2,
+          "input_status": "matched"
+        }
+      ]
+    },
+    {
+      "trace": "D1-B-2.json",
+      "trace_sha256": "ead28514c47ee908cc05f4a4cf58a68408a0331d0cdcfe294a614c9201faca7d",
+      "call_id": "call_0c9fcff18ff64f69a2438fc3",
+      "original_input": {
+        "calculations": [
+          {
+            "fact_ids": [
+              "fact-045b89819b8725efed91a29845a7751cda84afbd4e20b2e1c4d88a4763298f41",
+              "fact-36dca21006235b0f0110b1707ae8abce4348e7aaf1594d13b769c9a3a52806ef"
+            ],
+            "first_fact_id": "fact-045b89819b8725efed91a29845a7751cda84afbd4e20b2e1c4d88a4763298f41",
+            "formula": "growth_percent",
+            "second_fact_id": "fact-36dca21006235b0f0110b1707ae8abce4348e7aaf1594d13b769c9a3a52806ef"
+          },
+          {
+            "first_fact_id": "fact-c583e6b9af78c16d135d5f1fc1d1f5c25fde02b70022290229ad0a6c2d7947e8",
+            "formula": "growth_percent",
+            "second_fact_id": "fact-ed373845f636917eb4168b6401bf3a4e22c2c328b8aabdb540ae3ca842ae6331"
+          },
+          {
+            "first_fact_id": "fact-c583e6b9af78c16d135d5f1fc1d1f5c25fde02b70022290229ad0a6c2d7947e8",
+            "formula": "difference",
+            "second_fact_id": "fact-ed373845f636917eb4168b6401bf3a4e22c2c328b8aabdb540ae3ca842ae6331"
+          }
+        ],
+        "rationale": "用同一公式对已记录事实做确定性计算：收入同比增速（2025 vs 2024）、稀释 EPS 同比增速及绝对变化额。"
+      },
+      "results": [
+        {
+          "calculation_id": "calc-97ea62c72f3c459c91d46a50b0c6bdcb",
+          "formula_id": "growth_percent",
+          "formula_version": "1",
+          "expression": "(first / second - 1) * 100",
+          "input_verification": "not_verified_by_calculator",
+          "input_precision_status": "not_established",
+          "inputs": [
+            {
+              "fact_id": "fact-045b89819b8725efed91a29845a7751cda84afbd4e20b2e1c4d88a4763298f41",
+              "value": "120",
+              "unit": "USD million",
+              "currency": "USD",
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-36dca21006235b0f0110b1707ae8abce4348e7aaf1594d13b769c9a3a52806ef",
+              "value": "100",
+              "unit": "USD million",
+              "currency": "USD",
+              "period": "FY2024"
+            }
+          ],
+          "value": "20.00",
+          "unit": "percent",
+          "currency": null,
+          "rounding": "half_up",
+          "decimal_places": 2,
+          "period_order_check": "recognized_formats_only",
+          "period_granularity_check": "not_established",
+          "input_status": "matched"
+        },
+        {
+          "calculation_id": "calc-0ec2aa919cde45e190cb2810f9b63726",
+          "formula_id": "growth_percent",
+          "formula_version": "1",
+          "expression": "(first / second - 1) * 100",
+          "input_verification": "not_verified_by_calculator",
+          "input_precision_status": "not_established",
+          "inputs": [
+            {
+              "fact_id": "fact-c583e6b9af78c16d135d5f1fc1d1f5c25fde02b70022290229ad0a6c2d7947e8",
+              "value": "3",
+              "unit": "USD per share",
+              "currency": "USD",
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-ed373845f636917eb4168b6401bf3a4e22c2c328b8aabdb540ae3ca842ae6331",
+              "value": "2",
+              "unit": "USD per share",
+              "currency": "USD",
+              "period": "FY2024"
+            }
+          ],
+          "value": "50.00",
+          "unit": "percent",
+          "currency": null,
+          "rounding": "half_up",
+          "decimal_places": 2,
+          "period_order_check": "recognized_formats_only",
+          "period_granularity_check": "not_established",
+          "input_status": "matched"
+        },
+        {
+          "calculation_id": "calc-d458bd6c84e8410bab531c51ee575255",
+          "formula_id": "difference",
+          "formula_version": "1",
+          "expression": "first - second",
+          "input_verification": "not_verified_by_calculator",
+          "input_precision_status": "not_established",
+          "inputs": [
+            {
+              "fact_id": "fact-c583e6b9af78c16d135d5f1fc1d1f5c25fde02b70022290229ad0a6c2d7947e8",
+              "value": "3",
+              "unit": "USD per share",
+              "currency": "USD",
+              "period": "FY2025"
+            },
+            {
+              "fact_id": "fact-ed373845f636917eb4168b6401bf3a4e22c2c328b8aabdb540ae3ca842ae6331",
+              "value": "2",
+              "unit": "USD per share",
+              "currency": "USD",
+              "period": "FY2024"
+            }
+          ],
+          "value": "1.00",
+          "unit": "USD per share",
+          "currency": "USD",
+          "rounding": "half_up",
+          "decimal_places": 2,
+          "input_status": "matched"
+        }
+      ]
+    }
+  ],
+  "negative": {
+    "conflict": {
+      "error": "1 validation error for CalculateRequest\ncalculations.0\n  Value error, fact_ids conflicts with the ordered first_fact_id/second_fact_id pair. [type=value_error, input_value={'fact_ids': ['fact-9fae3...first_fact_id': 'other'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error",
+      "written": 0
+    },
+    "reversed": {
+      "error": "1 validation error for CalculateRequest\ncalculations.0\n  Value error, fact_ids conflicts with the ordered first_fact_id/second_fact_id pair. [type=value_error, input_value={'fact_ids': ['fact-1f546...f334ca9755da4e88be0fbf'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error",
+      "written": 0
+    },
+    "half_pair": {
+      "error": "1 validation error for CalculateRequest\ncalculations.0\n  Value error, Provide both first_fact_id and second_fact_id; a partial pair is invalid. [type=value_error, input_value={'fact_ids': ['fact-9fae3...f334ca9755da4e88be0fbf'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error",
+      "written": 0
+    },
+    "missing_fact": {
+      "error": "Calculation 1 (growth_percent): Calculation requires recorded fact IDs; unavailable: ['missing'].",
+      "written": 0
+    },
+    "stale_source": {
+      "error": "Calculation 1 (growth_percent): Calculation input source version has changed.",
+      "written": 0
+    },
+    "missing_source": {
+      "error": "Calculation 1 (growth_percent): Calculation input source or quotation is unavailable or has changed.",
+      "written": 0
+    },
+    "changed_quote": {
+      "error": "Calculation 1 (growth_percent): Calculation input source or quotation is unavailable or has changed.",
+      "written": 0
+    },
+    "mixed_invalid": {
+      "error": "1 validation error for CalculateRequest\ncalculations.1\n  Value error, fact_ids conflicts with the ordered first_fact_id/second_fact_id pair. [type=value_error, input_value={'fact_ids': ['fact-a4df1...first_fact_id': 'other'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error",
+      "written": 0
+    },
+    "bad_periods": {
+      "error": "1 validation error for CalculateRequest\ncalculations.0\n  Value error, periods is only valid for cagr. [type=value_error, input_value={'fact_ids': ['fact-9fae3...88be0fbf', 'periods': 1}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error",
+      "written": 0
+    }
+  },
+  "schema": {
+    "additionalProperties": false,
+    "properties": {
+      "decimal_places": {
+        "default": 2,
+        "maximum": 8,
+        "minimum": 0,
+        "title": "Decimal Places",
+        "type": "integer"
+      },
+      "fact_ids": {
+        "description": "Ordered recorded fact IDs. growth_percent/cagr: [current, prior]; margin_percent/ratio: [numerator, denominator]; difference/subtract: [minuend, subtrahend] (subtract may have more inputs); contribution_to_change_percent: [disclosed contribution, current, prior]; ttm_sum: exactly four consecutive quarters; sum and weighted_average: at least two facts, with weights matching each fact for weighted_average.",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 32,
+        "minItems": 2,
+        "title": "Fact Ids",
+        "type": "array"
+      },
+      "formula": {
+        "enum": [
+          "growth_percent",
+          "margin_percent",
+          "difference",
+          "cagr",
+          "ratio",
+          "contribution_to_change_percent",
+          "sum",
+          "subtract",
+          "weighted_average",
+          "ttm_sum"
+        ],
+        "title": "Formula",
+        "type": "string"
+      },
+      "periods": {
+        "anyOf": [
+          {
+            "exclusiveMinimum": 0.0,
+            "type": "number"
+          },
+          {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Positive number of compounding periods (> 0) required when formula is 'cagr'.",
+        "title": "Periods"
+      },
+      "weights": {
+        "anyOf": [
+          {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 32,
+            "minItems": 2,
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Explicit weights matching fact_ids one-for-one when formula is 'weighted_average'.",
+        "title": "Weights"
+      }
+    },
+    "required": [
+      "formula",
+      "fact_ids"
+    ],
+    "title": "CalculationPlan",
+    "type": "object"
+  },
+  "old_receipt_comparison": {
+    "trace": "D1-A-1.json",
+    "call_id": "call_09837961a9554ed8b1c30ee5",
+    "matches": [
+      "formula_id",
+      "value",
+      "unit",
+      "currency",
+      "ordered_inputs"
+    ]
+  },
+  "messages_wire_tool": {
+    "name": "calculate_financials",
+    "description": "Calculate comparable financial quantities; input values remain unverified.",
+    "input_schema": {
+      "$defs": {
+        "CalculationPlan": {
+          "additionalProperties": false,
+          "properties": {
+            "decimal_places": {
+              "default": 2,
+              "maximum": 8,
+              "minimum": 0,
+              "title": "Decimal Places",
+              "type": "integer"
+            },
+            "fact_ids": {
+              "description": "Ordered recorded fact IDs. growth_percent/cagr: [current, prior]; margin_percent/ratio: [numerator, denominator]; difference/subtract: [minuend, subtrahend] (subtract may have more inputs); contribution_to_change_percent: [disclosed contribution, current, prior]; ttm_sum: exactly four consecutive quarters; sum and weighted_average: at least two facts, with weights matching each fact for weighted_average.",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 32,
+              "minItems": 2,
+              "title": "Fact Ids",
+              "type": "array"
+            },
+            "formula": {
+              "enum": [
+                "growth_percent",
+                "margin_percent",
+                "difference",
+                "cagr",
+                "ratio",
+                "contribution_to_change_percent",
+                "sum",
+                "subtract",
+                "weighted_average",
+                "ttm_sum"
+              ],
+              "title": "Formula",
+              "type": "string"
+            },
+            "periods": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Positive number of compounding periods (> 0) required when formula is 'cagr'.",
+              "title": "Periods"
+            },
+            "weights": {
+              "anyOf": [
+                {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "maxItems": 32,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Explicit weights matching fact_ids one-for-one when formula is 'weighted_average'.",
+              "title": "Weights"
+            }
+          },
+          "required": [
+            "formula",
+            "fact_ids"
+          ],
+          "title": "CalculationPlan",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "calculations": {
+          "items": {
+            "$ref": "#/$defs/CalculationPlan"
+          },
+          "minItems": 1,
+          "title": "Calculations",
+          "type": "array"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "calculations",
+        "rationale"
+      ],
+      "title": "CalculateRequest",
+      "type": "object"
+    }
+  }
+}

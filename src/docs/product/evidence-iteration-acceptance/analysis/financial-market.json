@@ -1,0 +1,150 @@
+{
+  "F1": {
+    "status": "partial",
+    "parts": [
+      {
+        "question": "Can Northport's FY2025 revenue growth be sustained",
+        "status": "partial",
+        "answer": "Northport revenue FY2025 120 USD millions；Northport revenue FY2024 100 USD millions；growth_percent 20.00 percent",
+        "reason": "The historical change is calculated; its sustainability needs independent supporting and opposing evidence and review conditions."
+      },
+      {
+        "question": "what drove it",
+        "status": "partial",
+        "answer": "Northport acquired business contribution to revenue FY2025 18 USD millions；Northport revenue FY2025 120 USD millions；Northport revenue FY2024 100 USD millions；contribution_to_change_percent 90.00 percent",
+        "reason": "A disclosed contribution and change were calculated; issuer identity, accounting scope, remaining drivers and sustainability still require review."
+      }
+    ]
+  },
+  "F2": {
+    "status": "partial",
+    "parts": [
+      {
+        "question": "Can Northport's FY2025 revenue growth be sustained",
+        "status": "partial",
+        "answer": "Northport revenue FY2025 120 USD millions；Northport revenue FY2024 100 USD millions；growth_percent 20.00 percent",
+        "reason": "The historical change is calculated; its sustainability needs independent supporting and opposing evidence and review conditions."
+      },
+      {
+        "question": "what drove it",
+        "status": "unresolved",
+        "answer": "",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls."
+      }
+    ]
+  },
+  "F3": {
+    "status": "partial",
+    "parts": [
+      {
+        "question": "Can Northport's FY2025 revenue growth be sustained",
+        "status": "partial",
+        "answer": "Northport revenue FY2025 120 USD millions；Northport revenue FY2024 100 USD millions；growth_percent 20.00 percent",
+        "reason": "The historical change is calculated; its sustainability needs independent supporting and opposing evidence and review conditions."
+      },
+      {
+        "question": "what drove it",
+        "status": "unresolved",
+        "answer": "",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls."
+      }
+    ]
+  },
+  "X1": {
+    "status": "partial",
+    "parts": [
+      {
+        "question": "Can Northport's FY2025 revenue growth be sustained",
+        "status": "partial",
+        "answer": "Northport revenue FY2025 120 USD millions；Northport revenue FY2024 100 USD millions；growth_percent 20.00 percent",
+        "reason": "The historical change is calculated; its sustainability needs independent supporting and opposing evidence and review conditions."
+      },
+      {
+        "question": "what drove it",
+        "status": "unresolved",
+        "answer": "",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls."
+      }
+    ]
+  },
+  "F4": {
+    "status": "partial",
+    "parts": [
+      {
+        "question": "Can Northport's FY2025 revenue growth be sustained",
+        "status": "unresolved",
+        "answer": "",
+        "reason": "Missing comparable revenue evidence for 2025."
+      },
+      {
+        "question": "what drove it",
+        "status": "partial",
+        "answer": "The acquired business contributed USD 18 million of the increase in consolidated revenue.",
+        "reason": "A contribution is disclosed; the comparable denominator, remaining drivers and sustainability require evidence and review."
+      }
+    ]
+  },
+  "M1": {
+    "status": "completed",
+    "parts": [
+      {
+        "question": "Compare Gamma",
+        "status": "answered",
+        "answer": "Gamma adjusted closing price was 12 USD.",
+        "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review."
+      },
+      {
+        "question": "Compare Gamma and Benchmark adjusted-close returns over the event window.",
+        "status": "answered",
+        "answer": "Gamma@X / Benchmark@X 2026-02-02–2026-02-04: 20.00% / 10.00%, excess 10.00 percentage points",
+        "reason": "Distinct instruments have returns over the same dates and price basis; verify their requested roles."
+      }
+    ]
+  },
+  "M2": {
+    "status": "partial",
+    "parts": [
+      {
+        "question": "Compare Gamma",
+        "status": "answered",
+        "answer": "Gamma adjusted closing price was 12 USD.",
+        "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review."
+      },
+      {
+        "question": "Compare Gamma and Benchmark adjusted-close returns over the event window.",
+        "status": "unresolved",
+        "answer": "",
+        "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis."
+      },
+      {
+        "question": "标的在可用交易窗口内的收益",
+        "status": "unresolved",
+        "answer": "",
+        "reason": "缺少可核验的标的收益计算。"
+      }
+    ]
+  },
+  "M3": {
+    "status": "partial",
+    "parts": [
+      {
+        "question": "Compare Gamma",
+        "status": "answered",
+        "answer": "Gamma adjusted closing price was 12 USD.",
+        "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review."
+      },
+      {
+        "question": "Compare Gamma and Benchmark adjusted-close returns over the event window.",
+        "status": "unresolved",
+        "answer": "",
+        "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis."
+      },
+      {
+        "question": "标的在可用交易窗口内的收益",
+        "status": "unresolved",
+        "answer": "",
+        "reason": "缺少可核验的标的收益计算。"
+      }
+    ]
+  }
+}

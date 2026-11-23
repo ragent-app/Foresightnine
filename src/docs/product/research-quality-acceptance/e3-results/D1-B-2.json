@@ -1,0 +1,45 @@
+{
+  "case": "D1",
+  "arm": "B",
+  "request_sha256": "37f47dcd39ec98432bc771732aa899f6b370d065a89bd8944d430a86e5e945d5",
+  "tool_calls": [
+    {
+      "id": "call_9a5b23f6257e4c48b9af4144",
+      "name": "submit_answer",
+      "arguments": {
+        "claims": [
+          {
+            "calculation": "(120 - 100) / 100 = 20%",
+            "evidence": "Exhibit: Alpha 2025 revenue 120 USD million; 2024 revenue 100 USD million",
+            "limitations": "增速基于报表收入金额计算，未考虑业务结构或汇率等因素",
+            "text": "Alpha 2025 年收入为 1.2 亿美元，较 2024 年 1 亿美元增长 20%"
+          },
+          {
+            "calculation": "(3 - 2) / 2 = 50%",
+            "evidence": "Exhibit: Alpha diluted EPS 2025 = 3 USD; 2024 = 2 USD",
+            "limitations": "EPS 变化同时受净利润与稀释股份数影响，本分析仅基于稀释 EPS 数据",
+            "text": "稀释 EPS 由 2024 年的 2 美元增至 2025 年的 3 美元，增长 50%"
+          },
+          {
+            "calculation": "50% - 20% = 30 个百分点",
+            "evidence": "Exhibit 收入与稀释 EPS 数据",
+            "limitations": "仅基于两年数据，无法拆分净利润与股份数各自贡献",
+            "text": "稀释 EPS 增速（50%）显著高于收入增速（20%），表明盈利能力提升或股份摊薄下降"
+          }
+        ],
+        "report": "根据 Exhibit 数据：Alpha 2025 年收入 1.2 亿美元，2024 年收入 1 亿美元。收入增速 = (120 − 100) / 100 = 20%。稀释 EPS 方面，2025 年为 3 美元，2024 年为 2 美元，即从 2 美元升至 3 美元，增长 50%（(3 − 2) / 2 = 50%）。稀释 EPS 增速（50%）明显高于收入增速（20%），说明每股盈利改善幅度超出收入增长，通常反映利润率提升、费用控制或稀释股份数减少等因素的放大效应（仅凭 Exhibit 数据无法进一步拆分原因）。"
+      },
+      "raw_arguments": null
+    }
+  ],
+  "usage": {
+    "input_tokens": 323,
+    "output_tokens": 535,
+    "total_tokens": 858,
+    "cache_creation_input_tokens": null,
+    "cache_read_input_tokens": 0
+  },
+  "finish_reason": "tool_use",
+  "elapsed_seconds": 20.799,
+  "actual_cost": null
+}

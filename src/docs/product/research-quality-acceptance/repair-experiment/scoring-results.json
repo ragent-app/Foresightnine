@@ -1,0 +1,300 @@
+{
+  "scoring_protocol_sha256": "0c4ded0459f9e9e5bd3735fc64ff13a65647cab8cb85f9298fd721f58753a3dc",
+  "judgments_sha256": "720bc9bf172603a4363a5a94f4ef156ae633f46d5df88937e98d0fbc7c44da12",
+  "method": "non-blinded manual semantic adjudication; no model; unknown retained",
+  "planned": 16,
+  "started": 1,
+  "unstarted": [
+    "D1-B-1",
+    "D1-B-2",
+    "D1-A-2",
+    "D2-A-1",
+    "D2-B-1",
+    "D2-B-2",
+    "D2-A-2",
+    "D3-A-1",
+    "D3-B-1",
+    "D3-B-2",
+    "D3-A-2",
+    "D4-A-1",
+    "D4-B-1",
+    "D4-B-2",
+    "D4-A-2"
+  ],
+  "rows": [
+    {
+      "name": "D1-A-1",
+      "case": "D1",
+      "arm": "A",
+      "repeat": 1,
+      "raw_sha256": "8f2bcc29b8f0e056ab9bdbd757e7069869bcd8abb2e7296888daeda46f863550",
+      "submission": "not_accepted",
+      "core": [
+        {
+          "criterion": "收入增速 20%，绑定两期收入及公式",
+          "evidence": {
+            "status": "unsupported",
+            "reason": "已保存 facts、calculations、claims 均为空；来源虽然存在，但未读取，也未形成符合条件的计算或证据。",
+            "refs": [
+              {
+                "doc": "raw",
+                "pointer": "/facts",
+                "excerpt": "[]"
+              },
+              {
+                "doc": "raw",
+                "pointer": "/calculations",
+                "excerpt": "[]"
+              },
+              {
+                "doc": "raw",
+                "pointer": "/claims",
+                "excerpt": "[]"
+              }
+            ]
+          },
+          "formal": {
+            "status": "unsupported",
+            "reason": "工具记录和处理器回执为空、submission 为 null，正式报告为空。",
+            "refs": [
+              {
+                "doc": "raw",
+                "pointer": "/tool_io",
+                "excerpt": "[]"
+              },
+              {
+                "doc": "raw",
+                "pointer": "/submit_handler_receipts",
+                "excerpt": "[]"
+              },
+              {
+                "doc": "raw",
+                "pointer": "/state_submission",
+                "excerpt": "null"
+              }
+            ]
+          },
+          "visible": {
+            "status": "unsupported",
+            "reason": "topic API、export 与浏览器 DOM 均显示该项未完成及缺口，未交付有据答案。",
+            "refs": [
+              {
+                "doc": "api",
+                "pointer": "/0/topic/versions/0/content/turns/0/question_parts/0/status",
+                "excerpt": "unresolved"
+              },
+              {
+                "doc": "export",
+                "pointer": "/0/export/version/content/turns/0/question_parts/0/status",
+                "excerpt": "unresolved"
+              },
+              {
+                "doc": "ui",
+                "pointer": "/0/body",
+                "excerpt": "缺少 2024, 2025 年同口径的收入依据。"
+              }
+            ]
+          }
+        },
+        {
+          "criterion": "稀释 EPS 增加 1 USD，绑定两期同口径数据",
+          "evidence": {
+            "status": "unsupported",
+            "reason": "已保存 facts、calculations、claims 均为空；来源虽然存在，但未读取，也未形成符合条件的计算或证据。",
+            "refs": [
+              {
+                "doc": "raw",
+                "pointer": "/facts",
+                "excerpt": "[]"
+              },
+              {
+                "doc": "raw",
+                "pointer": "/calculations",
+                "excerpt": "[]"
+              },
+              {
+                "doc": "raw",
+                "pointer": "/claims",
+                "excerpt": "[]"
+              }
+            ]
+          },
+          "formal": {
+            "status": "unsupported",
+            "reason": "工具记录和处理器回执为空、submission 为 null，正式报告为空。",
+            "refs": [
+              {
+                "doc": "raw",
+                "pointer": "/tool_io",
+                "excerpt": "[]"
+              },
+              {
+                "doc": "raw",
+                "pointer": "/submit_handler_receipts",
+                "excerpt": "[]"
+              },
+              {
+                "doc": "raw",
+                "pointer": "/state_submission",
+                "excerpt": "null"
+              }
+            ]
+          },
+          "visible": {
+            "status": "unsupported",
+            "reason": "topic API、export 与浏览器 DOM 均显示该项未完成及缺口，未交付有据答案。",
+            "refs": [
+              {
+                "doc": "api",
+                "pointer": "/0/topic/versions/0/content/turns/0/question_parts/1/status",
+                "excerpt": "unresolved"
+              },
+              {
+                "doc": "export",
+                "pointer": "/0/export/version/content/turns/0/question_parts/1/status",
+                "excerpt": "unresolved"
+              },
+              {
+                "doc": "ui",
+                "pointer": "/0/body",
+                "excerpt": "缺少 2024, 2025 年同口径的稀释 EPS依据。"
+              }
+            ]
+          }
+        }
+      ],
+      "risk_review": {
+        "status": "reviewed",
+        "reason": "无已存事实、计算、主张或提交；两个分项均 unresolved，不存在已完成误判和重复矛盾行。空引用无越权或过期引用，来源访问与最终权限边界另由路由测试覆盖。",
+        "browser": "DOM 实际核验：两项未完成，均有缺口原因，拒绝终止原因可见；隔离内存 fixture，认证替换。",
+        "unsupported_value": "none observed"
+      },
+      "status": "partial",
+      "reason": "provider_request_rejected",
+      "calls": 1,
+      "budget_accounted_tokens": 59950,
+      "reported_tokens": 0,
+      "unknown_usage_calls": 1,
+      "reserved_estimate_tokens": 59950,
+      "seconds": 0.827,
+      "actual_cost": null
+    }
+  ],
+  "pairs": [],
+  "aggregate": {
+    "A": {
+      "started": 1,
+      "submission": {
+        "accepted": 0,
+        "not_accepted": 1,
+        "unknown": 0
+      },
+      "evidence": {
+        "supported": 0,
+        "unknown": 0,
+        "total": 2,
+        "lower": 0,
+        "upper": 0
+      },
+      "formal": {
+        "supported": 0,
+        "unknown": 0,
+        "total": 2,
+        "lower": 0,
+        "upper": 0
+      },
+      "visible": {
+        "supported": 0,
+        "unknown": 0,
+        "total": 2,
+        "lower": 0,
+        "upper": 0
+      },
+      "calls": {
+        "known_sum": 1,
+        "unknown_runs": 0
+      },
+      "budget_accounted_tokens": {
+        "known_sum": 59950,
+        "unknown_runs": 0
+      },
+      "reported_tokens": {
+        "known_sum": 0,
+        "unknown_runs": 0
+      },
+      "unknown_usage_calls": {
+        "known_sum": 1,
+        "unknown_runs": 0
+      },
+      "reserved_estimate_tokens": {
+        "known_sum": 59950,
+        "unknown_runs": 0
+      },
+      "seconds": {
+        "known_sum": 0.827,
+        "unknown_runs": 0
+      },
+      "actual_cost": {
+        "known_sum": 0,
+        "unknown_runs": 1
+      }
+    },
+    "B": {
+      "started": 0,
+      "submission": {
+        "accepted": 0,
+        "not_accepted": 0,
+        "unknown": 0
+      },
+      "evidence": {
+        "supported": 0,
+        "unknown": 0,
+        "total": 0,
+        "lower": 0,
+        "upper": 0
+      },
+      "formal": {
+        "supported": 0,
+        "unknown": 0,
+        "total": 0,
+        "lower": 0,
+        "upper": 0
+      },
+      "visible": {
+        "supported": 0,
+        "unknown": 0,
+        "total": 0,
+        "lower": 0,
+        "upper": 0
+      },
+      "calls": {
+        "known_sum": 0,
+        "unknown_runs": 0
+      },
+      "budget_accounted_tokens": {
+        "known_sum": 0,
+        "unknown_runs": 0
+      },
+      "reported_tokens": {
+        "known_sum": 0,
+        "unknown_runs": 0
+      },
+      "unknown_usage_calls": {
+        "known_sum": 0,
+        "unknown_runs": 0
+      },
+      "reserved_estimate_tokens": {
+        "known_sum": 0,
+        "unknown_runs": 0
+      },
+      "seconds": {
+        "known_sum": 0,
+        "unknown_runs": 0
+      },
+      "actual_cost": {
+        "known_sum": 0,
+        "unknown_runs": 0
+      }
+    }
+  }
+}

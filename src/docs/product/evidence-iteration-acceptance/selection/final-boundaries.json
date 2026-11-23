@@ -1,0 +1,22 @@
+{
+  "utf8_header_at_512_accepted": true,
+  "utf8_header_at_515_rejected": true,
+  "header_fixture": "synthetic direct selector; no real table header in short replay fixtures",
+  "suite_checks": {
+    "selection": {
+      "count": 20,
+      "violations": [],
+      "max_sum_utf8_bytes_including_each_header": 434
+    },
+    "holdout2": {
+      "count": 8,
+      "violations": [],
+      "max_sum_utf8_bytes_including_each_header": 169
+    },
+    "holdout3": {
+      "count": 8,
+      "violations": [],
+      "max_sum_utf8_bytes_including_each_header": 196
+    }
+  }
+}

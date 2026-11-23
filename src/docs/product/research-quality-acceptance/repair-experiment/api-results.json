@@ -1,0 +1,305 @@
+[
+  {
+    "run": "D1-A-1",
+    "topic_status": 200,
+    "export_status": 200,
+    "topic": {
+      "schema_version": "1",
+      "topic_id": "D1-A-1",
+      "owner_id": "D1-A-1",
+      "request": {
+        "question": "比较 Alpha 2025 与 2024 年收入增速，并说明稀释 EPS 变化。",
+        "source_ids": [
+          "exhibit"
+        ],
+        "scope": "",
+        "as_of": null
+      },
+      "created_at": "2026-11-23T00:00:00Z",
+      "updated_at": "2026-11-23T00:00:00Z",
+      "versions": [
+        {
+          "version_id": "v2",
+          "parent_version_id": null,
+          "created_at": "2026-11-23T00:00:00Z",
+          "content": {
+            "summary": "",
+            "sources": [
+              {
+                "source_id": "exhibit",
+                "content_sha256": "86999c7c03aa39f42799d31f99103f9397ca94dae821f7f8574a0acec24e4cda",
+                "permissions": {
+                  "store": true,
+                  "model_input": true,
+                  "display": true,
+                  "export": true
+                }
+              }
+            ],
+            "source_candidates": [],
+            "facts": [],
+            "calculations": [],
+            "claims": [],
+            "charts": [],
+            "tables": [],
+            "gaps": [],
+            "turns": [
+              {
+                "turn_id": "turn_1",
+                "index": 1,
+                "question": "比较 Alpha 2025 与 2024 年收入增速，并说明稀释 EPS 变化。",
+                "question_origin": "user",
+                "focus_citation": null,
+                "operation_ids": [
+                  "op_1"
+                ],
+                "parent_version_id": "v1",
+                "started_at": "2026-11-23T00:00:00Z",
+                "finished_at": "2026-11-23T00:00:00Z",
+                "status": "partial",
+                "reason": "provider_request_rejected",
+                "report": "",
+                "partial_notes": "部分结果已保留：停止原因：模型服务拒绝了本次请求（provider_request_rejected）；已收集资料 1 份，已读片段 0 段，已记录事实 0 条，已完成计算 0 项。",
+                "question_parts": [
+                  {
+                    "id": "req-d6ee812697d9beb7",
+                    "core": true,
+                    "question": "比较 Alpha 2025 与 2024 年收入增速",
+                    "status": "unresolved",
+                    "answer": "",
+                    "reason": "缺少 2024, 2025 年同口径的收入依据。",
+                    "references": [],
+                    "requirements": [
+                      {
+                        "id": "req-d6ee812697d9beb7",
+                        "question": "比较 Alpha 2025 与 2024 年收入增速",
+                        "status": "missing",
+                        "reason": "缺少 2024, 2025 年同口径的收入依据。",
+                        "references": [],
+                        "core": true
+                      }
+                    ]
+                  },
+                  {
+                    "id": "req-08c62e44b525d52e",
+                    "core": true,
+                    "question": "并说明稀释 EPS 变化",
+                    "status": "unresolved",
+                    "answer": "",
+                    "reason": "缺少 2024, 2025 年同口径的稀释 EPS依据。",
+                    "references": [],
+                    "requirements": [
+                      {
+                        "id": "req-08c62e44b525d52e",
+                        "question": "并说明稀释 EPS 变化",
+                        "status": "missing",
+                        "reason": "缺少 2024, 2025 年同口径的稀释 EPS依据。",
+                        "references": [],
+                        "core": true
+                      }
+                    ]
+                  }
+                ],
+                "market_analyses": [],
+                "stopping_note": null,
+                "claim_ids": [],
+                "fact_ids": [],
+                "calculation_ids": [],
+                "chart_ids": [],
+                "table_ids": [],
+                "gaps": [],
+                "usage": {
+                  "model_calls": 1,
+                  "search_calls": 0,
+                  "total_tokens": 59950,
+                  "reported_tokens": 0,
+                  "unknown_usage_calls": 1,
+                  "reserved_estimate_tokens": 59950,
+                  "usage_status": "partial_unknown"
+                },
+                "attempts": [],
+                "search_status": "not_requested",
+                "official_fetch_status": "not_requested",
+                "read_ranges": [],
+                "events": [],
+                "reconciliation": null,
+                "counter_evidence": null,
+                "coverage_map": null,
+                "method_packs": [],
+                "attributions": []
+              }
+            ]
+          },
+          "review": "draft",
+          "note": "",
+          "source_ids": [
+            "exhibit"
+          ],
+          "created_by": "agent"
+        }
+      ]
+    },
+    "export": {
+      "schema_version": "1",
+      "format": "research_json",
+      "topic_id": "D1-A-1",
+      "generated_at": "2026-11-23T08:24:20.580960Z",
+      "request": {
+        "question": "比较 Alpha 2025 与 2024 年收入增速，并说明稀释 EPS 变化。",
+        "source_ids": [
+          "exhibit"
+        ],
+        "scope": "",
+        "as_of": null
+      },
+      "version": {
+        "version_id": "v2",
+        "parent_version_id": null,
+        "created_at": "2026-11-23T00:00:00Z",
+        "content": {
+          "summary": "",
+          "sources": [
+            {
+              "source_id": "exhibit",
+              "content_sha256": "86999c7c03aa39f42799d31f99103f9397ca94dae821f7f8574a0acec24e4cda",
+              "permissions": {
+                "store": true,
+                "model_input": true,
+                "display": true,
+                "export": true
+              }
+            }
+          ],
+          "source_candidates": [],
+          "facts": [],
+          "calculations": [],
+          "claims": [],
+          "charts": [],
+          "tables": [],
+          "gaps": [],
+          "turns": [
+            {
+              "turn_id": "turn_1",
+              "index": 1,
+              "question": "比较 Alpha 2025 与 2024 年收入增速，并说明稀释 EPS 变化。",
+              "question_origin": "user",
+              "focus_citation": null,
+              "operation_ids": [
+                "op_1"
+              ],
+              "parent_version_id": "v1",
+              "started_at": "2026-11-23T00:00:00Z",
+              "finished_at": "2026-11-23T00:00:00Z",
+              "status": "partial",
+              "reason": "provider_request_rejected",
+              "report": "",
+              "partial_notes": "部分结果已保留：停止原因：模型服务拒绝了本次请求（provider_request_rejected）；已收集资料 1 份，已读片段 0 段，已记录事实 0 条，已完成计算 0 项。",
+              "question_parts": [
+                {
+                  "id": "req-d6ee812697d9beb7",
+                  "core": true,
+                  "question": "比较 Alpha 2025 与 2024 年收入增速",
+                  "status": "unresolved",
+                  "answer": "",
+                  "reason": "缺少 2024, 2025 年同口径的收入依据。",
+                  "references": [],
+                  "requirements": [
+                    {
+                      "id": "req-d6ee812697d9beb7",
+                      "question": "比较 Alpha 2025 与 2024 年收入增速",
+                      "status": "missing",
+                      "reason": "缺少 2024, 2025 年同口径的收入依据。",
+                      "references": [],
+                      "core": true
+                    }
+                  ]
+                },
+                {
+                  "id": "req-08c62e44b525d52e",
+                  "core": true,
+                  "question": "并说明稀释 EPS 变化",
+                  "status": "unresolved",
+                  "answer": "",
+                  "reason": "缺少 2024, 2025 年同口径的稀释 EPS依据。",
+                  "references": [],
+                  "requirements": [
+                    {
+                      "id": "req-08c62e44b525d52e",
+                      "question": "并说明稀释 EPS 变化",
+                      "status": "missing",
+                      "reason": "缺少 2024, 2025 年同口径的稀释 EPS依据。",
+                      "references": [],
+                      "core": true
+                    }
+                  ]
+                }
+              ],
+              "market_analyses": [],
+              "stopping_note": null,
+              "claim_ids": [],
+              "fact_ids": [],
+              "calculation_ids": [],
+              "chart_ids": [],
+              "table_ids": [],
+              "gaps": [],
+              "usage": {
+                "model_calls": 1,
+                "search_calls": 0,
+                "total_tokens": 59950,
+                "reported_tokens": 0,
+                "unknown_usage_calls": 1,
+                "reserved_estimate_tokens": 59950,
+                "usage_status": "partial_unknown"
+              },
+              "attempts": [],
+              "search_status": "not_requested",
+              "official_fetch_status": "not_requested",
+              "read_ranges": [],
+              "events": [],
+              "reconciliation": null,
+              "counter_evidence": null,
+              "coverage_map": null,
+              "method_packs": [],
+              "attributions": []
+            }
+          ]
+        },
+        "review": "draft",
+        "note": "",
+        "source_ids": [
+          "exhibit"
+        ],
+        "created_by": "agent"
+      },
+      "source_provenance": [
+        {
+          "schema_version": "1",
+          "source_id": "exhibit",
+          "title": "Synthetic exhibit",
+          "kind": "user_supplied",
+          "is_simulated": false,
+          "published_at": null,
+          "event_at": null,
+          "revised_at": null,
+          "obtained_at": "2026-11-23T00:00:00Z",
+          "content_sha256": "86999c7c03aa39f42799d31f99103f9397ca94dae821f7f8574a0acec24e4cda",
+          "retrieval_method": "user_supplied",
+          "pdf_text_order": null,
+          "derived_from_source_id": null,
+          "response_sha256": null,
+          "response_content_type": null,
+          "permissions": {
+            "store": true,
+            "model_input": true,
+            "display": true,
+            "export": true
+          },
+          "provenance": {},
+          "verification": "user_declared_not_verified"
+        }
+      ],
+      "disclosure": "Model interpretations and declared source permissions are not independently verified.",
+      "calculation_disclosure": "Calculations use the recorded inputs; their source precision and prior rounding are not established."
+    }
+  }
+]

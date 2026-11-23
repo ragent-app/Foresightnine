@@ -1,0 +1,93 @@
+{
+  "contract": [
+    {
+      "case": "qualified",
+      "claim_retained": true,
+      "status": "partial"
+    },
+    {
+      "case": "party_swapped",
+      "claim_retained": false,
+      "status": "partial"
+    },
+    {
+      "case": "exception_dropped",
+      "claim_retained": false,
+      "status": "partial"
+    },
+    {
+      "case": "truncated_citation",
+      "claim_retained": false,
+      "status": "partial"
+    }
+  ],
+  "market": [
+    {
+      "id": "req-670288c2935cd37b",
+      "question": "实际共同交易日区间的相对收益",
+      "core": true,
+      "status": "answered",
+      "answer": "GAM@X / IDX@X 2026-02-03–2026-02-04: 9.09% / 10.00%, excess -0.91 percentage points",
+      "reason": "仅覆盖共同交易日，无法核算完整请求窗口。",
+      "references": [
+        {
+          "analysis_id": "a1",
+          "origin": "current"
+        }
+      ],
+      "requirements": [
+        {
+          "id": "req-670288c2935cd37b",
+          "question": "实际共同交易日区间的相对收益",
+          "status": "satisfied",
+          "reason": "仅覆盖共同交易日，无法核算完整请求窗口。",
+          "references": [
+            {
+              "analysis_id": "a1",
+              "origin": "current"
+            }
+          ],
+          "core": true
+        }
+      ]
+    },
+    {
+      "id": "req-4216c3f1f54fa8b7",
+      "question": "Compare GAM with benchmark IDX from 2026-02-02 to 2026-02-04.",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-4216c3f1f54fa8b7",
+          "question": "Compare GAM with benchmark IDX from 2026-02-02 to 2026-02-04.",
+          "status": "missing",
+          "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+          "references": [],
+          "core": true
+        }
+      ]
+    },
+    {
+      "id": "req-dca767d9f5d42e99",
+      "question": "标的在可用交易窗口内的收益",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "缺少可核验的标的收益计算。",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-dca767d9f5d42e99",
+          "question": "标的在可用交易窗口内的收益",
+          "status": "missing",
+          "reason": "缺少可核验的标的收益计算。",
+          "references": [],
+          "core": true
+        }
+      ]
+    }
+  ]
+}

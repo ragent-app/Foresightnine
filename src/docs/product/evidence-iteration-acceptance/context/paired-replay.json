@@ -1,0 +1,344 @@
+{
+  "baseline": "82900b4",
+  "baseline_context_sha256": "fc45e779fd24cbad873bc4d23a9c8123640c9b11ceff4b3100a5b616db9d88c3",
+  "candidate_context_sha256": "27017a90885eb0744612ea77c88f2ed961caa86ed5b0dc30aa525d2d3d802f68",
+  "candidate_runtime_sha256": "bf0405804ce3290d0dd9fb9156f5bc66584a2836d3fe444499f0936ef8c2474f",
+  "candidate": "working tree",
+  "protocol": "Three repeated constructed native turns per scenario; identical tools, evidence and source permissions; bytes are canonical Messages protocol bodies constructed offline, not billed tokens. Two synthetic necessary groups; no semantic or provider quality claim.",
+  "results": [
+    {
+      "scenario": "first",
+      "arm": "A",
+      "calls": 3,
+      "cumulative_serialized_bytes": 163875,
+      "complete_groups_deduplicated": 1,
+      "complete_group_ids": [
+        "counterargument"
+      ],
+      "groups_per_decimal_kb": 0.006102,
+      "quote_occurrences_per_request": [
+        1,
+        1,
+        1
+      ],
+      "capacity_omissions_per_request": [
+        5,
+        5,
+        5
+      ]
+    },
+    {
+      "scenario": "first",
+      "arm": "B",
+      "calls": 3,
+      "cumulative_serialized_bytes": 171708,
+      "complete_groups_deduplicated": 2,
+      "complete_group_ids": [
+        "calculation",
+        "counterargument"
+      ],
+      "groups_per_decimal_kb": 0.011648,
+      "quote_occurrences_per_request": [
+        1,
+        1,
+        1
+      ],
+      "capacity_omissions_per_request": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "scenario": "middle",
+      "arm": "A",
+      "calls": 3,
+      "cumulative_serialized_bytes": 163875,
+      "complete_groups_deduplicated": 1,
+      "complete_group_ids": [
+        "counterargument"
+      ],
+      "groups_per_decimal_kb": 0.006102,
+      "quote_occurrences_per_request": [
+        1,
+        1,
+        1
+      ],
+      "capacity_omissions_per_request": [
+        5,
+        5,
+        5
+      ]
+    },
+    {
+      "scenario": "middle",
+      "arm": "B",
+      "calls": 3,
+      "cumulative_serialized_bytes": 171708,
+      "complete_groups_deduplicated": 2,
+      "complete_group_ids": [
+        "calculation",
+        "counterargument"
+      ],
+      "groups_per_decimal_kb": 0.011648,
+      "quote_occurrences_per_request": [
+        1,
+        1,
+        1
+      ],
+      "capacity_omissions_per_request": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "scenario": "last",
+      "arm": "A",
+      "calls": 3,
+      "cumulative_serialized_bytes": 163875,
+      "complete_groups_deduplicated": 1,
+      "complete_group_ids": [
+        "counterargument"
+      ],
+      "groups_per_decimal_kb": 0.006102,
+      "quote_occurrences_per_request": [
+        1,
+        1,
+        1
+      ],
+      "capacity_omissions_per_request": [
+        5,
+        5,
+        5
+      ]
+    },
+    {
+      "scenario": "last",
+      "arm": "B",
+      "calls": 3,
+      "cumulative_serialized_bytes": 171708,
+      "complete_groups_deduplicated": 2,
+      "complete_group_ids": [
+        "calculation",
+        "counterargument"
+      ],
+      "groups_per_decimal_kb": 0.011648,
+      "quote_occurrences_per_request": [
+        1,
+        1,
+        1
+      ],
+      "capacity_omissions_per_request": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "scenario": "no_history",
+      "arm": "A",
+      "calls": 3,
+      "cumulative_serialized_bytes": 161511,
+      "complete_groups_deduplicated": 1,
+      "complete_group_ids": [
+        "counterargument"
+      ],
+      "groups_per_decimal_kb": 0.006192,
+      "quote_occurrences_per_request": [
+        1,
+        1,
+        1
+      ],
+      "capacity_omissions_per_request": [
+        5,
+        5,
+        5
+      ]
+    },
+    {
+      "scenario": "no_history",
+      "arm": "B",
+      "calls": 3,
+      "cumulative_serialized_bytes": 169095,
+      "complete_groups_deduplicated": 2,
+      "complete_group_ids": [
+        "calculation",
+        "counterargument"
+      ],
+      "groups_per_decimal_kb": 0.011828,
+      "quote_occurrences_per_request": [
+        1,
+        1,
+        1
+      ],
+      "capacity_omissions_per_request": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "scenario": "recovery",
+      "arm": "A",
+      "calls": 3,
+      "cumulative_serialized_bytes": 165879,
+      "complete_groups_deduplicated": 1,
+      "complete_group_ids": [
+        "counterargument"
+      ],
+      "groups_per_decimal_kb": 0.006028,
+      "quote_occurrences_per_request": [
+        1,
+        1,
+        1
+      ],
+      "capacity_omissions_per_request": [
+        5,
+        5,
+        5
+      ]
+    },
+    {
+      "scenario": "recovery",
+      "arm": "B",
+      "calls": 3,
+      "cumulative_serialized_bytes": 173712,
+      "complete_groups_deduplicated": 2,
+      "complete_group_ids": [
+        "calculation",
+        "counterargument"
+      ],
+      "groups_per_decimal_kb": 0.011513,
+      "quote_occurrences_per_request": [
+        1,
+        1,
+        1
+      ],
+      "capacity_omissions_per_request": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "scenario": "different_source",
+      "arm": "A",
+      "calls": 3,
+      "cumulative_serialized_bytes": 171117,
+      "complete_groups_deduplicated": 1,
+      "complete_group_ids": [
+        "counterargument"
+      ],
+      "groups_per_decimal_kb": 0.005844,
+      "quote_occurrences_per_request": [
+        2,
+        2,
+        2
+      ],
+      "capacity_omissions_per_request": [
+        5,
+        5,
+        5
+      ]
+    },
+    {
+      "scenario": "different_source",
+      "arm": "B",
+      "calls": 3,
+      "cumulative_serialized_bytes": 178950,
+      "complete_groups_deduplicated": 2,
+      "complete_group_ids": [
+        "calculation",
+        "counterargument"
+      ],
+      "groups_per_decimal_kb": 0.011176,
+      "quote_occurrences_per_request": [
+        2,
+        2,
+        2
+      ],
+      "capacity_omissions_per_request": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "scenario": "revoked",
+      "arm": "A",
+      "calls": 3,
+      "cumulative_serialized_bytes": 151263,
+      "complete_groups_deduplicated": 0,
+      "complete_group_ids": [],
+      "groups_per_decimal_kb": 0.0,
+      "quote_occurrences_per_request": [
+        0,
+        0,
+        0
+      ],
+      "capacity_omissions_per_request": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "scenario": "revoked",
+      "arm": "B",
+      "calls": 3,
+      "cumulative_serialized_bytes": 151263,
+      "complete_groups_deduplicated": 0,
+      "complete_group_ids": [],
+      "groups_per_decimal_kb": 0.0,
+      "quote_occurrences_per_request": [
+        0,
+        0,
+        0
+      ],
+      "capacity_omissions_per_request": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "scenario": "revised",
+      "arm": "A",
+      "calls": 3,
+      "cumulative_serialized_bytes": 151263,
+      "complete_groups_deduplicated": 0,
+      "complete_group_ids": [],
+      "groups_per_decimal_kb": 0.0,
+      "quote_occurrences_per_request": [
+        0,
+        0,
+        0
+      ],
+      "capacity_omissions_per_request": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "scenario": "revised",
+      "arm": "B",
+      "calls": 3,
+      "cumulative_serialized_bytes": 151263,
+      "complete_groups_deduplicated": 0,
+      "complete_group_ids": [],
+      "groups_per_decimal_kb": 0.0,
+      "quote_occurrences_per_request": [
+        0,
+        0,
+        0
+      ],
+      "capacity_omissions_per_request": [
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}

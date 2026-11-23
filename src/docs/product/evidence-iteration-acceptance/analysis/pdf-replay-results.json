@@ -1,0 +1,200 @@
+{
+  "uk": {
+    "pdf_sha256": "357771f7ef54e1930d94614bb3b4cc97e24b4a6cf4b2b6ad2bed74872e8d3a09",
+    "text_sha256": "a62bcdb175d530414a485bff11ad1256eacc2028aae02da866f114f05fdb2ff8",
+    "columns": [
+      {
+        "label": "2025",
+        "period_end": "2025-03-31",
+        "basis": "header_year_with_period_date",
+        "period_type": "instant",
+        "fiscal_label": "as at 2025-03-31"
+      },
+      {
+        "label": "2024",
+        "period_end": "2024-03-31",
+        "basis": "header_year_with_period_date",
+        "period_type": "instant",
+        "fiscal_label": "as at 2024-03-31"
+      }
+    ],
+    "unit": {
+      "scale": 1000000,
+      "scale_label": "millions",
+      "stated_as": "£m",
+      "currency": "GBP",
+      "basis": "stated",
+      "text": "Note             £m              £m"
+    },
+    "warnings": [
+      "statement_end_not_found"
+    ],
+    "geometry": null,
+    "rows": [
+      {
+        "standard_line": "total_assets",
+        "label": "Total assets",
+        "primary": true,
+        "value": [
+          "273984000000",
+          "279345000000"
+        ],
+        "value_as_stated": [
+          "273984",
+          "279345"
+        ],
+        "page": 1,
+        "quotation": "Total assets                                                                       273,984         279,345",
+        "character_start": 1797,
+        "character_end": 1903,
+        "extraction_method": "document_table"
+      },
+      {
+        "standard_line": null,
+        "label": "Cash and balances at the Bank of England",
+        "value": [
+          "3231000000",
+          "2619000000"
+        ],
+        "value_as_stated": [
+          "3231",
+          "2619"
+        ],
+        "page": 1,
+        "quotation": "Cash and balances at the Bank of England                                              3,231           2,619",
+        "character_start": 388,
+        "character_end": 495,
+        "extraction_method": "document_table"
+      }
+    ],
+    "read_spans": [
+      {
+        "source_id": "sample",
+        "start": 0,
+        "end": 3293
+      }
+    ]
+  },
+  "note_after_read": {
+    "source_id": "sample",
+    "content_sha256": "243ea2418efc31d08fe029f979fbb641ff9fa0f8316249b73559a1abdd183d1a",
+    "page": 3,
+    "character_start": 935,
+    "character_end": 954,
+    "quotation": "五、1 货币资金：本期现金及银行存款。",
+    "status": "located_unverified"
+  },
+  "duplicate_note_withheld": true,
+  "reversed_continuation_values_withheld": true,
+  "ambiguous_geometry_withheld": true,
+  "synthetic": {
+    "pdf_sha256": "f46f1893cf18d835967af3eef83e03959b5fdf1dbfef2fb41403975d61e99273",
+    "text_sha256": "243ea2418efc31d08fe029f979fbb641ff9fa0f8316249b73559a1abdd183d1a",
+    "columns": [
+      {
+        "label": "期末余额",
+        "period_end": "2025-12-31",
+        "basis": "relative_label+header_date",
+        "period_type": "instant",
+        "fiscal_label": "as at 2025-12-31"
+      },
+      {
+        "label": "上年年末余额",
+        "period_end": "2024-12-31",
+        "basis": "relative_label+header_date",
+        "period_type": "instant",
+        "fiscal_label": "as at 2024-12-31"
+      }
+    ],
+    "unit": {
+      "scale": 1,
+      "scale_label": "currency units",
+      "stated_as": "元",
+      "currency": null,
+      "basis": "stated",
+      "text": "单位:元"
+    },
+    "warnings": [
+      "period_derived_from_report_date"
+    ],
+    "geometry": {
+      "page": 1,
+      "pdf_sha256": "f46f1893cf18d835967af3eef83e03959b5fdf1dbfef2fb41403975d61e99273",
+      "text_sha256": "243ea2418efc31d08fe029f979fbb641ff9fa0f8316249b73559a1abdd183d1a",
+      "method": "poppler_bbox_layout_exact_v1",
+      "parts": [
+        {
+          "character_start": 39,
+          "character_end": 43,
+          "bounds": [
+            175.624504,
+            65.895993,
+            197.298331,
+            76.372555
+          ]
+        },
+        {
+          "character_start": 21,
+          "character_end": 28,
+          "bounds": [
+            197.298329,
+            57.149997,
+            245.972293,
+            80.549997
+          ]
+        }
+      ],
+      "reading_order": "geometric_left_to_right",
+      "status": "geometric_alignment_unverified"
+    },
+    "rows": [
+      {
+        "standard_line": "cash_and_equivalents",
+        "label": "货币资金",
+        "primary": true,
+        "value": [
+          "1000000000",
+          "900000000"
+        ],
+        "value_as_stated": [
+          "1000000000.00",
+          "900000000.00"
+        ],
+        "note_ref": "五、1",
+        "page": 1,
+        "quotation": "货币资金           五、1      1,000,000,000.00       900,000,000.00",
+        "character_start": 153,
+        "character_end": 214,
+        "extraction_method": "document_table",
+        "warnings": [
+          "referenced_note_not_bound"
+        ]
+      },
+      {
+        "standard_line": "total_assets",
+        "label": "资产总计",
+        "primary": true,
+        "value": [
+          "5000000000",
+          "4500000000"
+        ],
+        "value_as_stated": [
+          "5000000000.00",
+          "4500000000.00"
+        ],
+        "page": 1,
+        "quotation": "资产总计                    5,000,000,000.00     4,500,000,000.00",
+        "character_start": 401,
+        "character_end": 462,
+        "extraction_method": "document_table"
+      }
+    ],
+    "read_spans": [
+      {
+        "source_id": "sample",
+        "start": 0,
+        "end": 934
+      }
+    ]
+  }
+}

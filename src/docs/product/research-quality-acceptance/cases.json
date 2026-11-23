@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "cases": [
+    {"id":"D1","group":"development","category":"financial","question":"比较 Alpha 2025 与 2024 年收入增速，并说明稀释 EPS 变化。","snapshot":"Alpha 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million, diluted EPS 2 USD.","core":["收入增速 20%，绑定两期收入及公式","稀释 EPS 增加 1 USD，绑定两期同口径数据"],"expected":"completed"},
+    {"id":"D2","group":"development","category":"financial","question":"比较 Beta 2025 与 2024 年收入增速，并说明稀释 EPS 变化。","snapshot":"Beta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million. Prior diluted EPS is not disclosed in this snapshot.","core":["收入增速 20%","缺少上年稀释 EPS，不能计算变化"],"expected":"partial"},
+    {"id":"D3","group":"development","category":"event","question":"比较 Gamma 与基准在两个共同交易日的调整收盘收益。","snapshot":"Adjusted close: Gamma day 1 10, day 2 12; Benchmark day 1 100, day 2 110.","core":["Gamma 收益 20%","基准收益 10%，超额 10 个百分点；绑定共同窗口及调整口径"],"expected":"completed"},
+    {"id":"D4","group":"development","category":"event","question":"比较 Delta 与基准在两个共同交易日的调整收盘收益。","snapshot":"Two calls both return Delta adjusted close day 1 10, day 2 12. No benchmark observation.","core":["Delta 收益 20%","基准缺失，同一标的重复不能充作基准"],"expected":"partial"},
+    {"id":"H1","group":"holdout","category":"qualitative","question":"公告的赎回截止日及其条件是什么？","snapshot":"Issuer E permits redemption until 30 June 2026, subject to regulator approval.","core":["截止 2026-06-30","须监管批准；定位原文"],"expected":"completed"},
+    {"id":"H2","group":"holdout","category":"qualitative","question":"完整公告是否披露赎回截止日？","snapshot":"Full announcement: Issuer F may redeem the notes subject to regulator approval. It gives no redemption deadline.","core":["完整资料未披露截止日；说明检查范围"],"expected":"completed"},
+    {"id":"H3","group":"holdout","category":"time_conflict","question":"截至 2026-03-31，G 指标 2025 年的已公布值是多少？","snapshot":"Initial release 2026-02-01: 50 units. Revision published 2026-04-10: 55 units.","core":["截至日可用值 50；修订在截止日后不能使用"],"expected":"completed"},
+    {"id":"H4","group":"holdout","category":"time_conflict","question":"H 两份同日资料是否对 2025 年收入存在无法解释的冲突？","snapshot":"Official source A: H 2025 consolidated revenue 50 USD million. Official source B: H 2025 consolidated revenue 80 USD million. No explanation is available.","core":["存在实质冲突，保留 50 和 80 及各自来源，不能合成为精确值"],"expected":"completed"}
+  ]
+}

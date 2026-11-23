@@ -1,0 +1,126 @@
+.....F..FF.FF..F......F.........FFFFFFFFFF..                             [100%]
+=================================== FAILURES ===================================
+_ test_question_only_run_can_discover_and_cite_market_data_with_users_own_key __
+tests/test_research_runtime_api.py:336: in test_question_only_run_can_discover_and_cite_market_data_with_users_own_key
+    assert version['content']['turns'][-1]['status'] == 'completed'
+E   AssertionError: assert 'partial' == 'completed'
+E     
+E     - completed
+E     + partial
+_ test_question_only_run_fetches_open_web_html_and_pdf_and_persists_partial_notes _
+tests/test_research_runtime_api.py:560: in test_question_only_run_fetches_open_web_html_and_pdf_and_persists_partial_notes
+    assert saved_turn['partial_notes'] == partial_notes
+E   AssertionError: assert '部分结果已保留：停止原因... 条，已完成计算 0 项。' == 'Acquired IR ... environment.'
+E     
+E     - Acquired IR HTML and PDF; SEC structured data is unconfigured in this environment.
+E     + 部分结果已保留：停止原因：模型重复相同操作，证据没有变化，已停止（no_progress）；已收集资料 2 份（本轮新获取 2 份），已读片段 2 段，已记录事实 0 条，已完成计算 0 项。
+_____ test_question_only_run_calls_company_financials_and_cites_sec_source _____
+tests/test_research_runtime_api.py:674: in test_question_only_run_calls_company_financials_and_cites_sec_source
+    assert version['content']['turns'][-1]['status'] == 'completed'
+E   AssertionError: assert 'partial' == 'completed'
+E     
+E     - completed
+E     + partial
+__ test_start_research_run_uses_pace_sec_request_and_honors_reserve_override ___
+tests/test_research_runtime_api.py:865: in test_start_research_run_uses_pace_sec_request_and_honors_reserve_override
+    assert len(requested) == 1 + 4 and len(pace_calls) == len(requested) + 1  # submissions + 4 revenue concept files, + 1 for SEC acquire_sources
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: assert (6 == (1 + 4))
+E    +  where 6 = len(['https://data.sec.gov/submissions/CIK0000320193.json', 'https://data.sec.gov/api/xbrl/companyconcept/CIK0000320193/us...-gaap/RevenueFromContractWithCustomerIncludingAssessedTax.json', 'https://data.sec.gov/submissions/CIK0000320193.json'])
+___ test_company_financials_syncs_official_fetch_status_with_priority_guard ____
+tests/test_research_runtime_api.py:1028: in test_company_financials_syncs_official_fetch_status_with_priority_guard
+    assert status == 'completed'
+E   AssertionError: assert 'failed' == 'completed'
+E     
+E     - completed
+E     + failed
+------------------------------ Captured log call -------------------------------
+ERROR    app.operations:operations.py:109 operation_failure metadata={'operation_id': 'operation:3ff751b3a2f92d9ce4798182', 'exception_class': 'AssertionError', 'location': {'file': 'chat_research_adapter.py', 'line': 78}}
+_ test_web_html_acquisition_does_not_mark_official_fetch_status_completed_and_preserves_sec_priority _
+tests/test_research_runtime_api.py:1364: in test_web_html_acquisition_does_not_mark_official_fetch_status_completed_and_preserves_sec_priority
+    assert v2['content']['turns'][-1]['official_fetch_status'] == 'completed'
+E   AssertionError: assert 'web_retrieved' == 'completed'
+E     
+E     - completed
+E     + web_retrieved
+_______ test_legacy_percent_difference_recalculates_as_percentage_points _______
+tests/test_research_topics.py:147: in test_legacy_percent_difference_recalculates_as_percentage_points
+    assert saved["content"]["calculations"][0].get("legacy_unit_warning") is None  # Annotated on read, never stored.
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: assert 'percentage_difference_requires_recalculation' is None
+E    +  where 'percentage_difference_requires_recalculation' = <built-in method get of dict object at 0x7506df450840>('legacy_unit_warning')
+E    +    where <built-in method get of dict object at 0x7506df450840> = {'calculation_id': 'calc-legacy', 'return_context': None, 'turn_id': None, 'formula_id': 'difference', ...}.get
+_ test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[growth_percent] _
+tests/test_research_topics.py:657: in test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate
+    saved_calc = validated.versions[-1].content.calculations[0]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: list index out of range
+_ test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[growth_percent_scale_adjusted] _
+tests/test_research_topics.py:657: in test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate
+    saved_calc = validated.versions[-1].content.calculations[0]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: list index out of range
+_ test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[margin_percent] _
+tests/test_research_topics.py:657: in test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate
+    saved_calc = validated.versions[-1].content.calculations[0]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: list index out of range
+_ test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[difference] _
+tests/test_research_topics.py:657: in test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate
+    saved_calc = validated.versions[-1].content.calculations[0]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: list index out of range
+_ test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[ratio] _
+tests/test_research_topics.py:657: in test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate
+    saved_calc = validated.versions[-1].content.calculations[0]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: list index out of range
+_ test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[cagr] _
+tests/test_research_topics.py:657: in test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate
+    saved_calc = validated.versions[-1].content.calculations[0]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: list index out of range
+_ test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[sum_scale_adjusted] _
+tests/test_research_topics.py:657: in test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate
+    saved_calc = validated.versions[-1].content.calculations[0]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: list index out of range
+_ test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[subtract] _
+tests/test_research_topics.py:657: in test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate
+    saved_calc = validated.versions[-1].content.calculations[0]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: list index out of range
+_ test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[weighted_average] _
+tests/test_research_topics.py:657: in test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate
+    saved_calc = validated.versions[-1].content.calculations[0]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: list index out of range
+_ test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[ttm_sum_scale_adjusted] _
+tests/test_research_topics.py:657: in test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate
+    saved_calc = validated.versions[-1].content.calculations[0]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: list index out of range
+=============================== warnings summary ===============================
+../../../../../home/ubuntu/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/ubuntu/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_research_runtime_api.py::test_question_only_run_can_discover_and_cite_market_data_with_users_own_key
+FAILED tests/test_research_runtime_api.py::test_question_only_run_fetches_open_web_html_and_pdf_and_persists_partial_notes
+FAILED tests/test_research_runtime_api.py::test_question_only_run_calls_company_financials_and_cites_sec_source
+FAILED tests/test_research_runtime_api.py::test_start_research_run_uses_pace_sec_request_and_honors_reserve_override
+FAILED tests/test_research_runtime_api.py::test_company_financials_syncs_official_fetch_status_with_priority_guard
+FAILED tests/test_research_runtime_api.py::test_web_html_acquisition_does_not_mark_official_fetch_status_completed_and_preserves_sec_priority
+FAILED tests/test_research_topics.py::test_legacy_percent_difference_recalculates_as_percentage_points
+FAILED tests/test_research_topics.py::test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[growth_percent]
+FAILED tests/test_research_topics.py::test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[growth_percent_scale_adjusted]
+FAILED tests/test_research_topics.py::test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[margin_percent]
+FAILED tests/test_research_topics.py::test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[difference]
+FAILED tests/test_research_topics.py::test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[ratio]
+FAILED tests/test_research_topics.py::test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[cagr]
+FAILED tests/test_research_topics.py::test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[sum_scale_adjusted]
+FAILED tests/test_research_topics.py::test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[subtract]
+FAILED tests/test_research_topics.py::test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[weighted_average]
+FAILED tests/test_research_topics.py::test_all_nine_formulas_roundtrip_calculate_merge_turn_validate_and_recalculate[ttm_sum_scale_adjusted]

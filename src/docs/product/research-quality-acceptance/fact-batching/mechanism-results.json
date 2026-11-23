@@ -1,0 +1,2946 @@
+{
+  "expected": [
+    "D1-A-1",
+    "D1-A-2",
+    "D1-B-1",
+    "D1-B-2",
+    "D2-A-1",
+    "D2-A-2",
+    "D2-B-1",
+    "D2-B-2",
+    "D3-A-1",
+    "D3-A-2",
+    "D3-B-1",
+    "D3-B-2",
+    "D4-A-1",
+    "D4-A-2",
+    "D4-B-1",
+    "D4-B-2"
+  ],
+  "observed_result_count": 16,
+  "started_markers": [
+    "D1-A-1",
+    "D1-A-2",
+    "D1-B-1",
+    "D1-B-2",
+    "D2-A-1",
+    "D2-A-2",
+    "D2-B-1",
+    "D2-B-2",
+    "D3-A-1",
+    "D3-A-2",
+    "D3-B-1",
+    "D3-B-2",
+    "D4-A-1",
+    "D4-A-2",
+    "D4-B-1",
+    "D4-B-2"
+  ],
+  "missing_result_for_started": [],
+  "no_started_marker": [],
+  "unexpected_results": [],
+  "read_errors": [],
+  "usage_by_arm": {
+    "A": {
+      "result_count": 8,
+      "known_reported_token_sum": 413690,
+      "reported_usage_missing_runs": 0,
+      "unknown_usage_calls_known_sum": 0,
+      "unknown_usage_call_count_missing_runs": 0
+    },
+    "B": {
+      "result_count": 8,
+      "known_reported_token_sum": 497801,
+      "reported_usage_missing_runs": 0,
+      "unknown_usage_calls_known_sum": 0,
+      "unknown_usage_call_count_missing_runs": 0
+    }
+  },
+  "runs": [
+    {
+      "id": "D1-A-1",
+      "arm": "A",
+      "source_sha256": "b0c56ea882eb877671903626fd308891f8cc1adf541843818493bdb52b888112",
+      "status": "partial",
+      "reason": "provider_budget_exhausted",
+      "error_type": null,
+      "calls": 4,
+      "elapsed_seconds": 58.471,
+      "provider_reported_tokens": 72269,
+      "unknown_usage_calls": 0,
+      "reserved_estimate_tokens": 0,
+      "budget_accounted_tokens": 72269,
+      "actual_cost": null,
+      "model_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:cb4fc75d0bd04fb494b54cb30849f78a",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 15854,
+          "usage_detail": {
+            "input_tokens": 15720,
+            "output_tokens": 134,
+            "total_tokens": 15854,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 0
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:1d11cb12e24a424d957df0dee58abad6",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 17253,
+          "usage_detail": {
+            "input_tokens": 596,
+            "output_tokens": 977,
+            "total_tokens": 17253,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:111ea462d84d41f88aed4ae07af9db85",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 19244,
+          "usage_detail": {
+            "input_tokens": 2366,
+            "output_tokens": 1198,
+            "total_tokens": 19244,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:727cb8369935461da3ce2e744ff8b345",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 19918,
+          "usage_detail": {
+            "input_tokens": 3354,
+            "output_tokens": 564,
+            "total_tokens": 19918,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 16000
+          }
+        }
+      ],
+      "observations": {
+        "wire_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "not_established",
+          "turns": []
+        },
+        "decoded_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "exact_count_only_not_identity_verified",
+          "turns": [
+            {
+              "observation_sequence": 1,
+              "model_call_ordinal": 1,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 267
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "read_sources",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "read_sources"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 2,
+              "model_call_ordinal": 2,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 1845
+                },
+                {
+                  "type": "text",
+                  "chars": 99
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "record_facts",
+                  "facts_items": 4
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "search_source",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "record_facts",
+                "search_source"
+              ],
+              "record_facts_seen": "yes",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 3,
+              "model_call_ordinal": 3,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 598
+                },
+                {
+                  "type": "text",
+                  "chars": 68
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "calculate_financials",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "calculate_financials"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 4,
+              "model_call_ordinal": 4,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 197
+                },
+                {
+                  "type": "text",
+                  "chars": 78
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "calculate_financials",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "calculate_financials"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            }
+          ]
+        }
+      },
+      "record_facts": {
+        "observation": "checkpoint_history",
+        "history_turns_with_multiple_record_facts": [],
+        "history_turn_index_missing": false,
+        "calls": [
+          {
+            "history_turn": 2,
+            "tool_call_id": "call_5eccdda82b0a436d8c3bd885",
+            "submitted_fact_count": 4,
+            "result_present": true
+          }
+        ],
+        "instruction_assessment": "not_applicable_A",
+        "identical_full_input_fact_repetitions": 0,
+        "saved_fact_count": 4,
+        "saved_duplicate_fact_ids": 0,
+        "duplicate_scope": "exact full fact input object and saved fact IDs only; semantic duplicates require review"
+      }
+    },
+    {
+      "id": "D1-A-2",
+      "arm": "A",
+      "source_sha256": "86903de5b7a2387ab8d7c4a9c22a2d9ff16f8994db90c92e96b53c8aeceffcaf",
+      "status": "partial",
+      "reason": "provider_output_truncated",
+      "error_type": null,
+      "calls": 2,
+      "elapsed_seconds": 41.876,
+      "provider_reported_tokens": 34483,
+      "unknown_usage_calls": 0,
+      "reserved_estimate_tokens": 0,
+      "budget_accounted_tokens": 34483,
+      "actual_cost": null,
+      "model_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:3e80639cc4ad4a94ae96c553b3e7a335",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 16008,
+          "usage_detail": {
+            "input_tokens": 40,
+            "output_tokens": 288,
+            "total_tokens": 16008,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          }
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:b524165904154ff4a6b110a31b6ef4dd",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 18475
+        }
+      ],
+      "observations": {
+        "wire_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "not_established",
+          "turns": []
+        },
+        "decoded_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "exact_count_only_not_identity_verified",
+          "turns": [
+            {
+              "observation_sequence": 1,
+              "model_call_ordinal": 1,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 777
+                },
+                {
+                  "type": "text",
+                  "chars": 49
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "read_sources",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "read_sources"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 2,
+              "model_call_ordinal": 2,
+              "finish_reason": "max_tokens",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 6704
+                }
+              ],
+              "known_tool_names_seen": [],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            }
+          ]
+        }
+      },
+      "record_facts": {
+        "observation": "checkpoint_history",
+        "history_turns_with_multiple_record_facts": [],
+        "history_turn_index_missing": false,
+        "calls": [],
+        "instruction_assessment": "not_applicable_A",
+        "identical_full_input_fact_repetitions": 0,
+        "saved_fact_count": 0,
+        "saved_duplicate_fact_ids": 0,
+        "duplicate_scope": "exact full fact input object and saved fact IDs only; semantic duplicates require review"
+      }
+    },
+    {
+      "id": "D1-B-1",
+      "arm": "B",
+      "source_sha256": "25642ffd6404cd2a23a6decf37932e8f7315a238cb64ae4ff7c4e8385581eca3",
+      "status": "partial",
+      "reason": "provider_output_truncated",
+      "error_type": null,
+      "calls": 2,
+      "elapsed_seconds": 47.4,
+      "provider_reported_tokens": 34212,
+      "unknown_usage_calls": 0,
+      "reserved_estimate_tokens": 0,
+      "budget_accounted_tokens": 34212,
+      "actual_cost": null,
+      "model_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:0292bfd362ef4d239a2f733da97ca9d6",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 15876,
+          "usage_detail": {
+            "input_tokens": 15750,
+            "output_tokens": 126,
+            "total_tokens": 15876,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 0
+          }
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:d516b08fe93d42e4abd33a883823f47e",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 18336
+        }
+      ],
+      "observations": {
+        "wire_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "not_established",
+          "turns": []
+        },
+        "decoded_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "exact_count_only_not_identity_verified",
+          "turns": [
+            {
+              "observation_sequence": 1,
+              "model_call_ordinal": 1,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 261
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "read_sources",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "read_sources"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 2,
+              "model_call_ordinal": 2,
+              "finish_reason": "max_tokens",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 7618
+                }
+              ],
+              "known_tool_names_seen": [],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            }
+          ]
+        }
+      },
+      "record_facts": {
+        "observation": "checkpoint_history",
+        "history_turns_with_multiple_record_facts": [],
+        "history_turn_index_missing": false,
+        "calls": [],
+        "instruction_assessment": "not_tested_no_record_facts_in_history",
+        "identical_full_input_fact_repetitions": 0,
+        "saved_fact_count": 0,
+        "saved_duplicate_fact_ids": 0,
+        "duplicate_scope": "exact full fact input object and saved fact IDs only; semantic duplicates require review"
+      }
+    },
+    {
+      "id": "D1-B-2",
+      "arm": "B",
+      "source_sha256": "9cf14b24f65ac61dcc48cceb0271c970d185e10ad2fa48f42ce9d0db44897dbe",
+      "status": "partial",
+      "reason": "provider_budget_exhausted",
+      "error_type": null,
+      "calls": 4,
+      "elapsed_seconds": 58.955,
+      "provider_reported_tokens": 71074,
+      "unknown_usage_calls": 0,
+      "reserved_estimate_tokens": 0,
+      "budget_accounted_tokens": 71074,
+      "actual_cost": null,
+      "model_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:991d2fad271040208ff7c1fabcad0f8a",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 16372,
+          "usage_detail": {
+            "input_tokens": 6,
+            "output_tokens": 622,
+            "total_tokens": 16372,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15744
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:46493f0316e44a8d9d0ebdd3c7de43e8",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 17264,
+          "usage_detail": {
+            "input_tokens": 1038,
+            "output_tokens": 482,
+            "total_tokens": 17264,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15744
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:b550924029c9445aae3ce569586c0a86",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 17797,
+          "usage_detail": {
+            "input_tokens": 1847,
+            "output_tokens": 206,
+            "total_tokens": 17797,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15744
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:f3baf6ca19b3427aa068c252efe2863d",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 19641,
+          "usage_detail": {
+            "input_tokens": 1622,
+            "output_tokens": 1507,
+            "total_tokens": 19641,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 16512
+          }
+        }
+      ],
+      "observations": {
+        "wire_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "not_established",
+          "turns": []
+        },
+        "decoded_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "exact_count_only_not_identity_verified",
+          "turns": [
+            {
+              "observation_sequence": 1,
+              "model_call_ordinal": 1,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 2369
+                },
+                {
+                  "type": "text",
+                  "chars": 37
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "read_sources",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "read_sources"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 2,
+              "model_call_ordinal": 2,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 1089
+                },
+                {
+                  "type": "text",
+                  "chars": 33
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "record_facts",
+                  "facts_items": 2
+                }
+              ],
+              "known_tool_names_seen": [
+                "record_facts"
+              ],
+              "record_facts_seen": "yes",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 3,
+              "model_call_ordinal": 3,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 135
+                },
+                {
+                  "type": "text",
+                  "chars": 16
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "record_facts",
+                  "facts_items": 2
+                }
+              ],
+              "known_tool_names_seen": [
+                "record_facts"
+              ],
+              "record_facts_seen": "yes",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 4,
+              "model_call_ordinal": 4,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 3340
+                },
+                {
+                  "type": "text",
+                  "chars": 83
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "calculate_financials",
+                  "facts_items": null
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "search_source",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "calculate_financials",
+                "search_source"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            }
+          ]
+        }
+      },
+      "record_facts": {
+        "observation": "checkpoint_history",
+        "history_turns_with_multiple_record_facts": [],
+        "history_turn_index_missing": false,
+        "calls": [
+          {
+            "history_turn": 2,
+            "tool_call_id": "call_33478b8bc5c1471cbe98fe6e",
+            "submitted_fact_count": 2,
+            "result_present": true
+          },
+          {
+            "history_turn": 3,
+            "tool_call_id": "call_23d4c37ba3a744a0ac38c00a",
+            "submitted_fact_count": 2,
+            "result_present": true
+          }
+        ],
+        "instruction_assessment": "structurally_consistent_inspection_not_provable",
+        "identical_full_input_fact_repetitions": 0,
+        "saved_fact_count": 4,
+        "saved_duplicate_fact_ids": 0,
+        "duplicate_scope": "exact full fact input object and saved fact IDs only; semantic duplicates require review"
+      }
+    },
+    {
+      "id": "D2-A-1",
+      "arm": "A",
+      "source_sha256": "7c17757a650f017e6df4bf74ac152cf0e8140c1e55edc21ab0bd3ea2da7bc59c",
+      "status": "partial",
+      "reason": "provider_budget_exhausted",
+      "error_type": null,
+      "calls": 4,
+      "elapsed_seconds": 74.287,
+      "provider_reported_tokens": 73715,
+      "unknown_usage_calls": 0,
+      "reserved_estimate_tokens": 0,
+      "budget_accounted_tokens": 73715,
+      "actual_cost": null,
+      "model_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:ada520c27e8c4a998af2a292c0dffa77",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 16177,
+          "usage_detail": {
+            "input_tokens": 15716,
+            "output_tokens": 461,
+            "total_tokens": 16177,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 0
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:c06008505fa545628b85733d4e08a8e1",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 17911,
+          "usage_detail": {
+            "input_tokens": 914,
+            "output_tokens": 1317,
+            "total_tokens": 17911,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:8ba98ad730054cebacc35a18d3639529",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 18991,
+          "usage_detail": {
+            "input_tokens": 2988,
+            "output_tokens": 323,
+            "total_tokens": 18991,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:98f57defc49d4cbdb7ec7da9d0d9c944",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 20636,
+          "usage_detail": {
+            "input_tokens": 2970,
+            "output_tokens": 1346,
+            "total_tokens": 20636,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 16320
+          }
+        }
+      ],
+      "observations": {
+        "wire_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "not_established",
+          "turns": []
+        },
+        "decoded_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "exact_count_only_not_identity_verified",
+          "turns": [
+            {
+              "observation_sequence": 1,
+              "model_call_ordinal": 1,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 1787
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "read_sources",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "read_sources"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 2,
+              "model_call_ordinal": 2,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 3432
+                },
+                {
+                  "type": "text",
+                  "chars": 115
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "record_facts",
+                  "facts_items": 3
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "search_source",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "record_facts",
+                "search_source"
+              ],
+              "record_facts_seen": "yes",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 3,
+              "model_call_ordinal": 3,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 432
+                },
+                {
+                  "type": "text",
+                  "chars": 120
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "calculate_financials",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "calculate_financials"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 4,
+              "model_call_ordinal": 4,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 3692
+                },
+                {
+                  "type": "text",
+                  "chars": 81
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "checkpoint_report_draft",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "checkpoint_report_draft"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            }
+          ]
+        }
+      },
+      "record_facts": {
+        "observation": "checkpoint_history",
+        "history_turns_with_multiple_record_facts": [],
+        "history_turn_index_missing": false,
+        "calls": [
+          {
+            "history_turn": 2,
+            "tool_call_id": "call_63d24e6072a64c93a79678ba",
+            "submitted_fact_count": 3,
+            "result_present": true
+          }
+        ],
+        "instruction_assessment": "not_applicable_A",
+        "identical_full_input_fact_repetitions": 0,
+        "saved_fact_count": 3,
+        "saved_duplicate_fact_ids": 0,
+        "duplicate_scope": "exact full fact input object and saved fact IDs only; semantic duplicates require review"
+      }
+    },
+    {
+      "id": "D2-A-2",
+      "arm": "A",
+      "source_sha256": "6cce32abf4ec19d64e91a94cd71a97a8f2cbc01d9839979c1514c579fbec8e80",
+      "status": "partial",
+      "reason": "provider_output_truncated",
+      "error_type": null,
+      "calls": 4,
+      "elapsed_seconds": 95.487,
+      "provider_reported_tokens": 75416,
+      "unknown_usage_calls": 0,
+      "reserved_estimate_tokens": 0,
+      "budget_accounted_tokens": 75416,
+      "actual_cost": null,
+      "model_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:6a625d8be1c34907a72133d1a1d6dc63",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 16417,
+          "usage_detail": {
+            "input_tokens": 36,
+            "output_tokens": 701,
+            "total_tokens": 16417,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:7a8f89aebb5f459baa484be6f1ebb4fe",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 18143,
+          "usage_detail": {
+            "input_tokens": 1158,
+            "output_tokens": 1305,
+            "total_tokens": 18143,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:314cd398a71542c99bef0aa3fbd32e4f",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 19147,
+          "usage_detail": {
+            "input_tokens": 2985,
+            "output_tokens": 482,
+            "total_tokens": 19147,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15680
+          }
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:9cafe1cd1ab742c6b41aa8a7bcf08b90",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 21709
+        }
+      ],
+      "observations": {
+        "wire_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "not_established",
+          "turns": []
+        },
+        "decoded_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "exact_count_only_not_identity_verified",
+          "turns": [
+            {
+              "observation_sequence": 1,
+              "model_call_ordinal": 1,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 2625
+                },
+                {
+                  "type": "text",
+                  "chars": 90
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "read_sources",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "read_sources"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 2,
+              "model_call_ordinal": 2,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 4222
+                },
+                {
+                  "type": "text",
+                  "chars": 100
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "record_facts",
+                  "facts_items": 3
+                }
+              ],
+              "known_tool_names_seen": [
+                "record_facts"
+              ],
+              "record_facts_seen": "yes",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 3,
+              "model_call_ordinal": 3,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 541
+                },
+                {
+                  "type": "text",
+                  "chars": 70
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "calculate_financials",
+                  "facts_items": null
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "search_source",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "calculate_financials",
+                "search_source"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 4,
+              "model_call_ordinal": 4,
+              "finish_reason": "max_tokens",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 7194
+                },
+                {
+                  "type": "text",
+                  "chars": 117
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "create_table",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "create_table"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            }
+          ]
+        }
+      },
+      "record_facts": {
+        "observation": "checkpoint_history",
+        "history_turns_with_multiple_record_facts": [],
+        "history_turn_index_missing": false,
+        "calls": [
+          {
+            "history_turn": 2,
+            "tool_call_id": "call_5e5d4b62b18048bc8285367b",
+            "submitted_fact_count": 3,
+            "result_present": true
+          }
+        ],
+        "instruction_assessment": "not_applicable_A",
+        "identical_full_input_fact_repetitions": 0,
+        "saved_fact_count": 3,
+        "saved_duplicate_fact_ids": 0,
+        "duplicate_scope": "exact full fact input object and saved fact IDs only; semantic duplicates require review"
+      }
+    },
+    {
+      "id": "D2-B-1",
+      "arm": "B",
+      "source_sha256": "f766b3bd510af7758d8a9dc5b92a135534d98ed4eca756c7a89b7b8ca5e05c17",
+      "status": "partial",
+      "reason": "provider_output_truncated",
+      "error_type": null,
+      "calls": 4,
+      "elapsed_seconds": 96.152,
+      "provider_reported_tokens": 75245,
+      "unknown_usage_calls": 0,
+      "reserved_estimate_tokens": 0,
+      "budget_accounted_tokens": 75245,
+      "actual_cost": null,
+      "model_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:ede391fa60d64c3c84d6bfa44bd3088f",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 15933,
+          "usage_detail": {
+            "input_tokens": 15746,
+            "output_tokens": 187,
+            "total_tokens": 15933,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 0
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:6f3cd7923c104db997b842aeef850117",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 18241,
+          "usage_detail": {
+            "input_tokens": 608,
+            "output_tokens": 1889,
+            "total_tokens": 18241,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15744
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:43389ed5972849679f2f6ce10693f2f2",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 19264,
+          "usage_detail": {
+            "input_tokens": 2967,
+            "output_tokens": 553,
+            "total_tokens": 19264,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15744
+          }
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:7978f8dc602c4df5b9beb5a0a520e906",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 21807
+        }
+      ],
+      "observations": {
+        "wire_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "not_established",
+          "turns": []
+        },
+        "decoded_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "exact_count_only_not_identity_verified",
+          "turns": [
+            {
+              "observation_sequence": 1,
+              "model_call_ordinal": 1,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 485
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "read_sources",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "read_sources"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 2,
+              "model_call_ordinal": 2,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 6558
+                },
+                {
+                  "type": "text",
+                  "chars": 116
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "record_facts",
+                  "facts_items": 2
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "search_source",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "record_facts",
+                "search_source"
+              ],
+              "record_facts_seen": "yes",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 3,
+              "model_call_ordinal": 3,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 874
+                },
+                {
+                  "type": "text",
+                  "chars": 159
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "record_facts",
+                  "facts_items": 1
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "calculate_financials",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "record_facts",
+                "calculate_financials"
+              ],
+              "record_facts_seen": "yes",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 4,
+              "model_call_ordinal": 4,
+              "finish_reason": "max_tokens",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 4850
+                },
+                {
+                  "type": "text",
+                  "chars": 49
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "checkpoint_report_draft",
+                  "facts_items": null
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "create_table",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "checkpoint_report_draft",
+                "create_table"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            }
+          ]
+        }
+      },
+      "record_facts": {
+        "observation": "checkpoint_history",
+        "history_turns_with_multiple_record_facts": [],
+        "history_turn_index_missing": false,
+        "calls": [
+          {
+            "history_turn": 2,
+            "tool_call_id": "call_7e0d2633364f465b91221554",
+            "submitted_fact_count": 2,
+            "result_present": true
+          },
+          {
+            "history_turn": 3,
+            "tool_call_id": "call_0163eb8d1ddb49a48f129b37",
+            "submitted_fact_count": 1,
+            "result_present": true
+          }
+        ],
+        "instruction_assessment": "structurally_consistent_inspection_not_provable",
+        "identical_full_input_fact_repetitions": 0,
+        "saved_fact_count": 3,
+        "saved_duplicate_fact_ids": 0,
+        "duplicate_scope": "exact full fact input object and saved fact IDs only; semantic duplicates require review"
+      }
+    },
+    {
+      "id": "D2-B-2",
+      "arm": "B",
+      "source_sha256": "a481bc0280afa207ed11a92e772e5f00792e0b1c0f76e52719103ccad2b09cd9",
+      "status": "partial",
+      "reason": "provider_output_truncated",
+      "error_type": null,
+      "calls": 2,
+      "elapsed_seconds": 75.842,
+      "provider_reported_tokens": 37057,
+      "unknown_usage_calls": 0,
+      "reserved_estimate_tokens": 0,
+      "budget_accounted_tokens": 37057,
+      "actual_cost": null,
+      "model_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:5037ee27af7f41ae953b22f7337fba48",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 17285,
+          "usage_detail": {
+            "input_tokens": 2,
+            "output_tokens": 1539,
+            "total_tokens": 17285,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15744
+          }
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:750fb7ce881345e288e2f3913b51231e",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 19772
+        }
+      ],
+      "observations": {
+        "wire_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "not_established",
+          "turns": []
+        },
+        "decoded_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "exact_count_only_not_identity_verified",
+          "turns": [
+            {
+              "observation_sequence": 1,
+              "model_call_ordinal": 1,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 6369
+                },
+                {
+                  "type": "text",
+                  "chars": 65
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "read_sources",
+                  "facts_items": null
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "resolve_entity",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "read_sources",
+                "resolve_entity"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 2,
+              "model_call_ordinal": 2,
+              "finish_reason": "max_tokens",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 7196
+                }
+              ],
+              "known_tool_names_seen": [],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            }
+          ]
+        }
+      },
+      "record_facts": {
+        "observation": "checkpoint_history",
+        "history_turns_with_multiple_record_facts": [],
+        "history_turn_index_missing": false,
+        "calls": [],
+        "instruction_assessment": "not_tested_no_record_facts_in_history",
+        "identical_full_input_fact_repetitions": 0,
+        "saved_fact_count": 0,
+        "saved_duplicate_fact_ids": 0,
+        "duplicate_scope": "exact full fact input object and saved fact IDs only; semantic duplicates require review"
+      }
+    },
+    {
+      "id": "D3-A-1",
+      "arm": "A",
+      "source_sha256": "9ac0ae9688d62a5d8a6bcb7b22a9d93fd2f015af51ea0b6fe2a6ea688dec5fdb",
+      "status": "partial",
+      "reason": "provider_budget_exhausted",
+      "error_type": null,
+      "calls": 4,
+      "elapsed_seconds": 81.177,
+      "provider_reported_tokens": 73441,
+      "unknown_usage_calls": 0,
+      "reserved_estimate_tokens": 0,
+      "budget_accounted_tokens": 73441,
+      "actual_cost": null,
+      "model_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:64fe072ce88f43dab6ae73757cf6fced",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 16111,
+          "usage_detail": {
+            "input_tokens": 14980,
+            "output_tokens": 1131,
+            "total_tokens": 16111,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 0
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:b9ef7f61b02249a9b3b438018c730ffd",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 17669,
+          "usage_detail": {
+            "input_tokens": 1538,
+            "output_tokens": 1155,
+            "total_tokens": 17669,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:17619df537e74e83aa0485a53f5e7011",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 19262,
+          "usage_detail": {
+            "input_tokens": 3592,
+            "output_tokens": 694,
+            "total_tokens": 19262,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:c8c6d5504f044ca89609ecc3bbd82534",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 20399,
+          "usage_detail": {
+            "input_tokens": 3668,
+            "output_tokens": 475,
+            "total_tokens": 20399,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 16256
+          }
+        }
+      ],
+      "observations": {
+        "wire_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "not_established",
+          "turns": []
+        },
+        "decoded_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "exact_count_only_not_identity_verified",
+          "turns": [
+            {
+              "observation_sequence": 1,
+              "model_call_ordinal": 1,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 5002
+                },
+                {
+                  "type": "text",
+                  "chars": 54
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "read_sources",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "read_sources"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 2,
+              "model_call_ordinal": 2,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 2173
+                },
+                {
+                  "type": "text",
+                  "chars": 131
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "record_facts",
+                  "facts_items": 4
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "search_source",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "record_facts",
+                "search_source"
+              ],
+              "record_facts_seen": "yes",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 3,
+              "model_call_ordinal": 3,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 1659
+                },
+                {
+                  "type": "text",
+                  "chars": 104
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "calculate_financials",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "calculate_financials"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 4,
+              "model_call_ordinal": 4,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 1431
+                },
+                {
+                  "type": "text",
+                  "chars": 87
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "calculate_financials",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "calculate_financials"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            }
+          ]
+        }
+      },
+      "record_facts": {
+        "observation": "checkpoint_history",
+        "history_turns_with_multiple_record_facts": [],
+        "history_turn_index_missing": false,
+        "calls": [
+          {
+            "history_turn": 2,
+            "tool_call_id": "call_1ec56b6cf56a4c89a47c6502",
+            "submitted_fact_count": 4,
+            "result_present": true
+          }
+        ],
+        "instruction_assessment": "not_applicable_A",
+        "identical_full_input_fact_repetitions": 0,
+        "saved_fact_count": 4,
+        "saved_duplicate_fact_ids": 0,
+        "duplicate_scope": "exact full fact input object and saved fact IDs only; semantic duplicates require review"
+      }
+    },
+    {
+      "id": "D3-A-2",
+      "arm": "A",
+      "source_sha256": "02e3650a6f93a06952bc1562077eabbcd4a50a9c5abc5e59201553e4850d983d",
+      "status": "partial",
+      "reason": "provider_output_truncated",
+      "error_type": null,
+      "calls": 1,
+      "elapsed_seconds": 45.846,
+      "provider_reported_tokens": 17028,
+      "unknown_usage_calls": 0,
+      "reserved_estimate_tokens": 0,
+      "budget_accounted_tokens": 17028,
+      "actual_cost": null,
+      "model_events": [
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:0b1b53624171421c90f8eff97c851588",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 17028
+        }
+      ],
+      "observations": {
+        "wire_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "not_established",
+          "turns": []
+        },
+        "decoded_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "exact_count_only_not_identity_verified",
+          "turns": [
+            {
+              "observation_sequence": 1,
+              "model_call_ordinal": 1,
+              "finish_reason": "max_tokens",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 9508
+                }
+              ],
+              "known_tool_names_seen": [],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            }
+          ]
+        }
+      },
+      "record_facts": {
+        "observation": "checkpoint_history",
+        "history_turns_with_multiple_record_facts": [],
+        "history_turn_index_missing": false,
+        "calls": [],
+        "instruction_assessment": "not_applicable_A",
+        "identical_full_input_fact_repetitions": 0,
+        "saved_fact_count": 0,
+        "saved_duplicate_fact_ids": 0,
+        "duplicate_scope": "exact full fact input object and saved fact IDs only; semantic duplicates require review"
+      }
+    },
+    {
+      "id": "D3-B-1",
+      "arm": "B",
+      "source_sha256": "14c0e9cbdfeba72cef38dbfa2ead36a3048b80106c8467df7d8284abf60642c8",
+      "status": "partial",
+      "reason": "provider_budget_exhausted",
+      "error_type": null,
+      "calls": 4,
+      "elapsed_seconds": 72.862,
+      "provider_reported_tokens": 69893,
+      "unknown_usage_calls": 0,
+      "reserved_estimate_tokens": 0,
+      "budget_accounted_tokens": 69893,
+      "actual_cost": null,
+      "model_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:8a504cc21b824e899706ca218985c6bd",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 15204,
+          "usage_detail": {
+            "input_tokens": 15010,
+            "output_tokens": 194,
+            "total_tokens": 15204,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 0
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:2c8cbd2530b449588f734fd505080f76",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 17598,
+          "usage_detail": {
+            "input_tokens": 627,
+            "output_tokens": 1995,
+            "total_tokens": 17598,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:1bf66c9a062946319c200ff7106fa291",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 18165,
+          "usage_detail": {
+            "input_tokens": 2955,
+            "output_tokens": 234,
+            "total_tokens": 18165,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:5aa8aff9d81149ddbb1ac3b78cc2623d",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 18926,
+          "usage_detail": {
+            "input_tokens": 3526,
+            "output_tokens": 424,
+            "total_tokens": 18926,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          }
+        }
+      ],
+      "observations": {
+        "wire_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "not_established",
+          "turns": []
+        },
+        "decoded_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "exact_count_only_not_identity_verified",
+          "turns": [
+            {
+              "observation_sequence": 1,
+              "model_call_ordinal": 1,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 504
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "read_sources",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "read_sources"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 2,
+              "model_call_ordinal": 2,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 7785
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "record_facts",
+                  "facts_items": 2
+                }
+              ],
+              "known_tool_names_seen": [
+                "record_facts"
+              ],
+              "record_facts_seen": "yes",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 3,
+              "model_call_ordinal": 3,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 196
+                },
+                {
+                  "type": "text",
+                  "chars": 29
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "record_facts",
+                  "facts_items": 2
+                }
+              ],
+              "known_tool_names_seen": [
+                "record_facts"
+              ],
+              "record_facts_seen": "yes",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 4,
+              "model_call_ordinal": 4,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 292
+                },
+                {
+                  "type": "text",
+                  "chars": 39
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "calculate_financials",
+                  "facts_items": null
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "search_library",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "calculate_financials",
+                "search_library"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            }
+          ]
+        }
+      },
+      "record_facts": {
+        "observation": "checkpoint_history",
+        "history_turns_with_multiple_record_facts": [],
+        "history_turn_index_missing": false,
+        "calls": [
+          {
+            "history_turn": 2,
+            "tool_call_id": "call_d64e29da07414782937d98e5",
+            "submitted_fact_count": 2,
+            "result_present": true
+          },
+          {
+            "history_turn": 3,
+            "tool_call_id": "call_ac894029753b4d2da9b2eb30",
+            "submitted_fact_count": 2,
+            "result_present": true
+          }
+        ],
+        "instruction_assessment": "structurally_consistent_inspection_not_provable",
+        "identical_full_input_fact_repetitions": 0,
+        "saved_fact_count": 4,
+        "saved_duplicate_fact_ids": 0,
+        "duplicate_scope": "exact full fact input object and saved fact IDs only; semantic duplicates require review"
+      }
+    },
+    {
+      "id": "D3-B-2",
+      "arm": "B",
+      "source_sha256": "d167d07d99d0d790c97f3bc148169d63b4346c02262ed9173918025e131fd4cd",
+      "status": "partial",
+      "reason": "provider_budget_exhausted",
+      "error_type": null,
+      "calls": 4,
+      "elapsed_seconds": 68.702,
+      "provider_reported_tokens": 71806,
+      "unknown_usage_calls": 0,
+      "reserved_estimate_tokens": 0,
+      "budget_accounted_tokens": 71806,
+      "actual_cost": null,
+      "model_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:10f521c13cea40f4a4acadf0e67859c8",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 16454,
+          "usage_detail": {
+            "input_tokens": 34,
+            "output_tokens": 1444,
+            "total_tokens": 16454,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:b1a316b85f0d44328c02753b12e001a2",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 17636,
+          "usage_detail": {
+            "input_tokens": 1872,
+            "output_tokens": 788,
+            "total_tokens": 17636,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:e918ebe5f85c466385dc99ad07702c41",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 18250,
+          "usage_detail": {
+            "input_tokens": 3019,
+            "output_tokens": 255,
+            "total_tokens": 18250,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:67342eec509844e0b3dd1a1c1ea60243",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 19466,
+          "usage_detail": {
+            "input_tokens": 2030,
+            "output_tokens": 860,
+            "total_tokens": 19466,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 16576
+          }
+        }
+      ],
+      "observations": {
+        "wire_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "not_established",
+          "turns": []
+        },
+        "decoded_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "exact_count_only_not_identity_verified",
+          "turns": [
+            {
+              "observation_sequence": 1,
+              "model_call_ordinal": 1,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 6421
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "read_sources",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "read_sources"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 2,
+              "model_call_ordinal": 2,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 1907
+                },
+                {
+                  "type": "text",
+                  "chars": 160
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "record_facts",
+                  "facts_items": 2
+                }
+              ],
+              "known_tool_names_seen": [
+                "record_facts"
+              ],
+              "record_facts_seen": "yes",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 3,
+              "model_call_ordinal": 3,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 133
+                },
+                {
+                  "type": "text",
+                  "chars": 26
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "record_facts",
+                  "facts_items": 2
+                }
+              ],
+              "known_tool_names_seen": [
+                "record_facts"
+              ],
+              "record_facts_seen": "yes",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 4,
+              "model_call_ordinal": 4,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 1552
+                },
+                {
+                  "type": "text",
+                  "chars": 63
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "calculate_financials",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "calculate_financials"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            }
+          ]
+        }
+      },
+      "record_facts": {
+        "observation": "checkpoint_history",
+        "history_turns_with_multiple_record_facts": [],
+        "history_turn_index_missing": false,
+        "calls": [
+          {
+            "history_turn": 2,
+            "tool_call_id": "call_876b61e695c24d94b9d38e77",
+            "submitted_fact_count": 2,
+            "result_present": true
+          },
+          {
+            "history_turn": 3,
+            "tool_call_id": "call_10666638279148f89f10fbfa",
+            "submitted_fact_count": 2,
+            "result_present": true
+          }
+        ],
+        "instruction_assessment": "structurally_consistent_inspection_not_provable",
+        "identical_full_input_fact_repetitions": 0,
+        "saved_fact_count": 4,
+        "saved_duplicate_fact_ids": 0,
+        "duplicate_scope": "exact full fact input object and saved fact IDs only; semantic duplicates require review"
+      }
+    },
+    {
+      "id": "D4-A-1",
+      "arm": "A",
+      "source_sha256": "48c83643329812e291d0ed280c1148b427b0ba8f5948e882478c7090ed1386eb",
+      "status": "partial",
+      "reason": "provider_output_truncated",
+      "error_type": null,
+      "calls": 2,
+      "elapsed_seconds": 59.414,
+      "provider_reported_tokens": 33881,
+      "unknown_usage_calls": 0,
+      "reserved_estimate_tokens": 0,
+      "budget_accounted_tokens": 33881,
+      "actual_cost": null,
+      "model_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:125f8830102945dd99d8eaacb6c5a41c",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 15724,
+          "usage_detail": {
+            "input_tokens": 14977,
+            "output_tokens": 747,
+            "total_tokens": 15724,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 0
+          }
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:b1ced526d0f2446a887a38f70d3da406",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 18157
+        }
+      ],
+      "observations": {
+        "wire_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "not_established",
+          "turns": []
+        },
+        "decoded_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "exact_count_only_not_identity_verified",
+          "turns": [
+            {
+              "observation_sequence": 1,
+              "model_call_ordinal": 1,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 3365
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "read_sources",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "read_sources"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 2,
+              "model_call_ordinal": 2,
+              "finish_reason": "max_tokens",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 7831
+                },
+                {
+                  "type": "text",
+                  "chars": 159
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "search_source",
+                  "facts_items": null
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "record_facts",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "search_source",
+                "record_facts"
+              ],
+              "record_facts_seen": "yes",
+              "unknown_tool_name_seen": false
+            }
+          ]
+        }
+      },
+      "record_facts": {
+        "observation": "checkpoint_history",
+        "history_turns_with_multiple_record_facts": [],
+        "history_turn_index_missing": false,
+        "calls": [],
+        "instruction_assessment": "not_applicable_A",
+        "identical_full_input_fact_repetitions": 0,
+        "saved_fact_count": 0,
+        "saved_duplicate_fact_ids": 0,
+        "duplicate_scope": "exact full fact input object and saved fact IDs only; semantic duplicates require review"
+      }
+    },
+    {
+      "id": "D4-A-2",
+      "arm": "A",
+      "source_sha256": "d96615298f0986c8f0bccb5dbc38a030fc35131e9d687469c0c8295a3622ed75",
+      "status": "partial",
+      "reason": "provider_output_truncated",
+      "error_type": null,
+      "calls": 2,
+      "elapsed_seconds": 53.747,
+      "provider_reported_tokens": 33457,
+      "unknown_usage_calls": 0,
+      "reserved_estimate_tokens": 0,
+      "budget_accounted_tokens": 33457,
+      "actual_cost": null,
+      "model_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:0c36e0ba61a24d81b2a380c235906663",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 15514,
+          "usage_detail": {
+            "input_tokens": 1,
+            "output_tokens": 537,
+            "total_tokens": 15514,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          }
+        },
+        {
+          "kind": "model_failure",
+          "call_id": "research:research-agent:8a1bb12d8cf04a19a8372e3aba7f8809",
+          "code": "provider_output_truncated",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 17943
+        }
+      ],
+      "observations": {
+        "wire_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "not_established",
+          "turns": []
+        },
+        "decoded_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "exact_count_only_not_identity_verified",
+          "turns": [
+            {
+              "observation_sequence": 1,
+              "model_call_ordinal": 1,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 1890
+                },
+                {
+                  "type": "text",
+                  "chars": 45
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "read_sources",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "read_sources"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 2,
+              "model_call_ordinal": 2,
+              "finish_reason": "max_tokens",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 6727
+                }
+              ],
+              "known_tool_names_seen": [],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            }
+          ]
+        }
+      },
+      "record_facts": {
+        "observation": "checkpoint_history",
+        "history_turns_with_multiple_record_facts": [],
+        "history_turn_index_missing": false,
+        "calls": [],
+        "instruction_assessment": "not_applicable_A",
+        "identical_full_input_fact_repetitions": 0,
+        "saved_fact_count": 0,
+        "saved_duplicate_fact_ids": 0,
+        "duplicate_scope": "exact full fact input object and saved fact IDs only; semantic duplicates require review"
+      }
+    },
+    {
+      "id": "D4-B-1",
+      "arm": "B",
+      "source_sha256": "b60473f1cd5fa4ad52e748b15967511944cbe3ce40108d2a4bdf1b0fae8d7209",
+      "status": "partial",
+      "reason": "provider_budget_exhausted",
+      "error_type": null,
+      "calls": 4,
+      "elapsed_seconds": 66.345,
+      "provider_reported_tokens": 69992,
+      "unknown_usage_calls": 0,
+      "reserved_estimate_tokens": 0,
+      "budget_accounted_tokens": 69992,
+      "actual_cost": null,
+      "model_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:342376626138431a95ad07c31739e31b",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 15313,
+          "usage_detail": {
+            "input_tokens": 15007,
+            "output_tokens": 306,
+            "total_tokens": 15313,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 0
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:6061aa474e0e4e86abfe5f36466eca90",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 17493,
+          "usage_detail": {
+            "input_tokens": 727,
+            "output_tokens": 1790,
+            "total_tokens": 17493,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:745e3d3dd79a44beb43bd36469667ba6",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 18458,
+          "usage_detail": {
+            "input_tokens": 3015,
+            "output_tokens": 467,
+            "total_tokens": 18458,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:ff534cf13ea249dfbd153aa63c868f34",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 18728,
+          "usage_detail": {
+            "input_tokens": 3075,
+            "output_tokens": 229,
+            "total_tokens": 18728,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15424
+          }
+        }
+      ],
+      "observations": {
+        "wire_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "not_established",
+          "turns": []
+        },
+        "decoded_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "exact_count_only_not_identity_verified",
+          "turns": [
+            {
+              "observation_sequence": 1,
+              "model_call_ordinal": 1,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 1091
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "read_sources",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "read_sources"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 2,
+              "model_call_ordinal": 2,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 6283
+                },
+                {
+                  "type": "text",
+                  "chars": 112
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "record_facts",
+                  "facts_items": 2
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "search_source",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "record_facts",
+                "search_source"
+              ],
+              "record_facts_seen": "yes",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 3,
+              "model_call_ordinal": 3,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 647
+                },
+                {
+                  "type": "text",
+                  "chars": 117
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "calculate_financials",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "calculate_financials"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 4,
+              "model_call_ordinal": 4,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 133
+                },
+                {
+                  "type": "text",
+                  "chars": 54
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "calculate_financials",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "calculate_financials"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            }
+          ]
+        }
+      },
+      "record_facts": {
+        "observation": "checkpoint_history",
+        "history_turns_with_multiple_record_facts": [],
+        "history_turn_index_missing": false,
+        "calls": [
+          {
+            "history_turn": 2,
+            "tool_call_id": "call_cf74e899df13464c98d18ea8",
+            "submitted_fact_count": 2,
+            "result_present": true
+          }
+        ],
+        "instruction_assessment": "structurally_consistent_inspection_not_provable",
+        "identical_full_input_fact_repetitions": 0,
+        "saved_fact_count": 2,
+        "saved_duplicate_fact_ids": 0,
+        "duplicate_scope": "exact full fact input object and saved fact IDs only; semantic duplicates require review"
+      }
+    },
+    {
+      "id": "D4-B-2",
+      "arm": "B",
+      "source_sha256": "306030b040c641d19c95b8b0cd1cdb24dea52639e72f7c7b3268dd3d7b32d307",
+      "status": "partial",
+      "reason": "provider_budget_exhausted",
+      "error_type": null,
+      "calls": 4,
+      "elapsed_seconds": 70.565,
+      "provider_reported_tokens": 68522,
+      "unknown_usage_calls": 0,
+      "reserved_estimate_tokens": 0,
+      "budget_accounted_tokens": 68522,
+      "actual_cost": null,
+      "model_events": [
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:ae19270d40f544a3a5a484428e95f613",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 15293,
+          "usage_detail": {
+            "input_tokens": 31,
+            "output_tokens": 286,
+            "total_tokens": 15293,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:9f27907dc59a45f79e0aca47356df1e3",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 16866,
+          "usage_detail": {
+            "input_tokens": 712,
+            "output_tokens": 1178,
+            "total_tokens": 16866,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:9b219beef82f401caea6f1b3c4ffaa76",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 17614,
+          "usage_detail": {
+            "input_tokens": 2269,
+            "output_tokens": 369,
+            "total_tokens": 17614,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 14976
+          }
+        },
+        {
+          "kind": "model",
+          "call_id": "research:research-agent:49c76e5f7f7f43e88fe7f3c1346df2a0",
+          "finish_reason": "tool_use",
+          "external_state": "returned",
+          "settlement": "settled",
+          "usage": 18749,
+          "usage_detail": {
+            "input_tokens": 2714,
+            "output_tokens": 611,
+            "total_tokens": 18749,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": 15424
+          }
+        }
+      ],
+      "observations": {
+        "wire_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "not_established",
+          "turns": []
+        },
+        "decoded_turns": {
+          "observation": "recorded",
+          "ordinal_mapping": "exact_count_only_not_identity_verified",
+          "turns": [
+            {
+              "observation_sequence": 1,
+              "model_call_ordinal": 1,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 967
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "read_sources",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "read_sources"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 2,
+              "model_call_ordinal": 2,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 4068
+                },
+                {
+                  "type": "text",
+                  "chars": 296
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "record_facts",
+                  "facts_items": 2
+                }
+              ],
+              "known_tool_names_seen": [
+                "record_facts"
+              ],
+              "record_facts_seen": "yes",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 3,
+              "model_call_ordinal": 3,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 341
+                },
+                {
+                  "type": "text",
+                  "chars": 68
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "calculate_financials",
+                  "facts_items": null
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "search_library",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "calculate_financials",
+                "search_library"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            },
+            {
+              "observation_sequence": 4,
+              "model_call_ordinal": 4,
+              "finish_reason": "tool_use",
+              "observation_parse_error": null,
+              "truncation_position_zero_based": null,
+              "blocks": [
+                {
+                  "type": "thinking",
+                  "chars": 2405
+                },
+                {
+                  "type": "text",
+                  "chars": 91
+                },
+                {
+                  "type": "tool_use",
+                  "chars": null,
+                  "name": "search_library",
+                  "facts_items": null
+                }
+              ],
+              "known_tool_names_seen": [
+                "search_library"
+              ],
+              "record_facts_seen": "not_seen_in_observed_blocks",
+              "unknown_tool_name_seen": false
+            }
+          ]
+        }
+      },
+      "record_facts": {
+        "observation": "checkpoint_history",
+        "history_turns_with_multiple_record_facts": [],
+        "history_turn_index_missing": false,
+        "calls": [
+          {
+            "history_turn": 2,
+            "tool_call_id": "call_002faacbb586468fb265c56a",
+            "submitted_fact_count": 2,
+            "result_present": true
+          }
+        ],
+        "instruction_assessment": "structurally_consistent_inspection_not_provable",
+        "identical_full_input_fact_repetitions": 0,
+        "saved_fact_count": 2,
+        "saved_duplicate_fact_ids": 0,
+        "duplicate_scope": "exact full fact input object and saved fact IDs only; semantic duplicates require review"
+      }
+    }
+  ],
+  "limitations": [
+    "No reasoning or input values retained.",
+    "A block not seen in the observed prefix is not proof of absence from the unseen continuation.",
+    "History turn is a checkpoint ordinal; it is not automatically a provider call ordinal.",
+    "A tool result in history does not establish that the model semantically inspected it.",
+    "Duplicate checks are exact, not semantic; actual cost and unknown usage are not estimated."
+  ]
+}

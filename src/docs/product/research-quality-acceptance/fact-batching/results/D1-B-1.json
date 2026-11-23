@@ -1,0 +1,243 @@
+{
+  "case": "D1",
+  "arm": "B",
+  "source": {
+    "source_id": "exhibit",
+    "content_sha256": "86999c7c03aa39f42799d31f99103f9397ca94dae821f7f8574a0acec24e4cda",
+    "permissions": {
+      "store": true,
+      "model_input": true,
+      "display": true,
+      "export": true
+    }
+  },
+  "actual_cost": null,
+  "status": "partial",
+  "reason": "provider_output_truncated",
+  "report": "",
+  "claims": [],
+  "facts": [],
+  "question_parts": [
+    {
+      "id": "req-93921fd1140995d0",
+      "question": "比较 Alpha 2025 与 2024 年收入增速",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-93921fd1140995d0",
+          "question": "比较 Alpha 2025 与 2024 年收入增速",
+          "status": "missing",
+          "reason": "No eligible recorded fact matches this metric.",
+          "references": [],
+          "core": true
+        }
+      ]
+    },
+    {
+      "question": "并说明稀释 EPS 变化",
+      "status": "unresolved",
+      "answer": "",
+      "reason": "这一部分尚未回答；需要补充相关依据和具体条件。",
+      "references": []
+    },
+    {
+      "id": "req-79e06e2aa18a6f59",
+      "question": "说明稀释 EPS 变化。",
+      "core": true,
+      "status": "unresolved",
+      "answer": "",
+      "reason": "No eligible recorded fact matches this metric.",
+      "references": [],
+      "requirements": [
+        {
+          "id": "req-79e06e2aa18a6f59",
+          "question": "说明稀释 EPS 变化。",
+          "status": "missing",
+          "reason": "No eligible recorded fact matches this metric.",
+          "references": [],
+          "core": true
+        }
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "code": "provider_error",
+      "message": "Provider output was truncated."
+    }
+  ],
+  "calculations": [],
+  "events": [
+    {
+      "kind": "model",
+      "call_id": "research:research-agent:0292bfd362ef4d239a2f733da97ca9d6",
+      "finish_reason": "tool_use",
+      "external_state": "returned",
+      "usage": 15876,
+      "usage_detail": {
+        "input_tokens": 15750,
+        "output_tokens": 126,
+        "total_tokens": 15876,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 0
+      },
+      "settlement": "settled",
+      "protocol_status": "normalized",
+      "evidence_status": "not_assessed",
+      "task_status": "in_progress",
+      "tool_call_ids": [
+        "call_0a51ae5907a74f00b6c1488b"
+      ],
+      "cache_telemetry": {
+        "total_input_tokens": 15750,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": null,
+        "cache_hit_ratio": 0.0
+      }
+    },
+    {
+      "kind": "tool",
+      "tool_call_id": "call_0a51ae5907a74f00b6c1488b",
+      "name": "read_sources",
+      "status": "completed",
+      "rationale": "读取授权的合成 exhibits 源文件，获取 Alpha 2025 与 2024 年的收入及稀释 EPS 数据以进行比较。",
+      "summary": {
+        "kind": "read_sources",
+        "read_count": 1,
+        "items": [
+          {
+            "source_id": "exhibit",
+            "title": "Synthetic exhibit",
+            "start": 0,
+            "end": 103,
+            "total_characters": 103
+          }
+        ]
+      }
+    },
+    {
+      "kind": "model_failure",
+      "call_id": "research:research-agent:d516b08fe93d42e4abd33a883823f47e",
+      "code": "provider_output_truncated",
+      "external_state": "returned",
+      "usage": 18336,
+      "settlement": "settled"
+    }
+  ],
+  "tool_io": [
+    {
+      "turn": 1,
+      "id": "call_0a51ae5907a74f00b6c1488b",
+      "tool": "read_sources",
+      "input": {
+        "rationale": "读取授权的合成 exhibits 源文件，获取 Alpha 2025 与 2024 年的收入及稀释 EPS 数据以进行比较。",
+        "reads": [
+          {
+            "end": 103,
+            "source_id": "exhibit",
+            "start": 0
+          }
+        ]
+      },
+      "result": "{\"rationale\": \"读取授权的合成 exhibits 源文件，获取 Alpha 2025 与 2024 年的收入及稀释 EPS 数据以进行比较。\", \"results\": [{\"content_sha256\": \"86999c7c03aa39f42799d31f99103f9397ca94dae821f7f8574a0acec24e4cda\", \"end\": 103, \"source_id\": \"exhibit\", \"start\": 0, \"status\": \"read\", \"text\": \"Alpha 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million, diluted EPS 2 USD.\", \"total_characters\": 103, \"truncated\": false}]}"
+    }
+  ],
+  "answered_parts": [],
+  "all_core_answered": false,
+  "submit_research_observed": false,
+  "submit_research_calls": [],
+  "submission_acceptance": "not_observed",
+  "record_facts_parallel_turns": [],
+  "usage": {
+    "reported_tokens": 34212,
+    "unknown_usage_calls": 0,
+    "reserved_estimate_tokens": 0
+  },
+  "search_calls": 0,
+  "calls": 2,
+  "budget_accounted_tokens": 34212,
+  "prompts": [
+    {
+      "turn_sha256": "9ef51fce1b38e4b4aad1958422cfda7786e9868005c8729592a2ca1216aff032",
+      "tail_note": null
+    },
+    {
+      "turn_sha256": "aa170e50d37644b110b39abce780592af46f8100b0b2a23478f6869388c4eb03",
+      "tail_note": "[Coverage]\n{\"coverage\":{\"categories\":[{\"category\":\"uploads\",\"obtained\":1,\"status\":\"obtained\"}],\"not_attempted\":[\"market_prices\",\"financial_statements\",\"filings\",\"news_web\",\"macro\",\"other\"],\"not_established\":[\"No market prices were requested in this run; nothing is established for this category.\",\"No financial statements were requested in this run; nothing is established for this category.\",\"No filings and official documents were requested in this run; nothing is established for this category.\",\"No news and web were requested in this run; nothing is established for this category.\"],\"note\":\"Generated deterministically from run events; state these limits instead of implying completeness.\",\"run_status\":\"incomplete\"}}\n[Working Memory]\nState: facts=0 calcs=0 charts=0 sources=1\nCore evidence needed: financial:revenue: No eligible recorded fact matches this metric.; financial:diluted_eps: No eligible recorded fact matches this metric.\nMethodChecks(company_comparison,earnings_review): entities:n/a, aligned_statements:missing, derived_ratios:missing, entity:n/a, statements:missing, filing_text:missing, prior_compare:missing\nCounterEvidence: needed(0/1)"
+    }
+  ],
+  "wire_turns": [],
+  "decoded_turns": [
+    {
+      "finish_reason": "tool_use",
+      "blocks": [
+        {
+          "type": "thinking",
+          "chars": 261
+        },
+        {
+          "type": "tool_use",
+          "name": "read_sources",
+          "arguments_shape": {
+            "rationale": {
+              "chars": 62
+            },
+            "reads": {
+              "items": 1,
+              "item_shapes": [
+                {
+                  "end": {
+                    "type": "int"
+                  },
+                  "source_id": {
+                    "chars": 7
+                  },
+                  "start": {
+                    "type": "int"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "raw_output_saved": false
+    },
+    {
+      "finish_reason": "max_tokens",
+      "blocks": [
+        {
+          "type": "thinking",
+          "chars": 7618
+        }
+      ],
+      "raw_output_saved": false
+    }
+  ],
+  "diagnostics": [
+    {
+      "transport": null,
+      "stream_metrics": null,
+      "finish_reason": null,
+      "stop_reason": null,
+      "usage": {
+        "input_tokens": 15750,
+        "output_tokens": 126,
+        "total_tokens": 15876,
+        "cache_read_input_tokens": 0
+      }
+    },
+    {
+      "transport": null,
+      "stream_metrics": null,
+      "finish_reason": null,
+      "stop_reason": null,
+      "usage": null
+    }
+  ],
+  "elapsed_seconds": 47.4
+}

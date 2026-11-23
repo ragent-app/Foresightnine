@@ -1,0 +1,91 @@
+{
+  "N1": {
+    "groups": [
+      [
+        [
+          "n1a",
+          "n1b"
+        ]
+      ]
+    ],
+    "limitations": "20% growth; price accounts for one third of the increase."
+  },
+  "N2": {
+    "groups": [
+      [
+        [
+          "n2a"
+        ]
+      ],
+      [
+        [
+          "n2b"
+        ]
+      ]
+    ],
+    "limitations": "供应商解除须买方违约、书面通知、六十日未补救；发运取决港口。"
+  },
+  "N3": {
+    "groups": [
+      [
+        [
+          "n3a",
+          "n3b"
+        ]
+      ]
+    ],
+    "limitations": "Common dates May 2–5; shares 9.09%, benchmark 5%."
+  },
+  "N4": {
+    "groups": [
+      [
+        [
+          "n4a",
+          "n4b"
+        ]
+      ]
+    ],
+    "limitations": "下降10%；不可将30视为同比贡献。"
+  },
+  "N5": {
+    "groups": [
+      [
+        [
+          "n5a"
+        ]
+      ]
+    ],
+    "limitations": "1,240 employees."
+  },
+  "N6": {
+    "groups": [
+      [
+        [
+          "n6a",
+          "n6b"
+        ]
+      ]
+    ],
+    "limitations": "原材料涨价是反证；不能保证持续上升。"
+  },
+  "N7": {
+    "groups": [
+      [
+        [
+          "n7a"
+        ]
+      ]
+    ],
+    "limitations": "Group increased EUR 6 million; subsidiary scope differs."
+  },
+  "N8": {
+    "groups": [
+      [
+        [
+          "n8a"
+        ]
+      ]
+    ],
+    "limitations": "今年12亿元，去年缺失，不可计算变化。"
+  }
+}

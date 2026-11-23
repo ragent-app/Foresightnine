@@ -1,0 +1,160 @@
+[
+  {
+    "id": "N1",
+    "question": "What was Bexler annual revenue change and how much came from higher unit prices?",
+    "sources": [
+      [
+        "n1a",
+        "Annual statement",
+        "Bexler revenue in CAD millions: 2024 90; 2025 108, consistent scope."
+      ],
+      [
+        "n1b",
+        "Management review",
+        "Bexler disclosed higher unit prices added CAD 6 million to the CAD 18 million revenue increase."
+      ],
+      [
+        "n1c",
+        "Market summary",
+        "Bexler annual revenue change and higher unit prices were discussed."
+      ]
+    ]
+  },
+  {
+    "id": "N2",
+    "question": "雁禾合同可否取消，预测发运的条件是什么？",
+    "sources": [
+      [
+        "n2a",
+        "供货协议",
+        "雁禾供货协议：仅在买方重大违约并收到书面通知六十日后仍未补救时，供应商可以解除合同。"
+      ],
+      [
+        "n2b",
+        "发运计划",
+        "雁禾预测按期发运取决于港口恢复通行，披露时尚未恢复。"
+      ],
+      [
+        "n2c",
+        "周报",
+        "雁禾取消合同和预测发运受到关注。"
+      ]
+    ]
+  },
+  {
+    "id": "N3",
+    "question": "Compare Fenn shares against its benchmark over common close dates.",
+    "sources": [
+      [
+        "n3a",
+        "Exchange tape",
+        "Fenn shares closing prices in SGD: May 1 10, May 2 11, May 5 12."
+      ],
+      [
+        "n3b",
+        "Index series",
+        "Fenn benchmark price index close: May 2 120, May 5 126."
+      ],
+      [
+        "n3c",
+        "Weekly review",
+        "Fenn shares and benchmark comparison were discussed."
+      ]
+    ]
+  },
+  {
+    "id": "N4",
+    "question": "榆陌集团收入变化有多少，处置贡献是多少？",
+    "sources": [
+      [
+        "n4a",
+        "合并报表",
+        "榆陌集团收入人民币百万元：2024年度200，2025年度180。"
+      ],
+      [
+        "n4b",
+        "范围附注",
+        "榆陌处置业务本期处置前实现收入30百万元，未披露其对同比变动的贡献。"
+      ],
+      [
+        "n4c",
+        "评论",
+        "榆陌集团收入变化与处置贡献受到关注。"
+      ]
+    ]
+  },
+  {
+    "id": "N5",
+    "question": "What was Corven headcount at year end 2025?",
+    "sources": [
+      [
+        "n5a",
+        "Workforce report",
+        "Corven year-end 2025 headcount was 1,240 employees."
+      ],
+      [
+        "n5b",
+        "Newsletter",
+        "Corven headcount was discussed."
+      ]
+    ]
+  },
+  {
+    "id": "N6",
+    "question": "泊舟毛利率是否会持续上升？请列出最强反证。",
+    "sources": [
+      [
+        "n6a",
+        "经营报告",
+        "泊舟预计毛利率继续上升，但预测取决于原材料价格。"
+      ],
+      [
+        "n6b",
+        "采购披露",
+        "泊舟主要原材料价格已上涨，持续时间尚不确定。"
+      ],
+      [
+        "n6c",
+        "摘要",
+        "泊舟毛利率预测引起关注。"
+      ]
+    ]
+  },
+  {
+    "id": "N7",
+    "question": "What is the change in group operating profit for Vellar?",
+    "sources": [
+      [
+        "n7a",
+        "Consolidated accounts",
+        "Vellar group operating profit EUR millions: 2024 30, 2025 36."
+      ],
+      [
+        "n7b",
+        "Subsidiary accounts",
+        "Vellar subsidiary operating profit EUR millions: 2024 3, 2025 9."
+      ],
+      [
+        "n7c",
+        "Summary",
+        "Vellar group operating profit change was discussed."
+      ]
+    ]
+  },
+  {
+    "id": "N8",
+    "question": "青屿去年与今年资本开支分别多少？",
+    "sources": [
+      [
+        "n8a",
+        "年度公告",
+        "青屿今年资本开支为人民币12亿元。"
+      ],
+      [
+        "n8b",
+        "新闻",
+        "青屿资本开支受到关注，未列示去年金额。"
+      ]
+    ]
+  }
+]

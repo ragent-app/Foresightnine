@@ -1,0 +1,169 @@
+........................................................................ [ 58%]
+.....F..FF.FF..F......................FFF.F.F...F..                      [100%]
+=================================== FAILURES ===================================
+_ test_question_only_run_can_discover_and_cite_market_data_with_users_own_key __
+tests/test_research_runtime_api.py:336: in test_question_only_run_can_discover_and_cite_market_data_with_users_own_key
+    assert version['content']['turns'][-1]['status'] == 'completed'
+E   AssertionError: assert 'partial' == 'completed'
+E     
+E     - completed
+E     + partial
+_ test_question_only_run_fetches_open_web_html_and_pdf_and_persists_partial_notes _
+tests/test_research_runtime_api.py:560: in test_question_only_run_fetches_open_web_html_and_pdf_and_persists_partial_notes
+    assert saved_turn['partial_notes'] == partial_notes
+E   AssertionError: assert '部分结果已保留：停止原因... 条，已完成计算 0 项。' == 'Acquired IR ... environment.'
+E     
+E     - Acquired IR HTML and PDF; SEC structured data is unconfigured in this environment.
+E     + 部分结果已保留：停止原因：模型重复相同操作，证据没有变化，已停止（no_progress）；已收集资料 2 份（本轮新获取 2 份），已读片段 2 段，已记录事实 0 条，已完成计算 0 项。
+_____ test_question_only_run_calls_company_financials_and_cites_sec_source _____
+tests/test_research_runtime_api.py:674: in test_question_only_run_calls_company_financials_and_cites_sec_source
+    assert version['content']['turns'][-1]['status'] == 'completed'
+E   AssertionError: assert 'partial' == 'completed'
+E     
+E     - completed
+E     + partial
+__ test_start_research_run_uses_pace_sec_request_and_honors_reserve_override ___
+tests/test_research_runtime_api.py:865: in test_start_research_run_uses_pace_sec_request_and_honors_reserve_override
+    assert len(requested) == 1 + 4 and len(pace_calls) == len(requested) + 1  # submissions + 4 revenue concept files, + 1 for SEC acquire_sources
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: assert (6 == (1 + 4))
+E    +  where 6 = len(['https://data.sec.gov/submissions/CIK0000320193.json', 'https://data.sec.gov/api/xbrl/companyconcept/CIK0000320193/us...-gaap/RevenueFromContractWithCustomerIncludingAssessedTax.json', 'https://data.sec.gov/submissions/CIK0000320193.json'])
+___ test_company_financials_syncs_official_fetch_status_with_priority_guard ____
+tests/test_research_runtime_api.py:1028: in test_company_financials_syncs_official_fetch_status_with_priority_guard
+    assert status == 'completed'
+E   AssertionError: assert 'failed' == 'completed'
+E     
+E     - completed
+E     + failed
+------------------------------ Captured log call -------------------------------
+ERROR    app.operations:operations.py:109 operation_failure metadata={'operation_id': 'operation:afcd7145c869c72b986a91d0', 'exception_class': 'AssertionError', 'location': {'file': 'chat_research_adapter.py', 'line': 78}}
+_ test_web_html_acquisition_does_not_mark_official_fetch_status_completed_and_preserves_sec_priority _
+tests/test_research_runtime_api.py:1364: in test_web_html_acquisition_does_not_mark_official_fetch_status_completed_and_preserves_sec_priority
+    assert v2['content']['turns'][-1]['official_fetch_status'] == 'completed'
+E   AssertionError: assert 'web_retrieved' == 'completed'
+E     
+E     - completed
+E     + web_retrieved
+______ test_xbrl_tags_can_confirm_source_consistency_but_not_source_truth ______
+app/research_analysis.py:2573: in analyze
+    raw, draft_problems, draft_ids = convert_draft(raw, {f['fact_id'] for f in structured_model_facts})
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_output_contract.py:182: in convert_draft
+    raise DraftContractError(errors)
+E   app.research_output_contract.DraftContractError: Invalid research draft
+
+The above exception was the direct cause of the following exception:
+tests/test_research_table_provenance.py:74: in test_xbrl_tags_can_confirm_source_consistency_but_not_source_truth
+    result = analyze_xbrl(source_for(xbrl_fixture()))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_research_table_provenance.py:43: in analyze_xbrl
+    return analyze('Compare total revenue in FY2024 and FY2023.', [source], None, lambda _: (payload, 1))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_analysis.py:2577: in analyze
+    raise failure from error
+E   app.research_analysis.InvalidAnalysis: Model output did not match the research schema.
+____ test_single_cell_citations_can_be_cross_checked_against_original_xbrl _____
+app/research_analysis.py:2573: in analyze
+    raw, draft_problems, draft_ids = convert_draft(raw, {f['fact_id'] for f in structured_model_facts})
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_output_contract.py:182: in convert_draft
+    raise DraftContractError(errors)
+E   app.research_output_contract.DraftContractError: Invalid research draft
+
+The above exception was the direct cause of the following exception:
+tests/test_research_table_provenance.py:95: in test_single_cell_citations_can_be_cross_checked_against_original_xbrl
+    result = analyze('Compare revenue.', [source], None, lambda _: (payload, 1))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_analysis.py:2577: in analyze
+    raise failure from error
+E   app.research_analysis.InvalidAnalysis: Model output did not match the research schema.
+_ test_xbrl_metadata_fails_closed_for_namespace_context_units_and_entity_conflicts _
+app/research_analysis.py:2573: in analyze
+    raw, draft_problems, draft_ids = convert_draft(raw, {f['fact_id'] for f in structured_model_facts})
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_output_contract.py:182: in convert_draft
+    raise DraftContractError(errors)
+E   app.research_output_contract.DraftContractError: Invalid research draft
+
+The above exception was the direct cause of the following exception:
+tests/test_research_table_provenance.py:110: in test_xbrl_metadata_fails_closed_for_namespace_context_units_and_entity_conflicts
+    result = analyze_xbrl(source_for(html))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_research_table_provenance.py:43: in analyze_xbrl
+    return analyze('Compare total revenue in FY2024 and FY2023.', [source], None, lambda _: (payload, 1))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_analysis.py:2577: in analyze
+    raise failure from error
+E   app.research_analysis.InvalidAnalysis: Model output did not match the research schema.
+______ test_inline_consistency_supports_ifrs_currency_and_exact_other_row ______
+app/research_analysis.py:2573: in analyze
+    raw, draft_problems, draft_ids = convert_draft(raw, {f['fact_id'] for f in structured_model_facts})
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_output_contract.py:182: in convert_draft
+    raise DraftContractError(errors)
+E   app.research_output_contract.DraftContractError: Invalid research draft
+
+The above exception was the direct cause of the following exception:
+tests/test_research_table_provenance.py:148: in test_inline_consistency_supports_ifrs_currency_and_exact_other_row
+    result = analyze_xbrl(source_for(html), label='Operating expenses', currency='EUR')
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_research_table_provenance.py:43: in analyze_xbrl
+    return analyze('Compare total revenue in FY2024 and FY2023.', [source], None, lambda _: (payload, 1))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_analysis.py:2577: in analyze
+    raise failure from error
+E   app.research_analysis.InvalidAnalysis: Model output did not match the research schema.
+_ test_inline_consistency_never_uses_generic_match_to_bypass_known_metric_mapping _
+app/research_analysis.py:2573: in analyze
+    raw, draft_problems, draft_ids = convert_draft(raw, {f['fact_id'] for f in structured_model_facts})
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_output_contract.py:182: in convert_draft
+    raise DraftContractError(errors)
+E   app.research_output_contract.DraftContractError: Invalid research draft
+
+The above exception was the direct cause of the following exception:
+tests/test_research_table_provenance.py:175: in test_inline_consistency_never_uses_generic_match_to_bypass_known_metric_mapping
+    result = analyze_xbrl(source_for(html))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_research_table_provenance.py:43: in analyze_xbrl
+    return analyze('Compare total revenue in FY2024 and FY2023.', [source], None, lambda _: (payload, 1))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_analysis.py:2577: in analyze
+    raise failure from error
+E   app.research_analysis.InvalidAnalysis: Model output did not match the research schema.
+___ test_analysis_keeps_structural_calculation_provisional_and_fails_closed ____
+app/research_analysis.py:2573: in analyze
+    raw, draft_problems, draft_ids = convert_draft(raw, {f['fact_id'] for f in structured_model_facts})
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/research_output_contract.py:182: in convert_draft
+    raise DraftContractError(errors)
+E   app.research_output_contract.DraftContractError: Invalid research draft
+
+The above exception was the direct cause of the following exception:
+tests/test_research_table_provenance.py:256: in test_analysis_keeps_structural_calculation_provisional_and_fails_closed
+    result = run(source)
+             ^^^^^^^^^^^
+tests/test_research_table_provenance.py:251: in run
+    return analyze('Compare revenue.', [material], None, lambda _: ({'facts': facts,
+app/research_analysis.py:2577: in analyze
+    raise failure from error
+E   app.research_analysis.InvalidAnalysis: Model output did not match the research schema.
+=============================== warnings summary ===============================
+.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/ubuntu/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_research_runtime_api.py::test_question_only_run_can_discover_and_cite_market_data_with_users_own_key
+FAILED tests/test_research_runtime_api.py::test_question_only_run_fetches_open_web_html_and_pdf_and_persists_partial_notes
+FAILED tests/test_research_runtime_api.py::test_question_only_run_calls_company_financials_and_cites_sec_source
+FAILED tests/test_research_runtime_api.py::test_start_research_run_uses_pace_sec_request_and_honors_reserve_override
+FAILED tests/test_research_runtime_api.py::test_company_financials_syncs_official_fetch_status_with_priority_guard
+FAILED tests/test_research_runtime_api.py::test_web_html_acquisition_does_not_mark_official_fetch_status_completed_and_preserves_sec_priority
+FAILED tests/test_research_table_provenance.py::test_xbrl_tags_can_confirm_source_consistency_but_not_source_truth
+FAILED tests/test_research_table_provenance.py::test_single_cell_citations_can_be_cross_checked_against_original_xbrl
+FAILED tests/test_research_table_provenance.py::test_xbrl_metadata_fails_closed_for_namespace_context_units_and_entity_conflicts
+FAILED tests/test_research_table_provenance.py::test_inline_consistency_supports_ifrs_currency_and_exact_other_row
+FAILED tests/test_research_table_provenance.py::test_inline_consistency_never_uses_generic_match_to_bypass_known_metric_mapping
+FAILED tests/test_research_table_provenance.py::test_analysis_keeps_structural_calculation_provisional_and_fails_closed

@@ -1,0 +1,306 @@
+[
+  {
+    "id": "P1",
+    "corpus_oracle": {
+      "ids": [
+        "p1a",
+        "p1b"
+      ],
+      "complete_items": 1,
+      "bytes": 207
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "p1a",
+        "p1b"
+      ],
+      "complete_items": 1,
+      "bytes": 207
+    },
+    "candidate_ids": [
+      "p1c",
+      "p1b",
+      "p1a"
+    ],
+    "selected_full_sources": [
+      "p1a",
+      "p1c"
+    ],
+    "selected_bytes": 158,
+    "selected_items": 0,
+    "total_items": 1,
+    "complete": false,
+    "first_loss": "selection_or_capacity",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "10% growth; FX explains 25% of the increase; remainder unknown.",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "P2",
+    "corpus_oracle": {
+      "ids": [
+        "p2a",
+        "p2b"
+      ],
+      "complete_items": 2,
+      "bytes": 219
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "p2a",
+        "p2b"
+      ],
+      "complete_items": 2,
+      "bytes": 219
+    },
+    "candidate_ids": [
+      "p2c",
+      "p2a",
+      "p2b"
+    ],
+    "selected_full_sources": [
+      "p2b",
+      "p2c"
+    ],
+    "selected_bytes": 153,
+    "selected_items": 1,
+    "total_items": 2,
+    "complete": false,
+    "first_loss": "selection_or_capacity",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "供应商享有终止权；须客户违约、书面通知、六十日未补救；认证未通过。",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "P3",
+    "corpus_oracle": {
+      "ids": [
+        "p3a",
+        "p3b"
+      ],
+      "complete_items": 1,
+      "bytes": 136
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "p3a",
+        "p3b"
+      ],
+      "complete_items": 1,
+      "bytes": 136
+    },
+    "candidate_ids": [
+      "p3c",
+      "p3b",
+      "p3a"
+    ],
+    "selected_full_sources": [
+      "p3c",
+      "p3b"
+    ],
+    "selected_bytes": 144,
+    "selected_items": 0,
+    "total_items": 1,
+    "complete": false,
+    "first_loss": "selection_or_capacity",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "Common dates April 3–4; shares 2.27%, benchmark 2%.",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "P4",
+    "corpus_oracle": {
+      "ids": [
+        "p4a",
+        "p4b"
+      ],
+      "complete_items": 1,
+      "bytes": 196
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "p4a",
+        "p4b"
+      ],
+      "complete_items": 1,
+      "bytes": 196
+    },
+    "candidate_ids": [
+      "p4c",
+      "p4b",
+      "p4a"
+    ],
+    "selected_full_sources": [
+      "p4b",
+      "p4a"
+    ],
+    "selected_bytes": 196,
+    "selected_items": 1,
+    "total_items": 1,
+    "complete": true,
+    "first_loss": "none_observed",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "集团增长10%；8百万元为当期收入，不可作为同比增量。",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "P5",
+    "corpus_oracle": {
+      "ids": [
+        "p5a"
+      ],
+      "complete_items": 1,
+      "bytes": 67
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "p5a"
+      ],
+      "complete_items": 1,
+      "bytes": 67
+    },
+    "candidate_ids": [
+      "p5a",
+      "p5b"
+    ],
+    "selected_full_sources": [
+      "p5a",
+      "p5b"
+    ],
+    "selected_bytes": 116,
+    "selected_items": 1,
+    "total_items": 1,
+    "complete": true,
+    "first_loss": "none_observed",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "240 gigawatt-hours in calendar 2024.",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "P6",
+    "corpus_oracle": {
+      "ids": [
+        "p6a",
+        "p6b"
+      ],
+      "complete_items": 1,
+      "bytes": 162
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "p6a",
+        "p6b"
+      ],
+      "complete_items": 1,
+      "bytes": 162
+    },
+    "candidate_ids": [
+      "p6c",
+      "p6b",
+      "p6a"
+    ],
+    "selected_full_sources": [
+      "p6c",
+      "p6b"
+    ],
+    "selected_bytes": 126,
+    "selected_items": 0,
+    "total_items": 1,
+    "complete": false,
+    "first_loss": "selection_or_capacity",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "Conditional expectation; a major customer plans a reduction of unspecified magnitude.",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "P7",
+    "corpus_oracle": {
+      "ids": [
+        "p7a"
+      ],
+      "complete_items": 1,
+      "bytes": 81
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "p7a"
+      ],
+      "complete_items": 1,
+      "bytes": 81
+    },
+    "candidate_ids": [
+      "p7c",
+      "p7a",
+      "p7b"
+    ],
+    "selected_full_sources": [
+      "p7a",
+      "p7c"
+    ],
+    "selected_bytes": 126,
+    "selected_items": 1,
+    "total_items": 1,
+    "complete": true,
+    "first_loss": "none_observed",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "集团营业利润增加3百万元；部门口径不得混用。",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  },
+  {
+    "id": "P8",
+    "corpus_oracle": {
+      "ids": [
+        "p8a"
+      ],
+      "complete_items": 1,
+      "bytes": 48
+    },
+    "candidate_pool_oracle": {
+      "ids": [
+        "p8a"
+      ],
+      "complete_items": 1,
+      "bytes": 48
+    },
+    "candidate_ids": [
+      "p8a",
+      "p8b"
+    ],
+    "selected_full_sources": [
+      "p8a",
+      "p8b"
+    ],
+    "selected_bytes": 108,
+    "selected_items": 1,
+    "total_items": 1,
+    "complete": true,
+    "first_loss": "none_observed",
+    "actual_model_input": "not_observed",
+    "delivery_and_reopened_version": "not_observed",
+    "limitations": "今年0.8元；去年缺少，不可计算变化。",
+    "capacity_passages": 2,
+    "capacity_bytes": 512,
+    "selected_ineligible": []
+  }
+]

@@ -1,0 +1,60 @@
+[
+  {
+    "k": 2,
+    "profiled": false,
+    "seconds": 0.48921326687559485,
+    "peak_traced_bytes": null,
+    "selected_indices": [
+      0,
+      1
+    ],
+    "pool_size": 1000,
+    "shortlist_size": 30,
+    "pruned_count": 970
+  },
+  {
+    "k": 2,
+    "profiled": true,
+    "seconds": 1.1978293261490762,
+    "peak_traced_bytes": 367647,
+    "selected_indices": [
+      0,
+      1
+    ],
+    "pool_size": 1000,
+    "shortlist_size": 30,
+    "pruned_count": 970
+  },
+  {
+    "k": 4,
+    "profiled": false,
+    "seconds": 0.2955946568399668,
+    "peak_traced_bytes": null,
+    "selected_indices": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "pool_size": 1000,
+    "shortlist_size": 30,
+    "pruned_count": 970
+  },
+  {
+    "k": 4,
+    "profiled": true,
+    "seconds": 1.156982084736228,
+    "peak_traced_bytes": 485799,
+    "selected_indices": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "pool_size": 1000,
+    "shortlist_size": 30,
+    "pruned_count": 970
+  }
+]
+{"marked_necessary_index": 999, "marked_necessary_pruned": true, "shortlist_size": 13}
+{"small_pool": 9, "k": 4, "beam": [0, 1, 2, 3], "exhaustive": [0, 1, 2, 3], "same_selected": true, "exhaustive_beam_width": 1000}

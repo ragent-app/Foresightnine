@@ -1,0 +1,160 @@
+[
+  {
+    "id": "P1",
+    "question": "How did Mossel annual turnover change, and how much did foreign exchange contribute?",
+    "sources": [
+      [
+        "p1a",
+        "Consolidated statement",
+        "Mossel turnover in NOK millions: 2023 160; 2024 176. Reporting perimeter unchanged."
+      ],
+      [
+        "p1b",
+        "Financial review",
+        "Foreign exchange contributed NOK 4 million to Mossel turnover increase of NOK 16 million; the remainder was not broken down."
+      ],
+      [
+        "p1c",
+        "News service",
+        "Mossel turnover change and foreign exchange contribution attracted comment."
+      ]
+    ]
+  },
+  {
+    "id": "P2",
+    "question": "云杉协议中哪一方有提前终止权？交付指引是否存在前提？",
+    "sources": [
+      [
+        "p2a",
+        "签署协议",
+        "云杉协议：只有客户实质违约，供应商书面通知后六十日仍未补救，供应商才可提前终止协议。"
+      ],
+      [
+        "p2b",
+        "运营披露",
+        "云杉交付指引以客户通过安全认证为前提；截至披露日认证尚未通过。"
+      ],
+      [
+        "p2c",
+        "市场简讯",
+        "云杉提前终止权和交付指引受到投资者关注。"
+      ]
+    ]
+  },
+  {
+    "id": "P3",
+    "question": "Compare Keswick shares with the benchmark using common closing dates.",
+    "sources": [
+      [
+        "p3a",
+        "Securities ledger",
+        "Keswick unadjusted share close in CHF: April 2 40, April 3 44, April 4 45."
+      ],
+      [
+        "p3b",
+        "Benchmark publication",
+        "Keswick benchmark price index close: April 3 400, April 4 408."
+      ],
+      [
+        "p3c",
+        "Investor newsletter",
+        "Keswick shares and benchmark performance over common closing dates were discussed."
+      ]
+    ]
+  },
+  {
+    "id": "P4",
+    "question": "霁岭集团收入变动多少，收购带来多少同比增量？",
+    "sources": [
+      [
+        "p4a",
+        "集团利润表",
+        "霁岭集团营业收入人民币百万元：2023年120，2024年132。"
+      ],
+      [
+        "p4b",
+        "企业合并披露",
+        "霁岭收购业务在2024年纳入的收入为8百万元，未披露其上年可比收入或对集团同比增量的贡献。"
+      ],
+      [
+        "p4c",
+        "摘要",
+        "霁岭集团收入和收购带来的增量受到关注。"
+      ]
+    ]
+  },
+  {
+    "id": "P5",
+    "question": "What was Northgrove annual electricity consumption in 2024?",
+    "sources": [
+      [
+        "p5a",
+        "Sustainability statement",
+        "Northgrove used 240 gigawatt-hours of electricity in calendar 2024."
+      ],
+      [
+        "p5b",
+        "Industry bulletin",
+        "Northgrove electricity consumption was discussed."
+      ]
+    ]
+  },
+  {
+    "id": "P6",
+    "question": "Does management expect 高榆 demand to remain strong, and what is the strongest disclosed counterpoint?",
+    "sources": [
+      [
+        "p6a",
+        "管理层更新",
+        "高榆管理层预计下半年需求保持强劲，但该预期依赖客户续约。"
+      ],
+      [
+        "p6b",
+        "客户披露",
+        "高榆最大客户披露将减少下半年采购，但未说明削减幅度。"
+      ],
+      [
+        "p6c",
+        "行业简报",
+        "高榆下半年需求预期引发市场讨论。"
+      ]
+    ]
+  },
+  {
+    "id": "P7",
+    "question": "In 林榆集团 accounts how much did operating profit change?",
+    "sources": [
+      [
+        "p7a",
+        "合并利润表",
+        "林榆集团合并营业利润人民币百万元：2023年度15，2024年度18。"
+      ],
+      [
+        "p7b",
+        "部门经营资料",
+        "林榆海外部门营业利润人民币百万元：2023年度10，2024年度20。"
+      ],
+      [
+        "p7c",
+        "市场评论",
+        "林榆集团营业利润变动受到关注。"
+      ]
+    ]
+  },
+  {
+    "id": "P8",
+    "question": "桐麓今年和去年每股股息分别是多少？",
+    "sources": [
+      [
+        "p8a",
+        "公司公告",
+        "桐麓今年每股现金股息人民币0.8元。"
+      ],
+      [
+        "p8b",
+        "简讯",
+        "桐麓每股股息受到关注；材料未载去年数额。"
+      ]
+    ]
+  }
+]

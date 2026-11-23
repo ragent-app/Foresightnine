@@ -1,0 +1,86 @@
+[
+  {
+    "question": "explain the change in operating costs",
+    "arm": "repeat",
+    "queries": [
+      "explain the change in operating costs",
+      "explain the change in operating costs"
+    ],
+    "pointer_target_in_pool": false,
+    "expandable_pointer": false,
+    "pointer_target_selected": false
+  },
+  {
+    "question": "explain the change in operating costs",
+    "arm": "directed",
+    "queries": [
+      "explain the change in operating costs",
+      "Note 73"
+    ],
+    "pointer_target_in_pool": true,
+    "expandable_pointer": true,
+    "pointer_target_selected": false
+  },
+  {
+    "question": "explain the change in operating costs",
+    "arm": "revised",
+    "queries": [
+      "explain the change in operating costs"
+    ],
+    "pointer_target_in_pool": false,
+    "expandable_pointer": false,
+    "pointer_target_selected": false
+  },
+  {
+    "question": "explain the change in operating costs",
+    "arm": "scope_excludes_pointer",
+    "queries": [
+      "explain the change in operating costs"
+    ],
+    "pointer_target_in_pool": true,
+    "expandable_pointer": false,
+    "pointer_target_selected": true
+  },
+  {
+    "question": "核实本期交货限制",
+    "arm": "repeat",
+    "queries": [
+      "核实本期交货限制",
+      "核实本期交货限制"
+    ],
+    "pointer_target_in_pool": false,
+    "expandable_pointer": false,
+    "pointer_target_selected": false
+  },
+  {
+    "question": "核实本期交货限制",
+    "arm": "directed",
+    "queries": [
+      "核实本期交货限制",
+      "附注 73"
+    ],
+    "pointer_target_in_pool": true,
+    "expandable_pointer": true,
+    "pointer_target_selected": false
+  },
+  {
+    "question": "核实本期交货限制",
+    "arm": "revised",
+    "queries": [
+      "核实本期交货限制"
+    ],
+    "pointer_target_in_pool": false,
+    "expandable_pointer": false,
+    "pointer_target_selected": false
+  },
+  {
+    "question": "核实本期交货限制",
+    "arm": "scope_excludes_pointer",
+    "queries": [
+      "核实本期交货限制"
+    ],
+    "pointer_target_in_pool": false,
+    "expandable_pointer": false,
+    "pointer_target_selected": false
+  }
+]

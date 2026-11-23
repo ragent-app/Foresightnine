@@ -1,0 +1,159 @@
+{
+  "runs": {
+    "D1-A-1": {
+      "raw_sha256": "8f2bcc29b8f0e056ab9bdbd757e7069869bcd8abb2e7296888daeda46f863550",
+      "documents": {
+        "api": {
+          "path": "api-results.json",
+          "sha256": "23835c26fefddcb2e2ae14bc92cb25ea7da03f3cb6ecfca032cca473070f7ad1"
+        },
+        "export": {
+          "path": "api-results.json",
+          "sha256": "23835c26fefddcb2e2ae14bc92cb25ea7da03f3cb6ecfca032cca473070f7ad1"
+        },
+        "ui": {
+          "path": "browser-results.json",
+          "sha256": "225d31eeeeb3937cdaecbd7c5c166acce0af2d09e15bcf404ef3dbecc7b3b648"
+        }
+      },
+      "core": [
+        {
+          "evidence": {
+            "status": "unsupported",
+            "reason": "已保存 facts、calculations、claims 均为空；来源虽然存在，但未读取，也未形成符合条件的计算或证据。",
+            "refs": [
+              {
+                "doc": "raw",
+                "pointer": "/facts",
+                "excerpt": "[]"
+              },
+              {
+                "doc": "raw",
+                "pointer": "/calculations",
+                "excerpt": "[]"
+              },
+              {
+                "doc": "raw",
+                "pointer": "/claims",
+                "excerpt": "[]"
+              }
+            ]
+          },
+          "formal": {
+            "status": "unsupported",
+            "reason": "工具记录和处理器回执为空、submission 为 null，正式报告为空。",
+            "refs": [
+              {
+                "doc": "raw",
+                "pointer": "/tool_io",
+                "excerpt": "[]"
+              },
+              {
+                "doc": "raw",
+                "pointer": "/submit_handler_receipts",
+                "excerpt": "[]"
+              },
+              {
+                "doc": "raw",
+                "pointer": "/state_submission",
+                "excerpt": "null"
+              }
+            ]
+          },
+          "visible": {
+            "status": "unsupported",
+            "reason": "topic API、export 与浏览器 DOM 均显示该项未完成及缺口，未交付有据答案。",
+            "refs": [
+              {
+                "doc": "api",
+                "pointer": "/0/topic/versions/0/content/turns/0/question_parts/0/status",
+                "excerpt": "unresolved"
+              },
+              {
+                "doc": "export",
+                "pointer": "/0/export/version/content/turns/0/question_parts/0/status",
+                "excerpt": "unresolved"
+              },
+              {
+                "doc": "ui",
+                "pointer": "/0/body",
+                "excerpt": "缺少 2024, 2025 年同口径的收入依据。"
+              }
+            ]
+          }
+        },
+        {
+          "evidence": {
+            "status": "unsupported",
+            "reason": "已保存 facts、calculations、claims 均为空；来源虽然存在，但未读取，也未形成符合条件的计算或证据。",
+            "refs": [
+              {
+                "doc": "raw",
+                "pointer": "/facts",
+                "excerpt": "[]"
+              },
+              {
+                "doc": "raw",
+                "pointer": "/calculations",
+                "excerpt": "[]"
+              },
+              {
+                "doc": "raw",
+                "pointer": "/claims",
+                "excerpt": "[]"
+              }
+            ]
+          },
+          "formal": {
+            "status": "unsupported",
+            "reason": "工具记录和处理器回执为空、submission 为 null，正式报告为空。",
+            "refs": [
+              {
+                "doc": "raw",
+                "pointer": "/tool_io",
+                "excerpt": "[]"
+              },
+              {
+                "doc": "raw",
+                "pointer": "/submit_handler_receipts",
+                "excerpt": "[]"
+              },
+              {
+                "doc": "raw",
+                "pointer": "/state_submission",
+                "excerpt": "null"
+              }
+            ]
+          },
+          "visible": {
+            "status": "unsupported",
+            "reason": "topic API、export 与浏览器 DOM 均显示该项未完成及缺口，未交付有据答案。",
+            "refs": [
+              {
+                "doc": "api",
+                "pointer": "/0/topic/versions/0/content/turns/0/question_parts/1/status",
+                "excerpt": "unresolved"
+              },
+              {
+                "doc": "export",
+                "pointer": "/0/export/version/content/turns/0/question_parts/1/status",
+                "excerpt": "unresolved"
+              },
+              {
+                "doc": "ui",
+                "pointer": "/0/body",
+                "excerpt": "缺少 2024, 2025 年同口径的稀释 EPS依据。"
+              }
+            ]
+          }
+        }
+      ],
+      "risk_review": {
+        "status": "reviewed",
+        "reason": "无已存事实、计算、主张或提交；两个分项均 unresolved，不存在已完成误判和重复矛盾行。空引用无越权或过期引用，来源访问与最终权限边界另由路由测试覆盖。",
+        "browser": "DOM 实际核验：两项未完成，均有缺口原因，拒绝终止原因可见；隔离内存 fixture，认证替换。",
+        "unsupported_value": "none observed"
+      }
+    }
+  }
+}

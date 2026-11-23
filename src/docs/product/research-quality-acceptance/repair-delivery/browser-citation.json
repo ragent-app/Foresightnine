@@ -1,0 +1,8 @@
+[
+  {
+    "reader": "比较 Beta 2025 与 2024 年收入增速，并说明稀释 EPS 变化。\n比较 Beta 2025 与 2024 年收入增速，并说明稀释 EPS 变化。\n部分完成\n还差 2 项\n比较 Beta 2025 与 2024 年收入增速：缺少 2024, 2025 年同口径的收入依据。\n并说明稀释 EPS 变化：只回答了一部分\n模型输出达到单次长度上限而被截断\n重新提问\n更多\n\n已保存 1 项有依据的研究结果或缺口。\n\n过程与缺口说明（未核实线索与建议，非正式结论）\n\n部分结果已保留：停止原因：模型输出达到单次长度上限而被截断（provider_output_truncated）；已收集资料 1 份，已读片段 1 段，已记录事实 0 条，已完成计算 0 项。\n\n已回答 0/2 部分\n1 份资料\n比较 Beta 2025 与 2024 年收入增速\n尚未完成\n\n缺少 2024, 2025 年同口径的收入依据。\n\n并说明稀释 EPS 变化\n部分回答\n\n已读取的这份材料明确未披露 2024 年稀释 EPS。因此仅凭该材料无法计算该指标的变化。\n\n查看原文 · Synthetic exhibit\nSynthetic exhibit\n用户提供 · 粘贴文本 · 获取 2026-11-23 00:00\n✓ 保存\n✓ 供模型读取\n✓ 展示原文\n✓ 导出\n当前引文：字符 83–136 · 数字与位置已核对，语义未核验 · sha256 906ddf95 cb167bf6…\nBeta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million. Prior diluted EPS is not disclosed in this snapshot.\n上一处\n下一处",
+    "run": "D2-A-2",
+    "url": "http://127.0.0.1:43247/research/D2-A-2",
+    "body": "比较 Beta 2025 与 2024 年收入增速，并说明稀释 EPS 变化。\n比较 Beta 2025 与 2024 年收入增速，并说明稀释 EPS 变化。\n部分完成\n还差 2 项\n比较 Beta 2025 与 2024 年收入增速：缺少 2024, 2025 年同口径的收入依据。\n并说明稀释 EPS 变化：只回答了一部分\n模型输出达到单次长度上限而被截断\n重新提问\n更多\n\n已保存 1 项有依据的研究结果或缺口。\n\n过程与缺口说明（未核实线索与建议，非正式结论）\n\n部分结果已保留：停止原因：模型输出达到单次长度上限而被截断（provider_output_truncated）；已收集资料 1 份，已读片段 1 段，已记录事实 0 条，已完成计算 0 项。\n\n已回答 0/2 部分\n1 份资料\n比较 Beta 2025 与 2024 年收入增速\n尚未完成\n\n缺少 2024, 2025 年同口径的收入依据。\n\n并说明稀释 EPS 变化\n部分回答\n\n已读取的这份材料明确未披露 2024 年稀释 EPS。因此仅凭该材料无法计算该指标的变化。\n\n查看原文 · Synthetic exhibit\nSynthetic exhibit\n用户提供 · 粘贴文本 · 获取 2026-11-23 00:00\n✓ 保存\n✓ 供模型读取\n✓ 展示原文\n✓ 导出\n当前引文：字符 83–136 · 数字与位置已核对，语义未核验 · sha256 906ddf95 cb167bf6…\nBeta 2025 revenue 120 USD million, diluted EPS 3 USD; 2024 revenue 100 USD million. Prior diluted EPS is not disclosed in this snapshot.\n上一处\n下一处"
+  }
+]

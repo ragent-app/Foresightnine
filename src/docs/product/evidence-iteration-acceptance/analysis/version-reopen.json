@@ -1,0 +1,56 @@
+[
+  {
+    "case": "available",
+    "version_endpoint": 200,
+    "growth_visible": true,
+    "contribution_visible": true,
+    "source_text": 200,
+    "full_export": 200,
+    "metadata_export": 200
+  },
+  {
+    "case": "export_revoked",
+    "version_endpoint": 200,
+    "growth_visible": true,
+    "contribution_visible": true,
+    "source_text": 200,
+    "full_export": 403,
+    "metadata_export": 200
+  },
+  {
+    "case": "display_revoked",
+    "version_endpoint": 200,
+    "growth_visible": true,
+    "contribution_visible": false,
+    "source_text": 403,
+    "full_export": 403,
+    "metadata_export": 200
+  },
+  {
+    "case": "source_revised",
+    "version_endpoint": 200,
+    "growth_visible": true,
+    "contribution_visible": false,
+    "source_text": 403,
+    "full_export": 403,
+    "metadata_export": 200
+  },
+  {
+    "case": "after_cutoff",
+    "version_endpoint": 200,
+    "growth_visible": true,
+    "contribution_visible": false,
+    "source_text": 403,
+    "full_export": 403,
+    "metadata_export": 200
+  },
+  {
+    "case": "restored",
+    "version_endpoint": 200,
+    "growth_visible": true,
+    "contribution_visible": true,
+    "source_text": 200,
+    "full_export": 200,
+    "metadata_export": 200
+  }
+]

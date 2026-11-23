@@ -1,0 +1,3563 @@
+[
+  {
+    "id": "S1",
+    "requirements": [
+      {
+        "id": "item-0",
+        "question": "Find comparable consolidated revenue for 2025 and 2024.",
+        "status": "missing",
+        "core": true
+      },
+      {
+        "id": "item-1",
+        "question": "Find disclosed drivers of revenue growth and limitations on attribution.",
+        "status": "missing",
+        "core": true
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "Aster 2025 2024 revenue growth sustainability",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "release-copy-a",
+          "title": "News copy A",
+          "page": null,
+          "score": 1.9904,
+          "snippet": "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "growth",
+            "revenu",
+            "sustainability"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "release-copy-a",
+            "start": 0,
+            "end": 143
+          },
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "annual-note",
+          "title": "Aster annual report acquisition note",
+          "page": null,
+          "score": 0.5098,
+          "snippet": "Aster acquisition note. The acquisition contributed 18 million dollars to the increase in 2025 revenue compared with 2024. Other drivers of the remaining increase were not quantified.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "revenu"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "annual-note",
+            "start": 0,
+            "end": 183
+          },
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 5,
+        "passages_indexed": 5,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "release-copy-a",
+          "start": 0,
+          "end": 143,
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "release-copy-b",
+          "start": 0,
+          "end": 143,
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "decision": "omitted",
+          "reason": "identical_passage"
+        },
+        {
+          "source_id": "release-original",
+          "start": 0,
+          "end": 143,
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "decision": "omitted",
+          "reason": "identical_passage"
+        },
+        {
+          "source_id": "annual-table",
+          "start": 0,
+          "end": 118,
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "annual-note",
+          "start": 0,
+          "end": 183,
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 5,
+        "selected": 2,
+        "omitted_by_reason": {
+          "identical_passage": 2,
+          "capacity": 1
+        },
+        "requirements_searched": 2
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "item-0",
+          "query": "Find comparable consolidated revenue for 2025 and 2024.",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "item-1",
+          "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 5,
+        "shortlist_size": 5,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact",
+            "periods"
+          ],
+          [
+            "fact",
+            "periods"
+          ],
+          [
+            "fact",
+            "periods"
+          ],
+          [
+            "fact",
+            "periods"
+          ],
+          [
+            "attribution",
+            "fact",
+            "periods"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "periods"
+          ],
+          [
+            "attribution",
+            "periods"
+          ]
+        ],
+        "bytes": 326,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "S2",
+    "requirements": [
+      {
+        "id": "item-0",
+        "question": "Find comparable consolidated revenue for 2025 and 2024.",
+        "status": "missing",
+        "core": true
+      },
+      {
+        "id": "item-1",
+        "question": "Find disclosed drivers of revenue growth and limitations on attribution.",
+        "status": "missing",
+        "core": true
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "Aster 2025 2024 revenue growth sustainability",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "release-copy-a",
+          "title": "News copy A",
+          "page": null,
+          "score": 1.6414,
+          "snippet": "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "growth",
+            "revenu",
+            "sustainability"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "release-copy-a",
+            "start": 0,
+            "end": 143
+          },
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "annual-table",
+          "title": "Aster annual consolidated statements",
+          "page": null,
+          "score": 0.6834,
+          "snippet": "Aster consolidated statements of operations. USD millions. Year ended December 31: 2025 revenue 120; 2024 revenue 100.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "revenu"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "annual-table",
+            "start": 0,
+            "end": 118
+          },
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 4,
+        "passages_indexed": 4,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "release-copy-a",
+          "start": 0,
+          "end": 143,
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "release-copy-b",
+          "start": 0,
+          "end": 143,
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "decision": "omitted",
+          "reason": "identical_passage"
+        },
+        {
+          "source_id": "release-original",
+          "start": 0,
+          "end": 143,
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "decision": "omitted",
+          "reason": "identical_passage"
+        },
+        {
+          "source_id": "annual-table",
+          "start": 0,
+          "end": 118,
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 4,
+        "selected": 2,
+        "omitted_by_reason": {
+          "identical_passage": 2
+        },
+        "requirements_searched": 2
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "item-0",
+          "query": "Find comparable consolidated revenue for 2025 and 2024.",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "item-1",
+          "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 4,
+        "shortlist_size": 4,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact",
+            "periods"
+          ],
+          [
+            "fact",
+            "periods"
+          ],
+          [
+            "fact",
+            "periods"
+          ],
+          [
+            "fact",
+            "periods"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "periods"
+          ],
+          [
+            "attribution",
+            "periods"
+          ]
+        ],
+        "bytes": 261,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "S3",
+    "requirements": [
+      {
+        "id": "item-0",
+        "question": "Find comparable consolidated revenue for 2025 and 2024.",
+        "status": "missing",
+        "core": true
+      },
+      {
+        "id": "item-1",
+        "question": "Find disclosed drivers of revenue growth and limitations on attribution.",
+        "status": "missing",
+        "core": true
+      },
+      {
+        "id": "item-2",
+        "question": "Find evidence that could undermine sustainability of revenue growth.",
+        "status": "missing",
+        "core": true
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "Aster 2025 2024 revenue growth sustainability",
+      "returned_hits": 3,
+      "hits": [
+        {
+          "source_id": "release-original",
+          "title": "Aster revenue release",
+          "page": null,
+          "score": 5.1011,
+          "snippet": "Aster 2025 revenue growth was 20 percent from 2024. Aster revenue growth reflected demand. The company discussed revenue growth sustainability.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "growth",
+            "revenu",
+            "sustainability"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "release-original",
+            "start": 0,
+            "end": 143
+          },
+          "requirement_ids": [
+            "item-0",
+            "item-1",
+            "item-2"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "annual-table",
+          "title": "Aster annual consolidated statements",
+          "page": null,
+          "score": 2.0104,
+          "snippet": "Aster consolidated statements of operations. USD millions. Year ended December 31: 2025 revenue 120; 2024 revenue 100.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "revenu"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "annual-table",
+            "start": 0,
+            "end": 118
+          },
+          "requirement_ids": [
+            "item-0",
+            "item-1",
+            "item-2"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "annual-note",
+          "title": "Aster annual report acquisition note",
+          "page": null,
+          "score": 1.7844,
+          "snippet": "Aster acquisition note. The acquisition contributed 18 million dollars to the increase in 2025 revenue compared with 2024. Other drivers of the remaining increase were not quantified.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "revenu"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "annual-note",
+            "start": 0,
+            "end": 183
+          },
+          "requirement_ids": [
+            "item-0",
+            "item-1",
+            "item-2"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 4,
+        "passages_indexed": 4,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "release-original",
+          "start": 0,
+          "end": 143,
+          "requirement_ids": [
+            "item-0",
+            "item-1",
+            "item-2"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "annual-table",
+          "start": 0,
+          "end": 118,
+          "requirement_ids": [
+            "item-0",
+            "item-1",
+            "item-2"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "annual-note",
+          "start": 0,
+          "end": 183,
+          "requirement_ids": [
+            "item-0",
+            "item-1",
+            "item-2"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "contrary",
+          "start": 0,
+          "end": 133,
+          "requirement_ids": [
+            "item-0",
+            "item-1",
+            "item-2"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 4,
+        "selected": 3,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 3
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "item-0",
+          "query": "Find comparable consolidated revenue for 2025 and 2024.",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "item-1",
+          "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "item-2",
+          "query": "Find evidence that could undermine sustainability of revenue growth.",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 4,
+        "shortlist_size": 4,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact",
+            "periods"
+          ],
+          [
+            "fact",
+            "periods"
+          ],
+          [
+            "attribution",
+            "fact",
+            "periods"
+          ],
+          [
+            "counter",
+            "fact"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "periods"
+          ],
+          [
+            "attribution",
+            "periods"
+          ],
+          [
+            "periods"
+          ]
+        ],
+        "bytes": 444,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "S4",
+    "requirements": [
+      {
+        "id": "item-0",
+        "question": "Find comparable consolidated revenue for 2025 and 2024.",
+        "status": "missing",
+        "core": true
+      },
+      {
+        "id": "item-1",
+        "question": "Find disclosed drivers of revenue growth and limitations on attribution.",
+        "status": "missing",
+        "core": true
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "Aster 2025 2024 revenue growth sustainability",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "annual-table",
+          "title": "Aster annual consolidated statements",
+          "page": null,
+          "score": 1.189,
+          "snippet": "Aster consolidated statements of operations. USD millions. Year ended December 31: 2025 revenue 120; 2024 revenue 100.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "revenu"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "annual-table",
+            "start": 0,
+            "end": 118
+          },
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "annual-note",
+          "title": "Aster annual report acquisition note",
+          "page": null,
+          "score": 1.0682,
+          "snippet": "Aster acquisition note. The acquisition contributed 18 million dollars to the increase in 2025 revenue compared with 2024. Other drivers of the remaining increase were not quantified.",
+          "matched_terms": [
+            "2024",
+            "2025",
+            "aster",
+            "revenu"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "annual-note",
+            "start": 0,
+            "end": 183
+          },
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 2,
+        "passages_indexed": 2,
+        "unsearched_page_count": 0,
+        "complete": false,
+        "sources_excluded": [
+          {
+            "source_id": "future",
+            "reason": "availability_unestablished"
+          },
+          {
+            "source_id": "revoked",
+            "reason": "model_permission_missing"
+          }
+        ],
+        "notes": [
+          "Excluded sources were not searched."
+        ],
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "annual-table",
+          "start": 0,
+          "end": 118,
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "annual-note",
+          "start": 0,
+          "end": 183,
+          "requirement_ids": [
+            "item-0",
+            "item-1"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 2,
+        "selected": 2,
+        "omitted_by_reason": {},
+        "requirements_searched": 2
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "item-0",
+          "query": "Find comparable consolidated revenue for 2025 and 2024.",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "item-1",
+          "query": "Find disclosed drivers of revenue growth and limitations on attribution.",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 2,
+        "shortlist_size": 2,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact",
+            "periods"
+          ],
+          [
+            "attribution",
+            "fact",
+            "periods"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "periods"
+          ],
+          [
+            "attribution",
+            "periods"
+          ]
+        ],
+        "bytes": 301,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Not every page or source could be searched (see library_coverage); a miss here is not evidence that the text is absent. Hits are leads: read the location with read_sources or read_pages before citing."
+    }
+  },
+  {
+    "id": "H1",
+    "requirements": [
+      {
+        "id": "req-6e589bd00dbebd99",
+        "question": "How much did Selden's annual sales grow",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:0",
+        "metric": "revenue"
+      },
+      {
+        "id": "req-09ed632fde6ab94c",
+        "question": "how much of the change can the disclosure explain",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:1",
+        "metric": "revenue"
+      },
+      {
+        "id": "req-460f1de5339bed25",
+        "question": "Cite the two periods",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:Cite the two periods"
+      },
+      {
+        "id": "req-7f586acf06444281",
+        "question": "the driver",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:the driver"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "How much did Selden's annual sales grow, and how much of the change can the disclosure explain? Cite the two periods and the driver.",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "h1c",
+          "title": "Regional news service",
+          "page": null,
+          "score": 1.0177,
+          "snippet": "Selden annual sales growth attracts attention. Investors discussed Selden annual sales growth.",
+          "matched_terms": [
+            "annual",
+            "sale",
+            "selden"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "h1c",
+            "start": 0,
+            "end": 94
+          },
+          "requirement_ids": [
+            "req-6e589bd00dbebd99",
+            "req-09ed632fde6ab94c",
+            "req-460f1de5339bed25",
+            "req-7f586acf06444281"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "h1b",
+          "title": "Notes to the accounts",
+          "page": null,
+          "score": 0.1589,
+          "snippet": "Selden acquisition note. Of the FY2025 increase in net sales versus FY2024, purchased businesses contributed USD 7 million. The balance was not disaggregated.",
+          "matched_terms": [
+            "sale",
+            "selden"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "h1b",
+            "start": 0,
+            "end": 158
+          },
+          "requirement_ids": [
+            "req-6e589bd00dbebd99",
+            "req-09ed632fde6ab94c",
+            "req-460f1de5339bed25",
+            "req-7f586acf06444281"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 5,
+        "passages_indexed": 5,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "h1c",
+          "start": 0,
+          "end": 94,
+          "requirement_ids": [
+            "req-6e589bd00dbebd99",
+            "req-09ed632fde6ab94c",
+            "req-460f1de5339bed25",
+            "req-7f586acf06444281"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "h1d",
+          "start": 0,
+          "end": 94,
+          "requirement_ids": [
+            "req-6e589bd00dbebd99",
+            "req-09ed632fde6ab94c",
+            "req-460f1de5339bed25",
+            "req-7f586acf06444281"
+          ],
+          "decision": "omitted",
+          "reason": "identical_passage"
+        },
+        {
+          "source_id": "h1e",
+          "start": 0,
+          "end": 94,
+          "requirement_ids": [
+            "req-6e589bd00dbebd99",
+            "req-09ed632fde6ab94c",
+            "req-460f1de5339bed25",
+            "req-7f586acf06444281"
+          ],
+          "decision": "omitted",
+          "reason": "identical_passage"
+        },
+        {
+          "source_id": "h1a",
+          "start": 0,
+          "end": 124,
+          "requirement_ids": [
+            "req-6e589bd00dbebd99",
+            "req-09ed632fde6ab94c",
+            "req-460f1de5339bed25",
+            "req-7f586acf06444281"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "h1b",
+          "start": 0,
+          "end": 158,
+          "requirement_ids": [
+            "req-6e589bd00dbebd99",
+            "req-09ed632fde6ab94c",
+            "req-460f1de5339bed25",
+            "req-7f586acf06444281"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 5,
+        "selected": 2,
+        "omitted_by_reason": {
+          "identical_passage": 2,
+          "capacity": 1
+        },
+        "requirements_searched": 4
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-6e589bd00dbebd99",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 How much did Selden's annual sales grow",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-09ed632fde6ab94c",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 how much of the change can the disclosure explain",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-460f1de5339bed25",
+          "query": "Cite the two periods",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-7f586acf06444281",
+          "query": "the driver",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 5,
+        "shortlist_size": 5,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "fact"
+          ],
+          [
+            "fact"
+          ],
+          [
+            "fact",
+            "periods"
+          ],
+          [
+            "attribution",
+            "fact",
+            "periods"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "periods"
+          ],
+          [
+            "periods"
+          ],
+          [
+            "fact"
+          ],
+          [
+            "attribution",
+            "periods"
+          ]
+        ],
+        "bytes": 252,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "H2",
+    "requirements": [
+      {
+        "id": "req-461833abb6196bb8",
+        "question": "白楠公司两年营收增速是多少",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:0",
+        "metric": "revenue"
+      },
+      {
+        "id": "req-9118edc4dbdaf3f4",
+        "question": "能否由现有资料算出并购对营收增量的贡献占比",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:1",
+        "metric": "revenue"
+      },
+      {
+        "id": "req-6b4edf7ffddb8135",
+        "question": "请引用依据并说明限制",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:请引用依据并说明限制"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "白楠公司两年营收增速是多少？能否由现有资料算出并购对营收增量的贡献占比？请引用依据并说明限制。",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "h2b",
+          "title": "企业合并附注",
+          "page": null,
+          "score": 2.6882,
+          "snippet": "白楠公司企业合并附注：被收购业务本期营业收入为12百万元。合并前比较期营业收入和增量贡献均未披露。",
+          "matched_terms": [
+            "公司",
+            "增量",
+            "楠公",
+            "白楠",
+            "贡献"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "h2b",
+            "start": 0,
+            "end": 49
+          },
+          "requirement_ids": [
+            "req-461833abb6196bb8",
+            "req-9118edc4dbdaf3f4",
+            "req-6b4edf7ffddb8135"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "h2a",
+          "title": "合并财务报表",
+          "page": null,
+          "score": 0.2518,
+          "snippet": "白楠公司合并利润表，单位：百万元人民币。2024年度营业收入为80百万元。2025年度营业收入为100百万元。",
+          "matched_terms": [
+            "公司",
+            "楠公",
+            "白楠"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "h2a",
+            "start": 0,
+            "end": 55
+          },
+          "requirement_ids": [
+            "req-461833abb6196bb8",
+            "req-9118edc4dbdaf3f4",
+            "req-6b4edf7ffddb8135"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 5,
+        "passages_indexed": 5,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "h2c",
+          "start": 0,
+          "end": 31,
+          "requirement_ids": [
+            "req-461833abb6196bb8",
+            "req-9118edc4dbdaf3f4",
+            "req-6b4edf7ffddb8135"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "h2d",
+          "start": 0,
+          "end": 31,
+          "requirement_ids": [
+            "req-461833abb6196bb8",
+            "req-9118edc4dbdaf3f4",
+            "req-6b4edf7ffddb8135"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "h2e",
+          "start": 0,
+          "end": 31,
+          "requirement_ids": [
+            "req-461833abb6196bb8",
+            "req-9118edc4dbdaf3f4",
+            "req-6b4edf7ffddb8135"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "h2b",
+          "start": 0,
+          "end": 49,
+          "requirement_ids": [
+            "req-461833abb6196bb8",
+            "req-9118edc4dbdaf3f4",
+            "req-6b4edf7ffddb8135"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "h2a",
+          "start": 0,
+          "end": 55,
+          "requirement_ids": [
+            "req-461833abb6196bb8",
+            "req-9118edc4dbdaf3f4",
+            "req-6b4edf7ffddb8135"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 5,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 3
+        },
+        "requirements_searched": 3
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-461833abb6196bb8",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 白楠公司两年营收增速是多少",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-9118edc4dbdaf3f4",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 能否由现有资料算出并购对营收增量的贡献占比",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-6b4edf7ffddb8135",
+          "query": "请引用依据并说明限制",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 5,
+        "shortlist_size": 5,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "fact"
+          ],
+          [
+            "fact"
+          ],
+          [
+            "attribution",
+            "fact"
+          ],
+          [
+            "fact",
+            "periods"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "periods"
+          ],
+          [
+            "attribution",
+            "periods"
+          ],
+          [
+            "fact"
+          ]
+        ],
+        "bytes": 282,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "H3",
+    "requirements": [
+      {
+        "id": "req-12fe01cf0e8d5328",
+        "question": "What condition allows Merrow's customer to terminate the agreement early? Is management's guidance unconditional?",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:What condition allows Merrow's customer to terminate the agreement early? Is management's guidance unconditional?"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "What condition allows Merrow's customer to terminate the agreement early? Is management's guidance unconditional?",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "h3a",
+          "title": "Signed agreement",
+          "page": null,
+          "score": 3.2891,
+          "snippet": "Merrow service agreement, section 8. A customer may terminate early only after a material breach that remains uncured for 45 days following written notice.",
+          "matched_terms": [
+            "agreement",
+            "customer",
+            "early",
+            "merrow",
+            "terminat"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "h3a",
+            "start": 0,
+            "end": 155
+          },
+          "requirement_ids": [
+            "req-12fe01cf0e8d5328"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "h3b",
+          "title": "Quarterly update",
+          "page": null,
+          "score": 1.5114,
+          "snippet": "Merrow management guidance assumes that the two pilot sites convert to paid contracts. This conversion had not occurred at the reporting date.",
+          "matched_terms": [
+            "guidanc",
+            "management",
+            "merrow"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "h3b",
+            "start": 0,
+            "end": 142
+          },
+          "requirement_ids": [
+            "req-12fe01cf0e8d5328"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 4,
+        "passages_indexed": 4,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "h3a",
+          "start": 0,
+          "end": 155,
+          "requirement_ids": [
+            "req-12fe01cf0e8d5328"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "h3b",
+          "start": 0,
+          "end": 142,
+          "requirement_ids": [
+            "req-12fe01cf0e8d5328"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "h3c",
+          "start": 0,
+          "end": 74,
+          "requirement_ids": [
+            "req-12fe01cf0e8d5328"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "h3d",
+          "start": 0,
+          "end": 74,
+          "requirement_ids": [
+            "req-12fe01cf0e8d5328"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 4,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 2
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-12fe01cf0e8d5328",
+          "query": "What condition allows Merrow's customer to terminate the agreement early? Is management's guidance unconditional?",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 4,
+        "shortlist_size": 4,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "condition",
+            "fact"
+          ],
+          [
+            "fact"
+          ],
+          [
+            "condition",
+            "fact"
+          ],
+          [
+            "condition",
+            "fact"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "fact"
+          ]
+        ],
+        "bytes": 297,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "H4",
+    "requirements": [
+      {
+        "id": "req-d00269a1b44334f6",
+        "question": "根据共同交易日收盘价，岚浦的累计收益是否跑赢基准？",
+        "status": "missing",
+        "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+        "references": [],
+        "core": true,
+        "kind": "market:benchmark"
+      },
+      {
+        "id": "req-04840e8e330406bb",
+        "question": "根据共同交易日收盘价",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:根据共同交易日收盘价"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "根据共同交易日收盘价，岚浦的累计收益是否跑赢基准？",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "h4a",
+          "title": "岚浦收盘价",
+          "page": null,
+          "score": 2.3659,
+          "snippet": "岚浦未复权收盘价，人民币。2025-05-12 为 40，2025-05-13 为 42，2025-05-14 为 44。",
+          "matched_terms": [
+            "岚浦",
+            "收盘",
+            "盘价"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "h4a",
+            "start": 0,
+            "end": 61
+          },
+          "requirement_ids": [
+            "req-d00269a1b44334f6",
+            "req-04840e8e330406bb"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "h4b",
+          "title": "基准收盘点位",
+          "page": null,
+          "score": 1.5062,
+          "snippet": "同币种基准指数。2025-05-13 收盘 150，2025-05-14 收盘 155。",
+          "matched_terms": [
+            "基准",
+            "收盘"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "h4b",
+            "start": 0,
+            "end": 44
+          },
+          "requirement_ids": [
+            "req-d00269a1b44334f6",
+            "req-04840e8e330406bb"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 4,
+        "passages_indexed": 4,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "h4c",
+          "start": 0,
+          "end": 34,
+          "requirement_ids": [
+            "req-d00269a1b44334f6",
+            "req-04840e8e330406bb"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "h4d",
+          "start": 0,
+          "end": 34,
+          "requirement_ids": [
+            "req-d00269a1b44334f6",
+            "req-04840e8e330406bb"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "h4a",
+          "start": 0,
+          "end": 61,
+          "requirement_ids": [
+            "req-d00269a1b44334f6",
+            "req-04840e8e330406bb"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "h4b",
+          "start": 0,
+          "end": 44,
+          "requirement_ids": [
+            "req-d00269a1b44334f6",
+            "req-04840e8e330406bb"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 4,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 2
+        },
+        "requirements_searched": 2
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-d00269a1b44334f6",
+          "query": "price trading date benchmark 价格 交易日 基准 根据共同交易日收盘价，岚浦的累计收益是否跑赢基准？",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-04840e8e330406bb",
+          "query": "根据共同交易日收盘价",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 4,
+        "shortlist_size": 4,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "fact"
+          ],
+          [
+            "fact",
+            "market_first"
+          ],
+          [
+            "fact",
+            "market_second"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "market_first",
+            "market_second"
+          ],
+          [
+            "fact"
+          ]
+        ],
+        "bytes": 171,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "J1",
+    "requirements": [
+      {
+        "id": "req-c348e16125206333",
+        "question": "Calculate Waven's annual sales growth",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:0",
+        "metric": "revenue"
+      },
+      {
+        "id": "req-5249c346333ecbd0",
+        "question": "identify the quantified pricing contribution to that change",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:1",
+        "metric": "revenue"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "Calculate Waven's annual sales growth and identify the quantified pricing contribution to that change.",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "w3",
+          "title": "Weekend letter",
+          "page": null,
+          "score": 2.9609,
+          "snippet": "Waven annual sales growth and the pricing contribution drew comment after the release.",
+          "matched_terms": [
+            "annual",
+            "contribution",
+            "growth",
+            "pric",
+            "sale",
+            "waven"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "w3",
+            "start": 0,
+            "end": 86
+          },
+          "requirement_ids": [
+            "req-c348e16125206333",
+            "req-5249c346333ecbd0"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "w1",
+          "title": "Consolidated accounts",
+          "page": null,
+          "score": 0.1854,
+          "snippet": "Waven net sales, GBP millions: year ended March 2024, 240; year ended March 2025, 252. Accounting basis unchanged.",
+          "matched_terms": [
+            "sale",
+            "waven"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "w1",
+            "start": 0,
+            "end": 114
+          },
+          "requirement_ids": [
+            "req-c348e16125206333",
+            "req-5249c346333ecbd0"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 4,
+        "passages_indexed": 4,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "w3",
+          "start": 0,
+          "end": 86,
+          "requirement_ids": [
+            "req-c348e16125206333",
+            "req-5249c346333ecbd0"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "w4",
+          "start": 0,
+          "end": 86,
+          "requirement_ids": [
+            "req-c348e16125206333",
+            "req-5249c346333ecbd0"
+          ],
+          "decision": "omitted",
+          "reason": "identical_passage"
+        },
+        {
+          "source_id": "w2",
+          "start": 0,
+          "end": 132,
+          "requirement_ids": [
+            "req-c348e16125206333",
+            "req-5249c346333ecbd0"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "w1",
+          "start": 0,
+          "end": 114,
+          "requirement_ids": [
+            "req-c348e16125206333",
+            "req-5249c346333ecbd0"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 4,
+        "selected": 2,
+        "omitted_by_reason": {
+          "identical_passage": 1,
+          "capacity": 1
+        },
+        "requirements_searched": 2
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-c348e16125206333",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 Calculate Waven's annual sales growth",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-5249c346333ecbd0",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 identify the quantified pricing contribution to that change",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 4,
+        "shortlist_size": 4,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "attribution",
+            "fact"
+          ],
+          [
+            "attribution",
+            "fact"
+          ],
+          [
+            "attribution",
+            "fact"
+          ],
+          [
+            "fact",
+            "periods"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "periods"
+          ],
+          [
+            "attribution",
+            "periods"
+          ]
+        ],
+        "bytes": 200,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "J2",
+    "requirements": [
+      {
+        "id": "req-9ce776b83974195d",
+        "question": "青岳的订单能否提前撤销？交货预估还有什么前提？",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:青岳的订单能否提前撤销？交货预估还有什么前提？"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "青岳的订单能否提前撤销？交货预估还有什么前提？",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "y3",
+          "title": "周报",
+          "page": null,
+          "score": 7.0973,
+          "snippet": "青岳的订单能否提前撤销成为讨论热点，市场也在关注交货预估。",
+          "matched_terms": [
+            "交货",
+            "前撤",
+            "单能",
+            "否提",
+            "岳的",
+            "提前",
+            "撤销",
+            "的订",
+            "能否",
+            "订单",
+            "货预",
+            "青岳",
+            "预估"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "y3",
+            "start": 0,
+            "end": 29
+          },
+          "requirement_ids": [
+            "req-9ce776b83974195d"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "y2",
+          "title": "营运更新",
+          "page": null,
+          "score": 1.6781,
+          "snippet": "青岳预计将按期交货，前提是客户通过现场验收；截至披露日验收尚未进行。",
+          "matched_terms": [
+            "交货",
+            "前提",
+            "青岳"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "y2",
+            "start": 0,
+            "end": 34
+          },
+          "requirement_ids": [
+            "req-9ce776b83974195d"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 4,
+        "passages_indexed": 4,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "y3",
+          "start": 0,
+          "end": 29,
+          "requirement_ids": [
+            "req-9ce776b83974195d"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "y4",
+          "start": 0,
+          "end": 29,
+          "requirement_ids": [
+            "req-9ce776b83974195d"
+          ],
+          "decision": "omitted",
+          "reason": "identical_passage"
+        },
+        {
+          "source_id": "y2",
+          "start": 0,
+          "end": 34,
+          "requirement_ids": [
+            "req-9ce776b83974195d"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "y1",
+          "start": 0,
+          "end": 42,
+          "requirement_ids": [
+            "req-9ce776b83974195d"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 4,
+        "selected": 2,
+        "omitted_by_reason": {
+          "identical_passage": 1,
+          "capacity": 1
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-9ce776b83974195d",
+          "query": "青岳的订单能否提前撤销？交货预估还有什么前提？",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 4,
+        "shortlist_size": 4,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "condition",
+            "fact",
+            "performance"
+          ],
+          [
+            "condition",
+            "fact",
+            "performance"
+          ],
+          [
+            "fact",
+            "performance"
+          ],
+          [
+            "condition",
+            "fact",
+            "performance"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "condition",
+            "performance"
+          ]
+        ],
+        "bytes": 189,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "J3",
+    "requirements": [
+      {
+        "id": "req-5e425a26f8bdcd45",
+        "question": "Compare Tarn stock's local-currency close-to-close return with the index over their shared dates.",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:Compare Tarn stock's local-currency close-to-close return with the index over their shared dates."
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "Compare Tarn stock's local-currency close-to-close return with the index over their shared dates.",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "t2",
+          "title": "Index history",
+          "page": null,
+          "score": 1.5446,
+          "snippet": "Tarn sector index, AUD price return index, closing points. June 6: 200; June 9: 208.",
+          "matched_terms": [
+            "clos",
+            "index",
+            "return",
+            "tarn"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "t2",
+            "start": 0,
+            "end": 84
+          },
+          "requirement_ids": [
+            "req-5e425a26f8bdcd45"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "t1",
+          "title": "Exchange daily list",
+          "page": null,
+          "score": 1.2939,
+          "snippet": "Tarn stock, closing prices in AUD. June 5: 60; June 6: 62; June 9: 65. Same share class, no adjustments.",
+          "matched_terms": [
+            "clos",
+            "shar",
+            "stock",
+            "tarn"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "t1",
+            "start": 0,
+            "end": 104
+          },
+          "requirement_ids": [
+            "req-5e425a26f8bdcd45"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 4,
+        "passages_indexed": 4,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "t3",
+          "start": 0,
+          "end": 81,
+          "requirement_ids": [
+            "req-5e425a26f8bdcd45"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "t4",
+          "start": 0,
+          "end": 81,
+          "requirement_ids": [
+            "req-5e425a26f8bdcd45"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "t2",
+          "start": 0,
+          "end": 84,
+          "requirement_ids": [
+            "req-5e425a26f8bdcd45"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "t1",
+          "start": 0,
+          "end": 104,
+          "requirement_ids": [
+            "req-5e425a26f8bdcd45"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 4,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 2
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-5e425a26f8bdcd45",
+          "query": "Compare Tarn stock's local-currency close-to-close return with the index over their shared dates.",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 4,
+        "shortlist_size": 4,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "fact"
+          ],
+          [
+            "attribution",
+            "fact",
+            "market_second"
+          ],
+          [
+            "attribution",
+            "fact",
+            "market_first"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "market_first",
+            "market_second"
+          ]
+        ],
+        "bytes": 188,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "J4",
+    "requirements": [
+      {
+        "id": "req-32de0eb2fea02e6d",
+        "question": "星桐两期营业收入变动多少",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:0",
+        "metric": "revenue"
+      },
+      {
+        "id": "req-786639eadb15673d",
+        "question": "本期处置子公司能解释多少变化",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:1",
+        "metric": "revenue"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "星桐两期营业收入变动多少？本期处置子公司能解释多少变化？",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "s3",
+          "title": "快讯",
+          "page": null,
+          "score": 5.731,
+          "snippet": "星桐两期营业收入变动和处置子公司受到关注。",
+          "matched_terms": [
+            "业收",
+            "两期",
+            "入变",
+            "公司",
+            "变动",
+            "处置",
+            "子公",
+            "收入",
+            "星桐",
+            "期营",
+            "桐两",
+            "置子",
+            "营业"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "s3",
+            "start": 0,
+            "end": 21
+          },
+          "requirement_ids": [
+            "req-32de0eb2fea02e6d",
+            "req-786639eadb15673d"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "s1",
+          "title": "年度报告附表",
+          "page": null,
+          "score": 0.8347,
+          "snippet": "星桐合并利润表，人民币百万元。2023年度营业收入为150，2024年度营业收入为135，两期会计政策相同。",
+          "matched_terms": [
+            "业收",
+            "两期",
+            "收入",
+            "星桐",
+            "营业"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "s1",
+            "start": 0,
+            "end": 54
+          },
+          "requirement_ids": [
+            "req-32de0eb2fea02e6d",
+            "req-786639eadb15673d"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 4,
+        "passages_indexed": 4,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "s3",
+          "start": 0,
+          "end": 21,
+          "requirement_ids": [
+            "req-32de0eb2fea02e6d",
+            "req-786639eadb15673d"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "s4",
+          "start": 0,
+          "end": 21,
+          "requirement_ids": [
+            "req-32de0eb2fea02e6d",
+            "req-786639eadb15673d"
+          ],
+          "decision": "omitted",
+          "reason": "identical_passage"
+        },
+        {
+          "source_id": "s2",
+          "start": 0,
+          "end": 47,
+          "requirement_ids": [
+            "req-32de0eb2fea02e6d",
+            "req-786639eadb15673d"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "s1",
+          "start": 0,
+          "end": 54,
+          "requirement_ids": [
+            "req-32de0eb2fea02e6d",
+            "req-786639eadb15673d"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 4,
+        "selected": 2,
+        "omitted_by_reason": {
+          "identical_passage": 1,
+          "capacity": 1
+        },
+        "requirements_searched": 2
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-32de0eb2fea02e6d",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 星桐两期营业收入变动多少",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-786639eadb15673d",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 本期处置子公司能解释多少变化",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 4,
+        "shortlist_size": 4,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "fact"
+          ],
+          [
+            "attribution",
+            "fact"
+          ],
+          [
+            "fact",
+            "periods"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "periods"
+          ],
+          [
+            "periods"
+          ]
+        ],
+        "bytes": 197,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "L1",
+    "requirements": [
+      {
+        "id": "req-a819e5c18259e126",
+        "question": "What was Orlin revenue growth",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:0",
+        "metric": "revenue"
+      },
+      {
+        "id": "req-c02fe00d38385f5c",
+        "question": "how much of the increase came from volume",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:how much of the increase came from volume"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "What was Orlin revenue growth and how much of the increase came from volume?",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "l1c",
+          "title": "Commentary",
+          "page": null,
+          "score": 2.0181,
+          "snippet": "Orlin revenue growth and volume were discussed after earnings.",
+          "matched_terms": [
+            "growth",
+            "orlin",
+            "revenu",
+            "volum"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "l1c",
+            "start": 0,
+            "end": 62
+          },
+          "requirement_ids": [
+            "req-a819e5c18259e126",
+            "req-c02fe00d38385f5c"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "l1a",
+          "title": "Annual accounts",
+          "page": null,
+          "score": 0.2671,
+          "snippet": "Orlin revenue in EUR millions: 2024 was 80 and 2025 was 100, with unchanged accounting scope.",
+          "matched_terms": [
+            "orlin",
+            "revenu"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "l1a",
+            "start": 0,
+            "end": 93
+          },
+          "requirement_ids": [
+            "req-a819e5c18259e126",
+            "req-c02fe00d38385f5c"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "l1c",
+          "start": 0,
+          "end": 62,
+          "requirement_ids": [
+            "req-a819e5c18259e126",
+            "req-c02fe00d38385f5c"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "l1b",
+          "start": 0,
+          "end": 131,
+          "requirement_ids": [
+            "req-a819e5c18259e126",
+            "req-c02fe00d38385f5c"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "l1a",
+          "start": 0,
+          "end": 93,
+          "requirement_ids": [
+            "req-a819e5c18259e126",
+            "req-c02fe00d38385f5c"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 2
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-a819e5c18259e126",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 What was Orlin revenue growth",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-c02fe00d38385f5c",
+          "query": "how much of the increase came from volume",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 3,
+        "shortlist_size": 3,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "attribution",
+            "fact"
+          ],
+          [
+            "attribution",
+            "fact"
+          ],
+          [
+            "fact",
+            "periods"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "periods"
+          ],
+          [
+            "fact"
+          ]
+        ],
+        "bytes": 155,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "L2",
+    "requirements": [
+      {
+        "id": "req-6f1541b6538af1eb",
+        "question": "What was Cedar water usage in 2025?",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:What was Cedar water usage in 2025?"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "What was Cedar water usage in 2025?",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "l2a",
+          "title": "Environmental filing",
+          "page": null,
+          "score": 1.5999,
+          "snippet": "Cedar used 14 million cubic metres of water in 2025.",
+          "matched_terms": [
+            "2025",
+            "cedar",
+            "water"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "l2a",
+            "start": 0,
+            "end": 52
+          },
+          "requirement_ids": [
+            "req-6f1541b6538af1eb"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "l2b",
+          "title": "Newsletter",
+          "page": null,
+          "score": 1.1681,
+          "snippet": "Cedar water usage was discussed in the newsletter.",
+          "matched_terms": [
+            "cedar",
+            "usag",
+            "water"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "l2b",
+            "start": 0,
+            "end": 50
+          },
+          "requirement_ids": [
+            "req-6f1541b6538af1eb"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 2,
+        "passages_indexed": 2,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "l2a",
+          "start": 0,
+          "end": 52,
+          "requirement_ids": [
+            "req-6f1541b6538af1eb"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "l2b",
+          "start": 0,
+          "end": 50,
+          "requirement_ids": [
+            "req-6f1541b6538af1eb"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 2,
+        "selected": 2,
+        "omitted_by_reason": {},
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-6f1541b6538af1eb",
+          "query": "What was Cedar water usage in 2025?",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 2,
+        "shortlist_size": 2,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "fact"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "fact"
+          ]
+        ],
+        "bytes": 102,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "L3",
+    "requirements": [
+      {
+        "id": "req-949906fbe52792b3",
+        "question": "Does Dovetail expect demand growth to continue? Give the strongest counterevidence.",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:Does Dovetail expect demand growth to continue? Give the strongest counterevidence."
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "Does Dovetail expect demand growth to continue? Give the strongest counterevidence.",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "l3a",
+          "title": "Trading update",
+          "page": null,
+          "score": 1.9893,
+          "snippet": "Dovetail expects demand growth next year, subject to confirmed orders.",
+          "matched_terms": [
+            "demand",
+            "dovetail",
+            "expect",
+            "growth"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "l3a",
+            "start": 0,
+            "end": 70
+          },
+          "requirement_ids": [
+            "req-949906fbe52792b3"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "l3c",
+          "title": "Market note",
+          "page": null,
+          "score": 1.2124,
+          "snippet": "Dovetail demand growth attracted investor attention.",
+          "matched_terms": [
+            "demand",
+            "dovetail",
+            "growth"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "l3c",
+            "start": 0,
+            "end": 52
+          },
+          "requirement_ids": [
+            "req-949906fbe52792b3"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "l3a",
+          "start": 0,
+          "end": 70,
+          "requirement_ids": [
+            "req-949906fbe52792b3"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "l3c",
+          "start": 0,
+          "end": 52,
+          "requirement_ids": [
+            "req-949906fbe52792b3"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "l3b",
+          "start": 0,
+          "end": 82,
+          "requirement_ids": [
+            "req-949906fbe52792b3"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-949906fbe52792b3",
+          "query": "Does Dovetail expect demand growth to continue? Give the strongest counterevidence.",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 3,
+        "shortlist_size": 3,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "fact"
+          ],
+          [
+            "fact"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "periods"
+          ]
+        ],
+        "bytes": 122,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "L4",
+    "requirements": [
+      {
+        "id": "req-0f79beccb46198fa",
+        "question": "How much of Iver sales growth was due to the purchase",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:0",
+        "metric": "revenue"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "How much of Iver sales growth was due to the purchase?",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "l4c",
+          "title": "Commentary",
+          "page": null,
+          "score": 2.6648,
+          "snippet": "Iver purchase and sales growth were the subject of discussion.",
+          "matched_terms": [
+            "growth",
+            "iver",
+            "purchas",
+            "sale"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "l4c",
+            "start": 0,
+            "end": 62
+          },
+          "requirement_ids": [
+            "req-0f79beccb46198fa"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "l4a",
+          "title": "Accounts",
+          "page": null,
+          "score": 0.2785,
+          "snippet": "Iver net sales USD millions: 2024 50; 2025 60.",
+          "matched_terms": [
+            "iver",
+            "sale"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "l4a",
+            "start": 0,
+            "end": 46
+          },
+          "requirement_ids": [
+            "req-0f79beccb46198fa"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "l4c",
+          "start": 0,
+          "end": 62,
+          "requirement_ids": [
+            "req-0f79beccb46198fa"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "l4a",
+          "start": 0,
+          "end": 46,
+          "requirement_ids": [
+            "req-0f79beccb46198fa"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "l4b",
+          "start": 0,
+          "end": 134,
+          "requirement_ids": [
+            "req-0f79beccb46198fa"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-0f79beccb46198fa",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 How much of Iver sales growth was due to the purchase",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 3,
+        "shortlist_size": 3,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "fact",
+            "periods"
+          ],
+          [
+            "attribution",
+            "fact"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "periods"
+          ]
+        ],
+        "bytes": 108,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "L5",
+    "requirements": [
+      {
+        "id": "req-78b7a0cef6667981",
+        "question": "柳澄订单何时可取消，交付预测是否确定？",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:柳澄订单何时可取消，交付预测是否确定？"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "柳澄订单何时可取消，交付预测是否确定？",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "l5c",
+          "title": "转载",
+          "page": null,
+          "score": 4.811,
+          "snippet": "柳澄订单取消和交付预测引起关注。",
+          "matched_terms": [
+            "交付",
+            "付预",
+            "取消",
+            "柳澄",
+            "澄订",
+            "订单",
+            "预测"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "l5c",
+            "start": 0,
+            "end": 16
+          },
+          "requirement_ids": [
+            "req-78b7a0cef6667981"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "l5a",
+          "title": "采购合同",
+          "page": null,
+          "score": 1.6937,
+          "snippet": "柳澄采购合同：买方仅在供应商实质违约且收到书面通知后四十五日仍未补救时，才可取消订单。",
+          "matched_terms": [
+            "取消",
+            "可取",
+            "柳澄",
+            "订单"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "l5a",
+            "start": 0,
+            "end": 43
+          },
+          "requirement_ids": [
+            "req-78b7a0cef6667981"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "l5c",
+          "start": 0,
+          "end": 16,
+          "requirement_ids": [
+            "req-78b7a0cef6667981"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "l5a",
+          "start": 0,
+          "end": 43,
+          "requirement_ids": [
+            "req-78b7a0cef6667981"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "l5b",
+          "start": 0,
+          "end": 26,
+          "requirement_ids": [
+            "req-78b7a0cef6667981"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-78b7a0cef6667981",
+          "query": "柳澄订单何时可取消，交付预测是否确定？",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 3,
+        "shortlist_size": 3,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact",
+            "performance"
+          ],
+          [
+            "condition",
+            "fact",
+            "performance"
+          ],
+          [
+            "fact",
+            "performance"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "fact"
+          ]
+        ],
+        "bytes": 177,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "L6",
+    "requirements": [
+      {
+        "id": "req-2ad9e7039c28e674",
+        "question": "按共同交易日比较澜川股票与指数的收盘收益。",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:按共同交易日比较澜川股票与指数的收盘收益。"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "按共同交易日比较澜川股票与指数的收盘收益。",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "l6a",
+          "title": "交易记录",
+          "page": null,
+          "score": 1.382,
+          "snippet": "澜川股票人民币未复权收盘价：6月2日20，6月3日21，6月4日22。",
+          "matched_terms": [
+            "川股",
+            "收盘",
+            "澜川",
+            "股票"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "l6a",
+            "start": 0,
+            "end": 35
+          },
+          "requirement_ids": [
+            "req-2ad9e7039c28e674"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "l6b",
+          "title": "指数记录",
+          "page": null,
+          "score": 1.0143,
+          "snippet": "澜川基准价格指数人民币收盘点位：6月3日100，6月4日102。",
+          "matched_terms": [
+            "指数",
+            "收盘",
+            "澜川"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "l6b",
+            "start": 0,
+            "end": 32
+          },
+          "requirement_ids": [
+            "req-2ad9e7039c28e674"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "l6c",
+          "start": 0,
+          "end": 14,
+          "requirement_ids": [
+            "req-2ad9e7039c28e674"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "l6a",
+          "start": 0,
+          "end": 35,
+          "requirement_ids": [
+            "req-2ad9e7039c28e674"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "l6b",
+          "start": 0,
+          "end": 32,
+          "requirement_ids": [
+            "req-2ad9e7039c28e674"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-2ad9e7039c28e674",
+          "query": "按共同交易日比较澜川股票与指数的收盘收益。",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 3,
+        "shortlist_size": 3,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "fact",
+            "market_first"
+          ],
+          [
+            "attribution",
+            "fact",
+            "market_second"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "market_first",
+            "market_second"
+          ]
+        ],
+        "bytes": 157,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "L7",
+    "requirements": [
+      {
+        "id": "req-2c6fac069ec92a30",
+        "question": "松樾报告的本期收入和上期收入相差多少",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:0",
+        "metric": "revenue"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "松樾报告的本期收入和上期收入相差多少？",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "l7c",
+          "title": "摘要",
+          "page": null,
+          "score": 0.3234,
+          "snippet": "松樾收入增长受到关注。",
+          "matched_terms": [
+            "收入",
+            "松樾"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "l7c",
+            "start": 0,
+            "end": 11
+          },
+          "requirement_ids": [
+            "req-2c6fac069ec92a30"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "l7a",
+          "title": "集团报表",
+          "page": null,
+          "score": 0.2848,
+          "snippet": "松樾合并报表人民币百万元：2024年度收入40，2025年度收入44。",
+          "matched_terms": [
+            "收入",
+            "松樾"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "l7a",
+            "start": 0,
+            "end": 35
+          },
+          "requirement_ids": [
+            "req-2c6fac069ec92a30"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "l7c",
+          "start": 0,
+          "end": 11,
+          "requirement_ids": [
+            "req-2c6fac069ec92a30"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "l7a",
+          "start": 0,
+          "end": 35,
+          "requirement_ids": [
+            "req-2c6fac069ec92a30"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "l7b",
+          "start": 0,
+          "end": 32,
+          "requirement_ids": [
+            "req-2c6fac069ec92a30"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-2c6fac069ec92a30",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 松樾报告的本期收入和上期收入相差多少",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 3,
+        "shortlist_size": 3,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "fact",
+            "periods"
+          ],
+          [
+            "fact",
+            "periods"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "periods"
+          ]
+        ],
+        "bytes": 114,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "L8",
+    "requirements": [
+      {
+        "id": "req-e755c8bb8103180b",
+        "question": "北岑今年每股派息是多少，去年是多少？",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:北岑今年每股派息是多少，去年是多少？"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "北岑今年每股派息是多少，去年是多少？",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "l8b",
+          "title": "资讯",
+          "page": null,
+          "score": 1.4224,
+          "snippet": "北岑每股派息引起讨论，未提供去年数值。",
+          "matched_terms": [
+            "北岑",
+            "去年",
+            "每股",
+            "派息",
+            "股派"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "l8b",
+            "start": 0,
+            "end": 19
+          },
+          "requirement_ids": [
+            "req-e755c8bb8103180b"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "l8a",
+          "title": "本年公告",
+          "page": null,
+          "score": 0.7293,
+          "snippet": "北岑宣布本年度每股派息人民币0.5元。",
+          "matched_terms": [
+            "北岑",
+            "每股",
+            "派息",
+            "股派"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "l8a",
+            "start": 0,
+            "end": 19
+          },
+          "requirement_ids": [
+            "req-e755c8bb8103180b"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 2,
+        "passages_indexed": 2,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "l8b",
+          "start": 0,
+          "end": 19,
+          "requirement_ids": [
+            "req-e755c8bb8103180b"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "l8a",
+          "start": 0,
+          "end": 19,
+          "requirement_ids": [
+            "req-e755c8bb8103180b"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 2,
+        "selected": 2,
+        "omitted_by_reason": {},
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-e755c8bb8103180b",
+          "query": "北岑今年每股派息是多少，去年是多少？",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 2,
+        "shortlist_size": 2,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "fact"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "fact"
+          ]
+        ],
+        "bytes": 108,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  }
+]

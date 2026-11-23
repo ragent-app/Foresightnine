@@ -1,0 +1,1229 @@
+[
+  {
+    "id": "P1",
+    "requirements": [
+      {
+        "id": "req-1806080f8295bd04",
+        "question": "How did Mossel annual turnover change, and how much did foreign exchange contribute?",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:How did Mossel annual turnover change, and how much did foreign exchange contribute?"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "How did Mossel annual turnover change, and how much did foreign exchange contribute?",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "p1a",
+          "title": "Consolidated statement",
+          "page": null,
+          "score": 0.2703,
+          "snippet": "Mossel turnover in NOK millions: 2023 160; 2024 176. Reporting perimeter unchanged.",
+          "matched_terms": [
+            "mossel",
+            "turnover"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "p1a",
+            "start": 0,
+            "end": 83
+          },
+          "requirement_ids": [
+            "req-1806080f8295bd04"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "p1c",
+          "title": "News service",
+          "page": null,
+          "score": 2.4872,
+          "snippet": "Mossel turnover change and foreign exchange contribution attracted comment.",
+          "matched_terms": [
+            "chang",
+            "exchang",
+            "foreign",
+            "mossel",
+            "turnover"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "p1c",
+            "start": 0,
+            "end": 75
+          },
+          "requirement_ids": [
+            "req-1806080f8295bd04"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "p1c",
+          "start": 0,
+          "end": 75,
+          "requirement_ids": [
+            "req-1806080f8295bd04"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "p1b",
+          "start": 0,
+          "end": 124,
+          "requirement_ids": [
+            "req-1806080f8295bd04"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "p1a",
+          "start": 0,
+          "end": 83,
+          "requirement_ids": [
+            "req-1806080f8295bd04"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-1806080f8295bd04",
+          "query": "How did Mossel annual turnover change, and how much did foreign exchange contribute?",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 3,
+        "shortlist_size": 3,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "attribution",
+            "fact"
+          ],
+          [
+            "fact",
+            "periods"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "periods"
+          ]
+        ],
+        "bytes": 158,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "P2",
+    "requirements": [
+      {
+        "id": "req-3890d1fc16c02246",
+        "question": "云杉协议中哪一方有提前终止权？交付指引是否存在前提？",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:云杉协议中哪一方有提前终止权？交付指引是否存在前提？"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "云杉协议中哪一方有提前终止权？交付指引是否存在前提？",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "p2b",
+          "title": "运营披露",
+          "page": null,
+          "score": 2.4985,
+          "snippet": "云杉交付指引以客户通过安全认证为前提；截至披露日认证尚未通过。",
+          "matched_terms": [
+            "云杉",
+            "交付",
+            "付指",
+            "前提",
+            "指引"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "p2b",
+            "start": 0,
+            "end": 31
+          },
+          "requirement_ids": [
+            "req-3890d1fc16c02246"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "p2c",
+          "title": "市场简讯",
+          "page": null,
+          "score": 4.5195,
+          "snippet": "云杉提前终止权和交付指引受到投资者关注。",
+          "matched_terms": [
+            "云杉",
+            "交付",
+            "付指",
+            "前终",
+            "指引",
+            "提前",
+            "止权",
+            "终止"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "p2c",
+            "start": 0,
+            "end": 20
+          },
+          "requirement_ids": [
+            "req-3890d1fc16c02246"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "p2c",
+          "start": 0,
+          "end": 20,
+          "requirement_ids": [
+            "req-3890d1fc16c02246"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "p2a",
+          "start": 0,
+          "end": 42,
+          "requirement_ids": [
+            "req-3890d1fc16c02246"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "p2b",
+          "start": 0,
+          "end": 31,
+          "requirement_ids": [
+            "req-3890d1fc16c02246"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-3890d1fc16c02246",
+          "query": "云杉协议中哪一方有提前终止权？交付指引是否存在前提？",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 3,
+        "shortlist_size": 3,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact",
+            "performance"
+          ],
+          [
+            "condition",
+            "fact"
+          ],
+          [
+            "counter",
+            "fact",
+            "performance"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "fact"
+          ]
+        ],
+        "bytes": 153,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "P3",
+    "requirements": [
+      {
+        "id": "req-6d7210d24cf34c11",
+        "question": "Compare Keswick shares with the benchmark using common closing dates.",
+        "status": "missing",
+        "reason": "Need distinct target and benchmark returns over at least two common dates, using the same price basis.",
+        "references": [],
+        "core": true,
+        "kind": "market:benchmark"
+      },
+      {
+        "id": "req-e0efff9b2a80b213",
+        "question": "标的在可用交易窗口内的收益",
+        "status": "missing",
+        "reason": "缺少可核验的标的收益计算。",
+        "references": [],
+        "core": true,
+        "kind": "market:target"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "Compare Keswick shares with the benchmark using common closing dates.",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "p3c",
+          "title": "Investor newsletter",
+          "page": null,
+          "score": 3.5667,
+          "snippet": "Keswick shares and benchmark performance over common closing dates were discussed.",
+          "matched_terms": [
+            "benchmark",
+            "clos",
+            "common",
+            "date",
+            "keswick",
+            "shar"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "p3c",
+            "start": 0,
+            "end": 82
+          },
+          "requirement_ids": [
+            "req-6d7210d24cf34c11",
+            "req-e0efff9b2a80b213"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "p3b",
+          "title": "Benchmark publication",
+          "page": null,
+          "score": 0.7371,
+          "snippet": "Keswick benchmark price index close: April 3 400, April 4 408.",
+          "matched_terms": [
+            "benchmark",
+            "clos",
+            "keswick"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "p3b",
+            "start": 0,
+            "end": 62
+          },
+          "requirement_ids": [
+            "req-6d7210d24cf34c11",
+            "req-e0efff9b2a80b213"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "p3c",
+          "start": 0,
+          "end": 82,
+          "requirement_ids": [
+            "req-6d7210d24cf34c11",
+            "req-e0efff9b2a80b213"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "p3b",
+          "start": 0,
+          "end": 62,
+          "requirement_ids": [
+            "req-6d7210d24cf34c11",
+            "req-e0efff9b2a80b213"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "p3a",
+          "start": 0,
+          "end": 74,
+          "requirement_ids": [
+            "req-6d7210d24cf34c11"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 2
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-6d7210d24cf34c11",
+          "query": "price trading date benchmark 价格 交易日 基准 Compare Keswick shares with the benchmark using common closing dates.",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-e0efff9b2a80b213",
+          "query": "price trading date benchmark 价格 交易日 基准 标的在可用交易窗口内的收益",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 3,
+        "shortlist_size": 3,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "attribution",
+            "fact",
+            "market_second"
+          ],
+          [
+            "fact",
+            "market_first"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "market_first",
+            "market_second"
+          ],
+          [
+            "market_first",
+            "market_second"
+          ]
+        ],
+        "bytes": 144,
+        "match_status": "retrieval_only_unverified"
+      },
+      "unverified_missing_uses": [
+        "market_first"
+      ],
+      "next_step": "Read the selected locations and search authorized local sources for the missing uses. If permitted and available, use existing discovery or acquisition tools; an absent search result does not establish nondisclosure.",
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "P4",
+    "requirements": [
+      {
+        "id": "req-d69b35008020f25a",
+        "question": "霁岭集团收入变动多少",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:0",
+        "metric": "revenue"
+      },
+      {
+        "id": "req-56cf794bc19ee2fc",
+        "question": "收购带来多少同比增量",
+        "status": "missing",
+        "reason": "No eligible recorded fact matches this metric.",
+        "references": [],
+        "core": true,
+        "kind": "financial:revenue:1",
+        "metric": "revenue"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "霁岭集团收入变动多少，收购带来多少同比增量？",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "p4b",
+          "title": "企业合并披露",
+          "page": null,
+          "score": 2.7916,
+          "snippet": "霁岭收购业务在2024年纳入的收入为8百万元，未披露其上年可比收入或对集团同比增量的贡献。",
+          "matched_terms": [
+            "同比",
+            "增量",
+            "收入",
+            "收购",
+            "比增",
+            "集团",
+            "霁岭"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "p4b",
+            "start": 0,
+            "end": 45
+          },
+          "requirement_ids": [
+            "req-d69b35008020f25a",
+            "req-56cf794bc19ee2fc"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "p4a",
+          "title": "集团利润表",
+          "page": null,
+          "score": 0.9517,
+          "snippet": "霁岭集团营业收入人民币百万元：2023年120，2024年132。",
+          "matched_terms": [
+            "岭集",
+            "收入",
+            "集团",
+            "霁岭"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "p4a",
+            "start": 0,
+            "end": 33
+          },
+          "requirement_ids": [
+            "req-d69b35008020f25a"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "p4c",
+          "start": 0,
+          "end": 19,
+          "requirement_ids": [
+            "req-d69b35008020f25a",
+            "req-56cf794bc19ee2fc"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        },
+        {
+          "source_id": "p4b",
+          "start": 0,
+          "end": 45,
+          "requirement_ids": [
+            "req-d69b35008020f25a",
+            "req-56cf794bc19ee2fc"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "p4a",
+          "start": 0,
+          "end": 33,
+          "requirement_ids": [
+            "req-d69b35008020f25a"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 2
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-d69b35008020f25a",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 霁岭集团收入变动多少",
+          "reason": "unmet_or_requested_requirement"
+        },
+        {
+          "requirement_id": "req-56cf794bc19ee2fc",
+          "query": "revenue financial statement comparable periods change increase drivers 财务报表 可比期间 变化 增长 原因 收购带来多少同比增量",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 3,
+        "shortlist_size": 3,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "attribution",
+            "counter",
+            "fact"
+          ],
+          [
+            "fact",
+            "periods"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "periods"
+          ],
+          [
+            "periods"
+          ]
+        ],
+        "bytes": 196,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "P5",
+    "requirements": [
+      {
+        "id": "req-5dfe29912fb8eb4b",
+        "question": "What was Northgrove annual electricity consumption in 2024?",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:What was Northgrove annual electricity consumption in 2024?"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "What was Northgrove annual electricity consumption in 2024?",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "p5a",
+          "title": "Sustainability statement",
+          "page": null,
+          "score": 1.5408,
+          "snippet": "Northgrove used 240 gigawatt-hours of electricity in calendar 2024.",
+          "matched_terms": [
+            "2024",
+            "electricity",
+            "northgrov"
+          ],
+          "reasons": [
+            "lexical_bm25",
+            "number_or_date_exact"
+          ],
+          "read_sources": {
+            "source_id": "p5a",
+            "start": 0,
+            "end": 67
+          },
+          "requirement_ids": [
+            "req-5dfe29912fb8eb4b"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "p5b",
+          "title": "Industry bulletin",
+          "page": null,
+          "score": 1.2248,
+          "snippet": "Northgrove electricity consumption was discussed.",
+          "matched_terms": [
+            "consumption",
+            "electricity",
+            "northgrov"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "p5b",
+            "start": 0,
+            "end": 49
+          },
+          "requirement_ids": [
+            "req-5dfe29912fb8eb4b"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 2,
+        "passages_indexed": 2,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "p5a",
+          "start": 0,
+          "end": 67,
+          "requirement_ids": [
+            "req-5dfe29912fb8eb4b"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "p5b",
+          "start": 0,
+          "end": 49,
+          "requirement_ids": [
+            "req-5dfe29912fb8eb4b"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 2,
+        "selected": 2,
+        "omitted_by_reason": {},
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-5dfe29912fb8eb4b",
+          "query": "What was Northgrove annual electricity consumption in 2024?",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 2,
+        "shortlist_size": 2,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "fact"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "fact"
+          ]
+        ],
+        "bytes": 116,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "P6",
+    "requirements": [
+      {
+        "id": "req-19fd17d8971a76b1",
+        "question": "Does management expect 高榆 demand to remain strong, and what is the strongest disclosed counterpoint?",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:Does management expect 高榆 demand to remain strong, and what is the strongest disclosed counterpoint?"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "Does management expect 高榆 demand to remain strong, and what is the strongest disclosed counterpoint?",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "p6c",
+          "title": "行业简报",
+          "page": null,
+          "score": 0.1522,
+          "snippet": "高榆下半年需求预期引发市场讨论。",
+          "matched_terms": [
+            "高榆"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "p6c",
+            "start": 0,
+            "end": 16
+          },
+          "requirement_ids": [
+            "req-19fd17d8971a76b1"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "p6b",
+          "title": "客户披露",
+          "page": null,
+          "score": 0.1283,
+          "snippet": "高榆最大客户披露将减少下半年采购，但未说明削减幅度。",
+          "matched_terms": [
+            "高榆"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "p6b",
+            "start": 0,
+            "end": 26
+          },
+          "requirement_ids": [
+            "req-19fd17d8971a76b1"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "p6c",
+          "start": 0,
+          "end": 16,
+          "requirement_ids": [
+            "req-19fd17d8971a76b1"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "p6b",
+          "start": 0,
+          "end": 26,
+          "requirement_ids": [
+            "req-19fd17d8971a76b1"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "p6a",
+          "start": 0,
+          "end": 28,
+          "requirement_ids": [
+            "req-19fd17d8971a76b1"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-19fd17d8971a76b1",
+          "query": "Does management expect 高榆 demand to remain strong, and what is the strongest disclosed counterpoint?",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 3,
+        "shortlist_size": 3,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "fact"
+          ],
+          [
+            "fact"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "fact"
+          ]
+        ],
+        "bytes": 126,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "P7",
+    "requirements": [
+      {
+        "id": "req-5ac9cdab8c331d7c",
+        "question": "In 林榆集团 accounts how much did operating profit change?",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:In 林榆集团 accounts how much did operating profit change?"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "In 林榆集团 accounts how much did operating profit change?",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "p7a",
+          "title": "合并利润表",
+          "page": null,
+          "score": 1.0132,
+          "snippet": "林榆集团合并营业利润人民币百万元：2023年度15，2024年度18。",
+          "matched_terms": [
+            "林榆",
+            "榆集",
+            "集团"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "p7a",
+            "start": 0,
+            "end": 35
+          },
+          "requirement_ids": [
+            "req-5ac9cdab8c331d7c"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "p7c",
+          "title": "市场评论",
+          "page": null,
+          "score": 1.2186,
+          "snippet": "林榆集团营业利润变动受到关注。",
+          "matched_terms": [
+            "林榆",
+            "榆集",
+            "集团"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "p7c",
+            "start": 0,
+            "end": 15
+          },
+          "requirement_ids": [
+            "req-5ac9cdab8c331d7c"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 3,
+        "passages_indexed": 3,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "p7c",
+          "start": 0,
+          "end": 15,
+          "requirement_ids": [
+            "req-5ac9cdab8c331d7c"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "p7a",
+          "start": 0,
+          "end": 35,
+          "requirement_ids": [
+            "req-5ac9cdab8c331d7c"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "p7b",
+          "start": 0,
+          "end": 35,
+          "requirement_ids": [
+            "req-5ac9cdab8c331d7c"
+          ],
+          "decision": "omitted",
+          "reason": "capacity"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 3,
+        "selected": 2,
+        "omitted_by_reason": {
+          "capacity": 1
+        },
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-5ac9cdab8c331d7c",
+          "query": "In 林榆集团 accounts how much did operating profit change?",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 3,
+        "shortlist_size": 3,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "fact",
+            "periods"
+          ],
+          [
+            "fact",
+            "periods"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "periods"
+          ]
+        ],
+        "bytes": 126,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  },
+  {
+    "id": "P8",
+    "requirements": [
+      {
+        "id": "req-960d503ab7ea4705",
+        "question": "桐麓今年和去年每股股息分别是多少？",
+        "status": "missing",
+        "reason": "The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.",
+        "references": [],
+        "core": true,
+        "kind": "generic:桐麓今年和去年每股股息分别是多少？"
+      }
+    ],
+    "result": {
+      "status": "completed",
+      "query": "桐麓今年和去年每股股息分别是多少？",
+      "returned_hits": 2,
+      "hits": [
+        {
+          "source_id": "p8a",
+          "title": "公司公告",
+          "page": null,
+          "score": 2.7,
+          "snippet": "桐麓今年每股现金股息人民币0.8元。",
+          "matched_terms": [
+            "今年",
+            "年每",
+            "桐麓",
+            "每股",
+            "股息",
+            "麓今"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "p8a",
+            "start": 0,
+            "end": 18
+          },
+          "requirement_ids": [
+            "req-960d503ab7ea4705"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        },
+        {
+          "source_id": "p8b",
+          "title": "简讯",
+          "page": null,
+          "score": 1.8819,
+          "snippet": "桐麓每股股息受到关注；材料未载去年数额。",
+          "matched_terms": [
+            "去年",
+            "桐麓",
+            "每股",
+            "股息",
+            "股股"
+          ],
+          "reasons": [
+            "lexical_bm25"
+          ],
+          "read_sources": {
+            "source_id": "p8b",
+            "start": 0,
+            "end": 20
+          },
+          "requirement_ids": [
+            "req-960d503ab7ea4705"
+          ],
+          "requirement_match_status": "retrieval_only_unverified"
+        }
+      ],
+      "library_coverage": {
+        "sources_searched": 2,
+        "passages_indexed": 2,
+        "unsearched_page_count": 0,
+        "complete": true,
+        "retrieval_mode": "bm25_only"
+      },
+      "selection_trace": [
+        {
+          "source_id": "p8a",
+          "start": 0,
+          "end": 18,
+          "requirement_ids": [
+            "req-960d503ab7ea4705"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        },
+        {
+          "source_id": "p8b",
+          "start": 0,
+          "end": 20,
+          "requirement_ids": [
+            "req-960d503ab7ea4705"
+          ],
+          "decision": "selected",
+          "reason": "combination_retrieval"
+        }
+      ],
+      "selection_summary": {
+        "candidates": 2,
+        "selected": 2,
+        "omitted_by_reason": {},
+        "requirements_searched": 1
+      },
+      "requirement_queries": [
+        {
+          "requirement_id": "req-960d503ab7ea4705",
+          "query": "桐麓今年和去年每股股息分别是多少？",
+          "reason": "unmet_or_requested_requirement"
+        }
+      ],
+      "combination_diagnostics": {
+        "pool_size": 2,
+        "shortlist_size": 2,
+        "pruned_count": 0,
+        "uses": [
+          [
+            "fact"
+          ],
+          [
+            "fact"
+          ]
+        ],
+        "needed_uses": [
+          [
+            "fact"
+          ]
+        ],
+        "bytes": 108,
+        "match_status": "retrieval_only_unverified"
+      },
+      "message": "Hits and requirement associations are retrieval leads, not verified support; read the location with read_sources or read_pages before citing. Scores from different queries are not directly comparable."
+    }
+  }
+]

@@ -1,0 +1,362 @@
+[
+  {
+    "id": "P1",
+    "requested_reads": [
+      {
+        "source_id": "p1a",
+        "start": 0,
+        "end": 83
+      },
+      {
+        "source_id": "p1c",
+        "start": 0,
+        "end": 75
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "p1a",
+        "start": 0,
+        "end": 83
+      },
+      {
+        "source_id": "p1c",
+        "start": 0,
+        "end": 75
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "p1a",
+        "start": 0,
+        "end": 83,
+        "content_sha256": "f50046cf1a4a54955e72e5f8a15fd9c687fc8e331cc6d2749ee5ec7716184fc2"
+      },
+      {
+        "source_id": "p1c",
+        "start": 0,
+        "end": 75,
+        "content_sha256": "22534a2ef902521c970991b4d9b64113b83ad1c54ccac63e7cfca4e01dbd972e"
+      }
+    ],
+    "wire_sha256": "7a516fd2e3b05c8c1a0d795f6aea2f7b6a695d7ce5686a9cbcf62a86cd2d9be5",
+    "wire_bytes": 54927,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "P2",
+    "requested_reads": [
+      {
+        "source_id": "p2b",
+        "start": 0,
+        "end": 31
+      },
+      {
+        "source_id": "p2c",
+        "start": 0,
+        "end": 20
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "p2b",
+        "start": 0,
+        "end": 31
+      },
+      {
+        "source_id": "p2c",
+        "start": 0,
+        "end": 20
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "p2b",
+        "start": 0,
+        "end": 31,
+        "content_sha256": "0fa207cfcfbbbfcf595f56e07019e6c56b16e1f67681ac2ea955967319acd0c8"
+      },
+      {
+        "source_id": "p2c",
+        "start": 0,
+        "end": 20,
+        "content_sha256": "9b3f7aee929a81889d0313fcdedb711ee3ad98662ee9d31c648fd9e8b5280d06"
+      }
+    ],
+    "wire_sha256": "4270fde719d86bd6daf37718f10abf81b2841142a63695f970fd8b830888634c",
+    "wire_bytes": 54978,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "P3",
+    "requested_reads": [
+      {
+        "source_id": "p3c",
+        "start": 0,
+        "end": 82
+      },
+      {
+        "source_id": "p3b",
+        "start": 0,
+        "end": 62
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "p3c",
+        "start": 0,
+        "end": 82
+      },
+      {
+        "source_id": "p3b",
+        "start": 0,
+        "end": 62
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "p3c",
+        "start": 0,
+        "end": 82,
+        "content_sha256": "2755cf176020cbf7971ca0fe593a337d900142a51c59e3afe3109d808fc49ef1"
+      },
+      {
+        "source_id": "p3b",
+        "start": 0,
+        "end": 62,
+        "content_sha256": "cf2e5785c8457083b45aa863ec40c6e66c13e755a172e1a4573c0e051f9e6ec6"
+      }
+    ],
+    "wire_sha256": "51415579acffc9f95967faf9ed4cd8d1c875013e21aefb244afdcb76478ed18b",
+    "wire_bytes": 55598,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "P4",
+    "requested_reads": [
+      {
+        "source_id": "p4b",
+        "start": 0,
+        "end": 45
+      },
+      {
+        "source_id": "p4a",
+        "start": 0,
+        "end": 33
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "p4b",
+        "start": 0,
+        "end": 45
+      },
+      {
+        "source_id": "p4a",
+        "start": 0,
+        "end": 33
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "p4b",
+        "start": 0,
+        "end": 45,
+        "content_sha256": "2b1027dd1e8dd966d1e5c8360698595d75e047d0bc899acd2502414424bea4c2"
+      },
+      {
+        "source_id": "p4a",
+        "start": 0,
+        "end": 33,
+        "content_sha256": "169e1b841c45cdcbd655af57398e28732f9db4c1361cc77d604efc350bc7ea66"
+      }
+    ],
+    "wire_sha256": "1e5457184800f458084099af786011dfb6bd8b6434e0fc69786bbc41fc9b4baf",
+    "wire_bytes": 55421,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "P5",
+    "requested_reads": [
+      {
+        "source_id": "p5a",
+        "start": 0,
+        "end": 67
+      },
+      {
+        "source_id": "p5b",
+        "start": 0,
+        "end": 49
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "p5a",
+        "start": 0,
+        "end": 67
+      },
+      {
+        "source_id": "p5b",
+        "start": 0,
+        "end": 49
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "p5a",
+        "start": 0,
+        "end": 67,
+        "content_sha256": "10bc8d587d93745584cc104b770687fe377afc7f96d32892577da04b91bb185f"
+      },
+      {
+        "source_id": "p5b",
+        "start": 0,
+        "end": 49,
+        "content_sha256": "6f19f5a3a271e158d97585617c7e4e70ed812cbb16ed0d9feaf89b9db32d4744"
+      }
+    ],
+    "wire_sha256": "fabb1d0f4941368903616790ece6dc445171b03b2ff32f57e8eee002faf82879",
+    "wire_bytes": 54415,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "P6",
+    "requested_reads": [
+      {
+        "source_id": "p6c",
+        "start": 0,
+        "end": 16
+      },
+      {
+        "source_id": "p6b",
+        "start": 0,
+        "end": 26
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "p6c",
+        "start": 0,
+        "end": 16
+      },
+      {
+        "source_id": "p6b",
+        "start": 0,
+        "end": 26
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "p6c",
+        "start": 0,
+        "end": 16,
+        "content_sha256": "645f5b8e0d3463a41a17feb5af3e9e164fad1c150c8bfd882a861f8f1991f47f"
+      },
+      {
+        "source_id": "p6b",
+        "start": 0,
+        "end": 26,
+        "content_sha256": "c3488ab87d334eca2369c14bfe8df8a921d0e323a023b611121782700625fb47"
+      }
+    ],
+    "wire_sha256": "f75b05bd2b9fd49d4d42c9265cd8f9fdc904c3ef0243e621edf0183a9f5df2f2",
+    "wire_bytes": 54834,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "P7",
+    "requested_reads": [
+      {
+        "source_id": "p7a",
+        "start": 0,
+        "end": 35
+      },
+      {
+        "source_id": "p7c",
+        "start": 0,
+        "end": 15
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "p7a",
+        "start": 0,
+        "end": 35
+      },
+      {
+        "source_id": "p7c",
+        "start": 0,
+        "end": 15
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "p7a",
+        "start": 0,
+        "end": 35,
+        "content_sha256": "73e2d261b6ea5a7ad11f833ea02dcac3113f277cae8ce0ab7c5c4ea09bbb7335"
+      },
+      {
+        "source_id": "p7c",
+        "start": 0,
+        "end": 15,
+        "content_sha256": "5342e7730103b09129987e0fef6f7ed41b0b92cef52dd66869f7d81047012028"
+      }
+    ],
+    "wire_sha256": "ce9742e22f1c2b3ebc7d8f9e6ac0049ef74307c27b0c4000619958ad4066989d",
+    "wire_bytes": 54746,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  },
+  {
+    "id": "P8",
+    "requested_reads": [
+      {
+        "source_id": "p8a",
+        "start": 0,
+        "end": 18
+      },
+      {
+        "source_id": "p8b",
+        "start": 0,
+        "end": 20
+      }
+    ],
+    "read_ranges": [
+      {
+        "source_id": "p8a",
+        "start": 0,
+        "end": 18
+      },
+      {
+        "source_id": "p8b",
+        "start": 0,
+        "end": 20
+      }
+    ],
+    "observed_in_serialized_read_result": [
+      {
+        "source_id": "p8a",
+        "start": 0,
+        "end": 18,
+        "content_sha256": "e67b0624d558408da2529114f029eb8d2c266d0795def2d9697864d017f6ed00"
+      },
+      {
+        "source_id": "p8b",
+        "start": 0,
+        "end": 20,
+        "content_sha256": "d6682912b92fb00d2519b9d5a7344b83866e13184be47a64effb2d019aa1cb91"
+      }
+    ],
+    "wire_sha256": "86b0cbc7d95f37ea6269c7697482dffc01e26b730bba2d7b471386651bcee252",
+    "wire_bytes": 54356,
+    "actual_provider_response": "not_called",
+    "reopened_delivery": "not_observed"
+  }
+]

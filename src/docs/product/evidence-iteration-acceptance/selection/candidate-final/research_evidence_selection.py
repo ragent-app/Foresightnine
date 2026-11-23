@@ -1,0 +1,136 @@
+"""Bounded, unverified retrieval-lead combination selection.
+
+This module does not read evaluation labels or establish evidentiary support.
+"""
+from __future__ import annotations
+
+import itertools
+from collections import Counter
+import re
+from typing import Any, Mapping
+
+
+def evidence_uses(requirement: Mapping[str, Any]) -> list[str]:
+    kind = str(requirement.get('kind') or '').lower()
+    q = str(requirement.get('question') or '').lower()
+    if kind.startswith('counterevidence'):
+        return ['counter']
+    if kind.startswith('market:') or re.search(r'benchmark|index|relative return|指数|同期表现', q):
+        return ['market_first', 'market_second']
+    if re.search(r'contract|cancel|terminat|delivery|合同|撤单|撤销|交货', q):
+        return ['condition', 'performance']
+    if kind.startswith('contribution:') or re.search(r'drivers?|contribution|attribution|原因|归因|贡献', q):
+        return ['periods', 'attribution']
+    if kind.startswith('financial:') or re.search(r'growth|change|revenue|增长|变化|收入|营收', q):
+        return ['periods']
+    return ['fact']
+
+
+def lead_uses(text: str) -> set[str]:
+    t = text.lower()
+    uses = {'fact'}
+    if len(set(re.findall(r'(?<!\d)(?:19|20)\d{2}(?!\d)', t))) >= 2:
+        uses.add('periods')
+    if re.search(r'\d', t) and re.search(r'price|pricing|volume|contribut|driven|due to|attribut|价格|销量|贡献|驱动|由于|未披露', t):
+        uses.add('attribution')
+    if re.search(r'cancel|terminat|notice|unless|remed|合同|撤销|撤单|通知|补救|除非', t):
+        uses.add('condition')
+    if re.search(r'deliver|shipment|backlog|fulfil|guidance|assumes|履约|交付|交货|订单|前提|预估', t):
+        uses.add('performance')
+    if re.search(r'index|benchmark|指数|基准', t) and re.search(r'\d', t):
+        uses.add('market_second')
+    if re.search(r'share|stock|equity|股票|股价|收盘价', t) and re.search(r'\d', t):
+        uses.add('market_first')
+    if re.search(r'risk|declin|uncertain|however|although|风险|下滑|但是|然而|不确定|未披露|尚未|not disclosed|not occurred|not disaggregated', t):
+        uses.add('counter')
+    return uses
+
+
+def select_evidence_candidates(candidates: list[dict[str, Any]], requirements: list[Mapping[str, Any]], *,
+                               max_hits: int, max_bytes: int | None = None, beam_width: int = 32,
+                               per_use: int = 12, baseline_indices: list[int] | None = None) -> tuple[list[int], dict[str, Any]]:
+    """Select indices into an already authorized pool. Metadata matches remain unverified.
+
+    Each candidate supplies text, source_id, start, end, rank and optionally explicit
+    entity/period/currency metadata. Unknown compatibility is never inferred as proof.
+    """
+    needed = [set(evidence_uses(r)) for r in requirements]
+    roles = [lead_uses(str(c.get('text') or '')) for c in candidates]
+    shortlist: set[int] = set(range(min(per_use, len(candidates))))
+    for role in set().union(*needed, {'counter'}):
+        shortlist.update([i for i, uses in enumerate(roles) if role in uses][:per_use])
+    if baseline_indices is not None:
+        shortlist.update(baseline_indices)
+    pool = sorted(shortlist)
+    def valid(group: tuple[int, ...]) -> bool:
+        if len({str(candidates[i].get('text') or '') for i in group}) < len(group):
+            return False
+        for field in ('entity', 'currency', 'period_scope'):
+            values = {str(candidates[i][field]) for i in group if candidates[i].get(field)}
+            if len(values) > 1 and not (field == 'entity' and any('market_second' in n for n in needed)):
+                return False
+        return max_bytes is None or byte_cost(group) <= max_bytes
+    def byte_cost(group: tuple[int, ...]) -> int:
+        # Count overlapping intervals once, against actual source text slices.
+        total = 0
+        intervals: dict[str, list[tuple[int, int, str]]] = {}
+        for i in group:
+            c = candidates[i]
+            intervals.setdefault(str(c.get('source_id')), []).append((int(c.get('start', 0)), int(c.get('end', 0)), str(c.get('text') or '')))
+        for rows in intervals.values():
+            end = -1
+            for start, stop, text in sorted(rows):
+                total += len(text[max(0, end-start):].encode('utf-8'))
+                end = max(end, stop)
+        headers = {(candidates[i]['source_id'], candidates[i].get('header') or '') for i in group}
+        return total + sum(len(header.encode('utf-8')) for _, header in headers)
+    def score(group: tuple[int, ...]) -> tuple:
+        found = set().union(*(roles[i] for i in group)) if group else set()
+        complete = sum(n <= found for n in needed)
+        covered = sum(len(n & found) for n in needed)
+        counter = int('counter' in found)
+        return (complete, covered, counter, len(group), -sum(int(candidates[i].get('rank', i)) for i in group), -byte_cost(group))
+    best: tuple[int, ...] = ()
+    if baseline_indices is not None:
+        # Keep the ordinary ranking as the incumbent. Repeated, non-specific text
+        # is replaceable only when a located alternative adds a required use.
+        copies = Counter(str(c.get('text') or '').strip() for c in candidates)
+        concrete = re.compile(r'\d|\b(?:unless|only if|subject to|provided that|written notice|shall|cannot|undisclosed)\b'
+                              r'|方可|书面|除非|不得|前提|尚未|未披露|未能', re.I)
+        useful = [r if concrete.search(str(c.get('text') or '')) else set() for r, c in zip(roles, candidates)]
+        required = set().union(*needed) if needed else set()
+        def coverage(group: tuple[int, ...]) -> int:
+            return len(required.intersection(set().union(*(useful[i] for i in group))))
+        for index in baseline_indices[:max_hits]:
+            if valid(best + (index,)):
+                best += (index,)
+        for slot, index in enumerate(best):
+            body = str(candidates[index].get('text') or '').strip()
+            if copies[body] < 2 or useful[index]:
+                continue
+            alternatives = (best[:slot] + (i,) + best[slot+1:] for i in pool if i not in best)
+            improved = [g for g in alternatives if valid(g) and coverage(g) > coverage(best)]
+            if improved:
+                best = max(improved, key=lambda g: (coverage(g), score(g)))
+        # The experiment may impose a byte limit that removed an incumbent.
+        # Fill vacant slots without displacing admissible, source-specific leads.
+        for i in pool:
+            if len(best) >= max_hits:
+                break
+            if i not in best and valid(best + (i,)):
+                best += (i,)
+    elif max_hits <= 2:
+        groups = itertools.chain.from_iterable(itertools.combinations(pool, size) for size in range(1, max_hits + 1))
+        best = max((g for g in groups if valid(g)), key=score, default=())
+    else:
+        beam = [()]
+        for _ in range(max_hits):
+            extensions = {g + (i,) for g in beam for i in pool if (not g or i > g[-1]) and valid(g + (i,))}
+            if not extensions:
+                break
+            beam = sorted(extensions, key=score, reverse=True)[:beam_width]
+            best = max([best, *beam], key=score)
+    return list(best), {'pool_size': len(candidates), 'shortlist_size': len(pool),
+                        'pruned_count': len(candidates)-len(pool), 'uses': [sorted(r) for r in roles],
+                        'needed_uses': [sorted(n) for n in needed], 'bytes': byte_cost(best),
+                        'match_status': 'retrieval_only_unverified'}
