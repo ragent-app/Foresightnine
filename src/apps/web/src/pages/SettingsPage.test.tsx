@@ -80,7 +80,7 @@ describe("SettingsPage", () => {
     expect(await screen.findByText("请输入 API Key")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("API Key"), { target: { value: "sk-example-abcd" } });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
-    expect(await screen.findByText("可用")).toBeTruthy();
+    expect(await screen.findByText("研究工具已验证")).toBeTruthy();
     expect(bodyOf(fetchMock, "/v1/account/model-config", "PUT")).toEqual({
       mode: "personal", protocol: "openai_chat_completions", base_url: "https://api.example.com/v1", model: "example-model", api_key: "sk-example-abcd",
     });
@@ -104,7 +104,7 @@ describe("SettingsPage", () => {
     expect(await screen.findByText(/已保存，未使用/)).toBeTruthy();
     expect(screen.queryByRole("alertdialog")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "我的模型" }));
-    expect(await screen.findByText("可用")).toBeTruthy();
+    expect(await screen.findByText("研究工具已验证")).toBeTruthy();
     expect(screen.queryByLabelText("API Key")).toBeNull();
     const puts = fetchMock.mock.calls.filter(([input, init]) => String(input).endsWith("/v1/account/model-config") && init?.method === "PUT").map(([, init]) => JSON.parse(String(init!.body)));
     expect(puts).toEqual([{ mode: "platform" }, { mode: "personal" }]);
@@ -130,12 +130,12 @@ describe("SettingsPage", () => {
     expect(await screen.findByLabelText("API Key")).toBeTruthy();
   });
 
-  it("does not offer a connection test for Anthropic Messages", async () => {
-    mockApi((url) => (url.pathname === "/v1/account/model-config" ? jsonResponse({ ...PERSONAL, protocol: "anthropic_messages" }) : undefined));
+  it("offers a tool verification for Anthropic Messages", async () => {
+    mockApi((url) => (url.pathname === "/v1/account/model-config" ? jsonResponse({ ...PERSONAL, protocol: "anthropic_messages", messages_options: { version: "test-version", auth_scheme: "bearer", max_tokens: 1000 } }) : undefined));
     renderSettings("/settings?tab=model");
     await screen.findByText("Anthropic Messages · example-model");
-    expect(screen.queryByRole("button", { name: "测试连接" })).toBeNull();
-    expect(screen.getByText(/暂不支持连接测试/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "验证研究工具" })).toBeTruthy();
+    expect(screen.getByText("研究工具待验证")).toBeTruthy();
   });
 
   it("reorders and disables data sources with full update bodies", async () => {

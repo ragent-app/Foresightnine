@@ -736,18 +736,30 @@ def _model_provider_for_request(request: Request, *, research: bool = False) -> 
             if protocol != 'openai_chat_completions':
                 raise ApiProblem(503, 'internal_error', 'Research model protocol is unsupported.')
         return challenge_provider, False
-    protocol = resolved_config.protocol
-    if protocol == 'anthropic_messages':
-        if not research:
-            raise ApiProblem(422, 'invalid_request', 'This model protocol is available for research only.')
-        allowed = os.environ.get('FORESIGHTNINE_MESSAGES_PERSONAL_BASE_URL', '').rstrip('/')
-        if not allowed or settings.base_url != allowed:
-            raise ApiProblem(503, 'internal_error', 'Messages configuration is not enabled for this endpoint.')
-        request.state.personal_model = True
-        return _messages_research_provider(settings), True
     request.state.personal_model = True
-    # This object and its decrypted key remain scoped to this request closure.
-    return OpenAICompatibleLlmProvider(settings), True
+    if resolved_config.protocol == 'anthropic_messages' and not research:
+        raise ApiProblem(422, 'invalid_request', 'This model protocol is available for research only.')
+    return _personal_model_provider(settings, resolved_config, research=research), True
+
+
+def _personal_model_provider(settings: OpenAICompatibleSettings, config: StoredModelConfig, *, research: bool):
+    if config.protocol == 'anthropic_messages':
+        allowed = {url.strip().rstrip('/') for url in os.environ.get('FORESIGHTNINE_MESSAGES_PERSONAL_BASE_URL', '').split(',') if url.strip()}
+        if allowed and settings.base_url not in allowed:
+            raise ApiProblem(422, 'invalid_request', 'This Messages endpoint is outside the configured personal endpoint permissions.')
+        if config.messages_options is None:
+            raise ApiProblem(422, 'invalid_request', 'Configure the Messages version, authentication scheme and output limit in model settings.')
+    if research and not settings.tools_verified:
+        raise ApiProblem(422, 'invalid_request', 'Verify research tools for this model in model settings.')
+    if config.protocol == 'anthropic_messages':
+        from .anthropic_messages import AnthropicMessagesProvider
+        from .openai_compatible import _llm_timeout_from_environment
+        from .phase3 import ProviderPolicy
+        options = config.messages_options
+        policy = ProviderPolicy(max_output_tokens=options.max_tokens, timeout_seconds=_llm_timeout_from_environment())
+        return AnthropicMessagesProvider(settings, policy, anthropic_version=options.version,
+                                        auth_scheme=options.auth_scheme, max_tokens=options.max_tokens)
+    return OpenAICompatibleLlmProvider(settings)
 
 
 def _messages_research_provider(settings: OpenAICompatibleSettings) -> Any:
@@ -759,14 +771,24 @@ def _messages_research_provider(settings: OpenAICompatibleSettings) -> Any:
         auth = os.environ['FORESIGHTNINE_MESSAGES_AUTH_SCHEME'].strip()
         timeout = float(os.environ.get('FORESIGHTNINE_RESEARCH_LLM_TIMEOUT_SECONDS', '20'))
         import math
-        if maximum <= 0 or not version or not auth or not math.isfinite(timeout) or not 0 < timeout <= 600 or os.environ.get('FORESIGHTNINE_MESSAGES_NATIVE_TOOLS') != 'true' or os.environ.get('FORESIGHTNINE_MESSAGES_CONTINUATION') != 'true':
+        if maximum <= 0 or not version or not auth or not math.isfinite(timeout) or not 0 < timeout <= 600:
             raise ValueError()
-        if (os.environ.get('FORESIGHTNINE_MESSAGES_CAPABILITY_BASE_URL', '').rstrip('/') != settings.base_url
+        if os.environ.get('FORESIGHTNINE_LLM_CAPABILITY_PROFILES', '').strip():
+            from .anthropic_messages import _endpoint
+            from .provider_capabilities import configured_profile
+            profile = configured_profile(_endpoint(settings.base_url), settings.model, protocol='anthropic_messages')
+            if not profile or profile.version != version or not (profile.native_tools and profile.continuation):
+                raise ValueError()
+            stream_enabled = profile.stream is True
+        elif (os.environ.get('FORESIGHTNINE_MESSAGES_NATIVE_TOOLS') != 'true'
+                or os.environ.get('FORESIGHTNINE_MESSAGES_CONTINUATION') != 'true'
+                or os.environ.get('FORESIGHTNINE_MESSAGES_CAPABILITY_BASE_URL', '').rstrip('/') != settings.base_url
                 or os.environ.get('FORESIGHTNINE_MESSAGES_CAPABILITY_MODEL') != settings.model
                 or os.environ.get('FORESIGHTNINE_MESSAGES_CAPABILITY_VERSION') != version):
             raise ValueError()
-        stream_enabled = os.environ.get('FORESIGHTNINE_MESSAGES_STREAM') == 'true'
-    except (KeyError, ValueError):
+        else:
+            stream_enabled = os.environ.get('FORESIGHTNINE_MESSAGES_STREAM') == 'true'
+    except (KeyError, ValueError, ProviderFailure):
         raise ApiProblem(503, 'internal_error', 'Messages research requires an explicit output limit, version, authentication scheme and native tools capability.') from None
     _warn_if_research_timeout_mismatch(maximum, timeout, source="messages_provider")
     try:
@@ -2874,13 +2896,18 @@ def _runtime_provider_binding(provider: Any, request: Request) -> str:
     # A platform-mode record may retain an inactive personal configuration; only
     # an active personal configuration describes the provider actually bound.
     personal = config if getattr(config, 'mode', None) == 'personal' else None
+    parameters = os.environ.get('FORESIGHTNINE_LLM_GENERATION_PARAMETERS')
+    if personal:
+        parameters = None
+    elif os.environ.get('FORESIGHTNINE_LLM_CAPABILITY_PROFILES', '').strip():
+        parameters = getattr(provider, 'generation_parameters_json', lambda: None)()
     payload = {'provider': getattr(provider, 'name', None), 'protocol': getattr(personal, 'protocol', None) or os.environ.get('FORESIGHTNINE_RESEARCH_MODEL_PROTOCOL', 'openai_chat_completions'), 'endpoint': getattr(settings, 'base_url', None),
                'model': getattr(settings, 'model', None), 'policy': repr(getattr(provider, 'policy', None)),
-               'profile': repr(profile), 'adapter_binding': getattr(provider, 'research_capacity_key', lambda: None)(), 'protocol_version': getattr(provider, 'anthropic_version', None), 'auth_scheme': getattr(provider, 'auth_scheme', None), 'output_limit': getattr(provider, 'max_tokens', None), 'parameters': os.environ.get('FORESIGHTNINE_LLM_GENERATION_PARAMETERS'),
+               'profile': repr(profile), 'adapter_binding': getattr(provider, 'research_capacity_key', lambda: None)(), 'protocol_version': getattr(provider, 'anthropic_version', None), 'auth_scheme': getattr(provider, 'auth_scheme', None), 'output_limit': getattr(provider, 'max_tokens', None), 'parameters': parameters,
                'account_model_mode': getattr(config, 'mode', None),
                'credential_revision': str(getattr(config, 'updated_at', None)),
                'credential_hint': getattr(personal, 'key_hint', None),
-               'platform_credential_revision': os.environ.get('FORESIGHTNINE_RESEARCH_LLM_CREDENTIAL_REVISION') if getattr(provider, 'name', None) == 'anthropic_messages' else os.environ.get('FORESIGHTNINE_LLM_CREDENTIAL_REVISION'),
+               'platform_credential_revision': None if personal else os.environ.get('FORESIGHTNINE_RESEARCH_LLM_CREDENTIAL_REVISION') if getattr(provider, 'name', None) == 'anthropic_messages' else os.environ.get('FORESIGHTNINE_LLM_CREDENTIAL_REVISION'),
                'system': SYSTEM, 'tools': [asdict(tool) for tool in TOOLS]}
     return sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
@@ -4027,18 +4054,33 @@ def test_model_config(
     response: Response,
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> ModelConfigTestResponse:
-    """Run one bounded, redirect-free capability probe against a saved personal endpoint."""
+    """Verify the selected model can issue a native tool call using a synthetic question."""
+    from .chat_research_adapter import ChatResearchAdapter
+    from .model_protocol import ModelToolDefinition, ModelTurnInput
     account = _authenticated_account(authorization)
     response.headers["Cache-Control"] = "no-store"
     try:
-        settings = model_settings.runtime_settings(account.account_id)
-    except ModelCredentialError:
-        # A stale DNS answer, unavailable key file, or corrupted ciphertext is
-        # deliberately indistinguishable from an unavailable provider probe.
+        settings, config = model_settings.runtime_configuration(account.account_id)
+        if settings is None or config is None:
+            return ModelConfigTestResponse(status="unavailable")
+        # Only this synthetic call may try the capability before it is verified.
+        provider = _personal_model_provider(dataclass_replace(settings, tools_verified=True), config, research=True)
+        chat = config.protocol == "openai_chat_completions"
+        adapter = ChatResearchAdapter(provider) if chat else provider
+        tool = ModelToolDefinition("verify_connection", "Verify research tool support.", {
+            "type": "object", "properties": {"value": {"type": "string"}}, "required": ["value"],
+        })
+        turn = ModelTurnInput("Use the provided tool.", "Call verify_connection with value ok.", (tool,), ())
+        # Chat output-limit field support varies by endpoint. Use the same
+        # minimal wire fields as a normal uncapped Chat turn.
+        result = adapter.complete_turn(turn, timeout_seconds=30, max_output_tokens=None if chat else 256)
+        verified = (result.stop_class == "tool_calls" and len(result.tool_calls) == 1
+                    and result.tool_calls[0].name == tool.name and result.tool_calls[0].arguments == {"value": "ok"})
+    except (ModelCredentialError, ProviderFailure, ApiProblem):
         return ModelConfigTestResponse(status="unavailable")
-    if settings is None or model_settings.snapshot(account.account_id).protocol != "openai_chat_completions":
-        return ModelConfigTestResponse(status="unavailable")
-    return ModelConfigTestResponse(status="ready" if OpenAICompatibleLlmProvider(settings).connection_ready() else "unavailable")
+    recorded = model_settings.record_tools_result(config, verified)
+    ready = verified and recorded
+    return ModelConfigTestResponse(status="ready" if ready else "unavailable")
 
 
 @app.get("/v1/account", include_in_schema=False)

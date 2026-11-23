@@ -293,6 +293,8 @@ class OpenAICompatibleSettings:
     allowed_hosts: frozenset[tuple[str, int]]
     api_key: str | None = field(default=None, repr=False)
     allow_private_network: bool = False
+    personal: bool = False
+    tools_verified: bool = False
 
     @classmethod
     def from_environment(cls) -> "OpenAICompatibleSettings":
@@ -399,7 +401,7 @@ class OpenAICompatibleSettings:
             _require_public_dns(normalized_host, 443)
         except _TransportFailure as error:
             raise ProviderFailure("provider_configuration_invalid", "LLM base URL DNS validation failed.", retryable=False) from error
-        return settings
+        return replace(settings, personal=True)
 
 
 
@@ -1463,8 +1465,8 @@ class OpenAICompatibleLlmProvider(LlmProvider):
         if self.policy.max_output_tokens is not None:
             payload['max_tokens'] = self.policy.max_output_tokens
         if contract is not None:
-            from .provider_capabilities import configured_profile, wire_contract
-            profile = configured_profile(_endpoint(self.settings.base_url), self.settings.model) if self.settings else None
+            from .provider_capabilities import wire_contract
+            profile = self.research_capacity()
             mode = profile.mode if profile else 'json_object'
             payload.pop('response_format')
             payload.update(wire_contract(contract, mode))
@@ -1537,8 +1539,14 @@ class OpenAICompatibleLlmProvider(LlmProvider):
         return None
 
     def research_capacity(self):
-        from .provider_capabilities import configured_profile
-        return configured_profile(_endpoint(self.settings.base_url), self.settings.model) if self.settings else None
+        from .provider_capabilities import research_profile
+        return research_profile(self.settings, _endpoint(self.settings.base_url), "openai_chat_completions", "chat-completions-v1") if self.settings else None
+
+    def generation_parameters_json(self) -> str:
+        from .provider_capabilities import chat_generation_parameters
+        if not self.settings or self.settings.personal:
+            return ""
+        return chat_generation_parameters(_endpoint(self.settings.base_url), self.settings.model)
 
     def research_capacity_key(self) -> str:
         from hashlib import sha256
@@ -1563,10 +1571,10 @@ class OpenAICompatibleLlmProvider(LlmProvider):
         return True if self.estimate_research_input(prompt, system, contract) + profile.output_tokens <= profile.context_tokens else None
 
     def contract_overhead_bytes(self, contract) -> int:
-        from .provider_capabilities import configured_profile, contract_wire_overhead
+        from .provider_capabilities import contract_wire_overhead
         if self.settings is None:
             return 0
-        profile = configured_profile(_endpoint(self.settings.base_url), self.settings.model)
+        profile = self.research_capacity()
         return contract_wire_overhead(contract, profile.mode if profile else 'json_object')
 
     def estimate_native_input(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> int:
@@ -1575,7 +1583,7 @@ class OpenAICompatibleLlmProvider(LlmProvider):
         This is a reservation estimate, not proof of the provider's capacity.
         """
         wire = {'model': self.settings.model if self.settings else '', 'messages': messages, 'tools': tools}
-        raw = os.environ.get('FORESIGHTNINE_LLM_GENERATION_PARAMETERS', '').strip()
+        raw = self.generation_parameters_json()
         if raw:
             try:
                 wire['configured_parameters'] = json.loads(raw)
@@ -1655,7 +1663,7 @@ class OpenAICompatibleLlmProvider(LlmProvider):
         wire: dict[str, Any] = {"model": self.settings.model, "messages": messages}
         # The deployment opts in both to field names and to their values. This
         # permits standard and private protocol extensions without brand tests.
-        raw_parameters = os.environ.get('FORESIGHTNINE_LLM_GENERATION_PARAMETERS', '').strip()
+        raw_parameters = self.generation_parameters_json()
         if raw_parameters:
             try:
                 parameters = json.loads(raw_parameters)

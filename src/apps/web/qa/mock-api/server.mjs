@@ -1696,20 +1696,28 @@ function readEnum(value, allowed, location) {
 
 /** Mirrors ModelConfigUpdate (strict, extra forbid, plus its after-validator). */
 function readModelConfigUpdate(body) {
-  exactKeys(body, ["mode", "protocol", "base_url", "model", "api_key", "clear_api_key"], "body");
+  exactKeys(body, ["mode", "protocol", "base_url", "model", "api_key", "clear_api_key", "messages_options"], "body");
   if (body.mode === undefined) throw invalid("Field required.", "body/mode");
   const mode = readEnum(body.mode, ["platform", "personal"], "body/mode");
   const protocol = body.protocol === undefined || body.protocol === null ? null : readEnum(body.protocol, MODEL_PROTOCOLS, "body/protocol");
+  const options = body.messages_options ?? null;
+  if (options !== null) {
+    exactKeys(options, ["version", "auth_scheme", "max_tokens"], "body/messages_options");
+    if (typeof options.version !== "string" || !/^[!-~]{1,64}$/.test(options.version)) throw invalid("Invalid Messages version.");
+    readEnum(options.auth_scheme, ["x-api-key", "bearer"], "body/messages_options/auth_scheme");
+    readInt(options.max_tokens, "body/messages_options/max_tokens", { min: 1 });
+  }
   const request = {
     mode,
     protocol,
+    messages_options: options,
     base_url: readBounded(body, "base_url", 1, 2048),
     model: readBounded(body, "model", 1, 128),
     api_key: readBounded(body, "api_key", 8, 512),
     clear_api_key: readStrictBool(body, "clear_api_key"),
   };
   if (request.api_key !== null && request.clear_api_key) throw invalid("api_key and clear_api_key are mutually exclusive");
-  if (mode === "platform" && (protocol !== null || request.base_url !== null || request.model !== null || request.api_key !== null || request.clear_api_key)) {
+  if (mode === "platform" && (options !== null || protocol !== null || request.base_url !== null || request.model !== null || request.api_key !== null || request.clear_api_key)) {
     throw invalid("platform mode does not accept personal model fields");
   }
   for (const key of ["base_url", "model", "api_key"]) {
@@ -1787,24 +1795,11 @@ const originOf = (baseUrl) => {
 /** Mirrors AccountModelSettings.snapshot (response_model_exclude_none). Never includes the key. */
 function modelSnapshot(config) {
   if (!config) return { schema_version: "v1", mode: "platform", configured: true };
-  if (config.mode === "platform") {
-    // Backend keeps an inactive personal configuration in platform mode and reports it masked.
-    const saved = config.base_url && config.model && config.api_key && config.key_hint;
-    return {
-      schema_version: "v1", mode: "platform", configured: true,
-      ...(saved ? { protocol: config.protocol, base_url: config.base_url, model: config.model, key_hint: config.key_hint } : {}),
-      updated_at: config.updated_at,
-    };
-  }
   return {
-    schema_version: "v1",
-    mode: "personal",
-    configured: true,
-    protocol: config.protocol,
-    base_url: config.base_url,
-    model: config.model,
-    key_hint: config.key_hint,
-    updated_at: config.updated_at,
+    schema_version: "v1", mode: config.mode, configured: true, updated_at: config.updated_at,
+    ...(config.key_hint ? { protocol: config.protocol, base_url: config.base_url, model: config.model, key_hint: config.key_hint } : {}),
+    ...(config.messages_options ? { messages_options: config.messages_options } : {}),
+    ...(config.research_tools_verified_at ? { research_tools_verified_at: config.research_tools_verified_at } : {}),
   };
 }
 
@@ -1812,8 +1807,7 @@ function modelSnapshot(config) {
 function applyModelUpdate(existing, request, now) {
   if (request.mode === "platform") {
     // Keep the personal configuration (and key) so switching back needs no re-entry; DELETE removes it.
-    const keep = existing ? { protocol: existing.protocol, base_url: existing.base_url, model: existing.model, api_key: existing.api_key, key_hint: existing.key_hint } : {};
-    return { ...keep, mode: "platform", updated_at: iso(now) };
+    return { ...existing, mode: "platform", updated_at: iso(now) };
   }
   const prior = existing ?? null;
   const baseUrl = request.base_url ?? prior?.base_url ?? null;
@@ -1840,7 +1834,11 @@ function applyModelUpdate(existing, request, now) {
   }
   if (!baseUrl || !model || !apiKey || !hint) throw modelProblem("Personal model configuration is incomplete.");
   if (!personalValuesValid(baseUrl, model)) throw modelProblem("Personal model configuration is invalid.");
-  return { mode: "personal", protocol, base_url: baseUrl, model, api_key: apiKey, key_hint: hint, updated_at: iso(now) };
+  if (request.messages_options && protocol !== "anthropic_messages") throw modelProblem("Messages options require the Messages protocol.");
+  const same = protocol === prior?.protocol && baseUrl === prior?.base_url && model === prior?.model;
+  const options = request.messages_options ?? (same ? prior.messages_options : null);
+  const verified = same && request.api_key === null && JSON.stringify(options) === JSON.stringify(prior.messages_options) ? prior.research_tools_verified_at : null;
+  return { mode: "personal", protocol, messages_options: options, research_tools_verified_at: verified, base_url: baseUrl, model, api_key: apiKey, key_hint: hint, updated_at: iso(now) };
 }
 
 /** Mirrors MarketDataConfigUpdate (strict, extra forbid, plus its after-validators). */
@@ -3161,10 +3159,11 @@ export function createServer({ tickMs = 1500, heartbeatMs = 15000, maxSsePerAcco
   route("POST", "/v1/account/model-config/test", true, ({ res, auth }) => {
     const config = dataFor(auth.accountId).modelConfig;
     let status = "unavailable";
-    if (config?.mode === "personal" && config.protocol === "openai_chat_completions") {
+    if (config?.mode === "personal" && (config.protocol === "openai_chat_completions" || config.messages_options)) {
       // Simulated probe, no network: hosts or models named "down" are unreachable.
       const down = new URL(config.base_url).hostname.toLowerCase().includes("down") || config.model.toLowerCase().includes("down");
       status = down ? "unavailable" : "ready";
+      if (!down) config.research_tools_verified_at ??= iso(new Date());
     }
     send(res, 200, { status });
   });

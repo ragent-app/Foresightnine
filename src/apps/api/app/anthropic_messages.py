@@ -58,8 +58,8 @@ class AnthropicMessagesProvider:
         )
 
     def research_capacity(self):
-        from .provider_capabilities import configured_profile
-        return configured_profile(_endpoint(self.settings.base_url), self.settings.model)
+        from .provider_capabilities import research_profile
+        return research_profile(self.settings, _endpoint(self.settings.base_url), "anthropic_messages", self.anthropic_version)
 
     def research_capacity_key(self):
         from hashlib import sha256

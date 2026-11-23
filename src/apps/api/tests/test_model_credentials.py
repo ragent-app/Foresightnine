@@ -178,8 +178,9 @@ def test_authenticated_routes_isolate_keys_clear_and_route_personal_without_bill
         def generate_challenge(self, request, **_kwargs):
             return self._inner.generate_challenge(request)
 
-        def connection_ready(self) -> bool:
-            return True
+        def complete(self, messages, tools, **kwargs):
+            from app.model_protocol import ModelResponse, ModelToolCall
+            return ModelResponse({}, (ModelToolCall("p", "verify_connection", '{"value":"ok"}'),), None, "tool_calls")
 
     monkeypatch.setattr(main, "OpenAICompatibleLlmProvider", PersonalProvider)
     session = client.post("/v1/sessions", json={}, headers={**first_headers, "Idempotency-Key": "personal-model-session"})
@@ -412,3 +413,91 @@ def test_runtime_configuration_resolves_protocol_and_key_from_one_read(monkeypat
     settings, revision = service.runtime_configuration(account_id)
     assert len(reads) == 1 and revision.protocol == 'anthropic_messages'
     assert settings.api_key == SYNTHETIC_MODEL_KEY and settings.base_url == revision.base_url
+
+
+def test_personal_chat_verification_and_research_follow_selected_model(monkeypatch):
+    from uuid import uuid4
+    from time import sleep
+
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    monkeypatch.setattr(main.model_settings, "cipher", ModelCredentialCipher(b"p" * 32))
+    monkeypatch.setattr(compatible, "_require_public_dns", lambda *_args, **_kwargs: None)
+    monkeypatch.setenv("FORESIGHTNINE_LLM_CAPABILITY_PROFILE", "invalid platform config")
+    monkeypatch.setenv("FORESIGHTNINE_LLM_GENERATION_PARAMETERS", '{"platform_only":1}')
+    calls = []
+
+    def transport(method, url, headers, body, timeout, **kwargs):
+        wire = json.loads(body)
+        assert "platform_only" not in wire and "stream" not in wire
+        names = [item["function"]["name"] for item in wire["tools"]]
+        calls.append((url, wire["model"], names))
+        if wire["model"] == "text-model":
+            choice = {"message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}
+        else:
+            if names == ["verify_connection"]:
+                name, args = "verify_connection", {"value": "ok"}
+            else:
+                name, args = "submit_research", {"report": "No sources.", "claims": [], "limitations": ["No sources."], "stopping_reason": "insufficient_evidence"}
+            choice = {"message": {"role": "assistant", "content": None, "tool_calls": [{
+                "type": "function", "id": "call1", "function": {"name": name, "arguments": json.dumps(args)}}]},
+                "finish_reason": "tool_calls"}
+        return compatible.HttpResponse(200, json.dumps({"choices": [choice]}))
+
+    monkeypatch.setattr(compatible, "_default_transport", transport)
+    client = TestClient(main.app)
+    auth = client.post("/v1/auth/local/register", json={"email": f"{uuid4().hex}@example.test", "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + auth["access_token"]}
+    account_id = auth["account"]["account_id"]
+    url = "/v1/account/model-config"
+    for model, host in (("model-a", "a.example.test"), ("model-b", "b.example.test"), ("text-model", "b.example.test")):
+        base = f"https://{host}/v1"
+        saved = client.put(url, headers=headers, json=_personal_request(model=model, base_url=base).model_dump(exclude_none=True))
+        assert saved.status_code == 200 and "research_tools_verified_at" not in saved.json()
+        topic = client.post("/v2/research/topics", headers=headers, json={"question": "What changed?"}).json()
+        path = f"/v2/research/topics/{topic['topic_id']}/runs"
+        request = {"parent_version_id": topic["versions"][0]["version_id"], "discover_sources": False, "max_model_calls": 1}
+        count = len(calls)
+        response = client.post(path, headers={**headers, "Idempotency-Key": uuid4().hex}, json=request)
+        assert response.status_code == 422 and len(calls) == count
+        probe = client.post(url + "/test", headers=headers).json()
+        assert calls[-1] == (base + "/chat/completions", model, ["verify_connection"])
+        if model == "text-model":
+            assert probe == {"status": "unavailable"}
+            assert "research_tools_verified_at" not in client.get(url, headers=headers).json()
+            continue
+        assert probe == {"status": "ready"} and client.get(url, headers=headers).json()["research_tools_verified_at"]
+        run = client.post(path, headers={**headers, "Idempotency-Key": uuid4().hex}, json=request)
+        assert run.status_code == 202, run.text
+        op = run.json()["operation"]["operation_id"]
+        for _ in range(250):
+            if client.get(path + "/" + op, headers=headers).json()["operation"]["status"] == "completed":
+                break
+            sleep(.02)
+        assert len(calls) == count + 2 and calls[-1][:2] == (base + "/chat/completions", model)
+        assert "submit_research" in calls[-1][2]
+        assert main.model_settings.runtime_settings(account_id).tools_verified
+
+
+def test_stale_verification_cannot_approve_a_changed_or_deleted_config(monkeypatch):
+    monkeypatch.setattr(compatible, "_require_public_dns", lambda *_args, **_kwargs: None)
+    settings = AccountModelSettings(InMemoryDocumentRepository(), ModelCredentialCipher(b"c" * 32))
+    owner = "account_probe_race"
+    settings.update(owner, _personal_request())
+    _, first = settings.runtime_configuration(owner)
+    settings.update(owner, _personal_request(model="replacement-model"))
+    assert not settings.record_tools_result(first, True)
+    assert settings.snapshot(owner).research_tools_verified_at is None
+    _, second = settings.runtime_configuration(owner)
+    assert settings.record_tools_result(second, True)
+    settings.update(owner, ModelConfigUpdate(mode="platform"))
+    assert settings.update(owner, ModelConfigUpdate(mode="personal")).research_tools_verified_at
+    _, reused = settings.runtime_configuration(owner)
+    assert settings.record_tools_result(reused, False)
+    assert not settings.snapshot(owner).research_tools_verified_at
+    assert not settings.record_tools_result(reused, True)
+    _, cleared = settings.runtime_configuration(owner)
+    assert settings.record_tools_result(cleared, True)
+    assert not settings.update(owner, ModelConfigUpdate(mode="personal", api_key="rotated-key-1234")).research_tools_verified_at
+    settings.delete(owner)
+    assert not settings.record_tools_result(second, True)
+    assert not settings.snapshot(owner).research_tools_verified_at

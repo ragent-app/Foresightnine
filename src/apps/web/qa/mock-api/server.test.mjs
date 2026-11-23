@@ -1523,6 +1523,10 @@ describe("account, model and market-data settings", () => {
     assert.equal(await status(), "unavailable");
     await call("PUT", MODEL_URL, { body: { ...PERSONAL, protocol: "anthropic_messages" } });
     assert.equal(await status(), "unavailable");
+    await call("PUT", MODEL_URL, { body: { ...PERSONAL, protocol: "anthropic_messages",
+      messages_options: { version: "2023-06-01", auth_scheme: "x-api-key", max_tokens: 4096 } } });
+    assert.equal(await status(), "ready");
+    assert.ok((await call("GET", MODEL_URL)).json.research_tools_verified_at);
     await call("DELETE", MODEL_URL);
     assert.equal(await status(), "unavailable");
   });
