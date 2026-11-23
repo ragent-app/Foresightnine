@@ -1,0 +1,149 @@
+[
+  {
+    "case": "index",
+    "question": "指数在季度审核时把 B 级债券纳入吗？如果成分券在两次审核之间从 BBB 降到 B，什么时候退出？",
+    "synthetic_source": "本指数在每个季度的最后一个营业日审核。新纳入的债券在审核日必须评级至少为 BBB。已有成分券在两个审核日之间评级降到 BBB 以下，保留至下一次季度审核的收盘时移除。出现发行人违约的，当日收盘移除。",
+    "operation": "completed",
+    "turn_status": "partial",
+    "reason": "submitted",
+    "delivered_report": "",
+    "writer_proposed_report": "## 结论\n\n- **新纳入：不能。** 季度审核时新纳入债券的评级至少须为 BBB，因此 B 级不符合新纳入门槛。[claim]\n- **已有成分券降级：** 从 BBB 降到 B 后，通常保留至下一次季度审核收盘移除。审核在每季度最后一个营业日。[claim]\n- **例外：** 如果发行人违约，当日收盘移除，不必等下一次审核。[claim]\n\n以上依据所给合成样例规则；资料未说明评级回升等其他特殊情况。",
+    "gaps": [
+      "仅依据所给合成样例规则；未提供其他评级回升等特殊情形的处理。",
+      "This planned deliverable requires independent review.",
+      "核心问题尚缺少可展示的有据答案。"
+    ],
+    "parts": [
+      {
+        "question": "指数在季度审核时把 B 级债券纳入吗？如果成分券在两次审核之间从 BBB 降到 B，什么时候退出？",
+        "status": "answered",
+        "answer": "新纳入债券在审核日评级至少须为 BBB，B 级不符合新纳入条件。",
+        "reason": "原文规定新纳入门槛至少 BBB，B 不达标。"
+      },
+      {
+        "question": "确定季度审核的 B 级债券纳入规则",
+        "status": "answered",
+        "answer": "新纳入债券在审核日评级至少须为 BBB，B 级不符合新纳入条件。",
+        "reason": "原文规定新纳入门槛至少 BBB，B 不达标。"
+      },
+      {
+        "question": "确定两次审核之间降级的退出时间",
+        "status": "unresolved",
+        "answer": "",
+        "reason": "This planned deliverable requires independent review."
+      }
+    ],
+    "review_verdicts": [
+      {
+        "requirement": "指数在季度审核时把 B 级债券纳入吗？如果成分券在两次审核之间从 BBB 降到 B，什么时候退出？",
+        "verdict": "supported",
+        "reason": "原文规定新纳入门槛至少 BBB，B 不达标。"
+      },
+      {
+        "requirement": "指数在季度审核时把 B 级债券纳入吗？如果成分券在两次审核之间从 BBB 降到 B，什么时候退出？",
+        "verdict": "weaker",
+        "reason": "原文支持下一次季度审核收盘移除，但发行人违约当日收盘移除的例外未明确说明。"
+      },
+      {
+        "requirement": "指数在季度审核时把 B 级债券纳入吗？如果成分券在两次审核之间从 BBB 降到 B，什么时候退出？",
+        "verdict": "supported",
+        "reason": "原文规定新纳入门槛至少 BBB，B 不达标。"
+      },
+      {
+        "requirement": "指数在季度审核时把 B 级债券纳入吗？如果成分券在两次审核之间从 BBB 降到 B，什么时候退出？",
+        "verdict": "weaker",
+        "reason": "原文支持下一次季度审核收盘移除，但发行人违约当日收盘移除的例外未明确说明。"
+      },
+      {
+        "requirement": "确定季度审核的 B 级债券纳入规则",
+        "verdict": "supported",
+        "reason": "原文规定新纳入门槛至少 BBB，B 不达标。"
+      },
+      {
+        "requirement": "确定季度审核的 B 级债券纳入规则",
+        "verdict": "irrelevant",
+        "reason": "此陈述涉及已有成分券退出时间，没有确定新纳入评级门槛。"
+      },
+      {
+        "requirement": "确定季度审核的 B 级债券纳入规则",
+        "verdict": "supported",
+        "reason": "原文规定新纳入门槛至少 BBB，B 不达标。"
+      },
+      {
+        "requirement": "确定季度审核的 B 级债券纳入规则",
+        "verdict": "irrelevant",
+        "reason": "此陈述涉及已有成分券退出时间，没有确定新纳入评级门槛。"
+      },
+      {
+        "requirement": "确定两次审核之间降级的退出时间",
+        "verdict": "irrelevant",
+        "reason": "新纳入门槛不说明已有成分券降级的退出时间。"
+      },
+      {
+        "requirement": "确定两次审核之间降级的退出时间",
+        "verdict": "weaker",
+        "reason": "原文支持下一次季度审核收盘移除，但未说明发行人违约当日收盘移除的例外。"
+      },
+      {
+        "requirement": "确定两次审核之间降级的退出时间",
+        "verdict": "irrelevant",
+        "reason": "新纳入门槛不说明已有成分券降级的退出时间。"
+      },
+      {
+        "requirement": "确定两次审核之间降级的退出时间",
+        "verdict": "weaker",
+        "reason": "原文支持下一次季度审核收盘移除，但未说明发行人违约当日收盘移除的例外。"
+      }
+    ],
+    "writer_calls": 3,
+    "reviewer_calls": 2,
+    "elapsed_seconds": 78.7,
+    "export_http": 200
+  },
+  {
+    "case": "household",
+    "question": "十二天后我必须缴纳学费，这是唯一的一笔备用金。甲账户和乙产品都宣传可赎回，这笔钱放哪一个更合适？",
+    "synthetic_source": "甲账户的可用余额可于任一自然日按账面本金即时提取，没有提前提取费。乙产品按当日净值赎回，净值可能低于投入本金；赎回须提前三十个自然日申请。",
+    "operation": "completed",
+    "turn_status": "partial",
+    "reason": "submitted",
+    "delivered_report": "",
+    "writer_proposed_report": "## 选择\n\n依据提供的样例条款，**甲更合适**，前提是这笔学费在甲账户中属于可用余额，并且提取及缴费转账能按时完成。甲的可用余额可在任一自然日按账面本金即时提取，没有提前提取费。[claim]\n\n乙虽可赎回，却须提前三十个自然日申请，不能满足十二天后的付款期限；而且赎回净值可能低于投入本金。[claim]\n\n这是唯一备用金，优先确保足额、按时缴费。请先核实甲账户的可用余额、实际提取和缴费到账时间，留出操作余量；样例没有说明这些转账条件或账户其他风险。",
+    "gaps": [
+      "仅依据给定合成样例条款，甲的可用余额条件、缴费转账时间与其他风险未说明。",
+      "A grounded answer requires independent semantic review.",
+      "This planned deliverable requires independent review.",
+      "核心问题尚缺少可展示的有据答案。"
+    ],
+    "parts": [
+      {
+        "question": "十二天后我必须缴纳学费，这是唯一的一笔备用金。甲账户和乙产品都宣传可赎回，这笔钱放哪一个更合适？",
+        "status": "unresolved",
+        "answer": "",
+        "reason": "未说明甲账户可用余额条件、转账和缴费到账限制，也未给其他产品风险及保障。"
+      },
+      {
+        "question": "比较甲乙并按到期可用性和保本风险给出有条件选择",
+        "status": "unresolved",
+        "answer": "",
+        "reason": "This planned deliverable requires independent review."
+      }
+    ],
+    "review_verdicts": [
+      {
+        "requirement": "十二天后我必须缴纳学费，这是唯一的一笔备用金。甲账户和乙产品都宣传可赎回，这笔钱放哪一个更合适？",
+        "verdict": "weaker",
+        "reason": "原文支持甲账户的可用余额条款，但单独陈述甲的条款未比较乙的赎回期限和本金风险，也未给出选择。"
+      },
+      {
+        "requirement": "比较甲乙并按到期可用性和保本风险给出有条件选择",
+        "verdict": "weaker",
+        "reason": "原文支持甲账户的可用余额条款，但单独陈述甲的条款未比较乙的赎回期限和本金风险，也未给出选择。"
+      }
+    ],
+    "writer_calls": 3,
+    "reviewer_calls": 1,
+    "elapsed_seconds": 64.3,
+    "export_http": 200
+  }
+]

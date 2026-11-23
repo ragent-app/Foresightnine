@@ -22,6 +22,7 @@ from .research_tool_presentation import DEFAULT_TOOLS as TOOLS, DEFAULT_METADATA
 from .research_library import ResearchLibrary
 from .research_source_catalog import canonical_source_url
 from .research_source_policy import source_eligibility
+from .research_public_query import minimize_identity
 from .research_sources import ResearchSource
 from .research_tools_registry import (
     BULK_COMPACT_TOOLS,
@@ -1639,6 +1640,13 @@ def build_model_turn_input(
         original = json.loads(state.get('user', ''))
     except (TypeError, ValueError):
         original = None
+    # Apply minimization to the wire projection; the account-owned turn keeps
+    # its original question and instruction sequence for replay and correction.
+    if isinstance(original, dict) and isinstance(original.get('question'), str):
+        clean = minimize_identity(original['question'])
+        if clean != original['question']:
+            original = {**original, 'question': clean}
+            state = {**state, 'user': json.dumps(original, ensure_ascii=False)}
     revoked = False
     hashes: dict[str, Any] = {}
     as_of = None
@@ -1805,7 +1813,7 @@ def build_model_turn_input(
             tuple(tools),
             history_items,
             tail_note=tail_note,
-            user_instructions=tuple(dict(item) for item in sorted(
+            user_instructions=tuple(dict(item, text=minimize_identity(item['text'])) for item in sorted(
                 (row for row in (state.get('user_instructions') or [])
                  if isinstance(row, Mapping) and isinstance(row.get('text'), str)),
                 key=lambda row: row.get('sequence') if type(row.get('sequence')) is int else 0)),

@@ -11,6 +11,7 @@ import app.main as api
 from app.phase3 import ProviderFailure, ProviderPolicy
 from app.research_runtime import GAP_CODES, run_research_agent
 from app.model_protocol import ModelResponse
+from tests.semantic_review_fixture import fixture_review
 from tests.test_research_runtime import Model, context, source, turn
 
 TEXT = 'Revenue was 100 USD. Revenue was 80 USD. Costs were 60 USD.'
@@ -32,11 +33,14 @@ class Scripted:
     name = 'multiturn-test'
     policy = ProviderPolicy(max_attempts=1, max_output_tokens=1000, timeout_seconds=5)
 
-    def __init__(self, *steps):
+    def __init__(self, *steps, review_verdict='supported'):
+        self.review_verdict = review_verdict
         self.steps = list(steps)
         self.calls = 0
 
     def complete(self, messages, tools, **kwargs):
+        if not tools:
+            return fixture_review(messages[1]['content'], self.review_verdict)
         step = self.steps[self.calls]
         self.calls += 1
         return step(messages, kwargs)
@@ -63,9 +67,9 @@ def record_revenue(source_id):
 
 
 def submit(source_id, *, role='support', quotation='Revenue was 100 USD.', status='completed', claims=True, **extra):
-    claim = {'text': 'Revenue was ' + quotation, 'source_id': source_id, 'quotation': quotation, 'role': role, **extra}
+    claim = {'text': quotation, 'source_id': source_id, 'quotation': quotation, 'role': role, **extra}
     def step(messages, kwargs):
-        return turn('submit_research', {'report': 'Answer.', 'claims': [claim] if claims else [], 'limitations': [],
+        return turn('submit_research', {'report': claim['text'], 'claims': [claim] if claims else [], 'limitations': [],
                                         'stopping_reason': 'answered', 'status': status}, 'submit')
     return step
 
@@ -150,7 +154,7 @@ def test_two_turns_accumulate_and_second_turn_calculates_from_prior_fact_ids(env
     assert content['calculations'][0]['input_status'] == 'matched'
     assert content['claims'][0]['turn_id'] == turn1['turn_id'] == first['content']['claims'][0]['turn_id']
     assert content['claims'] == first['content']['claims']
-    assert turn2['report'] == 'Revenue grew 25.00%.' and turn2['status'] == 'completed'
+    assert '25.00' in turn2['report'] and 'growth_percent' in turn2['report'] and turn2['status'] == 'completed'
     assert turn2['parent_version_id'] == first['version_id']
     assert turn1['usage']['model_calls'] == 3 and turn2['usage']['model_calls'] == 2
 
@@ -224,6 +228,7 @@ def test_failed_second_turn_continues_in_place_without_duplicates(env, monkeypat
                         costs, followup_suggested, read_all(sid), costs)
     env.install(provider)
     env.run()
+    provider.review_verdict = 'irrelevant'  # A previous revenue claim cannot answer the costs question.
     second_id = env.start({'question_override': 'Check costs.'}).json()['operation']['operation_id']
     assert env.wait(second_id)['status'] == 'failed'
     progress = env.client.get(f'{env.path}/runs/{second_id}/progress', headers=env.headers).json()
@@ -237,14 +242,14 @@ def test_failed_second_turn_continues_in_place_without_duplicates(env, monkeypat
     assert len(final['turns']) == 2
     turn2 = final['turns'][-1]
     assert turn2['operation_ids'] == [second_id, third_id]
-    # The synthetic claim prefixes a cost quote with 'Revenue was'; its relationship
-    # to costs is not established, although the recorded cost fact is retained.
+    # The literal cost observation and its provenance survive the interrupted run;
+    # its relevance to the user's request still needs independent review.
     assert turn2['status'] == 'partial' and turn2['index'] == 2 and turn2['question'] == 'Check costs.'
     assert turn2['gaps']
     assert len(final['facts']) == 3 and len({f['fact_id'] for f in final['facts']}) == 3
     assert len(final['claims']) == 2 and turn2['claim_ids'] == [final['claims'][1]['claim_id']]
     assert turn2['fact_ids'] == [final['facts'][2]['fact_id']]
-    assert turn2['usage']['model_calls'] == 5  # The failed request never reached the provider and is not counted.
+    assert turn2['usage']['model_calls'] == 6  # Five writer calls plus one reviewer. The failed request was unsent.
     assert sum(1 for event in turn2['events'] if event['kind'] == 'submission') == 1
     assert final['gaps'] == [g for g in turn2['gaps']]
     assert provider.calls == 9
@@ -412,6 +417,9 @@ def test_completion_counts_prior_claims_and_prior_facts_resolve_for_calculation(
                     'citations': [{'source_id': 's1', 'quotation': 'Revenue was 100 USD.', 'location': {'character_start': 0, 'character_end': 20}}]}]}
     src = source()
     src.text = 'Revenue was 100 USD. Revenue was 80 USD.'
+    from hashlib import sha256
+    src.content_sha256 = sha256(src.text.encode()).hexdigest()
+    prior['source_hashes']['s1'] = src.content_sha256
     m = Model([turn('calculate_financials', {'rationale': 'g', 'calculations': [
                     {'formula': 'growth_percent', 'first_fact_id': 'fact-a', 'second_fact_id': 'fact-b'}]}, 'a'),
                turn('submit_research', {'report': 'Grew 25%.', 'claims': [], 'limitations': [], 'stopping_reason': 'answered'}, 'b')])
@@ -427,6 +435,35 @@ def test_completion_counts_prior_claims_and_prior_facts_resolve_for_calculation(
                STOP])
     result = run_research_agent(question='Q2', sources=[src], model=m, context=context(), prior=prior)
     assert result.status == 'partial' and any('At least one source-backed claim' in item.get('content', '') for item in m.inputs[1] if item.get('role') == 'tool')
+
+
+def test_concept_answer_survives_save_export_and_edit(env):
+    text = 'Concept explanation: duration measures sensitivity to interest rates.'
+    def explain(messages, kwargs):
+        return turn('submit_research', {'report': text, 'claims': [], 'source_free_answers': [
+            {'basis': 'concept', 'text': text}], 'limitations': [], 'stopping_reason': 'answered'}, 'submit')
+    env.install(Scripted(explain))
+    env.run({'question_override': 'What is duration?'})
+    version = env.latest()
+    saved = version['content']['turns'][-1]
+    assert saved['status'] == 'completed' and saved['question_parts'][0]['answer'] == text
+    assert saved['semantic_reviews'][0]['verdict'] == 'supported'
+    original_id = version['version_id']
+    exported = env.client.get(f'{env.path}/versions/{original_id}/export', headers=env.headers)
+    assert exported.status_code == 200, exported.text
+    changed = version['content']
+    changed['claims'][-1]['text'] = 'A user-authored revision.'
+    result = env.client.post(env.path + '/versions', headers=env.headers,
+                             json={'parent_version_id': original_id, 'content': changed})
+    assert result.status_code == 201, result.text
+    revised = result.json()['versions'][-1]['content']['turns'][-1]
+    assert revised['semantic_reviews'] == [] and revised['question_parts'][0]['status'] == 'unresolved'
+    assert revised['report'] == '' and revised['status'] == 'partial'
+    historical = env.client.get(f'{env.path}/versions/{original_id}/export', headers=env.headers).json()
+    expected = exported.json()
+    historical.pop('generated_at')
+    expected.pop('generated_at')
+    assert historical == expected
 
 
 def test_user_edits_mark_claims_and_protect_server_records(env):
@@ -551,6 +588,8 @@ def test_continue_after_provider_output_truncated_runs_l2_compaction_and_succeed
             self.calls = 0
 
         def complete(self, messages, tools, **kwargs):
+            if not tools:
+                return fixture_review(messages[1]['content'])
             self.calls += 1
             seen_payloads.append({
                 'bytes': len(json.dumps(messages, ensure_ascii=False).encode('utf-8')),
@@ -639,6 +678,8 @@ def test_continue_after_incomplete_model_response_clears_stopped_and_compacts(mo
             self.calls = 0
 
         def complete(self, messages, tools, **kwargs):
+            if not tools:
+                return fixture_review(messages[1]['content'])
             self.calls += 1
             payloads.append(len(json.dumps(messages, ensure_ascii=False).encode('utf-8')))
             if self.calls == 1:
@@ -713,6 +754,8 @@ def test_continue_after_provider_timeout_preserves_unread_sources_and_injects_ti
             self.calls = 0
 
         def complete(self, messages, tools, **kwargs):
+            if not tools:
+                return fixture_review(messages[1]['content'])
             self.calls += 1
             seen_calls.append(messages)
             if self.calls == 1:

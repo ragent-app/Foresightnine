@@ -47,20 +47,23 @@ class ResearchRunInstructions:
             raise InstructionNotFound()
         return deepcopy(doc)
 
-    def begin(self, account_id, topic_id, turn_id, operation_id, budget=None, *, previous_operation_id=None, allow_reopen=False):
+    def begin(self, account_id, topic_id, turn_id, operation_id, budget=None, *, previous_operation_id=None, allow_reopen=False, require_waiting=False):
         def run():
             existing = self.repository.get(turn_id)
             if existing is not None:
                 doc = self._get(account_id, topic_id, turn_id)
                 if doc['operation_id'] == operation_id:
                     return doc
+                if require_waiting and doc['status'] != 'awaiting_user':
+                    raise InstructionConflict('clarification is no longer waiting')
                 if previous_operation_id != doc['operation_id']:
                     raise InstructionConflict('operation changed')
                 if doc['status'] != 'open':
-                    if not allow_reopen or doc['status'] not in ('stopped', 'sealed'):
+                    if not allow_reopen or doc['status'] not in ('stopped', 'sealed', 'awaiting_user'):
                         raise InstructionConflict('turn closed')
                     doc['status'] = 'open'
                     doc['final_version_id'] = None
+                    doc.pop('clarification', None)
                 doc['operation_id'] = operation_id
             else:
                 if previous_operation_id is not None:
@@ -101,7 +104,7 @@ class ResearchRunInstructions:
                 if item['text'] != text:
                     raise InstructionConflict('idempotency key reused with different text')
                 return {k: deepcopy(v) for k, v in item.items() if k != 'account_id'}, False
-            if doc['status'] != 'open':
+            if doc['status'] not in ('open', 'awaiting_user'):
                 raise InstructionConflict('turn closed')
             doc['sequence'] += 1
             item = {'instruction_id': str(uuid4()), 'turn_id': turn_id, 'sequence': doc['sequence'],
@@ -111,6 +114,36 @@ class ResearchRunInstructions:
             self.repository[receipt_key] = {'sequence': doc['sequence'], 'account_id': account_id}
             self.repository[turn_id] = doc
             return {k: deepcopy(v) for k, v in item.items() if k != 'account_id'}, True
+        return self._locked(turn_id, run)
+
+    def wait_for_user(self, account_id, topic_id, turn_id, operation_id, expected_sequence, clarification, *, persist=None):
+        """Park a settled checkpoint only if no instruction or stop won the race."""
+        def run():
+            doc = self._get(account_id, topic_id, turn_id)
+            if doc['status'] != 'open' or doc['operation_id'] != operation_id or doc['sequence'] != expected_sequence:
+                return False
+            if persist is not None:
+                persist()
+            doc['status'] = 'awaiting_user'
+            doc['clarification'] = deepcopy(clarification)
+            doc['clarification_sequence'] = expected_sequence
+            self.repository[turn_id] = doc
+            return True
+        return self._locked(turn_id, run)
+
+    def accept_findings(self, account_id, topic_id, turn_id, operation_id, version_id):
+        def run():
+            doc = self._get(account_id, topic_id, turn_id)
+            if doc['status'] == 'sealed' and doc['operation_id'] == operation_id and doc['final_version_id'] == version_id:
+                return doc
+            if (doc['status'] != 'awaiting_user' or doc['operation_id'] != operation_id
+                    or doc['sequence'] != doc.get('clarification_sequence')):
+                raise InstructionConflict('turn changed while awaiting clarification')
+            doc['status'] = 'sealed'
+            doc['final_version_id'] = version_id
+            doc.pop('clarification', None)
+            self.repository[turn_id] = doc
+            return deepcopy(doc)
         return self._locked(turn_id, run)
 
     def awaiting_receipt(self, account_id, topic_id, turn_id, operation_id, sequence):
@@ -207,10 +240,10 @@ class ResearchRunInstructions:
             return 'unclaimed'
         return self._locked(turn_id, run)
 
-    def fenced(self, account_id, topic_id, turn_id, operation_id, callback, *, allow_sealed=False):
+    def fenced(self, account_id, topic_id, turn_id, operation_id, callback, *, allow_sealed=False, allow_waiting=False):
         def run():
             doc = self._get(account_id, topic_id, turn_id)
-            if doc['operation_id'] != operation_id or (doc['status'] != 'open' and not (allow_sealed and doc['status'] == 'sealed')):
+            if doc['operation_id'] != operation_id or (doc['status'] != 'open' and not (allow_sealed and doc['status'] == 'sealed') and not (allow_waiting and doc['status'] == 'awaiting_user')):
                 raise InstructionConflict('stale operation or turn closed')
             try:
                 return callback()

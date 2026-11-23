@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 import app.main as api
+from tests.semantic_review_fixture import fixture_review
 from tests.test_research_runtime import turn
 
 
@@ -43,6 +44,8 @@ def test_failed_version_write_reconciles_once_with_two_workers(monkeypatch):
         def __init__(self): self.calls = 0
         def complete(self, messages, tools, **kwargs):
             self.calls += 1
+            if not tools:
+                return fixture_review(messages[1]['content'])
             if self.calls == 1:
                 return turn('read_sources', {'reads': [{'source_id': source_id}], 'rationale': 'disclosure'}, 'read')
             return turn('submit_research', {'report': 'Revenue was 100 USD.', 'claims': [{'text': 'Revenue was 100 USD.',
@@ -64,7 +67,7 @@ def test_failed_version_write_reconciles_once_with_two_workers(monkeypatch):
         return original_save(self, parent, content)
     monkeypatch.setattr(api.ResearchVersionChain, 'save', fail_once)
     start = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex},
-        json={'parent_version_id': topic['versions'][0]['version_id'], 'discover_sources': False, 'max_model_calls': 2})
+        json={'parent_version_id': topic['versions'][0]['version_id'], 'discover_sources': False, 'max_model_calls': 3})
     assert start.status_code == 202, start.text
     operation_id = start.json()['operation']['operation_id']
     assert _wait(client, path, headers, operation_id) == 'failed'
@@ -79,7 +82,7 @@ def test_failed_version_write_reconciles_once_with_two_workers(monkeypatch):
     versions = client.get(path, headers=headers).json()['versions']
     assert len(versions) == 2
     assert versions[-1]['content']['turns'][-1]['report'] == 'Revenue was 100 USD.'
-    assert provider.calls == before == 2
+    assert provider.calls == before == 3
     progress = client.get(path + '/runs/' + operation_id + '/progress', headers=headers)
     assert progress.status_code == 200, progress.text
     assert progress.json()['logical_status'] == 'completed'
@@ -95,6 +98,8 @@ def test_workers_admit_one_continuation_and_old_id_finds_result(monkeypatch):
         def __init__(self): self.calls = 0
         def complete(self, messages, tools, **kwargs):
             self.calls += 1
+            if not tools:
+                return fixture_review(messages[1]['content'])
             if self.calls == 1:
                 return turn('read_sources', {'reads': [{'source_id': source_id}], 'rationale': 'disclosure'}, 'read')
             if self.calls == 2:
@@ -134,7 +139,7 @@ def test_workers_admit_one_continuation_and_old_id_finds_result(monkeypatch):
     versions = client.get(path, headers=headers).json()['versions']
     assert len(versions) == 2
     assert view['version_id'] == versions[-1]['version_id']
-    assert provider.calls == 3
+    assert provider.calls == 4
 
 
 def test_unknown_claimed_tool_is_not_replayed_on_recovery(monkeypatch):
@@ -145,6 +150,8 @@ def test_unknown_claimed_tool_is_not_replayed_on_recovery(monkeypatch):
         def __init__(self): self.calls = 0
         def complete(self, messages, tools, **kwargs):
             self.calls += 1
+            if not tools:
+                return fixture_review(messages[1]['content'])
             return turn('news_search', {'query': 'issuer disclosure', 'rationale': 'locate filing'}, 'lookup')
     provider = Provider()
     monkeypatch.setattr(api, 'challenge_provider', provider)
@@ -187,6 +194,8 @@ def test_lifespan_restart_resumes_without_browser_and_keeps_budget(monkeypatch):
         def __init__(self): self.calls = 0
         def complete(self, messages, tools, **kwargs):
             self.calls += 1
+            if not tools:
+                return fixture_review(messages[1]['content'])
             if self.calls == 1:
                 return turn('read_sources', {'reads': [{'source_id': source_id}], 'rationale': 'disclosure'}, 'read')
             if self.calls == 2:
@@ -201,7 +210,7 @@ def test_lifespan_restart_resumes_without_browser_and_keeps_budget(monkeypatch):
         headers, source_id, topic = _create(client)
         path = '/v2/research/topics/' + topic['topic_id']
         start = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex},
-            json={'parent_version_id': topic['versions'][0]['version_id'], 'discover_sources': False, 'max_model_calls': 2})
+            json={'parent_version_id': topic['versions'][0]['version_id'], 'discover_sources': False, 'max_model_calls': 3})
         assert start.status_code == 202, start.text
         old_id, turn_id = start.json()['operation']['operation_id'], start.json()['turn_id']
         assert _wait(client, path, headers, old_id) == 'failed'
@@ -230,6 +239,6 @@ def test_lifespan_restart_resumes_without_browser_and_keeps_budget(monkeypatch):
         assert saved['turn_id'] == turn_id and old_id in saved['operation_ids'] and new_id in saved['operation_ids']
         assert saved['report'] == 'Revenue was 100 USD.'
         record = api.RESEARCH_RUN_INPUTS.get(new_id)
-        assert record['runtime_request']['max_model_calls'] == 2
-        assert record['runtime_checkpoint']['_accounting']['calls'] == 2
-        assert provider.calls == 3  # Two settled calls and one confirmed pre-send failure.
+        assert record['runtime_request']['max_model_calls'] == 3
+        assert record['runtime_checkpoint']['_accounting']['calls'] == 3
+        assert provider.calls == 4  # Three settled calls including review, plus one confirmed pre-send failure.

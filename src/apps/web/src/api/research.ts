@@ -77,16 +77,20 @@ export function stopTurn(topicId: string, turnId: string, idempotencyKey: string
   return apiRequest(`${topicPath(topicId)}/turns/${enc(turnId)}/stop`, { method: "POST", body: {}, idempotencyKey });
 }
 
+export function acceptFindings(topicId: string, turnId: string): Promise<{ turn_id: string; status: "completed" }> {
+  return apiRequest(`${topicPath(topicId)}/turns/${enc(turnId)}/accept-findings`, { method: "POST", body: {} });
+}
+
 export interface TurnStatus {
   topic_id: string; turn_id: string; current_operation_id: string | null;
-  logical_status: "running" | "completed" | "stopped" | "failed"; version_id?: string | null;
+  logical_status: "running" | "awaiting_user" | "completed" | "stopped" | "failed"; version_id?: string | null;
 }
 export function listTurnStatuses(signal?: AbortSignal): Promise<TurnStatus[]> {
   return apiRequest<TurnStatus[]>("/v2/research/turn-statuses", opts(signal));
 }
 
 export type ResearchRunResponse = ResearchV2.OperationResponse & {
-  logical_status?: "running" | "completed" | "stopped" | "failed";
+  logical_status?: "running" | "awaiting_user" | "completed" | "stopped" | "failed";
   current_operation_id?: string | null;
   turn_id?: string | null;
 };

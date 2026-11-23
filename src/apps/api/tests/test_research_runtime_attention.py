@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from hashlib import sha256
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -40,7 +41,7 @@ def _source(source_id: str = 's1', text: str = 'Revenue was 100 USD in FY2025. G
         url=url,
         retrieval_method=method,
         obtained_at=NOW,
-        content_sha256='sha-' + source_id,
+        content_sha256=sha256(text.encode()).hexdigest(),
         permissions=SourcePermissions(store=True, model_input=True, display=True, export=True),
     )
 
@@ -72,14 +73,22 @@ def _tool_response(calls: list[tuple[str, dict, str]], *, message_extras: dict |
     return ModelResponse(msg, objs, usage or ModelUsage(10, 5, 15), 'tool_calls', stop_class='tool_calls')
 
 
+from tests.semantic_review_fixture import fixture_review
+
+
 class NativeTurnRecorder:
     """Native complete_turn stub recording exact ModelTurnInput instances."""
 
-    def __init__(self, script):
+    def __init__(self, script, *, review_verdict='supported'):
+        self.review_verdict = review_verdict
+        self.review_turns = []
         self._turns = iter(script)
         self.turns: list[ModelTurnInput] = []
 
     def complete_turn(self, turn: ModelTurnInput, **kwargs) -> ModelResponse:
+        if not turn.tools and 'candidates' in json.loads(turn.user):
+            self.review_turns.append(turn)
+            return fixture_review(turn.user, self.review_verdict)
         self.turns.append(turn)
         nxt = next(self._turns)
         return nxt(turn, len(self.turns) - 1) if callable(nxt) else nxt
@@ -731,14 +740,14 @@ def test_cache_telemetry_accumulated_in_usage_diagnostics_receipts_and_outcome()
         checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
     )
     assert out.status == 'completed'
-    # Normalized total input tokens per ModelUsage: Call 1 (tot=120, out=20) = 100, Call 2 (tot=40 < 15+180) = 195; sum = 295.
+    # Normalized total input tokens per ModelUsage: Call 1 (tot=120, out=20) = 100, Call 2 (tot=40 < 15+180) = 195; sum = 295. The independent review adds 4 input and 3 output tokens.
     expected = {
-        'input_tokens': 295,
-        'output_tokens': 45,
+        'input_tokens': 299,
+        'output_tokens': 48,
         'cache_read_input_tokens': 180,
         'cache_creation_input_tokens': 80,
         'cache_hit_ratio': round(180 / 295, 6),
-        'calls_with_usage': 2,
+        'calls_with_usage': 3,
         'calls_with_cache_telemetry': 2,
     }
     assert out.cache_usage == expected
@@ -747,15 +756,17 @@ def test_cache_telemetry_accumulated_in_usage_diagnostics_receipts_and_outcome()
     assert all(r['stage'] == 'constructed' for r in saved[-1]['_context_input_records'])
 
     receipts = saved[-1]['model_receipts']
-    assert len(receipts) == 2
+    assert len(receipts) == 3
+    assert receipts[2]['purpose'] == 'semantic_review'
     assert receipts[0]['cache_read_input_tokens'] == 0 and receipts[0]['cache_creation_input_tokens'] == 80
     assert receipts[1]['cache_read_input_tokens'] == 180 and receipts[1]['input_tokens'] == 195
     assert receipts[1]['cache_hit_ratio'] == 180 / 195
 
     diag_items = list(ctx.private_diagnostics.values())
-    assert len(diag_items) == 2
+    assert len(diag_items) == 3
+    assert sum(':semantic-review:' in key for key in ctx.private_diagnostics) == 1
     assert diag_items[1]['cache_telemetry']['cache_read_input_tokens'] == 180
-    assert diag_items[1]['cumulative_cache_usage'] == expected
+    assert diag_items[2]['cumulative_cache_usage'] == expected
 
     model_events = [ev for ev in out.events if ev.get('kind') == 'model']
     assert [ev['cache_telemetry']['cache_read_input_tokens'] for ev in model_events] == [0, 180]
@@ -852,7 +863,7 @@ def test_activate_method_pack_tool_is_immutable_canonical_and_activates_checks_m
                 'stopping_reason': 'answered',
             }, 'sub2')]),
         )[1],
-    ])
+    ], review_verdict='weaker')
     saved: list[dict] = []
     out = run_research_agent(
         question='Summarize this uploaded file.',

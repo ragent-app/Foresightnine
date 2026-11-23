@@ -1,0 +1,242 @@
+[
+  {
+    "id": "g01a",
+    "expected": true,
+    "status": "partial",
+    "reason": "submitted",
+    "report": "",
+    "question_parts": [
+      {
+        "id": "req-343f06596069dec3",
+        "question": "Can holders transfer Oriole notes?",
+        "core": true,
+        "status": "unresolved",
+        "answer": "",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "requirements": [
+          {
+            "id": "req-343f06596069dec3",
+            "question": "Can holders transfer Oriole notes?",
+            "status": "missing",
+            "reason": "A grounded answer requires independent semantic review.",
+            "references": [],
+            "core": true
+          }
+        ]
+      }
+    ],
+    "calls": 3,
+    "seconds": 0.04309073928743601
+  },
+  {
+    "id": "g01b",
+    "expected": false,
+    "status": "partial",
+    "reason": "submitted",
+    "report": "",
+    "question_parts": [
+      {
+        "id": "req-343f06596069dec3",
+        "question": "Can holders transfer Oriole notes?",
+        "core": true,
+        "status": "unresolved",
+        "answer": "",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "requirements": [
+          {
+            "id": "req-343f06596069dec3",
+            "question": "Can holders transfer Oriole notes?",
+            "status": "missing",
+            "reason": "A grounded answer requires independent semantic review.",
+            "references": [],
+            "core": true
+          }
+        ]
+      }
+    ],
+    "calls": 3,
+    "seconds": 0.029289577156305313
+  },
+  {
+    "id": "g04a",
+    "expected": true,
+    "status": "partial",
+    "reason": "submitted",
+    "report": "",
+    "question_parts": [
+      {
+        "id": "req-a063370535efe3bf",
+        "question": "When does the Willow rule take effect?",
+        "core": true,
+        "status": "unresolved",
+        "answer": "",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "requirements": [
+          {
+            "id": "req-a063370535efe3bf",
+            "question": "When does the Willow rule take effect?",
+            "status": "missing",
+            "reason": "A grounded answer requires independent semantic review.",
+            "references": [],
+            "core": true
+          }
+        ]
+      }
+    ],
+    "calls": 3,
+    "seconds": 0.045399921014904976
+  },
+  {
+    "id": "g04b",
+    "expected": false,
+    "status": "partial",
+    "reason": "submitted",
+    "report": "",
+    "question_parts": [
+      {
+        "id": "req-a063370535efe3bf",
+        "question": "When does the Willow rule take effect?",
+        "core": true,
+        "status": "unresolved",
+        "answer": "",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "requirements": [
+          {
+            "id": "req-a063370535efe3bf",
+            "question": "When does the Willow rule take effect?",
+            "status": "missing",
+            "reason": "A grounded answer requires independent semantic review.",
+            "references": [],
+            "core": true
+          }
+        ]
+      }
+    ],
+    "calls": 3,
+    "seconds": 0.04544451925903559
+  },
+  {
+    "id": "g09a",
+    "expected": true,
+    "status": "partial",
+    "reason": "submitted",
+    "report": "",
+    "question_parts": [
+      {
+        "id": "req-40330f8e85f7fc2b",
+        "question": "What was Birch closing price?",
+        "core": true,
+        "status": "unresolved",
+        "answer": "",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "requirements": [
+          {
+            "id": "req-40330f8e85f7fc2b",
+            "question": "What was Birch closing price?",
+            "status": "missing",
+            "reason": "A grounded answer requires independent semantic review.",
+            "references": [],
+            "core": true
+          }
+        ]
+      }
+    ],
+    "calls": 3,
+    "seconds": 0.048128878232091665
+  },
+  {
+    "id": "g09b",
+    "expected": false,
+    "status": "partial",
+    "reason": "submitted",
+    "report": "",
+    "question_parts": [
+      {
+        "id": "req-40330f8e85f7fc2b",
+        "question": "What was Birch closing price?",
+        "core": true,
+        "status": "unresolved",
+        "answer": "",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "requirements": [
+          {
+            "id": "req-40330f8e85f7fc2b",
+            "question": "What was Birch closing price?",
+            "status": "missing",
+            "reason": "A grounded answer requires independent semantic review.",
+            "references": [],
+            "core": true
+          }
+        ]
+      }
+    ],
+    "calls": 3,
+    "seconds": 0.027426355984061956
+  },
+  {
+    "id": "g13a",
+    "expected": true,
+    "status": "partial",
+    "reason": "submitted",
+    "report": "",
+    "question_parts": [
+      {
+        "id": "req-0a3812beb2a6f96d",
+        "question": "Can the Spruce fund guarantee a payment in one year?",
+        "core": true,
+        "status": "unresolved",
+        "answer": "",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "requirements": [
+          {
+            "id": "req-0a3812beb2a6f96d",
+            "question": "Can the Spruce fund guarantee a payment in one year?",
+            "status": "missing",
+            "reason": "A grounded answer requires independent semantic review.",
+            "references": [],
+            "core": true
+          }
+        ]
+      }
+    ],
+    "calls": 3,
+    "seconds": 0.02199238585308194
+  },
+  {
+    "id": "g13b",
+    "expected": false,
+    "status": "partial",
+    "reason": "submitted",
+    "report": "",
+    "question_parts": [
+      {
+        "id": "req-0a3812beb2a6f96d",
+        "question": "Can the Spruce fund guarantee a payment in one year?",
+        "core": true,
+        "status": "unresolved",
+        "answer": "",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "requirements": [
+          {
+            "id": "req-0a3812beb2a6f96d",
+            "question": "Can the Spruce fund guarantee a payment in one year?",
+            "status": "missing",
+            "reason": "A grounded answer requires independent semantic review.",
+            "references": [],
+            "core": true
+          }
+        ]
+      }
+    ],
+    "calls": 3,
+    "seconds": 0.028298472054302692
+  }
+]

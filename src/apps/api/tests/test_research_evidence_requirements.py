@@ -8,7 +8,7 @@ def test_quantitative_question_cannot_be_closed_by_a_proxy_claim():
     question = '分析一下Example的市值变化'
     for quotation, expected in [
         ('Example closing price went from 100 to 120 USD.', 'missing'),
-        ('Example market capitalization rose from USD 100 billion to USD 120 billion.', 'satisfied'),
+        ('Example market capitalization rose from USD 100 billion to USD 120 billion.', 'missing'),
     ]:
         state = {'read_ranges': [{'source_id': 's', 'start': 0, 'end': len(quotation)}]}
         claims = [{'claim_id': 'c', 'role': 'support', 'text': 'Example市值变化与股价有关。',
@@ -216,19 +216,21 @@ def test_runtime_qualitative_question_and_complete_announcement_absence():
         ('公告的赎回截止日及其条件是什么？', '赎回截止日是 2026-06-30，条件是获得监管批准。', '赎回截止日是 2026-06-30，条件是获得监管批准。'),
         ('完整公告是否披露赎回截止日？', '本公告允许赎回，条件是获得监管批准。', '完整公告未披露赎回截止日。'),
     ]
-    for question, text, answer in cases:
+    for index, (question, text, answer) in enumerate(cases):
+        from hashlib import sha256
         src = _source(text=text)
+        src.content_sha256 = sha256(text.encode()).hexdigest()
         submit = {'report': answer, 'claims': [{'text': answer, 'source_id': 's1', 'quotation': text, 'role': 'support'}],
                   'limitations': [], 'stopping_reason': 'answered'}
         recorder = NativeTurnRecorder([
             _tool_response([('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'read full announcement'}, 'read')]),
             _tool_response([('submit_research', submit, 'submit')]),
             _tool_response([('submit_research', submit, 'submit-again')]),
-        ])
+        ], review_verdict='supported' if index == 0 else 'insufficient')
         saved = []
         out = run_research_agent(question=question, sources=[src], model=recorder, context=_ctx(),
                                  checkpoint=lambda state: saved.append(json.loads(json.dumps(state))))
-        assert out.status == 'completed', out
+        assert out.status == ('completed' if index == 0 else 'partial'), out
 
 
 def test_runtime_cutoff_and_question_about_conflicting_revenue():
@@ -236,7 +238,9 @@ def test_runtime_cutoff_and_question_about_conflicting_revenue():
     from tests.test_research_runtime_attention import _source, _ctx, _tool_response, NativeTurnRecorder
     from app.research_runtime import run_research_agent
     cutoff = datetime(2026, 3, 31, tzinfo=timezone.utc)
+    from hashlib import sha256
     early = _source('early', 'G 2025 年指标已公布值为 50。')
+    early.content_sha256 = sha256(early.text.encode()).hexdigest()
     early.published_at = datetime(2026, 2, 1, tzinfo=timezone.utc)
     late = _source('late', 'G 2025 年指标修订值为 55。')
     late.published_at = datetime(2026, 4, 10, tzinfo=timezone.utc)

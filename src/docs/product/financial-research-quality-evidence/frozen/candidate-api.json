@@ -1,0 +1,346 @@
+[
+  {
+    "id": "g01a",
+    "expected": true,
+    "blind_supported": true,
+    "operation_status": "completed",
+    "turn_status": "completed",
+    "report": "Oriole notes may be transferred without consent.",
+    "question_parts": [
+      {
+        "id": "req-343f06596069dec3",
+        "core": true,
+        "question": "Can holders transfer Oriole notes?",
+        "status": "answered",
+        "answer": "Oriole notes may be transferred without consent.",
+        "reason": "The source explicitly permits transfers without consent.",
+        "references": [
+          {
+            "fact_id": null,
+            "calculation_id": null,
+            "analysis_id": null,
+            "chart_id": null,
+            "claim_id": "claim-81f2dce0b3712a57e495aba460bef686",
+            "source_id": null,
+            "character_start": null,
+            "character_end": null,
+            "origin": "current"
+          }
+        ],
+        "requirements": [
+          {
+            "id": "req-343f06596069dec3",
+            "question": "Can holders transfer Oriole notes?",
+            "status": "satisfied",
+            "reason": "The source explicitly permits transfers without consent.",
+            "references": [
+              {
+                "fact_id": null,
+                "calculation_id": null,
+                "analysis_id": null,
+                "chart_id": null,
+                "claim_id": "claim-81f2dce0b3712a57e495aba460bef686",
+                "source_id": null,
+                "character_start": null,
+                "character_end": null,
+                "origin": "current"
+              }
+            ],
+            "core": true
+          }
+        ]
+      }
+    ],
+    "writer_calls": 2,
+    "review_calls": 1,
+    "candidate_in_version": true,
+    "candidate_in_export": true,
+    "operation_seconds": 0.088135
+  },
+  {
+    "id": "g01b",
+    "expected": false,
+    "blind_supported": false,
+    "operation_status": "completed",
+    "turn_status": "partial",
+    "report": "",
+    "question_parts": [
+      {
+        "id": "req-343f06596069dec3",
+        "core": true,
+        "question": "Can holders transfer Oriole notes?",
+        "status": "unresolved",
+        "answer": "",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "requirements": [
+          {
+            "id": "req-343f06596069dec3",
+            "question": "Can holders transfer Oriole notes?",
+            "status": "missing",
+            "reason": "A grounded answer requires independent semantic review.",
+            "references": [],
+            "core": true
+          }
+        ]
+      }
+    ],
+    "writer_calls": 2,
+    "review_calls": 1,
+    "candidate_in_version": false,
+    "candidate_in_export": false,
+    "operation_seconds": 0.067238
+  },
+  {
+    "id": "g04a",
+    "expected": true,
+    "blind_supported": true,
+    "operation_status": "completed",
+    "turn_status": "completed",
+    "report": "The Willow rule takes effect on 2025-07-01.",
+    "question_parts": [
+      {
+        "id": "req-a063370535efe3bf",
+        "core": true,
+        "question": "When does the Willow rule take effect?",
+        "status": "answered",
+        "answer": "The Willow rule takes effect on 2025-07-01.",
+        "reason": "The source gives the stated effective date.",
+        "references": [
+          {
+            "fact_id": null,
+            "calculation_id": null,
+            "analysis_id": null,
+            "chart_id": null,
+            "claim_id": "claim-2b09c97ea45d7f199e8c11dcba9a2919",
+            "source_id": null,
+            "character_start": null,
+            "character_end": null,
+            "origin": "current"
+          }
+        ],
+        "requirements": [
+          {
+            "id": "req-a063370535efe3bf",
+            "question": "When does the Willow rule take effect?",
+            "status": "satisfied",
+            "reason": "The source gives the stated effective date.",
+            "references": [
+              {
+                "fact_id": null,
+                "calculation_id": null,
+                "analysis_id": null,
+                "chart_id": null,
+                "claim_id": "claim-2b09c97ea45d7f199e8c11dcba9a2919",
+                "source_id": null,
+                "character_start": null,
+                "character_end": null,
+                "origin": "current"
+              }
+            ],
+            "core": true
+          }
+        ]
+      }
+    ],
+    "writer_calls": 2,
+    "review_calls": 1,
+    "candidate_in_version": true,
+    "candidate_in_export": true,
+    "operation_seconds": 0.062819
+  },
+  {
+    "id": "g04b",
+    "expected": false,
+    "blind_supported": false,
+    "operation_status": "completed",
+    "turn_status": "partial",
+    "report": "",
+    "question_parts": [
+      {
+        "id": "req-a063370535efe3bf",
+        "core": true,
+        "question": "When does the Willow rule take effect?",
+        "status": "unresolved",
+        "answer": "",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "requirements": [
+          {
+            "id": "req-a063370535efe3bf",
+            "question": "When does the Willow rule take effect?",
+            "status": "missing",
+            "reason": "A grounded answer requires independent semantic review.",
+            "references": [],
+            "core": true
+          }
+        ]
+      }
+    ],
+    "writer_calls": 2,
+    "review_calls": 1,
+    "candidate_in_version": false,
+    "candidate_in_export": false,
+    "operation_seconds": 0.06279
+  },
+  {
+    "id": "g09a",
+    "expected": true,
+    "blind_supported": true,
+    "operation_status": "completed",
+    "turn_status": "completed",
+    "report": "Birch closing price was 12 dollars.",
+    "question_parts": [
+      {
+        "id": "req-40330f8e85f7fc2b",
+        "core": true,
+        "question": "What was Birch closing price?",
+        "status": "answered",
+        "answer": "Birch closing price was 12 dollars.",
+        "reason": "The source states the closing price.",
+        "references": [
+          {
+            "fact_id": null,
+            "calculation_id": null,
+            "analysis_id": null,
+            "chart_id": null,
+            "claim_id": "claim-b2ba63b631d2a63b2e8bbf2720e5bd81",
+            "source_id": null,
+            "character_start": null,
+            "character_end": null,
+            "origin": "current"
+          }
+        ],
+        "requirements": [
+          {
+            "id": "req-40330f8e85f7fc2b",
+            "question": "What was Birch closing price?",
+            "status": "satisfied",
+            "reason": "The source states the closing price.",
+            "references": [
+              {
+                "fact_id": null,
+                "calculation_id": null,
+                "analysis_id": null,
+                "chart_id": null,
+                "claim_id": "claim-b2ba63b631d2a63b2e8bbf2720e5bd81",
+                "source_id": null,
+                "character_start": null,
+                "character_end": null,
+                "origin": "current"
+              }
+            ],
+            "core": true
+          }
+        ]
+      }
+    ],
+    "writer_calls": 2,
+    "review_calls": 1,
+    "candidate_in_version": true,
+    "candidate_in_export": true,
+    "operation_seconds": 0.067917
+  },
+  {
+    "id": "g09b",
+    "expected": false,
+    "blind_supported": false,
+    "operation_status": "completed",
+    "turn_status": "partial",
+    "report": "",
+    "question_parts": [
+      {
+        "id": "req-40330f8e85f7fc2b",
+        "core": true,
+        "question": "What was Birch closing price?",
+        "status": "unresolved",
+        "answer": "",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "requirements": [
+          {
+            "id": "req-40330f8e85f7fc2b",
+            "question": "What was Birch closing price?",
+            "status": "missing",
+            "reason": "A grounded answer requires independent semantic review.",
+            "references": [],
+            "core": true
+          }
+        ]
+      }
+    ],
+    "writer_calls": 2,
+    "review_calls": 1,
+    "candidate_in_version": false,
+    "candidate_in_export": false,
+    "operation_seconds": 0.068118
+  },
+  {
+    "id": "g13a",
+    "expected": true,
+    "blind_supported": false,
+    "operation_status": "completed",
+    "turn_status": "partial",
+    "report": "",
+    "question_parts": [
+      {
+        "id": "req-0a3812beb2a6f96d",
+        "core": true,
+        "question": "Can the Spruce fund guarantee a payment in one year?",
+        "status": "unresolved",
+        "answer": "",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "requirements": [
+          {
+            "id": "req-0a3812beb2a6f96d",
+            "question": "Can the Spruce fund guarantee a payment in one year?",
+            "status": "missing",
+            "reason": "A grounded answer requires independent semantic review.",
+            "references": [],
+            "core": true
+          }
+        ]
+      }
+    ],
+    "writer_calls": 2,
+    "review_calls": 1,
+    "candidate_in_version": false,
+    "candidate_in_export": false,
+    "operation_seconds": 0.067889
+  },
+  {
+    "id": "g13b",
+    "expected": false,
+    "blind_supported": false,
+    "operation_status": "completed",
+    "turn_status": "partial",
+    "report": "",
+    "question_parts": [
+      {
+        "id": "req-0a3812beb2a6f96d",
+        "core": true,
+        "question": "Can the Spruce fund guarantee a payment in one year?",
+        "status": "unresolved",
+        "answer": "",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "requirements": [
+          {
+            "id": "req-0a3812beb2a6f96d",
+            "question": "Can the Spruce fund guarantee a payment in one year?",
+            "status": "missing",
+            "reason": "A grounded answer requires independent semantic review.",
+            "references": [],
+            "core": true
+          }
+        ]
+      }
+    ],
+    "writer_calls": 2,
+    "review_calls": 1,
+    "candidate_in_version": false,
+    "candidate_in_export": false,
+    "operation_seconds": 0.070344
+  }
+]

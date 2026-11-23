@@ -58,6 +58,46 @@ def test_concurrent_append_and_seal_are_serialized():
     assert appended != sealed
 
 
+def test_clarification_is_account_scoped_and_resumes_same_turn():
+    store = ResearchRunInstructions(InMemoryDocumentRepository())
+    store.begin('a', 't', 'r', 'op')
+    clarification = {'question': 'When is payment due?', 'why_it_matters': 'It changes liquidity needs.', 'requirement_id': 'cashflow'}
+    assert store.wait_for_user('a', 't', 'r', 'op', 0, clarification)
+    with pytest.raises(InstructionNotFound):
+        store.read('other', 't', 'r')
+    receipt, _ = store.append('a', 't', 'r', 'Next June', 'answer')
+    assert receipt['sequence'] == 1
+    with pytest.raises(InstructionConflict):
+        store.accept_findings('a', 't', 'r', 'op', 'v')
+    reopened = store.begin('a', 't', 'r', 'op2', previous_operation_id='op', allow_reopen=True)
+    assert reopened['status'] == 'open' and 'clarification' not in reopened
+    assert store.read('a', 't', 'r')['instructions'][0]['text'] == 'Next June'
+
+
+def test_clarification_fence_preserves_concurrent_instruction_and_stop():
+    store = ResearchRunInstructions(InMemoryDocumentRepository())
+    store.begin('a', 't', 'r', 'op')
+    store.append('a', 't', 'r', 'New condition', 'k')
+    writes = []
+    assert not store.wait_for_user('a', 't', 'r', 'op', 0, {'question': 'Q'}, persist=lambda: writes.append(1))
+    assert writes == []
+    assert store.wait_for_user('a', 't', 'r', 'op', 1, {'question': 'Q'})
+    store.stop('a', 't', 'r')
+    with pytest.raises(InstructionConflict):
+        store.fenced('a', 't', 'r', 'op', lambda: writes.append(1), allow_waiting=True)
+    assert writes == []
+
+
+def test_accept_findings_is_idempotent_without_model_resume():
+    store = ResearchRunInstructions(InMemoryDocumentRepository())
+    store.begin('a', 't', 'r', 'op')
+    assert store.wait_for_user('a', 't', 'r', 'op', 0, {'question': 'Q'})
+    assert store.accept_findings('a', 't', 'r', 'op', 'v')['status'] == 'sealed'
+    assert store.accept_findings('a', 't', 'r', 'op', 'v')['final_version_id'] == 'v'
+    with pytest.raises(InstructionConflict):
+        store.append('a', 't', 'r', 'late', 'late')
+
+
 @pytest.mark.parametrize('history', [False, True])
 def test_three_wires_include_ordered_user_messages_after_tools_and_in_estimates(history):
     state = {'user': '{}', 'history': [], 'user_instructions': [

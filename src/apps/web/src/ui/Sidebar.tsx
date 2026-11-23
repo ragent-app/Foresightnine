@@ -18,7 +18,7 @@ import { Menu, type MenuEntry } from "./Menu";
 import { showToast } from "./toast";
 import { useLongPress } from "./useLongPress";
 
-type Tone = "running" | "done" | "partial" | "failed" | "stopped" | "none";
+type Tone = "running" | "waiting" | "done" | "partial" | "failed" | "stopped" | "none";
 
 function topicTone(topic: ResearchV2.ResearchTopic): Tone {
   const versions = topic.versions;
@@ -33,7 +33,7 @@ function topicTone(topic: ResearchV2.ResearchTopic): Tone {
 
 const GROUP_ORDER: DateGroup[] = ["today", "week", "earlier"];
 /** Only states that differ from “done” are marked; a column of green dots says nothing. */
-const TONE_LABEL: Partial<Record<Tone, string>> = { running: "研究中", done: "已完成", partial: "研究限制", failed: "失败", stopped: "已停止" };
+const TONE_LABEL: Partial<Record<Tone, string>> = { running: "研究中", waiting: "等待你的补充", done: "已完成", partial: "研究限制", failed: "失败", stopped: "已停止" };
 
 export function topicLink(topicId: string): string {
   return `${window.location.origin}/research/${encodeURIComponent(topicId)}`;
@@ -80,7 +80,7 @@ function TopicRow({ topic, current, tone, items, renaming, onRename }: {
         }}
       >
         <span className="q">{title}</span>
-        {TONE_LABEL[tone] ? <><StatusDot tone={tone === "stopped" ? "failed" : tone} /><span className="sr-only">{TONE_LABEL[tone]}</span></> : null}
+        {TONE_LABEL[tone] ? <><StatusDot tone={tone === "stopped" ? "failed" : tone === "waiting" ? "partial" : tone} /><span className="sr-only">{TONE_LABEL[tone]}</span></> : null}
       </Link>
       <Menu
         label={`“${title}”的操作`}
@@ -257,6 +257,7 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
               const savedVersion = status?.version_id && topic.versions.some((version) => version.version_id === status.version_id);
               const currentTone: Tone | null = status
                 ? status.logical_status === "running" ? "running"
+                  : status.logical_status === "awaiting_user" ? "waiting"
                   : status.logical_status === "stopped" ? "stopped"
                   : status.logical_status === "failed" ? "failed"
                   : !savedVersion ? "running"
@@ -269,7 +270,7 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
                   topic={topic}
                   current={current}
                   tone={tone}
-                  items={actionsFor(topic, tone === "running")}
+                  items={actionsFor(topic, tone === "running" || tone === "waiting")}
                   renaming={renamingId === topic.topic_id}
                   onRename={(title) => rename(topic, title)}
                 />

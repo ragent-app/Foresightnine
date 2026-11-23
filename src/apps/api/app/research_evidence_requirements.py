@@ -363,7 +363,7 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
                     and all(any(claim_identifies(name, text, c) for c in citations) for name in names)
                     and any(located(c) for c in citations) and _get(claim, 'claim_id')):
                     refs = [{'claim_id': _get(claim, 'claim_id')}]
-                    status, reason = 'satisfied', 'A located claim addresses the metric and requested period; semantic support needs review.'
+                    status, reason = 'partial', 'A located claim addresses the metric and requested period; semantic support needs review.'
                     break
         if status in ('partial', 'missing') and requested_years:
             missing_years = requested_years - {period[0] for f in matching if (period := _period_key(str(f.get('period', ''))))}
@@ -645,51 +645,8 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
                 add('evidence:' + fragment, fragment, 'satisfied',
                     'Recorded facts link to eligible original source ranges; semantic support remains subject to review.', refs)
                 continue
-        # A model checkpoint is only a candidate: references must survive current source and cutoff checks.
-        matched = [p for p in parts if _part_key(str(p.get('question') or '')) == _part_key(fragment) and p.get('status') == 'answered' and p.get('answer')]
-        refs = [ref for p in matched for ref in p.get('references', []) if isinstance(ref, Mapping) and ref.get('fact_id') in by_id]
-        claims_by_id = {_get(c, 'claim_id'): c for c in claims if _get(c, 'claim_id')}
-        for p in matched:
-            for ref in p.get('references', []):
-                if not isinstance(ref, Mapping):
-                    continue
-                claim = claims_by_id.get(ref.get('claim_id'))
-                if claim and _get(claim, 'role') == 'support' and any(located(c) for c in (_get(claim, 'citations', []) or [])):
-                    refs.append({'claim_id': ref['claim_id']})
-                sid, start, end = ref.get('source_id'), ref.get('character_start'), ref.get('character_end')
-                src = sources.get(sid)
-                if (_eligible(src, as_of) and type(start) is int and type(end) is int and 0 <= start < end <= len(src.text)
-                    and any(isinstance(r, Mapping) and r.get('source_id') == sid and r.get('start', -1) <= start < end <= r.get('end', -1)
-                            for r in _read_ranges(state))):
-                    refs.append({'source_id': sid, 'character_start': start, 'character_end': end})
-        stop = {'what', 'which', 'when', 'where', 'how', 'does', 'did', 'the', 'this', 'that', 'with', 'from', 'have', 'were', 'was', 'are', 'is', 'for', 'and', 'explain', 'summarize', 'disclose', 'provide', 'please'}
-        terms = {w for w in re.findall(r'[a-z0-9]{3,}', fragment.lower()) if w not in stop}
-        cjk_terms = {fragment[i:i+2] for i in range(len(fragment)-1) if re.fullmatch(r'[一-龥]{2}', fragment[i:i+2])}
-        if terms or cjk_terms:
-            # An incidental mention of the target in a claim about another
-            # measurement cannot close a quantitative comparison by word overlap.
-            from .research_reconciliation import detect_metrics
-            requested_metrics = set(detect_metrics(fragment)[0]) if any(word in fragment.lower() for word in _COMPARE) else set()
-            for claim in claims:
-                claim_text = str(_get(claim, 'text', ''))
-                text_terms = set(re.findall(r'[a-z0-9]{3,}', claim_text.lower()))
-                overlap = bool(terms & text_terms or any(w in claim_text for w in cjk_terms))
-                absent = bool(re.search(r'\b(?:not disclosed|no disclosure|not mentioned)\b|未披露|没有披露|未提及', claim_text, re.I))
-                complete = any(_eligible(sources.get(_get(c, 'source_id')), as_of) and
-                               any(isinstance(r, Mapping) and r.get('source_id') == _get(c, 'source_id') and r.get('start') == 0
-                                   and r.get('end', 0) >= len(sources[_get(c, 'source_id')].text)
-                                   for r in _read_ranges(state))
-                               for c in (_get(claim, 'citations', []) or []))
-                conditions_requested = any(w in fragment.lower() for w in ('condition', '条件', '限定'))
-                conditions_addressed = any(w in claim_text.lower() for w in ('condition', 'subject to', 'provided that', '条件', '须', '需', '前提', '批准'))
-                citations = [c for c in (_get(claim, 'citations', []) or []) if located(c)]
-                if requested_metrics and not requested_metrics.issubset({
-                    key for citation in citations for key in detect_metrics(str(_get(citation, 'quotation', '')))[0]
-                }):
-                    continue
-                if (overlap and (not conditions_requested or conditions_addressed) and (not absent or complete) and _get(claim, 'role') == 'support' and _get(claim, 'claim_id')
-                    and citations):
-                    refs.append({'claim_id': _get(claim, 'claim_id')})
-        add('generic:' + fragment, fragment, 'satisfied' if refs else 'missing',
-            'A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.' if refs else 'The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.', refs)
+        # A located quotation or writer checkpoint establishes provenance only.
+        # The independent semantic review is merged by research_delivery.
+        add('generic:' + fragment, fragment, 'missing',
+            'A grounded answer requires independent semantic review.', [])
     return rows

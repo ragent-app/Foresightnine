@@ -1,0 +1,643 @@
+{
+  "results": [
+    {
+      "id": "g01a",
+      "kind": "rights",
+      "expected": true,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-343f06596069dec3",
+          "question": "Can holders transfer Oriole notes?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:Can holders transfer Oriole notes?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.07073282264173031
+    },
+    {
+      "id": "g01b",
+      "kind": "rights",
+      "expected": false,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-343f06596069dec3",
+          "question": "Can holders transfer Oriole notes?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:Can holders transfer Oriole notes?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00024370290338993073
+    },
+    {
+      "id": "g02a",
+      "kind": "rights",
+      "expected": true,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-a47dc137c1d621c5",
+          "question": "Can Bracken borrowers prepay without a fee?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:Can Bracken borrowers prepay without a fee?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.0001775161363184452
+    },
+    {
+      "id": "g02b",
+      "kind": "rights",
+      "expected": false,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-a47dc137c1d621c5",
+          "question": "Can Bracken borrowers prepay without a fee?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:Can Bracken borrowers prepay without a fee?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.0001694466918706894
+    },
+    {
+      "id": "g03a",
+      "kind": "rights",
+      "expected": true,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-b5f718c61fe68eb1",
+          "question": "Who may redeem Cedar units?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:Who may redeem Cedar units?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.002233994659036398
+    },
+    {
+      "id": "g03b",
+      "kind": "rights",
+      "expected": false,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-b5f718c61fe68eb1",
+          "question": "Who may redeem Cedar units?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:Who may redeem Cedar units?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00023605115711688995
+    },
+    {
+      "id": "g04a",
+      "kind": "policy",
+      "expected": true,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-a063370535efe3bf",
+          "question": "When does the Willow rule take effect?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:When does the Willow rule take effect?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00017621787264943123
+    },
+    {
+      "id": "g04b",
+      "kind": "policy",
+      "expected": false,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-a063370535efe3bf",
+          "question": "When does the Willow rule take effect?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:When does the Willow rule take effect?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00015840493142604828
+    },
+    {
+      "id": "g05a",
+      "kind": "policy",
+      "expected": true,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-6759a4b51321f56c",
+          "question": "Does the Pine rule cover existing contracts?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:Does the Pine rule cover existing contracts?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00015629781410098076
+    },
+    {
+      "id": "g05b",
+      "kind": "policy",
+      "expected": false,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-6759a4b51321f56c",
+          "question": "Does the Pine rule cover existing contracts?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:Does the Pine rule cover existing contracts?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00019162800163030624
+    },
+    {
+      "id": "g06a",
+      "kind": "timing",
+      "expected": true,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-37cdb86750b6ea3d",
+          "question": "When does the Maple deposit mature?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:When does the Maple deposit mature?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.0001598629169166088
+    },
+    {
+      "id": "g06b",
+      "kind": "timing",
+      "expected": false,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-37cdb86750b6ea3d",
+          "question": "When does the Maple deposit mature?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:When does the Maple deposit mature?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00016210786998271942
+    },
+    {
+      "id": "g07a",
+      "kind": "currency",
+      "expected": true,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-c072b053cdc860dc",
+          "question": "In what currency is the Larch payment?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:In what currency is the Larch payment?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00016559800133109093
+    },
+    {
+      "id": "g07b",
+      "kind": "currency",
+      "expected": false,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-c072b053cdc860dc",
+          "question": "In what currency is the Larch payment?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:In what currency is the Larch payment?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00017291167750954628
+    },
+    {
+      "id": "g08a",
+      "kind": "network",
+      "expected": true,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-bdc6960baac9c85f",
+          "question": "Which network supports the Rowan token?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:Which network supports the Rowan token?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00231572100892663
+    },
+    {
+      "id": "g08b",
+      "kind": "network",
+      "expected": false,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-bdc6960baac9c85f",
+          "question": "Which network supports the Rowan token?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:Which network supports the Rowan token?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.0001878160983324051
+    },
+    {
+      "id": "g09a",
+      "kind": "measurement",
+      "expected": true,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-40330f8e85f7fc2b",
+          "question": "What was Birch closing price?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:What was Birch closing price?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.0001652413047850132
+    },
+    {
+      "id": "g09b",
+      "kind": "measurement",
+      "expected": false,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-40330f8e85f7fc2b",
+          "question": "What was Birch closing price?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:What was Birch closing price?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00015097018331289291
+    },
+    {
+      "id": "g10a",
+      "kind": "measurement",
+      "expected": true,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-a6ce7f90d8c014f1",
+          "question": "What was Hazel transaction volume?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:What was Hazel transaction volume?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00018340209499001503
+    },
+    {
+      "id": "g10b",
+      "kind": "measurement",
+      "expected": false,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-a6ce7f90d8c014f1",
+          "question": "What was Hazel transaction volume?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:What was Hazel transaction volume?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.0001589898020029068
+    },
+    {
+      "id": "g11a",
+      "kind": "causation",
+      "expected": true,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-b74faf872ab7a2be",
+          "question": "Did fuel cause Aspen profit decline?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:Did fuel cause Aspen profit decline?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.015371735207736492
+    },
+    {
+      "id": "g11b",
+      "kind": "causation",
+      "expected": false,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-b74faf872ab7a2be",
+          "question": "Did fuel cause Aspen profit decline?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:Did fuel cause Aspen profit decline?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00026713497936725616
+    },
+    {
+      "id": "g12a",
+      "kind": "conditional",
+      "expected": true,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-228d441547b148e2",
+          "question": "Is the Elm fee waived?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:Is the Elm fee waived?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.000163376796990633
+    },
+    {
+      "id": "g12b",
+      "kind": "conditional",
+      "expected": false,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-228d441547b148e2",
+          "question": "Is the Elm fee waived?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:Is the Elm fee waived?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.0001555420458316803
+    },
+    {
+      "id": "g13a",
+      "kind": "personal",
+      "expected": true,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-0a3812beb2a6f96d",
+          "question": "Can the Spruce fund guarantee a payment in one year?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:Can the Spruce fund guarantee a payment in one year?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00016931770369410515
+    },
+    {
+      "id": "g13b",
+      "kind": "personal",
+      "expected": false,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-0a3812beb2a6f96d",
+          "question": "Can the Spruce fund guarantee a payment in one year?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:Can the Spruce fund guarantee a payment in one year?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.0001733768731355667
+    },
+    {
+      "id": "g14a",
+      "kind": "definition",
+      "expected": true,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-fb568cd34d1cf94b",
+          "question": "What is Fir duration?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:What is Fir duration?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.005248703062534332
+    },
+    {
+      "id": "g14b",
+      "kind": "definition",
+      "expected": false,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-fb568cd34d1cf94b",
+          "question": "What is Fir duration?",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:What is Fir duration?",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00023314915597438812
+    },
+    {
+      "id": "g15a",
+      "kind": "chinese",
+      "expected": true,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-046880ae50237a80",
+          "question": "榆树合同允许提前赎回吗？",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:榆树合同允许提前赎回吗？",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00017166603356599808
+    },
+    {
+      "id": "g15b",
+      "kind": "chinese",
+      "expected": false,
+      "answered": false,
+      "rows": [
+        {
+          "id": "req-046880ae50237a80",
+          "question": "榆树合同允许提前赎回吗？",
+          "status": "missing",
+          "reason": "A grounded answer requires independent semantic review.",
+          "references": [],
+          "core": true,
+          "kind": "generic:榆树合同允许提前赎回吗？",
+          "semantic_required": true
+        }
+      ],
+      "elapsed_seconds": 0.00016544107347726822
+    }
+  ],
+  "by_kind": {
+    "rights": {
+      "false_accept": 0,
+      "negative": 3,
+      "false_reject": 3,
+      "positive": 3
+    },
+    "policy": {
+      "false_accept": 0,
+      "negative": 2,
+      "false_reject": 2,
+      "positive": 2
+    },
+    "timing": {
+      "false_accept": 0,
+      "negative": 1,
+      "false_reject": 1,
+      "positive": 1
+    },
+    "currency": {
+      "false_accept": 0,
+      "negative": 1,
+      "false_reject": 1,
+      "positive": 1
+    },
+    "network": {
+      "false_accept": 0,
+      "negative": 1,
+      "false_reject": 1,
+      "positive": 1
+    },
+    "measurement": {
+      "false_accept": 0,
+      "negative": 2,
+      "false_reject": 2,
+      "positive": 2
+    },
+    "causation": {
+      "false_accept": 0,
+      "negative": 1,
+      "false_reject": 1,
+      "positive": 1
+    },
+    "conditional": {
+      "false_accept": 0,
+      "negative": 1,
+      "false_reject": 1,
+      "positive": 1
+    },
+    "personal": {
+      "false_accept": 0,
+      "negative": 1,
+      "false_reject": 1,
+      "positive": 1
+    },
+    "definition": {
+      "false_accept": 0,
+      "negative": 1,
+      "false_reject": 1,
+      "positive": 1
+    },
+    "chinese": {
+      "false_accept": 0,
+      "negative": 1,
+      "false_reject": 1,
+      "positive": 1
+    }
+  },
+  "total_seconds": 0.10041814669966698
+}

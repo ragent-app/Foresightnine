@@ -1,0 +1,185 @@
+{
+  "instructions": "Independently evaluate each packet using only its question, candidate and source. Decide whether the candidate substantially answers the question and every material assertion is directly supported by the supplied source. Return exactly one result per packet with id, supported (boolean), reason (one concise sentence), and source_excerpt (the shortest relevant exact source quotation, or empty if none). Conditions, negation, timing, units and causation matter; do not infer missing facts. Judge each packet on its own. Do not search the web or inspect any files besides this packet. Do not infer or access an answer key.",
+  "packets": [
+    {
+      "id": "373a5a14dce0d0156ba34ad2e3dc2e3c",
+      "question": "What was Birch closing price?",
+      "candidate": "Birch market capitalization was 12 dollars.",
+      "source": "Birch closing price was 12 dollars; its market capitalization was not disclosed."
+    },
+    {
+      "id": "8172d867ad2a430881e582ed51455e83",
+      "question": "When does the Willow rule take effect?",
+      "candidate": "The Willow rule takes effect on 2025-07-01.",
+      "source": "The Willow rule was announced on 2025-01-02 and takes effect on 2025-07-01."
+    },
+    {
+      "id": "342061464f377ba8097e819a098fd564",
+      "question": "Who may redeem Cedar units?",
+      "candidate": "Only institutional accounts may redeem Cedar units.",
+      "source": "Only institutional accounts may redeem Cedar units."
+    },
+    {
+      "id": "f4f8ff6a0ae92e27e25d4faa8f787b56",
+      "question": "In what currency is the Larch payment?",
+      "candidate": "The Larch payment is denominated in EUR.",
+      "source": "The Larch payment is denominated in EUR, not USD."
+    },
+    {
+      "id": "f781cbf89d1afded7a97dbc1752f513a",
+      "question": "Did fuel cause Aspen profit decline?",
+      "candidate": "Aspen profit fell while fuel costs rose; causation was not established.",
+      "source": "Aspen profit fell while fuel costs rose; the cause was not established."
+    },
+    {
+      "id": "e0cd1708b30b954353d666da04ddf36d",
+      "question": "Does the Pine rule cover existing contracts?",
+      "candidate": "The Pine rule does not cover existing contracts.",
+      "source": "The Pine rule covers new contracts only; existing contracts are exempt."
+    },
+    {
+      "id": "7891596a849206e8787529619d1d1345",
+      "question": "Can the Spruce fund guarantee a payment in one year?",
+      "candidate": "The Spruce fund cannot guarantee principal in one year.",
+      "source": "The Spruce fund has no principal guarantee and its value can fall."
+    },
+    {
+      "id": "ec61edcbed8fb0b8f4646ba74d984b0c",
+      "question": "榆树合同允许提前赎回吗？",
+      "candidate": "榆树合同允许提前赎回。",
+      "source": "榆树合同不允许提前赎回。"
+    },
+    {
+      "id": "7192ec9d2e5e6287d78f9eee6f7201eb",
+      "question": "What was Birch closing price?",
+      "candidate": "Birch closing price was 12 dollars.",
+      "source": "Birch closing price was 12 dollars; its market capitalization was not disclosed."
+    },
+    {
+      "id": "ceda5d66712de7049f9babc64dd37446",
+      "question": "What was Hazel transaction volume?",
+      "candidate": "Hazel transaction volume was 90 units.",
+      "source": "Hazel transaction volume was 90 units; its transaction value was not disclosed."
+    },
+    {
+      "id": "15e672e69ab92fba545fe9e2e43785bc",
+      "question": "When does the Maple deposit mature?",
+      "candidate": "The Maple deposit matures on 2026-06-30.",
+      "source": "The Maple deposit matures on 2027-06-30."
+    },
+    {
+      "id": "efe2e345c3a138557d615574c843b761",
+      "question": "What was Hazel transaction volume?",
+      "candidate": "Hazel transaction value was 90 dollars.",
+      "source": "Hazel transaction volume was 90 units; its transaction value was not disclosed."
+    },
+    {
+      "id": "b08d28ed3b73802e0e21c8669e9b1215",
+      "question": "What is Fir duration?",
+      "candidate": "Fir duration measures bond price sensitivity to interest rate changes.",
+      "source": "Fir duration is a measure of bond price sensitivity to interest rate changes."
+    },
+    {
+      "id": "87220fed06ce76965e794f41bfc60c0a",
+      "question": "榆树合同允许提前赎回吗？",
+      "candidate": "榆树合同不允许提前赎回。",
+      "source": "榆树合同不允许提前赎回。"
+    },
+    {
+      "id": "49e8030363a397e5080fbf2906d8b6c7",
+      "question": "When does the Maple deposit mature?",
+      "candidate": "The Maple deposit matures on 2027-06-30.",
+      "source": "The Maple deposit matures on 2027-06-30."
+    },
+    {
+      "id": "28039739d8d57ceb0f54b1ef3cd944c1",
+      "question": "Can Bracken borrowers prepay without a fee?",
+      "candidate": "Bracken borrowers must pay a prepayment fee.",
+      "source": "Bracken borrowers may prepay without a fee."
+    },
+    {
+      "id": "10cd809eec893d6a0cb61009aa5a943c",
+      "question": "What is Fir duration?",
+      "candidate": "Fir duration guarantees a bond will mature within one year.",
+      "source": "Fir duration is a measure of bond price sensitivity to interest rate changes."
+    },
+    {
+      "id": "10a3ec097d4acdd61f692e43ca9b4470",
+      "question": "Can holders transfer Oriole notes?",
+      "candidate": "Oriole notes may not be transferred without consent.",
+      "source": "Oriole notes may be transferred without consent."
+    },
+    {
+      "id": "827f1becfba18f574e3a07a1efc3bbfd",
+      "question": "Is the Elm fee waived?",
+      "candidate": "The Elm fee is waived for every account.",
+      "source": "The Elm fee is waived only for accounts with balances above 500 units."
+    },
+    {
+      "id": "bd2c97c6fbd59f196d15ba6b0560ca1d",
+      "question": "Does the Pine rule cover existing contracts?",
+      "candidate": "The Pine rule covers existing contracts.",
+      "source": "The Pine rule covers new contracts only; existing contracts are exempt."
+    },
+    {
+      "id": "2440612a0ed5f521734f91e33232ad0a",
+      "question": "Who may redeem Cedar units?",
+      "candidate": "All retail accounts may redeem Cedar units.",
+      "source": "Only institutional accounts may redeem Cedar units."
+    },
+    {
+      "id": "003ecbb18c63e73078285d434062c2e3",
+      "question": "In what currency is the Larch payment?",
+      "candidate": "The Larch payment is denominated in USD.",
+      "source": "The Larch payment is denominated in EUR, not USD."
+    },
+    {
+      "id": "2a5c1a0fe3edab2aa934a3fad9d29e54",
+      "question": "Which network supports the Rowan token?",
+      "candidate": "The Rowan token is issued on Network Amber.",
+      "source": "The Rowan token is issued only on Network Azure, not Network Amber."
+    },
+    {
+      "id": "5a88ec4fb1b0d566fdca25153d64a840",
+      "question": "When does the Willow rule take effect?",
+      "candidate": "The Willow rule takes effect on 2025-01-02.",
+      "source": "The Willow rule was announced on 2025-01-02 and takes effect on 2025-07-01."
+    },
+    {
+      "id": "e9a23e833501b32e627cfee072676bac",
+      "question": "Can Bracken borrowers prepay without a fee?",
+      "candidate": "Bracken borrowers may prepay without a fee.",
+      "source": "Bracken borrowers may prepay without a fee."
+    },
+    {
+      "id": "e5eeef746345ee6aaf4b880ffa69c0a7",
+      "question": "Did fuel cause Aspen profit decline?",
+      "candidate": "Fuel caused the Aspen profit decline.",
+      "source": "Aspen profit fell while fuel costs rose; the cause was not established."
+    },
+    {
+      "id": "e970531e648df09253173d035554a2cc",
+      "question": "Can the Spruce fund guarantee a payment in one year?",
+      "candidate": "The Spruce fund guarantees the payment in one year.",
+      "source": "The Spruce fund has no principal guarantee and its value can fall."
+    },
+    {
+      "id": "7b7f0820813a74dac6d8e8e6de63df08",
+      "question": "Which network supports the Rowan token?",
+      "candidate": "The Rowan token is issued on Network Azure.",
+      "source": "The Rowan token is issued only on Network Azure, not Network Amber."
+    },
+    {
+      "id": "394717b440e06a4d1ea96a23e4fc9d91",
+      "question": "Is the Elm fee waived?",
+      "candidate": "The Elm fee is waived for accounts with balances above 500 units.",
+      "source": "The Elm fee is waived only for accounts with balances above 500 units."
+    },
+    {
+      "id": "40894c9a4329c5914196560af289b1ca",
+      "question": "Can holders transfer Oriole notes?",
+      "candidate": "Oriole notes may be transferred without consent.",
+      "source": "Oriole notes may be transferred without consent."
+    }
+  ]
+}

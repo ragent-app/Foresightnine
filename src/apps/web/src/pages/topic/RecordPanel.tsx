@@ -127,6 +127,15 @@ function ClaimsTab() {
                         <span>{changed ? edits[id!]!.text.trim() : claim.text}</span>
                         <span className="meta">{meta}{changed ? <span className="unsaved"> · 未保存</span> : null}</span>
                       </button>
+                      {claim.scenario_calculation && !changed ? (
+                        <details className="note inset">
+                          <summary>情景计算 · {claim.scenario_calculation.display}</summary>
+                          <div>{claim.scenario_calculation.formula}: {claim.scenario_calculation.expression} · 四舍五入至 {claim.scenario_calculation.decimal_places} 位</div>
+                          {claim.scenario_calculation.operands.map((operand, index) => (
+                            <div key={index}>{operand.label}: {operand.value} {operand.unit} {operand.currency} · {operand.period} · {operand.kind === "user" ? `用户输入 ${operand.sequence}` : "假设"} · “{operand.quotation}”</div>
+                          ))}
+                        </details>
+                      ) : null}
                       {id ? (
                         <span className="claim-actions">
                           {changed ? <button type="button" className="link" onClick={() => undo(id)}>撤销</button> : null}
@@ -507,6 +516,7 @@ function StepsTab({ turnKey, onTurn }: { turnKey: string | undefined; onTurn: (t
       {options.length > 1 ? <Segmented label="选择轮次" options={options} value={selected} onChange={onTurn} /> : null}
       {interimText ? <p className="meta pt-interim-bar">{interimText}</p> : null}
       {selectedTurn ? <TurnUsage turn={selectedTurn} /> : null}
+      {selectedTurn ? <RequirementReviews turn={selectedTurn} /> : null}
       {rows.length === 0 && !current ? (
         liveSelected ? (
           <LiveEmptyOrStream stream={stream} idleText="正在等待研究过程输出…" inPanel />
@@ -518,6 +528,59 @@ function StepsTab({ turnKey, onTurn }: { turnKey: string | undefined; onTurn: (t
       )}
       {hasInvalid ? <p className="note inset">{INVALID_NOTE}</p> : null}
     </>
+  );
+}
+
+const REVIEW_VERDICT: Record<string, string> = {
+  supported: "复核认为支持", conditional: "在条件下成立", weaker: "仅支持较弱结论",
+  contradicted: "与依据冲突", irrelevant: "依据不相关", insufficient: "依据不足",
+};
+
+function RequirementReviews({ turn }: { turn: ResearchV2.ResearchTurn }) {
+  const view = useTopicView();
+  const requirements = turn.requirement_plan ?? [];
+  const reviews = turn.semantic_reviews ?? [];
+  const history = turn.requirement_plan_history ?? [];
+  if (!requirements.length && !reviews.length && !history.length) return null;
+  return (
+    <section aria-label="问题要求与依据核验">
+      <div className="gtitle">问题要求与依据核验</div>
+      <p className="note inset">核验意见辅助你检查依据，不能代替对原文和条件的复核。</p>
+      {requirements.map((requirement) => (
+        <div className="item" key={requirement.requirement_id}>
+          <span className="title">{requirement.deliverable}</span>
+          <span className="meta">{requirement.priority === "optional" ? "可选" : "核心"} · 版本 {requirement.revision} · {requirement.source.sequence ? `追加要求 ${requirement.source.sequence}` : "原问题"}：{requirement.source.excerpt}</span>
+          <p>需要的依据：{requirement.evidence_needed}</p>
+          {(requirement.user_conditions ?? []).map((condition, index) => <p key={index}>用户条件：{condition.excerpt}</p>)}
+          {(requirement.assumptions ?? []).map((assumption, index) => <p key={index}>研究假设：{assumption}</p>)}
+        </div>
+      ))}
+      {history.length ? <details className="item">
+        <summary>查看先前的问题要求</summary>
+        {history.map((revision) => revision.map((item) => <p key={`${item.revision}:${item.requirement_id}`}>版本 {item.revision} · {item.deliverable}（{item.source.excerpt}）</p>))}
+      </details> : null}
+      {reviews.map((review, index) => {
+        const claim = (view.content.claims ?? []).find((item) => item.claim_id === review.claim_id);
+        const requirement = requirements.find((item) => item.requirement_id === review.requirement_id);
+        return (
+          <div className="item" key={`${review.review_key}-${index}`}>
+            <span className="title">{REVIEW_VERDICT[review.verdict] ?? "待核验"}</span>
+            {requirement ? <span className="meta">对应要求：{requirement.deliverable}</span> : <span className="meta">对应要求：{review.requirement_text || turn.question}</span>}
+            {claim ? <button type="button" className="link" onClick={() => view.gotoClaim(review.claim_id)}>查看结论：{claim.text}</button> : <span className="meta">结论在当前版本不可见。</span>}
+            <p>{review.reason}</p>
+            {review.condition ? <p>成立条件：{review.condition}</p> : null}
+            {review.evidence.map((raw, evidenceIndex) => {
+              const evidence = raw as typeof raw & { kind?: "source" | "user" | "assumption" | "concept"; sequence?: number | null; source_id?: string | null };
+              const kind = evidence.kind ?? "source";
+              return <div key={evidenceIndex} className="note inset">
+                <span>{kind === "user" ? (evidence.sequence ? `用户补充 ${evidence.sequence}` : "原问题") : kind === "assumption" ? "研究假设" : kind === "concept" ? "待核验概念" : "资料原文"}：{evidence.quotation}</span>
+                {kind === "source" && evidence.source_id ? <button type="button" className="link" onClick={() => view.openPanel({ kind: "reader", sourceId: evidence.source_id!, range: [evidence.character_start, evidence.character_end] })}>查看原文</button> : null}
+              </div>;
+            })}
+          </div>
+        );
+      })}
+    </section>
   );
 }
 

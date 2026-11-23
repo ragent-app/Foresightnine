@@ -1,0 +1,716 @@
+[
+  {
+    "id": "g01a",
+    "kind": "rights",
+    "expected": true,
+    "blind_supported": true,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": true,
+    "rows": [
+      {
+        "id": "req-343f06596069dec3",
+        "question": "Can holders transfer Oriole notes?",
+        "status": "satisfied",
+        "reason": "The source explicitly permits transfers without consent.",
+        "references": [
+          {
+            "claim_id": "candidate"
+          }
+        ],
+        "core": true,
+        "kind": "generic:Can holders transfer Oriole notes?",
+        "semantic_required": true,
+        "verdict": "supported",
+        "condition": null
+      }
+    ]
+  },
+  {
+    "id": "g01b",
+    "kind": "rights",
+    "expected": false,
+    "blind_supported": false,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": false,
+    "rows": [
+      {
+        "id": "req-343f06596069dec3",
+        "question": "Can holders transfer Oriole notes?",
+        "status": "missing",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "core": true,
+        "kind": "generic:Can holders transfer Oriole notes?",
+        "semantic_required": true
+      }
+    ]
+  },
+  {
+    "id": "g02a",
+    "kind": "rights",
+    "expected": true,
+    "blind_supported": true,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": true,
+    "rows": [
+      {
+        "id": "req-a47dc137c1d621c5",
+        "question": "Can Bracken borrowers prepay without a fee?",
+        "status": "satisfied",
+        "reason": "The source explicitly permits prepayment without a fee.",
+        "references": [
+          {
+            "claim_id": "candidate"
+          }
+        ],
+        "core": true,
+        "kind": "generic:Can Bracken borrowers prepay without a fee?",
+        "semantic_required": true,
+        "verdict": "supported",
+        "condition": null
+      }
+    ]
+  },
+  {
+    "id": "g02b",
+    "kind": "rights",
+    "expected": false,
+    "blind_supported": false,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": false,
+    "rows": [
+      {
+        "id": "req-a47dc137c1d621c5",
+        "question": "Can Bracken borrowers prepay without a fee?",
+        "status": "missing",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "core": true,
+        "kind": "generic:Can Bracken borrowers prepay without a fee?",
+        "semantic_required": true
+      }
+    ]
+  },
+  {
+    "id": "g03a",
+    "kind": "rights",
+    "expected": true,
+    "blind_supported": true,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": true,
+    "rows": [
+      {
+        "id": "req-b5f718c61fe68eb1",
+        "question": "Who may redeem Cedar units?",
+        "status": "satisfied",
+        "reason": "The source explicitly restricts redemption to institutional accounts.",
+        "references": [
+          {
+            "claim_id": "candidate"
+          }
+        ],
+        "core": true,
+        "kind": "generic:Who may redeem Cedar units?",
+        "semantic_required": true,
+        "verdict": "supported",
+        "condition": null
+      }
+    ]
+  },
+  {
+    "id": "g03b",
+    "kind": "rights",
+    "expected": false,
+    "blind_supported": false,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": false,
+    "rows": [
+      {
+        "id": "req-b5f718c61fe68eb1",
+        "question": "Who may redeem Cedar units?",
+        "status": "missing",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "core": true,
+        "kind": "generic:Who may redeem Cedar units?",
+        "semantic_required": true
+      }
+    ]
+  },
+  {
+    "id": "g04a",
+    "kind": "policy",
+    "expected": true,
+    "blind_supported": true,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": true,
+    "rows": [
+      {
+        "id": "req-a063370535efe3bf",
+        "question": "When does the Willow rule take effect?",
+        "status": "satisfied",
+        "reason": "The source gives the stated effective date.",
+        "references": [
+          {
+            "claim_id": "candidate"
+          }
+        ],
+        "core": true,
+        "kind": "generic:When does the Willow rule take effect?",
+        "semantic_required": true,
+        "verdict": "supported",
+        "condition": null
+      }
+    ]
+  },
+  {
+    "id": "g04b",
+    "kind": "policy",
+    "expected": false,
+    "blind_supported": false,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": false,
+    "rows": [
+      {
+        "id": "req-a063370535efe3bf",
+        "question": "When does the Willow rule take effect?",
+        "status": "missing",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "core": true,
+        "kind": "generic:When does the Willow rule take effect?",
+        "semantic_required": true
+      }
+    ]
+  },
+  {
+    "id": "g05a",
+    "kind": "policy",
+    "expected": true,
+    "blind_supported": true,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": true,
+    "rows": [
+      {
+        "id": "req-6759a4b51321f56c",
+        "question": "Does the Pine rule cover existing contracts?",
+        "status": "satisfied",
+        "reason": "The source explicitly exempts existing contracts.",
+        "references": [
+          {
+            "claim_id": "candidate"
+          }
+        ],
+        "core": true,
+        "kind": "generic:Does the Pine rule cover existing contracts?",
+        "semantic_required": true,
+        "verdict": "supported",
+        "condition": null
+      }
+    ]
+  },
+  {
+    "id": "g05b",
+    "kind": "policy",
+    "expected": false,
+    "blind_supported": false,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": false,
+    "rows": [
+      {
+        "id": "req-6759a4b51321f56c",
+        "question": "Does the Pine rule cover existing contracts?",
+        "status": "missing",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "core": true,
+        "kind": "generic:Does the Pine rule cover existing contracts?",
+        "semantic_required": true
+      }
+    ]
+  },
+  {
+    "id": "g06a",
+    "kind": "timing",
+    "expected": true,
+    "blind_supported": true,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": true,
+    "rows": [
+      {
+        "id": "req-37cdb86750b6ea3d",
+        "question": "When does the Maple deposit mature?",
+        "status": "satisfied",
+        "reason": "The source states the same maturity date.",
+        "references": [
+          {
+            "claim_id": "candidate"
+          }
+        ],
+        "core": true,
+        "kind": "generic:When does the Maple deposit mature?",
+        "semantic_required": true,
+        "verdict": "supported",
+        "condition": null
+      }
+    ]
+  },
+  {
+    "id": "g06b",
+    "kind": "timing",
+    "expected": false,
+    "blind_supported": false,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": false,
+    "rows": [
+      {
+        "id": "req-37cdb86750b6ea3d",
+        "question": "When does the Maple deposit mature?",
+        "status": "missing",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "core": true,
+        "kind": "generic:When does the Maple deposit mature?",
+        "semantic_required": true
+      }
+    ]
+  },
+  {
+    "id": "g07a",
+    "kind": "currency",
+    "expected": true,
+    "blind_supported": true,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": true,
+    "rows": [
+      {
+        "id": "req-c072b053cdc860dc",
+        "question": "In what currency is the Larch payment?",
+        "status": "satisfied",
+        "reason": "The source states the payment is denominated in EUR.",
+        "references": [
+          {
+            "claim_id": "candidate"
+          }
+        ],
+        "core": true,
+        "kind": "generic:In what currency is the Larch payment?",
+        "semantic_required": true,
+        "verdict": "supported",
+        "condition": null
+      }
+    ]
+  },
+  {
+    "id": "g07b",
+    "kind": "currency",
+    "expected": false,
+    "blind_supported": false,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": false,
+    "rows": [
+      {
+        "id": "req-c072b053cdc860dc",
+        "question": "In what currency is the Larch payment?",
+        "status": "missing",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "core": true,
+        "kind": "generic:In what currency is the Larch payment?",
+        "semantic_required": true
+      }
+    ]
+  },
+  {
+    "id": "g08a",
+    "kind": "network",
+    "expected": true,
+    "blind_supported": true,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": true,
+    "rows": [
+      {
+        "id": "req-bdc6960baac9c85f",
+        "question": "Which network supports the Rowan token?",
+        "status": "satisfied",
+        "reason": "The source identifies Network Azure as the issuance network.",
+        "references": [
+          {
+            "claim_id": "candidate"
+          }
+        ],
+        "core": true,
+        "kind": "generic:Which network supports the Rowan token?",
+        "semantic_required": true,
+        "verdict": "supported",
+        "condition": null
+      }
+    ]
+  },
+  {
+    "id": "g08b",
+    "kind": "network",
+    "expected": false,
+    "blind_supported": false,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": false,
+    "rows": [
+      {
+        "id": "req-bdc6960baac9c85f",
+        "question": "Which network supports the Rowan token?",
+        "status": "missing",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "core": true,
+        "kind": "generic:Which network supports the Rowan token?",
+        "semantic_required": true
+      }
+    ]
+  },
+  {
+    "id": "g09a",
+    "kind": "measurement",
+    "expected": true,
+    "blind_supported": true,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": true,
+    "rows": [
+      {
+        "id": "req-40330f8e85f7fc2b",
+        "question": "What was Birch closing price?",
+        "status": "satisfied",
+        "reason": "The source states the closing price.",
+        "references": [
+          {
+            "claim_id": "candidate"
+          }
+        ],
+        "core": true,
+        "kind": "generic:What was Birch closing price?",
+        "semantic_required": true,
+        "verdict": "supported",
+        "condition": null
+      }
+    ]
+  },
+  {
+    "id": "g09b",
+    "kind": "measurement",
+    "expected": false,
+    "blind_supported": false,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": false,
+    "rows": [
+      {
+        "id": "req-40330f8e85f7fc2b",
+        "question": "What was Birch closing price?",
+        "status": "missing",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "core": true,
+        "kind": "generic:What was Birch closing price?",
+        "semantic_required": true
+      }
+    ]
+  },
+  {
+    "id": "g10a",
+    "kind": "measurement",
+    "expected": true,
+    "blind_supported": true,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": true,
+    "rows": [
+      {
+        "id": "req-a6ce7f90d8c014f1",
+        "question": "What was Hazel transaction volume?",
+        "status": "satisfied",
+        "reason": "The source states the transaction volume and units.",
+        "references": [
+          {
+            "claim_id": "candidate"
+          }
+        ],
+        "core": true,
+        "kind": "generic:What was Hazel transaction volume?",
+        "semantic_required": true,
+        "verdict": "supported",
+        "condition": null
+      }
+    ]
+  },
+  {
+    "id": "g10b",
+    "kind": "measurement",
+    "expected": false,
+    "blind_supported": false,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": false,
+    "rows": [
+      {
+        "id": "req-a6ce7f90d8c014f1",
+        "question": "What was Hazel transaction volume?",
+        "status": "missing",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "core": true,
+        "kind": "generic:What was Hazel transaction volume?",
+        "semantic_required": true
+      }
+    ]
+  },
+  {
+    "id": "g11a",
+    "kind": "causation",
+    "expected": true,
+    "blind_supported": true,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": true,
+    "rows": [
+      {
+        "id": "req-b74faf872ab7a2be",
+        "question": "Did fuel cause Aspen profit decline?",
+        "status": "satisfied",
+        "reason": "The source states both movements and that the cause was not established.",
+        "references": [
+          {
+            "claim_id": "candidate"
+          }
+        ],
+        "core": true,
+        "kind": "generic:Did fuel cause Aspen profit decline?",
+        "semantic_required": true,
+        "verdict": "supported",
+        "condition": null
+      }
+    ]
+  },
+  {
+    "id": "g11b",
+    "kind": "causation",
+    "expected": false,
+    "blind_supported": false,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": false,
+    "rows": [
+      {
+        "id": "req-b74faf872ab7a2be",
+        "question": "Did fuel cause Aspen profit decline?",
+        "status": "missing",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "core": true,
+        "kind": "generic:Did fuel cause Aspen profit decline?",
+        "semantic_required": true
+      }
+    ]
+  },
+  {
+    "id": "g12a",
+    "kind": "conditional",
+    "expected": true,
+    "blind_supported": true,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": true,
+    "rows": [
+      {
+        "id": "req-228d441547b148e2",
+        "question": "Is the Elm fee waived?",
+        "status": "satisfied",
+        "reason": "The source states the waiver and its balance condition.",
+        "references": [
+          {
+            "claim_id": "candidate"
+          }
+        ],
+        "core": true,
+        "kind": "generic:Is the Elm fee waived?",
+        "semantic_required": true,
+        "verdict": "supported",
+        "condition": null
+      }
+    ]
+  },
+  {
+    "id": "g12b",
+    "kind": "conditional",
+    "expected": false,
+    "blind_supported": false,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": false,
+    "rows": [
+      {
+        "id": "req-228d441547b148e2",
+        "question": "Is the Elm fee waived?",
+        "status": "missing",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "core": true,
+        "kind": "generic:Is the Elm fee waived?",
+        "semantic_required": true
+      }
+    ]
+  },
+  {
+    "id": "g13a",
+    "kind": "personal",
+    "expected": true,
+    "blind_supported": false,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": false,
+    "rows": [
+      {
+        "id": "req-0a3812beb2a6f96d",
+        "question": "Can the Spruce fund guarantee a payment in one year?",
+        "status": "missing",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "core": true,
+        "kind": "generic:Can the Spruce fund guarantee a payment in one year?",
+        "semantic_required": true
+      }
+    ]
+  },
+  {
+    "id": "g13b",
+    "kind": "personal",
+    "expected": false,
+    "blind_supported": false,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": false,
+    "rows": [
+      {
+        "id": "req-0a3812beb2a6f96d",
+        "question": "Can the Spruce fund guarantee a payment in one year?",
+        "status": "missing",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "core": true,
+        "kind": "generic:Can the Spruce fund guarantee a payment in one year?",
+        "semantic_required": true
+      }
+    ]
+  },
+  {
+    "id": "g14a",
+    "kind": "definition",
+    "expected": true,
+    "blind_supported": true,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": true,
+    "rows": [
+      {
+        "id": "req-fb568cd34d1cf94b",
+        "question": "What is Fir duration?",
+        "status": "satisfied",
+        "reason": "The source defines duration as the stated sensitivity.",
+        "references": [
+          {
+            "claim_id": "candidate"
+          }
+        ],
+        "core": true,
+        "kind": "generic:What is Fir duration?",
+        "semantic_required": true,
+        "verdict": "supported",
+        "condition": null
+      }
+    ]
+  },
+  {
+    "id": "g14b",
+    "kind": "definition",
+    "expected": false,
+    "blind_supported": false,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": false,
+    "rows": [
+      {
+        "id": "req-fb568cd34d1cf94b",
+        "question": "What is Fir duration?",
+        "status": "missing",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "core": true,
+        "kind": "generic:What is Fir duration?",
+        "semantic_required": true
+      }
+    ]
+  },
+  {
+    "id": "g15a",
+    "kind": "chinese",
+    "expected": true,
+    "blind_supported": true,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": true,
+    "rows": [
+      {
+        "id": "req-046880ae50237a80",
+        "question": "榆树合同允许提前赎回吗？",
+        "status": "satisfied",
+        "reason": "The source explicitly prohibits early redemption.",
+        "references": [
+          {
+            "claim_id": "candidate"
+          }
+        ],
+        "core": true,
+        "kind": "generic:榆树合同允许提前赎回吗？",
+        "semantic_required": true,
+        "verdict": "supported",
+        "condition": null
+      }
+    ]
+  },
+  {
+    "id": "g15b",
+    "kind": "chinese",
+    "expected": false,
+    "blind_supported": false,
+    "candidate_count": 1,
+    "hydrated": 1,
+    "answered": false,
+    "rows": [
+      {
+        "id": "req-046880ae50237a80",
+        "question": "榆树合同允许提前赎回吗？",
+        "status": "missing",
+        "reason": "A grounded answer requires independent semantic review.",
+        "references": [],
+        "core": true,
+        "kind": "generic:榆树合同允许提前赎回吗？",
+        "semantic_required": true
+      }
+    ]
+  }
+]

@@ -126,7 +126,8 @@ export interface RunProgress {
   operation_id: string;
   operation_status: OperationStatus;
   turn: { index: number; question: string; turn_id?: string };
-  logical_status?: "running" | "completed" | "stopped" | "failed";
+  logical_status?: "running" | "awaiting_user" | "completed" | "stopped" | "failed";
+  clarification?: { question: string; why_it_matters: string; requirement_id: string } | null;
   current_operation_id?: string | null;
   instructions?: ResearchInstruction[];
   usage: RunUsage;

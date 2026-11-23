@@ -18,6 +18,9 @@ from .research_calculations import BINARY_FORMULAS, FormulaId, MULTI_FACT_FORMUL
 from .research_charts import ResearchChart
 from .research_tables import ResearchTable
 from .research_market_analytics import AnalyzeMarketSeriesRequest
+from .research_semantic_review import SemanticReview
+from .research_requirement_plan import PlannedRequirement
+from .research_scenario_calculation import ScenarioCalculationReceipt
 
 
 class ResearchInput(BaseModel):
@@ -77,6 +80,7 @@ class ResearchClaim(BaseModel):
     reasoning: str | None = None
     qualification: str | None = None
     edited_by_user: bool = False
+    scenario_calculation: ScenarioCalculationReceipt | None = None
 
 
 class ResearchFact(BaseModel):
@@ -352,6 +356,9 @@ class ResearchTurn(BaseModel):
     report: str = ""
     partial_notes: str | None = None
     question_parts: list[ResearchQuestionPart] = Field(default_factory=list)
+    requirement_plan: list[PlannedRequirement] = Field(default_factory=list)
+    requirement_plan_history: list[list[PlannedRequirement]] = Field(default_factory=list)
+    semantic_reviews: list[SemanticReview] = Field(default_factory=list)
     market_analyses: list[SavedMarketAnalysis] = Field(default_factory=list)
     stopping_note: str | None = None
     claim_ids: list[str] = Field(default_factory=list)

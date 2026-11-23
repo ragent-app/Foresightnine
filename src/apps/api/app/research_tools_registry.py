@@ -29,6 +29,7 @@ from .research_sources import ResearchSource
 from .research_statement_extraction import ExtractStatementsRequest
 from .research_tables import CreateTableRequest
 from .research_topics import ResearchCalculation, ResearchClaim, ResearchFact
+from .research_scenario_calculation import ScenarioCalculation
 
 
 MAX_READ_SOURCE_SPAN_CHARS = 25_000
@@ -127,6 +128,7 @@ class RequestOcrRequest(BaseModel):
 
 
 from .research_counter_search import CounterSearchIntent
+from .research_requirement_plan import RequirementPlanInput
 
 
 class SearchSourceRequest(BaseModel):
@@ -288,6 +290,20 @@ class CalculateRequest(BaseModel):
     rationale: str = Field(min_length=1)
 
 
+class UserExcerpt(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    sequence: int = Field(ge=0, description='0 for original question, otherwise user instruction sequence.')
+    quotation: str = Field(min_length=1, max_length=1000, description='Exact user-authored text.')
+
+
+class SourceFreeAnswer(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    text: str = Field(min_length=1, max_length=3000, description='A labeled concept explanation or explicitly assumed scenario, without unsourced current facts.')
+    basis: Literal['concept', 'assumption']
+    user_inputs: list[UserExcerpt] = Field(default_factory=list, max_length=10)
+    scenario_calculation: ScenarioCalculation | None = Field(default=None, description='Optional deterministic calculation for an explicitly hypothetical answer. Each input must quote its value, unit, currency and period from an exact user excerpt or an explicitly labeled assumption in the answer. Include the exact calculated value, unit and currency in the answer.')
+
+
 class Claim(BaseModel):
     model_config = ConfigDict(extra='forbid')
     text: str = Field(min_length=1, max_length=3000)
@@ -301,8 +317,10 @@ class Claim(BaseModel):
         description='IDs of prior claims from prior_research that this claim contradicts or weakens.')
     fact_ids: list[str] = Field(default_factory=list, max_length=30)
     calculation_ids: list[str] = Field(default_factory=list, max_length=30)
+    additional_citations: list[DraftCitation] = Field(default_factory=list, max_length=9, description='Other exact passages required for this same conclusion, including evidence from different sources.')
     reasoning: str | None = Field(default=None, max_length=3000)
     qualification: str | None = Field(default=None, max_length=3000)
+    user_inputs: list[UserExcerpt] = Field(default_factory=list, max_length=10, description='Exact user-provided context used by this claim.')
 
 
 REPORT_FORMAT_GUIDANCE = (
@@ -373,6 +391,7 @@ class SubmitRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     report: str = Field(min_length=1, max_length=100000, description=REPORT_FORMAT_GUIDANCE)
     claims: list[Claim]
+    source_free_answers: list[SourceFreeAnswer] = Field(default_factory=list, max_length=20, description='Labeled general concept explanations or explicitly assumed scenarios, never unsupported current facts.')
     limitations: list[str] = Field(max_length=499)
     stopping_reason: str = Field(min_length=1)
     status: Literal['completed', 'partial'] = 'completed'
@@ -380,6 +399,13 @@ class SubmitRequest(BaseModel):
         description='For each user instruction, bind its sequence to existing evidence or explain its unresolved limitation. Supersession needs an explicit explanation.')
     next_actions: list[SubmissionNextAction] = Field(default_factory=list, max_length=10,
         description='Concrete different authorized actions that may resolve a core gap; the server validates permissions, inputs, budget and prior attempts.')
+
+
+class ClarificationRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    question: str = Field(min_length=1, max_length=1000)
+    why_it_matters: str = Field(min_length=1, max_length=1000)
+    requirement_id: str = Field(min_length=1, max_length=200)
 
 
 class ActivateToolGroupRequest(BaseModel):
@@ -429,7 +455,12 @@ SYSTEM = ("You are a financial research coordinator. Identify evidence needs, ch
           "For annual or interim reports of issuers without SEC XBRL (mainland China, Hong Kong), after acquire_sources call extract_statements on the report source to get statement rows with unit, period columns and exact quotations (it reads the statement pages itself); record the needed rows with record_facts, check warnings, and derive single quarters explicitly from year-to-date figures. "
           "For historical market performance, resolve the instrument and use a market_data series or authorized dated observations. "
           "If required prices are missing, explain the gap without inventing prices. "
+          "For multi-part, ambiguous, scenario or personal decisions first use plan_research_requirements to record the requested "
+          "deliverables and the user constraints that could change the answer. Replan affected requirements after new instructions. "
+          "Keep explicit user constraints separate from assumptions. Lookup public product terms with impersonal keywords; "
+          "never send names of private individuals, contact details, account identifiers or personal amounts to public tools. "
           "Use checkpoint_report_draft to save each independently cited report clause incrementally. Use checkpoint_question_part as evidence becomes available to save each question component and its specific unresolved information before continuing. An answer must cite recorded fact IDs and must not present a numerical fact as an investment recommendation. "
+          "Put the actual comparison, explanation or conditional recommendation in a support claim. Use additional_citations for all required passages and user_inputs for relevant private conditions. For personal decisions, first do independent work and provide useful conditional answers where possible. Only when a fact that only the user can provide is essential and no useful conditional answer is possible, save findings and call request_user_clarification alone with one specific question and why it changes the judgment. Do not send personal identifiers or private amounts in public searches. "
           "Use deterministic calculation where needed. "
           "Use create_chart only when a visual comparison, trend, waterfall, price series, or causal transmission graph materially improves clarity; bind numeric series strictly to recorded fact_ids, calculation_ids, or acquired market_data source_ids and never supply raw numeric arrays. For chart_type='causal_graph' (macro -> industry -> company -> asset transmission chains or scenario branches), populate causal_graph without y_axes/series, bind edges to known claim_ids from prior_research when available, and mark unsupported links as assumptions. When referencing a created chart in report, place [[chart:chart_id]] on its own line. "
           "Use create_table when structured comparison, financial summary, peer comp, valuation, or time-series tables improve clarity; bind every numeric cell strictly to a fact_id or calculation_id and embed created tables in report as [[table:table_id]] on its own line. "
@@ -993,6 +1024,18 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         activity_summarizer=_rationale_summarizer(_target_extract_statements),
     ),
     ToolSpec(
+        name='request_user_clarification',
+        description='Pause for one essential user-only fact after independent work; use only if useful conditional answers are not possible. Call this tool alone.',
+        input_model=ClarificationRequest,
+        compaction_role='protected',
+    ),
+    ToolSpec(
+        name='plan_research_requirements',
+        description='Save the expected answers with exact user anchors, conditions, assumptions and the required evidence. The plan never proves completion.',
+        input_model=RequirementPlanInput,
+        compaction_role='protected',
+    ),
+    ToolSpec(
         name='checkpoint_question_part',
         description='Save a question component and its grounded partial answer or specific missing information as soon as available.',
         input_model=CheckpointQuestionPartRequest,
@@ -1006,7 +1049,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         name='submit_research',
-        description='Submit research with exact quotations and explicit gaps.',
+        description=('Submit research with exact source quotations and explicit gaps. For a general concept or hypothetical scenario, use source_free_answers with an explicit concept/assumption label. Link exact user_inputs when personal context matters. Never treat hypothetical inputs as current facts; current product terms and claims still need authorized sources.'),
         input_model=SubmitRequest,
         persistence_model=ResearchClaim,
         persistence_item_kind='claim',

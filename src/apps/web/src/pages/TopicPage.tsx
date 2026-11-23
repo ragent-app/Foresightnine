@@ -4,7 +4,7 @@ import { Link, useBlocker, useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "../api/http";
 import { readSession } from "../auth/session";
 import { useActiveRun, useAttachSources, useCancelRun, useContinueTurn, useRecoverTurn, useRecoveryStatus, useReextractPdf, useRunProgress, useSaveVersion, useStartTurn, useTopic, useTopicActions, useTurnStatuses, useVersionSources } from "../api/queries";
-import { exportFull, exportMetadata, isActiveStatus, latestVersion, restoreVersion } from "../api/research";
+import { acceptFindings, exportFull, exportMetadata, isActiveStatus, latestVersion, restoreVersion } from "../api/research";
 import type { AvailableVersionSource, CreatedSource, ResearchInstruction } from "../api/types";
 import { gapText } from "../lib/copy";
 import { saveJson } from "../lib/download";
@@ -29,7 +29,7 @@ import { TopicContext, type FocusCitation, type LiveRun, type PanelState, type T
 import { InterruptedTurn, LiveTurn, TurnView, type AnswerTools, type TurnActions } from "./topic/Conversation";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys, useTopics } from "../api/queries";
-import { appendInstruction, stopResearchTurn } from "../api/writes";
+import { appendInstruction, continueTurn as continueWaitingTurn, stopResearchTurn } from "../api/writes";
 import { showToast } from "../ui/toast";
 import { LiveCapsule } from "./topic/LiveBar";
 import { ReaderPanel } from "./topic/ReaderPanel";
@@ -106,6 +106,7 @@ export function TopicPage() {
   const [instructionError, setInstructionError] = useState<string | null>(null);
   const [receipts, setReceipts] = useState<ResearchInstruction[]>([]);
   const [stoppingTurn, setStoppingTurn] = useState(false);
+  const [closedWaitingTurn, setClosedWaitingTurn] = useState<string | null>(null);
   const [focus, setFocus] = useState<FocusCitation | null>(null);
   const [options, setOptions] = useState<RunOptions>(DEFAULT_OPTIONS);
   const [pendingAsk, setPendingAsk] = useState<PendingAsk | null>(null);
@@ -146,6 +147,7 @@ export function TopicPage() {
   const latestRun = runs.latestRun;
   const progress = useRunProgress(topicId, runs.activeRun?.operation_id ?? latestRun?.operation_id ?? null);
   const batchStatus = turnStatuses.data?.find((item) => item.topic_id === topicId);
+  const awaitingUser = progress.progress?.logical_status === "awaiting_user" && closedWaitingTurn !== progress.progress.operation_id;
   const logicalRunning = progress.progress?.logical_status === "running" || (!progress.progress && batchStatus?.logical_status === "running");
   const terminalLogical = progress.progress?.logical_status && progress.progress.logical_status !== "running";
   const activeRun = terminalLogical ? null : runs.activeRun ?? (logicalRunning ? latestRun : null);
@@ -168,7 +170,7 @@ export function TopicPage() {
 
   // Reset per-topic state when navigating between topics.
   useEffect(() => {
-    setPanel(null); setText((() => { try { return sessionStorage.getItem(draftKey) ?? ""; } catch { return ""; } })()); setReceipts([]); setInstructionBusy(false); setInstructionError(null); setFocus(null); setPendingAsk(null); setAskedOp(null); setPendingContinue(null); setAwayFromLive(false);
+    setPanel(null); setText((() => { try { return sessionStorage.getItem(draftKey) ?? ""; } catch { return ""; } })()); setReceipts([]); setInstructionBusy(false); setInstructionError(null); setClosedWaitingTurn(null); setFocus(null); setPendingAsk(null); setAskedOp(null); setPendingContinue(null); setAwayFromLive(false);
     nearBottomRef.current = true; lastScrollTopRef.current = 0; suppressScrollUntilRef.current = 0;
     setNotice(null); setOptions(DEFAULT_OPTIONS); setDraftState({}); setSendPrompt(null);
   }, [topicId, draftKey]);
@@ -371,6 +373,10 @@ export function TopicPage() {
 
   const send = () => {
     const question = text.trim();
+    if (awaitingUser && progress.progress?.turn.turn_id && latestRun && question && !instructionBusy) {
+      void answerClarification(question);
+      return;
+    }
     if (activeRun) {
       const turnId = progress.progress?.turn.turn_id;
       if (!question || instructionBusy) return;
@@ -395,6 +401,26 @@ export function TopicPage() {
     if (!version || !question || locked || !optionsValid(options)) return;
     if (dirty) { setSendPrompt({ error: null }); return; }
     sendWith(version.version_id);
+  };
+
+  const answerClarification = async (answer: string) => {
+    const snapshot = progress.progress;
+    if (!snapshot?.turn.turn_id || !latestRun || instructionBusy) return;
+    setInstructionBusy(true); setInstructionError(null);
+    try {
+      const receipt = await appendInstruction(topicId, snapshot.turn.turn_id, answer);
+      setReceipts((previous) => [...previous.filter((item) => item.instruction_id !== receipt.instruction_id), receipt]);
+      await continueWaitingTurn(topicId, latestRun.operation_id);
+      setClosedWaitingTurn(snapshot.operation_id);
+      setText((current) => current.trim() === answer ? "" : current);
+      try { sessionStorage.removeItem(draftKey); } catch {}
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.runs(topicId) }),
+        queryClient.invalidateQueries({ queryKey: ["research-turn-statuses"] }),
+      ]);
+    } catch (error) {
+      setInstructionError(`补充已保存后可重试继续研究：${describeError(error)}`);
+    } finally { setInstructionBusy(false); }
   };
 
   const followLiveOutput = useCallback(() => {
@@ -783,11 +809,37 @@ export function TopicPage() {
                 <TurnView
                   key={turn.turn_id}
                   turn={turn}
+                  waiting={awaitingUser && turn.turn_id === progress.progress?.turn.turn_id}
                   first={index === 0 && turn.question.trim() === title.trim()}
                   {...(index === turns.length - 1 && canModifyLast ? latestTurnControls(turn) : view ? { tools: { menu: [forkEntry(turn)] } } : {})}
-                  actions={index === turns.length - 1 && turn.status === "partial" && !orphanRun && !activeRun ? turnActions(turn.question, turn.reason !== "submitted", turn.turn_id) : null}
+                  actions={index === turns.length - 1 && turn.status === "partial" && !orphanRun && !activeRun && !awaitingUser ? turnActions(turn.question, turn.reason !== "submitted", turn.turn_id) : null}
                 />
               ))}
+              {awaitingUser && progress.progress?.clarification ? (
+                <div className="turn"><div className="callout" role="status">
+                  <span className="h">需要你的补充</span>
+                  <p>{progress.progress.clarification.question}</p>
+                  <p>{progress.progress.clarification.why_it_matters}</p>
+                  <button type="button" className="btn" disabled={instructionBusy} onClick={() => {
+                    const turnId = progress.progress?.turn.turn_id;
+                    if (!turnId) return;
+                    setInstructionBusy(true); setInstructionError(null);
+                    void acceptFindings(topicId, turnId).then(() => { setClosedWaitingTurn(progress.progress?.operation_id ?? null); return Promise.all([
+                      queryClient.invalidateQueries({ queryKey: queryKeys.runs(topicId) }),
+                      queryClient.invalidateQueries({ queryKey: ["research-turn-statuses"] }),
+                    ]); }).catch((error) => setInstructionError(describeError(error))).finally(() => setInstructionBusy(false));
+                  }}>接受现有分析</button>
+                  <button type="button" className="btn" disabled={stoppingTurn} onClick={() => {
+                    const turnId = progress.progress?.turn.turn_id;
+                    if (!turnId) return;
+                    setStoppingTurn(true);
+                    void stopResearchTurn(topicId, turnId).then(() => { setClosedWaitingTurn(progress.progress?.operation_id ?? null); return Promise.all([
+                      queryClient.invalidateQueries({ queryKey: queryKeys.runs(topicId) }),
+                      queryClient.invalidateQueries({ queryKey: ["research-turn-statuses"] }),
+                    ]); }).catch((error) => setInstructionError(describeError(error))).finally(() => setStoppingTurn(false));
+                  }}>停止研究</button>
+                </div></div>
+              ) : null}
               {orphanRun && !activeRun ? (
                 <InterruptedTurn
                   number={turns.length + 1}
@@ -835,7 +887,7 @@ export function TopicPage() {
             <div className="dock-inner">
               {live ? (
                 awayFromLive ? <LiveCapsule live={live} onJump={scrollToLive} /> : null
-              ) : suggestions.length > 0 ? (
+              ) : !awaitingUser && suggestions.length > 0 ? (
                 <div className="suggest">
                   {suggestions.map((item) => <button key={item.key} type="button" className="link" onClick={() => prefill(item.prefill)}>{item.label}</button>)}
                 </div>
@@ -853,7 +905,7 @@ export function TopicPage() {
                 addDisabled={locked}
                 onDropFiles={(files) => { if (files[0]) setPanel({ kind: "add", initial: { tab: "file", file: files[0] } }); }}
                 label="追问"
-                placeholder={activeRun ? "追加研究要求…" : "继续追问…"}
+                placeholder={awaitingUser ? "补充这项信息…" : activeRun ? "追加研究要求…" : "继续追问…"}
                 submitLabel="发送"
                 disabled={startTurn.isPending && !activeRun}
                 onStop={live ? () => {

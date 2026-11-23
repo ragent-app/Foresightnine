@@ -20,6 +20,7 @@ from tests.test_research_multiturn import (Q1, Q2, TEXT, Scripted, env, read_all
 from tests.fin_data.helpers import ConceptTransport
 from tests.fin_runtime_helpers import FakeTransport, json_reply, make_toolbox
 from tests.test_research_runtime import Model, context, source, turn
+from tests.semantic_review_fixture import fixture_review
 
 PROGRESS_KEYS = {'operation_id', 'operation_status', 'turn', 'usage', 'current', 'interim', 'context_receipts', 'events', 'event_count',
                  'started_at', 'updated_at', 'version_id'}
@@ -236,6 +237,7 @@ def test_focus_range_alone_licenses_a_quotation_and_survives_a_checkpoint():
     submission = {'report': 'x', 'claims': [claim], 'limitations': [], 'stopping_reason': 'answered'}
     saved = []
     model = Model([turn('submit_research', submission, 'b')])
+    model.review_verdict = 'supported'
     result = run_research_agent(question='Revenue?', sources=[source()], model=model, context=context(), focus=focus,
                                 checkpoint=lambda state: saved.append(deepcopy(state)))
     assert result.status == 'completed'
@@ -247,7 +249,9 @@ def test_focus_range_alone_licenses_a_quotation_and_survives_a_checkpoint():
     assert 'previously read range' in [m for m in unfocused.inputs[1] if m.get('role') == 'tool'][-1]['content']
     # A continuation restores the same focus from the checkpoint, not from the call arguments.
     state = next(deepcopy(item) for item in saved if item['pending'] and item['pending']['kind'] == 'tool_batch')
-    again = run_research_agent(question='Revenue?', sources=[source()], model=Model([]), context=context(), initial_state=state)
+    resumed = Model([])
+    resumed.review_verdict = 'supported'
+    again = run_research_agent(question='Revenue?', sources=[source()], model=resumed, context=context(), initial_state=state)
     assert again.status == 'completed' and again.claims[0]['citations'][0]['location'] == {'character_start': 0, 'character_end': 20}
 
 
@@ -464,6 +468,8 @@ def test_model_note_extraction_excludes_thinking_signatures_and_tool_json():
             return 10
 
         def complete_turn(self, turn_input, **kwargs):
+            if not turn_input.tools:
+                return fixture_review(turn_input.user)
             self.step += 1
             if self.step == 1:
                 # Anthropic Messages blocks: thinking, redacted_thinking, visible text, tool_use

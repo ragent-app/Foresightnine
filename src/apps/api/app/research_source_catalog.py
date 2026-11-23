@@ -89,3 +89,32 @@ def official_document_capability(url: str, *, sec_available: bool) -> SourceCapa
     if web_cap.hosts and hostname not in web_cap.hosts:
         return None
     return web_cap
+
+
+def run_evidence_routes(caps: dict, *, available_source: bool) -> list[dict[str, str]]:
+    """The catalog is descriptive. Authorization remains with the configured tool."""
+    routes = []
+
+    def offer(tool: str, evidence: str, limit: str) -> None:
+        routes.append({'tool': tool, 'provides': evidence, 'scope': limit})
+
+    if available_source:
+        offer('search_library / read_sources', 'Located passages from current authorized documents',
+              'Check the source version, effective date, exceptions and selected coverage.')
+    if caps.get('news_search_available'):
+        offer('news_search', 'Public leads for missing evidence or a counterargument',
+              'Public keywords only. A search hit is not the underlying document.')
+    if caps.get('acquire_available'):
+        offer('acquire_sources', 'Original text from a permitted discovered or user-supplied URL',
+              'Subject to source terms, access, availability and the research cutoff.')
+    if caps.get('filings_available') or caps.get('issuer_documents_available'):
+        offer(' / '.join(k for k in ('filings', 'issuer_documents') if caps.get(k + '_available')),
+              'Issuer or regulatory document discovery', 'Confirm issuer, jurisdiction, effective version and dates.')
+    if caps.get('sec_financials_available') or caps.get('cn_financials_available'):
+        offer('company_financials', 'Issuer-reported structured figures',
+              'Inspect available markets, periods, units and line definitions in the tool results.')
+    if any(caps.get(k) for k in ('market_data_available', 'cn_market_data_available', 'hk_market_data_available')):
+        offer('market_data', 'Instrument price and volume observations', 'Coverage and freshness depend on the selected connector.')
+    offer('calculate_financials', 'Reproducible calculations from located input facts',
+          'Match dates, units, currency, instrument and formula. Keep assumptions distinct from observations.')
+    return routes

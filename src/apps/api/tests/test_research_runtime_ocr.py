@@ -465,6 +465,7 @@ def test_ondemand_seconds_env_default(monkeypatch):
 @pytest.mark.parametrize('at_ingestion', [False, True])
 def test_api_run_ocr_vision_page_is_billed_in_ledger(monkeypatch, tmp_path, at_ingestion):
     import time
+    from tests.semantic_review_fixture import fixture_review
     from types import SimpleNamespace
     from uuid import uuid4
 
@@ -508,6 +509,8 @@ def test_api_run_ocr_vision_page_is_billed_in_ledger(monkeypatch, tmp_path, at_i
 
         def complete(self, messages, tools, **kwargs):
             self.calls += 1
+            if not tools:
+                return fixture_review(messages[1]['content'])
             results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
             if not results:
                 return turn('news_search', {'query': 'Report revenue', 'rationale': 'find'}, 'd1')
@@ -560,6 +563,6 @@ def test_api_run_ocr_vision_page_is_billed_in_ledger(monkeypatch, tmp_path, at_i
     version = client.get(path, headers=headers).json()['versions'][-1]
     assert version['content']['claims'][0]['citations'][0]['source_id'] == new_id
     settlement = client.get(path + '/runs/' + operation_id + '/settlement', headers=headers).json()
-    # four research model calls plus one vision OCR call, all settled through the account ledger
-    assert provider.calls == 4
+    # four writer calls, one review and one vision OCR call, all settled through the account ledger
+    assert provider.calls == 5
     assert settlement['model_ledger']['settled_calls'] == provider.calls + 1, settlement

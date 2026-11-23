@@ -106,7 +106,7 @@ from .research_topics import (AttachSourcesInput, ResearchCalculation, ResearchF
 from .research_clock import build_research_clock
 from .research_progress import build_progress
 from .research_live_stream import ResearchLiveBroker, format_sse_frame, parse_last_event_id
-from .research_answer_evidence import AnswerEvidence, part_references, visible_answer_content
+from .research_answer_evidence import AnswerEvidence, invalidate_edited_answers, part_references, visible_answer_content
 from .research_turns import merge_turn, prior_research_input
 from .research_turn_persister import ResearchTurnPersister, record_failed_checkpoint_version
 from .research_calculations import BINARY_FORMULAS, CalculationError, CalculationRequest, PublicCalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, MULTI_FACT_FORMULAS, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, verified_direction_proof, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
@@ -1878,6 +1878,14 @@ def _version_source_hashes(version) -> dict[str, str]:
         sid, digest = row.get("source_id"), row.get("content_sha256")
         if isinstance(sid, str):
             hashes[sid] = digest if isinstance(digest, str) and hashes.get(sid, digest) == digest else ""
+    for turn in content.turns:
+        for review in turn.semantic_reviews:
+            for item in review.evidence:
+                if item.kind != 'source':
+                    continue
+                used.add(item.source_id)
+                if hashes.get(item.source_id) != item.content_sha256:
+                    hashes[item.source_id] = ""
     return {**dict.fromkeys(used, ""), **hashes}
 
 
@@ -2034,6 +2042,8 @@ def export_research_version(topic_id: str, version_id: str, authorization: str |
                     answer_sources.update(evidence.source_ids(ref))
     except KeyError as error:
         raise ApiProblem(403, "invalid_request", "A research answer references unavailable evidence.") from error
+    answer_sources.update(item.source_id for turn in version.content.turns
+                          for review in turn.semantic_reviews for item in review.evidence if item.kind == 'source')
     source_ids.update(answer_sources)
     chart_source_ids: set[str] = set()
     for chart in version.content.charts:
@@ -2200,7 +2210,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                 id_map[claim.claim_id] = "claim-" + uuid4().hex
             saved = claim.model_copy(update={"claim_id": id_map.get(claim.claim_id, claim.claim_id),
                                              "turn_id": original.turn_id if original is not None else None,
-                                             "edited_by_user": True})
+                                             "edited_by_user": True, "scenario_calculation": None})
             claims.append(saved)
             changed_claims.append(saved)
         final_ids = {claim.claim_id for claim in claims}
@@ -2270,6 +2280,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
         for entry in calculations:
             entry.input_status = calculation_input_status(entry.model_dump(mode="json"), fact_rows)
         content.calculations = calculations
+        invalidate_edited_answers(before, content)
         existing = {row.get("source_id") for row in content.sources}
         for sid, source in loaded.items():
             if sid not in existing:
@@ -3037,14 +3048,14 @@ class ResearchStartResponse(OperationResponse):
 class ResearchRunListEntry(OperationResponse):
     turn_id: str | None = None
     current_operation_id: str | None = None
-    logical_status: Literal["running", "completed", "stopped", "failed"] | None = None
+    logical_status: Literal["running", "awaiting_user", "completed", "stopped", "failed"] | None = None
 
 
 class ResearchTurnSummary(BaseModel):
     topic_id: str
     turn_id: str
     current_operation_id: str
-    logical_status: Literal["running", "completed", "stopped", "failed"]
+    logical_status: Literal["running", "awaiting_user", "completed", "stopped", "failed"]
     version_id: str | None = None
 
 
@@ -3520,6 +3531,11 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
                 cursor = pending.get('cursor', 0)
                 calls = pending.get('calls', [])
                 tool_name = calls[cursor].get('name') if 0 <= cursor < len(calls) else None
+                if tool_name == 'submit_research' and state.get('_semantic_replay_action') == action:
+                    if doc['sequence'] != expected:
+                        state['user_instructions'] = _instruction_view(turn_instructions.read(*identity))
+                        return True
+                    return False
                 local_read = tool_name in {'read_sources', 'outline_source', 'search_source', 'read_pages'}
                 if turn_instructions.claim_action(*identity, operation_id, action, expected, local_read=local_read):
                     return False
@@ -3582,6 +3598,7 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
 
         if admitted_continuation.get('runtime') is not None:
             resumed = admitted_continuation['runtime']
+            resumed.pop('clarification', None)
             if (resumed.get('stopped') == 'no_progress'
                     and TURN_RECORDS[identity[-1]]['sequence'] > resumed.get('model_instruction_sequence', 0)):
                 resumed.pop('stopped', None)
@@ -3651,7 +3668,12 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
             # The validated candidate permits local delivery after a failed version write.
             def stage_delivery() -> None:
                 RESEARCH_WORK.put(operation_id, {**job, 'result': result.model_dump(mode='json')})
-            if doc['status'] == 'sealed':
+            if outcome.reason == 'awaiting_user' and isinstance(last_runtime_state.get('clarification'), dict):
+                if not turn_instructions.wait_for_user(*identity, operation_id,
+                        last_runtime_state.get('model_instruction_sequence', 0), last_runtime_state['clarification'],
+                        persist=stage_delivery):
+                    raise ApiProblem(503, 'internal_error', 'Research changed while requesting clarification.', retryable=True)
+            elif doc['status'] == 'sealed':
                 turn_instructions.fenced(*identity, operation_id, stage_delivery, allow_sealed=True)
             else:
                 # Budget and terminal provider failures may prevent another model call.
@@ -3675,16 +3697,19 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
 
     def commit(_operation_id: str, result: BaseModel) -> None:
         assert isinstance(result, ResearchRunResult)
-        saved = persister.commit_result(
-            operation_id=_operation_id,
-            result=result,
-            runtime_state=last_runtime_state,
-        )
+        saved = turn_instructions.fenced(*identity, _operation_id, lambda: persister.commit_result(
+            operation_id=_operation_id, result=result, runtime_state=last_runtime_state,
+        ), allow_sealed=True, allow_waiting=True)
 
-        _update_turn_status(topic_id, _operation_id, 'completed', saved.version_id)
+        turn_doc = turn_instructions.read(*identity)
+        _update_turn_status(topic_id, _operation_id,
+                            'awaiting_user' if turn_doc['status'] == 'awaiting_user' else 'completed', saved.version_id)
         RESEARCH_WORK.delete(_operation_id)
 
     def record_inputs(operation_id: str) -> None:
+        current_status = TURN_STATUS.get(topic_id)
+        if continuation_input is None and current_status and current_status.get('owner_id') == account.account_id and current_status.get('logical_status') == 'awaiting_user':
+            raise ApiProblem(409, 'lifecycle_conflict', 'Answer or stop the waiting research turn first.')
         for job_id, job in RESEARCH_WORK.items():
             if (job['account_id'] == account.account_id and job['topic_id'] == topic_id
                     and job_id != (continuation_input or {}).get('operation_id')):
@@ -3741,8 +3766,12 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
         old_turn = TURN_RECORDS.get(turn_meta['turn_id'])
         TURN_RECORDS.put(operation_id, {'account_id': account.account_id, 'topic_id': topic_id,
                                         'turn_id': turn_meta['turn_id']})
-        turn_instructions.begin(*identity, operation_id, previous_operation_id=previous if old_turn else None,
-                                allow_reopen=not background and bool(previous))
+        try:
+            turn_instructions.begin(*identity, operation_id, previous_operation_id=previous if old_turn else None,
+                                    allow_reopen=not background and bool(previous),
+                                    require_waiting=bool(continuation_input and not background and snapshot.get('clarification')))
+        except (InstructionNotFound, InstructionConflict, InstructionInvalid) as error:
+            raise _turn_http_error(error) from error
         TURN_STATUS.put(topic_id, {'owner_id': account.account_id, 'topic_id': topic_id,
                                    'turn_id': turn_meta['turn_id'], 'current_operation_id': operation_id,
                                    'logical_status': 'running'})
@@ -4044,6 +4073,30 @@ def stop_research_turn(topic_id: str, turn_id: str, http_request: Request, idemp
     return {'turn_id': turn_id, 'status': 'stopped'}
 
 
+@app.post('/v2/research/topics/{topic_id}/turns/{turn_id}/accept-findings', include_in_schema=False)
+def accept_research_findings(topic_id: str, turn_id: str, http_request: Request) -> dict:
+    account = _authenticated_account(http_request.headers.get('Authorization'))
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+        identity = (account.account_id, topic_id, turn_id)
+        doc = turn_instructions.read(*identity)
+        operation_id = doc['operation_id']
+        version = next((v for v in reversed(topic.versions) if _agent_turn_for(v, operation_id)), None)
+        operation = operations._cache_operation(operation_id)
+        if version is None or operation.status in {'pending', 'running'}:
+            raise InstructionConflict('findings are still being saved')
+        turn = _agent_turn_for(version, operation_id)
+        if turn is None or not (turn.report.strip() or (turn.partial_notes or '').strip() or any(p.answer.strip() for p in turn.question_parts)):
+            raise InstructionConflict('no readable findings are available to accept')
+        turn_instructions.accept_findings(*identity, operation_id, version.version_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, 'not_found', 'Research topic not found.') from error
+    except (InstructionNotFound, InstructionConflict) as error:
+        raise _turn_http_error(error) from error
+    _update_turn_status(topic_id, operation_id, 'completed', version.version_id)
+    return {'turn_id': turn_id, 'status': 'completed', 'version_id': version.version_id}
+
+
 def _reconcile_research_work() -> None:
     """Only jobs admitted with automatic continuation are eligible for this sweep."""
     if not RESEARCH_WORK:
@@ -4087,7 +4140,7 @@ def _reconcile_research_attempt(operation_id: str, work: dict, *, now: datetime 
         return
     delivered = next((v for v in reversed(topic.versions) if _agent_turn_for(v, operation_id)), None)
     if delivered:
-        _update_turn_status(topic_id, operation_id, 'completed', delivered.version_id)
+        _update_turn_status(topic_id, operation_id, 'awaiting_user' if doc['status'] == 'awaiting_user' else 'completed', delivered.version_id)
         RESEARCH_WORK.delete(operation_id)
         return
     inputs = RESEARCH_RUN_INPUTS.get(operation_id) or {}
@@ -4118,17 +4171,24 @@ def _reconcile_research_attempt(operation_id: str, work: dict, *, now: datetime 
                     *(row['source_id'] for row in cp.get('_sources', []))]))
                 chain = ResearchVersionChain(research_topics, account_id, topic_id, candidate.parent_version_id, sources)
                 saved = chain.save(chain.current(), candidate.content)
-                _update_turn_status(topic_id, operation_id, 'completed', saved.version_id)
+                _update_turn_status(topic_id, operation_id, 'awaiting_user' if doc['status'] == 'awaiting_user' else 'completed', saved.version_id)
             else:
                 _deliver_saved_research(operation_id, account_id, reason=None)
             RESEARCH_WORK.delete(operation_id)
-        turn_instructions.fenced(*identity, operation_id, deliver, allow_sealed=True)
+        turn_instructions.fenced(*identity, operation_id, deliver, allow_sealed=True, allow_waiting=True)
         return
     pending = cp.get('pending') or {}
     last_failure = next((e for e in reversed(cp.get('events', [])) if e.get('kind') == 'model_failure'), {})
+    cursor = pending.get('cursor', 0)
+    calls = pending.get('calls', [])
+    action = f"{pending.get('call_id')}:{cursor}"
+    review_pending = cp.get('_semantic_pending') or {}
+    returned_review = (pending.get('kind') == 'tool_batch' and type(cursor) is int and 0 <= cursor < len(calls)
+                       and calls[cursor].get('name') == 'submit_research'
+                       and (review_pending.get('phase') == 'returned' or cp.get('_semantic_replay_action') == action))
     claimed = (pending.get('kind') == 'tool_batch' and turn_instructions.action_status(
-        *identity, operation_id, f"{pending.get('call_id')}:{pending.get('cursor', 0)}",
-        cp.get('model_instruction_sequence', 0)) == 'claimed_unknown')
+        *identity, operation_id, action,
+        cp.get('model_instruction_sequence', 0)) == 'claimed_unknown' and not returned_review)
     if claimed or last_failure.get('external_state') == 'unknown' or pending.get('kind') not in {
             None, 'model_returned', 'tool_batch'}:
         def finish_unknown() -> None:
@@ -4339,6 +4399,8 @@ def _logical_run_status(doc: dict, operation_status: str, version: ResearchVersi
     operation_id = doc['operation_id']
     if doc['status'] == 'stopped' or operation_status == 'cancelled':
         status = 'stopped'
+    elif doc['status'] == 'awaiting_user':
+        status = 'awaiting_user'
     elif version and _agent_turn_for(version, doc['operation_id']):
         status = 'completed'
     elif RESEARCH_WORK.get(operation_id) is not None:
@@ -4350,7 +4412,8 @@ def _logical_run_status(doc: dict, operation_status: str, version: ResearchVersi
 
 def _turn_progress_fields(doc: dict, operation_status: str, version: ResearchVersion | None) -> dict:
     return {'instructions': _instruction_view(doc), 'logical_status': _logical_run_status(doc, operation_status, version),
-            'current_operation_id': doc['operation_id'], 'instruction_sequence': doc['sequence']}
+            'current_operation_id': doc['operation_id'], 'instruction_sequence': doc['sequence'],
+            'clarification': doc.get('clarification') if doc['status'] == 'awaiting_user' else None}
 
 
 

@@ -306,7 +306,7 @@ function FootToggle({ label, open, onToggle }: { label: string; open: boolean; o
  * Spec v6 answer order: what is missing (partial), the answer's lead, key numbers, the report,
  * counter-evidence, then one quiet row for evidence, parts, process and record links.
  */
-export function AnswerBlock({ turn, actions, tools }: { turn: ResearchV2.ResearchTurn; actions: TurnActions | null; tools?: AnswerTools | undefined }) {
+export function AnswerBlock({ turn, actions, tools, waiting = false }: { turn: ResearchV2.ResearchTurn; actions: TurnActions | null; tools?: AnswerTools | undefined; waiting?: boolean }) {
   const view = useTopicView();
   const items = turnContent(view.content, turn);
   const partial = turn.status === "partial";
@@ -387,7 +387,7 @@ export function AnswerBlock({ turn, actions, tools }: { turn: ResearchV2.Researc
 
   return (
     <div className="answer">
-      {lifecycle === "stopped" || (!lifecycle && String(turn.reason) === "provider_cancelled") ? <span className="meta">已停止</span> : lifecycle === "completed" || (!lifecycle && turn.status === "completed") ? <span className="meta">已完成</span> : null}
+      {waiting ? <span className="meta">等待你的补充</span> : lifecycle === "stopped" || (!lifecycle && String(turn.reason) === "provider_cancelled") ? <span className="meta">已停止</span> : lifecycle === "completed" || (!lifecycle && turn.status === "completed") ? <span className="meta">已完成</span> : null}
       <ClaimRefContext.Provider value={claimRefs}>
         {lead ? (
           <div className="report answer-lead">
@@ -439,6 +439,9 @@ export function AnswerBlock({ turn, actions, tools }: { turn: ResearchV2.Researc
             <Icon name="chev" size={14} />
           </button>
         ))}
+        {(turn.requirement_plan?.length || turn.semantic_reviews?.length) ? (
+          <button type="button" className="foot-btn" onClick={() => view.openPanel({ kind: "record", tab: "steps", turnKey: turn.turn_id })}>问题要求与依据核验<Icon name="chev" size={14} /></button>
+        ) : null}
         {turn.replaces_turn_id ? (
           <button type="button" className="foot-btn" title="上一次的回答保留在版本历史中" onClick={() => view.openPanel({ kind: "review" })}>
             重新生成的回答
@@ -475,9 +478,9 @@ export function AnswerBlock({ turn, actions, tools }: { turn: ResearchV2.Researc
   );
 }
 
-export function TurnView({ turn, actions, first = false, tools, askTools, editing = false, onEditDone }: {
+export function TurnView({ turn, actions, first = false, tools, askTools, editing = false, onEditDone, waiting = false }: {
   turn: ResearchV2.ResearchTurn; actions: TurnActions | null; first?: boolean;
-  tools?: AnswerTools | undefined; askTools?: ReactNode; editing?: boolean; onEditDone?: (question: string | null) => void;
+  tools?: AnswerTools | undefined; askTools?: ReactNode; editing?: boolean; onEditDone?: (question: string | null) => void; waiting?: boolean;
 }) {
   const view = useTopicView();
   const number = displayTurnNumber(turn);
@@ -500,7 +503,7 @@ export function TurnView({ turn, actions, first = false, tools, askTools, editin
       {(turn.user_instructions ?? []).map((instruction) => (
         <div key={instruction.instruction_id}><AskBubble text={instruction.text} /><span className="meta">{instructionReceiptLabel(instruction.status)}</span><InstructionDelivery instruction={instruction} /></div>
       ))}
-      <AnswerBlock turn={turn} actions={actions} tools={tools} />
+      <AnswerBlock turn={turn} actions={actions} tools={tools} waiting={waiting} />
     </section>
   );
 }

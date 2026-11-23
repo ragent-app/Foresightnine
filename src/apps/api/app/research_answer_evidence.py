@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
+from hashlib import sha256
 
 from .research_topics import QuestionPartReference, ResearchContent, ResearchGap, ResearchQuestionPart, ResearchTurn
+from .research_scenario_calculation import scenario_receipt_intact
 
 
 def part_references(part: ResearchQuestionPart) -> Iterator[QuestionPartReference]:
@@ -20,6 +22,31 @@ class AnswerEvidence:
         self.charts = {chart.chart_id: chart for chart in content.charts}
         self.analyses = {a.analysis_id: a for t in content.turns for a in t.market_analyses}
         self.sources = {source["source_id"] for source in content.sources if source.get("source_id")}
+
+        self.review_sources: dict[str, set[str]] = {}
+        self.local_claims = set()
+        for turn in content.turns:
+            messages = {0: turn.question, **{row.sequence: row.text for row in turn.user_instructions}}
+            for review in turn.semantic_reviews:
+                claim = self.claims.get(review.claim_id)
+                if not claim or review.verdict not in ('supported', 'conditional') or claim.edited_by_user:
+                    continue
+                self.review_sources.setdefault(claim.claim_id, set()).update(
+                    item.source_id for item in review.evidence if item.kind == 'source')
+                if claim.turn_id != turn.turn_id:
+                    continue
+                if claim.scenario_calculation and not scenario_receipt_intact(claim.scenario_calculation, claim.text, messages):
+                    continue
+                # The server validated the message receipts at submission. Recheck
+                # saved text when available (instructions are attached after merge).
+                local = [item for item in review.evidence if item.kind in ('concept', 'assumption')]
+                if not local or any(item.quotation != claim.text or item.character_start != 0 or
+                                    item.content_sha256 != sha256(claim.text.encode()).hexdigest() for item in local):
+                    continue
+                if all(messages[item.sequence][item.character_start:item.character_end] == item.quotation
+                       and sha256(messages[item.sequence].encode()).hexdigest() == item.content_sha256
+                       for item in review.evidence if item.kind == 'user' and item.sequence in messages):
+                    self.local_claims.add(claim.claim_id)
 
     def source_ids(self, ref: QuestionPartReference) -> set[str]:
         """Raise KeyError for a missing dependency, including a calculation input."""
@@ -39,13 +66,14 @@ class AnswerEvidence:
             sources.add(ref.source_id)
         if ref.claim_id:
             claim = self.claims[ref.claim_id]
+            sources.update(self.review_sources.get(claim.claim_id, ()))
             sources.update(citation.source_id for citation in claim.citations)
             calculations.update(claim.calculation_ids)
             facts.update(claim.fact_ids)
         for cid in calculations:
             facts.update(row.fact_id for row in self.calculations[cid].inputs)
         sources.update(self.facts[fid].source_id for fid in facts)
-        if not sources:
+        if not sources and ref.claim_id not in self.local_claims:
             raise KeyError("No evidence source")
         return sources
 
@@ -83,6 +111,45 @@ def reconcile_saved_answers(content: ResearchContent, turn: ResearchTurn) -> Non
             turn.gaps.append(ResearchGap(code="answer_evidence_unavailable", message=reason))
 
 
+def invalidate_edited_answers(before: ResearchContent, after: ResearchContent) -> None:
+    """An edit makes its previous answer and review inapplicable in this version."""
+    def changed(old, new, key):
+        current = {getattr(item, key): item for item in new}
+        return {getattr(item, key) for item in old if current.get(getattr(item, key)) != item}
+
+    facts = changed(before.facts, after.facts, 'fact_id')
+    calculations = changed(before.calculations, after.calculations, 'calculation_id')
+    calculations.update(c.calculation_id for c in before.calculations if any(i.fact_id in facts for i in c.inputs))
+    claims = changed(before.claims, after.claims, 'claim_id')
+    claims.update(c.claim_id for c in before.claims
+                  if facts.intersection(c.fact_ids) or calculations.intersection(c.calculation_ids))
+    if not (claims or facts or calculations):
+        return
+    reason = '结论或其计算依据已编辑，先前的核验仅适用于编辑前的版本。'
+    for turn in after.turns:
+        affected = any(row.claim_id in claims for row in turn.semantic_reviews)
+        turn.semantic_reviews = [row for row in turn.semantic_reviews if row.claim_id not in claims]
+        for part in turn.question_parts:
+            if any(ref.claim_id in claims or ref.fact_id in facts or ref.calculation_id in calculations
+                   for ref in part_references(part)):
+                part.status, part.answer, part.reason = 'unresolved', '', reason
+                part.references, part.requirements = [], []
+                affected = True
+        if affected:
+            turn.report, turn.partial_notes, turn.status = '', None, 'partial'
+            for instruction in turn.user_instructions:
+                instruction.references = [ref for ref in instruction.references
+                                          if ref.claim_id not in claims and ref.fact_id not in facts
+                                          and ref.calculation_id not in calculations]
+                instruction.text_locations = [loc for loc in instruction.text_locations if loc.instruction_sequence]
+                if instruction.delivery_status == 'linked_for_review' and not (instruction.references or instruction.text_locations):
+                    instruction.delivery_status, instruction.reason = 'unresolved', reason
+            if not any(gap.code == 'edited_answer' for gap in turn.gaps):
+                turn.gaps.append(ResearchGap(code='edited_answer', message=reason))
+    if after.turns:
+        after.gaps = [gap.model_copy(deep=True) for gap in after.turns[-1].gaps]
+
+
 def visible_answer_content(content: ResearchContent, can_display: Callable[[str], bool]) -> ResearchContent:
     """Restrict a read projection after source access changes; keep the stored version immutable."""
     evidence = AnswerEvidence(content)
@@ -101,6 +168,8 @@ def visible_answer_content(content: ResearchContent, can_display: Callable[[str]
     used.update(r.source_id for turn in content.turns for r in turn.read_ranges)
     used.update(ref.source_id for turn in content.turns for part in turn.question_parts
                 for ref in part_references(part) if ref.source_id)
+    used.update(item.source_id for turn in content.turns for review in turn.semantic_reviews for item in review.evidence
+                if item.kind == 'source')
     hidden = {sid for sid in used if not can_display(sid)}
     if not hidden:
         return content
@@ -123,6 +192,11 @@ def visible_answer_content(content: ResearchContent, can_display: Callable[[str]
         # Free text, tool events and aggregate views can contain observations from multiple sources.
         # Retain only answers that have their own complete, currently displayable evidence chain.
         turn.report, turn.partial_notes, turn.stopping_note = "", None, None
+        # Review rationales may discuss several documents. On a changed access
+        # boundary expose only the original independently filtered answer references.
+        turn.semantic_reviews = []
+        turn.requirement_plan = []
+        turn.requirement_plan_history = []
         for instruction in turn.user_instructions:
             instruction.reason = None
             instruction.references = [ref for ref in instruction.references if allowed(ref)]

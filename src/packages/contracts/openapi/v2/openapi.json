@@ -1145,6 +1145,77 @@
         "title": "PdfUploadRequest",
         "type": "object"
       },
+      "PlannedRequirement": {
+        "additionalProperties": false,
+        "properties": {
+          "assumptions": {
+            "items": {
+              "maxLength": 600,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "deliverable": {
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Deliverable",
+            "type": "string"
+          },
+          "evidence_needed": {
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Evidence Needed",
+            "type": "string"
+          },
+          "instruction_sequence": {
+            "minimum": 0.0,
+            "title": "Instruction Sequence",
+            "type": "integer"
+          },
+          "priority": {
+            "default": "core",
+            "enum": [
+              "core",
+              "optional"
+            ],
+            "title": "Priority",
+            "type": "string"
+          },
+          "requirement_id": {
+            "title": "Requirement Id",
+            "type": "string"
+          },
+          "revision": {
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "source": {
+            "$ref": "#/components/schemas/UserAnchor"
+          },
+          "user_conditions": {
+            "items": {
+              "$ref": "#/components/schemas/UserAnchor"
+            },
+            "maxItems": 16,
+            "title": "User Conditions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source",
+          "deliverable",
+          "evidence_needed",
+          "requirement_id",
+          "instruction_sequence",
+          "revision"
+        ],
+        "title": "PlannedRequirement",
+        "type": "object"
+      },
       "PublicCalculationRequest": {
         "additionalProperties": false,
         "description": "The standalone calculator cannot establish a disclosed attribution.",
@@ -1949,6 +2020,16 @@
             "title": "Role",
             "type": "string"
           },
+          "scenario_calculation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScenarioCalculationReceipt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "text": {
             "maxLength": 3000,
             "minLength": 1,
@@ -2713,6 +2794,7 @@
               {
                 "enum": [
                   "running",
+                  "awaiting_user",
                   "completed",
                   "stopped",
                   "failed"
@@ -3326,9 +3408,33 @@
             "title": "Report",
             "type": "string"
           },
+          "requirement_plan": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedRequirement"
+            },
+            "title": "Requirement Plan",
+            "type": "array"
+          },
+          "requirement_plan_history": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/PlannedRequirement"
+              },
+              "type": "array"
+            },
+            "title": "Requirement Plan History",
+            "type": "array"
+          },
           "search_status": {
             "title": "Search Status",
             "type": "string"
+          },
+          "semantic_reviews": {
+            "items": {
+              "$ref": "#/components/schemas/SemanticReview"
+            },
+            "title": "Semantic Reviews",
+            "type": "array"
           },
           "started_at": {
             "format": "date-time",
@@ -3422,6 +3528,7 @@
           "logical_status": {
             "enum": [
               "running",
+              "awaiting_user",
               "completed",
               "stopped",
               "failed"
@@ -3606,6 +3713,68 @@
         "title": "ReturnContext",
         "type": "object"
       },
+      "ReviewEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "character_end": {
+            "title": "Character End",
+            "type": "integer"
+          },
+          "character_start": {
+            "title": "Character Start",
+            "type": "integer"
+          },
+          "content_sha256": {
+            "title": "Content Sha256",
+            "type": "string"
+          },
+          "kind": {
+            "default": "source",
+            "enum": [
+              "source",
+              "user",
+              "assumption",
+              "concept"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "quotation": {
+            "title": "Quotation",
+            "type": "string"
+          },
+          "sequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          }
+        },
+        "required": [
+          "content_sha256",
+          "character_start",
+          "character_end",
+          "quotation"
+        ],
+        "title": "ReviewEvidence",
+        "type": "object"
+      },
       "SavedMarketAnalysis": {
         "additionalProperties": false,
         "properties": {
@@ -3717,6 +3886,172 @@
         "title": "SavedResearchInstruction",
         "type": "object"
       },
+      "ScenarioCalculationReceipt": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "decimal_places": {
+            "maximum": 8.0,
+            "minimum": 0.0,
+            "title": "Decimal Places",
+            "type": "integer"
+          },
+          "display": {
+            "title": "Display",
+            "type": "string"
+          },
+          "expression": {
+            "title": "Expression",
+            "type": "string"
+          },
+          "formula": {
+            "enum": [
+              "difference",
+              "sum",
+              "subtract",
+              "ratio",
+              "margin_percent",
+              "growth_percent"
+            ],
+            "title": "Formula",
+            "type": "string"
+          },
+          "formula_version": {
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "operands": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioInputReceipt"
+            },
+            "maxItems": 10,
+            "minItems": 2,
+            "title": "Operands",
+            "type": "array"
+          },
+          "rounding": {
+            "const": "half_up",
+            "title": "Rounding",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "formula",
+          "operands",
+          "decimal_places",
+          "expression",
+          "value",
+          "unit",
+          "currency",
+          "display",
+          "formula_version",
+          "rounding"
+        ],
+        "title": "ScenarioCalculationReceipt",
+        "type": "object"
+      },
+      "ScenarioInputReceipt": {
+        "additionalProperties": false,
+        "properties": {
+          "character_end": {
+            "exclusiveMinimum": 0.0,
+            "title": "Character End",
+            "type": "integer"
+          },
+          "character_start": {
+            "minimum": 0.0,
+            "title": "Character Start",
+            "type": "integer"
+          },
+          "content_sha256": {
+            "title": "Content Sha256",
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "kind": {
+            "enum": [
+              "user",
+              "assumption"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "quotation": {
+            "title": "Quotation",
+            "type": "string"
+          },
+          "sequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "value",
+          "unit",
+          "currency",
+          "period",
+          "kind",
+          "sequence",
+          "quotation",
+          "content_sha256",
+          "character_start",
+          "character_end"
+        ],
+        "title": "ScenarioInputReceipt",
+        "type": "object"
+      },
       "SecConceptRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3801,6 +4136,99 @@
           "query"
         ],
         "title": "SecIdentityRequest",
+        "type": "object"
+      },
+      "SemanticReview": {
+        "additionalProperties": false,
+        "properties": {
+          "claim_id": {
+            "title": "Claim Id",
+            "type": "string"
+          },
+          "condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition"
+          },
+          "correction_possible_from_read_evidence": {
+            "default": false,
+            "title": "Correction Possible From Read Evidence",
+            "type": "boolean"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewEvidence"
+            },
+            "minItems": 1,
+            "title": "Evidence",
+            "type": "array"
+          },
+          "instruction_sequence": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Instruction Sequence",
+            "type": "integer"
+          },
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "repair_evidence_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Repair Evidence Ids",
+            "type": "array"
+          },
+          "requirement_id": {
+            "title": "Requirement Id",
+            "type": "string"
+          },
+          "requirement_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirement Text"
+          },
+          "review_key": {
+            "title": "Review Key",
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "supported",
+              "conditional",
+              "weaker",
+              "contradicted",
+              "irrelevant",
+              "insufficient"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requirement_id",
+          "claim_id",
+          "evidence",
+          "verdict",
+          "reason",
+          "review_key"
+        ],
+        "title": "SemanticReview",
         "type": "object"
       },
       "SourceInput": {
@@ -4512,6 +4940,29 @@
           "total_tokens"
         ],
         "title": "TurnUsage",
+        "type": "object"
+      },
+      "UserAnchor": {
+        "additionalProperties": false,
+        "properties": {
+          "excerpt": {
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "sequence": {
+            "description": "0 for the original question; otherwise an exact user instruction sequence.",
+            "minimum": 0.0,
+            "title": "Sequence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sequence",
+          "excerpt"
+        ],
+        "title": "UserAnchor",
         "type": "object"
       },
       "ValidationError": {
@@ -6690,6 +7141,56 @@
           }
         },
         "summary": "Attach Research Sources"
+      }
+    },
+    "/v2/research/topics/{topic_id}/turns/{turn_id}/accept-findings": {
+      "post": {
+        "operationId": "accept_research_findings_v2_research_topics__topic_id__turns__turn_id__accept_findings_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "turn_id",
+            "required": true,
+            "schema": {
+              "title": "Turn Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Accept Research Findings V2 Research Topics  Topic Id  Turns  Turn Id  Accept Findings Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accept Research Findings"
       }
     },
     "/v2/research/topics/{topic_id}/turns/{turn_id}/instructions": {

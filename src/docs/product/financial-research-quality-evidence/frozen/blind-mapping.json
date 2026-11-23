@@ -1,0 +1,122 @@
+{
+  "40894c9a4329c5914196560af289b1ca": {
+    "id": "g01a",
+    "expected": true
+  },
+  "10a3ec097d4acdd61f692e43ca9b4470": {
+    "id": "g01b",
+    "expected": false
+  },
+  "e9a23e833501b32e627cfee072676bac": {
+    "id": "g02a",
+    "expected": true
+  },
+  "28039739d8d57ceb0f54b1ef3cd944c1": {
+    "id": "g02b",
+    "expected": false
+  },
+  "342061464f377ba8097e819a098fd564": {
+    "id": "g03a",
+    "expected": true
+  },
+  "2440612a0ed5f521734f91e33232ad0a": {
+    "id": "g03b",
+    "expected": false
+  },
+  "8172d867ad2a430881e582ed51455e83": {
+    "id": "g04a",
+    "expected": true
+  },
+  "5a88ec4fb1b0d566fdca25153d64a840": {
+    "id": "g04b",
+    "expected": false
+  },
+  "e0cd1708b30b954353d666da04ddf36d": {
+    "id": "g05a",
+    "expected": true
+  },
+  "bd2c97c6fbd59f196d15ba6b0560ca1d": {
+    "id": "g05b",
+    "expected": false
+  },
+  "49e8030363a397e5080fbf2906d8b6c7": {
+    "id": "g06a",
+    "expected": true
+  },
+  "15e672e69ab92fba545fe9e2e43785bc": {
+    "id": "g06b",
+    "expected": false
+  },
+  "f4f8ff6a0ae92e27e25d4faa8f787b56": {
+    "id": "g07a",
+    "expected": true
+  },
+  "003ecbb18c63e73078285d434062c2e3": {
+    "id": "g07b",
+    "expected": false
+  },
+  "7b7f0820813a74dac6d8e8e6de63df08": {
+    "id": "g08a",
+    "expected": true
+  },
+  "2a5c1a0fe3edab2aa934a3fad9d29e54": {
+    "id": "g08b",
+    "expected": false
+  },
+  "7192ec9d2e5e6287d78f9eee6f7201eb": {
+    "id": "g09a",
+    "expected": true
+  },
+  "373a5a14dce0d0156ba34ad2e3dc2e3c": {
+    "id": "g09b",
+    "expected": false
+  },
+  "ceda5d66712de7049f9babc64dd37446": {
+    "id": "g10a",
+    "expected": true
+  },
+  "efe2e345c3a138557d615574c843b761": {
+    "id": "g10b",
+    "expected": false
+  },
+  "f781cbf89d1afded7a97dbc1752f513a": {
+    "id": "g11a",
+    "expected": true
+  },
+  "e5eeef746345ee6aaf4b880ffa69c0a7": {
+    "id": "g11b",
+    "expected": false
+  },
+  "394717b440e06a4d1ea96a23e4fc9d91": {
+    "id": "g12a",
+    "expected": true
+  },
+  "827f1becfba18f574e3a07a1efc3bbfd": {
+    "id": "g12b",
+    "expected": false
+  },
+  "7891596a849206e8787529619d1d1345": {
+    "id": "g13a",
+    "expected": true
+  },
+  "e970531e648df09253173d035554a2cc": {
+    "id": "g13b",
+    "expected": false
+  },
+  "b08d28ed3b73802e0e21c8669e9b1215": {
+    "id": "g14a",
+    "expected": true
+  },
+  "10cd809eec893d6a0cb61009aa5a943c": {
+    "id": "g14b",
+    "expected": false
+  },
+  "87220fed06ce76965e794f41bfc60c0a": {
+    "id": "g15a",
+    "expected": true
+  },
+  "ec61edcbed8fb0b8f4646ba74d984b0c": {
+    "id": "g15b",
+    "expected": false
+  }
+}

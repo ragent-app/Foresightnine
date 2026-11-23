@@ -1,0 +1,272 @@
+[
+  {
+    "id": "g01a",
+    "group": "g01",
+    "kind": "rights",
+    "question": "Can holders transfer Oriole notes?",
+    "source": "Oriole notes may be transferred without consent.",
+    "claim": "Oriole notes may be transferred without consent.",
+    "expected": true
+  },
+  {
+    "id": "g01b",
+    "group": "g01",
+    "kind": "rights",
+    "question": "Can holders transfer Oriole notes?",
+    "source": "Oriole notes may be transferred without consent.",
+    "claim": "Oriole notes may not be transferred without consent.",
+    "expected": false
+  },
+  {
+    "id": "g02a",
+    "group": "g02",
+    "kind": "rights",
+    "question": "Can Bracken borrowers prepay without a fee?",
+    "source": "Bracken borrowers may prepay without a fee.",
+    "claim": "Bracken borrowers may prepay without a fee.",
+    "expected": true
+  },
+  {
+    "id": "g02b",
+    "group": "g02",
+    "kind": "rights",
+    "question": "Can Bracken borrowers prepay without a fee?",
+    "source": "Bracken borrowers may prepay without a fee.",
+    "claim": "Bracken borrowers must pay a prepayment fee.",
+    "expected": false
+  },
+  {
+    "id": "g03a",
+    "group": "g03",
+    "kind": "rights",
+    "question": "Who may redeem Cedar units?",
+    "source": "Only institutional accounts may redeem Cedar units.",
+    "claim": "Only institutional accounts may redeem Cedar units.",
+    "expected": true
+  },
+  {
+    "id": "g03b",
+    "group": "g03",
+    "kind": "rights",
+    "question": "Who may redeem Cedar units?",
+    "source": "Only institutional accounts may redeem Cedar units.",
+    "claim": "All retail accounts may redeem Cedar units.",
+    "expected": false
+  },
+  {
+    "id": "g04a",
+    "group": "g04",
+    "kind": "policy",
+    "question": "When does the Willow rule take effect?",
+    "source": "The Willow rule was announced on 2025-01-02 and takes effect on 2025-07-01.",
+    "claim": "The Willow rule takes effect on 2025-07-01.",
+    "expected": true
+  },
+  {
+    "id": "g04b",
+    "group": "g04",
+    "kind": "policy",
+    "question": "When does the Willow rule take effect?",
+    "source": "The Willow rule was announced on 2025-01-02 and takes effect on 2025-07-01.",
+    "claim": "The Willow rule takes effect on 2025-01-02.",
+    "expected": false
+  },
+  {
+    "id": "g05a",
+    "group": "g05",
+    "kind": "policy",
+    "question": "Does the Pine rule cover existing contracts?",
+    "source": "The Pine rule covers new contracts only; existing contracts are exempt.",
+    "claim": "The Pine rule does not cover existing contracts.",
+    "expected": true
+  },
+  {
+    "id": "g05b",
+    "group": "g05",
+    "kind": "policy",
+    "question": "Does the Pine rule cover existing contracts?",
+    "source": "The Pine rule covers new contracts only; existing contracts are exempt.",
+    "claim": "The Pine rule covers existing contracts.",
+    "expected": false
+  },
+  {
+    "id": "g06a",
+    "group": "g06",
+    "kind": "timing",
+    "question": "When does the Maple deposit mature?",
+    "source": "The Maple deposit matures on 2027-06-30.",
+    "claim": "The Maple deposit matures on 2027-06-30.",
+    "expected": true
+  },
+  {
+    "id": "g06b",
+    "group": "g06",
+    "kind": "timing",
+    "question": "When does the Maple deposit mature?",
+    "source": "The Maple deposit matures on 2027-06-30.",
+    "claim": "The Maple deposit matures on 2026-06-30.",
+    "expected": false
+  },
+  {
+    "id": "g07a",
+    "group": "g07",
+    "kind": "currency",
+    "question": "In what currency is the Larch payment?",
+    "source": "The Larch payment is denominated in EUR, not USD.",
+    "claim": "The Larch payment is denominated in EUR.",
+    "expected": true
+  },
+  {
+    "id": "g07b",
+    "group": "g07",
+    "kind": "currency",
+    "question": "In what currency is the Larch payment?",
+    "source": "The Larch payment is denominated in EUR, not USD.",
+    "claim": "The Larch payment is denominated in USD.",
+    "expected": false
+  },
+  {
+    "id": "g08a",
+    "group": "g08",
+    "kind": "network",
+    "question": "Which network supports the Rowan token?",
+    "source": "The Rowan token is issued only on Network Azure, not Network Amber.",
+    "claim": "The Rowan token is issued on Network Azure.",
+    "expected": true
+  },
+  {
+    "id": "g08b",
+    "group": "g08",
+    "kind": "network",
+    "question": "Which network supports the Rowan token?",
+    "source": "The Rowan token is issued only on Network Azure, not Network Amber.",
+    "claim": "The Rowan token is issued on Network Amber.",
+    "expected": false
+  },
+  {
+    "id": "g09a",
+    "group": "g09",
+    "kind": "measurement",
+    "question": "What was Birch closing price?",
+    "source": "Birch closing price was 12 dollars; its market capitalization was not disclosed.",
+    "claim": "Birch closing price was 12 dollars.",
+    "expected": true
+  },
+  {
+    "id": "g09b",
+    "group": "g09",
+    "kind": "measurement",
+    "question": "What was Birch closing price?",
+    "source": "Birch closing price was 12 dollars; its market capitalization was not disclosed.",
+    "claim": "Birch market capitalization was 12 dollars.",
+    "expected": false
+  },
+  {
+    "id": "g10a",
+    "group": "g10",
+    "kind": "measurement",
+    "question": "What was Hazel transaction volume?",
+    "source": "Hazel transaction volume was 90 units; its transaction value was not disclosed.",
+    "claim": "Hazel transaction volume was 90 units.",
+    "expected": true
+  },
+  {
+    "id": "g10b",
+    "group": "g10",
+    "kind": "measurement",
+    "question": "What was Hazel transaction volume?",
+    "source": "Hazel transaction volume was 90 units; its transaction value was not disclosed.",
+    "claim": "Hazel transaction value was 90 dollars.",
+    "expected": false
+  },
+  {
+    "id": "g11a",
+    "group": "g11",
+    "kind": "causation",
+    "question": "Did fuel cause Aspen profit decline?",
+    "source": "Aspen profit fell while fuel costs rose; the cause was not established.",
+    "claim": "Aspen profit fell while fuel costs rose; causation was not established.",
+    "expected": true
+  },
+  {
+    "id": "g11b",
+    "group": "g11",
+    "kind": "causation",
+    "question": "Did fuel cause Aspen profit decline?",
+    "source": "Aspen profit fell while fuel costs rose; the cause was not established.",
+    "claim": "Fuel caused the Aspen profit decline.",
+    "expected": false
+  },
+  {
+    "id": "g12a",
+    "group": "g12",
+    "kind": "conditional",
+    "question": "Is the Elm fee waived?",
+    "source": "The Elm fee is waived only for accounts with balances above 500 units.",
+    "claim": "The Elm fee is waived for accounts with balances above 500 units.",
+    "expected": true
+  },
+  {
+    "id": "g12b",
+    "group": "g12",
+    "kind": "conditional",
+    "question": "Is the Elm fee waived?",
+    "source": "The Elm fee is waived only for accounts with balances above 500 units.",
+    "claim": "The Elm fee is waived for every account.",
+    "expected": false
+  },
+  {
+    "id": "g13a",
+    "group": "g13",
+    "kind": "personal",
+    "question": "Can the Spruce fund guarantee a payment in one year?",
+    "source": "The Spruce fund has no principal guarantee and its value can fall.",
+    "claim": "The Spruce fund cannot guarantee principal in one year.",
+    "expected": true
+  },
+  {
+    "id": "g13b",
+    "group": "g13",
+    "kind": "personal",
+    "question": "Can the Spruce fund guarantee a payment in one year?",
+    "source": "The Spruce fund has no principal guarantee and its value can fall.",
+    "claim": "The Spruce fund guarantees the payment in one year.",
+    "expected": false
+  },
+  {
+    "id": "g14a",
+    "group": "g14",
+    "kind": "definition",
+    "question": "What is Fir duration?",
+    "source": "Fir duration is a measure of bond price sensitivity to interest rate changes.",
+    "claim": "Fir duration measures bond price sensitivity to interest rate changes.",
+    "expected": true
+  },
+  {
+    "id": "g14b",
+    "group": "g14",
+    "kind": "definition",
+    "question": "What is Fir duration?",
+    "source": "Fir duration is a measure of bond price sensitivity to interest rate changes.",
+    "claim": "Fir duration guarantees a bond will mature within one year.",
+    "expected": false
+  },
+  {
+    "id": "g15a",
+    "group": "g15",
+    "kind": "chinese",
+    "question": "榆树合同允许提前赎回吗？",
+    "source": "榆树合同不允许提前赎回。",
+    "claim": "榆树合同不允许提前赎回。",
+    "expected": true
+  },
+  {
+    "id": "g15b",
+    "group": "g15",
+    "kind": "chinese",
+    "question": "榆树合同允许提前赎回吗？",
+    "source": "榆树合同不允许提前赎回。",
+    "claim": "榆树合同允许提前赎回。",
+    "expected": false
+  }
+]

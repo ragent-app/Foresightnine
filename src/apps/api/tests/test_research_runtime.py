@@ -1,4 +1,5 @@
 import json
+from hashlib import sha256
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -13,7 +14,7 @@ from app.research_sources import ResearchSource, SourcePermissions
 
 def source(url=None, allowed=True):
     return ResearchSource(source_id='s1', owner_id='owner', title='Disclosure', text='Revenue was 100 USD.',
-                          url=url, kind='user_supplied', obtained_at=datetime.now(timezone.utc), content_sha256='hash',
+                          url=url, kind='user_supplied', obtained_at=datetime.now(timezone.utc), content_sha256=sha256(b'Revenue was 100 USD.').hexdigest(),
                           permissions=SourcePermissions(store=True, model_input=allowed, display=True, export=True))
 
 
@@ -32,7 +33,11 @@ class Model:
     def __init__(self, turns):
         self.turns = iter(turns)
         self.inputs = []
+        self.review_verdict = 'insufficient'
     def complete(self, messages, tools, **kwargs):
+        if not tools and 'candidates' in json.loads(messages[1]['content']):
+            from tests.semantic_review_fixture import fixture_review
+            return fixture_review(messages[1]['content'], self.review_verdict)
         self.inputs.append(json.loads(json.dumps(messages)))
         return next(self.turns)
 
@@ -49,6 +54,7 @@ def test_read_feedback_and_submission_uses_call_association_and_server_ids():
     m = Model([turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'financial disclosure'}, 'a'),
                turn('submit_research', {'report': 'Revenue was 100 USD.', 'claims': [{'text': 'Revenue was 100 USD.', 'source_id': 's1',
                     'quotation': 'Revenue was 100 USD.', 'character_start': 0, 'character_end': 20, 'role': 'support'}], 'limitations': [], 'stopping_reason': 'answered'}, 'b')])
+    m.review_verdict = 'supported'
     saved = []
     result = run_research_agent(question='Revenue?', sources=[source()], model=m, context=context(),
                                 checkpoint=lambda s: saved.append(json.loads(json.dumps(s))))
@@ -182,10 +188,12 @@ def test_quotation_offsets_are_resolved_and_ambiguous_matches_are_rejected():
               'limitations': [], 'stopping_reason': 'answered'}
     m = Model([turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'read'}, 'a'),
                turn('submit_research', submit, 'b')])
+    m.review_verdict = 'supported'
     result = run_research_agent(question='Q', sources=[source()], model=m, context=context())
     assert result.claims[0]['citations'][0]['location'] == {'character_start': 0, 'character_end': 20}
     repeated = source()
     repeated.text = repeated.text + ' ' + repeated.text
+    repeated.content_sha256 = sha256(repeated.text.encode()).hexdigest()
     m = Model([turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'read'}, 'a'),
                turn('submit_research', submit, 'b'), ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')])
     result = run_research_agent(question='Q', sources=[repeated], model=m, context=context())
@@ -367,11 +375,11 @@ def test_chat_bridge_preserves_not_started_diagnostics_and_releases_reservation(
 
 
 @pytest.mark.parametrize(('failure_stage', 'failures', 'expected_status', 'expected_attempts'), [
-    ('dns', 1, 'completed', 3),
+    ('dns', 1, 'partial', 3),
     ('dns', 3, 'partial', 4),
     # A TLS handshake failure is still before any request byte is written (362 acceptance).
-    ('tls', 1, 'completed', 3),
-    ('tls', 2, 'completed', 4),
+    ('tls', 1, 'partial', 3),
+    ('tls', 2, 'partial', 4),
     ('request_write', 1, 'partial', 2),
 ])
 def test_messages_retries_only_the_unsent_turn(monkeypatch, failure_stage, failures, expected_status, expected_attempts):
@@ -416,8 +424,9 @@ def test_messages_retries_only_the_unsent_turn(monkeypatch, failure_stage, failu
     assert len(bodies) == expected_attempts
     assert bodies[0] != bodies[1]
     assert all(body == bodies[1] for body in bodies[1:])
-    if expected_status == 'completed':
-        assert result.report == 'Revenue was 100 USD.'
+    if failure_stage in ('dns', 'tls') and failures <= 2:
+        # The two-call cap allows the writer calls, but not independent review.
+        assert result.report == ''
         assert c.calls == 2
         assert c.usage == 4
     elif failure_stage in ('dns', 'tls'):
@@ -525,10 +534,12 @@ def test_submission_claim_requires_support_or_counterargument_role(claim_role):
 def test_submission_keeps_support_and_counterargument_roles_without_kind():
     text = source()
     text.text = 'Revenue was 100 USD. Costs rose sharply.'
+    text.content_sha256 = sha256(text.text.encode()).hexdigest()
     claims = [{'text': 'Revenue was 100 USD.', 'source_id': 's1', 'quotation': 'Revenue was 100 USD.', 'role': 'support'},
               {'text': 'Costs rose sharply.', 'source_id': 's1', 'quotation': 'Costs rose sharply.', 'role': 'counterargument'}]
     m = Model([turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'read'}, 'a'),
                turn('submit_research', {'report': 'Mixed.', 'claims': claims, 'limitations': [], 'stopping_reason': 'answered'}, 'b')])
+    m.review_verdict = 'supported'
     result = run_research_agent(question='What was revenue?', sources=[text], model=m, context=context())
     assert result.status == 'completed'
     assert [c['role'] for c in result.claims] == ['support', 'counterargument']
@@ -619,14 +630,18 @@ def test_available_capabilities_derived_and_overridden_in_initial_prompt():
     run_research_agent(question='Q', sources=[], model=m_default, context=context())
     payload_default = json.loads(m_default.inputs[0][1]['content'])
     assert 'available_historical_price_instruments' not in payload_default
-    assert payload_default['available_capabilities'] == {
+    default_caps = dict(payload_default['available_capabilities'])
+    assert default_caps.pop('evidence_routes')
+    assert default_caps == {
         'search_available': False, 'acquire_available': False, 'sec_available': False,
         'search_library_available': True, 'news_search_available': False, **off}
 
     m_derived = Model([stop])
     run_research_agent(question='Q', sources=[], model=m_derived, context=context(),
                        discover=lambda _: [], acquire=lambda *_: (None, {}), fin_data=make_toolbox())
-    assert json.loads(m_derived.inputs[0][1]['content'])['available_capabilities'] == {
+    derived_caps = dict(json.loads(m_derived.inputs[0][1]['content'])['available_capabilities'])
+    assert derived_caps.pop('evidence_routes')
+    assert derived_caps == {
         'search_available': True, 'acquire_available': True, 'sec_available': True,
         'market_data_available': True, 'market_data_key_required': False,
         'sec_financials_available': True, 'filings_available': True,
@@ -645,7 +660,9 @@ def test_available_capabilities_derived_and_overridden_in_initial_prompt():
     custom_caps = {'search_available': True, 'web_fetch_enabled': True, 'sec_available': False}
     run_research_agent(question='Q', sources=[], model=m_custom, context=context(), capabilities=custom_caps)
     payload_custom = json.loads(m_custom.inputs[0][1]['content'])
-    assert payload_custom['available_capabilities'] == {**custom_caps, **off, 'search_library_available': True, 'news_search_available': False}
+    custom_result = dict(payload_custom['available_capabilities'])
+    assert custom_result.pop('evidence_routes')
+    assert custom_result == {**custom_caps, **off, 'search_library_available': True, 'news_search_available': False}
 
     for token in ('available_capabilities', 'news_search', 'acquire_sources', 'resolve_entity', 'market_data',
                   'company_financials', 'filings', 'market_data_key_required', 'sec_financials_available', 'partial'):
@@ -796,7 +813,7 @@ def test_acquire_sources_distinguishes_disabled_undiscovered_and_granular_failur
     assert fb_single['failure_reasons'] == ['http_forbidden_or_challenge']
 
 
-def test_partial_submission_keeps_report_empty_and_preserves_partial_notes_across_recovery():
+def test_partial_submission_does_not_publish_unverified_notes_across_recovery():
     notes = 'Checked SEC and web search; SEC was unconfigured and IR returned 403.'
     m = Model([
         turn('submit_research', {
@@ -818,10 +835,10 @@ def test_partial_submission_keeps_report_empty_and_preserves_partial_notes_acros
     assert outcome.status == 'partial'
     assert outcome.reason == 'submitted'
     assert outcome.report == ''
-    assert outcome.partial_notes == notes
+    assert notes not in outcome.partial_notes
     assert outcome.stopping_note == 'all retrieval paths blocked'
     assert saved[-1]['submission']['report'] == ''
-    assert saved[-1]['submission']['partial_notes'] == notes
+    assert notes not in (saved[-1]['submission'].get('partial_notes') or '')
 
     recovered = run_research_agent(
         question='Compare revenue?',
@@ -833,7 +850,7 @@ def test_partial_submission_keeps_report_empty_and_preserves_partial_notes_acros
     assert recovered.status == 'partial'
     assert recovered.reason == 'submitted'
     assert recovered.report == ''
-    assert recovered.partial_notes == notes
+    assert recovered.partial_notes == outcome.partial_notes
     assert recovered.stopping_note == 'all retrieval paths blocked'
 
 
@@ -958,7 +975,7 @@ def test_acquire_sources_rate_limit_allows_one_retry_and_blocks_second_repeat():
         discover=lambda _: [lead],
         acquire=acquire_flaky,
     )
-    assert res_ok.status == 'completed'
+    assert res_ok.status == 'partial'  # The synthetic reviewer rejects unsupported claims.
     assert len(attempts) == 2
 
     always_limited = []
@@ -1305,7 +1322,7 @@ def test_read_sources_enforces_span_and_batch_caps_while_preserving_small_source
         context=context(),
         checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
     )
-    assert res_long.status == 'completed'
+    assert res_long.status == 'partial'  # Retrieval checks do not establish semantic support.
     assert res_long.source_ids == ['s_long']
 
     for idx, expected_err in ((1, 'read_span_too_large'), (2, 'read_span_too_large'), (3, 'read_batch_too_large')):
@@ -1331,7 +1348,7 @@ def test_below_watermark_runtime_keeps_history_prefix_byte_identical_for_kv_cach
 
     src = source()
     src.text = 'Revenue was 100 USD in FY2025. Revenue was 80 USD in FY2024. ' + ('Detail text. ' * 200)
-    src.content_sha256 = 'hash-kv'
+    src.content_sha256 = sha256(src.text.encode()).hexdigest()
 
     m = Model([
         turn('outline_source', {'source_id': 's1'}, 'c1'),
@@ -1349,6 +1366,7 @@ def test_below_watermark_runtime_keeps_history_prefix_byte_identical_for_kv_cach
             'stopping_reason': 'answered',
         }, 'c5'),
     ])
+    m.review_verdict = 'supported'
     saved = []
     res = run_research_agent(
         question='Revenue?',
@@ -1358,7 +1376,7 @@ def test_below_watermark_runtime_keeps_history_prefix_byte_identical_for_kv_cach
         checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
     )
     assert res.status == 'completed'
-    assert res.partial_notes is None
+    assert res.question_parts[0]['status'] == 'answered'
     assert 'compaction_count' not in saved[-1]
     assert len(m.inputs) == 5
 
@@ -1538,7 +1556,7 @@ def test_l1_compaction_triggers_under_tight_context_and_record_facts_still_locat
     src.source_id = 's_comp'
     src.title = 'NVDA Filing'
     src.text = doc_text
-    src.content_sha256 = 'hash-comp'
+    src.content_sha256 = sha256(src.text.encode()).hexdigest()
 
     q2_start = doc_text.index(quote_2)
     s3_start = doc_text.index('Segment three')
@@ -1641,7 +1659,6 @@ def test_l1_compaction_triggers_under_tight_context_and_record_facts_still_locat
         checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
     )
     assert outcome.status == 'completed'
-    assert outcome.partial_notes is None
     assert len(outcome.facts) == 1
     assert outcome.facts[0]['character_start'] == 0
     assert saved[-1]['compaction_count'] == 1
@@ -2599,6 +2616,7 @@ def test_partial_question_enumerations_preserve_unsplit_entities_and_fill_only_u
 def test_report_draft_retains_valid_clauses_after_rejection_and_rechecks_permissions():
     src = source()
     src.text = '\n'.join(f'Revenue was {n} USD.' for n in range(100, 125))
+    src.content_sha256 = sha256(src.text.encode()).hexdigest()
     model = Model([
         turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'read'}, 'a'),
         turn('checkpoint_report_draft', {'clauses': [
@@ -2612,7 +2630,9 @@ def test_report_draft_retains_valid_clauses_after_rejection_and_rechecks_permiss
                              checkpoint=lambda state: saved.append(json.loads(json.dumps(state))))
     feedback = json.loads(_last_tool(model, 2)['content'])
     assert len(feedback['accepted']) == 25 and len(feedback['rejected']) == 1
-    assert len(out.claims) == 25
+    # Located drafts are retained in the checkpoint, but cannot become answer
+    # claims without independent semantic review.
+    assert out.claims == []
     assert all('BlackRock' not in claim['text'] for claim in out.claims)
     from app.research_report_grounding import recover_draft_claims
     assert len(recover_draft_claims(saved[-1], {'s1': src}, lambda s: True)) == 25

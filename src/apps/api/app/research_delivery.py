@@ -15,15 +15,50 @@ def assess(question: str, state: dict, source_by_id: dict, *, as_of: Any = None,
         rows = insights.assess_core_requirements(question, state, source_by_id, as_of=as_of, claims=claims)
         if not rows:
             raise ValueError('empty requirement assessment')
-        # A request to explain the previous answer can reuse a single located,
-        # currently eligible prior claim; semantic interpretation remains reviewable.
-        if re.fullmatch(r'\s*(?:explain (?:the|your|that|previous) answer|解释(?:之前|上面|这个)?(?:的)?(?:回答|结论))\s*[?.？。]?\s*', question, re.I):
-            candidates = [claim for claim in claims if isinstance(claim, dict) and claim.get('role') == 'support' and claim.get('citations')]
-            if len(candidates) == 1:
-                row = candidates[0]
-                return [{'id': 'requirement-' + sha256(question.encode()).hexdigest()[:20], 'question': question,
-                         'status': 'satisfied', 'reason': '引用此前记录的结论；语义仍需复核。',
-                         'references': [{'claim_id': row['claim_id'], 'origin': 'prior'}], 'core': True}]
+        instructions = [i for i in state.get('user_instructions', []) if isinstance(i, dict)]
+        sequence = max((i.get('sequence', 0) for i in instructions if type(i.get('sequence')) is int), default=0)
+        for plan in state.get('requirement_plan', []):
+            if (not isinstance(plan, dict) or plan.get('instruction_sequence') != sequence
+                    or not isinstance(plan.get('requirement_id'), str) or not isinstance(plan.get('deliverable'), str)):
+                continue
+            rows.append({'id': plan['requirement_id'], 'question': plan['deliverable'],
+                         'status': 'missing', 'reason': 'This planned deliverable requires independent review.',
+                         'references': [], 'core': plan.get('priority') == 'core',
+                         'kind': 'generic:planned', 'plan': plan})
+        from .research_semantic_review import candidates, parse_reviews
+        current = {item['review_key']: item for item in candidates(rows, claims, state, source_by_id, as_of)}
+        import json
+        reviews = parse_reviews(json.dumps({'reviews': state.get('_semantic_reviews', [])}), list(current.values()))
+        for row in rows:
+            if not any(item['requirement_id'] == row.get('id') for item in current.values()):
+                continue
+            row['semantic_required'] = True
+            matches = [r for r in reviews if r.get('requirement_id') == row['id']]
+            # Conflicting judgments never upgrade an answer.
+            if any(r.get('verdict') == 'contradicted' for r in matches):
+                row.update(status='missing', reason='Evidence contradicts a candidate answer.', references=[])
+                continue
+            accepted = [r for r in matches if r.get('verdict') in ('supported', 'conditional')
+                        and (r.get('verdict') != 'conditional' or
+                             (r.get('condition') and r['condition'] in current[r['review_key']]['claim']))]
+            if accepted:
+                review = accepted[0]
+                row.update(status='satisfied', reason=review.get('reason', ''),
+                           references=[{'claim_id': review['claim_id']}],
+                           verdict=review['verdict'], condition=review.get('condition'))
+        # A broad question can contain several requested deliverables. Keep its
+        # display consistent with the current core plan and its verified answers.
+        core_plan = [row for row in rows if row.get('kind') == 'generic:planned' and row.get('core')]
+        for row in rows:
+            if not core_plan or row.get('kind') == 'generic:planned' or _part_key(row['question']) != _part_key(question):
+                continue
+            if row.get('status') == 'satisfied' and incomplete(core_plan):
+                row.update(status='partial', reason='部分核心要求仍待核验。')
+            elif row.get('status') == 'satisfied':
+                for part in core_plan:
+                    for ref in part.get('references', []):
+                        if ref not in row['references']:
+                            row['references'].append(ref)
         return rows
     except Exception:
         log.exception('Core requirement assessment failed')
@@ -96,9 +131,4 @@ def assemble_parts(question: str, state: dict, source_by_id: dict, eligible_ids:
                        'status': part_status, 'answer': answer,
                        'reason': '' if answer and answer == requirement.get('reason') else ((requirement.get('reason') or '') if part_status == 'answered' or any(r.get('source_id') and r.get('character_start') is not None for r in refs) else (checkpoint_gap or requirement.get('reason') or '')), 'references': refs,
                        'requirements': [requirement_copy]})
-    # Preserve independently saved grounded components, without replacing assessed rows
-    # or adding synthetic unresolved fragments that duplicate those rows.
-    for checkpoint in checkpoints:
-        if checkpoint.get('answer') and not any(_part_key(str(checkpoint.get('question') or '')) == _part_key(str(part.get('question') or '')) for part in result):
-            result.append({**checkpoint, 'id': 'part-' + sha256(checkpoint['question'].encode()).hexdigest()[:20], 'core': True, 'requirements': []})
     return result

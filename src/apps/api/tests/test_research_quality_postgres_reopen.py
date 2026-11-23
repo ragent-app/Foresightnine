@@ -201,7 +201,9 @@ class NoReplay:
   raise AssertionError('recovery must not call the provider')
 api.challenge_provider=NoReplay()
 record=api.RESEARCH_RUN_INPUTS.get(op);cp=record['runtime_checkpoint']
-assert cp.get('submission') and cp['submission']['report']=='Revenue was 100 USD.',cp
+# The explicit two-call budget leaves no independent semantic review. Recovery
+# must preserve the limited submission rather than promote its unverified text.
+assert cp.get('submission') and cp['submission']['status']=='partial' and cp['submission']['report']=='',cp
 assert api.operations.recover_expired_leases(now=api.lifecycle_clock.now()+timedelta(seconds=301))>=1
 status=c.get(path+'/runs/'+op+'/recovery-status',headers=h)
 assert status.status_code==200 and status.json()['can_deliver'],status.text
@@ -214,9 +216,14 @@ for _ in range(400):
  if current in ('completed','failed','cancelled'):break
  time.sleep(.05)
 assert current=='completed',current
+settlement=c.get(path+'/runs/'+recovered+'/settlement',headers=h)
+assert settlement.status_code==200,settlement.text
+assert settlement.json()['model_ledger']['settled_calls']==2,settlement.text
+assert settlement.json()['model_ledger']['reserved_calls']==0,settlement.text
 versions=c.get(path,headers=h).json()['versions'];assert len(versions)==2,versions
 version=versions[-1];assert version['parent_version_id']==s['parent']
-assert version['content']['turns'][-1]['report']=='Revenue was 100 USD.'
+assert version['content']['turns'][-1]['status']=='partial'
+assert version['content']['turns'][-1]['report']==''
 vpath=path+'/versions/'+version['version_id']
 assert c.get(vpath+'/export',headers=h).json()['version']['version_id']==version['version_id']
 replay=c.post(path+'/runs/'+op+'/recover',headers=request_headers,json={})

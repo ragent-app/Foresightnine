@@ -112,6 +112,48 @@ const CLAIMS: ResearchV2.ResearchClaim[] = [
 ];
 
 describe("TopicPage", () => {
+  it("shows the saved requirement and conditional review with a source link in the research record", async () => {
+    const saved = turn(1, {
+      claim_ids: ["C1"], report: "收入有条件成立。",
+      requirement_plan: [{ requirement_id: "req", revision: 1, instruction_sequence: 0, source: { sequence: 0, excerpt: "收入" }, deliverable: "核对收入", evidence_needed: "年报", priority: "core", assumptions: ["以美元计"] }],
+      semantic_reviews: [{ requirement_id: "req", claim_id: "C1", verdict: "conditional", reason: "需要对齐期间。", condition: "同一财年", review_key: "key", evidence: [{ source_id: "s1", content_sha256: "a".repeat(64), character_start: START, character_end: END, quotation: QUOTE }] }],
+    });
+    mockApi((url) => {
+      if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([saved], CLAIMS));
+      if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+      if (url.pathname.endsWith("/sources/s1/text")) return jsonResponse({ text: TEXT, content_sha256: "a".repeat(64) });
+      return undefined;
+    });
+    renderTopic();
+    fireEvent.click(await screen.findByRole("button", { name: "问题要求与依据核验" }));
+    const records = await screen.findByRole("region", { name: "问题要求与依据核验" });
+    expect(within(records).getByText("核对收入", { exact: true })).toBeTruthy();
+    expect(within(records).getByText("成立条件：同一财年")).toBeTruthy();
+    fireEvent.click(within(records).getByRole("button", { name: "查看原文" }));
+    expect(await screen.findByText(QUOTE, { selector: "mark" })).toBeTruthy();
+  });
+
+  it("shows the clarification and sends the answer to the same turn before continuing", async () => {
+    const fetchMock = mockApi((url, init) => {
+      if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([turn(1, { status: "partial", reason: "awaiting_user", partial_notes: "已有分析" })]));
+      if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([{ ...operation("op_1", "completed"), turn_id: "turn_1", logical_status: "awaiting_user" }]);
+      if (url.pathname.endsWith("/op_1/events")) return jsonResponse({}, { status: 405 });
+      if (url.pathname.endsWith("/op_1/progress")) return jsonResponse({ operation_id: "op_1", operation_status: "completed", logical_status: "awaiting_user", current_operation_id: "op_1", turn: { turn_id: "turn_1", index: 1, question: "问题 1" }, clarification: { question: "何时支付学费？", why_it_matters: "日期影响流动性判断。", requirement_id: "payment" }, instructions: [], usage: { model_calls: 1, search_calls: 0, total_tokens: 10 }, current: null, events: [], event_count: 0, started_at: NOW, updated_at: NOW, version_id: "v2" });
+      if (url.pathname.endsWith("/turn_1/instructions") && init.method === "POST") return jsonResponse({ instruction_id: "i1", turn_id: "turn_1", operation_id: "op_1", sequence: 1, text: "明年六月", received_at: NOW, status: "received" }, { status: 201 });
+      if (url.pathname.endsWith("/op_1/continue") && init.method === "POST") return jsonResponse(operation("op_2", "pending"), { status: 202 });
+      return undefined;
+    });
+    renderTopic();
+    expect(await screen.findByText("何时支付学费？")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "第 1 轮" })).getByText("等待你的补充")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "第 1 轮" })).queryByText("已完成")).toBeNull();
+    expect(screen.getByText("日期影响流动性判断。")).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText("补充这项信息…"), { target: { value: "明年六月" } });
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/op_1/continue"))).toBe(true));
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/turn_1/instructions"))).toBe(true);
+  });
+
   it("shows a partial turn with its gaps and offers to continue when recovery allows it", async () => {
     const partial = turn(1, { status: "partial", reason: "no_submission", gaps: [{ code: "no_cited_claims", message: "x" }] });
     const completed = turn(2, {

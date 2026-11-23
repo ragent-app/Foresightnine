@@ -1,0 +1,733 @@
+{
+  "results": [
+    {
+      "id": "g01a",
+      "kind": "rights",
+      "expected": true,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-343f06596069dec3",
+          "question": "Can holders transfer Oriole notes?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:Can holders transfer Oriole notes?"
+        }
+      ],
+      "elapsed_seconds": 0.02054162696003914
+    },
+    {
+      "id": "g01b",
+      "kind": "rights",
+      "expected": false,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-343f06596069dec3",
+          "question": "Can holders transfer Oriole notes?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:Can holders transfer Oriole notes?"
+        }
+      ],
+      "elapsed_seconds": 0.0001559448428452015
+    },
+    {
+      "id": "g02a",
+      "kind": "rights",
+      "expected": true,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-a47dc137c1d621c5",
+          "question": "Can Bracken borrowers prepay without a fee?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:Can Bracken borrowers prepay without a fee?"
+        }
+      ],
+      "elapsed_seconds": 0.00015047099441289902
+    },
+    {
+      "id": "g02b",
+      "kind": "rights",
+      "expected": false,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-a47dc137c1d621c5",
+          "question": "Can Bracken borrowers prepay without a fee?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:Can Bracken borrowers prepay without a fee?"
+        }
+      ],
+      "elapsed_seconds": 0.00011492380872368813
+    },
+    {
+      "id": "g03a",
+      "kind": "rights",
+      "expected": true,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-b5f718c61fe68eb1",
+          "question": "Who may redeem Cedar units?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:Who may redeem Cedar units?"
+        }
+      ],
+      "elapsed_seconds": 9.628385305404663e-05
+    },
+    {
+      "id": "g03b",
+      "kind": "rights",
+      "expected": false,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-b5f718c61fe68eb1",
+          "question": "Who may redeem Cedar units?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:Who may redeem Cedar units?"
+        }
+      ],
+      "elapsed_seconds": 9.133387356996536e-05
+    },
+    {
+      "id": "g04a",
+      "kind": "policy",
+      "expected": true,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-a063370535efe3bf",
+          "question": "When does the Willow rule take effect?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:When does the Willow rule take effect?"
+        }
+      ],
+      "elapsed_seconds": 0.00010121474042534828
+    },
+    {
+      "id": "g04b",
+      "kind": "policy",
+      "expected": false,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-a063370535efe3bf",
+          "question": "When does the Willow rule take effect?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:When does the Willow rule take effect?"
+        }
+      ],
+      "elapsed_seconds": 9.928923100233078e-05
+    },
+    {
+      "id": "g05a",
+      "kind": "policy",
+      "expected": true,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-6759a4b51321f56c",
+          "question": "Does the Pine rule cover existing contracts?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:Does the Pine rule cover existing contracts?"
+        }
+      ],
+      "elapsed_seconds": 0.00010652700439095497
+    },
+    {
+      "id": "g05b",
+      "kind": "policy",
+      "expected": false,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-6759a4b51321f56c",
+          "question": "Does the Pine rule cover existing contracts?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:Does the Pine rule cover existing contracts?"
+        }
+      ],
+      "elapsed_seconds": 0.00010299030691385269
+    },
+    {
+      "id": "g06a",
+      "kind": "timing",
+      "expected": true,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-37cdb86750b6ea3d",
+          "question": "When does the Maple deposit mature?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:When does the Maple deposit mature?"
+        }
+      ],
+      "elapsed_seconds": 0.00012064632028341293
+    },
+    {
+      "id": "g06b",
+      "kind": "timing",
+      "expected": false,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-37cdb86750b6ea3d",
+          "question": "When does the Maple deposit mature?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:When does the Maple deposit mature?"
+        }
+      ],
+      "elapsed_seconds": 0.00010036397725343704
+    },
+    {
+      "id": "g07a",
+      "kind": "currency",
+      "expected": true,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-c072b053cdc860dc",
+          "question": "In what currency is the Larch payment?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:In what currency is the Larch payment?"
+        }
+      ],
+      "elapsed_seconds": 9.947782382369041e-05
+    },
+    {
+      "id": "g07b",
+      "kind": "currency",
+      "expected": false,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-c072b053cdc860dc",
+          "question": "In what currency is the Larch payment?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:In what currency is the Larch payment?"
+        }
+      ],
+      "elapsed_seconds": 9.830202907323837e-05
+    },
+    {
+      "id": "g08a",
+      "kind": "network",
+      "expected": true,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-bdc6960baac9c85f",
+          "question": "Which network supports the Rowan token?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:Which network supports the Rowan token?"
+        }
+      ],
+      "elapsed_seconds": 9.837094694375992e-05
+    },
+    {
+      "id": "g08b",
+      "kind": "network",
+      "expected": false,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-bdc6960baac9c85f",
+          "question": "Which network supports the Rowan token?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:Which network supports the Rowan token?"
+        }
+      ],
+      "elapsed_seconds": 9.73050482571125e-05
+    },
+    {
+      "id": "g09a",
+      "kind": "measurement",
+      "expected": true,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-40330f8e85f7fc2b",
+          "question": "What was Birch closing price?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:What was Birch closing price?"
+        }
+      ],
+      "elapsed_seconds": 9.068520739674568e-05
+    },
+    {
+      "id": "g09b",
+      "kind": "measurement",
+      "expected": false,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-40330f8e85f7fc2b",
+          "question": "What was Birch closing price?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:What was Birch closing price?"
+        }
+      ],
+      "elapsed_seconds": 8.910708129405975e-05
+    },
+    {
+      "id": "g10a",
+      "kind": "measurement",
+      "expected": true,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-a6ce7f90d8c014f1",
+          "question": "What was Hazel transaction volume?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:What was Hazel transaction volume?"
+        }
+      ],
+      "elapsed_seconds": 9.397091343998909e-05
+    },
+    {
+      "id": "g10b",
+      "kind": "measurement",
+      "expected": false,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-a6ce7f90d8c014f1",
+          "question": "What was Hazel transaction volume?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:What was Hazel transaction volume?"
+        }
+      ],
+      "elapsed_seconds": 0.00010528229176998138
+    },
+    {
+      "id": "g11a",
+      "kind": "causation",
+      "expected": true,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-b74faf872ab7a2be",
+          "question": "Did fuel cause Aspen profit decline?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:Did fuel cause Aspen profit decline?"
+        }
+      ],
+      "elapsed_seconds": 0.008760454133152962
+    },
+    {
+      "id": "g11b",
+      "kind": "causation",
+      "expected": false,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-b74faf872ab7a2be",
+          "question": "Did fuel cause Aspen profit decline?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:Did fuel cause Aspen profit decline?"
+        }
+      ],
+      "elapsed_seconds": 0.0001832912676036358
+    },
+    {
+      "id": "g12a",
+      "kind": "conditional",
+      "expected": true,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-228d441547b148e2",
+          "question": "Is the Elm fee waived?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:Is the Elm fee waived?"
+        }
+      ],
+      "elapsed_seconds": 0.00010164221748709679
+    },
+    {
+      "id": "g12b",
+      "kind": "conditional",
+      "expected": false,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-228d441547b148e2",
+          "question": "Is the Elm fee waived?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:Is the Elm fee waived?"
+        }
+      ],
+      "elapsed_seconds": 8.940882980823517e-05
+    },
+    {
+      "id": "g13a",
+      "kind": "personal",
+      "expected": true,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-0a3812beb2a6f96d",
+          "question": "Can the Spruce fund guarantee a payment in one year?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:Can the Spruce fund guarantee a payment in one year?"
+        }
+      ],
+      "elapsed_seconds": 0.00011923396959900856
+    },
+    {
+      "id": "g13b",
+      "kind": "personal",
+      "expected": false,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-0a3812beb2a6f96d",
+          "question": "Can the Spruce fund guarantee a payment in one year?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:Can the Spruce fund guarantee a payment in one year?"
+        }
+      ],
+      "elapsed_seconds": 0.00011579599231481552
+    },
+    {
+      "id": "g14a",
+      "kind": "definition",
+      "expected": true,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-fb568cd34d1cf94b",
+          "question": "What is Fir duration?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:What is Fir duration?"
+        }
+      ],
+      "elapsed_seconds": 8.668005466461182e-05
+    },
+    {
+      "id": "g14b",
+      "kind": "definition",
+      "expected": false,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-fb568cd34d1cf94b",
+          "question": "What is Fir duration?",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:What is Fir duration?"
+        }
+      ],
+      "elapsed_seconds": 8.426094427704811e-05
+    },
+    {
+      "id": "g15a",
+      "kind": "chinese",
+      "expected": true,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-046880ae50237a80",
+          "question": "榆树合同允许提前赎回吗？",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:榆树合同允许提前赎回吗？"
+        }
+      ],
+      "elapsed_seconds": 9.193690493702888e-05
+    },
+    {
+      "id": "g15b",
+      "kind": "chinese",
+      "expected": false,
+      "answered": true,
+      "rows": [
+        {
+          "id": "req-046880ae50237a80",
+          "question": "榆树合同允许提前赎回吗？",
+          "status": "satisfied",
+          "reason": "A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.",
+          "references": [
+            {
+              "claim_id": "candidate"
+            }
+          ],
+          "core": true,
+          "kind": "generic:榆树合同允许提前赎回吗？"
+        }
+      ],
+      "elapsed_seconds": 8.114660158753395e-05
+    }
+  ],
+  "by_kind": {
+    "rights": {
+      "false_accept": 3,
+      "negative": 3,
+      "false_reject": 0,
+      "positive": 3
+    },
+    "policy": {
+      "false_accept": 2,
+      "negative": 2,
+      "false_reject": 0,
+      "positive": 2
+    },
+    "timing": {
+      "false_accept": 1,
+      "negative": 1,
+      "false_reject": 0,
+      "positive": 1
+    },
+    "currency": {
+      "false_accept": 1,
+      "negative": 1,
+      "false_reject": 0,
+      "positive": 1
+    },
+    "network": {
+      "false_accept": 1,
+      "negative": 1,
+      "false_reject": 0,
+      "positive": 1
+    },
+    "measurement": {
+      "false_accept": 2,
+      "negative": 2,
+      "false_reject": 0,
+      "positive": 2
+    },
+    "causation": {
+      "false_accept": 1,
+      "negative": 1,
+      "false_reject": 0,
+      "positive": 1
+    },
+    "conditional": {
+      "false_accept": 1,
+      "negative": 1,
+      "false_reject": 0,
+      "positive": 1
+    },
+    "personal": {
+      "false_accept": 1,
+      "negative": 1,
+      "false_reject": 0,
+      "positive": 1
+    },
+    "definition": {
+      "false_accept": 1,
+      "negative": 1,
+      "false_reject": 0,
+      "positive": 1
+    },
+    "chinese": {
+      "false_accept": 1,
+      "negative": 1,
+      "false_reject": 0,
+      "positive": 1
+    }
+  },
+  "total_seconds": 0.03226796817034483
+}

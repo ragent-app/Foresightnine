@@ -13,6 +13,8 @@ from .research_lifecycle import ResearchVersionChain
 from .research_runs import ResearchRunResult
 from .research_source_policy import source_eligibility, summarize_sources
 from .research_sources import ResearchSource
+from .research_requirement_plan import PlannedRequirement
+from .research_semantic_review import SemanticReview
 from .research_topics import (
     ReadRange,
     ResearchAttempt,
@@ -363,6 +365,16 @@ class ResearchTurnPersister:
             official_fetch_status=official_fetch_status,
             read_ranges=ranges,
         )
+        sequence = max((row['sequence'] for row in runtime_state.get('user_instructions', [])), default=0)
+        turn.requirement_plan = [PlannedRequirement.model_validate(row) for row in runtime_state.get('requirement_plan', [])
+                                 if row['instruction_sequence'] == sequence]
+        plans = list(runtime_state.get('requirement_plan_history', []))
+        current = runtime_state.get('requirement_plan', [])
+        if current and not turn.requirement_plan:
+            plans.append(current)
+        turn.requirement_plan_history = [[PlannedRequirement.model_validate(item) for item in revision] for revision in plans]
+        turn.semantic_reviews = [SemanticReview.model_validate(row) for row in runtime_state.get('_semantic_reviews', [])
+                                 if row.get('instruction_sequence', 0) == sequence]
         turn.market_analyses = [SavedMarketAnalysis.model_validate(a) for a in runtime_state.get("market_analyses", ())
                                 if a.get("analysis_id")]
         summaries_fn = self.source_summaries_fn or (

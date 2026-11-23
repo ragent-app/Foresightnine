@@ -357,6 +357,9 @@ def _initialize_runtime_state(
     if ocr_pages is not None:
         available_capabilities.setdefault('pdf_ocr_on_demand', True)
     available_capabilities.setdefault('issuer_documents_available', issuer_docs is not None)
+    from .research_source_catalog import run_evidence_routes
+    available_capabilities['evidence_routes'] = run_evidence_routes(
+        available_capabilities, available_source=any(row['eligibility'] == 'eligible' for row in inventory))
     # Method packs go right after the research clock in the first user message, never into SYSTEM/TOOLS.
     pack_texts, pack_records = insights.method_pack_texts(question, available_capabilities)
     payload: dict[str, Any] = {
@@ -432,6 +435,158 @@ def _model_accepts_stream_event(model: Any) -> bool:
     except (TypeError, ValueError):
         return False
     return 'on_stream_event' in params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
+
+
+def _settle_semantic_review(state, context):
+    from .research_semantic_review import parse_reviews
+
+    pending = state['_semantic_pending']
+    call_id = pending['call_id']
+    context.finish_model(call_id, pending.get('usage'), tuple(pending['before']))
+    telemetry = _record_cache_usage(state, call_id=call_id, usage_detail=pending.get('usage_detail'))
+    receipt = {'call_id': call_id, 'provider': 'returned', 'purpose': 'semantic_review',
+               'settlement': context.model_call_receipts.get(call_id, {}).get('settlement', 'unknown')}
+    if telemetry:
+        receipt.update(cache_telemetry=telemetry, input_tokens=telemetry.get('total_input_tokens'),
+                       cache_read_input_tokens=telemetry.get('cache_read_input_tokens'),
+                       cache_creation_input_tokens=telemetry.get('cache_creation_input_tokens'),
+                       cache_hit_ratio=telemetry.get('cache_hit_ratio'))
+        detail = context.private_diagnostics.setdefault(call_id, {})
+        detail.update(cache_telemetry=telemetry, cumulative_cache_usage=dict(state['cache_usage']))
+        context._persist_diagnostic(call_id)
+    state.setdefault('model_receipts', []).append(receipt)
+    parsed = parse_reviews(pending.get('content', ''), pending.get('items', []))
+    state.setdefault('_semantic_reviews', []).extend(parsed)
+    state.setdefault('events', []).append({'kind': 'semantic_review', 'call_id': call_id, 'usage': pending.get('usage')})
+    state.pop('_semantic_pending')
+    return parsed
+
+
+def _semantic_review_call(*, state, source_by_id, as_of, model, context, save, seen, rows, claims, signature):
+    from .research_semantic_review import SYSTEM as REVIEW_SYSTEM, candidates
+    from .model_protocol import ModelTurnInput
+    if state.get('_semantic_replay_action'):
+        return  # Recovery may only reassemble this local submission.
+    items = candidates(rows, claims, state, source_by_id, as_of)
+    cached = {r.get('review_key') for r in state.get('_semantic_reviews', []) if isinstance(r, dict)}
+    items = [item for item in items if item['review_key'] not in cached]
+    if not items or not callable(getattr(model, 'complete_turn', None)):
+        return
+    # Bound each native request, retaining unreviewed items for later batches.
+    batch = []
+    size = 0
+    for item in items:
+        item_size = len(json.dumps(item, ensure_ascii=False).encode())
+        if item_size > 32000:
+            continue
+        if batch and (len(batch) >= 8 or size + item_size > 32000):
+            break
+        batch.append(item)
+        size += item_size
+    if not batch:
+        return
+    items = batch
+    from .research_public_query import minimize_identity
+    model_items = [{**{k: v for k, v in item.items() if k != 'evidence'}, 'requirement': minimize_identity(item['requirement']),
+                    'instructions': [{**instruction, 'text': minimize_identity(instruction.get('text') or '')}
+                                     for instruction in item['instructions']]} for item in items]
+    def minimize_tree(value):
+        if isinstance(value, str): return minimize_identity(value)
+        if isinstance(value, list): return [minimize_tree(x) for x in value]
+        if isinstance(value, dict): return {k: minimize_tree(v) for k, v in value.items()}
+        return value
+    for item in model_items:
+        item['claim'] = minimize_identity(item['claim'])
+        item['evidence_context'] = minimize_tree(item['evidence_context'])
+        if 'requirement_plan' in item:
+            item['requirement_plan'] = minimize_tree(item['requirement_plan'])
+    wire = json.dumps({'candidates': model_items}, ensure_ascii=False)
+    turn = ModelTurnInput(system=REVIEW_SYSTEM, user=wire, tools=(), history=())
+    try:
+        estimator = getattr(model, 'estimate_turn_input', None)
+        if callable(estimator):
+            class ReviewBudgetProvider:
+                def __getattr__(self, name): return getattr(model, name)
+                def estimate_research_input(self, prompt, system, contract): return estimator(turn)
+            budget_model = ReviewBudgetProvider()
+        else:
+            budget_model = model
+        reservation, cap = context.prepare_model_call(budget_model, wire, REVIEW_SYSTEM)
+        call_id = str(context.diagnostic_context.get('operation_id') or 'research') + ':semantic-review:' + uuid4().hex
+        before = context.start_model(call_id, reservation)
+    except ProviderFailure:
+        return  # Budget or provider unavailable: retain the unanswered result.
+    # Preserve the tool batch checkpoint; a started call must never be repeated
+    # until its result is known. The submit action can be replayed after settlement.
+    seen.discard(signature)
+    state['seen'] = sorted(seen)
+    state['_semantic_pending'] = {'call_id': call_id, 'before': list(before), 'items': items, 'phase': 'started_unknown'}
+    try:
+        save()
+    except BaseException:
+        context.abort_model_before_call(call_id, before)
+        raise
+    kwargs = {'cancel_event': context.cancel_event()}
+    if math.isfinite(context.budget.deadline):
+        kwargs['timeout_seconds'] = max(0.001, context.budget.deadline - context.now())
+    if cap is not None:
+        kwargs['max_output_tokens'] = cap
+    try:
+        response = context.invoke_model(call_id, model.complete_turn, turn, **kwargs)
+    except ProviderFailure as error:
+        diag = context.private_diagnostics.get(call_id, {}).get('transport', {})
+        if diag.get('submission_state') == 'not_started':
+            context.abort_model_before_call(call_id, before)
+            state.pop('_semantic_pending', None)
+            seen.add(signature)
+            state['seen'] = sorted(seen)
+            save()
+            return
+        # Leave a durable unknown marker: recovery must not submit it again.
+        save()
+        raise
+    except Exception as error:
+        # An unexpected transport/adapter error cannot prove the request was not sent.
+        save()
+        raise ProviderFailure('provider_result_unknown', 'Semantic review result is unknown.', retryable=False) from error
+    usage = getattr(response, 'usage', None)
+    tokens = getattr(usage, 'total_tokens', None) if usage is not None else None
+    message = response.message if isinstance(response.message, Mapping) else {}
+    content = message.get('content', '')
+    if isinstance(content, list):
+        content = ''.join(x.get('text', '') for x in content if isinstance(x, Mapping) and x.get('type') == 'text')
+    state['_semantic_pending'].update(phase='returned', usage=tokens, usage_detail=asdict(usage) if isinstance(usage, ModelUsage) else None,
+                                      content=content if isinstance(content, str) else '')
+    save()
+    parsed = _settle_semantic_review(state, context)
+    batch = state.get('pending') or {}
+    replay_action = (f"{batch.get('call_id')}:{batch.get('cursor', 0)}"
+                     if batch.get('kind') == 'tool_batch' else None)
+    if replay_action:
+        state['_semantic_replay_action'] = replay_action
+    # Keep the durable action replayable until the enclosing tool is committed.
+    state['seen'] = sorted(seen)
+    save()
+    state.pop('_semantic_replay_action', None)
+    seen.add(signature)
+    state['seen'] = sorted(seen)
+    if len(parsed) == len(items):
+        _semantic_review_call(state=state, source_by_id=source_by_id, as_of=as_of, model=model,
+                              context=context, save=save, seen=seen, rows=rows, claims=claims, signature=signature)
+
+
+def _recover_semantic_review(state, context, save):
+    pending = state.get('_semantic_pending')
+    if not isinstance(pending, dict):
+        return True
+    if pending.get('phase') != 'returned':
+        return False
+    _settle_semantic_review(state, context)
+    batch = state.get('pending') or {}
+    if batch.get('kind') == 'tool_batch':
+        state['_semantic_replay_action'] = f"{batch.get('call_id')}:{batch.get('cursor', 0)}"
+    save()
+    return True
 
 
 def _invoke_model_turn(
@@ -976,6 +1131,7 @@ def run_research_agent(
         news_provider_list=news_provider_list,
         issuer_docs=issuer_docs,
     )
+    state.setdefault('_original_question', question)
 
     def save() -> None:
         if checkpoint is not None:
@@ -1046,13 +1202,25 @@ def run_research_agent(
         display_claims = [*outcome_claims, *previous_claims]
         requirements = assess_delivery(question, state, source_by_id, as_of=as_of, claims=display_claims)
         parts = assemble_parts(question, state, source_by_id, {s.source_id for s in sources if _is_source_eligible(s, as_of)}, requirements, display_claims)
-        parts = merge_checkpoint_parts(question, state, {s.source_id for s in sources if _is_source_eligible(s, as_of)}, parts, source_by_id)
         if status == 'completed' and (incomplete_delivery(requirements) or any(p.get('core', True) and p.get('requirements') and p.get('status') != 'answered' for p in parts)):
             status = 'partial'
             report = ''
             unique.append(gap('model_reported', '核心问题的依据或可展示答案仍需核验。'))
             if not resolved_partial_notes:
                 resolved_partial_notes = _default_partial_notes(state=state, reason=reason, eligible_sources=[s for s in sources if _is_source_eligible(s, as_of)])
+        # Unreviewed or rejected candidate assertions are not user-facing findings.
+        from .research_semantic_review import candidates as review_candidates, parse_reviews
+        candidate_items = review_candidates(requirements, display_claims, state, source_by_id, as_of)
+        verified = parse_reviews(json.dumps({'reviews': state.get('_semantic_reviews', [])}), candidate_items)
+        denied = {item['claim_id'] for item in verified if item['verdict'] == 'contradicted'}
+        supported = {item['claim_id'] for item in verified if item['verdict'] in ('supported', 'conditional')} - denied
+        from .research_observations import deterministic_observation_ids
+        observations = deterministic_observation_ids(outcome_claims, state, source_by_id, as_of) - denied
+        outcome_claims = [claim for claim in outcome_claims if claim.get('claim_id') in supported
+                          or claim.get('claim_id') in observations]
+        outcome_claims = [({**claim, 'reasoning': None, 'qualification': None, 'grounding_status': 'needs_review'}
+                           if claim.get('claim_id') in observations and claim.get('claim_id') not in supported else claim)
+                          for claim in outcome_claims]
         delivered = RuntimeOutcome(
             status,
             reason,
@@ -1086,6 +1254,11 @@ def run_research_agent(
             context._persist_diagnostic(last_call_id)
         return delivered
 
+    if not _recover_semantic_review(state, context, save):
+        return outcome('partial', 'external_result_unknown', gaps=[gap('external_result_unknown')])
+
+    if state.get('clarification') and not state.get('pending'):
+        return outcome('partial', 'awaiting_user')
     if state.get('stopped'):
         return outcome('partial', state['stopped'], gaps=[gap('run_stopped')])
     if state.get('submission'):
@@ -1150,6 +1323,9 @@ def run_research_agent(
         outcome_builder=outcome,
         can_afford_presubmit_followup=lambda: _can_afford_presubmit_followup(context),
         sync_instructions=sync_instructions,
+        semantic_review=lambda rows, claims, signature: _semantic_review_call(
+            state=state, source_by_id=source_by_id, as_of=as_of, model=model,
+            context=context, save=save, seen=seen, rows=rows, claims=claims, signature=signature),
         emit_reset=_emit_reset,
         deps=deps,
     )

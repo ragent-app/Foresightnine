@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 import json
+from hashlib import sha256
+from tests.semantic_review_fixture import fixture_review
 from types import SimpleNamespace
 
 from app.model_protocol import ModelResponse, ModelToolCall, ModelUsage, canonical_json_dumps, canonicalize_json_value
@@ -44,7 +46,7 @@ def _filing_source() -> ResearchSource:
         kind="official",
         published_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
         obtained_at=datetime(2026, 2, 5, tzinfo=timezone.utc),
-        content_sha256="sha-filing",
+        content_sha256=sha256(text.encode()).hexdigest(),
         retrieval_method="sec_filing_html",
         permissions=SourcePermissions(store=True, model_input=True, display=True, export=True),
     )
@@ -69,7 +71,7 @@ def _market_source() -> ResearchSource:
         kind="market_data",
         published_at=datetime(2026, 2, 20, tzinfo=timezone.utc),
         obtained_at=datetime(2026, 2, 20, tzinfo=timezone.utc),
-        content_sha256="sha-mkt",
+        content_sha256=sha256("\n".join(lines).encode()).hexdigest(),
         retrieval_method="market_data",
         permissions=SourcePermissions(store=True, model_input=True, display=True, export=True),
         provenance={"provider": "yahoo", "exchange": "NASDAQ"},
@@ -115,6 +117,8 @@ def test_runtime_dispatches_expanded_calculations_market_analytics_and_create_ta
             return 100
 
         def complete_turn(self, turn_obj, **kwargs):
+            if not turn_obj.tools:
+                return fixture_review(turn_obj.user, "irrelevant")
             self.turns.append(turn_obj)
             self.step += 1
             if self.step == 1:
@@ -310,7 +314,7 @@ def test_runtime_dispatches_expanded_calculations_market_analytics_and_create_ta
     # and this fixture does not establish an AAPL/Apple identity link.
     assert outcome.status == "partial"
     assert any('No eligible recorded fact matches this metric' in gap['message'] for gap in outcome.gaps)
-    assert any('complete question needs an answer' in gap['message'] for gap in outcome.gaps)
+    assert any(p['status'] == 'unresolved' for p in outcome.question_parts)
     assert len(outcome.tables) == 1
     assert outcome.tables[0]["title"] == "Apple Multi-Year Revenue & CAGR"
     # TTM calc (USD 133,100 millions) aligned to column unit_preference "USD billions" -> 133.1!
@@ -334,6 +338,8 @@ def test_runtime_rejects_invalid_table_or_market_analytics_gracefully():
             return 100
 
         def complete_turn(self, turn_obj, **kwargs):
+            if not turn_obj.tools:
+                return fixture_review(turn_obj.user, "irrelevant")
             self.step += 1
             if self.step == 1:
                 return ModelResponse(
@@ -391,5 +397,5 @@ def test_runtime_rejects_invalid_table_or_market_analytics_gracefully():
     # The question describes a tool test; its unrelated revenue claim is not an
     # evidence-backed answer to that question, even though the tool errors are handled.
     assert outcome.status == "partial"
-    assert any('complete question needs an answer' in gap['message'] for gap in outcome.gaps)
+    assert any(p['status'] == 'unresolved' for p in outcome.question_parts)
     assert outcome.tables == []
