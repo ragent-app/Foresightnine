@@ -39,7 +39,7 @@ _HIST_PRICE_LINE_RE = re.compile(
     r"(?:\s+(?P<unit>.+))?$"
 )
 
-_DAILY_INTERVALS = frozenset({"1d", "d", "day", "daily", "daily close"})
+_DAILY_INTERVALS = frozenset({"1day", "1d", "d", "day", "daily", "daily close"})
 
 
 class MarketAnalyticsError(ValueError):

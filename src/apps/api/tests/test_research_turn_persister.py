@@ -316,6 +316,7 @@ def test_build_research_turn_and_persister_finalize_with_merge_turn_isolation() 
     outcome = _make_outcome(
         report=f"Revenue.\n\n[[table:{table['table_id']}]]",
         tables=[table],
+        method_packs=[{"pack_id": "market_trend", "version": "1.2.0", "fingerprint": "abc", "activated_mid_run": True}],
         claims=[claim],
         facts=[f1, f2],
         calculations=[valid_calc, invalid_calc],
@@ -343,6 +344,7 @@ def test_build_research_turn_and_persister_finalize_with_merge_turn_isolation() 
     assert built_turn.claim_ids == ["claim-1"]
     assert built_turn.fact_ids == ["fact-2025", "fact-2024"]
     assert built_turn.calculation_ids == ["calc-valid", "calc-bad"]
+    assert built_turn.method_packs[0].activated_mid_run is True
     assert built_turn.finished_at == finished_at
 
     # Persister finalize_turn hands off to real merge_turn -> isolates invalid_calc while keeping valid items.

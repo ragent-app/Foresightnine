@@ -807,8 +807,13 @@
       },
       "MethodPackRef": {
         "additionalProperties": false,
-        "description": "A research method pack that was loaded into the run's first message (id, version and content fingerprint).",
+        "description": "A method pack loaded at the start of a run or activated during research.",
         "properties": {
+          "activated_mid_run": {
+            "default": false,
+            "title": "Activated Mid Run",
+            "type": "boolean"
+          },
           "fingerprint": {
             "title": "Fingerprint",
             "type": "string"

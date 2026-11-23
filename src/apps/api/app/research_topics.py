@@ -214,11 +214,12 @@ class ReadRange(BaseModel):
 
 
 class MethodPackRef(BaseModel):
-    """A research method pack that was loaded into the run's first message (id, version and content fingerprint)."""
+    """A method pack loaded at the start of a run or activated during research."""
     model_config = ConfigDict(extra="forbid")
     pack_id: str
     version: str
     fingerprint: str
+    activated_mid_run: bool = False
 
 
 class TurnAttribution(BaseModel):

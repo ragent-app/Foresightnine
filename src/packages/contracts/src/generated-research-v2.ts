@@ -1,5 +1,5 @@
 /** GENERATED FILE — DO NOT EDIT. Source: openapi/v2/openapi.json
- * SHA-256: 30121a0f9ba1a7b3d16dbf41e293eb9101f996a5260a2cb2cfe07cb2bc491209
+ * SHA-256: 9d092b9082f41612bcf889675ded27519cf6c01c884d56fad1757566c4fb3f60
  */
 export type AnalyzeMarketSeriesRequest = { readonly "benchmark_selection_reason"?: string | null; readonly "benchmark_source_id"?: string | null; readonly "decimal_places"?: number; readonly "end_date"?: string | null; readonly "price_basis"?: "adjusted" | "raw"; readonly "source_id": string; readonly "start_date"?: string | null; };
 export type AttachSourcesInput = { readonly "parent_version_id": string; readonly "source_ids": readonly (string)[]; };
@@ -19,7 +19,7 @@ export type FetchSourceRequest = { readonly "event_at"?: string | null; readonly
 export type FocusCitation = { readonly "citation_index": number; readonly "claim_id": string; };
 export type HTTPValidationError = { readonly "detail"?: readonly (ValidationError)[]; };
 export type HtmlUploadRequest = { readonly "event_at"?: string | null; readonly "html_base64": string; readonly "is_simulated"?: boolean; readonly "permissions": SourcePermissions; readonly "published_at"?: string | null; readonly "revised_at"?: string | null; readonly "title": string; };
-export type MethodPackRef = { readonly "fingerprint": string; readonly "pack_id": string; readonly "version": string; };
+export type MethodPackRef = { readonly "activated_mid_run"?: boolean; readonly "fingerprint": string; readonly "pack_id": string; readonly "version": string; };
 export type NumericFact = { readonly "currency"?: string | null; readonly "fact_id": string; readonly "period": string; readonly "unit": string; readonly "value": number | string; };
 export type Operation = { readonly "cancel_token": string; readonly "content_hash": string; readonly "created_at": string; readonly "endpoint": string; readonly "idempotency_key_hash": string; readonly "last_event_id": string; readonly "operation_id": string; readonly "resume_token": string; readonly "schema_version": "v1"; readonly "source_refs": readonly (SourceRef)[]; readonly "status": "pending" | "running" | "completed" | "failed" | "cancelled"; readonly "updated_at": string; };
 export type OperationResponse = { readonly "operation": Operation; };

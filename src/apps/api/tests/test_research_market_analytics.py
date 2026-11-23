@@ -75,7 +75,7 @@ def test_full_analytics_returns_cagr_volatility_drawdown_and_technicals():
             price = Decimal("240.0") + Decimal(idx - 650) * Decimal("0.5")
         closes.append(price)
         lines.append(
-            f"TEST@NASDAQ | {d.isoformat()} | 1d | O {price} H {price + 1} L {price - 1} C {price} V 1000000 USD"
+            f"TEST@NASDAQ | {d.isoformat()} | 1day | O {price} H {price + 1} L {price - 1} C {price} V 1000000 USD"
         )
 
     src = _market_source("src-mkt", "\n".join(lines), provenance={"provider": "yahoo", "exchange": "NASDAQ"})
