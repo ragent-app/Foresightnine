@@ -4,6 +4,19 @@ from types import SimpleNamespace
 from app.research_run_insights import assess_core_requirements, build_working_memory_anchor
 
 
+def test_quantitative_question_cannot_be_closed_by_a_proxy_claim():
+    question = '分析一下Example的市值变化'
+    for quotation, expected in [
+        ('Example closing price went from 100 to 120 USD.', 'missing'),
+        ('Example market capitalization rose from USD 100 billion to USD 120 billion.', 'satisfied'),
+    ]:
+        state = {'read_ranges': [{'source_id': 's', 'start': 0, 'end': len(quotation)}]}
+        claims = [{'claim_id': 'c', 'role': 'support', 'text': 'Example市值变化与股价有关。',
+                   'citations': [{'source_id': 's', 'quotation': quotation}]}]
+        rows = assess_core_requirements(question, state, {'s': source(quotation)}, claims=claims)
+        assert rows[0]['status'] == expected
+
+
 def source(text='100 120 2 3', *, published='2024-01-01'):
     return SimpleNamespace(text=text, is_simulated=False, url=None,
                            permissions=SimpleNamespace(model_input=True, display=True),

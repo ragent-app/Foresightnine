@@ -2880,6 +2880,7 @@ def _proposed_core_path(ctx: ToolExecutionContext, proposals: Sequence[Any]) -> 
             if ctx.acquire is None:
                 continue
             leads = {row.get('url'): row for row in ctx.state.get('leads', []) if isinstance(row, dict)}
+            failed_urls = {row.get('url') for row in ctx.state.get('failed_source_accesses', []) if isinstance(row, dict)}
             allowed = True
             for raw in parsed.urls:
                 try:
@@ -2888,7 +2889,7 @@ def _proposed_core_path(ctx: ToolExecutionContext, proposals: Sequence[Any]) -> 
                     allowed = False
                     break
                 lead = leads.get(url)
-                if not lead or lead.get('acquirable') is False or is_fred_source(url) or ctx.reusable_ids(ctx.acquire_key(url)):
+                if not lead or url in failed_urls or lead.get('acquirable') is False or is_fred_source(url) or ctx.reusable_ids(ctx.acquire_key(url)):
                     allowed = False
                     break
                 if not terms_decision(url, initiator=lead.get('initiator') or 'agent').allowed:
@@ -3014,6 +3015,20 @@ def _unread_core_path(ctx: ToolExecutionContext, requirements: list[dict]) -> di
 
 def _authorized_external_core_path(ctx: ToolExecutionContext) -> dict | None:
     """Use explicitly configured discovery/acquisition without expanding permissions."""
+    searches = [event for event in ctx.state.get('events', []) if isinstance(event, dict)
+                and event.get('kind') == 'tool' and event.get('name') == 'news_search']
+    counter_ids = {attempt['call_id'] for attempt in ctx.state.get('counter_searches', [])
+                   if attempt.get('scope') == 'external' and attempt.get('call_id')}
+    query = ctx.question.strip()[:500]
+    discovery = SimpleNamespace(tool='news_search', arguments={'query': query,
+                                'rationale': 'Find sources for the unresolved core question.'},
+                                requirement=ctx.question, expected_evidence='Unverified source leads.')
+    # Counterargument searches have their own targets. Their hits can still
+    # be useful, but do not exhaust discovery for the original question.
+    if query and searches and all(event.get('tool_call_id') in counter_ids for event in searches):
+        path = _proposed_core_path(ctx, [discovery])
+        if path:
+            return path
     for lead in ctx.state.get('leads', []):
         if not isinstance(lead, dict) or not isinstance(lead.get('url'), str):
             continue
@@ -3023,14 +3038,8 @@ def _authorized_external_core_path(ctx: ToolExecutionContext) -> dict | None:
         path = _proposed_core_path(ctx, [candidate])
         if path:
             return path
-    if not any(event.get('kind') == 'tool' and event.get('name') == 'news_search'
-               for event in ctx.state.get('events', []) if isinstance(event, dict)):
-        query = ctx.question.strip()[:500]
-        if query:
-            candidate = SimpleNamespace(tool='news_search', arguments={'query': query,
-                                       'rationale': 'Find sources for the unresolved core question.'},
-                                       requirement=ctx.question, expected_evidence='Unverified source leads.')
-            return _proposed_core_path(ctx, [candidate])
+    if query and not searches:
+        return _proposed_core_path(ctx, [discovery])
     return None
 
 

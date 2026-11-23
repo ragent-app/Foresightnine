@@ -156,11 +156,27 @@ function missingParts(turn: ResearchV2.ResearchTurn): string[] {
 export function GapCallout({ turn, actions, tone }: { turn: ResearchV2.ResearchTurn; actions: TurnActions | null; tone: "partial" | "completed" }) {
   const gaps = turn.gaps ?? [];
   const parts = tone === "partial" ? missingParts(turn) : [];
+  const needsMarketKey = gaps.some((gap) => gap.code === "market_data_key_required");
+  if (turn.lifecycle_status === "completed" || turn.lifecycle_status === "stopped") {
+    const descriptions = gaps.map((gap) => gap.code === "model_reported" ? gap.message : gapText(gap));
+    const first = gaps.findIndex((gap) => gap.code === "model_reported" && gap.message.trim());
+    const headline = descriptions[first] ?? parts[0] ?? descriptions[0];
+    const remaining = [...new Set([...descriptions, ...parts])].filter((line) => line && line !== headline);
+    if (!headline && !turn.partial_notes?.trim()) return null;
+    return <div className="meta" role="note" aria-label="结论适用范围">
+      {headline && <p>{headline}</p>}
+      {needsMarketKey && <Link className="link" to="/settings?tab=data">前往设置，添加自己的 Twelve Data key</Link>}
+      {(remaining.length > 0 || turn.partial_notes?.trim()) && <details>
+        <summary>查看依据与限制</summary>
+        {remaining.length > 0 && <ul>{remaining.map((line) => <li key={line}>{line}</li>)}</ul>}
+        {turn.partial_notes?.trim() && <PartialNotesBlock notes={turn.partial_notes} />}
+      </details>}
+    </div>;
+  }
   if (tone === "completed" && gaps.length === 0) return null;
   const lines = [...parts, ...gaps.map((gap) => gapText(gap))];
   const shown = lines.slice(0, 3);
   const hidden = lines.length - shown.length;
-  const needsMarketKey = gaps.some((gap) => gap.code === "market_data_key_required");
   const explained = turn.reason !== "submitted" || Boolean(turn.stopping_note?.trim());
   const stopReason = tone === "partial" && explained ? turnReasonLabel(turn.reason, turn.stopping_note) : null;
   const recoveryReason = tone === "partial" && actions?.recovery?.reason
@@ -294,7 +310,7 @@ export function AnswerBlock({ turn, actions, tools }: { turn: ResearchV2.Researc
   const view = useTopicView();
   const items = turnContent(view.content, turn);
   const partial = turn.status === "partial";
-  const lifecycle = (turn as ResearchV2.ResearchTurn & { lifecycle_status?: "completed" | "stopped" }).lifecycle_status;
+  const lifecycle = turn.lifecycle_status;
   const reportText = (turn.report ?? "").trim();
   const partialNotes = partial ? (turn.partial_notes ?? "").trim() : "";
   const events = useMemo(() => parseTurnEvents(turn.events), [turn.events]);
@@ -406,7 +422,7 @@ export function AnswerBlock({ turn, actions, tools }: { turn: ResearchV2.Researc
       <ClaimList claims={elevated} showRole className="claims elevated" />
       <EvidenceViews turn={turn} />
       <GapCallout turn={turn} actions={actions} tone={partial ? "partial" : "completed"} />
-      {partial && partialNotes ? <PartialNotesBlock notes={partialNotes} /> : null}
+      {!lifecycle && partialNotes ? <PartialNotesBlock notes={partialNotes} /> : null}
       <div className="answer-foot">
         {supporting.length > 0 ? (
           <FootToggle label={`依据 ${supporting.length} 条`} open={evidenceOpen} onToggle={() => view.setEvidence(turn.turn_id, !evidenceOpen)} />
@@ -481,7 +497,7 @@ export function TurnView({ turn, actions, first = false, tools, askTools, editin
       ) : !first || focusLabel ? (
         <AskBubble text={turn.question} focusLabel={focusLabel} tools={askTools} />
       ) : null}
-      {((turn as ResearchV2.ResearchTurn & { user_instructions?: import("../../api/types").ResearchInstruction[] }).user_instructions ?? []).map((instruction) => (
+      {(turn.user_instructions ?? []).map((instruction) => (
         <div key={instruction.instruction_id}><AskBubble text={instruction.text} /><span className="meta">{instructionReceiptLabel(instruction.status)}</span><InstructionDelivery instruction={instruction} /></div>
       ))}
       <AnswerBlock turn={turn} actions={actions} tools={tools} />
@@ -495,7 +511,7 @@ function instructionReceiptLabel(status: string) {
   return "已收到";
 }
 
-function InstructionDelivery({ instruction }: { instruction: import("../../api/types").ResearchInstruction }) {
+function InstructionDelivery({ instruction }: { instruction: ResearchV2.SavedResearchInstruction }) {
   const view = useTopicView();
   const labels: Record<string, string> = { linked_for_review: "已关联依据，待核实", unresolved: "尚未核实", limited: "受资料或权限限制", superseded: "已被后续要求取代", supersession_needs_review: "已定位原文，取代关系待核验" };
   return <div className="meta">

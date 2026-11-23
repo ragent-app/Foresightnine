@@ -666,6 +666,10 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
         terms = {w for w in re.findall(r'[a-z0-9]{3,}', fragment.lower()) if w not in stop}
         cjk_terms = {fragment[i:i+2] for i in range(len(fragment)-1) if re.fullmatch(r'[一-龥]{2}', fragment[i:i+2])}
         if terms or cjk_terms:
+            # An incidental mention of the target in a claim about another
+            # measurement cannot close a quantitative comparison by word overlap.
+            from .research_reconciliation import detect_metrics
+            requested_metrics = set(detect_metrics(fragment)[0]) if any(word in fragment.lower() for word in _COMPARE) else set()
             for claim in claims:
                 claim_text = str(_get(claim, 'text', ''))
                 text_terms = set(re.findall(r'[a-z0-9]{3,}', claim_text.lower()))
@@ -678,8 +682,13 @@ def assess(question: str, state: Mapping[str, Any], sources: Mapping[str, Any], 
                                for c in (_get(claim, 'citations', []) or []))
                 conditions_requested = any(w in fragment.lower() for w in ('condition', '条件', '限定'))
                 conditions_addressed = any(w in claim_text.lower() for w in ('condition', 'subject to', 'provided that', '条件', '须', '需', '前提', '批准'))
+                citations = [c for c in (_get(claim, 'citations', []) or []) if located(c)]
+                if requested_metrics and not requested_metrics.issubset({
+                    key for citation in citations for key in detect_metrics(str(_get(citation, 'quotation', '')))[0]
+                }):
+                    continue
                 if (overlap and (not conditions_requested or conditions_addressed) and (not absent or complete) and _get(claim, 'role') == 'support' and _get(claim, 'claim_id')
-                    and any(located(c) for c in (_get(claim, 'citations', []) or []))):
+                    and citations):
                     refs.append({'claim_id': _get(claim, 'claim_id')})
         add('generic:' + fragment, fragment, 'satisfied' if refs else 'missing',
             'A checkpoint binds the complete question to eligible recorded facts; semantic support needs review.' if refs else 'The complete question needs an answer linked to eligible evidence; coverage cannot be inferred from tool calls.', refs)

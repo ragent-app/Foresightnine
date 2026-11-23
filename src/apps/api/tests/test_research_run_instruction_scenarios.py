@@ -11,6 +11,33 @@ def last_result(turn):
     return json.loads(turn.history[-1].results[-1].content)
 
 
+def test_counter_search_does_not_exhaust_discovery_for_the_core_question():
+    question = 'How did Example market capitalization change?'
+    searches = []
+
+    def discover(query):
+        searches.append(query)
+        return []
+
+    submit = {'report': 'No dated capitalization figures found.', 'claims': [], 'limitations': ['Data unavailable.'],
+              'stopping_reason': 'Data unavailable.', 'status': 'partial'}
+
+    def follow_core(turn, _):
+        followup = last_result(turn)['next_action']
+        assert followup['tool'] == 'news_search'
+        return _tool_response([('news_search', followup['arguments'], 'core')])
+
+    counter = {'query': 'Example tariff risk', 'rationale': 'Test an alternative explanation.',
+               'counter_search': {'target': 'Example share price', 'hypothesis': 'Tariffs reduced demand.'}}
+    model = NativeTurnRecorder([_tool_response([('news_search', counter, 'counter')]),
+                                _tool_response([('submit_research', submit, 'draft')]), follow_core,
+                                _tool_response([('submit_research', submit, 'final')])])
+    result = run_research_agent(question=question, sources=[], model=model, context=_ctx(), discover=discover,
+                                sync_instructions=lambda state, boundary: False)
+    assert result.reason == 'submitted'
+    assert searches == [counter['query'], question]
+
+
 def test_early_draft_proceeds_through_retrieval_facts_and_calculation():
     text = 'Revenue was 100 USD. Revenue was 80 USD.'
     src = _source(text=text)

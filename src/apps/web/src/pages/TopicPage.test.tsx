@@ -2274,20 +2274,31 @@ describe("research turn instructions", () => {
   });
 
   it("marks a final result with documented limits completed and preserves a stopped result", async () => {
-    const limited = { ...turn(1, { status: "partial", gaps: [{ code: "no_cited_claims", message: "x" }] }), lifecycle_status: "completed" };
-    const stopped = { ...turn(2, { status: "partial", reason: "provider_cancelled" }), lifecycle_status: "stopped" };
+    const limited: ResearchV2.ResearchTurn = { ...turn(1, { status: "partial", gaps: [
+      { code: "claims_omitted_unverified_location", message: "x" },
+      { code: "model_reported", message: "缺少同日发行在外股数。" },
+    ] }), lifecycle_status: "completed" };
+    const stopped: ResearchV2.ResearchTurn = { ...turn(2, { status: "partial", reason: "provider_cancelled" }), lifecycle_status: "stopped" };
     mockApi((url) => {
       if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([limited, stopped]));
       if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_2", "cancelled")]);
       return undefined;
     });
     renderTopic();
-    expect(within(await screen.findByRole("region", { name: "第 1 轮" })).getByText("已完成")).toBeTruthy();
+    const completed = within(await screen.findByRole("region", { name: "第 1 轮" }));
+    expect(completed.getByText("已完成")).toBeTruthy();
+    expect(completed.getByText("缺少同日发行在外股数。")).toBeTruthy();
+    expect(completed.queryByText("研究限制")).toBeNull();
+    expect(completed.queryByRole("button", { name: "重新提问" })).toBeNull();
+    const details = completed.getByText("查看依据与限制").closest("details")!;
+    expect(details.open).toBe(false);
+    fireEvent.click(completed.getByText("查看依据与限制"));
+    expect(details.open).toBe(true);
     expect(within(screen.getByRole("region", { name: "第 2 轮" })).getByText("已停止")).toBeTruthy();
   });
 
   it("shows saved instruction disposition and lets the reader locate its evidence", async () => {
-    const saved = { ...turn(1, { report: "有来源的回答。", claim_ids: ["C1"] }), user_instructions: [{ instruction_id: "i1", turn_id: "turn_1", operation_id: "op_1", sequence: 1, text: "核对口径", received_at: NOW, status: "included", delivery_status: "linked_for_review", reason: "与收入披露相关", references: [{ claim_id: "C1" }] }, { instruction_id: "i2", turn_id: "turn_1", operation_id: "op_1", sequence: 2, text: "采用新口径", received_at: NOW, status: "included", delivery_status: "supersession_needs_review", text_locations: [{ field: "report", instruction_sequence: 1, start: 0, end: 3, excerpt: "原文内容" }] }] };
+    const saved: ResearchV2.ResearchTurn = { ...turn(1, { report: "有来源的回答。", claim_ids: ["C1"] }), user_instructions: [{ instruction_id: "i1", turn_id: "turn_1", operation_id: "op_1", sequence: 1, text: "核对口径", received_at: NOW, status: "included", delivery_status: "linked_for_review", reason: "与收入披露相关", references: [{ claim_id: "C1" }] }, { instruction_id: "i2", turn_id: "turn_1", operation_id: "op_1", sequence: 2, text: "采用新口径", received_at: NOW, status: "included", delivery_status: "supersession_needs_review", text_locations: [{ field: "report", instruction_sequence: 1, start: 0, end: 3, excerpt: "原文内容" }] }] };
     mockApi((url) => {
       if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([saved], [{ ...CLAIMS[0]!, turn_id: "turn_1" }]));
       if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
