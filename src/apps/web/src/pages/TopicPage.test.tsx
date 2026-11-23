@@ -2096,6 +2096,47 @@ describe("TopicPage", () => {
     });
   });
 
+  describe("research actions: fork", () => {
+    function forkApi() {
+      const original = topicWith([turn(1), turn(2)]);
+      const forked: ResearchV2.ResearchTopic = {
+        ...topicWith([turn(1)]), topic_id: "t9", title: "Northwind 示例公司的收入增长有多快？（分支）",
+        forked_from: { topic_id: "t1", version_id: "v2", turn_id: "turn_1", turn_index: 1 },
+      };
+      return mockApi((url, init) => {
+        if (url.pathname === "/v2/research/topics") return jsonResponse([original]);
+        if (url.pathname === "/v2/research/topics/t1/fork" && init.method === "POST") return jsonResponse(forked, { status: 201 });
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(original);
+        if (url.pathname === "/v2/research/topics/t9") return jsonResponse(forked);
+        if (url.pathname.endsWith("/runs")) return jsonResponse([operation("op_1", "completed")]);
+        return undefined;
+      });
+    }
+    const forkBodies = (fetchMock: ReturnType<typeof vi.fn>) => fetchMock.mock.calls
+      .filter(([input]) => String(input).endsWith("/v2/research/topics/t1/fork"))
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)) as Record<string, unknown>);
+
+    it("forks from an earlier answer and opens the new research", async () => {
+      const fetchMock = forkApi();
+      renderTopic();
+      const region = await screen.findByRole("region", { name: "第 1 轮" });
+      fireEvent.click(within(region).getByRole("button", { name: "更多回答操作" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "从这里分叉" }));
+      await waitFor(() => expect(forkBodies(fetchMock)).toEqual([{ version_id: "v2", turn_id: "turn_1" }]));
+      expect(await screen.findByRole("link", { name: /分叉自《Northwind 示例公司的收入增长有多快？》\s*第 1 轮/ })).toBeTruthy();
+      expect(await screen.findByText("已创建分支")).toBeTruthy();
+    });
+
+    it("forks a whole research from its row menu", async () => {
+      const fetchMock = forkApi();
+      renderTopic();
+      const nav = await screen.findByRole("navigation", { name: "研究列表" });
+      fireEvent.contextMenu(await within(nav).findByRole("link", { name: /Northwind 示例公司/ }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "分叉为新研究" }));
+      await waitFor(() => expect(forkBodies(fetchMock)).toEqual([{ version_id: "v2" }]));
+    });
+  });
+
   describe("research actions: rename, pin, delete", () => {
     function lifecycleApi() {
       let topic = topicWith([turn(1)]);

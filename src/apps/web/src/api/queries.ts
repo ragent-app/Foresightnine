@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { nextPollDelay } from "../lib/polling";
 import { ApiError } from "./http";
-import { createCalculation, createVersion, deleteTopic, getProgress, getRecoveryStatus, getTopic, getVersionSourceText, isActiveStatus, listRuns, listTopics, listVersionSources, recalculateCalculation, restoreTopic, updateTopic, type CreateCalculationRequest } from "./research";
+import { createCalculation, createVersion, deleteTopic, getProgress, getRecoveryStatus, getTopic, getVersionSourceText, forkTopic, isActiveStatus, listRuns, listTopics, listVersionSources, recalculateCalculation, restoreTopic, updateTopic, type CreateCalculationRequest } from "./research";
 import { attachSources, reextractPdfSource } from "./sources";
 import { openResearchRunStream, StreamFallbackError } from "./stream";
 import type { CreatedSource, ProgressEvent, RecoveryStatus, RunProgress, SourceText, TransientStreamState, VersionSource } from "./types";
@@ -51,7 +51,11 @@ export function useTopicActions() {
     },
   });
   const restore = useMutation({ mutationFn: (topicId: string) => restoreTopic(topicId), onSuccess: put });
-  return { update, remove, restore };
+  const fork = useMutation({
+    mutationFn: ({ topicId, fork }: { topicId: string; fork: ResearchV2.TopicForkInput }) => forkTopic(topicId, fork),
+    onSuccess: put,
+  });
+  return { update, remove, restore, fork };
 }
 
 export function useTopic(topicId: string) {

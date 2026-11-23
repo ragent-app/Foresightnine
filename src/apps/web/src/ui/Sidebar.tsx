@@ -218,6 +218,13 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
       onSelect: () => void copyText(topicLink(topic.topic_id)).then((ok) => showToast(ok ? "已复制链接" : "无法访问剪贴板", { tone: ok ? "info" : "error" })),
     },
     { key: "export", label: "导出完整记录", icon: "download", onSelect: () => void exportTopic(topic) },
+    {
+      key: "fork", label: "分叉为新研究", icon: "fork",
+      onSelect: () => actions.fork.mutate({ topicId: topic.topic_id, fork: { version_id: latestVersion(topic).version_id } }, {
+        onSuccess: (created) => { navigate(`/research/${encodeURIComponent(created.topic_id)}`); showToast("已创建分支"); },
+        onError: (error) => showToast(`分叉失败：${describeError(error)}`, { tone: "error" }),
+      }),
+    },
     "separator",
     { key: "delete", label: running ? "删除（研究进行中）" : "删除…", icon: "trash", destructive: true, disabled: running, onSelect: () => setDeleting(topic) },
   ];

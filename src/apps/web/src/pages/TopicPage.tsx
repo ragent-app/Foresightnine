@@ -1,6 +1,6 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useBlocker, useParams } from "react-router-dom";
+import { Link, useBlocker, useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "../api/http";
 import { useActiveRun, useAttachSources, useCancelRun, useContinueTurn, useRecoverTurn, useRecoveryStatus, useReextractPdf, useRunProgress, useSaveVersion, useStartTurn, useTopic, useTopicActions, useVersionSources } from "../api/queries";
 import { exportFull, exportMetadata, isActiveStatus, latestVersion, restoreVersion } from "../api/research";
@@ -27,7 +27,7 @@ import { CitationSheet } from "./topic/Citation";
 import { TopicContext, type FocusCitation, type LiveRun, type PanelState, type TopicView } from "./topic/context";
 import { InterruptedTurn, LiveTurn, TurnView, type AnswerTools, type TurnActions } from "./topic/Conversation";
 import { useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "../api/queries";
+import { queryKeys, useTopics } from "../api/queries";
 import { showToast } from "../ui/toast";
 import { LiveCapsule } from "./topic/LiveBar";
 import { ReaderPanel } from "./topic/ReaderPanel";
@@ -107,6 +107,8 @@ export function TopicPage() {
   const [regenPrompt, setRegenPrompt] = useState<{ turn: ResearchV2.ResearchTurn; question: string | null } | null>(null);
   const [restoring, setRestoring] = useState(false);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const topicList = useTopics();
   const topicActions = useTopicActions();
   const [evidence, setEvidenceState] = useState<ReadonlyMap<string, boolean>>(new Map());
   const setEvidence = useCallback((turnId: string, open: boolean) => {
@@ -431,6 +433,19 @@ export function TopicPage() {
     });
   };
 
+  /** A new research holding this version up to the given turn; it opens right away. */
+  const forkFrom = (turn: ResearchV2.ResearchTurn) => {
+    if (!version) return;
+    topicActions.fork.mutate({ topicId, fork: { version_id: version.version_id, turn_id: turn.turn_id } }, {
+      onSuccess: (created) => { navigate(`/research/${encodeURIComponent(created.topic_id)}`); showToast("已创建分支"); },
+      onError: (error) => setNotice({ tone: "error", text: `分叉失败：${describeError(error)}` }),
+    });
+  };
+  const forkEntry = (turn: ResearchV2.ResearchTurn) => ({
+    key: "fork", label: topicActions.fork.isPending ? "正在创建分支…" : "从这里分叉", icon: "fork" as const,
+    disabled: topicActions.fork.isPending, onSelect: () => forkFrom(turn),
+  });
+
   const restorePrevious = (turn: ResearchV2.ResearchTurn) => {
     if (!version || !topic || !turn.replaces_turn_id || locked) return;
     const previous = versionWithTurn(topic.versions, turn.replaces_turn_id);
@@ -469,6 +484,9 @@ export function TopicPage() {
   }
 
   const title = topic ? topicTitle(topic) : "";
+  // The origin may have been deleted since; then it is named generically.
+  const forkOrigin = topic?.forked_from ? topicList.data?.find((item) => item.topic_id === topic.forked_from!.topic_id) : undefined;
+  const forkOriginTitle = forkOrigin ? topicTitle(forkOrigin) : "原研究";
   const lastGap = lastTurn?.gaps?.[0];
   const turnActions = (question: string, deliverable: boolean, targetTurnId: string | null): TurnActions => ({
     recovery: recovery.data,
@@ -518,6 +536,7 @@ export function TopicPage() {
       menu: [
         { key: "edit", label: "编辑问题并重发", icon: "pen", onSelect: () => setEditingTurnId(turn.turn_id) },
         ...(turn.replaces_turn_id ? [{ key: "restore", label: restoring ? "正在恢复…" : "恢复上一次的回答", icon: "undo" as const, disabled: restoring, onSelect: () => restorePrevious(turn) }] : []),
+        forkEntry(turn),
       ],
     };
     return {
@@ -705,8 +724,14 @@ export function TopicPage() {
                   <h1 onDoubleClick={() => setRenaming(true)}>{title}</h1>
                 )}
                 {/* Version and turn count live in 复核与版本; the header only names what needs attention. */}
-                {topic!.request.as_of || dirty ? (
+                {topic!.request.as_of || dirty || topic!.forked_from ? (
                   <div className="meta">
+                    {topic!.forked_from ? (
+                      <Link className="link meta-link" to={`/research/${encodeURIComponent(topic!.forked_from.topic_id)}`}>
+                        分叉自《{forkOriginTitle}》
+                        {topic!.forked_from.turn_index ? `第 ${topic!.forked_from.turn_index} 轮` : ""}
+                      </Link>
+                    ) : null}
                     {topic!.request.as_of ? <span>数据截止 {formatDateTimeWithOffset(topic!.request.as_of)}</span> : null}
                     {dirty ? <button type="button" className="link meta-link unsaved" onClick={() => setPanel({ kind: "review" })}>有未保存的修改</button> : null}
                   </div>
@@ -717,7 +742,7 @@ export function TopicPage() {
                   key={turn.turn_id}
                   turn={turn}
                   first={index === 0 && turn.question.trim() === title.trim()}
-                  {...(index === turns.length - 1 && canModifyLast ? latestTurnControls(turn) : {})}
+                  {...(index === turns.length - 1 && canModifyLast ? latestTurnControls(turn) : view ? { tools: { menu: [forkEntry(turn)] } } : {})}
                   actions={index === turns.length - 1 && turn.status === "partial" && !orphanRun && !activeRun ? turnActions(turn.question, turn.reason !== "submitted", turn.turn_id) : null}
                 />
               ))}

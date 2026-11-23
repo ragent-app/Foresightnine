@@ -659,8 +659,13 @@ class ResearchTopics:
                 created_by="agent", source_ids=source_ids,
                 note=f"分叉自《{name[:80]}》第 {turn.index} 轮" if k == len(content.turns) else ""))
         topic = ResearchTopic(topic_id=new_id, owner_id=owner, request=source_topic.request.model_copy(deep=True),
-                              created_at=created, updated_at=created, versions=versions)
+                              created_at=created, updated_at=created, versions=versions[:1])
+        # One write per version: the document's storage revision must equal its version count,
+        # which later optimistic appends (add_version) rely on.
         self.repository.put(new_id, topic)
+        for count in range(2, len(versions) + 1):
+            topic = topic.model_copy(update={"versions": versions[:count]})
+            self.repository.put(new_id, topic, expected_version=count - 1)
         origin = TopicOrigin(topic_id=topic_id, version_id=version.version_id,
                              turn_id=content.turns[-1].turn_id if content.turns else None,
                              turn_index=content.turns[-1].index if content.turns else None)

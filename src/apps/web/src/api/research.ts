@@ -48,6 +48,11 @@ export function restoreVersion(topicId: string, versionId: string, parentVersion
   return apiRequest<ResearchV2.ResearchTopic>(`${versionPath(topicId, versionId)}/restore`, { method: "POST", body: { parent_version_id: parentVersionId } });
 }
 
+/** A new research from one version, up to and including a turn (the whole version when omitted). */
+export function forkTopic(topicId: string, fork: ResearchV2.TopicForkInput): Promise<ResearchV2.ResearchTopic> {
+  return apiRequest<ResearchV2.ResearchTopic>(`${topicPath(topicId)}/fork`, { method: "POST", body: fork });
+}
+
 export function restoreTopic(topicId: string): Promise<ResearchV2.ResearchTopic> {
   return apiRequest<ResearchV2.ResearchTopic>(`${topicPath(topicId)}/restore`, { method: "POST" });
 }
