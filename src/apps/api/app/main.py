@@ -741,7 +741,7 @@ def _model_provider_for_request(request: Request, *, research: bool = False) -> 
                 raise ApiProblem(503, 'internal_error', 'Research model protocol is unsupported.')
         return challenge_provider, False
     request.state.personal_model = True
-    if resolved_config.protocol == 'anthropic_messages' and not research:
+    if resolved_config.protocol in ('anthropic_messages', 'openai_responses') and not research:
         raise ApiProblem(422, 'invalid_request', 'This model protocol is available for research only.')
     return _personal_model_provider(settings, resolved_config, research=research), True
 
@@ -755,6 +755,9 @@ def _personal_model_provider(settings: OpenAICompatibleSettings, config: StoredM
             raise ApiProblem(422, 'invalid_request', 'Configure the Messages version, authentication scheme and output limit in model settings.')
     if research and not settings.tools_verified:
         raise ApiProblem(422, 'invalid_request', 'Verify research tools for this model in model settings.')
+    if config.protocol == 'openai_responses':
+        from .openai_responses import OpenAIResponsesProvider
+        return OpenAIResponsesProvider(settings)
     if config.protocol == 'anthropic_messages':
         from .anthropic_messages import AnthropicMessagesProvider
         from .openai_compatible import _llm_timeout_from_environment
@@ -4229,7 +4232,7 @@ def test_model_config(
         turn = ModelTurnInput("Use the provided tool.", "Call verify_connection with value ok.", (tool,), ())
         # Chat output-limit field support varies by endpoint. Use the same
         # minimal wire fields as a normal uncapped Chat turn.
-        result = adapter.complete_turn(turn, timeout_seconds=30, max_output_tokens=None if chat else 256)
+        result = adapter.complete_turn(turn, timeout_seconds=30, max_output_tokens=256 if config.protocol == "anthropic_messages" else None)
         verified = (result.stop_class == "tool_calls" and len(result.tool_calls) == 1
                     and result.tool_calls[0].name == tool.name and result.tool_calls[0].arguments == {"value": "ok"})
     except ProviderFailure as error:

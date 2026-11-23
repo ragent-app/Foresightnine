@@ -20,7 +20,7 @@ export interface AccountSummary {
   research_model?: string | null;
 }
 
-export type ModelProtocol = "openai_chat_completions" | "anthropic_messages";
+export type ModelProtocol = "openai_chat_completions" | "openai_responses" | "anthropic_messages";
 
 /**
  * GET/PUT/DELETE /v1/account/model-config (response_model_exclude_none: absent fields are unset).

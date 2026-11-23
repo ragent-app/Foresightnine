@@ -348,7 +348,7 @@ def safe_diagnostic_context(**kwargs: Any) -> dict[str, Any]:
         value = kwargs.get(key)
         if isinstance(value, str) and _IDENTIFIER.fullmatch(value):
             result[key] = value
-    for key, values in {'provider': {'openai-compatible', 'openai_compatible', 'glm_coding', 'anthropic_messages', 'local', 'unknown'}, 'output_mode': {'json_object', 'json_schema', 'tool', 'tool_call', 'unknown'}}.items():
+    for key, values in {'provider': {'openai-compatible', 'openai_compatible', 'glm_coding', 'openai_responses', 'anthropic_messages', 'local', 'unknown'}, 'output_mode': {'json_object', 'json_schema', 'tool', 'tool_call', 'unknown'}}.items():
         value = kwargs.get(key)
         if isinstance(value, str) and value in values:
             result[key] = value
@@ -457,7 +457,7 @@ def sanitize_diagnostic_errors(value: object, *, schema: type[BaseModel] | None 
     return result
 
 _PROVIDER_PARAMETERS = frozenset(ChatGenerationParameters.model_fields) | {
-    "model", "max_tokens", "max_completion_tokens", "messages", "tools", "system", "thinking", "stream",
+    "reasoning.effort", "reasoning", "input", "instructions", "max_output_tokens", "model", "max_tokens", "max_completion_tokens", "messages", "tools", "system", "thinking", "stream",
 }
 
 _PROVIDER_ERROR_CODES = frozenset({'invalid_request_error', 'authentication_error', 'permission_error',
@@ -504,6 +504,8 @@ def safe_wire_metadata(wire: object, *, contract: object = None, wire_bytes: int
     """Select parameters actually present in a submitted request envelope."""
     if not isinstance(wire, dict): return {}
     params = {key: wire[key] for key in (*_PARAMETER_KEYS, 'reasoning_effort', 'do_sample') if key in wire}
+    if isinstance(wire.get('reasoning'), dict):
+        params['reasoning_effort'] = wire['reasoning'].get('effort')
     thinking = wire.get('thinking')
     if isinstance(thinking, dict): params['thinking'] = thinking.get('type')
     mode = 'tool' if isinstance(wire.get('tools'), list) else (

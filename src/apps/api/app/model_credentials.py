@@ -23,6 +23,9 @@ from .phase3 import ProviderFailure
 from .provider_capabilities import ChatGenerationParameters
 
 
+ModelProtocol = Literal["openai_chat_completions", "openai_responses", "anthropic_messages"]
+
+
 class ModelCredentialError(RuntimeError):
     def __init__(self, status_code: int, code: str, message: str) -> None:
         super().__init__(message)
@@ -45,7 +48,7 @@ class ModelConfigUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     mode: Literal["platform", "personal"]
-    protocol: Literal["openai_chat_completions", "anthropic_messages"] | None = None
+    protocol: ModelProtocol | None = None
     messages_options: MessagesOptions | None = None
     generation_parameters: ChatGenerationParameters | None = None
     base_url: str | None = Field(default=None, min_length=1, max_length=2048)
@@ -77,7 +80,7 @@ class ModelConfigResponse(BaseModel):
     schema_version: Literal["v1"] = "v1"
     mode: Literal["platform", "personal"]
     configured: bool
-    protocol: Literal["openai_chat_completions", "anthropic_messages"] | None = None
+    protocol: ModelProtocol | None = None
     messages_options: MessagesOptions | None = None
     generation_parameters: ChatGenerationParameters | None = None
     base_url: str | None = None
@@ -101,7 +104,7 @@ class StoredModelConfig(BaseModel):
     schema_version: Literal["v1"] = "v1"
     account_id: str = Field(min_length=8, max_length=80)
     mode: Literal["platform", "personal"]
-    protocol: Literal["openai_chat_completions", "anthropic_messages"] = "openai_chat_completions"
+    protocol: ModelProtocol = "openai_chat_completions"
     messages_options: MessagesOptions | None = None
     generation_parameters: ChatGenerationParameters | None = None
     base_url: str | None = Field(default=None, max_length=2048)
@@ -225,8 +228,10 @@ class AccountModelSettings:
             if request.messages_options and protocol != "anthropic_messages":
                 raise ModelCredentialError(422, "validation_error", "Messages options require the Messages protocol.")
             parameters = request.generation_parameters
-            if parameters is not None and protocol != "openai_chat_completions":
-                raise ModelCredentialError(422, "validation_error", "Generation parameters require Chat Completions.")
+            if parameters is not None and protocol == "anthropic_messages":
+                raise ModelCredentialError(422, "validation_error", "Generation parameters require a Chat Completions or Responses connection.")
+            if protocol == "openai_responses" and parameters and parameters.seed is not None:
+                raise ModelCredentialError(422, "validation_error", "Responses does not accept seed.")
             options = request.messages_options
             if existing and (protocol, base_url, model) == (existing.protocol, existing.base_url, existing.model):
                 if options is None:

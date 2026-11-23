@@ -9,14 +9,15 @@ from urllib.parse import quote, urlencode
 from pydantic import BaseModel, ConfigDict, Field
 
 from .anthropic_messages import _endpoint as messages_endpoint
-from .model_credentials import AccountModelSettings, ModelCredentialError
+from .model_credentials import AccountModelSettings, ModelCredentialError, ModelProtocol
 from .openai_compatible import _default_transport, _endpoint as chat_endpoint, personal_model_endpoint
+from .openai_responses import responses_endpoint
 from .phase3 import ProviderFailure
 
 
 class ModelDiscoveryRequest(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
-    protocol: Literal["openai_chat_completions", "anthropic_messages"]
+    protocol: ModelProtocol
     base_url: str = Field(min_length=1, max_length=2048)
     api_key: str | None = Field(default=None, min_length=8, max_length=512, repr=False)
     version: str | None = Field(default=None, pattern=r"^[!-~]{1,64}$")
@@ -103,8 +104,13 @@ def discover_models(account_id: str, request: ModelDiscoveryRequest, accounts: A
         headers["x-api-key"] = key
     else:
         headers["Authorization"] = "Bearer " + key
-    url = (messages_endpoint(base).removesuffix("/messages") if messages
-           else chat_endpoint(base).removesuffix("/chat/completions")) + "/models"
+    if messages:
+        root = messages_endpoint(base).removesuffix("/messages")
+    elif request.protocol == "openai_responses":
+        root = responses_endpoint(base).removesuffix("/responses")
+    else:
+        root = chat_endpoint(base).removesuffix("/chat/completions")
+    url = root + "/models"
     if request.model:
         if any(part in {".", ".."} for part in request.model.split("/")):
             raise ModelCredentialError(422, "validation_error", "Invalid model identifier.")

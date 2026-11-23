@@ -1666,7 +1666,7 @@ function buildProgress(run, after) {
 // ---- Account, model and market-data settings (mirrors model_credentials.py / market_credentials.py) ----
 
 const STORAGE_UNAVAILABLE_KEY = "storage-unavailable-key";
-const MODEL_PROTOCOLS = ["openai_chat_completions", "anthropic_messages"];
+const MODEL_PROTOCOLS = ["openai_chat_completions", "openai_responses", "anthropic_messages"];
 const unavailable = (code, message) => new HttpError(503, code, message, { retryable: true, headers: { "Retry-After": "30" } });
 const modelUnavailable = () => unavailable("model_credential_storage_unavailable", "Model credential storage is unavailable.");
 const marketUnavailable = () => unavailable("market_credential_storage_unavailable", "Market credential storage is unavailable.");
@@ -1850,7 +1850,8 @@ function applyModelUpdate(existing, request, now) {
   if (request.messages_options && protocol !== "anthropic_messages") throw modelProblem("Messages options require the Messages protocol.");
   const same = protocol === prior?.protocol && baseUrl === prior?.base_url && model === prior?.model;
   const options = request.messages_options ?? (same ? prior.messages_options : null);
-  if (request.generation_parameters != null && protocol !== "openai_chat_completions") throw modelProblem("Generation parameters require Chat Completions.");
+  if (request.generation_parameters != null && protocol === "anthropic_messages") throw modelProblem("Generation parameters require Chat Completions or Responses.");
+  if (protocol === "openai_responses" && request.generation_parameters?.seed != null) throw modelProblem("Responses does not accept seed.");
   const selected = request.generation_parameters === undefined && same ? prior.generation_parameters : request.generation_parameters;
   const entries = Object.entries(selected ?? {}).filter(([, value]) => value !== null).sort(([a], [b]) => a.localeCompare(b));
   const parameters = entries.length ? Object.fromEntries(entries) : null;
@@ -3184,7 +3185,7 @@ export function createServer({ tickMs = 1500, heartbeatMs = 15000, maxSsePerAcco
   route("POST", "/v1/account/model-config/test", true, ({ res, auth }) => {
     const config = dataFor(auth.accountId).modelConfig;
     let status = "unavailable";
-    if (config?.mode === "personal" && (config.protocol === "openai_chat_completions" || config.messages_options)) {
+    if (config?.mode === "personal" && (config.protocol !== "anthropic_messages" || config.messages_options)) {
       // Simulated probe, no network: hosts or models named "down" are unreachable.
       const down = new URL(config.base_url).hostname.toLowerCase().includes("down") || config.model.toLowerCase().includes("down");
       status = down ? "unavailable" : "ready";

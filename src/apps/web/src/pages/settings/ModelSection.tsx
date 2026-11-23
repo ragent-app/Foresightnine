@@ -42,12 +42,13 @@ function MyModelPanel({ saved, onClose, onSaved }: { saved: ModelConfig | undefi
   const save = useSaveModelConfig();
   // Prefill from the saved configuration whether or not it is active.
   const personal = hasSavedPersonal(saved) ? saved : undefined;
-  const [protocol, setProtocol] = useState<ModelProtocol>(personal?.protocol ?? "openai_chat_completions");
+  const [protocol, setProtocol] = useState<ModelProtocol>(personal?.protocol ?? "openai_responses");
   const [baseUrl, setBaseUrl] = useState(personal?.base_url ?? "");
   const [model, setModel] = useState(personal?.model ?? "");
   const [version, setVersion] = useState(personal?.messages_options?.version ?? "");
   const [authScheme, setAuthScheme] = useState<MessagesOptions["auth_scheme"]>(personal?.messages_options?.auth_scheme ?? "x-api-key");
   const [maxTokens, setMaxTokens] = useState(String(personal?.messages_options?.max_tokens ?? ""));
+  const numericParams = protocol === "openai_responses" ? ["temperature", "top_p"] as const : ["temperature", "top_p", "seed"] as const;
   const messages = protocol === "anthropic_messages";
   const sameConnection = personal && protocol === personal.protocol && baseUrl === personal.base_url && model === personal.model;
   const savedParameters = sameConnection ? personal.generation_parameters : undefined;
@@ -76,7 +77,7 @@ function MyModelPanel({ saved, onClose, onSaved }: { saved: ModelConfig | undefi
     const effort = fields.get("effort");
     if (!messages) {
       if (typeof effort === "string" && effort) parameters.reasoning_effort = effort;
-      for (const name of ["temperature", "top_p", "seed"] as const) {
+      for (const name of numericParams) {
         const value = fields.get(name);
         if (typeof value === "string" && value) parameters[name] = Number(value);
       }
@@ -155,7 +156,7 @@ function MyModelPanel({ saved, onClose, onSaved }: { saved: ModelConfig | undefi
         </> : <details key={JSON.stringify([baseUrl, model])}>
           <summary>生成参数（可选）</summary>
           <p className="help">只填写当前模型支持的值。留空时由服务商决定。</p>
-          {(["temperature", "top_p", "seed"] as const).map((name) => (
+          {numericParams.map((name) => (
             <div className="field" key={name}>
               <label htmlFor={`${ids}-${name}`}>{name}</label>
               <input id={`${ids}-${name}`} name={name} type="number" step={name === "seed" ? "1" : "any"}

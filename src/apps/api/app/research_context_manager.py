@@ -77,6 +77,9 @@ def _extract_assistant_tool_calls(assistant: Any) -> dict[str, tuple[str, dict[s
                 raw_input = block.get('input')
                 calls[cid] = (cname, dict(raw_input) if isinstance(raw_input, Mapping) else {})
     tool_calls = assistant.get('tool_calls')
+    if isinstance(assistant.get('output'), list):
+        tool_calls = [dict(item, id=item.get('call_id')) for item in assistant['output']
+                      if isinstance(item, dict) and item.get('type') == 'function_call']
     if isinstance(tool_calls, list):
         for tc in tool_calls:
             if not isinstance(tc, Mapping):

@@ -65,8 +65,8 @@ describe("SettingsPage", () => {
   it("saves a personal model and tests the connection", async () => {
     let saved = false;
     const fetchMock = mockApi((url, init) => {
-      if (url.pathname === "/v1/account/model-config" && init.method === "PUT") { saved = true; return jsonResponse(PERSONAL); }
-      if (url.pathname === "/v1/account/model-config") return jsonResponse(saved ? PERSONAL : PLATFORM);
+      if (url.pathname === "/v1/account/model-config" && init.method === "PUT") { saved = true; return jsonResponse({ ...PERSONAL, protocol: "openai_responses" }); }
+      if (url.pathname === "/v1/account/model-config") return jsonResponse(saved ? { ...PERSONAL, protocol: "openai_responses" } : PLATFORM);
       if (url.pathname === "/v1/account/model-config/test") return jsonResponse({ status: "ready" });
       return undefined;
     });
@@ -82,9 +82,9 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     expect(await screen.findByText("研究工具已验证")).toBeTruthy();
     expect(bodyOf(fetchMock, "/v1/account/model-config", "PUT")).toEqual({
-      mode: "personal", protocol: "openai_chat_completions", base_url: "https://api.example.com/v1", model: "example-model", api_key: "sk-example-abcd",
+      mode: "personal", protocol: "openai_responses", base_url: "https://api.example.com/v1", model: "example-model", api_key: "sk-example-abcd",
     });
-    expect(screen.getByText("OpenAI Chat Completions · example-model")).toBeTruthy();
+    expect(screen.getByText("OpenAI Responses · example-model")).toBeTruthy();
   });
 
   it("discovers models without resending the saved key and preserves the chosen effort on verification failure", async () => {
