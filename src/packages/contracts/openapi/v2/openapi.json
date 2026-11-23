@@ -2147,6 +2147,17 @@
             "title": "Quotation",
             "type": "string"
           },
+          "quotation_match": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quotation Match"
+          },
           "scale_quote_missing": {
             "anyOf": [
               {
@@ -2162,6 +2173,29 @@
             "minLength": 1,
             "title": "Source Id",
             "type": "string"
+          },
+          "table_alignment_unverified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Alignment Unverified"
+          },
+          "table_structure_alignment": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Structure Alignment"
           },
           "turn_id": {
             "anyOf": [
@@ -2187,6 +2221,18 @@
           "verification": {
             "title": "Verification",
             "type": "string"
+          },
+          "xbrl_source_consistency": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xbrl Source Consistency"
           }
         },
         "required": [
