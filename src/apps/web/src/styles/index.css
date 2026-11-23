@@ -943,3 +943,5 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 .large-title .title-edit { width: 100%; margin: 0; padding: 0 0 2px; border: 0; border-bottom: 1.5px solid var(--primary); background: transparent; outline: none;
   font: inherit; font-size: 28px; font-weight: 600; line-height: 1.3; letter-spacing: -0.02em; color: var(--on-surface); }
 @media (max-width: 899px) { .large-title .title-edit { font-size: 24px; } }
+/* Toasts center on the content column, not the window, while the sidebar is open beside it. */
+@media (min-width: 900px) { .app:not(.side-collapsed) .toasts { left: calc(50% + var(--side-w) / 2); } }
