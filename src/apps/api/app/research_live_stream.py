@@ -13,13 +13,24 @@ import json
 import os
 from threading import Lock, RLock, Timer
 from time import monotonic
-from typing import Any, Callable, Literal, Mapping
+from typing import Any, Callable, Literal, Mapping, Sequence
 from uuid import uuid4
 
 from .operations import ApiProblem
 
 StreamChannel = Literal['thinking', 'text', 'tool_status', 'draft_report']
 _STREAM_CHANNELS = frozenset({'thinking', 'text', 'tool_status', 'draft_report'})
+ORG_GRAPH_ACTION_KINDS = frozenset({
+    'READING',
+    'SEARCHING',
+    'INSPECTING',
+    'DELEGATING',
+    'WAITING_SUBORDINATES',
+    'RESPONDING',
+    'NEEDS_USER',
+    'BLOCKED',
+    'FAILED',
+})
 _TERMINAL_STATUSES = frozenset({'completed', 'failed', 'cancelled'})
 _DEFAULT_MAX_PER_ACCOUNT = 6
 _DEFAULT_QUEUE_MAXSIZE = 128
@@ -65,8 +76,95 @@ def format_sse_frame(event: str, data: Mapping[str, Any], *, event_id: str | Non
     lines = [f'event: {event}']
     if event_id is not None:
         lines.append(f'id: {event_id}')
-    lines.append('data: ' + json.dumps(data, ensure_ascii=False, separators=(',', ':')))
+    lines.append('data: ' + json.dumps(data, ensure_ascii=False, separators=(',', ':'), default=str))
     return '\n'.join(lines) + '\n\n'
+
+
+def parse_org_last_event_id(last_event_id: str | None) -> int:
+    """Parse SSE Last-Event-ID cursor for org_graph_event streams (`org:<seq>` -> `<seq>`)."""
+    if last_event_id is None or last_event_id == '':
+        return 0
+    if not last_event_id.strip():
+        raise ApiProblem(400, 'invalid_last_event_id', 'Last-Event-ID is invalid.')
+    if last_event_id.startswith('org:'):
+        raw = last_event_id[4:]
+        if not (raw.isascii() and raw.isdigit()):
+            raise ApiProblem(400, 'invalid_last_event_id', 'Last-Event-ID org sequence is invalid.')
+        return int(raw)
+    after_idx, _ = parse_last_event_id(last_event_id)
+    return after_idx
+
+
+def _coerce_org_edge_event(raw: Any) -> dict[str, Any] | None:
+    if raw is None:
+        return None
+    if hasattr(raw, 'model_dump') and callable(raw.model_dump):
+        raw = raw.model_dump(mode='json')
+    if not isinstance(raw, Mapping):
+        raise ValueError('edge_event must be a mapping or None.')
+    from_id = str(raw.get('from_node_id') or '').strip()
+    to_id = str(raw.get('to_node_id') or '').strip()
+    if not from_id or not to_id:
+        raise ValueError('edge_event requires non-blank from_node_id and to_node_id.')
+    out: dict[str, Any] = {
+        'from_node_id': from_id,
+        'to_node_id': to_id,
+        'is_review': bool(raw.get('is_review', False)),
+    }
+    if raw.get('edge_kind') is not None:
+        out['edge_kind'] = str(raw['edge_kind'])
+    if raw.get('label') is not None:
+        out['label'] = str(raw['label'])
+    return out
+
+
+def normalize_org_graph_event(event: Any) -> dict[str, Any]:
+    """Validate and normalize an OrgGraphEvent into a strict JSON-serializable payload."""
+    if hasattr(event, 'model_dump') and callable(event.model_dump):
+        raw = event.model_dump(mode='json')
+    elif isinstance(event, Mapping):
+        raw = dict(event)
+    else:
+        raise ValueError('OrgGraphEvent payload must be a model or mapping.')
+
+    seq = raw.get('sequence')
+    if type(seq) is not int or seq < 1:
+        raise ValueError('OrgGraphEvent.sequence must be an integer >= 1.')
+
+    required_fields: dict[str, str] = {}
+    for fname in ('stage', 'node_id', 'role', 'display_name', 'runtime_state', 'action_kind', 'current_activity'):
+        val = raw.get(fname)
+        if not isinstance(val, str) or not val.strip():
+            raise ValueError(f'OrgGraphEvent.{fname} must be a non-blank string.')
+        required_fields[fname] = val.strip()
+
+    if required_fields['action_kind'] not in ORG_GRAPH_ACTION_KINDS:
+        raise ValueError(f"Unsupported OrgGraphEvent.action_kind: {required_fields['action_kind']!r}")
+
+    blocker = raw.get('blocker_text')
+    blocker_text = str(blocker) if blocker is not None else None
+    edge_event = _coerce_org_edge_event(raw.get('edge_event'))
+
+    normalized: dict[str, Any] = {
+        'sequence': seq,
+        **required_fields,
+        'blocker_text': blocker_text,
+        'edge_event': edge_event,
+    }
+    for optional_key in ('timestamp', 'slot', 'parent_node_id'):
+        if raw.get(optional_key) is not None:
+            normalized[optional_key] = raw[optional_key]
+    return normalized
+
+
+def format_org_graph_sse_frame(operation_id: str, event: Any) -> str:
+    """Format one ``org_graph_event`` SSE frame with ``id: org:<sequence>``."""
+    payload = normalize_org_graph_event(event)
+    return format_sse_frame(
+        'org_graph_event',
+        {'operation_id': operation_id, **payload},
+        event_id=f"org:{payload['sequence']}",
+    )
 
 
 @dataclass
@@ -85,6 +183,7 @@ class _OperationChannel:
     operation_id: str
     subscribers: dict[str, _Subscriber] = field(default_factory=dict)
     last_event_index: int = -1
+    last_org_sequence: int = 0
     last_current_key: str | None = None
     terminal_at: float | None = None
 
@@ -252,6 +351,81 @@ class ResearchLiveBroker:
             })
         return frames
 
+    @staticmethod
+    def _collect_new_org_graph_frames(
+        channel: _OperationChannel, operation_id: str, progress: Mapping[str, Any]
+    ) -> list[dict[str, Any]]:
+        raw_events = progress.get('org_events')
+        if not isinstance(raw_events, list) or not raw_events:
+            return []
+        frames: list[dict[str, Any]] = []
+        for raw_ev in raw_events:
+            payload = normalize_org_graph_event(raw_ev)
+            seq = payload['sequence']
+            if seq <= channel.last_org_sequence:
+                continue
+            channel.last_org_sequence = seq
+            frames.append({
+                'event': 'org_graph_event',
+                'id': f'org:{seq}',
+                'data': {
+                    'operation_id': operation_id,
+                    **payload,
+                },
+            })
+        return frames
+
+    def publish_org_graph_event(self, operation_id: str, event: Any) -> dict[str, Any] | None:
+        """Emit a single strictly-sequenced ``org_graph_event`` SSE frame to active subscribers."""
+        payload = normalize_org_graph_event(event)
+        seq = payload['sequence']
+        with self._lock:
+            self._prune_expired_locked()
+            channel = self._channels.setdefault(operation_id, _OperationChannel(operation_id))
+            if channel.terminal_at is not None or seq <= channel.last_org_sequence:
+                return None
+            channel.last_org_sequence = seq
+            frame = {
+                'event': 'org_graph_event',
+                'id': f'org:{seq}',
+                'data': {
+                    'operation_id': operation_id,
+                    **payload,
+                },
+            }
+            subs = list(channel.subscribers.values())
+        if subs:
+            self._dispatch(subs, [frame])
+        return frame
+
+    def publish_org_graph_batch(self, operation_id: str, events: Sequence[Any]) -> list[dict[str, Any]]:
+        """Emit an ordered batch of ``org_graph_event`` frames while deduplicating sequences."""
+        normalized = [normalize_org_graph_event(ev) for ev in events]
+        normalized.sort(key=lambda item: item['sequence'])
+        frames: list[dict[str, Any]] = []
+        with self._lock:
+            self._prune_expired_locked()
+            channel = self._channels.setdefault(operation_id, _OperationChannel(operation_id))
+            if channel.terminal_at is not None:
+                return []
+            for payload in normalized:
+                seq = payload['sequence']
+                if seq <= channel.last_org_sequence:
+                    continue
+                channel.last_org_sequence = seq
+                frames.append({
+                    'event': 'org_graph_event',
+                    'id': f'org:{seq}',
+                    'data': {
+                        'operation_id': operation_id,
+                        **payload,
+                    },
+                })
+            subs = list(channel.subscribers.values())
+        if frames and subs:
+            self._dispatch(subs, frames)
+        return frames
+
     def publish_progress(self, operation_id: str, progress: dict[str, Any]) -> None:
         with self._lock:
             self._prune_expired_locked()
@@ -259,6 +433,7 @@ class ResearchLiveBroker:
             if channel.terminal_at is not None:
                 return
             frames = self._collect_new_event_frames(channel, operation_id, progress)
+            frames.extend(self._collect_new_org_graph_frames(channel, operation_id, progress))
             current_state = {
                 'operation_status': progress.get('operation_status'),
                 'current': progress.get('current'),
@@ -342,6 +517,8 @@ class ResearchLiveBroker:
             if channel.terminal_at is not None:
                 return
             frames = self._collect_new_event_frames(channel, operation_id, progress) if progress is not None else []
+            if progress is not None:
+                frames.extend(self._collect_new_org_graph_frames(channel, operation_id, progress))
             frames.append({
                 'event': 'run.terminal',
                 'id': f'done:{operation_status}',

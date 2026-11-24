@@ -7,6 +7,7 @@ from dataclasses import asdict, replace as dataclass_replace
 from collections.abc import Callable, Mapping
 from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
 from hashlib import sha256
 import json
 import logging
@@ -15,12 +16,13 @@ import re
 import secrets
 import tempfile
 from pathlib import Path
+from threading import RLock, Thread
 from time import monotonic
 from typing import Annotated, Any, Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
 
-from fastapi import FastAPI, Header, Query, Request, Response
+from fastapi import Body, FastAPI, Header, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
@@ -105,7 +107,14 @@ from .research_topics import (AttachSourcesInput, ResearchCalculation, ResearchF
     VersionInput, VersionRestoreInput)
 from .research_clock import build_research_clock
 from .research_progress import build_progress
-from .research_live_stream import ResearchLiveBroker, format_sse_frame, parse_last_event_id
+from .research_live_stream import (
+    ResearchLiveBroker,
+    format_org_graph_sse_frame,
+    format_sse_frame,
+    normalize_org_graph_event,
+    parse_last_event_id,
+    parse_org_last_event_id,
+)
 from .research_answer_evidence import AnswerEvidence, invalidate_edited_answers, part_references, visible_answer_content
 from .research_turns import merge_turn, prior_research_input
 from .research_turn_persister import ResearchTurnPersister, record_failed_checkpoint_version
@@ -149,6 +158,40 @@ from .research_source_catalog import canonical_source_url, source_capabilities
 from .research_source_terms import user_initiated_basis, user_initiated_scope
 from .issuer_documents import IssuerDocuments
 from .research_uploads import HtmlUploadRequest, PdfFailure, PdfReextractRequest, PdfUploadRequest, extract_pdf, extract_uploaded_html
+from .earnings_external_data import ExternalEarningsService
+from .fin_data.adapters.fmp import FmpEarningsAdapter
+from .fin_data.adapters.sec_deep import SecDeepAdapter
+from .fin_data.adapters.sec_edgar import SecEdgarAdapter
+from .research_earnings_diagnostics import GuidanceMetricInput, NonGaapBridgeInput, PeriodFinancials
+from .research_earnings_export import ExportUnavailableError, MarkdownReportMode, export_earnings_dossier
+from .research_earnings_squad import (
+    EarningsDossier,
+    EarningsSquadOrchestrator,
+    FinToolboxToolRunner,
+    InMemorySquadCheckpointStore,
+    OrgGraphEvent,
+    PrefetchDependencies,
+    SlotBinding,
+    SlotModelRequest,
+    SlotModelResponse,
+    SquadCancelledError,
+    SquadCheckpoint,
+    SquadCheckpointStore,
+    SquadConfigurationError,
+    SquadExecutionError,
+    SquadModelRunner,
+    SquadPrefetchRequest,
+    SquadToolViolationError,
+    UserSteeringInstruction,
+    render_deep_report,
+    resolve_squad_slots,
+)
+from .research_model_slots import (
+    ModelSlotConfig,
+    ModelSlotError,
+    resolve_model_slots,
+    slot_routing_summary,
+)
 
 _DEFAULT_FETCH_OFFICIAL_TEXT = fetch_official_text
 _DEFAULT_RESERVE_SEC_REQUEST = reserve_sec_request
@@ -212,6 +255,21 @@ def _resolve_tushare_key(account_id: str, policy=None) -> tuple[str | None, str 
     return None, None
 
 
+def _resolve_fmp_key(account_id: str, policy=None) -> tuple[str | None, str | None]:
+    """(api_key, credential_owner) for FMP earnings consensus & transcripts, or (None, None).
+
+    The account's own FMP BYOK key wins ('user_byok'). The platform environment key
+    (FORESIGHTNINE_FMP_API_KEY) is used ('platform') only when the fin_data policy allows it
+    (requires FORESIGHTNINE_FMP_ALLOW_PLATFORM_KEY=true or explicit policy opt-in).
+    """
+    return resolve_fmp_key(
+        account_id,
+        market_data_settings,
+        policy=policy,
+        platform_secret_lookup=platform_secret,
+    )
+
+
 def _cn_data_possible(tushare_key: str | None, policy=None) -> bool:
     """A-share/HK price data may be possible: a Tushare token, BaoStock, or Yahoo allowed by policy. Reachability is
     not probed here (admission must stay fast); the tools report cn_provider_unreachable per call."""
@@ -242,6 +300,7 @@ from .market_credentials import (
     MarketProviderTestRequest,
     MarketProviderTestResponse,
     StoredMarketDataConfig,
+    resolve_fmp_key,
 )
 from .model_discovery import ModelCatalog, ModelDiscoveryRequest, discover_models
 from .model_credentials import (
@@ -435,6 +494,8 @@ RESEARCH_RUN_INPUTS = build_repository(storage_config, "research_run_inputs")
 TURN_RECORDS = build_repository(storage_config, "research_turn_instructions")
 TURN_STATUS = build_repository(storage_config, "research_turn_status")
 RESEARCH_WORK = build_repository(storage_config, "research_turn_work")
+EARNINGS_SQUAD_STATES = build_repository(storage_config, "earnings_squad_states")
+EARNINGS_SQUAD_CHECKPOINTS = build_repository(storage_config, "earnings_squad_checkpoints")
 turn_instructions = ResearchRunInstructions(TURN_RECORDS)
 SOURCE_RATE_LIMITS = build_repository(storage_config, "source_rate_limits")
 (
@@ -458,6 +519,8 @@ SOURCE_RATE_LIMITS = build_repository(storage_config, "source_rate_limits")
 ) = _build_entity_repositories(storage_config)
 operations = OperationManager(lifecycle_clock, store=build_operation_store(storage_config))
 research_live_broker = ResearchLiveBroker()
+_ACTIVE_SQUAD_LOCK = RLock()
+_ACTIVE_SQUAD_RUNS: dict[tuple[str, str], dict[str, Any]] = {}
 OPERATION_SESSIONS: dict[str, str] = {}
 CHALLENGE_OPERATION_IDS: dict[str, str] = {}
 billing_ledger = BillingLedger(
@@ -663,6 +726,14 @@ def reset_state() -> None:
     RESEARCH_WORK.clear()
     TURN_STATUS.clear()
     TURN_RECORDS.clear()
+    with _ACTIVE_SQUAD_LOCK:
+        for entry in _ACTIVE_SQUAD_RUNS.values():
+            orch = entry.get("orchestrator")
+            if orch is not None and callable(getattr(orch, "cancel", None)):
+                orch.cancel()
+        _ACTIVE_SQUAD_RUNS.clear()
+    EARNINGS_SQUAD_STATES.clear()
+    EARNINGS_SQUAD_CHECKPOINTS.clear()
     SOURCE_RATE_LIMITS.clear()
     abuse_control.reset()
     telemetry.reset()
@@ -1539,6 +1610,15 @@ def _delete_research_run_inputs(owner_id: str) -> None:
     for key, record in list(RESEARCH_RUN_INPUTS.items()):
         if record.get("owner_id") == owner_id:
             RESEARCH_RUN_INPUTS.delete(key)
+    for repo in (EARNINGS_SQUAD_STATES, EARNINGS_SQUAD_CHECKPOINTS):
+        for key, record in list(repo.items()):
+            if isinstance(record, Mapping) and record.get("account_id") == owner_id:
+                repo.delete(key)
+    with _ACTIVE_SQUAD_LOCK:
+        for key in [k for k in _ACTIVE_SQUAD_RUNS if k[0] == owner_id]:
+            entry = _ACTIVE_SQUAD_RUNS.pop(key, None)
+            if entry and entry.get("orchestrator") is not None:
+                entry["orchestrator"].cancel()
 
 
 @app.get(
@@ -2894,6 +2974,14 @@ def get_research_capabilities(authorization: str | None = Header(default=None)) 
     allowed_hosts = fetch_allowed_hosts()
     _market = _resolve_market_key(account.account_id)
     _tushare = _resolve_tushare_key(account.account_id)
+    _fmp = _resolve_fmp_key(account.account_id)
+    _fin_box = FinDataToolbox(
+        account_id=account.account_id, market_key=_market[0], credential_owner=_market[1] or 'user_byok',
+        sec_user_agent=os.environ.get("FORESIGHTNINE_SEC_USER_AGENT") or os.environ.get("SEC_USER_AGENT"),
+        tushare_key=_tushare[0], tushare_owner=_tushare[1] or 'user_byok',
+        fmp_key=_fmp[0], fmp_owner=_fmp[1] or 'user_byok',
+        persist=lambda *_a, **_k: None,
+    )
     return {
         "schema_version": "v1",
         "search_available": search_available,
@@ -2901,10 +2989,8 @@ def get_research_capabilities(authorization: str | None = Header(default=None)) 
         "sec_available": sec_available,
         # Structured data tools for this account: market_data uses the account's own Twelve Data key, or the
         # platform key only when the fin_data policy allows it; SEC tools follow the configured SEC contact.
-        **FinDataToolbox(account_id=account.account_id, market_key=_market[0], credential_owner=_market[1] or 'user_byok',
-                         sec_user_agent=os.environ.get("FORESIGHTNINE_SEC_USER_AGENT") or os.environ.get("SEC_USER_AGENT"),
-                         tushare_key=_tushare[0], tushare_owner=_tushare[1] or 'user_byok',
-                         persist=lambda *_a, **_k: None).capabilities(),
+        **_fin_box.capabilities(),
+        **_fin_box.earnings_capabilities(),
         "sources": [asdict(item) for item in source_capabilities(search_available=search_available, sec_available=sec_available)],
     }
 
@@ -3220,6 +3306,7 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
     # price key is used only when the fin_data policy explicitly allows it (default policy denies it).
     market_key, market_owner = _resolve_market_key(account.account_id)
     tushare_key, tushare_owner = _resolve_tushare_key(account.account_id)
+    fmp_key, fmp_owner = _resolve_fmp_key(account.account_id)
     historical_available = (market_key is not None or _configured_sec_user_agent()[1]
                             or _cn_data_possible(tushare_key)) and topic.request.as_of is None
     has_news_search = bool(getattr(evidence_provider, 'supports_project_search', False)) or bool(default_news_providers(None))
@@ -3442,16 +3529,21 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
         fin_data = FinDataToolbox(
             account_id=account.account_id, market_key=market_key, credential_owner=market_owner or 'user_byok',
             tushare_key=tushare_key, tushare_owner=tushare_owner or 'user_byok',
+            fmp_key=fmp_key, fmp_owner=fmp_owner or 'user_byok',
             sec_user_agent=sec_agent_raw,
             persist=lambda item, **kwargs: research_sources.create(account.account_id, item, **kwargs),
             reserve_call=context.reserve_search, reserve_sec=reserve_sec_for_run,
             remaining_seconds=lambda: context.budget.deadline - context.now(), ensure_running=context.ensure_running,
             now=lifecycle_clock.now, disabled_reason=fin_disabled_reason, cancel_event=context.cancel_event())
         capabilities.update(fin_data.capabilities())
+        capabilities.update(fin_data.earnings_capabilities())
         def note_fin_result(name: str, result: dict[str, Any]) -> None:
             # SEC based tools count as official retrieval for the turn's official_fetch_status, like the old SEC tool.
             nonlocal official_fetch_calls, official_fetch_status
-            if name not in ('company_financials', 'filings'):
+            if name not in (
+                'company_financials', 'filings', 'sec_earnings_release',
+                'sec_filing_tables', 'sec_filing_sections', 'sec_redline_diff', 'sec_fulltext_search',
+            ):
                 return
             # A-share structured financials come from third-party aggregators (Tushare/BaoStock), not the issuer's
             # filed report: they are structured data, so they neither count as an official fetch nor change its status.
@@ -4249,6 +4341,9 @@ def _reconcile_research_attempt(operation_id: str, work: dict, *, now: datetime 
 
 
 def _topic_has_active_run(account_id: str, topic_id: str) -> bool:
+    with _ACTIVE_SQUAD_LOCK:
+        if (account_id, topic_id) in _ACTIVE_SQUAD_RUNS:
+            return True
     if any(work['account_id'] == account_id and work['topic_id'] == topic_id for work in RESEARCH_WORK.values()):
         return True
     endpoint = f"/v1/research/topics/{topic_id}/runs"
@@ -4600,6 +4695,1221 @@ def get_research_run_settlement(topic_id: str, operation_id: str, http_request: 
             'reported_tokens_scope': 'run_chain_including_prior_continuations',
             'cost_status': 'unknown',
             'interpretation': 'Ledger tokens are conservative accounted amounts, not proof of provider usage or cost.'}
+
+
+# --------------------------------------------------------------------------- US Earnings Buy-Side Squad API (Phase A2)
+class EarningsSquadApiRunRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str | None = Field(default=None, max_length=2000)
+    entity_id: str | None = Field(default=None, max_length=120)
+    cik: str | None = Field(default=None, max_length=16)
+    symbol: str | None = Field(default=None, max_length=32)
+    company_name: str | None = Field(default=None, max_length=300)
+    sic_code: str | None = Field(default=None, max_length=8)
+    sic_description: str | None = Field(default=None, max_length=200)
+    period_label: str | None = Field(default=None, max_length=100)
+    as_of: date | datetime | None = None
+    close_price: Decimal | float | int | str | None = None
+    filing_form: str | None = Field(default="10-Q", max_length=16)
+    filing_accession: str | None = Field(default=None, max_length=40)
+    prior_filing_accession: str | None = Field(default=None, max_length=40)
+    fiscal_year: int | None = Field(default=None, ge=1900, le=2200)
+    fiscal_quarter: int | None = Field(default=None, ge=1, le=4)
+    period_financials: list[dict[str, Any]] = Field(default_factory=list)
+    guidance_inputs: list[dict[str, Any]] = Field(default_factory=list)
+    nongaap_bridges: list[dict[str, Any]] = Field(default_factory=list)
+    execution_mode: Literal["sync", "async"] = "sync"
+    background: bool = False
+    run_id: str | None = Field(default=None, max_length=120)
+    resume_from_checkpoint: bool = False
+    resume_run_id: str | None = Field(default=None, max_length=120)
+    user_instructions: list[str] = Field(default_factory=list)
+    max_model_calls: int | None = Field(default=None, ge=1)
+    max_search_calls: int | None = Field(default=None, ge=0)
+    max_total_tokens: int | None = Field(default=None, ge=1)
+    max_elapsed_seconds: float | None = Field(default=None, gt=0)
+    slot_overrides: ModelSlotConfig | None = None
+
+
+class EarningsSquadRunResponse(BaseModel):
+    topic_id: str
+    run_id: str
+    operation_id: str
+    status: Literal["running", "completed", "failed", "cancelled"]
+    dossier: EarningsDossier | None = None
+    org_events: list[OrgGraphEvent] = Field(default_factory=list)
+    slot_routing_summary: dict[str, Any] = Field(default_factory=dict)
+    checkpoint_completed_stages: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class EarningsSquadDossierResponse(BaseModel):
+    topic_id: str
+    run_id: str
+    operation_id: str
+    status: Literal["running", "completed", "failed", "cancelled"]
+    dossier: EarningsDossier | None = None
+    org_events: list[OrgGraphEvent] = Field(default_factory=list)
+    slot_routing_summary: dict[str, Any] = Field(default_factory=dict)
+    steering_instructions: list[UserSteeringInstruction] = Field(default_factory=list)
+    checkpoint_completed_stages: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class EarningsSquadDeepReportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    force: bool = False
+
+
+class EarningsSquadDeepReportResponse(BaseModel):
+    topic_id: str
+    run_id: str
+    dossier_id: str
+    dossier_sha256: str
+    cached: bool
+    deep_report_tool_calls: int = 0
+    deep_report_markdown: str
+    dossier: EarningsDossier
+
+
+class EarningsSquadSteerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=4000)
+
+
+class EarningsSquadSteerResponse(BaseModel):
+    topic_id: str
+    run_id: str
+    operation_id: str
+    instruction: UserSteeringInstruction
+    status: Literal["queued", "persisted_for_resume"]
+
+
+def set_earnings_squad_runner_hook(hook: Any) -> None:
+    """Install or clear an optional prebuilt/live squad runner hook on ``app.state``."""
+    app.state.earnings_squad_hook = hook
+
+
+def _squad_state_key(account_id: str, topic_id: str) -> str:
+    return f"{account_id}:{topic_id}"
+
+
+def _squad_checkpoint_key(account_id: str, topic_id: str, run_id: str) -> str:
+    return f"{account_id}:{topic_id}:{run_id}"
+
+
+class _RepoSquadCheckpointStore:
+    """Repository-backed ``SquadCheckpointStore`` preserving subtask checkpoints safely."""
+
+    def __init__(self, *, account_id: str, topic_id: str, state_lock_key: str) -> None:
+        self._account_id = account_id
+        self._topic_id = topic_id
+        self._state_key = state_lock_key
+        self._mem = InMemorySquadCheckpointStore()
+
+    def save(self, checkpoint: SquadCheckpoint) -> None:
+        self._mem.save(checkpoint)
+        dumped = checkpoint.model_dump(mode="json")
+        cp_key = _squad_checkpoint_key(self._account_id, self._topic_id, checkpoint.run_id)
+        EARNINGS_SQUAD_CHECKPOINTS.put(cp_key, {
+            "account_id": self._account_id,
+            "topic_id": self._topic_id,
+            "run_id": checkpoint.run_id,
+            "checkpoint": dumped,
+            "updated_at": lifecycle_clock.now().isoformat(),
+        })
+
+        def update_state() -> None:
+            current = EARNINGS_SQUAD_STATES.get(self._state_key)
+            if not isinstance(current, Mapping) or current.get("run_id") != checkpoint.run_id:
+                return
+            updated = dict(current)
+            updated["checkpoint"] = dumped
+            updated["checkpoint_completed_stages"] = list(checkpoint.completed_stages)
+            updated["org_events"] = [ev.model_dump(mode="json") for ev in checkpoint.org_events]
+            if checkpoint.dossier is not None:
+                updated["dossier"] = checkpoint.dossier.model_dump(mode="json")
+            updated["updated_at"] = lifecycle_clock.now().isoformat()
+            EARNINGS_SQUAD_STATES.put(self._state_key, updated)
+
+        EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{self._state_key}", update_state)
+
+    def load(self, run_id: str) -> SquadCheckpoint | None:
+        loaded = self._mem.load(run_id)
+        if loaded is not None:
+            return loaded
+        cp_key = _squad_checkpoint_key(self._account_id, self._topic_id, run_id)
+        row = EARNINGS_SQUAD_CHECKPOINTS.get(cp_key)
+        if isinstance(row, Mapping) and isinstance(row.get("checkpoint"), Mapping):
+            return SquadCheckpoint.model_validate(row["checkpoint"])
+        return None
+
+
+class _AccountSlotModelRunner:
+    """Adapter bridging ``SquadModelRunner`` to ForesightNine wire ``LlmProvider`` instances."""
+
+    def __init__(self, *, providers_by_slot: Mapping[str, Any], default_provider: Any) -> None:
+        self._providers = dict(providers_by_slot)
+        self._default_provider = default_provider
+        self._lock = RLock()
+        self._turns: dict[tuple[str, str], tuple[str, list[Any], Any]] = {}
+
+    def invoke(self, mreq: SlotModelRequest) -> SlotModelResponse:
+        from .chat_research_adapter import ChatResearchAdapter
+        from .model_protocol import (
+            ModelAssistantContinuation,
+            ModelToolDefinition,
+            ModelToolResult,
+            ModelTurnExchange,
+            ModelTurnInput,
+        )
+
+        provider = self._providers.get(mreq.slot) or self._default_provider
+        if provider is None or not (hasattr(provider, "complete_turn") or hasattr(provider, "complete")):
+            raise SquadConfigurationError(
+                f"Configured provider for slot {mreq.slot!r} does not support research turns; "
+                "configure personal research-verified model settings or install a squad runner hook.",
+                code="provider_not_research_capable",
+                stage=mreq.stage,
+            )
+        adapter = provider if hasattr(provider, "complete_turn") else ChatResearchAdapter(provider)
+        tool_defs = tuple(
+            ModelToolDefinition(
+                name=t["name"],
+                description=t.get("description", ""),
+                input_schema=t.get("input_schema") or {"type": "object", "properties": {}},
+            )
+            for t in mreq.tools
+        )
+        key = (mreq.stage, mreq.role)
+        with self._lock:
+            if mreq.turn_index == 0 or key not in self._turns:
+                init_user = (
+                    mreq.messages[1]["content"]
+                    if len(mreq.messages) > 1 and isinstance(mreq.messages[1].get("content"), str)
+                    else mreq.user_prompt
+                )
+                history: list[Any] = []
+                last_msg = None
+            else:
+                init_user, history, last_msg = self._turns[key]
+                history = list(history)
+                if last_msg is not None:
+                    trailing_results: list[ModelToolResult] = []
+                    for msg in reversed(mreq.messages):
+                        if msg.get("role") == "tool":
+                            trailing_results.append(
+                                ModelToolResult(
+                                    tool_call_id=str(msg.get("tool_call_id") or ""),
+                                    content=str(msg.get("content") or ""),
+                                )
+                            )
+                        elif msg.get("role") == "assistant":
+                            break
+                    trailing_results.reverse()
+                    history.append(ModelTurnExchange(ModelAssistantContinuation(last_msg), tuple(trailing_results)))
+
+        turn = ModelTurnInput(
+            system=mreq.system_prompt,
+            user=init_user,
+            tools=tool_defs,
+            history=tuple(history),
+        )
+        model_resp = adapter.complete_turn(turn)
+        with self._lock:
+            self._turns[key] = (init_user, history, model_resp.message)
+        raw_content = model_resp.message.get("content") if isinstance(model_resp.message, Mapping) else None
+        text_out = raw_content if isinstance(raw_content, str) else None
+        return SlotModelResponse(
+            content=text_out,
+            tool_calls=tuple(model_resp.tool_calls or ()),
+            usage=model_resp.usage,
+            finish_reason=str(model_resp.finish_reason or "stop"),
+        )
+
+
+def _topic_attached_sources_for_squad(
+    account_id: str,
+    topic: ResearchTopic,
+) -> tuple[dict[str, Any], dict[str, str], dict[str, dict[str, bool]]]:
+    source_ids = list(dict.fromkeys([*topic.request.source_ids, *topic.versions[-1].source_ids]))
+    loaded: list[ResearchSource] = []
+    for sid in source_ids:
+        try:
+            loaded.append(research_sources.get(account_id, sid))
+        except SourceNotFound:
+            continue
+    eligible, _ = prepare_sources(loaded, topic.request.as_of)
+    source_by_id = {src.source_id: src for src in loaded}
+    texts = {src.source_id: src.text for src in eligible}
+    perms = {
+        src.source_id: {
+            "store": src.permissions.store,
+            "display": src.permissions.display,
+            "model_input": src.permissions.model_input,
+            "export": src.permissions.export,
+        }
+        for src in loaded
+    }
+    return source_by_id, texts, perms
+
+
+def _invoke_squad_hook(
+    hook: Any,
+    *,
+    account: LocalAccount,
+    topic: ResearchTopic,
+    request: EarningsSquadApiRunRequest | None,
+    operation_id: str,
+    run_id: str,
+    checkpoint_store: SquadCheckpointStore,
+    org_sink: Callable[[OrgGraphEvent], None],
+) -> Any:
+    if hook is None:
+        return None
+    if callable(hook):
+        import inspect
+        sig = inspect.signature(hook)
+        candidate_kwargs: dict[str, Any] = {
+            "account": account,
+            "topic": topic,
+            "request": request,
+            "operation_id": operation_id,
+            "run_id": run_id,
+            "checkpoint_store": checkpoint_store,
+            "org_sink": org_sink,
+        }
+        if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+            return hook(**candidate_kwargs)
+        filtered = {k: v for k, v in candidate_kwargs.items() if k in sig.parameters}
+        return hook(**filtered)
+    return hook
+
+
+def _build_squad_slot_provider(
+    account_id: str,
+    slot_entry: Any,
+    primary_settings: OpenAICompatibleSettings | None,
+    primary_config: StoredModelConfig | None,
+) -> Any:
+    """Resolve an isolated wire provider for an explicitly overridden slot when possible."""
+    if slot_entry is None or getattr(slot_entry, "fallback_used", True):
+        return None
+    if not getattr(slot_entry, "differs_from_primary", False):
+        return None
+    if primary_settings is None or primary_config is None:
+        return None
+    cred_ref = getattr(slot_entry, "credential_ref", None)
+    if cred_ref not in (None, "account_primary"):
+        return None
+    proto = getattr(slot_entry, "protocol", None) or primary_config.protocol
+    base_url = getattr(slot_entry, "base_url", None) or primary_settings.base_url
+    model = getattr(slot_entry, "model", None) or primary_settings.model
+    # Only reuse account primary key on the exact same origin host.
+    if urlsplit(base_url).hostname != urlsplit(primary_settings.base_url).hostname:
+        return None
+    try:
+        slot_settings = OpenAICompatibleSettings.from_account_values(
+            base_url=base_url,
+            model=model,
+            api_key=primary_settings.api_key,
+        )
+    except ProviderFailure:
+        return None
+    if proto == "openai_responses":
+        from .openai_responses import OpenAIResponsesProvider
+        return OpenAIResponsesProvider(slot_settings)
+    if proto == "anthropic_messages":
+        from .anthropic_messages import AnthropicMessagesProvider
+        from .openai_compatible import _llm_timeout_from_environment
+        from .phase3 import ProviderPolicy
+        max_tokens = getattr(slot_entry, "messages_max_tokens", None) or 4096
+        version = getattr(slot_entry, "endpoint_version", None) or "2023-06-01"
+        auth_scheme = getattr(slot_entry, "messages_auth_scheme", None) or "x-api-key"
+        effort = getattr(slot_entry, "messages_effort", None)
+        return AnthropicMessagesProvider(
+            slot_settings,
+            ProviderPolicy(max_output_tokens=max_tokens, timeout_seconds=_llm_timeout_from_environment()),
+            anthropic_version=version,
+            auth_scheme=auth_scheme,
+            max_tokens=max_tokens,
+            effort=effort,
+        )
+    return OpenAICompatibleLlmProvider(slot_settings)
+
+
+def _platform_primary_slot_profile(primary_provider: Any) -> Any:
+    """Build a full ModelSlotBinding from a platform wire provider when available, else None."""
+    from .research_model_slots import ModelSlotBinding
+
+    settings = getattr(primary_provider, "settings", None)
+    if settings is None:
+        return None
+    base_url = getattr(settings, "base_url", None)
+    model = getattr(settings, "model", None)
+    if not base_url or not model:
+        return None
+    cls_name = type(primary_provider).__name__
+    if "AnthropicMessages" in cls_name:
+        protocol = "anthropic_messages"
+    elif "OpenAIResponses" in cls_name:
+        protocol = "openai_responses"
+    else:
+        protocol = "openai_chat_completions"
+    try:
+        return ModelSlotBinding(
+            protocol=protocol,
+            base_url=base_url,
+            model=model,
+            credential_ref="platform_primary",
+            tools_verified=True,
+        )
+    except ValueError:
+        return None
+
+
+def _resolve_earnings_squad_runtime(
+    *,
+    account: LocalAccount,
+    topic: ResearchTopic,
+    request: EarningsSquadApiRunRequest | None,
+    http_request: Request,
+    operation_id: str,
+    run_id: str,
+    checkpoint_store: _RepoSquadCheckpointStore,
+    org_sink: Callable[[OrgGraphEvent], None],
+) -> tuple[EarningsSquadOrchestrator, dict[str, Any]]:
+    from .research_fin_tools import FinDataToolbox
+
+    stored_slots = model_settings.model_slots(account.account_id)
+    primary_profile = model_settings.primary_slot_profile(account.account_id)
+    requested_slots = request.slot_overrides if (request and request.slot_overrides is not None) else stored_slots
+
+    hook = getattr(app.state, "earnings_squad_hook", None)
+    hook_res = _invoke_squad_hook(
+        hook,
+        account=account,
+        topic=topic,
+        request=request,
+        operation_id=operation_id,
+        run_id=run_id,
+        checkpoint_store=checkpoint_store,
+        org_sink=org_sink,
+    )
+
+    if isinstance(hook_res, EarningsSquadOrchestrator):
+        orch = hook_res
+        if org_sink not in orch._org_sinks:
+            orch._org_sinks.append(org_sink)
+        routing_summary = slot_routing_summary(requested_slots, primary_profile=primary_profile)
+        return orch, routing_summary
+
+    hook_dict: Mapping[str, Any] = hook_res if isinstance(hook_res, Mapping) else {}
+    if isinstance(hook_dict.get("orchestrator"), EarningsSquadOrchestrator):
+        orch = hook_dict["orchestrator"]
+        if org_sink not in orch._org_sinks:
+            orch._org_sinks.append(org_sink)
+        routing_summary = slot_routing_summary(
+            hook_dict.get("resolved_slots") or hook_dict.get("slot_overrides") or requested_slots,
+            primary_profile=hook_dict.get("primary_profile") or primary_profile,
+        )
+        return orch, routing_summary
+
+    source_by_id, init_texts, init_perms = _topic_attached_sources_for_squad(account.account_id, topic)
+
+    effective_resolved_slots = hook_dict.get("resolved_slots")
+    effective_slot_bindings = hook_dict.get("slot_bindings")
+    effective_primary_profile = hook_dict.get("primary_profile") if "primary_profile" in hook_dict else primary_profile
+    effective_slot_overrides = hook_dict.get("slot_overrides") if "slot_overrides" in hook_dict else requested_slots
+
+    model_runner = hook_dict.get("model_runner")
+    if model_runner is None:
+        primary_provider, is_personal = _model_provider_for_account(account, http_request, research=True)
+        try:
+            settings, config = model_settings.runtime_configuration(account.account_id)
+        except ModelCredentialError as error:
+            raise ApiProblem(error.status_code, error.code, error.message, retryable=error.status_code == 503) from error
+
+        if not is_personal and effective_primary_profile is None:
+            effective_primary_profile = _platform_primary_slot_profile(primary_provider)
+
+        if effective_resolved_slots is None and effective_slot_bindings is None:
+            if effective_primary_profile is not None:
+                try:
+                    effective_resolved_slots = resolve_model_slots(
+                        effective_primary_profile,
+                        effective_slot_overrides,
+                        strict=True,
+                    )
+                except ModelSlotError as error:
+                    raise ApiProblem(422, "invalid_request", str(error)) from error
+            elif effective_slot_overrides is not None:
+                # Platform mode without a full wire primary (e.g. dev/MockResearchProvider):
+                # validate configured slots cleanly while letting unset slots inherit fallback.
+                fallback_model = getattr(primary_provider, "name", None) or "platform_primary"
+                try:
+                    effective_slot_bindings = resolve_squad_slots(
+                        primary_profile={"model": fallback_model, "native_tools": True},
+                        slot_overrides=effective_slot_overrides,
+                    )
+                except SquadConfigurationError as error:
+                    raise ApiProblem(422, "invalid_request", str(error)) from error
+
+        slot_providers: dict[str, Any] = {}
+        if effective_resolved_slots is not None:
+            for sname in ("fast_extractor", "deep_reasoner", "bear_reviewer", "writer"):
+                p_override = _build_squad_slot_provider(
+                    account.account_id,
+                    effective_resolved_slots.slot_for(sname),
+                    settings,
+                    config,
+                )
+                if p_override is not None:
+                    slot_providers[sname] = p_override
+        model_runner = _AccountSlotModelRunner(providers_by_slot=slot_providers, default_provider=primary_provider)
+
+    prefetch_deps = hook_dict.get("prefetch_deps")
+    tool_runner = hook_dict.get("tool_runner")
+    if prefetch_deps is None:
+        sec_agent_raw, sec_ok = _configured_sec_user_agent()
+        market_key, market_owner = _resolve_market_key(account.account_id)
+        tushare_key, tushare_owner = _resolve_tushare_key(account.account_id)
+        fmp_key, fmp_owner = _resolve_fmp_key(account.account_id)
+        fin_box = FinDataToolbox(
+            account_id=account.account_id,
+            market_key=market_key,
+            credential_owner=market_owner or "user_byok",
+            sec_user_agent=sec_agent_raw,
+            tushare_key=tushare_key,
+            tushare_owner=tushare_owner or "user_byok",
+            fmp_key=fmp_key,
+            fmp_owner=fmp_owner or "user_byok",
+            persist=lambda item, **kwargs: research_sources.create(account.account_id, item, **kwargs),
+        )
+        sec_adapter = SecEdgarAdapter(user_agent=sec_agent_raw) if sec_ok and sec_agent_raw else None
+        sec_deep = SecDeepAdapter(adapter=sec_adapter) if sec_adapter is not None else None
+        fmp_adapter = (
+            FmpEarningsAdapter(
+                api_key=fmp_key,
+                credential_owner=fmp_owner or "user_byok",
+                account_id=account.account_id,
+            )
+            if fmp_key
+            else None
+        )
+        ext_service = ExternalEarningsService(provider=fmp_adapter, account_id=account.account_id)
+        if tool_runner is None:
+            tool_runner = FinToolboxToolRunner(fin_box, source_by_id=source_by_id)
+        prefetch_deps = PrefetchDependencies(
+            sec_adapter=sec_adapter,
+            sec_deep=sec_deep,
+            external_earnings=ext_service,
+            tool_runner=tool_runner,
+            initial_source_texts=init_texts,
+            initial_source_permissions=init_perms,
+        )
+    elif tool_runner is None:
+        tool_runner = prefetch_deps.tool_runner
+
+    try:
+        orch = EarningsSquadOrchestrator(
+            model_runner=model_runner,
+            tool_runner=tool_runner,
+            prefetch_deps=prefetch_deps,
+            slot_bindings=effective_slot_bindings,
+            resolved_slots=effective_resolved_slots,
+            primary_profile=effective_primary_profile if effective_slot_bindings is None and effective_resolved_slots is None else None,
+            slot_overrides=effective_slot_overrides if effective_slot_bindings is None and effective_resolved_slots is None else None,
+            checkpoint_store=checkpoint_store,
+            org_sinks=[org_sink],
+            context=hook_dict.get("context"),
+            budget=hook_dict.get("budget"),
+            max_worker_concurrency=int(hook_dict.get("max_worker_concurrency") or 3),
+        )
+    except SquadConfigurationError as error:
+        raise ApiProblem(422, "invalid_request", str(error)) from error
+
+    routing_summary = slot_routing_summary(
+        effective_resolved_slots or effective_slot_overrides,
+        primary_profile=effective_primary_profile,
+    )
+    return orch, routing_summary
+
+
+@app.post(
+    "/v2/research/topics/{topic_id}/earnings-squad/run",
+    response_model=EarningsSquadRunResponse,
+    include_in_schema=False,
+)
+def run_earnings_squad(
+    topic_id: str,
+    http_request: Request,
+    response: Response,
+    request: EarningsSquadApiRunRequest = Body(default_factory=EarningsSquadApiRunRequest),
+) -> EarningsSquadRunResponse:
+    """Execute (or resume from checkpoint) the 6-stage Scheme 2 US Earnings Research Squad."""
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+
+    state_key = _squad_state_key(account.account_id, topic_id)
+    with _ACTIVE_SQUAD_LOCK:
+        if (account.account_id, topic_id) in _ACTIVE_SQUAD_RUNS:
+            raise ApiProblem(409, "lifecycle_conflict", "An earnings squad run is already active for this topic.")
+
+    prior_state = EARNINGS_SQUAD_STATES.get(state_key)
+    resume_target_run_id = request.resume_run_id or (
+        prior_state.get("run_id") if request.resume_from_checkpoint and isinstance(prior_state, Mapping) else None
+    )
+    run_id = request.run_id or resume_target_run_id or f"sqrun_{uuid4().hex[:12]}"
+    operation_id = f"sqop_{uuid4().hex[:16]}"
+    cp_store = _RepoSquadCheckpointStore(account_id=account.account_id, topic_id=topic_id, state_lock_key=state_key)
+
+    question = (request.question or "").strip() or (topic.request.question or "").strip() or DOCUMENT_OVERVIEW_QUESTION
+    effective_as_of = request.as_of if request.as_of is not None else topic.request.as_of
+    fmp_key, _ = _resolve_fmp_key(account.account_id)
+    try:
+        validated_periods = [PeriodFinancials.model_validate(item) for item in request.period_financials]
+        validated_guidance = [GuidanceMetricInput.model_validate(item) for item in request.guidance_inputs]
+        validated_bridges = [NonGaapBridgeInput.model_validate(item) for item in request.nongaap_bridges]
+    except Exception as error:
+        raise ApiProblem(422, "invalid_request", f"Invalid earnings diagnostic input: {error}") from error
+
+    prefetch_req = SquadPrefetchRequest(
+        question=question,
+        entity_id=request.entity_id,
+        cik=request.cik,
+        symbol=request.symbol,
+        company_name=request.company_name,
+        sic_code=request.sic_code,
+        sic_description=request.sic_description,
+        period_label=request.period_label,
+        as_of=effective_as_of,
+        account_id=account.account_id,
+        fmp_byok_api_key=fmp_key,
+        close_price=request.close_price,
+        filing_form=request.filing_form,
+        filing_accession=request.filing_accession,
+        prior_filing_accession=request.prior_filing_accession,
+        fiscal_year=request.fiscal_year,
+        fiscal_quarter=request.fiscal_quarter,
+        period_financials=validated_periods,
+        guidance_inputs=validated_guidance,
+        nongaap_bridges=validated_bridges,
+    )
+
+    event_lock = RLock()
+    org_events_buf: list[OrgGraphEvent] = []
+
+    def emit_org_event(ev: OrgGraphEvent) -> None:
+        with event_lock:
+            if not any(existing.sequence == ev.sequence for existing in org_events_buf):
+                org_events_buf.append(ev)
+        ev_dict = ev.model_dump(mode="json")
+
+        def append_event() -> None:
+            cur = EARNINGS_SQUAD_STATES.get(state_key)
+            if not isinstance(cur, Mapping) or cur.get("run_id") != run_id:
+                return
+            updated = dict(cur)
+            events_list = list(updated.get("org_events") or [])
+            if not any(isinstance(item, Mapping) and item.get("sequence") == ev.sequence for item in events_list):
+                events_list.append(ev_dict)
+            updated["org_events"] = events_list
+            updated["updated_at"] = lifecycle_clock.now().isoformat()
+            EARNINGS_SQUAD_STATES.put(state_key, updated)
+
+        EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", append_event)
+        research_live_broker.publish_org_graph_event(operation_id, ev)
+
+    orch, routing_summary = _resolve_earnings_squad_runtime(
+        account=account,
+        topic=topic,
+        request=request,
+        http_request=http_request,
+        operation_id=operation_id,
+        run_id=run_id,
+        checkpoint_store=cp_store,
+        org_sink=emit_org_event,
+    )
+
+    # Apply explicit budget overrides if caller set any
+    if any(v is not None for v in (request.max_model_calls, request.max_search_calls, request.max_total_tokens, request.max_elapsed_seconds)):
+        deadline = monotonic() + request.max_elapsed_seconds if request.max_elapsed_seconds is not None else float("inf")
+        orch._budget = ResearchExecutionBudget(
+            request.max_model_calls,
+            request.max_search_calls,
+            request.max_total_tokens,
+            deadline,
+        )
+
+    resume_cp: SquadCheckpoint | None = None
+    existing_steering: list[dict[str, Any]] = []
+    if request.resume_from_checkpoint or request.resume_run_id:
+        resume_cp = cp_store.load(run_id)
+        if resume_cp is None and isinstance(prior_state, Mapping) and isinstance(prior_state.get("checkpoint"), Mapping):
+            resume_cp = SquadCheckpoint.model_validate(prior_state["checkpoint"])
+        if resume_cp is not None:
+            org_events_buf.extend(resume_cp.org_events)
+        if isinstance(prior_state, Mapping) and isinstance(prior_state.get("steering_instructions"), list):
+            existing_steering = list(prior_state["steering_instructions"])
+
+    seed_instructions: list[UserSteeringInstruction] = []
+    for raw_item in existing_steering:
+        try:
+            seed_instructions.append(UserSteeringInstruction.model_validate(raw_item))
+        except Exception:
+            pass
+    next_seq = max(
+        [i.sequence for i in seed_instructions] + ([max((i.sequence for i in resume_cp.user_instructions), default=0)] if resume_cp else [0])
+    ) + 1
+    for text in request.user_instructions:
+        cleaned = text.strip()
+        if cleaned:
+            instr = UserSteeringInstruction(sequence=next_seq, text=cleaned)
+            seed_instructions.append(instr)
+            existing_steering.append(instr.model_dump(mode="json"))
+            next_seq += 1
+
+    def init_state() -> None:
+        EARNINGS_SQUAD_STATES.put(state_key, {
+            "account_id": account.account_id,
+            "topic_id": topic_id,
+            "run_id": run_id,
+            "operation_id": operation_id,
+            "status": "running",
+            "dossier": resume_cp.dossier.model_dump(mode="json") if resume_cp and resume_cp.dossier else None,
+            "org_events": [ev.model_dump(mode="json") for ev in org_events_buf],
+            "slot_routing_summary": routing_summary,
+            "steering_instructions": existing_steering,
+            "checkpoint": resume_cp.model_dump(mode="json") if resume_cp else None,
+            "checkpoint_completed_stages": list(resume_cp.completed_stages) if resume_cp else [],
+            "error": None,
+            "updated_at": lifecycle_clock.now().isoformat(),
+        })
+
+    EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", init_state)
+
+    with _ACTIVE_SQUAD_LOCK:
+        _ACTIVE_SQUAD_RUNS[(account.account_id, topic_id)] = {
+            "run_id": run_id,
+            "operation_id": operation_id,
+            "orchestrator": orch,
+        }
+
+    def execute_run() -> tuple[str, EarningsDossier | None, str | None, bool]:
+        status_out: Literal["completed", "failed", "cancelled"] = "completed"
+        dossier_out: EarningsDossier | None = None
+        err_out: str | None = None
+        config_error = False
+        try:
+            dossier_out = orch.run(
+                prefetch_req,
+                run_id=run_id,
+                resume_from=resume_cp,
+                user_instructions=seed_instructions,
+                on_stage_complete=lambda _stage, cp: cp_store.save(cp),
+                on_worker_complete=lambda _role, _batch, cp: cp_store.save(cp),
+            )
+            status_out = "completed"
+        except SquadCancelledError as exc:
+            status_out = "cancelled"
+            err_out = str(exc)
+        except SquadConfigurationError as exc:
+            status_out = "failed"
+            err_out = str(exc)
+            config_error = True
+        except Exception as exc:
+            status_out = "failed"
+            err_out = str(exc)
+        finally:
+            final_cp = cp_store.load(run_id)
+            with event_lock:
+                events_final = list(final_cp.org_events) if final_cp and final_cp.org_events else list(org_events_buf)
+
+            def finalize_state() -> None:
+                cur = EARNINGS_SQUAD_STATES.get(state_key) or {}
+                updated = dict(cur)
+                updated["status"] = status_out
+                if dossier_out is not None:
+                    updated["dossier"] = dossier_out.model_dump(mode="json")
+                if final_cp is not None:
+                    updated["checkpoint"] = final_cp.model_dump(mode="json")
+                    updated["checkpoint_completed_stages"] = list(final_cp.completed_stages)
+                updated["org_events"] = [ev.model_dump(mode="json") for ev in events_final]
+                updated["error"] = err_out
+                updated["updated_at"] = lifecycle_clock.now().isoformat()
+                EARNINGS_SQUAD_STATES.put(state_key, updated)
+
+            EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", finalize_state)
+            with _ACTIVE_SQUAD_LOCK:
+                active = _ACTIVE_SQUAD_RUNS.get((account.account_id, topic_id))
+                if active and active.get("operation_id") == operation_id:
+                    _ACTIVE_SQUAD_RUNS.pop((account.account_id, topic_id), None)
+            research_live_broker.publish_terminal(
+                operation_id,
+                operation_status=status_out,
+                version_id=dossier_out.dossier_id if dossier_out is not None else None,
+                progress={"org_events": [ev.model_dump(mode="json") for ev in events_final]},
+            )
+        return status_out, dossier_out, err_out, config_error
+
+    is_async = request.background or request.execution_mode == "async"
+    if is_async:
+        thread = Thread(target=execute_run, name=f"earnings-squad-{run_id}", daemon=True)
+        with _ACTIVE_SQUAD_LOCK:
+            if (account.account_id, topic_id) in _ACTIVE_SQUAD_RUNS:
+                _ACTIVE_SQUAD_RUNS[(account.account_id, topic_id)]["thread"] = thread
+        thread.start()
+        response.status_code = 202
+        return EarningsSquadRunResponse(
+            topic_id=topic_id,
+            run_id=run_id,
+            operation_id=operation_id,
+            status="running",
+            dossier=resume_cp.dossier if resume_cp else None,
+            org_events=list(org_events_buf),
+            slot_routing_summary=routing_summary,
+            checkpoint_completed_stages=list(resume_cp.completed_stages) if resume_cp else [],
+        )
+
+    final_status, final_dossier, final_err, is_config_err = execute_run()
+    final_row = EARNINGS_SQUAD_STATES.get(state_key) or {}
+    if final_status == "failed" and final_dossier is None:
+        if is_config_err:
+            raise ApiProblem(422, "invalid_request", final_err or "Invalid model slot configuration.")
+        raise ApiProblem(500, "internal_error", final_err or "Earnings squad execution failed.")
+    return EarningsSquadRunResponse(
+        topic_id=topic_id,
+        run_id=run_id,
+        operation_id=operation_id,
+        status=final_status,
+        dossier=final_dossier,
+        org_events=[OrgGraphEvent.model_validate(ev) for ev in final_row.get("org_events") or []],
+        slot_routing_summary=routing_summary,
+        checkpoint_completed_stages=list(final_row.get("checkpoint_completed_stages") or []),
+        error=final_err,
+    )
+
+
+@app.get(
+    "/v2/research/topics/{topic_id}/earnings-squad/dossier",
+    response_model=EarningsSquadDossierResponse,
+    include_in_schema=False,
+)
+def get_earnings_squad_dossier(
+    topic_id: str,
+    http_request: Request,
+) -> EarningsSquadDossierResponse:
+    """Return locked ``EarningsDossier``, sequenced ``org_events``, and ``slot_routing_summary``."""
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    try:
+        research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+
+    state_key = _squad_state_key(account.account_id, topic_id)
+    row = EARNINGS_SQUAD_STATES.get(state_key)
+    if not isinstance(row, Mapping):
+        raise ApiProblem(404, "not_found", "No earnings squad run found for this topic.")
+
+    dossier_raw = row.get("dossier")
+    dossier = EarningsDossier.model_validate(dossier_raw) if isinstance(dossier_raw, Mapping) else None
+    org_events = [OrgGraphEvent.model_validate(ev) for ev in row.get("org_events") or []]
+    org_events.sort(key=lambda e: e.sequence)
+    steering = [
+        UserSteeringInstruction.model_validate(item)
+        for item in row.get("steering_instructions") or []
+        if isinstance(item, Mapping)
+    ]
+    return EarningsSquadDossierResponse(
+        topic_id=topic_id,
+        run_id=str(row.get("run_id") or ""),
+        operation_id=str(row.get("operation_id") or ""),
+        status=str(row.get("status") or "completed"),
+        dossier=dossier,
+        org_events=org_events,
+        slot_routing_summary=dict(row.get("slot_routing_summary") or {}),
+        steering_instructions=steering,
+        checkpoint_completed_stages=list(row.get("checkpoint_completed_stages") or []),
+        error=row.get("error"),
+    )
+
+
+@app.post(
+    "/v2/research/topics/{topic_id}/earnings-squad/deep-report",
+    response_model=EarningsSquadDeepReportResponse,
+    response_model_exclude_none=True,
+    include_in_schema=False,
+)
+def generate_earnings_squad_deep_report(
+    topic_id: str,
+    http_request: Request,
+    request: EarningsSquadDeepReportRequest = Body(default_factory=EarningsSquadDeepReportRequest),
+) -> EarningsSquadDeepReportResponse:
+    """Render and cache Deep Report from a locked ``EarningsDossier`` (0 retrieval tool calls)."""
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+
+    state_key = _squad_state_key(account.account_id, topic_id)
+    row = EARNINGS_SQUAD_STATES.get(state_key)
+    if not isinstance(row, Mapping):
+        raise ApiProblem(404, "not_found", "No earnings squad run found for this topic.")
+    dossier_raw = row.get("dossier")
+    if not isinstance(dossier_raw, Mapping):
+        raise ApiProblem(409, "lifecycle_conflict", "Locked EarningsDossier is not available yet.")
+    dossier = EarningsDossier.model_validate(dossier_raw)
+    if not dossier.locked:
+        raise ApiProblem(409, "lifecycle_conflict", "EarningsDossier must be locked before rendering Deep Report.")
+
+    if dossier.deep_report_markdown is not None and not request.force:
+        return EarningsSquadDeepReportResponse(
+            topic_id=topic_id,
+            run_id=str(row.get("run_id") or dossier.run_id),
+            dossier_id=dossier.dossier_id,
+            dossier_sha256=dossier.dossier_sha256,
+            cached=True,
+            deep_report_tool_calls=dossier.slot_usage_summary.deep_report_tool_calls,
+            deep_report_markdown=dossier.deep_report_markdown,
+            dossier=dossier,
+        )
+
+    cp_store = _RepoSquadCheckpointStore(account_id=account.account_id, topic_id=topic_id, state_lock_key=state_key)
+    run_id = str(row.get("run_id") or dossier.run_id)
+    operation_id = str(row.get("operation_id") or f"sqop_{uuid4().hex[:12]}")
+
+    def noop_sink(_ev: OrgGraphEvent) -> None:
+        return None
+
+    orch, _ = _resolve_earnings_squad_runtime(
+        account=account,
+        topic=topic,
+        request=None,
+        http_request=http_request,
+        operation_id=operation_id,
+        run_id=run_id,
+        checkpoint_store=cp_store,
+        org_sink=noop_sink,
+    )
+    try:
+        updated_dossier = render_deep_report(
+            dossier,
+            model_runner=orch._model_runner,
+            slot_bindings=orch.slot_bindings,
+            force=request.force,
+        )
+    except SquadToolViolationError as error:
+        raise ApiProblem(422, "invalid_request", str(error)) from error
+    except SquadConfigurationError as error:
+        raise ApiProblem(422, "invalid_request", str(error)) from error
+    except SquadExecutionError as error:
+        raise ApiProblem(422, "invalid_request", str(error)) from error
+
+    def persist_deep_report() -> None:
+        cur = EARNINGS_SQUAD_STATES.get(state_key)
+        if not isinstance(cur, Mapping):
+            return
+        updated = dict(cur)
+        updated["dossier"] = updated_dossier.model_dump(mode="json")
+        if isinstance(updated.get("checkpoint"), Mapping):
+            cp = dict(updated["checkpoint"])
+            cp["dossier"] = updated["dossier"]
+            updated["checkpoint"] = cp
+        updated["updated_at"] = lifecycle_clock.now().isoformat()
+        EARNINGS_SQUAD_STATES.put(state_key, updated)
+
+    EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", persist_deep_report)
+    assert updated_dossier.deep_report_markdown is not None
+    return EarningsSquadDeepReportResponse(
+        topic_id=topic_id,
+        run_id=run_id,
+        dossier_id=updated_dossier.dossier_id,
+        dossier_sha256=updated_dossier.dossier_sha256,
+        cached=False,
+        deep_report_tool_calls=updated_dossier.slot_usage_summary.deep_report_tool_calls,
+        deep_report_markdown=updated_dossier.deep_report_markdown,
+        dossier=updated_dossier,
+    )
+
+
+@app.get(
+    "/v2/research/topics/{topic_id}/earnings-squad/export",
+    include_in_schema=False,
+)
+def export_earnings_squad_dossier(
+    topic_id: str,
+    http_request: Request,
+    format: Literal["markdown", "csv", "xlsx"] = Query(default="markdown"),
+    report_mode: MarkdownReportMode = Query(default="auto"),
+) -> Response:
+    """Export locked ``EarningsDossier`` as Markdown, CSV, or XLSX enforcing source export permissions."""
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+
+    state_key = _squad_state_key(account.account_id, topic_id)
+    row = EARNINGS_SQUAD_STATES.get(state_key)
+    if not isinstance(row, Mapping):
+        raise ApiProblem(404, "not_found", "No earnings squad run found for this topic.")
+    dossier_raw = row.get("dossier")
+    if not isinstance(dossier_raw, Mapping):
+        raise ApiProblem(409, "lifecycle_conflict", "Locked EarningsDossier is not available yet.")
+    dossier = EarningsDossier.model_validate(dossier_raw)
+
+    extra_perms: dict[str, dict[str, bool]] = {}
+    cp_raw = row.get("checkpoint")
+    if isinstance(cp_raw, Mapping) and isinstance(cp_raw.get("source_permissions"), Mapping):
+        for sid, perms in cp_raw["source_permissions"].items():
+            if isinstance(perms, Mapping):
+                extra_perms[str(sid)] = {str(k): bool(v) for k, v in perms.items()}
+
+    referenced_sids = {
+        *(ref.source_id for ref in dossier.snapshot.prefetched_sources),
+        *(cit.source_id for card in dossier.evidence_cards for cit in card.citations),
+        *topic.request.source_ids,
+        *topic.versions[-1].source_ids,
+    }
+    for sid in referenced_sids:
+        try:
+            src = research_sources.get(account.account_id, sid)
+            extra_perms[sid] = {
+                "store": src.permissions.store,
+                "display": src.permissions.display,
+                "model_input": src.permissions.model_input,
+                "export": src.permissions.export,
+            }
+        except SourceNotFound:
+            continue
+
+    try:
+        exported = export_earnings_dossier(
+            dossier,
+            fmt=format,
+            report_mode=report_mode,
+            extra_source_permissions=extra_perms,
+        )
+    except ExportUnavailableError as error:
+        raise ApiProblem(409, "lifecycle_conflict", str(error)) from error
+
+    return Response(
+        content=exported.content_bytes,
+        media_type=exported.media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{exported.filename}"',
+            "Cache-Control": "no-store",
+            "X-Dossier-Id": exported.dossier_id,
+            "X-Export-Redacted": "false" if exported.exportable_unrestricted else "true",
+        },
+    )
+
+
+@app.post(
+    "/v2/research/topics/{topic_id}/earnings-squad/steer",
+    status_code=202,
+    response_model=EarningsSquadSteerResponse,
+    response_model_exclude_none=True,
+    include_in_schema=False,
+)
+def steer_earnings_squad(
+    topic_id: str,
+    request: EarningsSquadSteerRequest,
+    http_request: Request,
+) -> EarningsSquadSteerResponse:
+    """Submit Lead-directed mid-run (or checkpoint-resume) user steering instruction."""
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    try:
+        research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+
+    cleaned = request.text.strip()
+    if not cleaned:
+        raise ApiProblem(422, "invalid_request", "Steering instruction text must not be blank.")
+
+    state_key = _squad_state_key(account.account_id, topic_id)
+    row = EARNINGS_SQUAD_STATES.get(state_key)
+    if not isinstance(row, Mapping):
+        raise ApiProblem(404, "not_found", "No earnings squad run found for this topic.")
+
+    with _ACTIVE_SQUAD_LOCK:
+        active = _ACTIVE_SQUAD_RUNS.get((account.account_id, topic_id))
+        active_orch: EarningsSquadOrchestrator | None = active.get("orchestrator") if active else None
+
+    if active_orch is not None:
+        instr = active_orch.submit_steering_instruction(cleaned)
+        delivery_status: Literal["queued", "persisted_for_resume"] = "queued"
+    else:
+        prior_instrs = row.get("steering_instructions") or []
+        max_seq = max((int(item.get("sequence") or 0) for item in prior_instrs if isinstance(item, Mapping)), default=0)
+        cp_raw = row.get("checkpoint")
+        if isinstance(cp_raw, Mapping) and isinstance(cp_raw.get("user_instructions"), list):
+            max_seq = max(
+                max_seq,
+                max((int(item.get("sequence") or 0) for item in cp_raw["user_instructions"] if isinstance(item, Mapping)), default=0),
+            )
+        instr = UserSteeringInstruction(sequence=max_seq + 1, text=cleaned)
+        delivery_status = "persisted_for_resume"
+
+    instr_dump = instr.model_dump(mode="json")
+    run_id = str(row.get("run_id") or "")
+    operation_id = str(row.get("operation_id") or "")
+
+    def append_steering() -> None:
+        cur = EARNINGS_SQUAD_STATES.get(state_key)
+        if not isinstance(cur, Mapping):
+            return
+        updated = dict(cur)
+        items = list(updated.get("steering_instructions") or [])
+        if not any(isinstance(i, Mapping) and i.get("sequence") == instr.sequence for i in items):
+            items.append(instr_dump)
+        updated["steering_instructions"] = items
+        if isinstance(updated.get("checkpoint"), Mapping):
+            cp = dict(updated["checkpoint"])
+            cp_instrs = list(cp.get("user_instructions") or [])
+            if not any(isinstance(i, Mapping) and i.get("sequence") == instr.sequence for i in cp_instrs):
+                cp_instrs.append(instr_dump)
+            cp["user_instructions"] = cp_instrs
+            updated["checkpoint"] = cp
+            cp_key = _squad_checkpoint_key(account.account_id, topic_id, str(cp.get("run_id") or run_id))
+            existing_cp_row = EARNINGS_SQUAD_CHECKPOINTS.get(cp_key)
+            if isinstance(existing_cp_row, Mapping):
+                EARNINGS_SQUAD_CHECKPOINTS.put(cp_key, {**dict(existing_cp_row), "checkpoint": cp})
+        updated["updated_at"] = lifecycle_clock.now().isoformat()
+        EARNINGS_SQUAD_STATES.put(state_key, updated)
+
+    EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", append_steering)
+    return EarningsSquadSteerResponse(
+        topic_id=topic_id,
+        run_id=run_id,
+        operation_id=operation_id,
+        instruction=instr,
+        status=delivery_status,
+    )
+
+
+@app.get(
+    "/v2/research/topics/{topic_id}/earnings-squad/events",
+    response_class=StreamingResponse,
+    include_in_schema=False,
+)
+async def stream_earnings_squad_events(
+    topic_id: str,
+    http_request: Request,
+    after: Annotated[int, Query(ge=0)] = 0,
+    last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
+) -> StreamingResponse:
+    """Stream structured ``org_graph_event`` SSE frames for the topic's active/latest squad run."""
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    try:
+        research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+
+    cursor_after = parse_org_last_event_id(last_event_id)
+    effective_after = max(after, cursor_after)
+    state_key = _squad_state_key(account.account_id, topic_id)
+    row = EARNINGS_SQUAD_STATES.get(state_key)
+    if not isinstance(row, Mapping):
+        raise ApiProblem(404, "not_found", "No earnings squad run found for this topic.")
+
+    operation_id = str(row.get("operation_id") or "")
+    sse_headers = {
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+
+    def snapshot_events_after(seq_floor: int) -> tuple[str, str | None, list[dict[str, Any]]]:
+        cur = EARNINGS_SQUAD_STATES.get(state_key) or row
+        status_now = str(cur.get("status") or "completed")
+        dossier_raw = cur.get("dossier")
+        ver_id = dossier_raw.get("dossier_id") if isinstance(dossier_raw, Mapping) else None
+        raw_list = cur.get("org_events") if isinstance(cur.get("org_events"), list) else []
+        filtered = []
+        for raw_ev in raw_list:
+            try:
+                norm = normalize_org_graph_event(raw_ev)
+            except ValueError:
+                continue
+            if norm["sequence"] > seq_floor:
+                filtered.append(norm)
+        filtered.sort(key=lambda item: item["sequence"])
+        return status_now, ver_id, filtered
+
+    loop = asyncio.get_running_loop()
+    subscriber = research_live_broker.subscribe(operation_id, account_id=account.account_id, loop=loop)
+    try:
+        status_init, ver_init, replay_init = snapshot_events_after(effective_after)
+    except BaseException:
+        research_live_broker.unsubscribe(subscriber)
+        raise
+
+    if status_init in {"completed", "failed", "cancelled"}:
+        research_live_broker.unsubscribe(subscriber)
+
+        async def terminal_stream():
+            for ev_data in replay_init:
+                yield format_org_graph_sse_frame(operation_id, ev_data)
+            yield _sse_terminal_frame(operation_id, status_init, ver_init)
+
+        return StreamingResponse(terminal_stream(), media_type="text/event-stream", headers=sse_headers)
+
+    async def live_squad_stream():
+        last_sent_seq = effective_after
+        try:
+            for ev_data in replay_init:
+                last_sent_seq = max(last_sent_seq, ev_data["sequence"])
+                yield format_org_graph_sse_frame(operation_id, ev_data)
+            while True:
+                status_check, ver_check, missed = snapshot_events_after(last_sent_seq)
+                for ev_data in missed:
+                    last_sent_seq = max(last_sent_seq, ev_data["sequence"])
+                    yield format_org_graph_sse_frame(operation_id, ev_data)
+                if status_check in {"completed", "failed", "cancelled"}:
+                    yield _sse_terminal_frame(operation_id, status_check, ver_check)
+                    return
+                try:
+                    frame = await asyncio.wait_for(
+                        subscriber.queue.get(),
+                        timeout=research_live_broker.heartbeat_seconds,
+                    )
+                except asyncio.TimeoutError:
+                    if await http_request.is_disconnected():
+                        return
+                    yield ": heartbeat\n\n"
+                    continue
+                event_name = frame.get("event")
+                data = frame.get("data") or {}
+                if event_name == "org_graph_event":
+                    seq_val = data.get("sequence")
+                    if type(seq_val) is int:
+                        if seq_val <= last_sent_seq:
+                            continue
+                        last_sent_seq = seq_val
+                    yield format_sse_frame("org_graph_event", data, event_id=frame.get("id"))
+                elif event_name == "run.terminal":
+                    _, _, tail_missed = snapshot_events_after(last_sent_seq)
+                    for ev_data in tail_missed:
+                        last_sent_seq = max(last_sent_seq, ev_data["sequence"])
+                        yield format_org_graph_sse_frame(operation_id, ev_data)
+                    yield format_sse_frame("run.terminal", data, event_id=frame.get("id"))
+                    return
+                else:
+                    yield format_sse_frame(str(event_name), data, event_id=frame.get("id"))
+        finally:
+            research_live_broker.unsubscribe(subscriber)
+
+    return StreamingResponse(live_squad_stream(), media_type="text/event-stream", headers=sse_headers)
 
 
 def _operation_owner_subject(request: Request) -> str:

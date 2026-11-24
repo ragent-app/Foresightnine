@@ -14,12 +14,32 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import re
 from datetime import date, datetime, timezone
-from typing import Any, Callable, Literal, Mapping
+from typing import Any, Callable, Literal, Mapping, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from .earnings_external_data import (
+    ExternalEarningsService,
+    FMP_ALLOW_PLATFORM_KEY_ENV,
+    FMP_API_KEY_ENV,
+    redact_secrets,
+)
 from .fin_data import cn as cn_helpers
 from .fin_data.adapters.baostock import BaoStockAdapter, default_runner as baostock_default_runner
+from .fin_data.adapters.fmp import FmpEarningsAdapter
+from .fin_data.adapters.sec_deep import (
+    DualPeriodEarningsRelease,
+    FilingRedlineReport,
+    FilingSectionsBundle,
+    FilingTableCatalog,
+    FilingTableData,
+    cik_scoped_efts_search,
+    fetch_filing_table,
+    sec_earnings_release as sec_deep_earnings_release,
+    sec_filing_sections as sec_deep_filing_sections,
+    sec_filing_tables as sec_deep_filing_tables,
+    sec_redline_diff as sec_deep_redline_diff,
+)
 from .fin_data.adapters.sec_edgar import STANDARD_LINES, SecEdgarAdapter, cik10
 from .fin_data.adapters.tushare import TushareAdapter
 from .fin_data.adapters.twelve_data import TwelveDataAdapter
@@ -27,9 +47,14 @@ from .fin_data.adapters.yahoo import YahooAdapter
 from .fin_data.reachability import UNREACHABLE_REASON, ReachabilityProbe, default_probe, unreachable_message
 from .fin_data.entity import MARKETS, parse_entity_id, resolve_cn, resolve_entity as _resolve_entity, wants_cn
 from .fin_data.models import INTERVALS, INTRADAY_INTERVALS, Permissions, ToolResult, normalize_exchange
-from .fin_data.policy import FinDataPolicy, load_policy
+from .fin_data.policy import Denied, FinDataPolicy, load_policy
 from .fin_data.ratelimit import RateDecision, default_limiter
 from .research_clock import exchange_session
+from .research_earnings_diagnostics import (
+    EarningsQualityRequest,
+    GuidanceAndNonGaapRequest,
+    ValuationRequest,
+)
 from .research_historical_prices import LOOKBACK_VALUES, resolve_lookback
 from .research_sec import SecFailure, validate_user_agent
 from .research_source_catalog import canonical_source_url
@@ -142,6 +167,182 @@ class FilingsRequest(BaseModel):
         return self
 
 
+class SecEarningsReleaseRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    entity_id: str | None = Field(default=None, max_length=64, description='entity_id from resolve_entity.')
+    cik: str | None = Field(default=None, pattern=r'^\d{1,10}$')
+    ticker: str | None = Field(default=None, max_length=16, description='Exact US ticker when no entity_id or cik.')
+    as_of: date | None = Field(default=None, description='Optional cutoff date restricting eligible 8-K filings.')
+    pairing_mode: Literal['sequential', 'yoy'] = Field(
+        default='sequential',
+        description='Prior quarter pairing mode: latest sequential 8-K or same quarter one year prior.',
+    )
+    include_ex99_2: bool = Field(
+        default=True,
+        description='Also fetch Exhibit 99.2 (remarks or presentation) when present in the 8-K directory.',
+    )
+    max_candidates: int = Field(default=15, ge=2, le=40)
+    rationale: str = Field(min_length=1)
+
+    @model_validator(mode='after')
+    def one_identity(self) -> 'SecEarningsReleaseRequest':
+        if not (self.entity_id or self.cik or self.ticker):
+            raise ValueError('Give entity_id, cik or ticker.')
+        return self
+
+
+class SecFilingTablesRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    entity_id: str | None = Field(default=None, max_length=64, description='entity_id from resolve_entity.')
+    cik: str | None = Field(default=None, pattern=r'^\d{1,10}$')
+    ticker: str | None = Field(default=None, max_length=16, description='Exact US ticker when no entity_id or cik.')
+    accession: str = Field(min_length=18, max_length=24, description='SEC accession number of the 10-Q or 10-K filing.')
+    category: Literal['Statements', 'Notes', 'Tables', 'Cover', 'Details', 'Other'] | None = Field(
+        default=None,
+        description='Optional FilingSummary report group filter when browsing the catalog.',
+    )
+    r_file: str | None = Field(
+        default=None,
+        max_length=24,
+        pattern=r'^[Rr]\d{1,5}\.html?$',
+        description='Optional R-file name (for example R2.htm) to fetch and parse deterministically; omit to list the catalog.',
+    )
+    rationale: str = Field(min_length=1)
+
+    @model_validator(mode='after')
+    def one_identity(self) -> 'SecFilingTablesRequest':
+        if not (self.entity_id or self.cik or self.ticker):
+            raise ValueError('Give entity_id, cik or ticker.')
+        return self
+
+
+class SecFilingSectionsRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    entity_id: str | None = Field(default=None, max_length=64)
+    cik: str | None = Field(default=None, pattern=r'^\d{1,10}$')
+    ticker: str | None = Field(default=None, max_length=16)
+    url: str | None = Field(
+        default=None,
+        max_length=500,
+        description='Direct SEC Archives filing URL (www.sec.gov) to fetch and split into Item sections.',
+    )
+    source_id: str | None = Field(
+        default=None,
+        max_length=80,
+        description='Optional already-acquired source_id containing filing text or HTML.',
+    )
+    form: str | None = Field(default=None, max_length=16, description='Optional SEC form type hint such as 10-K or 10-Q.')
+    section_keys: list[str] | None = Field(
+        default=None,
+        max_length=20,
+        description='Optional filter of section keys (for example item_1a_risk_factors, mda, liquidity_and_capital_resources, critical_accounting_estimates).',
+    )
+    rationale: str = Field(min_length=1)
+
+    @model_validator(mode='after')
+    def has_target(self) -> 'SecFilingSectionsRequest':
+        if not (self.url or self.source_id):
+            raise ValueError('Give url or source_id.')
+        return self
+
+
+class SecRedlineDiffRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    current_source_id: str | None = Field(default=None, max_length=80)
+    prior_source_id: str | None = Field(default=None, max_length=80)
+    current_url: str | None = Field(default=None, max_length=500)
+    prior_url: str | None = Field(default=None, max_length=500)
+    current_form: str | None = Field(default=None, max_length=16)
+    prior_form: str | None = Field(default=None, max_length=16)
+    section_keys: list[str] | None = Field(
+        default=None,
+        max_length=20,
+        description='Optional subset of section keys to compare across periods.',
+    )
+    filter_rolling_noise: bool = Field(
+        default=True,
+        description='Filter pure period/date rolling edits while retaining substantive disclosure changes.',
+    )
+    similarity_threshold: float = Field(default=0.45, ge=0.1, le=0.95)
+    rationale: str = Field(min_length=1)
+
+    @model_validator(mode='after')
+    def has_pair(self) -> 'SecRedlineDiffRequest':
+        if not (self.current_source_id or self.current_url):
+            raise ValueError('Give current_source_id or current_url.')
+        if not (self.prior_source_id or self.prior_url):
+            raise ValueError('Give prior_source_id or prior_url.')
+        return self
+
+
+class SecFulltextSearchRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    entity_id: str | None = Field(default=None, max_length=64)
+    cik: str | None = Field(
+        default=None,
+        pattern=r'^\d{1,10}$',
+        description='Single 1 to 10 digit SEC CIK; required when entity_id or ticker is not provided.',
+    )
+    ticker: str | None = Field(default=None, max_length=16, description='Exact US ticker resolved to a single SEC CIK.')
+    query: str = Field(min_length=1, max_length=200, description='Full-text query scoped strictly to the resolved company CIK.')
+    forms: list[str] | None = Field(default=None, max_length=20, description='Optional form filter such as 10-K, 10-Q, 8-K.')
+    since: date | None = None
+    until: date | None = None
+    limit: int = Field(default=25, ge=1, le=100)
+    rationale: str = Field(min_length=1)
+
+    @model_validator(mode='after')
+    def valid_scope(self) -> 'SecFulltextSearchRequest':
+        if not (self.entity_id or self.cik or self.ticker):
+            raise ValueError('Single-company scope required: give entity_id, cik, or ticker.')
+        if self.since and self.until and self.since > self.until:
+            raise ValueError('since is after until.')
+        return self
+
+
+class EarningsConsensusRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    entity_id: str | None = Field(default=None, max_length=64)
+    symbol: str | None = Field(default=None, max_length=32, description='Company ticker symbol.')
+    period: Literal['quarter', 'annual'] = Field(default='quarter', description='Consensus estimate cadence.')
+    limit: int = Field(default=8, ge=1, le=20)
+    include_actuals: bool = Field(default=True, description='Include historical reported actuals vs consensus estimates when available.')
+    rationale: str = Field(min_length=1)
+
+    @model_validator(mode='after')
+    def has_target(self) -> 'EarningsConsensusRequest':
+        if not (self.entity_id or self.symbol):
+            raise ValueError('Give entity_id or symbol.')
+        return self
+
+
+class EarningsTranscriptRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    entity_id: str | None = Field(default=None, max_length=64)
+    symbol: str | None = Field(default=None, max_length=32, description='Company ticker symbol.')
+    fiscal_year: int | None = Field(default=None, ge=1990, le=2100)
+    fiscal_quarter: int | None = Field(default=None, ge=1, le=4)
+    rationale: str = Field(min_length=1)
+
+    @model_validator(mode='after')
+    def has_target(self) -> 'EarningsTranscriptRequest':
+        if not (self.entity_id or self.symbol):
+            raise ValueError('Give entity_id or symbol.')
+        return self
+
+
+class EarningsQualityToolRequest(EarningsQualityRequest):
+    rationale: str = Field(min_length=1, max_length=500, description='Why these earnings quality diagnostics are needed.')
+
+
+class GuidanceAndNonGaapToolRequest(GuidanceAndNonGaapRequest):
+    rationale: str = Field(min_length=1, max_length=500, description='Why this guidance and Non-GAAP reconciliation is needed.')
+
+
+class ValuationToolRequest(ValuationRequest):
+    rationale: str = Field(min_length=1, max_length=500, description='Why this valuation and implied expectations analysis is needed.')
+
+
 # --------------------------------------------------------------------------- outcome
 @dataclass
 class FinToolOutcome:
@@ -229,7 +430,8 @@ class FinDataToolbox:
                  sec_transport=None, sec_stream_transport=None, twelve_transport=None, cancel_event=None,
                  tushare_key: str | None = None, tushare_owner: str = 'user_byok', tushare_transport=None,
                  baostock_runner: Any = _AUTO, cn_probe: ReachabilityProbe | None = None, yahoo_transport=None,
-                 on_result: Callable[[str, dict[str, Any]], None] | None = None) -> None:
+                 on_result: Callable[[str, dict[str, Any]], None] | None = None,
+                 fmp_key: str | None = None, fmp_owner: str = 'user_byok', fmp_transport=None) -> None:
         self.account_id, self._market_key = account_id, market_key or None
         self._owner = credential_owner if credential_owner in ('platform', 'user_byok') else 'user_byok'
         try:
@@ -250,6 +452,9 @@ class FinDataToolbox:
         self._bs_runner = baostock_default_runner() if baostock_runner is _AUTO else baostock_runner
         self._cn_probe, self._yahoo_transport = cn_probe, yahoo_transport
         self.on_result = on_result  # (tool name, model-visible result) for run level accounting
+        self._fmp_key = fmp_key.strip() if isinstance(fmp_key, str) and fmp_key.strip() else None
+        self._fmp_owner = fmp_owner if fmp_owner in ('platform', 'user_byok') else 'user_byok'
+        self._fmp_transport = fmp_transport
 
     # -- capability flags (first user message; tools stay static)
     @property
@@ -273,6 +478,24 @@ class FinDataToolbox:
                 'cn_data_provider': provider,
                 'cn_providers_unreachable': unreachable,
                 'hk_market_data_available': yahoo_hk or (self.enabled and self._market_key is not None)}
+
+    def earnings_capabilities(self) -> dict[str, Any]:
+        """Earnings/external-provider flags kept separate from ``capabilities()`` core contract keys."""
+        key_ready = self.enabled and self._fmp_key is not None
+        consensus_ok = key_ready and any(
+            not isinstance(self._policy.decide('fmp', cat, credential_owner=self._fmp_owner), Denied)
+            for cat in ('consensus', 'earnings_consensus')
+        )
+        transcript_ok = key_ready and any(
+            not isinstance(self._policy.decide('fmp', cat, credential_owner=self._fmp_owner), Denied)
+            for cat in ('transcripts', 'earnings_transcript')
+        )
+        return {
+            'earnings_consensus_available': consensus_ok,
+            'earnings_transcript_available': transcript_ok,
+            'fmp_key_configured': bool(self._fmp_key),
+            'fmp_credential_owner': self._fmp_owner if self._fmp_key else None,
+        }
 
     # -- adapters
     def _sec(self) -> SecEdgarAdapter:
@@ -892,4 +1115,786 @@ class FinDataToolbox:
     def _lead_note(rows: list[dict[str, Any]]) -> str:
         return ('primary_document_url values can be passed directly to acquire_sources; '
                 'then use outline_source / read_sources on the acquired document.') if rows else ''
+
+    # -- Phase A1 SEC Deep & External Earnings tools
+    @staticmethod
+    def _release_period_lines(period: Any) -> list[str]:
+        out: list[str] = [
+            f"=== {period.period_role.upper()} 8-K EARNINGS RELEASE ({period.accession}) ===",
+            f"filed_at: {period.filed_at.isoformat()} | period_of_report: {period.period_of_report.isoformat() if period.period_of_report else '-'} | items: {','.join(period.items) or '-'}",
+            f"index_json_url: {period.index_json_url}",
+        ]
+        if period.gaps:
+            out.append(f"period_gaps: {'; '.join(period.gaps)}")
+        if period.management_summary:
+            out.append("--- Management Summary ---")
+            out.append(period.management_summary)
+        if period.management_highlights:
+            out.append("--- Management Highlights ---")
+            out.extend(f"* {h}" for h in period.management_highlights)
+        if period.guidance_passages:
+            out.append("--- Forward Guidance Passages ---")
+            for idx, gp in enumerate(period.guidance_passages, 1):
+                meta = [p for p in (gp.heading, f"horizon={gp.horizon}" if gp.horizon else None, f"exhibit={gp.source_exhibit}") if p]
+                out.append(f"[Guidance {idx}] {' | '.join(meta)}")
+                out.append(gp.text)
+        if period.nongaap_reconciliations:
+            out.append("--- Non-GAAP Reconciliations ---")
+            for idx, ng in enumerate(period.nongaap_reconciliations, 1):
+                out.append(f"[Non-GAAP {idx}] {ng.title or 'Reconciliation'} ({ng.source_exhibit})")
+                if ng.table and ng.table.raw_markdown:
+                    out.append(ng.table.raw_markdown)
+                elif ng.text:
+                    out.append(ng.text)
+        for ex in (period.ex99_1, period.ex99_2):
+            if ex is None:
+                continue
+            out.append(f"--- {ex.exhibit_type} ({ex.filename}) ---")
+            out.append(f"url: {ex.url}")
+            out.append(ex.text)
+        return out
+
+    @classmethod
+    def _format_earnings_release_text(cls, payload: DualPeriodEarningsRelease, label: str) -> str:
+        header = [
+            f"SEC Dual-Period 8-K Item 2.02 Earnings Release: {label} (CIK {payload.cik})",
+            f"pairing_mode: {payload.pairing_mode} | days_between_filings: {payload.days_between_filings if payload.days_between_filings is not None else '-'}",
+        ]
+        if payload.gaps:
+            header.append(f"gaps: {'; '.join(payload.gaps)}")
+        lines = [*header, ""]
+        for period in (payload.current, payload.prior):
+            if period is not None:
+                lines.extend(cls._release_period_lines(period))
+                lines.append("")
+        return "\n".join(lines).strip()
+
+    @staticmethod
+    def _format_single_table_lines(tbl: FilingTableData, *, prefix: str = "") -> list[str]:
+        lines = [
+            f"{prefix}Table: {tbl.title} ({tbl.r_file})",
+            f"url: {tbl.url} | currency: {tbl.currency or '-'} | unit_scale: {tbl.unit_scale or '-'} | scale_multiplier: {tbl.scale_multiplier if tbl.scale_multiplier is not None else '-'}",
+        ]
+        if tbl.unit_header_note:
+            lines.append(f"unit_note: {tbl.unit_header_note}")
+        if tbl.periods:
+            lines.append("periods: " + " | ".join(tbl.periods))
+        if tbl.columns:
+            col_headers = [c.header for c in tbl.columns]
+            lines.append("line_item | " + " | ".join(col_headers))
+        for row in tbl.rows:
+            tag_prefix = f"[{row.xbrl_tag}] " if row.xbrl_tag else ""
+            indent = "  " * min(row.indent_level, 4)
+            vals = [c.raw_text for c in row.cells]
+            lines.append(f"{indent}{tag_prefix}{row.label}" + (" | " + " | ".join(vals) if vals else ""))
+        if tbl.narrative_text:
+            lines.append("--- Footnote / Narrative ---")
+            lines.append(tbl.narrative_text)
+        return lines
+
+    @classmethod
+    def _format_filing_table_text(cls, tbl: FilingTableData) -> str:
+        lines = cls._format_single_table_lines(tbl)
+        for idx, sub in enumerate(tbl.subtables, 1):
+            lines.append("")
+            lines.extend(cls._format_single_table_lines(sub, prefix=f"[Subtable {idx}] "))
+        return "\n".join(lines).strip()
+
+    @staticmethod
+    def _compact_table_rows(tbl: FilingTableData) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for r in tbl.rows:
+            rows.append({
+                'row_index': r.row_index,
+                'label': r.label,
+                'is_header': r.is_header,
+                'is_abstract': r.is_abstract,
+                'is_total': r.is_total,
+                'xbrl_tag': r.xbrl_tag,
+                'values_by_column': dict(r.values_by_column),
+                'numeric_values': {
+                    c.column_header or f'col_{c.column_index}': str(c.numeric_value)
+                    for c in r.cells
+                    if c.numeric_value is not None
+                },
+            })
+        return rows
+
+    @staticmethod
+    def _sec_provenance(res: ToolResult, info: Mapping[str, Any], **extra: Any) -> dict[str, Any]:
+        prov = res.provenance
+        endpoints = list(prov.endpoints) if prov and prov.endpoints else ([prov.endpoint] if prov and prov.endpoint else [])
+        out: dict[str, Any] = {
+            'provider': 'sec_edgar',
+            'endpoint': endpoints[0] if endpoints else None,
+            'endpoints': endpoints,
+            'provider_calls': res.cost.provider_calls,
+            'credential_owner': 'platform_public_data',
+            'entity_id': info.get('entity_id'),
+            'cik': info.get('cik'),
+            'provider_response_sha256': prov.response_sha256 if prov else None,
+            'retrieved_at': prov.retrieved_at.isoformat() if prov else None,
+            'coverage': res.coverage.model_dump(mode='json', exclude_none=True) if res.coverage else None,
+            'permissions': res.permissions.model_dump(mode='json'),
+        }
+        out.update(extra)
+        return out
+
+    def earnings_release_key(self, req: SecEarningsReleaseRequest) -> str:
+        return '|'.join([
+            'sec_earnings_release',
+            self._identity_key(req),
+            req.pairing_mode,
+            str(req.include_ex99_2),
+            req.as_of.isoformat() if req.as_of else '',
+        ])
+
+    def sec_earnings_release(self, req: SecEarningsReleaseRequest, entities: Mapping[str, Mapping[str, Any]]) -> FinToolOutcome:
+        blocked = self._sec_blocked()
+        if blocked:
+            return FinToolOutcome(blocked)
+        sec = self._sec()
+        info, failure = self._cik(req, entities, sec)
+        if failure:
+            return FinToolOutcome(failure)
+        res = sec_deep_earnings_release(
+            sec,
+            info['cik'],
+            as_of=req.as_of,
+            pairing_mode=req.pairing_mode,
+            include_ex99_2=req.include_ex99_2,
+            max_candidates=req.max_candidates,
+        )
+        if res.status not in ('ok', 'partial') or not res.data:
+            return FinToolOutcome(wire(res, entity_id=info['entity_id']))
+        payload: DualPeriodEarningsRelease = res.data[0]
+        label = info['name'] or info['symbol'] or info['entity_id']
+        text = self._format_earnings_release_text(payload, str(label))
+        cur = payload.current
+        pri = payload.prior
+        url = (
+            cur.ex99_1.url if cur and cur.ex99_1
+            else cur.index_json_url if cur
+            else pri.index_json_url if pri
+            else None
+        )
+        pub_at: datetime | None = None
+        if cur is not None:
+            pub_at = cur.accepted_at or datetime(cur.filed_at.year, cur.filed_at.month, cur.filed_at.day, tzinfo=timezone.utc)
+        prov_meta = self._sec_provenance(
+            res,
+            info,
+            pairing_mode=payload.pairing_mode,
+            current_accession=cur.accession if cur else None,
+            prior_accession=pri.accession if pri else None,
+        )
+        title_periods = " vs ".join(p.accession for p in (cur, pri) if p is not None)
+        try:
+            source = self._persist(
+                SourceInput(
+                    title=f"{label} SEC 8-K Item 2.02 Earnings Release ({title_periods})",
+                    text=text,
+                    url=url,
+                    kind='official',
+                    published_at=pub_at,
+                    permissions=self._source_permissions(res.permissions),
+                ),
+                retrieval_method='sec_earnings_release',
+                response_sha256=prov_meta['provider_response_sha256'],
+                response_content_type='text/html',
+                provenance=prov_meta,
+            )
+        except (ValueError, ValidationError):
+            return FinToolOutcome({'status': 'denied', 'reason': 'source_not_storable'})
+
+        def _period_summary(p: Any) -> dict[str, Any] | None:
+            if p is None:
+                return None
+            return {
+                'accession': p.accession,
+                'filed_at': p.filed_at.isoformat(),
+                'period_of_report': p.period_of_report.isoformat() if p.period_of_report else None,
+                'ex99_1_url': p.ex99_1.url if p.ex99_1 else None,
+                'ex99_2_url': p.ex99_2.url if p.ex99_2 else None,
+                'nongaap_table_count': len(p.nongaap_reconciliations),
+                'guidance_passage_count': len(p.guidance_passages),
+                'gaps': list(p.gaps),
+            }
+
+        out = wire(
+            res,
+            source_id=source.source_id,
+            title=source.title,
+            total_characters=len(source.text),
+            content_sha256=source.content_sha256,
+            entity_id=info['entity_id'],
+            cik=info['cik'],
+            pairing_mode=payload.pairing_mode,
+            current_period=_period_summary(cur),
+            prior_period=_period_summary(pri),
+            gaps=list(payload.gaps),
+            usage_note='Use outline_source / read_sources on source_id to quote management remarks, Non-GAAP reconciliations, or guidance.',
+        )
+        return FinToolOutcome(
+            out,
+            source=source,
+            entities={info['entity_id']: {'company': info['name'], 'symbol': info['symbol'], 'identifiers': {'cik': info['cik']}}},
+        )
+
+    def filing_tables_key(self, req: SecFilingTablesRequest) -> str | None:
+        if not req.r_file:
+            return None
+        return '|'.join(['sec_filing_tables', self._identity_key(req), req.accession.strip(), req.r_file.upper()])
+
+    def sec_filing_tables(self, req: SecFilingTablesRequest, entities: Mapping[str, Mapping[str, Any]]) -> FinToolOutcome:
+        blocked = self._sec_blocked()
+        if blocked:
+            return FinToolOutcome(blocked)
+        sec = self._sec()
+        info, failure = self._cik(req, entities, sec)
+        if failure:
+            return FinToolOutcome(failure)
+
+        if not req.r_file:
+            res = sec_deep_filing_tables(sec, info['cik'], req.accession, category=req.category)
+            if res.status not in ('ok', 'partial') or not res.data:
+                return FinToolOutcome(wire(res, entity_id=info['entity_id']))
+            catalog: FilingTableCatalog = res.data[0]
+
+            def _entry(r: Any) -> dict[str, Any]:
+                return {
+                    'r_file': r.r_file,
+                    'short_name': r.short_name,
+                    'long_name': r.long_name,
+                    'menu_category': r.menu_category,
+                    'normalized_category': r.normalized_category,
+                    'url': r.url,
+                }
+
+            out = wire(
+                res,
+                entity_id=info['entity_id'],
+                cik=info['cik'],
+                accession=catalog.accession,
+                filing_summary_url=catalog.filing_summary_url,
+                report_count=catalog.report_count,
+                statements=[_entry(r) for r in catalog.statements],
+                notes=[_entry(r) for r in catalog.notes],
+                tables=[_entry(r) for r in catalog.tables],
+                other=[_entry(r) for r in catalog.other],
+                usage_note='Pass an r_file (for example R2.htm) to sec_filing_tables to fetch and parse that structured table.',
+            )
+            return FinToolOutcome(
+                out,
+                entities={info['entity_id']: {'company': info['name'], 'symbol': info['symbol'], 'identifiers': {'cik': info['cik']}}},
+            )
+
+        res = fetch_filing_table(sec, info['cik'], req.accession, req.r_file)
+        if res.status not in ('ok', 'partial') or not res.data:
+            return FinToolOutcome(wire(res, entity_id=info['entity_id']))
+        tbl: FilingTableData = res.data[0]
+        label = info['name'] or info['symbol'] or info['entity_id']
+        text = self._format_filing_table_text(tbl)
+        prov_meta = self._sec_provenance(
+            res,
+            info,
+            accession=tbl.accession,
+            r_file=tbl.r_file,
+            currency=tbl.currency,
+            unit_scale=tbl.unit_scale,
+            scale_multiplier=tbl.scale_multiplier,
+            periods=list(tbl.periods),
+        )
+        try:
+            source = self._persist(
+                SourceInput(
+                    title=f"{label} SEC {tbl.accession} {tbl.r_file}: {tbl.title}",
+                    text=text,
+                    url=tbl.url,
+                    kind='official',
+                    permissions=self._source_permissions(res.permissions),
+                ),
+                retrieval_method='sec_filing_table',
+                response_sha256=prov_meta['provider_response_sha256'],
+                response_content_type='text/html',
+                provenance=prov_meta,
+            )
+        except (ValueError, ValidationError):
+            return FinToolOutcome({'status': 'denied', 'reason': 'source_not_storable'})
+
+        out = wire(
+            res,
+            source_id=source.source_id,
+            title=source.title,
+            total_characters=len(source.text),
+            content_sha256=source.content_sha256,
+            entity_id=info['entity_id'],
+            cik=info['cik'],
+            accession=tbl.accession,
+            r_file=tbl.r_file,
+            table_title=tbl.title,
+            currency=tbl.currency,
+            unit_scale=tbl.unit_scale,
+            scale_multiplier=tbl.scale_multiplier,
+            periods=list(tbl.periods),
+            columns=[c.model_dump(mode='json', exclude_none=True) for c in tbl.columns],
+            row_count=len(tbl.rows),
+            rows=self._compact_table_rows(tbl),
+            subtable_count=len(tbl.subtables),
+            usage_note='Use numeric_values and unit_scale directly in calculations or quote rows from source_id via read_sources.',
+        )
+        return FinToolOutcome(
+            out,
+            source=source,
+            entities={info['entity_id']: {'company': info['name'], 'symbol': info['symbol'], 'identifiers': {'cik': info['cik']}}},
+        )
+
+    @staticmethod
+    def _section_summaries(bundle: FilingSectionsBundle, section_keys: Sequence[str] | None = None) -> list[dict[str, Any]]:
+        wanted = {k.strip() for k in (section_keys or ()) if k and k.strip()}
+        out: list[dict[str, Any]] = []
+        for key in bundle.section_order:
+            if wanted and key not in wanted:
+                continue
+            sec = bundle.sections.get(key)
+            if sec is None:
+                continue
+            out.append({
+                'section_key': sec.section_key,
+                'title': sec.title,
+                'item_number': sec.item_number,
+                'part': sec.part,
+                'char_start': sec.char_start,
+                'char_end': sec.char_end,
+                'char_count': sec.char_count,
+                'word_count': sec.word_count,
+                'paragraph_count': len(sec.paragraphs),
+            })
+        return out
+
+    def sec_filing_sections(
+        self,
+        req: SecFilingSectionsRequest,
+        entities: Mapping[str, Mapping[str, Any]],
+        *,
+        source_by_id: Mapping[str, ResearchSource] | None = None,
+    ) -> FinToolOutcome:
+        if req.source_id:
+            blocked = self._blocked()
+            if blocked:
+                return FinToolOutcome(blocked)
+            src = (source_by_id or {}).get(req.source_id)
+            if src is None:
+                return FinToolOutcome({'status': 'failed', 'reason': 'source_not_found', 'message': f"Source {req.source_id} was not found in this run."})
+            res = sec_deep_filing_sections(None, text=src.text, form=req.form)
+            if res.status not in ('ok', 'partial') or not res.data:
+                return FinToolOutcome(wire(res, source_id=src.source_id))
+            bundle: FilingSectionsBundle = res.data[0]
+            sections = self._section_summaries(bundle, req.section_keys)
+            return FinToolOutcome(
+                wire(
+                    res,
+                    source_id=src.source_id,
+                    form=bundle.form,
+                    section_order=[s['section_key'] for s in sections],
+                    sections=sections,
+                    usage_note='Use search_source or read_sources on source_id to read specific sections verbatim.',
+                )
+            )
+
+        blocked = self._sec_blocked()
+        if blocked:
+            return FinToolOutcome(blocked)
+        sec = self._sec()
+        res = sec_deep_filing_sections(sec, url=req.url, form=req.form)
+        if res.status not in ('ok', 'partial') or not res.data:
+            return FinToolOutcome(wire(res))
+        bundle = res.data[0]
+        prov_info: dict[str, Any] = {'entity_id': req.entity_id, 'cik': cik10(req.cik) if req.cik else None}
+        prov_meta = self._sec_provenance(res, prov_info, form=bundle.form, section_order=list(bundle.section_order))
+        form_label = bundle.form or req.form or 'Filing'
+        try:
+            source = self._persist(
+                SourceInput(
+                    title=f"SEC {form_label} Sections ({len(bundle.section_order)} sections)",
+                    text=bundle.clean_text,
+                    url=req.url,
+                    kind='official',
+                    permissions=self._source_permissions(res.permissions),
+                ),
+                retrieval_method='sec_filing_sections',
+                response_sha256=prov_meta['provider_response_sha256'],
+                response_content_type='text/html',
+                provenance=prov_meta,
+            )
+        except (ValueError, ValidationError):
+            return FinToolOutcome({'status': 'denied', 'reason': 'source_not_storable'})
+
+        sections = self._section_summaries(bundle, req.section_keys)
+        out = wire(
+            res,
+            source_id=source.source_id,
+            title=source.title,
+            total_characters=len(source.text),
+            content_sha256=source.content_sha256,
+            form=bundle.form,
+            section_order=[s['section_key'] for s in sections],
+            sections=sections,
+            usage_note='Pass char_start/char_end offsets from sections directly to read_sources(source_id=...) and quote verbatim.',
+        )
+        return FinToolOutcome(out, source=source)
+
+    def _load_section_bundle(
+        self,
+        *,
+        source_id: str | None,
+        url: str | None,
+        form: str | None,
+        source_by_id: Mapping[str, ResearchSource],
+    ) -> tuple[FilingSectionsBundle | None, dict[str, Any] | None]:
+        if source_id:
+            src = source_by_id.get(source_id)
+            if src is None:
+                return None, {'status': 'failed', 'reason': 'source_not_found', 'message': f"Source {source_id} was not found in this run."}
+            res = sec_deep_filing_sections(None, text=src.text, form=form)
+            if res.status not in ('ok', 'partial') or not res.data:
+                return None, wire(res, source_id=source_id)
+            return res.data[0], None
+        blocked = self._sec_blocked()
+        if blocked:
+            return None, blocked
+        res = sec_deep_filing_sections(self._sec(), url=url, form=form)
+        if res.status not in ('ok', 'partial') or not res.data:
+            return None, wire(res, url=url)
+        return res.data[0], None
+
+    def sec_redline_diff(
+        self,
+        req: SecRedlineDiffRequest,
+        *,
+        source_by_id: Mapping[str, ResearchSource] | None = None,
+    ) -> FinToolOutcome:
+        blocked = self._blocked()
+        if blocked:
+            return FinToolOutcome(blocked)
+        pool = source_by_id or {}
+        cur_bundle, cur_err = self._load_section_bundle(
+            source_id=req.current_source_id,
+            url=req.current_url,
+            form=req.current_form,
+            source_by_id=pool,
+        )
+        if cur_err or cur_bundle is None:
+            return FinToolOutcome(cur_err or {'status': 'failed', 'reason': 'filing_load_failed'})
+        pri_bundle, pri_err = self._load_section_bundle(
+            source_id=req.prior_source_id,
+            url=req.prior_url,
+            form=req.prior_form,
+            source_by_id=pool,
+        )
+        if pri_err or pri_bundle is None:
+            return FinToolOutcome(pri_err or {'status': 'failed', 'reason': 'filing_load_failed'})
+
+        report = sec_deep_redline_diff(
+            cur_bundle,
+            pri_bundle,
+            section_keys=req.section_keys,
+            filter_rolling_noise=req.filter_rolling_noise,
+            similarity_threshold=req.similarity_threshold,
+        )
+        assert isinstance(report, FilingRedlineReport)
+        return FinToolOutcome({
+            'status': 'ok',
+            'reason': 'ok',
+            'filter_rolling_noise': req.filter_rolling_noise,
+            'total_added': report.total_added,
+            'total_removed': report.total_removed,
+            'total_revised': report.total_revised,
+            'total_filtered_noise': report.total_filtered_noise,
+            'sections': {k: v.model_dump(mode='json') for k, v in report.section_diffs.items()},
+        })
+
+    def sec_fulltext_search(self, req: SecFulltextSearchRequest, entities: Mapping[str, Mapping[str, Any]]) -> FinToolOutcome:
+        blocked = self._sec_blocked()
+        if blocked:
+            return FinToolOutcome(blocked)
+        sec = self._sec()
+        info, failure = self._cik(req, entities, sec)
+        if failure:
+            return FinToolOutcome(failure)
+        res = cik_scoped_efts_search(
+            sec,
+            info['cik'],
+            req.query,
+            start=req.since,
+            end=req.until,
+            forms=req.forms,
+            limit=req.limit,
+        )
+        if res.status == 'denied':
+            return FinToolOutcome(wire(res, entity_id=info['entity_id'], cik=info['cik']))
+        rows = []
+        leads: list[dict[str, Any]] = []
+        for h in res.data:
+            rows.append({
+                k: v for k, v in {
+                    'entity_id': h.entity_id,
+                    'company': h.display_name,
+                    'form': h.form,
+                    'filed_at': h.filed_at.isoformat() if h.filed_at else None,
+                    'period_of_report': h.period_of_report.isoformat() if h.period_of_report else None,
+                    'accession': h.accession,
+                    'document': h.document,
+                    'primary_document_url': h.url,
+                    'description': h.description,
+                }.items() if v
+            })
+            if h.url:
+                leads.append({
+                    'url': canonical_source_url(h.url),
+                    'title': f'{h.display_name or h.entity_id} {h.form or ""} {h.filed_at or ""}'.strip(),
+                    'published_at': f'{h.filed_at.isoformat()}T00:00:00+00:00' if h.filed_at else None,
+                })
+        return FinToolOutcome(
+            wire(res, entity_id=info['entity_id'], cik=info['cik'], hits=rows, lead_note=self._lead_note(rows)),
+            leads=leads,
+            entities={info['entity_id']: {'company': info['name'], 'symbol': info['symbol'], 'identifiers': {'cik': info['cik']}}},
+        )
+
+    def _fmp_service(self) -> ExternalEarningsService:
+        env: dict[str, str] = {}
+        allow_plat: bool = False
+        if self._fmp_key and self._fmp_owner == 'platform':
+            allow_plat = True
+            env = {FMP_API_KEY_ENV: self._fmp_key, FMP_ALLOW_PLATFORM_KEY_ENV: 'true'}
+        adapter = FmpEarningsAdapter(
+            api_key=self._fmp_key if self._fmp_owner == 'user_byok' else None,
+            credential_owner=self._fmp_owner,
+            account_id=self.account_id,
+            allow_platform_key=allow_plat,
+            env=env,
+            transport=self._fmp_transport,
+            limiter=self._limiter,
+            policy=self._policy,
+            now_fn=self._now,
+        )
+        return ExternalEarningsService(
+            provider=adapter,
+            allow_platform_key=allow_plat,
+            env=env,
+            account_id=self.account_id,
+            policy=self._policy,
+        )
+
+    def _earnings_symbol(self, req: Any, entities: Mapping[str, Mapping[str, Any]]) -> tuple[str | None, str | None, dict[str, Any] | None]:
+        if req.symbol:
+            return req.symbol.strip().upper(), req.entity_id, None
+        if req.entity_id:
+            info = self._info(req.entity_id, entities)
+            if info['symbol']:
+                return str(info['symbol']).strip().upper(), info['entity_id'], None
+        return None, None, {'status': 'failed', 'reason': 'entity_not_resolved', 'message': 'Supply ticker symbol or an entity_id with a ticker symbol from resolve_entity.'}
+
+    def _external_failure_outcome(self, res: Any) -> FinToolOutcome:
+        secrets = (self._fmp_key,) if self._fmp_key else ()
+        status = 'denied' if res.provider_status == 'denied' else res.status
+        out: dict[str, Any] = {
+            'status': status,
+            'reason': res.reason or 'unavailable',
+            'message': redact_secrets(res.message or '', secrets),
+            'degraded': bool(res.degraded),
+            'provider': res.provider,
+            'fallback_suggestions': list(res.fallback_suggestions),
+            'suggested_actions': [a.model_dump(mode='json', exclude_none=True) for a in res.suggested_actions],
+        }
+        if res.retryable:
+            out['retryable'] = True
+        if res.provider_status:
+            out['provider_status'] = res.provider_status
+        return FinToolOutcome(out)
+
+    def earnings_consensus_key(self, req: EarningsConsensusRequest) -> str:
+        who = req.symbol.strip().upper() if req.symbol else _norm_entity_id(req.entity_id or '')
+        return '|'.join(['earnings_consensus', who, req.period, str(req.limit), str(req.include_actuals)])
+
+    def earnings_consensus(self, req: EarningsConsensusRequest, entities: Mapping[str, Mapping[str, Any]]) -> FinToolOutcome:
+        blocked = self._blocked()
+        if blocked:
+            return FinToolOutcome(blocked)
+        symbol, entity_id, failure = self._earnings_symbol(req, entities)
+        if failure or not symbol:
+            return FinToolOutcome(failure or {'status': 'failed', 'reason': 'entity_not_resolved'})
+        service = self._fmp_service()
+        res = service.get_consensus(
+            symbol,
+            period=req.period,
+            limit=req.limit,
+            include_actuals=req.include_actuals,
+            byok_api_key=self._fmp_key if self._fmp_owner == 'user_byok' else None,
+            account_id=self.account_id,
+        )
+        if res.status not in ('ok', 'partial') or not res.consensus:
+            return self._external_failure_outcome(res)
+
+        lines = []
+        for c in res.consensus:
+            period_end_str = c.period_end.isoformat() if c.period_end else '-'
+            reported_str = c.reported_date.isoformat() if c.reported_date else '-'
+            lines.append(
+                f"{c.symbol} | period {c.fiscal_period or '-'} | period_end {period_end_str} | "
+                f"reported {reported_str} | "
+                f"rev_est_avg {c.revenue_estimate_avg if c.revenue_estimate_avg is not None else '-'} | "
+                f"eps_est_avg {c.eps_estimate_avg if c.eps_estimate_avg is not None else '-'} | "
+                f"rev_actual {c.revenue_actual if c.revenue_actual is not None else '-'} | "
+                f"eps_actual {c.eps_actual if c.eps_actual is not None else '-'} | "
+                f"analysts {c.num_analysts if c.num_analysts is not None else '-'}"
+            )
+        prov = res.provenance
+        secrets = (self._fmp_key,) if self._fmp_key else ()
+        endpoints = [redact_secrets(u, secrets) for u in ((prov.endpoints if prov and prov.endpoints else []) or ([prov.endpoint] if prov and prov.endpoint else []))]
+        prov_meta = {
+            'provider': res.provider,
+            'endpoint': endpoints[0] if endpoints else None,
+            'endpoints': endpoints,
+            'credential_owner': res.credential_owner,
+            'owner_account_id': self.account_id if res.permissions.owner_scoped else None,
+            'owner_scoped': bool(res.permissions.owner_scoped),
+            'symbol': symbol,
+            'entity_id': entity_id,
+            'period': req.period,
+            'provider_response_sha256': prov.response_sha256 if prov else None,
+            'retrieved_at': prov.retrieved_at.isoformat() if prov else None,
+            'permissions': res.permissions.model_dump(mode='json'),
+        }
+        try:
+            source = self._persist(
+                SourceInput(
+                    title=f"{symbol} Street Earnings Consensus ({req.period})",
+                    text="\n".join(lines),
+                    url=endpoints[0] if endpoints and not (self._fmp_key and self._fmp_key in endpoints[0]) else None,
+                    kind='market_data',
+                    permissions=self._source_permissions(res.permissions),
+                ),
+                retrieval_method='fmp_consensus',
+                response_sha256=prov_meta['provider_response_sha256'],
+                response_content_type='application/json',
+                provenance=prov_meta,
+            )
+        except (ValueError, ValidationError):
+            return FinToolOutcome({'status': 'denied', 'reason': 'source_not_storable'})
+
+        return FinToolOutcome({
+            'status': res.status,
+            'reason': res.reason or 'ok',
+            'source_id': source.source_id,
+            'title': source.title,
+            'total_characters': len(source.text),
+            'content_sha256': source.content_sha256,
+            'symbol': symbol,
+            'provider': res.provider,
+            'credential_owner': res.credential_owner,
+            'permissions': res.permissions.model_dump(mode='json'),
+            'rows': len(res.consensus),
+            'consensus': [c.model_dump(mode='json') for c in res.consensus],
+            'usage_note': 'Quote lines via read_sources / record_facts. Data is not exportable.' + (' Data is owner-scoped.' if res.permissions.owner_scoped else ''),
+        }, source=source)
+
+    def earnings_transcript_key(self, req: EarningsTranscriptRequest) -> str:
+        who = req.symbol.strip().upper() if req.symbol else _norm_entity_id(req.entity_id or '')
+        return '|'.join(['earnings_transcript', who, str(req.fiscal_year or ''), str(req.fiscal_quarter or '')])
+
+    def earnings_transcript(self, req: EarningsTranscriptRequest, entities: Mapping[str, Mapping[str, Any]]) -> FinToolOutcome:
+        blocked = self._blocked()
+        if blocked:
+            return FinToolOutcome(blocked)
+        symbol, entity_id, failure = self._earnings_symbol(req, entities)
+        if failure or not symbol:
+            return FinToolOutcome(failure or {'status': 'failed', 'reason': 'entity_not_resolved'})
+        service = self._fmp_service()
+        res = service.get_transcript(
+            symbol,
+            fiscal_year=req.fiscal_year,
+            fiscal_quarter=req.fiscal_quarter,
+            byok_api_key=self._fmp_key if self._fmp_owner == 'user_byok' else None,
+            account_id=self.account_id,
+        )
+        if res.status not in ('ok', 'partial') or res.transcript is None:
+            return self._external_failure_outcome(res)
+
+        tr = res.transcript
+        header = [
+            f"{tr.symbol} Earnings Call Transcript (FY{tr.fiscal_year or '-'} Q{tr.fiscal_quarter or '-'})",
+            f"call_date: {tr.call_date.isoformat() if tr.call_date else '-'} | speakers: {', '.join(tr.speakers) or '-'}",
+            "",
+        ]
+        body: list[str] = []
+        for idx, sec_item in enumerate(tr.sections, 1):
+            label_parts = [f"[{idx}] {sec_item.name.upper()}"]
+            if sec_item.title:
+                label_parts.append(sec_item.title)
+            if sec_item.speakers:
+                label_parts.append(f"speakers: {', '.join(sec_item.speakers)}")
+            body.append(" | ".join(label_parts))
+            body.append(sec_item.text)
+            body.append("")
+        text = "\n".join(header + (body if body else [tr.full_text])).strip()
+        prov = res.provenance
+        secrets = (self._fmp_key,) if self._fmp_key else ()
+        endpoints = [redact_secrets(u, secrets) for u in ((prov.endpoints if prov and prov.endpoints else []) or ([prov.endpoint] if prov and prov.endpoint else []))]
+        prov_meta = {
+            'provider': res.provider,
+            'endpoint': endpoints[0] if endpoints else None,
+            'endpoints': endpoints,
+            'credential_owner': res.credential_owner,
+            'owner_account_id': self.account_id if res.permissions.owner_scoped else None,
+            'owner_scoped': bool(res.permissions.owner_scoped),
+            'symbol': tr.symbol,
+            'entity_id': entity_id,
+            'fiscal_year': tr.fiscal_year,
+            'fiscal_quarter': tr.fiscal_quarter,
+            'provider_response_sha256': prov.response_sha256 if prov else None,
+            'retrieved_at': prov.retrieved_at.isoformat() if prov else None,
+            'permissions': res.permissions.model_dump(mode='json'),
+        }
+        pub_dt: datetime | None = None
+        if isinstance(tr.call_date, datetime):
+            pub_dt = tr.call_date if tr.call_date.utcoffset() is not None else tr.call_date.replace(tzinfo=timezone.utc)
+        elif isinstance(tr.call_date, date):
+            pub_dt = datetime(tr.call_date.year, tr.call_date.month, tr.call_date.day, tzinfo=timezone.utc)
+        try:
+            source = self._persist(
+                SourceInput(
+                    title=f"{tr.symbol} Earnings Call Transcript (FY{tr.fiscal_year or '-'} Q{tr.fiscal_quarter or '-'})",
+                    text=text,
+                    url=endpoints[0] if endpoints and not (self._fmp_key and self._fmp_key in endpoints[0]) else None,
+                    kind='market_data',
+                    published_at=pub_dt,
+                    permissions=self._source_permissions(res.permissions),
+                ),
+                retrieval_method='fmp_transcript',
+                response_sha256=prov_meta['provider_response_sha256'],
+                response_content_type='application/json',
+                provenance=prov_meta,
+            )
+        except (ValueError, ValidationError):
+            return FinToolOutcome({'status': 'denied', 'reason': 'source_not_storable'})
+
+        return FinToolOutcome({
+            'status': res.status,
+            'reason': res.reason or 'ok',
+            'source_id': source.source_id,
+            'title': source.title,
+            'total_characters': len(source.text),
+            'content_sha256': source.content_sha256,
+            'symbol': tr.symbol,
+            'fiscal_year': tr.fiscal_year,
+            'fiscal_quarter': tr.fiscal_quarter,
+            'call_date': tr.call_date.isoformat() if tr.call_date else None,
+            'section_count': len(tr.sections),
+            'speakers': list(tr.speakers),
+            'provider': res.provider,
+            'credential_owner': res.credential_owner,
+            'permissions': res.permissions.model_dump(mode='json'),
+            'usage_note': 'Use outline_source / read_sources on source_id to quote prepared remarks or Q&A. Data is not exportable.',
+        }, source=source)
 

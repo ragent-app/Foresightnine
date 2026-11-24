@@ -15,9 +15,19 @@ from .model_protocol import ModelToolDefinition, canonical_json_dumps, canonical
 from .research_charts import CreateChartRequest, ResearchChart
 from .research_fin_tools import (
     CompanyFinancialsRequest,
+    EarningsConsensusRequest,
+    EarningsQualityToolRequest,
+    EarningsTranscriptRequest,
     FilingsRequest,
+    GuidanceAndNonGaapToolRequest,
     MarketDataRequest,
     ResolveEntityRequest,
+    SecEarningsReleaseRequest,
+    SecFilingSectionsRequest,
+    SecFilingTablesRequest,
+    SecFulltextSearchRequest,
+    SecRedlineDiffRequest,
+    ValuationToolRequest,
 )
 from .research_item_validator import ItemKind
 from .research_library_tool import SearchLibraryRequest
@@ -641,26 +651,49 @@ def _target_market_data(tool_args: Mapping[str, Any], _ctx: ToolActivityContext)
 
 
 def _fin_summary_target(detail_key: str) -> Callable[[Mapping[str, Any], ToolActivityContext], str | None]:
-    def _target(tool_args: Mapping[str, Any], _ctx: ToolActivityContext) -> str | None:
+    def _target(tool_args: Mapping[str, Any], ctx: ToolActivityContext) -> str | None:
         who = next(
             (
                 v.strip()
                 for v in (
                     tool_args.get('entity_id'),
                     tool_args.get('ticker'),
+                    tool_args.get('symbol'),
                     tool_args.get('cik'),
                     tool_args.get('query'),
+                    safe_host(tool_args.get('url')),
                 )
                 if isinstance(v, str) and v.strip()
             ),
             '',
         )
+        if not who and isinstance(tool_args.get('source_id'), str) and tool_args['source_id'].strip():
+            who = _source_label(tool_args['source_id'].strip(), ctx, max_len=80)
         if not who:
             return None
         detail = tool_args.get(detail_key)
         return f'{who} · {detail}'[:200] if isinstance(detail, str) and detail else who[:200]
 
     return _target
+
+
+def _target_redline_diff(tool_args: Mapping[str, Any], ctx: ToolActivityContext) -> str | None:
+    cur = tool_args.get('current_source_id') or safe_host(tool_args.get('current_url'))
+    pri = tool_args.get('prior_source_id') or safe_host(tool_args.get('prior_url'))
+    cur_label = _source_label(cur.strip(), ctx, max_len=50) if isinstance(cur, str) and cur.strip() else ''
+    pri_label = _source_label(pri.strip(), ctx, max_len=50) if isinstance(pri, str) and pri.strip() else ''
+    if cur_label and pri_label:
+        return f'{cur_label} vs {pri_label}'[:200]
+    return (cur_label or pri_label or None)
+
+
+def _target_earnings_diag(tool_args: Mapping[str, Any], _ctx: ToolActivityContext) -> str | None:
+    parts = [
+        v.strip()
+        for v in (tool_args.get('entity_id'), tool_args.get('symbol'), tool_args.get('period_label'))
+        if isinstance(v, str) and v.strip()
+    ]
+    return ' · '.join(parts)[:200] if parts else None
 
 
 def _target_record_facts(tool_args: Mapping[str, Any], _ctx: ToolActivityContext) -> str | None:
@@ -1022,6 +1055,116 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         input_model=ExtractStatementsRequest,
         compaction_role='bulk',
         activity_summarizer=_rationale_summarizer(_target_extract_statements),
+    ),
+    ToolSpec(
+        name='sec_earnings_release',
+        description=(
+            'Fetch paired current and prior-period SEC 8-K Item 2.02 earnings release exhibits (EX-99.1 and optional EX-99.2), '
+            'strip HTML preserving tables, extract management highlights, Non-GAAP reconciliations, and forward guidance, '
+            'and persist as a quotable official source.'
+        ),
+        input_model=SecEarningsReleaseRequest,
+        compaction_role='bulk',
+        is_fin_tool=True,
+        activity_summarizer=_rationale_summarizer(_fin_summary_target('pairing_mode')),
+    ),
+    ToolSpec(
+        name='sec_filing_tables',
+        description=(
+            'Inspect a 10-Q or 10-K FilingSummary.xml report catalog (Statements, Notes, Tables) when r_file is omitted, '
+            'or fetch and deterministically parse an individual R*.htm table (with unit scale, currency, period headers, '
+            'XBRL tags, and quotable persisted source) when r_file is specified.'
+        ),
+        input_model=SecFilingTablesRequest,
+        compaction_role='bulk',
+        is_fin_tool=True,
+        activity_summarizer=_rationale_summarizer(_fin_summary_target('r_file')),
+    ),
+    ToolSpec(
+        name='sec_filing_sections',
+        description=(
+            'Split a 10-K or 10-Q filing (from a direct www.sec.gov URL or an already-acquired source_id) into canonical '
+            'Item sections including Risk Factors (Item 1A), MD&A (Item 2/7), Liquidity and Capital Resources, and '
+            'Critical Accounting Estimates with character offsets.'
+        ),
+        input_model=SecFilingSectionsRequest,
+        compaction_role='bulk',
+        is_fin_tool=True,
+        activity_summarizer=_rationale_summarizer(_fin_summary_target('form')),
+    ),
+    ToolSpec(
+        name='sec_redline_diff',
+        description=(
+            'Compute a deterministic cross-period redline diff between current and prior SEC filing sections (by source_id '
+            'or SEC URL), filtering pure date/period rolling noise and surfacing added, removed, and revised paragraphs.'
+        ),
+        input_model=SecRedlineDiffRequest,
+        compaction_role='bulk',
+        is_fin_tool=True,
+        activity_summarizer=_rationale_summarizer(_target_redline_diff),
+    ),
+    ToolSpec(
+        name='sec_fulltext_search',
+        description=(
+            'Run SEC EDGAR EFTS full-text search strictly scoped to one validated 10-digit CIK (via cik, entity_id, or '
+            'unique US ticker). Unscoped multi-issuer searches are disallowed.'
+        ),
+        input_model=SecFulltextSearchRequest,
+        compaction_role='bulk',
+        is_fin_tool=True,
+        activity_summarizer=_rationale_summarizer(_fin_summary_target('query')),
+    ),
+    ToolSpec(
+        name='earnings_consensus',
+        description=(
+            'Fetch structured Street consensus revenue/EPS estimates and historical surprise comparisons from the configured '
+            'earnings provider (strict BYOK or opted-in platform key; degrades gracefully with SEC fallback guidance if unconfigured).'
+        ),
+        input_model=EarningsConsensusRequest,
+        compaction_role='bulk',
+        is_fin_tool=True,
+        activity_summarizer=_rationale_summarizer(_fin_summary_target('period')),
+    ),
+    ToolSpec(
+        name='earnings_transcript',
+        description=(
+            'Fetch earnings call transcript structured into prepared remarks and Q&A sections from the configured earnings '
+            'provider (strict BYOK or opted-in platform key; degrades gracefully with upload/SEC fallback suggestions if unconfigured).'
+        ),
+        input_model=EarningsTranscriptRequest,
+        compaction_role='bulk',
+        is_fin_tool=True,
+        activity_summarizer=_rationale_summarizer(_fin_summary_target('symbol')),
+    ),
+    ToolSpec(
+        name='earnings_quality_diagnostics',
+        description=(
+            'Deterministically compute margin bridges, OCF/FCF conversion, SBC burden, DSO/DIO/DPO/CCC cash conversion cycle, '
+            'working capital divergence vs revenue/COGS, accruals ratios, share dilution, and capital intensity using Decimal precision.'
+        ),
+        input_model=EarningsQualityToolRequest,
+        compaction_role='standard',
+        activity_summarizer=_rationale_summarizer(_target_earnings_diag),
+    ),
+    ToolSpec(
+        name='guidance_and_nongaap_reconciler',
+        description=(
+            'Deterministically evaluate actuals vs prior guidance or consensus (beat/miss/in-line), net new guidance raise/cut '
+            'direction, and GAAP vs Non-GAAP reconciliation bridges (SBC exclusion share, one-time vs recurring add-backs).'
+        ),
+        input_model=GuidanceAndNonGaapToolRequest,
+        compaction_role='standard',
+        activity_summarizer=_rationale_summarizer(_target_earnings_diag),
+    ),
+    ToolSpec(
+        name='valuation_and_implied_expectations',
+        description=(
+            'Deterministically compute enterprise value bridge, trailing and forward multiples (EV/EBITDA, P/E, FCF yield), '
+            'ROIC vs WACC spread, Net Debt/EBITDA, and a Reverse-DCF implied 5-year revenue CAGR with terminal share sensitivity.'
+        ),
+        input_model=ValuationToolRequest,
+        compaction_role='standard',
+        activity_summarizer=_rationale_summarizer(_target_earnings_diag),
     ),
     ToolSpec(
         name='request_user_clarification',

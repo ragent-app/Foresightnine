@@ -1,0 +1,127 @@
+{
+ "id": "kpi_internet_ads",
+ "version": "1.0.0",
+ "layer": "l2_industry_kpi",
+ "parent_pack_id": "earnings_review",
+ "title_zh": "互联网平台与数字广告 KPI",
+ "title_en": "Internet, Platforms & Digital Ads KPIs",
+ "sector_scope": "Digital Advertising, Social/Search Platforms, Streaming & Online Marketplaces (SEC SIC 4832-4841, 4899, 7310-7319, 7370, 7375, 7812, 7841)",
+ "sic_major_groups": [
+  "48",
+  "73",
+  "78"
+ ],
+ "kpis": [
+  {
+   "id": "users_arpu_take_rate",
+   "name_en": "Users, ARPU & Take Rate",
+   "name_zh": "用户规模、ARPU 与货币化率",
+   "definition_and_formula": "DAU/MAU/DAP or paid subs YoY/QoQ; ARPU = Segment Revenue / Avg Users; Take Rate = Net Revenue / GMV",
+   "preferred_tools": [
+    "sec_filing_sections",
+    "sec_earnings_release",
+    "earnings_transcript"
+   ],
+   "where_to_look": "MD&A Operational Metrics, 8-K 99.1 KPI table & earnings call",
+   "red_flags": [
+    "Core geography user growth stalling while ARPU relies solely on ad load",
+    "Take rate compression or removal of previously reported user/engagement metric"
+   ],
+   "required": true
+  },
+  {
+   "id": "ad_volume_vs_price",
+   "name_en": "Ad Impressions vs Price per Ad",
+   "name_zh": "广告展示量与单价拆解",
+   "definition_and_formula": "Ad Revenue YoY growth decomposed into Impressions YoY % and Average Price per Ad / CPM YoY %",
+   "preferred_tools": [
+    "sec_filing_sections",
+    "earnings_transcript",
+    "sec_fulltext_search"
+   ],
+   "where_to_look": "MD&A Revenue Drivers & earnings call prepared remarks/Q&A",
+   "red_flags": [
+    "Price-per-ad turning negative while impression growth slows",
+    "Monetization shift toward lower-CPM surfaces without offsetting conversion lift"
+   ],
+   "required": true
+  },
+  {
+   "id": "ai_capex_depreciation",
+   "name_en": "AI CapEx & Depreciation Useful-Life Cycle",
+   "name_zh": "AI 资本开支与折旧周期",
+   "definition_and_formula": "CapEx / Revenue %, D&A growth vs Revenue growth, and server/network useful-life accounting changes",
+   "preferred_tools": [
+    "earnings_quality_diagnostics",
+    "sec_redline_diff",
+    "sec_filing_tables"
+   ],
+   "where_to_look": "Cash flow statement, PP&E Note (R*.htm), Critical Accounting Estimates redline",
+   "red_flags": [
+    "CapEx/Revenue jumping while FCF margin drops and D&A lags CapEx surge",
+    "Server useful-life extension inflating GAAP operating margin"
+   ],
+   "required": true
+  },
+  {
+   "id": "tac_margin",
+   "name_en": "Traffic Acquisition Costs (TAC) & Content Spend",
+   "name_zh": "流量获取成本 (TAC) 与内容分成",
+   "definition_and_formula": "TAC % = TAC / Ad or Partner Revenue; ex-TAC net revenue growth & gross-vs-net accounting basis",
+   "preferred_tools": [
+    "sec_filing_tables",
+    "sec_filing_sections",
+    "calculate_financials"
+   ],
+   "where_to_look": "COGS / Revenue Note (R*.htm) & MD&A cost of revenue discussion",
+   "red_flags": [
+    "TAC % rising >= 100bps YoY signaling distribution/partner bargaining pressure",
+    "Gross vs net revenue recognition shift inflating top-line growth"
+   ],
+   "required": false
+  }
+ ],
+ "filing_focus": [
+  "Disaggregated Revenue by Ad / Cloud / Platform & Geography (R*.htm)",
+  "PP&E Useful Life & Depreciation Estimates (sec_redline_diff)",
+  "sec_fulltext_search for 'impressions', 'traffic acquisition', 'useful life', 'regulatory'"
+ ],
+ "counter_evidence_angles": [
+  {
+   "angle": "AI CapEx wave outrunning monetization and compressing FCF conversion",
+   "evidence_anchor": "CapEx/Rev surge + D&A ramp or FCF/NI drop in earnings_quality_diagnostics",
+   "next_quarter_trigger": "Next-Q CapEx guidance raised again while revenue growth decelerates"
+  },
+  {
+   "angle": "Useful-life depreciation extension or rising TAC masking underlying margin erosion",
+   "evidence_anchor": "sec_redline_diff PP&E useful-life policy change or TAC/Rev bps expansion",
+   "next_quarter_trigger": "Next-Q ex-TAC gross margin or D&A-adjusted operating margin falls YoY"
+  }
+ ],
+ "unit_and_period_checks": [
+  "DAU vs MAU vs monetizable user definitions kept distinct",
+  "Gross GMV/revenue vs net ex-TAC revenue distinguished",
+  "Constant-currency vs reported ad/ARPU growth separated"
+ ],
+ "reconciliation": [
+  {
+   "metric": "Ad Revenue vs Volume*Price",
+   "source_classes": [
+    "MD&A disclosures",
+    "8-K 99.1 / call remarks"
+   ],
+   "note": "verify implied ad revenue growth ties to disclosed impression and price % deltas"
+  },
+  {
+   "metric": "CapEx & D&A Bridge",
+   "source_classes": [
+    "cash flow statement",
+    "PP&E Note R*.htm"
+   ],
+   "note": "include finance-lease additions alongside cash CapEx"
+  }
+ ],
+ "limits": [
+  "Several platforms disclose impression/price deltas qualitatively or omit TAC outside ad-network segments"
+ ]
+}

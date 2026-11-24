@@ -1,0 +1,127 @@
+{
+ "id": "kpi_semis_hardware",
+ "version": "1.0.0",
+ "layer": "l2_industry_kpi",
+ "parent_pack_id": "earnings_review",
+ "title_zh": "半导体、硬件与AI算力基础设施 KPI",
+ "title_en": "Semiconductors, Hardware & AI Infra KPIs",
+ "sector_scope": "Semiconductors, Foundry/Semicap, Networking, Servers & Computing Hardware (SEC SIC 3559, 3570-3579, 3661-3679, 3690-3699, 3825-3829)",
+ "sic_major_groups": [
+  "35",
+  "36",
+  "38"
+ ],
+ "kpis": [
+  {
+   "id": "segment_gm_cycle",
+   "name_en": "Segment Gross Margin Cycle",
+   "name_zh": "分部毛利率周期",
+   "definition_and_formula": "Segment & consolidated GM YoY/QoQ bps bridge separating mix, ASP, fab utilization, yield ramp & write-downs",
+   "preferred_tools": [
+    "sec_filing_tables",
+    "earnings_quality_diagnostics",
+    "earnings_transcript"
+   ],
+   "where_to_look": "Segment Information & MD&A Gross Margin tables (R*.htm / 8-K 99.1)",
+   "red_flags": [
+    "Gross margin down > 200bps YoY or sequential GM guidance miss",
+    "Margin compression from initial product ramp yield drag or price concessions"
+   ],
+   "required": true
+  },
+  {
+   "id": "dio_inventory_cycle",
+   "name_en": "DIO & Inventory Cycle Breakdown",
+   "name_zh": "存货周转天数 (DIO) 与库存周期",
+   "definition_and_formula": "DIO = (Inventory / COGS) * period_days; Inventory vs COGS growth pp gap; raw/WIP/finished-goods mix",
+   "preferred_tools": [
+    "earnings_quality_diagnostics",
+    "sec_filing_tables",
+    "sec_filing_sections"
+   ],
+   "where_to_look": "Balance sheet, Inventory Note (R*.htm) & MD&A channel commentary",
+   "red_flags": [
+    "Inventory growth leading COGS growth > 15pp or DIO spiking QoQ",
+    "Finished goods surging relative to WIP/raw materials or rising obsolescence reserves"
+   ],
+   "required": true
+  },
+  {
+   "id": "capex_rd_intensity",
+   "name_en": "CapEx & R&D Intensity",
+   "name_zh": "资本开支与研发强度",
+   "definition_and_formula": "CapEx / Revenue %, R&D / Revenue %, purchase commitments & depreciation lag vs cycle peak",
+   "preferred_tools": [
+    "earnings_quality_diagnostics",
+    "sec_filing_tables",
+    "sec_filing_sections"
+   ],
+   "where_to_look": "Cash flow statement, Commitments & Contingencies Note (R*.htm)",
+   "red_flags": [
+    "Unconditional wafer/capacity purchase obligations rising while backlog slows",
+    "R&D cut sharply to defend near-term EPS or CapEx/Rev surging near peak margins"
+   ],
+   "required": true
+  },
+  {
+   "id": "customer_concentration_export",
+   "name_en": "Customer Concentration, Export & Tariffs",
+   "name_zh": "客户集中度与出口管制/关税披露",
+   "definition_and_formula": "Share of revenue/AR from >=10% customers plus export license, tariff & geographic revenue shifts",
+   "preferred_tools": [
+    "sec_filing_tables",
+    "sec_redline_diff",
+    "sec_fulltext_search"
+   ],
+   "where_to_look": "Concentration/Segment/Geography Notes & Item 1A Risk Factors redline diff",
+   "red_flags": [
+    "Top customer >= 25% of revenue/AR or single hyperscaler CapEx pause",
+    "New Item 1A/MD&A export restriction, China/restricted-region revenue loss or tariff hit"
+   ],
+   "required": true
+  }
+ ],
+ "filing_focus": [
+  "Segment Information & Geographic Revenue Breakdown (R*.htm)",
+  "Inventory Components & Purchase Commitments Notes (R*.htm)",
+  "sec_fulltext_search for 'export', 'tariff', 'inventory', 'concentration', 'backlog'"
+ ],
+ "counter_evidence_angles": [
+  {
+   "angle": "Peak-cycle inventory build & gross margin mean-reversion risk",
+   "evidence_anchor": "DIO/inventory growth vs COGS > +15pp flag or segment GM guidance below consensus",
+   "next_quarter_trigger": "Next-Q DIO rises further QoQ or guided GM drops >= 100bps sequentially"
+  },
+  {
+   "angle": "Export control, tariff, or hyperscaler customer concentration shock",
+   "evidence_anchor": "sec_redline_diff Risk/MD&A export/tariff addition or >=10% customer AR/revenue concentration note",
+   "next_quarter_trigger": "Next-Q restricted-region revenue decline or top-customer order deferral disclosed"
+  }
+ ],
+ "unit_and_period_checks": [
+  "DIO computed on annualized quarter (91.25d) vs annual (365d) consistently",
+  "Sell-in vs sell-through channel inventory distinguished; purchase obligations off-balance-sheet noted",
+  "Geographic revenue by ship-to vs end-customer headquarters distinguished"
+ ],
+ "reconciliation": [
+  {
+   "metric": "Inventory & Cost of Revenue",
+   "source_classes": [
+    "3-statement XBRL",
+    "Inventory Note R*.htm"
+   ],
+   "note": "verify write-down/reserve charges inside COGS vs opex"
+  },
+  {
+   "metric": "Segment Revenue & Margin",
+   "source_classes": [
+    "Segment Note R*.htm",
+    "8-K 99.1"
+   ],
+   "note": "reconcile corporate unallocated costs and intersegment eliminations"
+  }
+ ],
+ "limits": [
+  "Channel distributor inventory and exact backlog cancelability may not be quantified in SEC filings"
+ ]
+}

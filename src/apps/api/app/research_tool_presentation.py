@@ -16,8 +16,23 @@ _GROUPS = {
     'presentation': {'create_chart': (), 'create_table': ()},
     'documents': {'read_pages': (), 'extract_statements': (), 'request_ocr': ('pdf_ocr_on_demand',)},
     'market': {'analyze_market_series': (), 'market_data': ('market_data_available', 'cn_market_data_available', 'hk_market_data_available')},
-    'disclosures': {'company_financials': ('sec_financials_available', 'cn_financials_available'),
-                    'filings': ('filings_available',), 'issuer_documents': ('issuer_documents_available',)},
+    'disclosures': {
+        'company_financials': ('sec_financials_available', 'cn_financials_available'),
+        'filings': ('filings_available',),
+        'issuer_documents': ('issuer_documents_available',),
+        'sec_earnings_release': ('filings_available',),
+        'sec_filing_tables': ('filings_available',),
+        'sec_filing_sections': (),
+        'sec_redline_diff': (),
+        'sec_fulltext_search': ('filings_available',),
+    },
+    'earnings_analysis': {
+        'earnings_consensus': ('earnings_consensus_available',),
+        'earnings_transcript': ('earnings_transcript_available',),
+        'earnings_quality_diagnostics': (),
+        'guidance_and_nongaap_reconciler': (),
+        'valuation_and_implied_expectations': (),
+    },
     'external_sources': {'acquire_sources': ('acquire_available',), 'news_search': ('news_search_available',)},
 }
 _DEFERRED = {name for group in _GROUPS.values() for name in group}

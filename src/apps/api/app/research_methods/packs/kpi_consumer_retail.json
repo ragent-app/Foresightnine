@@ -1,0 +1,138 @@
+{
+ "id": "kpi_consumer_retail",
+ "version": "1.0.0",
+ "layer": "l2_industry_kpi",
+ "parent_pack_id": "earnings_review",
+ "title_zh": "消费与零售行业 KPI",
+ "title_en": "Consumer & Retail KPIs",
+ "sector_scope": "Brick-and-Mortar & E-Commerce Retail, Restaurants, Apparel/Footwear & Consumer Packaged Goods (SEC SIC major groups 20-21, 23, 284x, 3021, 314x, 52-59)",
+ "sic_major_groups": [
+  "20",
+  "21",
+  "23",
+  "28",
+  "30",
+  "31",
+  "52",
+  "53",
+  "54",
+  "55",
+  "56",
+  "57",
+  "58",
+  "59"
+ ],
+ "kpis": [
+  {
+   "id": "sssg_traffic_ticket",
+   "name_en": "Same-Store Sales Growth (SSSG / Comps)",
+   "name_zh": "同店销售增速 (客流与客单价拆解)",
+   "definition_and_formula": "Comparable store/system sales YoY % decomposed into Traffic (transactions) % and Average Ticket (ASP/basket) %",
+   "preferred_tools": [
+    "sec_earnings_release",
+    "sec_filing_sections",
+    "earnings_transcript"
+   ],
+   "where_to_look": "8-K 99.1 Operational Highlights, MD&A Comps table & call Q&A",
+   "red_flags": [
+    "Negative traffic masked only by pricing/ticket increases",
+    "Comps slowing sharply or turning negative across core banner"
+   ],
+   "required": true
+  },
+  {
+   "id": "store_count_unit_econ",
+   "name_en": "Store Count & Unit Economics",
+   "name_zh": "门店净增与单店经济模型",
+   "definition_and_formula": "Net store openings/closures, digital/e-commerce mix %, sales per store or sq ft & new-store/franchise economics",
+   "preferred_tools": [
+    "sec_filing_tables",
+    "sec_filing_sections",
+    "sec_fulltext_search"
+   ],
+   "where_to_look": "MD&A Store Rollforward table, 10-K/10-Q Segment/Channel disclosures",
+   "red_flags": [
+    "Store closures accelerating or impairment/lease-exit charges rising",
+    "E-commerce growth dilutive to store-level EBIT margin"
+   ],
+   "required": true
+  },
+  {
+   "id": "gm_pricing_vs_promo",
+   "name_en": "Gross Margin: Pricing vs Promo & Shrink",
+   "name_zh": "毛利率拆解：提价 vs 促销与损耗",
+   "definition_and_formula": "GM YoY bps bridge decomposing price/mix, markdown/promotional intensity, freight/input deflation & shrink",
+   "preferred_tools": [
+    "earnings_quality_diagnostics",
+    "sec_filing_sections",
+    "earnings_transcript"
+   ],
+   "where_to_look": "MD&A Gross Margin commentary & earnings call Q&A",
+   "red_flags": [
+    "Gross margin down > 100bps due to promotional markdowns or elevated shrink",
+    "Volume elasticity weakening after cumulative price hikes"
+   ],
+   "required": true
+  },
+  {
+   "id": "inventory_turnover_dio",
+   "name_en": "Inventory Turnover & Working Capital",
+   "name_zh": "存货周转率与营运资本",
+   "definition_and_formula": "Inventory Turnover = TTM COGS / Avg Inventory; DIO delta YoY; Inventory growth vs Revenue/COGS growth (pp gap)",
+   "preferred_tools": [
+    "earnings_quality_diagnostics",
+    "sec_filing_tables",
+    "calculate_financials"
+   ],
+   "where_to_look": "Balance sheet & Inventory/Working Capital notes (R*.htm)",
+   "red_flags": [
+    "Inventory growth > COGS/Revenue growth by > 10-15pp ahead of soft comps",
+    "LIFO/markdown reserve buildup or extended DPO masking cash squeeze"
+   ],
+   "required": true
+  }
+ ],
+ "filing_focus": [
+  "Store Count Rollforward & Comparable Sales Definition (MD&A / 8-K 99.1)",
+  "Operating Lease Liabilities & Store Impairment Notes (R*.htm)",
+  "sec_fulltext_search for 'comparable', 'promotional', 'shrink', 'markdown', '53rd week'"
+ ],
+ "counter_evidence_angles": [
+  {
+   "angle": "Inventory overhang forcing next-quarter promotional markdowns",
+   "evidence_anchor": "Inventory vs COGS growth > +15pp flag in earnings_quality_diagnostics + negative traffic comps",
+   "next_quarter_trigger": "Next-Q gross margin drops >= 75bps YoY or management guides higher markdowns"
+  },
+  {
+   "angle": "Price-led comps masking volume/traffic erosion or store impairment risk",
+   "evidence_anchor": "Traffic negative in MD&A/call while SG&A/store deleverages or sec_redline_diff cites impairment",
+   "next_quarter_trigger": "Next-Q comp traffic stays negative or net store openings are cut"
+  }
+ ],
+ "unit_and_period_checks": [
+  "52-week vs 53-week fiscal calendar distortion explicitly adjusted",
+  "Comparable sales definition (e-commerce inclusion, store maturity threshold, constant FX) stated",
+  "Operating lease liabilities & store-opening CapEx distinguished from maintenance CapEx"
+ ],
+ "reconciliation": [
+  {
+   "metric": "Total Revenue Growth vs Comps + Net Units",
+   "source_classes": [
+    "8-K 99.1 / MD&A",
+    "income statement"
+   ],
+   "note": "explain gap from new stores, 53rd week, FX, or wholesale/franchise mix"
+  },
+  {
+   "metric": "Inventory & Gross Margin",
+   "source_classes": [
+    "balance sheet",
+    "MD&A margin bridge"
+   ],
+   "note": "align FIFO/LIFO basis and freight capitalization"
+  }
+ ],
+ "limits": [
+  "Traffic vs ticket split and shrink bps are sometimes disclosed qualitatively only on calls"
+ ]
+}

@@ -38,6 +38,14 @@ from .research_charts import build_research_chart
 from .research_context_manager import _record_failed_attempt, _turn_batch_usage
 from .research_documents import page_for_offset, page_range_to_chars
 from .research_delivery import assess, incomplete
+from .research_earnings_diagnostics import (
+    EarningsQualityRequest,
+    GuidanceAndNonGaapRequest,
+    ValuationRequest,
+    earnings_quality_diagnostics,
+    guidance_and_nongaap_reconciler,
+    valuation_and_implied_expectations,
+)
 from .research_fin_tools import FinDataToolbox
 from .research_item_validator import ItemPersistenceValidationError, validate_research_item
 from .research_library import ResearchLibrary
@@ -167,7 +175,10 @@ def _fold_char(ch: str) -> str:
 
 _NORMALIZE_MAX_SOURCE_CHARS = 8_000_000
 _ISO_CURRENCY_LIKE_RE = re.compile(r'^[A-Z]{3}$')
-_STRUCTURED_RETRIEVAL_METHODS = frozenset({'market_data', 'sec_companyfacts', 'sec_companyconcept', 'structured_financials'})
+_STRUCTURED_RETRIEVAL_METHODS = frozenset({
+    'market_data', 'sec_companyfacts', 'sec_companyconcept', 'structured_financials',
+    'sec_filing_table', 'fmp_consensus',
+})
 
 
 def _normalize_with_map(text: str) -> tuple[str, list[int], list[int]]:
@@ -1221,7 +1232,7 @@ def _user_available_capabilities(state: Mapping[str, Any], fin_data: FinDataTool
                 return dict(parsed['available_capabilities'])
         except (TypeError, ValueError):
             pass
-    return fin_data.capabilities() if fin_data is not None else {}
+    return {**fin_data.capabilities(), **fin_data.earnings_capabilities()} if fin_data is not None else {}
 
 
 def locate_quotation(
@@ -2210,6 +2221,14 @@ def _exec_fin_tool(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallR
         key = spec.key
     elif name == 'company_financials':
         key = ctx.fin_data.financials_key(inv.req)
+    elif name == 'sec_earnings_release':
+        key = ctx.fin_data.earnings_release_key(inv.req)
+    elif name == 'sec_filing_tables':
+        key = ctx.fin_data.filing_tables_key(inv.req)
+    elif name == 'earnings_consensus':
+        key = ctx.fin_data.earnings_consensus_key(inv.req)
+    elif name == 'earnings_transcript':
+        key = ctx.fin_data.earnings_transcript_key(inv.req)
     if key is not None:
         ids = ctx.reusable_ids(key)
         if ids:
@@ -2223,14 +2242,35 @@ def _exec_fin_tool(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallR
         'started_at': inv.started_at,
     }
     ctx.save()
+    eligible_sources = (
+        {sid: src for sid, src in ctx.source_by_id.items() if source_eligibility([src], ctx.as_of)[0][1] == 'eligible'}
+        if name in ('sec_filing_sections', 'sec_redline_diff')
+        else None
+    )
     if name == 'resolve_entity':
         produced = ctx.fin_data.resolve_entity(inv.req, entities)
     elif name == 'market_data':
         produced = ctx.fin_data.market_data(spec)
     elif name == 'company_financials':
         produced = ctx.fin_data.company_financials(inv.req, entities)
-    else:
+    elif name == 'filings':
         produced = ctx.fin_data.filings(inv.req, entities)
+    elif name == 'sec_earnings_release':
+        produced = ctx.fin_data.sec_earnings_release(inv.req, entities)
+    elif name == 'sec_filing_tables':
+        produced = ctx.fin_data.sec_filing_tables(inv.req, entities)
+    elif name == 'sec_filing_sections':
+        produced = ctx.fin_data.sec_filing_sections(inv.req, entities, source_by_id=eligible_sources)
+    elif name == 'sec_redline_diff':
+        produced = ctx.fin_data.sec_redline_diff(inv.req, source_by_id=eligible_sources)
+    elif name == 'sec_fulltext_search':
+        produced = ctx.fin_data.sec_fulltext_search(inv.req, entities)
+    elif name == 'earnings_consensus':
+        produced = ctx.fin_data.earnings_consensus(inv.req, entities)
+    elif name == 'earnings_transcript':
+        produced = ctx.fin_data.earnings_transcript(inv.req, entities)
+    else:
+        raise ValueError(f'Unsupported financial tool {name!r}.')
     ctx.state['pending'] = ctx.tool_batch_pending(inv.index, started_at=inv.started_at)
     result = produced.result
     if name == 'company_financials' and (result.get('status') == 'empty' or result.get('reason') in {'no_xbrl_facts', 'no_matching_lines', 'tag_not_reported', 'unit_or_period_not_found_in_returned_records'}):
@@ -2678,6 +2718,44 @@ def _exec_analyze_market_series(ctx: ToolExecutionContext, inv: _CallInvocation)
         'latest_close': analysis['latest_close'],
     }
     return ToolCallResult(result={'status': 'ok', 'analysis_id': analysis_id, **analysis}, summary=summary)
+
+
+_EARNINGS_DIAGNOSTIC_RUNNERS: dict[str, tuple[type[BaseModel], Callable[[Any], BaseModel]]] = {
+    'earnings_quality_diagnostics': (EarningsQualityRequest, earnings_quality_diagnostics),
+    'guidance_and_nongaap_reconciler': (GuidanceAndNonGaapRequest, guidance_and_nongaap_reconciler),
+    'valuation_and_implied_expectations': (ValuationRequest, valuation_and_implied_expectations),
+}
+
+
+def _exec_earnings_diagnostic(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallResult:
+    """Execute one deterministic earnings diagnostic tool cleanly."""
+    name = inv.call.name
+    pair = _EARNINGS_DIAGNOSTIC_RUNNERS.get(name)
+    if pair is None:
+        raise ValueError(f'Unknown earnings diagnostic tool {name!r}.')
+    request_cls, runner = pair
+    payload_args = inv.req.model_dump(mode='python', exclude={'rationale'})
+    inner_req = request_cls.model_validate(payload_args)
+    diagnostic = runner(inner_req)
+    rendered = diagnostic.model_dump(mode='json')
+    req_dumped = inv.req.model_dump(mode='json')
+    digest = sha256(
+        json.dumps({'tool': name, 'request': req_dumped, 'result': rendered}, sort_keys=True, ensure_ascii=False, default=str).encode()
+    ).hexdigest()[:32]
+    analysis_id = f'earnings-diag-{digest}'
+    recorded = {'analysis_id': analysis_id, 'tool': name, 'request': req_dumped, 'result': rendered}
+    bucket = ctx.state.setdefault('earnings_diagnostics', [])
+    if not any(isinstance(item, Mapping) and item.get('analysis_id') == analysis_id for item in bucket):
+        bucket.append(recorded)
+    summary = {
+        'kind': 'earnings_diagnostic',
+        'tool': name,
+        'analysis_id': analysis_id,
+        'entity_id': rendered.get('entity_id'),
+        'symbol': _clip(rendered.get('symbol'), 32) if isinstance(rendered.get('symbol'), str) else None,
+        'status': 'ok',
+    }
+    return ToolCallResult(result={'status': 'ok', 'analysis_id': analysis_id, **rendered}, summary=summary)
 
 
 def _exec_activate_tool_group(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallResult:
@@ -3573,6 +3651,16 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     'market_data': _exec_fin_tool,
     'company_financials': _exec_fin_tool,
     'filings': _exec_fin_tool,
+    'sec_earnings_release': _exec_fin_tool,
+    'sec_filing_tables': _exec_fin_tool,
+    'sec_filing_sections': _exec_fin_tool,
+    'sec_redline_diff': _exec_fin_tool,
+    'sec_fulltext_search': _exec_fin_tool,
+    'earnings_consensus': _exec_fin_tool,
+    'earnings_transcript': _exec_fin_tool,
+    'earnings_quality_diagnostics': _exec_earnings_diagnostic,
+    'guidance_and_nongaap_reconciler': _exec_earnings_diagnostic,
+    'valuation_and_implied_expectations': _exec_earnings_diagnostic,
     'issuer_documents': _exec_issuer_documents,
     'record_facts': _exec_record_facts,
     'calculate_financials': _exec_calculate_financials,

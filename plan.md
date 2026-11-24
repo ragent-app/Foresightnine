@@ -174,6 +174,15 @@ S0 由主 Agent 统筹，交给 Sonnet 子 Agent 实施。
 
 每个阶段的验收都按方案第 9 节进行：先通过离线测试，再做每次只改一个变量的受控真实复验。这些规划不代表 M1 已完成，也不代表阶段 B 的质量已通过。
 
+### 11. 2026-11-24 补充规划：方向 A 美股单公司财报深度拆解与买方投研小组架构（待审阅/待实施）
+
+为在保持通用金融研究底座的前提下于单一高价值垂类做到极强，确立**方向 A（单公司美股非金融财报深度拆解：10-Q / 10-K / 8-K）**作为阶段 B 突破与后续衔接阶段 C（季度持续跟踪）的标杆主攻方向。完整架构与分阶段实施设计见[方向 A 美股单公司财报深度拆解设计方案](src/docs/product/us-earnings-vertical-direction-a-plan-2026-11-24.md)（当前仅沉淀文档，尚未修改代码）：
+
+- **A1（数据与诊断引擎）**：补齐 SEC `8-K Exhibit 99.1` 双期直取、`FilingSummary.xml + R*.htm` 分部与附注直表、10-K/10-Q 章节导航与跨期 Redline Diff、限定 CIK 范围的 `EFTS` 全文检索；建立一致预期与电话会纪要统一接口（首期适配 FMP，凭据沿用 Twelve Data 策略）；新增确定性盈利质量排雷（红/黄/绿灯，不做黑箱总分）、指引兑现与 Non-GAAP 核对、基础估值倍数 + Reverse-DCF 隐含增速（代码识别银行/保险/REITs 并标注边界）。
+- **A2（买方投研小组编排）**：采用有界主从式并行架构（`Stage 0 确定性预热` → `Stage 1 Lead 规划` → `Stage 2 3 个并行只读专题 Worker` → `Stage 2.5 跨 Worker 交叉补证，硬上限 1 轮` → `Stage 3A 独立空头对抗审查` → `Stage 3B 锁定底稿 + 服务端门控渲染`）；支持 **4 个逻辑模型槽位**（`fast_extractor` / `deep_reasoner` / `bear_reviewer` / `writer`，未配时自动回落主模型）、**5 大非金融行业 KPI 方法包**（软件/云、半导体/硬件、互联网/广告、消费/零售、医药/生物科技）、子任务级断点恢复与 Lead 定向 Mid-run Steering；双档位（Memo 默认首出，Deep Report 基于同一锁定底稿按需生成并缓存）。
+- **A3（并行可视化 UI 与多格式导出）**：对标公开仓库 `ragent-app/Ragent_product` 的 `android/feature/organization/`，在 Web 端实现 Focus Tree 并行组织图与点击节点简洁过程日志抽屉、Memo/Deep Report 双档底稿视图，以及 Markdown / CSV / Excel（`.xlsx`）多 Sheet 导出（受来源 `export` 权限约束）。
+- **A4（黄金评测与阶段 B 出口）**：构建 20–25 道真实美股财报高难度评测集，在受控实验下对照旧单协调者与通用大模型 + 搜索，验证四维质量与多 Worker 真实收益。
+
 ---
 
 

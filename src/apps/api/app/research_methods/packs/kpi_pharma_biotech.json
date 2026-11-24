@@ -1,0 +1,129 @@
+{
+ "id": "kpi_pharma_biotech",
+ "version": "1.0.0",
+ "layer": "l2_industry_kpi",
+ "parent_pack_id": "earnings_review",
+ "title_zh": "医药与生物科技行业 KPI",
+ "title_en": "Pharma & Biotech KPIs",
+ "sector_scope": "Biopharma, Specialty Pharma, Biotech & Medical Devices/Labs (SEC SIC 2830-2836, 3841-3845, 3851, 8071, 8731)",
+ "sic_major_groups": [
+  "28",
+  "38",
+  "80",
+  "87"
+ ],
+ "kpis": [
+  {
+   "id": "pipeline_clinical_milestones",
+   "name_en": "Pipeline & Clinical/Regulatory Milestones",
+   "name_zh": "管线推进与临床/监管里程碑",
+   "definition_and_formula": "Phase 1/2/3 readout dates, NDA/BLA/PDUFA timelines, label expansions & trial discontinuation/hold updates",
+   "preferred_tools": [
+    "sec_earnings_release",
+    "sec_filing_sections",
+    "sec_redline_diff",
+    "earnings_transcript"
+   ],
+   "where_to_look": "8-K 99.1 Pipeline table, 10-K/10-Q Business/MD&A & Risk Factors redline",
+   "red_flags": [
+    "Delayed readout/PDUFA date, clinical hold, or primary endpoint miss",
+    "Acquired IPR&D or intangible impairment following trial setback"
+   ],
+   "required": true
+  },
+  {
+   "id": "product_concentration_loe",
+   "name_en": "Product Concentration & LOE / Patent Cliff",
+   "name_zh": "核心品种集中度与专利悬崖 (LOE)",
+   "definition_and_formula": "Top 1 & Top 3 drugs as % of product sales; key patent expiry / biosimilar / generic / IRA negotiation dates",
+   "preferred_tools": [
+    "sec_filing_tables",
+    "sec_filing_sections",
+    "sec_fulltext_search"
+   ],
+   "where_to_look": "Disaggregated Product Sales table (R*.htm), 10-K Patent/LOE disclosures",
+   "red_flags": [
+    "Single asset > 40% of product sales approaching LOE within 3 years",
+    "Legacy franchise eroding faster than new-launch ramp can offset"
+   ],
+   "required": true
+  },
+  {
+   "id": "rd_burn_cash_runway",
+   "name_en": "R&D Burn & Cash Runway",
+   "name_zh": "研发烧钱速度与现金跑道",
+   "definition_and_formula": "Cash + Marketable Securities / Annualized Quarterly Operating Cash Burn (for unprofitable biotech: quarters of runway)",
+   "preferred_tools": [
+    "earnings_quality_diagnostics",
+    "sec_filing_sections",
+    "calculate_financials"
+   ],
+   "where_to_look": "Balance Sheet, Cash Flow, Liquidity & Capital Resources section",
+   "red_flags": [
+    "Cash runway < 6 quarters ahead of pivotal Phase 3 readout without partner funding",
+    "Frequent ATM equity issuance / convertible dilution or going-concern language"
+   ],
+   "required": true
+  },
+  {
+   "id": "gross_to_net_payer_mix",
+   "name_en": "Gross-to-Net (GTN) & Payer Mix",
+   "name_zh": "总收入到净收入折扣 (GTN) 与支付方结构",
+   "definition_and_formula": "Volume vs Net Realized Price %; GTN rebate/chargeback/340B/Medicaid/Medicare Part D mix impact on net sales",
+   "preferred_tools": [
+    "sec_filing_tables",
+    "sec_filing_sections",
+    "earnings_transcript"
+   ],
+   "where_to_look": "Revenue Recognition & GTN Accrual Rollforward Note (R*.htm), MD&A, call Q&A",
+   "red_flags": [
+    "GTN rebate accruals expanding faster than gross scripts, compressing net realization",
+    "Headline revenue beat driven by one-time upfront/milestone collaboration fees rather than Rx volume"
+   ],
+   "required": false
+  }
+ ],
+ "filing_focus": [
+  "Product-by-Product Net Sales & Revenue Disaggregation (R*.htm)",
+  "Gross-to-Net Rebate/Chargeback Accruals & Acquired IPR&D Notes (R*.htm)",
+  "sec_fulltext_search for 'patent', 'exclusivity', 'biosimilar', 'clinical hold', 'gross-to-net'"
+ ],
+ "counter_evidence_angles": [
+  {
+   "angle": "LOE cliff or GTN rebate expansion outpacing new product launches",
+   "evidence_anchor": "Product sales concentration note in R*.htm + sec_redline_diff LOE/IRA or GTN accrual spike",
+   "next_quarter_trigger": "Next-Q net product sales of top franchise decline faster than consensus or GTN discount widens"
+  },
+  {
+   "angle": "Pre-profit biotech cash runway shortfall forcing dilutive equity raise",
+   "evidence_anchor": "Negative FCF/OCF burn in earnings_quality_diagnostics + Liquidity section runway < 6Q",
+   "next_quarter_trigger": "Next-Q quarterly burn widens QoQ or shelf/ATM share dilution exceeds 5%"
+  }
+ ],
+ "unit_and_period_checks": [
+  "Core net product sales separated from one-time collaboration/upfront/milestone & royalty revenue",
+  "Acquired IPR&D expensing vs GAAP R&D normalized consistently across periods and peers",
+  "Clinical cash runway uses cash + short/long-term marketable securities net of restricted cash"
+ ],
+ "reconciliation": [
+  {
+   "metric": "Net Product Sales vs Total Revenue",
+   "source_classes": [
+    "income statement",
+    "Product Revenue Note R*.htm"
+   ],
+   "note": "isolate collaboration/milestone spikes from recurring commercial Rx demand"
+  },
+  {
+   "metric": "GAAP vs Non-GAAP R&D / EPS",
+   "source_classes": [
+    "8-K 99.1 reconciliation",
+    "10-Q/10-K Notes"
+   ],
+   "note": "check whether acquired IPR&D & milestone payments are excluded from Non-GAAP"
+  }
+ ],
+ "limits": [
+  "Exact GTN % and regulatory clinical outcomes carry binary event risk beyond historical statement extrapolation"
+ ]
+}

@@ -56,8 +56,11 @@ STATUS_LABELS = {
 TOOL_CATEGORY: dict[str, str] = {
     "historical_prices": "market_prices", "market_data": "market_prices",
     "company_financials": "financial_statements", "sec_company_concept": "financial_statements", "sec_company_facts": "financial_statements",
+    "earnings_consensus": "financial_statements",
     "filings": "filings", "issuer_documents": "filings", "sec_filings": "filings", "sec_full_text_search": "filings",
-    "news_search": "news_web", "acquire_sources": "news_web",
+    "sec_earnings_release": "filings", "sec_filing_tables": "filings", "sec_filing_sections": "filings",
+    "sec_redline_diff": "filings", "sec_fulltext_search": "filings",
+    "news_search": "news_web", "acquire_sources": "news_web", "earnings_transcript": "news_web",
 }
 _MACRO_TOOL = re.compile(r"^(?:macro|fred|world_?bank|imf|ecb|oecd|bls|census)", re.I)
 _DATA_TOOLS = frozenset(TOOL_CATEGORY)
@@ -67,7 +70,9 @@ REASON_STATUS: dict[str, str] = {
     "source_blocked_terms": "blocked_by_terms",
     "license_platform_key_not_permitted": "license_restricted", "source_not_authorized": "license_restricted",
     "license_restricted": "license_restricted", "not_exportable": "license_restricted", "source_not_storable": "license_restricted",
-    "market_data_key_required": "tool_unavailable", "fin_data_unavailable": "tool_unavailable", "not_in_policy": "tool_unavailable",
+    "market_data_key_required": "tool_unavailable", "byok_key_required": "tool_unavailable", "api_key_not_configured": "tool_unavailable",
+    "sec_contact_unconfigured_or_unavailable": "tool_unavailable",
+    "fin_data_unavailable": "tool_unavailable", "not_in_policy": "tool_unavailable",
     "invalid_api_key": "tool_unavailable", "provider_plan_restriction": "tool_unavailable", "daily_quota_exhausted": "tool_unavailable",
     "provider_rate_limited": "tool_unavailable", "rate_limited": "tool_unavailable", "time_budget": "tool_unavailable",
     "budget_exhausted": "tool_unavailable", "cost_unknown": "tool_unavailable", "provider_unavailable": "tool_unavailable",
@@ -75,6 +80,8 @@ REASON_STATUS: dict[str, str] = {
     "no_bars": "not_found", "symbol_not_found": "not_found", "no_matching_filings": "not_found", "no_xbrl_facts": "not_found",
     "tag_not_reported": "not_found", "no_matching_lines": "not_found", "entity_not_found": "not_found", "cik_not_found": "not_found",
     "no_sec_filings_for_entity": "not_found", "search_no_results": "not_found", "not_found": "not_found",
+    "no_consensus_data": "not_found", "ticker_uncovered": "not_found", "transcript_not_found": "not_found", "transcript_unavailable": "not_found",
+    "no_earnings_releases": "not_found", "missing_exhibits": "not_found", "no_filing_reports": "not_found", "no_sections_matched": "not_found",
     "unit_or_period_not_found_in_returned_records": "not_found", "range_after_latest_session": "not_found",
     "search_sources_denied": "not_found", "lead_not_discovered": "not_found",
 }
@@ -234,6 +241,14 @@ def _category_of_source(src: Mapping[str, Any], action_tool: str | None, issuer_
     prov = src.get("provenance") if isinstance(src.get("provenance"), Mapping) else {}
     host = _host(src.get("url"))
     title = _str(src.get("title")) or ""
+    if method == "fmp_consensus" or action_tool == "earnings_consensus":
+        return "financial_statements"
+    if method == "fmp_transcript" or action_tool == "earnings_transcript":
+        return "news_web"
+    if method in ("sec_earnings_release", "sec_filing_table", "sec_filing_sections") or action_tool in (
+        "sec_earnings_release", "sec_filing_tables", "sec_filing_sections", "sec_redline_diff", "sec_fulltext_search",
+    ):
+        return "filings"
     if kind == "market_data" or method in ("market_data", "historical_prices") or action_tool in ("historical_prices", "market_data") \
             or prov.get("provider") == "twelve_data":
         return "market_prices"

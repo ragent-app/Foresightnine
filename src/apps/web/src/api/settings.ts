@@ -41,6 +41,66 @@ export interface ChatGenerationParameters {
   seed?: number;
 }
 
+export type ModelSlot = "fast_extractor" | "deep_reasoner" | "bear_reviewer" | "writer";
+
+export interface ModelSlotBinding {
+  deployment_ref?: string | null;
+  protocol?: ModelProtocol | null;
+  base_url?: string | null;
+  model?: string | null;
+  credential_ref?: string | null;
+  endpoint_version?: string | null;
+  generation_parameters?: ChatGenerationParameters | null;
+  messages_auth_scheme?: MessagesOptions["auth_scheme"] | null;
+  messages_max_tokens?: number | null;
+  messages_effort?: string | null;
+  tools_verified?: boolean | null;
+  allow_private_network?: boolean;
+}
+
+export interface ModelSlotConfig {
+  fast_extractor?: ModelSlotBinding | null;
+  deep_reasoner?: ModelSlotBinding | null;
+  bear_reviewer?: ModelSlotBinding | null;
+  writer?: ModelSlotBinding | null;
+}
+
+export interface SlotSummaryItem {
+  slot: ModelSlot;
+  role: string;
+  configured: boolean;
+  fallback_used: boolean;
+  source: "slot_override" | "primary_fallback";
+  protocol?: ModelProtocol | null;
+  base_url?: string | null;
+  endpoint_host?: string | null;
+  model?: string | null;
+  deployment_ref?: string | null;
+  credential_ref?: string | null;
+  capability_source?: string;
+  mode?: string | null;
+  native_tools_required?: boolean;
+  native_tools_supported?: boolean | null;
+  capability_valid?: boolean;
+  validation_errors?: string[];
+  context_tokens?: number | null;
+  output_tokens?: number | null;
+  input_counter?: string | null;
+  differs_from_primary?: boolean;
+  generation_parameters?: ChatGenerationParameters | null;
+}
+
+export interface SlotRoutingSummary {
+  schema_version: "v1";
+  is_valid: boolean;
+  cross_family_bear_review: boolean;
+  configured_slots: ModelSlot[];
+  fallback_slots: ModelSlot[];
+  heterogeneous_slots: ModelSlot[];
+  errors: string[];
+  slots: Record<ModelSlot, SlotSummaryItem>;
+}
+
 export interface ModelConfig {
   schema_version: "v1";
   mode: "platform" | "personal";
@@ -52,6 +112,8 @@ export interface ModelConfig {
   messages_options?: MessagesOptions;
   generation_parameters?: ChatGenerationParameters;
   research_tools_verified_at?: string;
+  model_slots?: ModelSlotConfig | null;
+  model_slots_summary?: SlotRoutingSummary | null;
   updated_at?: string;
 }
 
@@ -64,6 +126,8 @@ export interface ModelConfigUpdate {
   clear_api_key?: boolean;
   messages_options?: MessagesOptions;
   generation_parameters?: ChatGenerationParameters;
+  model_slots?: ModelSlotConfig | null;
+  clear_model_slots?: boolean;
 }
 
 export type ConnectionStatus = "ready" | "unavailable";
@@ -80,10 +144,24 @@ export interface MarketProviderSummary {
   key_hint: string | null;
 }
 
+export type EarningsProviderId = "fmp";
+
+export interface EarningsProviderSummary {
+  provider_id: EarningsProviderId;
+  display_name: string;
+  enabled: boolean;
+  requires_key: boolean;
+  personal_key_configured: boolean;
+  platform_available: boolean;
+  platform_key_allowed: boolean;
+  key_hint: string | null;
+}
+
 export interface MarketDataConfig {
   schema_version: "v1";
   fallback_order: MarketProviderId[];
   providers: MarketProviderSummary[];
+  earnings_providers?: EarningsProviderSummary[];
   updated_at: string | null;
 }
 
@@ -94,9 +172,17 @@ export interface MarketProviderUpdate {
   clear_api_key?: boolean;
 }
 
+export interface EarningsProviderUpdate {
+  provider_id: EarningsProviderId;
+  enabled: boolean;
+  api_key?: string;
+  clear_api_key?: boolean;
+}
+
 export interface MarketDataConfigUpdate {
   fallback_order: MarketProviderId[];
   providers: MarketProviderUpdate[];
+  fmp?: EarningsProviderUpdate;
 }
 
 export const settingsKeys = {
@@ -165,8 +251,10 @@ export function marketUpdateFrom(config: MarketDataConfig, change: {
   order?: MarketProviderId[];
   enabled?: Partial<Record<MarketProviderId, boolean>>;
   key?: { providerId: MarketProviderId; apiKey: string } | { providerId: MarketProviderId; clear: true };
+  fmp?: { enabled?: boolean; apiKey?: string; clear?: true };
 } = {}): MarketDataConfigUpdate {
-  return {
+  const existingFmp = config.earnings_providers?.find((item) => item.provider_id === "fmp");
+  const body: MarketDataConfigUpdate = {
     fallback_order: change.order ?? [...config.fallback_order],
     providers: config.providers.map((provider) => {
       const update: MarketProviderUpdate = { provider_id: provider.provider_id, enabled: change.enabled?.[provider.provider_id] ?? provider.enabled };
@@ -177,6 +265,16 @@ export function marketUpdateFrom(config: MarketDataConfig, change: {
       return update;
     }),
   };
+  if (change.fmp) {
+    const fmpUpdate: EarningsProviderUpdate = {
+      provider_id: "fmp",
+      enabled: change.fmp.enabled ?? existingFmp?.enabled ?? true,
+    };
+    if (change.fmp.clear) fmpUpdate.clear_api_key = true;
+    else if (change.fmp.apiKey !== undefined) fmpUpdate.api_key = change.fmp.apiKey;
+    body.fmp = fmpUpdate;
+  }
+  return body;
 }
 
 export function useAccountSummary() {

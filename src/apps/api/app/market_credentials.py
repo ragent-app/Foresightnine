@@ -7,9 +7,11 @@ from hashlib import sha256
 import os
 from pathlib import Path
 from threading import RLock
-from typing import Any, Literal, Mapping
+from typing import Any, Callable, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from .fin_data.policy import Denied, FMP_ALLOW_PLATFORM_ENV, FMP_CATEGORIES, FinDataPolicy, load_policy as load_fin_data_policy
 
 
 MarketProviderId = Literal["market_data", "alpha_vantage", "twelve_data", "finnhub", "yahoo", "tushare"]
@@ -17,6 +19,9 @@ MARKET_PROVIDER_ORDER: tuple[MarketProviderId, ...] = (
     "market_data", "alpha_vantage", "twelve_data", "finnhub", "yahoo", "tushare",
 )
 KEYED_MARKET_PROVIDERS = frozenset({"market_data", "alpha_vantage", "twelve_data", "finnhub", "tushare"})
+EarningsProviderId = Literal["fmp"]
+FMP_API_KEY_ENV = "FORESIGHTNINE_FMP_API_KEY"
+FMP_ALLOW_PLATFORM_KEY_ENV = FMP_ALLOW_PLATFORM_ENV
 PROVIDER_LABELS: Mapping[str, str] = {
     "market_data": "Market Data",
     "alpha_vantage": "Alpha Vantage",
@@ -50,12 +55,21 @@ class StoredMarketProvider(BaseModel):
     key_hint: str | None = Field(default=None, pattern=r"^••••[A-Za-z0-9]{4}$")
 
 
+class StoredEarningsProvider(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    provider_id: EarningsProviderId = "fmp"
+    enabled: bool = True
+    encrypted_api_key: str | None = Field(default=None, min_length=32, max_length=4096)
+    key_hint: str | None = Field(default=None, pattern=r"^••••[A-Za-z0-9]{4}$")
+
+
 class StoredMarketDataConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     schema_version: Literal["v1"] = "v1"
     account_id: str = Field(min_length=8, max_length=80)
     fallback_order: list[MarketProviderId]
     providers: list[StoredMarketProvider]
+    fmp: StoredEarningsProvider | None = None
     updated_at: datetime
 
     @model_validator(mode="before")
@@ -103,10 +117,27 @@ class MarketProviderUpdate(BaseModel):
         return self
 
 
+class EarningsProviderUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    provider_id: EarningsProviderId = "fmp"
+    enabled: bool = True
+    api_key: str | None = Field(default=None, min_length=8, max_length=512)
+    clear_api_key: bool = False
+
+    @model_validator(mode="after")
+    def validate_key_action(self) -> "EarningsProviderUpdate":
+        if self.api_key is not None and self.clear_api_key:
+            raise ValueError("api_key and clear_api_key are mutually exclusive")
+        if self.api_key is not None and self.api_key != self.api_key.strip():
+            raise ValueError("api_key must not contain surrounding whitespace")
+        return self
+
+
 class MarketDataConfigUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     fallback_order: list[MarketProviderId]
     providers: list[MarketProviderUpdate]
+    fmp: EarningsProviderUpdate | None = None
 
     @model_validator(mode="after")
     def validate_provider_set(self) -> "MarketDataConfigUpdate":
@@ -130,11 +161,24 @@ class MarketProviderSummary(BaseModel):
     key_hint: str | None = Field(default=None, pattern=r"^••••[A-Za-z0-9]{4}$")
 
 
+class EarningsProviderSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    provider_id: EarningsProviderId = "fmp"
+    display_name: str = "Financial Modeling Prep (FMP)"
+    enabled: bool = True
+    requires_key: bool = True
+    personal_key_configured: bool = False
+    platform_available: bool = False
+    platform_key_allowed: bool = False
+    key_hint: str | None = Field(default=None, pattern=r"^••••[A-Za-z0-9]{4}$")
+
+
 class MarketDataConfigResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     schema_version: Literal["v1"] = "v1"
     fallback_order: list[MarketProviderId]
     providers: list[MarketProviderSummary]
+    earnings_providers: list[EarningsProviderSummary] = Field(default_factory=list)
     updated_at: datetime | None = None
 
 
@@ -201,6 +245,66 @@ class AccountMarketDataSettings:
         value = self.repository.get(account_id)
         return value if value is None or isinstance(value, StoredMarketDataConfig) else StoredMarketDataConfig.model_validate(value)
 
+    def _apply_fmp_update(
+        self,
+        account_id: str,
+        existing: StoredMarketDataConfig | None,
+        update: EarningsProviderUpdate | None,
+    ) -> StoredEarningsProvider | None:
+        previous = existing.fmp if existing else None
+        if update is None:
+            return previous
+        encrypted = previous.encrypted_api_key if previous else None
+        hint = previous.key_hint if previous else None
+        if update.clear_api_key:
+            encrypted = None
+            hint = None
+        elif update.api_key is not None:
+            if self.cipher is None:
+                raise MarketCredentialError(503, "market_credential_storage_unavailable", "Market credential storage is unavailable.")
+            encrypted = self.cipher.encrypt(account_id, update.provider_id, update.api_key)
+            hint = _hint(update.api_key)
+        return StoredEarningsProvider(
+            provider_id=update.provider_id,
+            enabled=update.enabled,
+            encrypted_api_key=encrypted,
+            key_hint=hint,
+        )
+
+    def fmp_summary(self, account_id: str, *, env: Mapping[str, str] | None = None, policy: FinDataPolicy | None = None) -> EarningsProviderSummary:
+        stored = self._stored(account_id)
+        record = stored.fmp if stored else None
+        environ = os.environ if env is None else env
+        active_policy = policy if policy is not None else load_fin_data_policy(dict(env) if env is not None else None)
+        platform_allowed = any(
+            not isinstance(active_policy.decide("fmp", category, credential_owner="platform"), Denied)
+            for category in FMP_CATEGORIES
+        )
+        platform_configured = bool((environ.get(FMP_API_KEY_ENV, "") or "").strip())
+        return EarningsProviderSummary(
+            provider_id="fmp",
+            enabled=record.enabled if record else True,
+            personal_key_configured=bool(record and record.encrypted_api_key),
+            platform_available=platform_allowed and platform_configured,
+            platform_key_allowed=platform_allowed,
+            key_hint=record.key_hint if record else None,
+        )
+
+    def fmp_credential(self, account_id: str) -> str | None:
+        stored = self._stored(account_id)
+        if stored is None or stored.fmp is None or not stored.fmp.enabled:
+            return None
+        encrypted = stored.fmp.encrypted_api_key
+        if not encrypted:
+            return None
+        if self.cipher is None:
+            raise MarketCredentialError(503, "market_credential_storage_unavailable", "Market credential storage is unavailable.")
+        return self.cipher.decrypt(account_id, "fmp", encrypted)
+
+    def fmp_enabled(self, account_id: str) -> bool:
+        stored = self._stored(account_id)
+        return True if stored is None or stored.fmp is None else bool(stored.fmp.enabled)
+
     def snapshot(self, account_id: str) -> MarketDataConfigResponse:
         stored = self._stored(account_id)
         records = {item.provider_id: item for item in stored.providers} if stored else {}
@@ -220,6 +324,7 @@ class AccountMarketDataSettings:
         return MarketDataConfigResponse(
             fallback_order=list(stored.fallback_order) if stored else list(MARKET_PROVIDER_ORDER),
             providers=providers,
+            earnings_providers=[self.fmp_summary(account_id)],
             updated_at=stored.updated_at if stored else None,
         )
 
@@ -243,9 +348,40 @@ class AccountMarketDataSettings:
                         encrypted = self.cipher.encrypt(account_id, item.provider_id, item.api_key)
                         hint = _hint(item.api_key)
                     records.append(StoredMarketProvider(provider_id=item.provider_id, enabled=item.enabled, encrypted_api_key=encrypted, key_hint=hint))
-                stored = StoredMarketDataConfig(account_id=account_id, fallback_order=request.fallback_order, providers=records, updated_at=current_time)
+                fmp_record = self._apply_fmp_update(account_id, existing, request.fmp)
+                stored = StoredMarketDataConfig(
+                    account_id=account_id,
+                    fallback_order=request.fallback_order,
+                    providers=records,
+                    fmp=fmp_record,
+                    updated_at=current_time,
+                )
                 self.repository.put(account_id, stored)
                 return self.snapshot(account_id)
+        locker = getattr(self.repository, "with_advisory_lock", None)
+        return locker(f"market-config:{account_id}", operation) if callable(locker) else operation()
+
+    def update_fmp(self, account_id: str, request: EarningsProviderUpdate, *, now: datetime | None = None) -> EarningsProviderSummary:
+        current_time = now or datetime.now(timezone.utc)
+        def operation() -> EarningsProviderSummary:
+            with self._lock:
+                existing = self._stored(account_id)
+                fallback_order = list(existing.fallback_order) if existing else list(MARKET_PROVIDER_ORDER)
+                providers = (
+                    list(existing.providers)
+                    if existing
+                    else [StoredMarketProvider(provider_id=pid, enabled=True) for pid in MARKET_PROVIDER_ORDER]
+                )
+                fmp_record = self._apply_fmp_update(account_id, existing, request)
+                stored = StoredMarketDataConfig(
+                    account_id=account_id,
+                    fallback_order=fallback_order,
+                    providers=providers,
+                    fmp=fmp_record,
+                    updated_at=current_time,
+                )
+                self.repository.put(account_id, stored)
+                return self.fmp_summary(account_id)
         locker = getattr(self.repository, "with_advisory_lock", None)
         return locker(f"market-config:{account_id}", operation) if callable(locker) else operation()
 
@@ -268,8 +404,50 @@ class AccountMarketDataSettings:
         self.repository.delete(account_id)
 
 
+def resolve_fmp_key(
+    account_id: str,
+    settings: AccountMarketDataSettings,
+    *,
+    policy: FinDataPolicy | None = None,
+    env: Mapping[str, str] | None = None,
+    platform_secret_lookup: Callable[[str], str | None] | None = None,
+) -> tuple[str | None, str | None]:
+    """Resolve ``(api_key, credential_owner)`` for FMP (`user_byok` first, then policy-gated platform dev key)."""
+    active_policy = policy if policy is not None else load_fin_data_policy(dict(env) if env is not None else None)
+    try:
+        enabled = settings.fmp_enabled(account_id)
+        own = settings.fmp_credential(account_id) if enabled else None
+    except MarketCredentialError:
+        enabled = True
+        own = None
+    if not enabled:
+        return None, None
+    if own:
+        byok_allowed = any(
+            not isinstance(active_policy.decide("fmp", category, credential_owner="user_byok"), Denied)
+            for category in FMP_CATEGORIES
+        )
+        if byok_allowed:
+            return own, "user_byok"
+        return None, None
+    platform_allowed = any(
+        not isinstance(active_policy.decide("fmp", category, credential_owner="platform"), Denied)
+        for category in FMP_CATEGORIES
+    )
+    if platform_allowed:
+        if platform_secret_lookup is not None and env is None:
+            platform = (platform_secret_lookup(FMP_API_KEY_ENV) or "").strip()
+        else:
+            environ = os.environ if env is None else env
+            platform = (environ.get(FMP_API_KEY_ENV, "") or "").strip()
+        if platform:
+            return platform, "platform"
+    return None, None
+
+
 __all__ = [
-    "AccountMarketDataSettings", "MarketCredentialCipher", "MarketCredentialError",
+    "AccountMarketDataSettings", "EarningsProviderId", "EarningsProviderSummary", "EarningsProviderUpdate",
+    "FMP_ALLOW_PLATFORM_KEY_ENV", "FMP_API_KEY_ENV", "MarketCredentialCipher", "MarketCredentialError",
     "MarketDataConfigResponse", "MarketDataConfigUpdate", "MarketProviderTestRequest",
-    "MarketProviderTestResponse", "StoredMarketDataConfig",
+    "MarketProviderTestResponse", "StoredEarningsProvider", "StoredMarketDataConfig", "resolve_fmp_key",
 ]

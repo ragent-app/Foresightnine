@@ -1,6 +1,13 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Link, useBlocker, useNavigate, useParams } from "react-router-dom";
+import {
+  getEarningsDossier,
+  renderDeepReport,
+  runEarningsSquad,
+  steerEarningsSquad,
+  subscribeEarningsSquadEvents,
+} from "../api/earningsSquad";
 import { ApiError } from "../api/http";
 import { readSession } from "../auth/session";
 import { useActiveRun, useAttachSources, useCancelRun, useContinueTurn, useRecoverTurn, useRecoveryStatus, useReextractPdf, useRunProgress, useSaveVersion, useStartTurn, useTopic, useTopicActions, useTurnStatuses, useVersionSources } from "../api/queries";
@@ -32,6 +39,9 @@ import { queryKeys, useTopics } from "../api/queries";
 import { appendInstruction, continueTurn as continueWaitingTurn, stopResearchTurn } from "../api/writes";
 import { showToast } from "../ui/toast";
 import { LiveCapsule } from "./topic/LiveBar";
+import { EarningsDossierView, type DossierReportMode } from "./topic/EarningsDossierView";
+import { OrgGraphPanel } from "./topic/OrgGraphPanel";
+import { createInitialOrgGraphState, orgGraphReducer, type OrgRunStatus } from "./topic/orgGraphReducer";
 import { ReaderPanel } from "./topic/ReaderPanel";
 import { RecordPanel } from "./topic/RecordPanel";
 import { ReviewPanel, saveErrorText } from "./topic/ReviewPanel";
@@ -80,6 +90,31 @@ interface PendingContinue {
 function flash(element: Element): void {
   element.classList.add("flash");
   setTimeout(() => element.classList.remove("flash"), 900);
+}
+
+const SQUAD_STATUS_META: Readonly<Record<OrgRunStatus, { readonly label: string; readonly tone: "neutral" | "counter" | "support" | "error" }>> = {
+  idle: { label: "未启动", tone: "neutral" },
+  running: { label: "运行中", tone: "counter" },
+  completed: { label: "已完成", tone: "support" },
+  failed: { label: "执行失败", tone: "error" },
+  cancelled: { label: "已取消", tone: "neutral" },
+};
+
+function createSquadIdempotencyKey(prefix: string): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}:${crypto.randomUUID()}`;
+  }
+  return `${prefix}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function parseInspectLocation(location?: string | null): readonly [number, number] | null {
+  if (!location) return null;
+  const match = /^(?:chars?:?\s*)?(\d+)\s*[-–:]\s*(\d+)$/i.exec(location.trim());
+  if (!match) return null;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+  return [start, end];
 }
 
 export function TopicPage() {
@@ -131,6 +166,26 @@ export function TopicPage() {
   // Asked before sending while review changes are unsaved (spec §4.3).
   const [sendPrompt, setSendPrompt] = useState<{ error: string | null } | null>(null);
 
+  const [squadStatus, setSquadStatus] = useState<OrgRunStatus>("idle");
+  const [squadRunId, setSquadRunId] = useState<string | null>(null);
+  const squadRunIdRef = useRef<string | null>(null);
+  squadRunIdRef.current = squadRunId;
+  const [squadDossier, setSquadDossier] = useState<ResearchV2.EarningsDossier | null>(null);
+  const [squadSlotRouting, setSquadSlotRouting] = useState<Readonly<Record<string, unknown>> | null>(null);
+  const [squadSteeringHistory, setSquadSteeringHistory] = useState<readonly ResearchV2.UserSteeringInstruction[]>([]);
+  const [squadError, setSquadError] = useState<string | null>(null);
+  const [squadLaunching, setSquadLaunching] = useState(false);
+  const [squadSymbol, setSquadSymbol] = useState("");
+  const [steerInput, setSteerInput] = useState("");
+  const [steerBusy, setSteerBusy] = useState(false);
+  const [steerError, setSteerError] = useState<string | null>(null);
+  const [reportMode, setReportMode] = useState<DossierReportMode>("memo");
+  const [deepReportLoading, setDeepReportLoading] = useState(false);
+  const [deepReportError, setDeepReportError] = useState<string | null>(null);
+  const [orgGraphState, dispatchOrgGraph] = useReducer(orgGraphReducer, undefined, createInitialOrgGraphState);
+  const [orgDrawerOpen, setOrgDrawerOpen] = useState(false);
+  const orgGraphLastSeqRef = useRef(0);
+
   const startTurn = useStartTurn(topicId);
   const cancel = useCancelRun(topicId);
   const continueTurn = useContinueTurn(topicId);
@@ -179,16 +234,252 @@ export function TopicPage() {
   const sourcesQuery = useVersionSources(topicId, version?.version_id ?? null);
 
   useEffect(() => {
-    setPanelOpen(panel !== null && panel.kind !== "cite");
+    setPanelOpen((panel !== null && panel.kind !== "cite") || orgDrawerOpen);
     return () => setPanelOpen(false);
-  }, [panel, setPanelOpen]);
+  }, [panel, orgDrawerOpen, setPanelOpen]);
 
   // Reset per-topic state when navigating between topics.
   useEffect(() => {
-    setPanel(null); setText((() => { try { return sessionStorage.getItem(draftKey) ?? ""; } catch { return ""; } })()); setReceipts([]); setInstructionBusy(false); setInstructionError(null); setClosedWaitingTurn(null); setFocus(null); setPendingAsk(null); setAskedOp(null); setPendingContinue(null); setAwayFromLive(false);
+    setPanel(null); setOrgDrawerOpen(false); setText((() => { try { return sessionStorage.getItem(draftKey) ?? ""; } catch { return ""; } })()); setReceipts([]); setInstructionBusy(false); setInstructionError(null); setClosedWaitingTurn(null); setFocus(null); setPendingAsk(null); setAskedOp(null); setPendingContinue(null); setAwayFromLive(false);
     nearBottomRef.current = true; lastScrollTopRef.current = 0; suppressScrollUntilRef.current = 0;
     setNotice(null); setOptions(DEFAULT_OPTIONS); setDraftState({}); setSendPrompt(null);
+    squadRunIdRef.current = null;
+    orgGraphLastSeqRef.current = 0;
+    dispatchOrgGraph({ type: "reset" });
+    setSquadStatus("idle");
+    setSquadRunId(null);
+    setSquadDossier(null);
+    setSquadSlotRouting(null);
+    setSquadSteeringHistory([]);
+    setSquadError(null);
+    setSquadLaunching(false);
+    setSquadSymbol("");
+    setSteerInput("");
+    setSteerBusy(false);
+    setSteerError(null);
+    setReportMode("memo");
+    setDeepReportLoading(false);
+    setDeepReportError(null);
   }, [topicId, draftKey]);
+
+  const applySquadResponse = useCallback(
+    (response: ResearchV2.EarningsSquadDossierResponse | ResearchV2.EarningsSquadRunResponse) => {
+      if (topicIdRef.current !== response.topic_id) return;
+      const previousRunId = squadRunIdRef.current;
+      const switchedRun = Boolean(previousRunId && previousRunId !== response.run_id);
+      if (switchedRun) {
+        orgGraphLastSeqRef.current = 0;
+        dispatchOrgGraph({ type: "reset" });
+        setOrgDrawerOpen(false);
+        setSquadSteeringHistory([]);
+        if (!response.dossier) setSquadDossier(null);
+      }
+      squadRunIdRef.current = response.run_id;
+      setSquadRunId(response.run_id);
+
+      const events = response.org_events ?? [];
+      if (events.length > 0) {
+        let maxSeq = orgGraphLastSeqRef.current;
+        for (const ev of events) {
+          if (ev.sequence > maxSeq) maxSeq = ev.sequence;
+        }
+        orgGraphLastSeqRef.current = maxSeq;
+        dispatchOrgGraph({ type: "batch", events });
+      }
+      if (response.status === "completed" || response.status === "failed" || response.status === "cancelled") {
+        dispatchOrgGraph({ type: "run_terminal", status: response.status });
+      }
+
+      setSquadStatus(response.status);
+      if (response.dossier !== undefined) {
+        setSquadDossier(response.dossier ?? null);
+      }
+      if (response.slot_routing_summary !== undefined) {
+        setSquadSlotRouting(response.slot_routing_summary ?? null);
+      }
+      if ("steering_instructions" in response && response.steering_instructions !== undefined) {
+        setSquadSteeringHistory(response.steering_instructions);
+      }
+      setSquadError(response.error ?? null);
+    },
+    [],
+  );
+
+  // Hydrate existing earnings squad run/dossier for the topic (404 means none exists yet).
+  useEffect(() => {
+    if (!topicId) return undefined;
+    const controller = new AbortController();
+    void getEarningsDossier(topicId, controller.signal)
+      .then((response) => {
+        if (controller.signal.aborted || topicIdRef.current !== topicId) return;
+        applySquadResponse(response);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted || topicIdRef.current !== topicId) return;
+        if (error instanceof ApiError && error.status === 404) return;
+        setSquadError(describeError(error));
+      });
+    return () => controller.abort();
+  }, [topicId, applySquadResponse]);
+
+  // Subscribe to live org_graph_event SSE stream while squad run is active, falling back to polling on error/EOF.
+  useEffect(() => {
+    if (!topicId || squadStatus !== "running") return undefined;
+    let cancelled = false;
+    let pollTimer: number | null = null;
+    const controller = new AbortController();
+
+    const clearPoll = () => {
+      if (pollTimer !== null) {
+        window.clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+    };
+
+    const syncDossierState = async () => {
+      try {
+        const snapshot = await getEarningsDossier(topicId, controller.signal);
+        if (cancelled || controller.signal.aborted || topicIdRef.current !== topicId) return;
+        applySquadResponse(snapshot);
+        if (snapshot.status === "running") {
+          clearPoll();
+          pollTimer = window.setTimeout(() => void syncDossierState(), 2000);
+        }
+      } catch (error: unknown) {
+        if (cancelled || controller.signal.aborted || topicIdRef.current !== topicId) return;
+        if (error instanceof ApiError && error.status === 404) {
+          clearPoll();
+          pollTimer = window.setTimeout(() => void syncDossierState(), 2000);
+          return;
+        }
+        setSquadError(describeError(error));
+      }
+    };
+
+    const startPolling = (delayMs = 250) => {
+      if (cancelled || pollTimer !== null) return;
+      pollTimer = window.setTimeout(() => {
+        pollTimer = null;
+        void syncDossierState();
+      }, delayMs);
+    };
+
+    const unsubscribe = subscribeEarningsSquadEvents({
+      topicId,
+      after: orgGraphLastSeqRef.current,
+      signal: controller.signal,
+      onEvent: (event) => {
+        if (cancelled || topicIdRef.current !== topicId) return;
+        if (event.sequence > orgGraphLastSeqRef.current) {
+          orgGraphLastSeqRef.current = event.sequence;
+        }
+        dispatchOrgGraph({ type: "event", event });
+      },
+      onTerminal: (terminal) => {
+        if (cancelled || topicIdRef.current !== topicId) return;
+        dispatchOrgGraph({ type: "run_terminal", status: terminal.operation_status });
+        void syncDossierState();
+      },
+      onError: () => {
+        if (cancelled || topicIdRef.current !== topicId) return;
+        unsubscribe();
+        startPolling(250);
+      },
+      onClose: () => {
+        if (cancelled || topicIdRef.current !== topicId) return;
+        startPolling(250);
+      },
+    });
+
+    return () => {
+      cancelled = true;
+      clearPoll();
+      unsubscribe();
+      controller.abort();
+    };
+  }, [topicId, squadStatus, squadRunId, applySquadResponse]);
+
+  const handleLaunchSquad = useCallback(async () => {
+    if (!topicId || squadLaunching || squadStatus === "running") return;
+    setSquadLaunching(true);
+    setSquadError(null);
+    setSteerError(null);
+    setDeepReportError(null);
+    setReportMode("memo");
+    const trimmedSymbol = squadSymbol.trim().toUpperCase();
+    const topicQuestion = topicQuery.data?.request.question?.trim() ?? "";
+    try {
+      const response = await runEarningsSquad(
+        topicId,
+        {
+          execution_mode: "async",
+          ...(trimmedSymbol ? { symbol: trimmedSymbol } : {}),
+          ...(topicQuestion ? { question: topicQuestion } : {}),
+        },
+        { idempotencyKey: createSquadIdempotencyKey("squad-run") },
+      );
+      if (topicIdRef.current !== topicId) return;
+      applySquadResponse(response);
+    } catch (error: unknown) {
+      if (topicIdRef.current !== topicId) return;
+      setSquadError(describeError(error));
+    } finally {
+      if (topicIdRef.current === topicId) setSquadLaunching(false);
+    }
+  }, [topicId, squadLaunching, squadStatus, squadSymbol, topicQuery.data?.request.question, applySquadResponse]);
+
+  const handleSteerSquad = useCallback(async () => {
+    const trimmed = steerInput.trim();
+    if (!topicId || !trimmed || steerBusy) return;
+    setSteerBusy(true);
+    setSteerError(null);
+    try {
+      const response = await steerEarningsSquad(
+        topicId,
+        trimmed,
+        { idempotencyKey: createSquadIdempotencyKey("squad-steer") },
+      );
+      if (topicIdRef.current !== topicId) return;
+      setSquadSteeringHistory((previous) => [
+        ...previous.filter((item) => item.sequence !== response.instruction.sequence),
+        response.instruction,
+      ]);
+      setSteerInput("");
+    } catch (error: unknown) {
+      if (topicIdRef.current !== topicId) return;
+      setSteerError(describeError(error));
+    } finally {
+      if (topicIdRef.current === topicId) setSteerBusy(false);
+    }
+  }, [topicId, steerInput, steerBusy]);
+
+  const handleRequestDeepReport = useCallback(async () => {
+    if (!topicId) return null;
+    setDeepReportLoading(true);
+    setDeepReportError(null);
+    try {
+      const response = await renderDeepReport(
+        topicId,
+        { force: false },
+        { idempotencyKey: createSquadIdempotencyKey("squad-deep") },
+      );
+      if (topicIdRef.current !== topicId) return null;
+      setSquadDossier(response.dossier);
+      return response;
+    } catch (error: unknown) {
+      if (topicIdRef.current !== topicId) return null;
+      setDeepReportError(describeError(error));
+      return null;
+    } finally {
+      if (topicIdRef.current === topicId) setDeepReportLoading(false);
+    }
+  }, [topicId]);
+
+  const handleInspectSource = useCallback((sourceId: string, location?: string | null) => {
+    if (!sourceId) return;
+    const range = parseInspectLocation(location);
+    setPanel({ kind: "reader", sourceId, range });
+  }, []);
 
   const updateText = (value: string) => {
     setText(value);
@@ -351,7 +642,9 @@ export function TopicPage() {
         const known = sources.get(sourceId)?.title;
         if (known) return known;
         const row = (content.sources ?? []).find((item) => item.source_id === sourceId);
-        return typeof row?.title === "string" ? row.title : "资料";
+        if (typeof row?.title === "string") return row.title;
+        const prefetched = squadDossier?.snapshot.prefetched_sources?.find((item) => item.source_id === sourceId);
+        return prefetched?.title ?? "资料";
       },
       openPanel: setPanel,
       deepDive: (next) => {
@@ -383,7 +676,7 @@ export function TopicPage() {
     };
     // progressMatches reads progress.progress, listed below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topic, version, content, turns, citations, sources, activeRun, progress.progress, progress.events, progress.getStreamSnapshot, progress.subscribeStream, receipts, turnNumbers, topicId, inspector, locked, addToTopic, draft, setDraft, dirty, saveDraft, saveVersion.isPending, notify, evidence, setEvidence]);
+  }, [topic, version, content, turns, citations, sources, activeRun, progress.progress, progress.events, progress.getStreamSnapshot, progress.subscribeStream, receipts, turnNumbers, topicId, inspector, locked, addToTopic, draft, setDraft, dirty, saveDraft, saveVersion.isPending, notify, evidence, setEvidence, squadDossier]);
   const cancelling = cancel.isPending || (cancel.isSuccess && cancel.variables?.operation_id === activeRun?.operation_id);
 
   const send = () => {
@@ -882,7 +1175,7 @@ export function TopicPage() {
               ) : !live && pendingAsk ? (
                 <LiveTurn sectionRef={liveTurnRef} number={turns.length + 1} startedAt={pendingAsk.at} question={pendingAsk.question} live={null} first={turns.length === 0} />
               ) : null}
-              {turns.length === 0 && !live && !orphanRun && !pendingAsk && !runs.isLoading ? (
+              {turns.length === 0 && !live && !orphanRun && !pendingAsk && !runs.isLoading && squadStatus === "idle" && !squadDossier ? (
                 <div className="turn">
                   <div className="callout" role="note">
                     <span className="h">这个研究还没有开始。</span>
@@ -893,6 +1186,126 @@ export function TopicPage() {
                   </div>
                 </div>
               ) : null}
+              <div className="turn earnings-squad-workspace" data-testid="earnings-squad-workspace">
+                <section className="chart-card" aria-label="美股财报买方投研小组">
+                  <div className="chart-head">
+                    <div className="chart-title-wrap">
+                      <div className="chart-title-row">
+                        <h2 className="chart-title">美股财报买方投研小组</h2>
+                        {squadStatus !== "idle" ? (
+                          <span className={`role light ${SQUAD_STATUS_META[squadStatus].tone}`}>
+                            {SQUAD_STATUS_META[squadStatus].label}
+                          </span>
+                        ) : null}
+                        {squadDossier?.symbol ? (
+                          <span className="chart-badge is-updated">{squadDossier.symbol}</span>
+                        ) : null}
+                      </div>
+                      <p className="chart-subtitle">
+                        {squadStatus === "running"
+                          ? "多 Agent 组织树正在并行取证，可向 Lead 发送中场调度指令调整关注焦点。"
+                          : squadDossier
+                            ? "已锁定单一事实底稿与买方档案，支持 Memo / Deep Report 秒切及多格式导出。"
+                            : "可选：基于 SEC EDGAR 与已配置数据连接器启动 Lead Coordinator、并行专题 Worker、Bear Review 与撰稿小组。"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {squadStatus !== "running" ? (
+                    <form
+                      className="input-row"
+                      aria-label="启动美股财报买方小组"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void handleLaunchSquad();
+                      }}
+                    >
+                      <input
+                        type="text"
+                        aria-label="美股代码 (Ticker，可选)"
+                        placeholder="美股代码，如 AAPL / NVDA（可选，留空自动识别）"
+                        value={squadSymbol}
+                        onChange={(event) => setSquadSymbol(event.target.value)}
+                        disabled={squadLaunching}
+                      />
+                      <button type="submit" className="btn primary" disabled={squadLaunching}>
+                        {squadLaunching ? "正在启动…" : squadDossier ? "重新运行财报小组" : "启动美股财报买方小组"}
+                      </button>
+                    </form>
+                  ) : (
+                    <form
+                      className="input-row"
+                      aria-label="中场调度指令"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void handleSteerSquad();
+                      }}
+                    >
+                      <input
+                        type="text"
+                        aria-label="向 Lead 发送中场调度指令"
+                        placeholder="向 Lead 发送中场调度指令，例如：核查存货周转与 Non-GAAP SBC 加回…"
+                        value={steerInput}
+                        onChange={(event) => setSteerInput(event.target.value)}
+                        disabled={steerBusy}
+                      />
+                      <button
+                        type="submit"
+                        className="btn primary"
+                        disabled={steerBusy || steerInput.trim().length === 0}
+                      >
+                        {steerBusy ? "发送调度…" : "发送调度指令"}
+                      </button>
+                    </form>
+                  )}
+
+                  {squadSteeringHistory.length > 0 ? (
+                    <div className="chips" aria-label="已下达调度指令">
+                      <span>已下达调度：</span>
+                      {squadSteeringHistory.map((item) => (
+                        <span key={item.instruction_id ?? `seq-${item.sequence}`} className="chart-badge is-updated">
+                          #{item.sequence} {item.text}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {squadError ? (
+                    <span className="inline-error" role="alert">{squadError}</span>
+                  ) : null}
+                  {steerError ? (
+                    <span className="inline-error" role="alert">{steerError}</span>
+                  ) : null}
+                </section>
+
+                {squadStatus !== "idle" || orgGraphState.nodes.length > 0 ? (
+                  <OrgGraphPanel
+                    key={squadRunId ?? "default"}
+                    state={orgGraphState}
+                    runStatus={squadStatus}
+                    title="投研小组实时组织执行树"
+                    onSelectNode={(node) => {
+                      const open = node !== null;
+                      setOrgDrawerOpen(open);
+                      if (open) setPanel(null);
+                    }}
+                  />
+                ) : null}
+
+                {squadDossier ? (
+                  <EarningsDossierView
+                    dossier={squadDossier}
+                    topicId={topicId}
+                    reportMode={reportMode}
+                    onReportModeChange={setReportMode}
+                    onRequestDeepReport={handleRequestDeepReport}
+                    deepReportLoading={deepReportLoading}
+                    deepReportError={deepReportError}
+                    onInspectSource={handleInspectSource}
+                    slotRoutingSummary={squadSlotRouting}
+                  />
+                ) : null}
+              </div>
             </TopicContext.Provider>
           )}
         </div>

@@ -113,6 +113,121 @@
         "title": "AttachSourcesInput",
         "type": "object"
       },
+      "BalanceSheetLeverageGroup": {
+        "additionalProperties": false,
+        "properties": {
+          "current_ratio": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "interest_coverage": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "net_cash": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "net_debt": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "net_debt_to_ttm_ebitda": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "position": {
+            "enum": [
+              "net_cash",
+              "net_debt",
+              "balanced",
+              "unavailable"
+            ],
+            "title": "Position",
+            "type": "string"
+          },
+          "total_cash": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "total_debt": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          }
+        },
+        "required": [
+          "total_cash",
+          "total_debt",
+          "net_debt",
+          "net_cash",
+          "position",
+          "net_debt_to_ttm_ebitda",
+          "interest_coverage",
+          "current_ratio"
+        ],
+        "title": "BalanceSheetLeverageGroup",
+        "type": "object"
+      },
+      "BearCaseItem": {
+        "additionalProperties": false,
+        "description": "Evidence-anchored adversarial bear challenge with next-quarter invalidation trigger.",
+        "properties": {
+          "anchor_kind": {
+            "enum": [
+              "flag",
+              "redline",
+              "guidance_gap",
+              "valuation_gap"
+            ],
+            "title": "Anchor Kind",
+            "type": "string"
+          },
+          "anchored_evidence_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Anchored Evidence Ids",
+            "type": "array"
+          },
+          "bear_id": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Bear Id",
+            "type": "string"
+          },
+          "next_quarter_invalidation_trigger": {
+            "maxLength": 1500,
+            "minLength": 1,
+            "title": "Next Quarter Invalidation Trigger",
+            "type": "string"
+          },
+          "severity": {
+            "default": "medium",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "supporting_numbers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Supporting Numbers",
+            "type": "array"
+          },
+          "thesis_challenge": {
+            "maxLength": 3000,
+            "minLength": 1,
+            "title": "Thesis Challenge",
+            "type": "string"
+          }
+        },
+        "required": [
+          "thesis_challenge",
+          "anchored_evidence_ids",
+          "anchor_kind",
+          "next_quarter_invalidation_trigger"
+        ],
+        "title": "BearCaseItem",
+        "type": "object"
+      },
       "CalculationInput": {
         "additionalProperties": false,
         "properties": {
@@ -200,6 +315,31 @@
           "aligned_value"
         ],
         "title": "CalculationScaleAdjustment",
+        "type": "object"
+      },
+      "CapitalAllocationGroup": {
+        "additionalProperties": false,
+        "properties": {
+          "capex_to_revenue_pct": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "capital_returned": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "diluted_shares_yoy_pct": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "payout_to_fcf_pct": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          }
+        },
+        "required": [
+          "capex_to_revenue_pct",
+          "capital_returned",
+          "payout_to_fcf_pct",
+          "diluted_shares_yoy_pct"
+        ],
+        "title": "CapitalAllocationGroup",
         "type": "object"
       },
       "CausalGraphEdge": {
@@ -537,6 +677,59 @@
         "title": "ChartSeries",
         "type": "object"
       },
+      "ChatGenerationParameters": {
+        "additionalProperties": false,
+        "description": "User-selected generation controls for a single personal Chat connection.",
+        "properties": {
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Effort"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
+          },
+          "top_p": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top P"
+          }
+        },
+        "title": "ChatGenerationParameters",
+        "type": "object"
+      },
       "Citation": {
         "additionalProperties": false,
         "properties": {
@@ -563,6 +756,81 @@
         "title": "Citation",
         "type": "object"
       },
+      "ClassifiedNonGaapAdjustment": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "sbc",
+              "amortization_intangibles",
+              "restructuring",
+              "ma_transaction",
+              "impairment",
+              "litigation",
+              "tax_effect",
+              "fx_or_fair_value",
+              "other"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "input_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Ids",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "recurring_flag": {
+            "title": "Recurring Flag",
+            "type": "boolean"
+          },
+          "recurring_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recurring Reason"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "amount",
+          "unit",
+          "category",
+          "recurring_flag"
+        ],
+        "title": "ClassifiedNonGaapAdjustment",
+        "type": "object"
+      },
       "ConfirmDirectionRequest": {
         "additionalProperties": false,
         "properties": {
@@ -584,6 +852,78 @@
           "fact_id"
         ],
         "title": "ConfirmDirectionRequest",
+        "type": "object"
+      },
+      "ConsensusSnapshotSummary": {
+        "additionalProperties": false,
+        "description": "Optional FMP consensus index captured at Stage 0.",
+        "properties": {
+          "fallback_suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fallback Suggestions",
+            "type": "array"
+          },
+          "permissions": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Permissions",
+            "type": "object"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/EarningsConsensus"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "status": {
+            "default": "unavailable",
+            "enum": [
+              "available",
+              "unavailable",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          }
+        },
+        "title": "ConsensusSnapshotSummary",
         "type": "object"
       },
       "CreateResearchCalculationRequest": {
@@ -631,6 +971,2109 @@
           "second_fact_id"
         ],
         "title": "CreateResearchCalculationRequest",
+        "type": "object"
+      },
+      "DiagnosticFlag": {
+        "additionalProperties": false,
+        "properties": {
+          "flag_id": {
+            "title": "Flag Id",
+            "type": "string"
+          },
+          "group": {
+            "enum": [
+              "margin_bridge",
+              "earnings_quality",
+              "working_capital",
+              "capital_allocation",
+              "balance_sheet"
+            ],
+            "title": "Group",
+            "type": "string"
+          },
+          "input_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Ids",
+            "type": "array"
+          },
+          "investigation_prompt": {
+            "minLength": 10,
+            "title": "Investigation Prompt",
+            "type": "string"
+          },
+          "metric_name": {
+            "title": "Metric Name",
+            "type": "string"
+          },
+          "observed_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Observed Value",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "red",
+              "yellow",
+              "green"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "threshold_rule": {
+            "title": "Threshold Rule",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "flag_id",
+          "group",
+          "severity",
+          "metric_name",
+          "observed_value",
+          "unit",
+          "threshold_rule",
+          "summary",
+          "investigation_prompt"
+        ],
+        "title": "DiagnosticFlag",
+        "type": "object"
+      },
+      "DiagnosticMetric": {
+        "additionalProperties": false,
+        "description": "Single deterministic financial metric with formula, provenance, and status.",
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "formula": {
+            "title": "Formula",
+            "type": "string"
+          },
+          "input_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Ids",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "computed",
+              "unavailable",
+              "disabled_by_sector"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "xbrl_tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Xbrl Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "status",
+          "unit",
+          "formula"
+        ],
+        "title": "DiagnosticMetric",
+        "type": "object"
+      },
+      "DossierGateReport": {
+        "additionalProperties": false,
+        "description": "Audit record from Stage 3B server-side citation, anchor, and export-permission gate.",
+        "properties": {
+          "dropped_card_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Dropped Card Ids",
+            "type": "array"
+          },
+          "exportable": {
+            "default": true,
+            "title": "Exportable",
+            "type": "boolean"
+          },
+          "non_exportable_sources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Non Exportable Sources",
+            "type": "array"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "rejected_bear_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rejected Bear Ids",
+            "type": "array"
+          },
+          "unverified_citations": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Unverified Citations",
+            "type": "array"
+          },
+          "verified_bear_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Verified Bear Ids",
+            "type": "array"
+          },
+          "verified_card_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Verified Card Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "passed"
+        ],
+        "title": "DossierGateReport",
+        "type": "object"
+      },
+      "DualPeriodEarningsRelease": {
+        "additionalProperties": false,
+        "properties": {
+          "cik": {
+            "title": "Cik",
+            "type": "string"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EarningsReleasePeriod"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "days_between_filings": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Between Filings"
+          },
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "pairing_mode": {
+            "default": "sequential",
+            "enum": [
+              "sequential",
+              "yoy"
+            ],
+            "title": "Pairing Mode",
+            "type": "string"
+          },
+          "prior": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EarningsReleasePeriod"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "entity_id",
+          "cik"
+        ],
+        "title": "DualPeriodEarningsRelease",
+        "type": "object"
+      },
+      "EarningsConsensus": {
+        "additionalProperties": false,
+        "description": "Provider-agnostic consensus estimates and reported actuals for one fiscal period.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "eps_actual": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eps Actual"
+          },
+          "eps_estimate_avg": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eps Estimate Avg"
+          },
+          "eps_estimate_high": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eps Estimate High"
+          },
+          "eps_estimate_low": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eps Estimate Low"
+          },
+          "fiscal_period": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Fiscal Period",
+            "type": "string"
+          },
+          "fiscal_quarter": {
+            "anyOf": [
+              {
+                "maximum": 4.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fiscal Quarter"
+          },
+          "fiscal_year": {
+            "anyOf": [
+              {
+                "maximum": 2200.0,
+                "minimum": 1900.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fiscal Year"
+          },
+          "num_analysts": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Analysts"
+          },
+          "num_analysts_eps": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Analysts Eps"
+          },
+          "num_analysts_revenue": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Analysts Revenue"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "period_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "quarter",
+                  "annual"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Type"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/Permissions"
+          },
+          "reported_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported Date"
+          },
+          "revenue_actual": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revenue Actual"
+          },
+          "revenue_estimate_avg": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revenue Estimate Avg"
+          },
+          "revenue_estimate_high": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revenue Estimate High"
+          },
+          "revenue_estimate_low": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revenue Estimate Low"
+          },
+          "source_provider": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Source Provider",
+            "type": "string"
+          },
+          "symbol": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "fiscal_period",
+          "source_provider"
+        ],
+        "title": "EarningsConsensus",
+        "type": "object"
+      },
+      "EarningsDossier": {
+        "additionalProperties": false,
+        "description": "Locked, immutable server-gated earnings research dossier (Stage 3B).",
+        "properties": {
+          "bear_cases": {
+            "items": {
+              "$ref": "#/components/schemas/BearCaseItem"
+            },
+            "title": "Bear Cases",
+            "type": "array"
+          },
+          "cik": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cik"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "deep_report_markdown": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deep Report Markdown"
+          },
+          "dispatch_plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResearchDispatchPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dossier_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Dossier Id",
+            "type": "string"
+          },
+          "dossier_sha256": {
+            "default": "",
+            "title": "Dossier Sha256",
+            "type": "string"
+          },
+          "entity_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "evidence_cards": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceCard"
+            },
+            "title": "Evidence Cards",
+            "type": "array"
+          },
+          "gate_report": {
+            "$ref": "#/components/schemas/DossierGateReport"
+          },
+          "locked": {
+            "default": true,
+            "title": "Locked",
+            "type": "boolean"
+          },
+          "memo_markdown": {
+            "title": "Memo Markdown",
+            "type": "string"
+          },
+          "open_gaps": {
+            "items": {
+              "$ref": "#/components/schemas/SquadGap"
+            },
+            "title": "Open Gaps",
+            "type": "array"
+          },
+          "period_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Label"
+          },
+          "rejected_bear_cases": {
+            "items": {
+              "$ref": "#/components/schemas/RejectedBearCase"
+            },
+            "title": "Rejected Bear Cases",
+            "type": "array"
+          },
+          "run_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Run Id",
+            "type": "string"
+          },
+          "sector_applicability": {
+            "$ref": "#/components/schemas/SectorApplicability"
+          },
+          "selected_l2_pack_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected L2 Pack Id"
+          },
+          "slot_usage_summary": {
+            "$ref": "#/components/schemas/SlotUsageSummary"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/EarningsPrefetchSnapshot"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          }
+        },
+        "required": [
+          "run_id",
+          "entity_id",
+          "snapshot",
+          "sector_applicability",
+          "gate_report",
+          "memo_markdown",
+          "slot_usage_summary"
+        ],
+        "title": "EarningsDossier",
+        "type": "object"
+      },
+      "EarningsPrefetchSnapshot": {
+        "additionalProperties": false,
+        "description": "Stage 0 immutable deterministic prefetch snapshot (0 model calls).",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "cik": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cik"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "consensus_summary": {
+            "$ref": "#/components/schemas/ConsensusSnapshotSummary"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "derived_metrics": {
+            "additionalProperties": true,
+            "title": "Derived Metrics",
+            "type": "object"
+          },
+          "diagnostics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EarningsQualityDiagnosticsResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "earnings_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DualPeriodEarningsRelease"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entity_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "filing_accession": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filing Accession"
+          },
+          "filing_table_catalog": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FilingTableCatalog"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "flags": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticFlag"
+            },
+            "title": "Flags",
+            "type": "array"
+          },
+          "guidance_nongaap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GuidanceAndNonGaapResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "open_gaps": {
+            "items": {
+              "$ref": "#/components/schemas/SquadGap"
+            },
+            "title": "Open Gaps",
+            "type": "array"
+          },
+          "period_label": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Label"
+          },
+          "prefetched_sources": {
+            "items": {
+              "$ref": "#/components/schemas/PrefetchedSourceRef"
+            },
+            "title": "Prefetched Sources",
+            "type": "array"
+          },
+          "prior_filing_accession": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Filing Accession"
+          },
+          "redline_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FilingRedlineReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sector_applicability": {
+            "$ref": "#/components/schemas/SectorApplicability"
+          },
+          "sic_code": {
+            "anyOf": [
+              {
+                "maxLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sic Code"
+          },
+          "sic_description": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sic Description"
+          },
+          "snapshot_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Snapshot Id",
+            "type": "string"
+          },
+          "snapshot_sha256": {
+            "default": "",
+            "title": "Snapshot Sha256",
+            "type": "string"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/PeriodFinancials"
+            },
+            "title": "Statements",
+            "type": "array"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          },
+          "transcript_index": {
+            "$ref": "#/components/schemas/TranscriptIndexEntry"
+          },
+          "valuation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValuationAndExpectationsResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "entity_id",
+          "sector_applicability"
+        ],
+        "title": "EarningsPrefetchSnapshot",
+        "type": "object"
+      },
+      "EarningsQualityCashFlowGroup": {
+        "additionalProperties": false,
+        "properties": {
+          "fcf_ex_sbc": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "fcf_ex_sbc_margin_pct": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "fcf_margin_pct": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "fcf_to_ni": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "ocf_to_ni": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "reported_or_derived_fcf": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "sbc_to_fcf_pct": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "sbc_to_revenue_pct": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          }
+        },
+        "required": [
+          "reported_or_derived_fcf",
+          "ocf_to_ni",
+          "fcf_to_ni",
+          "fcf_margin_pct",
+          "sbc_to_revenue_pct",
+          "sbc_to_fcf_pct",
+          "fcf_ex_sbc",
+          "fcf_ex_sbc_margin_pct"
+        ],
+        "title": "EarningsQualityCashFlowGroup",
+        "type": "object"
+      },
+      "EarningsQualityDiagnosticsResult": {
+        "additionalProperties": false,
+        "description": "Output of ``earnings_quality_diagnostics`` (strictly zero black-box score).",
+        "properties": {
+          "balance_sheet": {
+            "$ref": "#/components/schemas/BalanceSheetLeverageGroup"
+          },
+          "capital_allocation": {
+            "$ref": "#/components/schemas/CapitalAllocationGroup"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "earnings_quality": {
+            "$ref": "#/components/schemas/EarningsQualityCashFlowGroup"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "flag_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "enum": [
+                "red",
+                "yellow",
+                "green"
+              ]
+            },
+            "title": "Flag Counts",
+            "type": "object"
+          },
+          "flags": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticFlag"
+            },
+            "title": "Flags",
+            "type": "array"
+          },
+          "margin_bridge": {
+            "items": {
+              "$ref": "#/components/schemas/MarginBridgeItem"
+            },
+            "title": "Margin Bridge",
+            "type": "array"
+          },
+          "monetary_unit": {
+            "title": "Monetary Unit",
+            "type": "string"
+          },
+          "period_label": {
+            "title": "Period Label",
+            "type": "string"
+          },
+          "sector_applicability": {
+            "$ref": "#/components/schemas/SectorApplicability"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          },
+          "thresholds_reference": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Thresholds Reference",
+            "type": "object"
+          },
+          "working_capital": {
+            "$ref": "#/components/schemas/WorkingCapitalForensicsGroup"
+          }
+        },
+        "required": [
+          "period_label",
+          "monetary_unit",
+          "sector_applicability",
+          "margin_bridge",
+          "earnings_quality",
+          "working_capital",
+          "capital_allocation",
+          "balance_sheet",
+          "flags",
+          "flag_counts",
+          "thresholds_reference"
+        ],
+        "title": "EarningsQualityDiagnosticsResult",
+        "type": "object"
+      },
+      "EarningsReleaseExhibit": {
+        "additionalProperties": false,
+        "properties": {
+          "content_sha256": {
+            "title": "Content Sha256",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "exhibit_type": {
+            "enum": [
+              "EX-99.1",
+              "EX-99.2"
+            ],
+            "title": "Exhibit Type",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Provenance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tables": {
+            "items": {
+              "$ref": "#/components/schemas/ParsedHtmlTable"
+            },
+            "title": "Tables",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "exhibit_type",
+          "filename",
+          "url",
+          "text",
+          "content_sha256"
+        ],
+        "title": "EarningsReleaseExhibit",
+        "type": "object"
+      },
+      "EarningsReleasePeriod": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted At"
+          },
+          "accession": {
+            "title": "Accession",
+            "type": "string"
+          },
+          "ex99_1": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EarningsReleaseExhibit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ex99_2": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EarningsReleaseExhibit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "filed_at": {
+            "format": "date",
+            "title": "Filed At",
+            "type": "string"
+          },
+          "form": {
+            "default": "8-K",
+            "title": "Form",
+            "type": "string"
+          },
+          "gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "guidance_passages": {
+            "items": {
+              "$ref": "#/components/schemas/GuidancePassage"
+            },
+            "title": "Guidance Passages",
+            "type": "array"
+          },
+          "index_json_url": {
+            "title": "Index Json Url",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "management_highlights": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Management Highlights",
+            "type": "array"
+          },
+          "management_summary": {
+            "default": "",
+            "title": "Management Summary",
+            "type": "string"
+          },
+          "nongaap_reconciliations": {
+            "items": {
+              "$ref": "#/components/schemas/NonGaapReconciliation"
+            },
+            "title": "Nongaap Reconciliations",
+            "type": "array"
+          },
+          "period_of_report": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Of Report"
+          },
+          "period_role": {
+            "enum": [
+              "current",
+              "prior"
+            ],
+            "title": "Period Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "period_role",
+          "accession",
+          "filed_at",
+          "index_json_url"
+        ],
+        "title": "EarningsReleasePeriod",
+        "type": "object"
+      },
+      "EarningsSquadApiRunRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "background": {
+            "default": false,
+            "title": "Background",
+            "type": "boolean"
+          },
+          "cik": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cik"
+          },
+          "close_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Price"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "execution_mode": {
+            "default": "sync",
+            "enum": [
+              "sync",
+              "async"
+            ],
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "filing_accession": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filing Accession"
+          },
+          "filing_form": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "10-Q",
+            "title": "Filing Form"
+          },
+          "fiscal_quarter": {
+            "anyOf": [
+              {
+                "maximum": 4.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fiscal Quarter"
+          },
+          "fiscal_year": {
+            "anyOf": [
+              {
+                "maximum": 2200.0,
+                "minimum": 1900.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fiscal Year"
+          },
+          "guidance_inputs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Guidance Inputs",
+            "type": "array"
+          },
+          "max_elapsed_seconds": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Elapsed Seconds"
+          },
+          "max_model_calls": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Model Calls"
+          },
+          "max_search_calls": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Search Calls"
+          },
+          "max_total_tokens": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Total Tokens"
+          },
+          "nongaap_bridges": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Nongaap Bridges",
+            "type": "array"
+          },
+          "period_financials": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Period Financials",
+            "type": "array"
+          },
+          "period_label": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Label"
+          },
+          "prior_filing_accession": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Filing Accession"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "resume_from_checkpoint": {
+            "default": false,
+            "title": "Resume From Checkpoint",
+            "type": "boolean"
+          },
+          "resume_run_id": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resume Run Id"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "sic_code": {
+            "anyOf": [
+              {
+                "maxLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sic Code"
+          },
+          "sic_description": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sic Description"
+          },
+          "slot_overrides": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelSlotConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          },
+          "user_instructions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "User Instructions",
+            "type": "array"
+          }
+        },
+        "title": "EarningsSquadApiRunRequest",
+        "type": "object"
+      },
+      "EarningsSquadDeepReportRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          }
+        },
+        "title": "EarningsSquadDeepReportRequest",
+        "type": "object"
+      },
+      "EarningsSquadDeepReportResponse": {
+        "properties": {
+          "cached": {
+            "title": "Cached",
+            "type": "boolean"
+          },
+          "deep_report_markdown": {
+            "title": "Deep Report Markdown",
+            "type": "string"
+          },
+          "deep_report_tool_calls": {
+            "default": 0,
+            "title": "Deep Report Tool Calls",
+            "type": "integer"
+          },
+          "dossier": {
+            "$ref": "#/components/schemas/EarningsDossier"
+          },
+          "dossier_id": {
+            "title": "Dossier Id",
+            "type": "string"
+          },
+          "dossier_sha256": {
+            "title": "Dossier Sha256",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "topic_id": {
+            "title": "Topic Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic_id",
+          "run_id",
+          "dossier_id",
+          "dossier_sha256",
+          "cached",
+          "deep_report_markdown",
+          "dossier"
+        ],
+        "title": "EarningsSquadDeepReportResponse",
+        "type": "object"
+      },
+      "EarningsSquadDossierResponse": {
+        "properties": {
+          "checkpoint_completed_stages": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Checkpoint Completed Stages",
+            "type": "array"
+          },
+          "dossier": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EarningsDossier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "operation_id": {
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "org_events": {
+            "items": {
+              "$ref": "#/components/schemas/OrgGraphEvent"
+            },
+            "title": "Org Events",
+            "type": "array"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "slot_routing_summary": {
+            "additionalProperties": true,
+            "title": "Slot Routing Summary",
+            "type": "object"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "steering_instructions": {
+            "items": {
+              "$ref": "#/components/schemas/UserSteeringInstruction"
+            },
+            "title": "Steering Instructions",
+            "type": "array"
+          },
+          "topic_id": {
+            "title": "Topic Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic_id",
+          "run_id",
+          "operation_id",
+          "status"
+        ],
+        "title": "EarningsSquadDossierResponse",
+        "type": "object"
+      },
+      "EarningsSquadRunResponse": {
+        "properties": {
+          "checkpoint_completed_stages": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Checkpoint Completed Stages",
+            "type": "array"
+          },
+          "dossier": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EarningsDossier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "operation_id": {
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "org_events": {
+            "items": {
+              "$ref": "#/components/schemas/OrgGraphEvent"
+            },
+            "title": "Org Events",
+            "type": "array"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "slot_routing_summary": {
+            "additionalProperties": true,
+            "title": "Slot Routing Summary",
+            "type": "object"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "topic_id": {
+            "title": "Topic Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic_id",
+          "run_id",
+          "operation_id",
+          "status"
+        ],
+        "title": "EarningsSquadRunResponse",
+        "type": "object"
+      },
+      "EarningsSquadSteerRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "EarningsSquadSteerRequest",
+        "type": "object"
+      },
+      "EarningsSquadSteerResponse": {
+        "properties": {
+          "instruction": {
+            "$ref": "#/components/schemas/UserSteeringInstruction"
+          },
+          "operation_id": {
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "persisted_for_resume"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "topic_id": {
+            "title": "Topic Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic_id",
+          "run_id",
+          "operation_id",
+          "instruction",
+          "status"
+        ],
+        "title": "EarningsSquadSteerResponse",
+        "type": "object"
+      },
+      "EvidenceCard": {
+        "additionalProperties": false,
+        "description": "Structured evidence output emitted by read-only Stage 2/2.5 workers.",
+        "properties": {
+          "card_id": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Card Id",
+            "type": "string"
+          },
+          "caveat": {
+            "anyOf": [
+              {
+                "maxLength": 1500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caveat"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceCitation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "finding": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Finding",
+            "type": "string"
+          },
+          "instruction_sequence": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Instruction Sequence",
+            "type": "integer"
+          },
+          "numeric_claims": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Numeric Claims",
+            "type": "array"
+          },
+          "round_number": {
+            "default": 1,
+            "maximum": 2.0,
+            "minimum": 1.0,
+            "title": "Round Number",
+            "type": "integer"
+          },
+          "supporting_fact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Supporting Fact Ids",
+            "type": "array"
+          },
+          "topic_tag": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Topic Tag",
+            "type": "string"
+          },
+          "unresolved_gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved Gaps",
+            "type": "array"
+          },
+          "worker_role": {
+            "enum": [
+              "worker_segments",
+              "worker_forensics",
+              "worker_guidance"
+            ],
+            "title": "Worker Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "card_id",
+          "worker_role",
+          "topic_tag",
+          "finding"
+        ],
+        "title": "EvidenceCard",
+        "type": "object"
+      },
+      "EvidenceCitation": {
+        "additionalProperties": false,
+        "description": "Source-anchored citation attached to an EvidenceCard.",
+        "properties": {
+          "character_end": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character End"
+          },
+          "character_start": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Start"
+          },
+          "content_sha256": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Sha256"
+          },
+          "fact_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fact Id"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "quotation": {
+            "maxLength": 2500,
+            "minLength": 1,
+            "title": "Quotation",
+            "type": "string"
+          },
+          "source_id": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "quotation"
+        ],
+        "title": "EvidenceCitation",
         "type": "object"
       },
       "FetchSourceRequest": {
@@ -702,6 +3145,200 @@
         "title": "FetchSourceRequest",
         "type": "object"
       },
+      "FilingRedlineReport": {
+        "additionalProperties": false,
+        "properties": {
+          "section_diffs": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SectionRedlineDiff"
+            },
+            "title": "Section Diffs",
+            "type": "object"
+          },
+          "total_added": {
+            "default": 0,
+            "title": "Total Added",
+            "type": "integer"
+          },
+          "total_filtered_noise": {
+            "default": 0,
+            "title": "Total Filtered Noise",
+            "type": "integer"
+          },
+          "total_removed": {
+            "default": 0,
+            "title": "Total Removed",
+            "type": "integer"
+          },
+          "total_revised": {
+            "default": 0,
+            "title": "Total Revised",
+            "type": "integer"
+          }
+        },
+        "title": "FilingRedlineReport",
+        "type": "object"
+      },
+      "FilingReportEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "long_name": {
+            "title": "Long Name",
+            "type": "string"
+          },
+          "menu_category": {
+            "title": "Menu Category",
+            "type": "string"
+          },
+          "normalized_category": {
+            "enum": [
+              "Statements",
+              "Notes",
+              "Tables",
+              "Cover",
+              "Details",
+              "Other"
+            ],
+            "title": "Normalized Category",
+            "type": "string"
+          },
+          "parent_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Role"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "r_file": {
+            "title": "R File",
+            "type": "string"
+          },
+          "report_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Type"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "short_name": {
+            "title": "Short Name",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "r_file",
+          "short_name",
+          "long_name",
+          "menu_category",
+          "normalized_category",
+          "url"
+        ],
+        "title": "FilingReportEntry",
+        "type": "object"
+      },
+      "FilingTableCatalog": {
+        "additionalProperties": false,
+        "properties": {
+          "accession": {
+            "title": "Accession",
+            "type": "string"
+          },
+          "all_reports": {
+            "items": {
+              "$ref": "#/components/schemas/FilingReportEntry"
+            },
+            "title": "All Reports",
+            "type": "array"
+          },
+          "cik": {
+            "title": "Cik",
+            "type": "string"
+          },
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "filing_summary_url": {
+            "title": "Filing Summary Url",
+            "type": "string"
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/FilingReportEntry"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "other": {
+            "items": {
+              "$ref": "#/components/schemas/FilingReportEntry"
+            },
+            "title": "Other",
+            "type": "array"
+          },
+          "report_count": {
+            "title": "Report Count",
+            "type": "integer"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/FilingReportEntry"
+            },
+            "title": "Statements",
+            "type": "array"
+          },
+          "tables": {
+            "items": {
+              "$ref": "#/components/schemas/FilingReportEntry"
+            },
+            "title": "Tables",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entity_id",
+          "cik",
+          "accession",
+          "filing_summary_url",
+          "report_count"
+        ],
+        "title": "FilingTableCatalog",
+        "type": "object"
+      },
       "FocusCitation": {
         "additionalProperties": false,
         "properties": {
@@ -722,6 +3359,151 @@
           "citation_index"
         ],
         "title": "FocusCitation",
+        "type": "object"
+      },
+      "GuidanceAndNonGaapResult": {
+        "additionalProperties": false,
+        "properties": {
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "guidance_evaluations": {
+            "items": {
+              "$ref": "#/components/schemas/GuidanceMetricEvaluation"
+            },
+            "title": "Guidance Evaluations",
+            "type": "array"
+          },
+          "nongaap_verifications": {
+            "items": {
+              "$ref": "#/components/schemas/NonGaapBridgeVerification"
+            },
+            "title": "Nongaap Verifications",
+            "type": "array"
+          },
+          "period_label": {
+            "title": "Period Label",
+            "type": "string"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/NonGaapWarningFlag"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "period_label",
+          "guidance_evaluations",
+          "nongaap_verifications",
+          "warnings"
+        ],
+        "title": "GuidanceAndNonGaapResult",
+        "type": "object"
+      },
+      "GuidanceMetricEvaluation": {
+        "additionalProperties": false,
+        "properties": {
+          "metric_name": {
+            "title": "Metric Name",
+            "type": "string"
+          },
+          "new_guidance_direction": {
+            "$ref": "#/components/schemas/NewGuidanceDirectionResult"
+          },
+          "period_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Label"
+          },
+          "vs_consensus": {
+            "$ref": "#/components/schemas/SurpriseComparison"
+          },
+          "vs_prior_guidance": {
+            "$ref": "#/components/schemas/SurpriseComparison"
+          }
+        },
+        "required": [
+          "metric_name",
+          "vs_prior_guidance",
+          "vs_consensus",
+          "new_guidance_direction"
+        ],
+        "title": "GuidanceMetricEvaluation",
+        "type": "object"
+      },
+      "GuidancePassage": {
+        "additionalProperties": false,
+        "properties": {
+          "heading": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heading"
+          },
+          "horizon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizon"
+          },
+          "metrics_mentioned": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Metrics Mentioned",
+            "type": "array"
+          },
+          "source_exhibit": {
+            "default": "EX-99.1",
+            "title": "Source Exhibit",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "GuidancePassage",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -858,6 +3640,71 @@
         "title": "InstructionTextLocation",
         "type": "object"
       },
+      "MarginBridgeItem": {
+        "additionalProperties": false,
+        "properties": {
+          "current_pct": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "line": {
+            "enum": [
+              "gross_margin",
+              "rd_pct",
+              "sga_pct",
+              "operating_margin",
+              "net_margin"
+            ],
+            "title": "Line",
+            "type": "string"
+          },
+          "prior_qoq_pct": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiagnosticMetric"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prior_yoy_pct": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiagnosticMetric"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "qoq_change_bps": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiagnosticMetric"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "yoy_change_bps": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiagnosticMetric"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "line",
+          "current_pct"
+        ],
+        "title": "MarginBridgeItem",
+        "type": "object"
+      },
       "MethodPackRef": {
         "additionalProperties": false,
         "description": "A method pack loaded at the start of a run or activated during research.",
@@ -886,6 +3733,700 @@
           "fingerprint"
         ],
         "title": "MethodPackRef",
+        "type": "object"
+      },
+      "MetricValue": {
+        "additionalProperties": false,
+        "description": "Scalar financial quantity carrying explicit provenance and optional unit/currency.",
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "fact_id": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fact Id"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          },
+          "xbrl_tag": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xbrl Tag"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "MetricValue",
+        "type": "object"
+      },
+      "ModelSlotBinding": {
+        "additionalProperties": false,
+        "description": "Configured model profile or deployment reference for a single research slot.",
+        "properties": {
+          "allow_private_network": {
+            "default": false,
+            "title": "Allow Private Network",
+            "type": "boolean"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "capabilities": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SlotCapabilities"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "credential_ref": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Ref"
+          },
+          "deployment_ref": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deployment Ref"
+          },
+          "endpoint_version": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint Version"
+          },
+          "generation_parameters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatGenerationParameters"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "messages_auth_scheme": {
+            "anyOf": [
+              {
+                "enum": [
+                  "x-api-key",
+                  "bearer"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Messages Auth Scheme"
+          },
+          "messages_effort": {
+            "anyOf": [
+              {
+                "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Messages Effort"
+          },
+          "messages_max_tokens": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Messages Max Tokens"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "protocol": {
+            "anyOf": [
+              {
+                "enum": [
+                  "openai_chat_completions",
+                  "openai_responses",
+                  "anthropic_messages"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protocol"
+          },
+          "tools_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tools Verified"
+          }
+        },
+        "title": "ModelSlotBinding",
+        "type": "object"
+      },
+      "ModelSlotConfig": {
+        "additionalProperties": false,
+        "description": "Optional bindings for the 4 logical research model slots.",
+        "properties": {
+          "bear_reviewer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelSlotBinding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deep_reasoner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelSlotBinding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fast_extractor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelSlotBinding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "writer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelSlotBinding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ModelSlotConfig",
+        "type": "object"
+      },
+      "NewGuidanceDirectionResult": {
+        "additionalProperties": false,
+        "properties": {
+          "abs_change": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Abs Change"
+          },
+          "benchmark_mid": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark Mid"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "direction": {
+            "enum": [
+              "Raise",
+              "Maintain",
+              "Cut",
+              "Not Provided"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "formula": {
+            "title": "Formula",
+            "type": "string"
+          },
+          "input_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Ids",
+            "type": "array"
+          },
+          "new_high": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New High"
+          },
+          "new_low": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Low"
+          },
+          "new_mid": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Mid"
+          },
+          "pct_change": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Change"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "direction",
+          "unit",
+          "formula"
+        ],
+        "title": "NewGuidanceDirectionResult",
+        "type": "object"
+      },
+      "NonGaapBridgeVerification": {
+        "additionalProperties": false,
+        "properties": {
+          "adjustments_sum": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Adjustments Sum",
+            "type": "string"
+          },
+          "classified_adjustments": {
+            "items": {
+              "$ref": "#/components/schemas/ClassifiedNonGaapAdjustment"
+            },
+            "title": "Classified Adjustments",
+            "type": "array"
+          },
+          "computed_non_gaap_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Computed Non Gaap Value",
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "discrepancy": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Discrepancy",
+            "type": "string"
+          },
+          "formula": {
+            "title": "Formula",
+            "type": "string"
+          },
+          "gaap_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Gaap Value",
+            "type": "string"
+          },
+          "input_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Ids",
+            "type": "array"
+          },
+          "metric_name": {
+            "title": "Metric Name",
+            "type": "string"
+          },
+          "period_label": {
+            "title": "Period Label",
+            "type": "string"
+          },
+          "reported_non_gaap_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Reported Non Gaap Value",
+            "type": "string"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          },
+          "tie_status": {
+            "enum": [
+              "exact_tie",
+              "ties_within_rounding_tolerance",
+              "mismatch"
+            ],
+            "title": "Tie Status",
+            "type": "string"
+          },
+          "ties": {
+            "title": "Ties",
+            "type": "boolean"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "uplift_pct": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "uplift_ratio": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/NonGaapWarningFlag"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "metric_name",
+          "period_label",
+          "unit",
+          "gaap_value",
+          "reported_non_gaap_value",
+          "adjustments_sum",
+          "computed_non_gaap_value",
+          "discrepancy",
+          "ties",
+          "tie_status",
+          "uplift_ratio",
+          "uplift_pct",
+          "classified_adjustments",
+          "warnings",
+          "formula"
+        ],
+        "title": "NonGaapBridgeVerification",
+        "type": "object"
+      },
+      "NonGaapReconciliation": {
+        "additionalProperties": false,
+        "properties": {
+          "metrics_mentioned": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Metrics Mentioned",
+            "type": "array"
+          },
+          "source_exhibit": {
+            "default": "EX-99.1",
+            "title": "Source Exhibit",
+            "type": "string"
+          },
+          "table": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParsedHtmlTable"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "text": {
+            "default": "",
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "NonGaapReconciliation",
+        "type": "object"
+      },
+      "NonGaapWarningFlag": {
+        "additionalProperties": false,
+        "properties": {
+          "adjustment_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjustment Label"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "flag_id": {
+            "title": "Flag Id",
+            "type": "string"
+          },
+          "input_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Ids",
+            "type": "array"
+          },
+          "investigation_prompt": {
+            "minLength": 10,
+            "title": "Investigation Prompt",
+            "type": "string"
+          },
+          "metric_name": {
+            "title": "Metric Name",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "red",
+              "yellow",
+              "green"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "flag_id",
+          "severity",
+          "metric_name",
+          "summary",
+          "investigation_prompt"
+        ],
+        "title": "NonGaapWarningFlag",
         "type": "object"
       },
       "NumericFact": {
@@ -1050,6 +4591,240 @@
         "title": "OperationResponse",
         "type": "object"
       },
+      "OrgEdgeEvent": {
+        "additionalProperties": false,
+        "description": "Directed organization graph edge event (delegation vs review).",
+        "properties": {
+          "edge_kind": {
+            "default": "dispatch",
+            "enum": [
+              "dispatch",
+              "report",
+              "review",
+              "steering"
+            ],
+            "title": "Edge Kind",
+            "type": "string"
+          },
+          "from_node_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "From Node Id",
+            "type": "string"
+          },
+          "is_review": {
+            "default": false,
+            "title": "Is Review",
+            "type": "boolean"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "to_node_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "To Node Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_node_id",
+          "to_node_id"
+        ],
+        "title": "OrgEdgeEvent",
+        "type": "object"
+      },
+      "OrgGraphEvent": {
+        "additionalProperties": false,
+        "description": "Sequenced Organization-Graph event aligned with OrganizationUiState.kt.",
+        "properties": {
+          "action_kind": {
+            "enum": [
+              "READING",
+              "SEARCHING",
+              "INSPECTING",
+              "DELEGATING",
+              "WAITING_SUBORDINATES",
+              "RESPONDING",
+              "NEEDS_USER",
+              "BLOCKED",
+              "FAILED"
+            ],
+            "title": "Action Kind",
+            "type": "string"
+          },
+          "blocker_text": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocker Text"
+          },
+          "current_activity": {
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Current Activity",
+            "type": "string"
+          },
+          "display_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "edge_event": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgEdgeEvent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "node_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Node Id",
+            "type": "string"
+          },
+          "parent_node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Node Id"
+          },
+          "role": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Role",
+            "type": "string"
+          },
+          "runtime_state": {
+            "enum": [
+              "idle",
+              "running",
+              "waiting",
+              "completed",
+              "failed",
+              "blocked",
+              "cancelled",
+              "skipped"
+            ],
+            "title": "Runtime State",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "slot": {
+            "anyOf": [
+              {
+                "enum": [
+                  "fast_extractor",
+                  "deep_reasoner",
+                  "bear_reviewer",
+                  "writer"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot"
+          },
+          "stage": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Stage",
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "title": "Timestamp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sequence",
+          "stage",
+          "node_id",
+          "role",
+          "display_name",
+          "runtime_state",
+          "action_kind",
+          "current_activity"
+        ],
+        "title": "OrgGraphEvent",
+        "type": "object"
+      },
+      "ParsedHtmlTable": {
+        "additionalProperties": false,
+        "properties": {
+          "headers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "array"
+          },
+          "is_nongaap": {
+            "default": false,
+            "title": "Is Nongaap",
+            "type": "boolean"
+          },
+          "raw_markdown": {
+            "default": "",
+            "title": "Raw Markdown",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "ParsedHtmlTable",
+        "type": "object"
+      },
       "PdfReextractRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1145,6 +4920,417 @@
         "title": "PdfUploadRequest",
         "type": "object"
       },
+      "PeriodFinancials": {
+        "additionalProperties": false,
+        "description": "Structured financial statement snapshot for one reporting period.",
+        "properties": {
+          "accounts_payable": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accounts_receivable": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "capex": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cash": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cost_of_revenue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "current_assets": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_liabilities": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "depreciation_amortization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dividends_paid": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ebit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ebitda": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "free_cash_flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gross_profit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "interest_expense": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inventory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "long_term_debt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "minority_interest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "monetary_unit": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monetary Unit"
+          },
+          "net_income": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "operating_cash_flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "operating_income": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "period_days": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Days"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "period_label": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Period Label",
+            "type": "string"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
+          },
+          "period_type": {
+            "default": "quarter",
+            "enum": [
+              "quarter",
+              "annual",
+              "ttm"
+            ],
+            "title": "Period Type",
+            "type": "string"
+          },
+          "rd_expense": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revenue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sbc": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sga_expense": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "share_repurchases": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "shares_diluted": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "short_term_debt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "short_term_investments": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total_debt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "period_label"
+        ],
+        "title": "PeriodFinancials",
+        "type": "object"
+      },
+      "Permissions": {
+        "additionalProperties": false,
+        "properties": {
+          "display": {
+            "default": false,
+            "title": "Display",
+            "type": "boolean"
+          },
+          "export": {
+            "default": false,
+            "title": "Export",
+            "type": "boolean"
+          },
+          "model_input": {
+            "default": false,
+            "title": "Model Input",
+            "type": "boolean"
+          },
+          "owner_scoped": {
+            "default": false,
+            "title": "Owner Scoped",
+            "type": "boolean"
+          },
+          "store": {
+            "default": false,
+            "title": "Store",
+            "type": "boolean"
+          }
+        },
+        "title": "Permissions",
+        "type": "object"
+      },
       "PlannedRequirement": {
         "additionalProperties": false,
         "properties": {
@@ -1214,6 +5400,122 @@
           "revision"
         ],
         "title": "PlannedRequirement",
+        "type": "object"
+      },
+      "PrefetchedSourceRef": {
+        "additionalProperties": false,
+        "description": "Metadata reference for an authoritative source persisted during Stage 0.",
+        "properties": {
+          "content_sha256": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Content Sha256",
+            "type": "string"
+          },
+          "kind": {
+            "default": "official",
+            "enum": [
+              "user_supplied",
+              "official",
+              "market_data"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "permissions": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Permissions",
+            "type": "object"
+          },
+          "retrieval_method": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Retrieval Method",
+            "type": "string"
+          },
+          "source_id": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "total_characters": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Total Characters",
+            "type": "integer"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "source_id",
+          "title",
+          "retrieval_method",
+          "content_sha256"
+        ],
+        "title": "PrefetchedSourceRef",
+        "type": "object"
+      },
+      "Provenance": {
+        "additionalProperties": false,
+        "properties": {
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "endpoints": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Endpoints",
+            "type": "array"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "response_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Sha256"
+          },
+          "retrieved_at": {
+            "format": "date-time",
+            "title": "Retrieved At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "endpoint",
+          "retrieved_at"
+        ],
+        "title": "Provenance",
         "type": "object"
       },
       "PublicCalculationRequest": {
@@ -1475,6 +5777,156 @@
           "calculation_index"
         ],
         "title": "RecalculateRequest",
+        "type": "object"
+      },
+      "RedlineParagraphDiff": {
+        "additionalProperties": false,
+        "properties": {
+          "change_type": {
+            "enum": [
+              "added",
+              "removed",
+              "revised"
+            ],
+            "title": "Change Type",
+            "type": "string"
+          },
+          "current_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Index"
+          },
+          "current_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Text"
+          },
+          "prior_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Index"
+          },
+          "prior_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Text"
+          },
+          "redline_markup": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redline Markup"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "similarity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Similarity"
+          }
+        },
+        "required": [
+          "change_type"
+        ],
+        "title": "RedlineParagraphDiff",
+        "type": "object"
+      },
+      "RejectedBearCase": {
+        "additionalProperties": false,
+        "description": "Generic or unanchored bear case rejected by the server-side Stage 3A/3B anchor gate.",
+        "properties": {
+          "anchor_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Kind"
+          },
+          "anchored_evidence_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Anchored Evidence Ids",
+            "type": "array"
+          },
+          "bear_id": {
+            "default": "",
+            "title": "Bear Id",
+            "type": "string"
+          },
+          "next_quarter_invalidation_trigger": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Quarter Invalidation Trigger"
+          },
+          "rejection_reason": {
+            "title": "Rejection Reason",
+            "type": "string"
+          },
+          "thesis_challenge": {
+            "default": "",
+            "title": "Thesis Challenge",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rejection_reason"
+        ],
+        "title": "RejectedBearCase",
         "type": "object"
       },
       "ResearchAttempt": {
@@ -2132,6 +6584,76 @@
           }
         },
         "title": "ResearchContent",
+        "type": "object"
+      },
+      "ResearchDispatchPlan": {
+        "additionalProperties": false,
+        "description": "Stage 1 Lead Coordinator output specifying L2 pack and 1-3 worker tasks.",
+        "properties": {
+          "cross_worker_hypotheses": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cross Worker Hypotheses",
+            "type": "array"
+          },
+          "instruction_sequence": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Instruction Sequence",
+            "type": "integer"
+          },
+          "l1_pack_id": {
+            "default": "earnings_review",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "L1 Pack Id",
+            "type": "string"
+          },
+          "plan_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "planning_notes": {
+            "default": "",
+            "maxLength": 1500,
+            "title": "Planning Notes",
+            "type": "string"
+          },
+          "selected_l2_pack_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected L2 Pack Id"
+          },
+          "selected_l2_pack_reason": {
+            "default": "",
+            "maxLength": 600,
+            "title": "Selected L2 Pack Reason",
+            "type": "string"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/WorkerTask"
+            },
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Tasks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tasks"
+        ],
+        "title": "ResearchDispatchPlan",
         "type": "object"
       },
       "ResearchEvidenceRequirement": {
@@ -3718,6 +8240,286 @@
         "title": "ReturnContext",
         "type": "object"
       },
+      "ReverseDcfResult": {
+        "additionalProperties": false,
+        "properties": {
+          "base_ttm_fcf": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Ttm Fcf"
+          },
+          "ev_residual_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ev Residual Pct"
+          },
+          "forecast_years": {
+            "title": "Forecast Years",
+            "type": "integer"
+          },
+          "formula": {
+            "title": "Formula",
+            "type": "string"
+          },
+          "implied_5y_fcf_cagr_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implied 5Y Fcf Cagr Pct"
+          },
+          "implied_exit_fcf_multiple": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implied Exit Fcf Multiple"
+          },
+          "implied_year_n_fcf": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implied Year N Fcf"
+          },
+          "input_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Ids",
+            "type": "array"
+          },
+          "pv_explicit_fcf": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pv Explicit Fcf"
+          },
+          "pv_terminal_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pv Terminal Value"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "sensitivity_matrix": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/ReverseDcfSensitivityCell"
+              },
+              "type": "array"
+            },
+            "title": "Sensitivity Matrix",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "computed",
+              "unavailable",
+              "disabled_by_sector"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "target_ev": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Ev"
+          },
+          "terminal_growth_axis_pct": {
+            "items": {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            "title": "Terminal Growth Axis Pct",
+            "type": "array"
+          },
+          "terminal_growth_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Terminal Growth Pct",
+            "type": "string"
+          },
+          "terminal_method": {
+            "enum": [
+              "gordon_growth",
+              "exit_multiple"
+            ],
+            "title": "Terminal Method",
+            "type": "string"
+          },
+          "terminal_multiple_input": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminal Multiple Input"
+          },
+          "terminal_value_share_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminal Value Share Pct"
+          },
+          "wacc_axis_pct": {
+            "items": {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            "title": "Wacc Axis Pct",
+            "type": "array"
+          },
+          "wacc_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Wacc Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "terminal_method",
+          "forecast_years",
+          "wacc_pct",
+          "terminal_growth_pct",
+          "formula"
+        ],
+        "title": "ReverseDcfResult",
+        "type": "object"
+      },
+      "ReverseDcfSensitivityCell": {
+        "additionalProperties": false,
+        "properties": {
+          "implied_5y_fcf_cagr_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implied 5Y Fcf Cagr Pct"
+          },
+          "implied_exit_fcf_multiple": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implied Exit Fcf Multiple"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "enum": [
+              "computed",
+              "unavailable",
+              "disabled_by_sector"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "terminal_growth_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Terminal Growth Pct",
+            "type": "string"
+          },
+          "wacc_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Wacc Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "wacc_pct",
+          "terminal_growth_pct",
+          "status"
+        ],
+        "title": "ReverseDcfSensitivityCell",
+        "type": "object"
+      },
       "ReviewEvidence": {
         "additionalProperties": false,
         "properties": {
@@ -4143,6 +8945,134 @@
         "title": "SecIdentityRequest",
         "type": "object"
       },
+      "SectionRedlineDiff": {
+        "additionalProperties": false,
+        "properties": {
+          "added": {
+            "items": {
+              "$ref": "#/components/schemas/RedlineParagraphDiff"
+            },
+            "title": "Added",
+            "type": "array"
+          },
+          "filtered_noise_count": {
+            "default": 0,
+            "title": "Filtered Noise Count",
+            "type": "integer"
+          },
+          "filtered_noise_examples": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Filtered Noise Examples",
+            "type": "array"
+          },
+          "has_substantive_changes": {
+            "default": false,
+            "title": "Has Substantive Changes",
+            "type": "boolean"
+          },
+          "removed": {
+            "items": {
+              "$ref": "#/components/schemas/RedlineParagraphDiff"
+            },
+            "title": "Removed",
+            "type": "array"
+          },
+          "revised": {
+            "items": {
+              "$ref": "#/components/schemas/RedlineParagraphDiff"
+            },
+            "title": "Revised",
+            "type": "array"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "unchanged_count": {
+            "default": 0,
+            "title": "Unchanged Count",
+            "type": "integer"
+          }
+        },
+        "title": "SectionRedlineDiff",
+        "type": "object"
+      },
+      "SectorApplicability": {
+        "additionalProperties": false,
+        "description": "SEC SIC sector gate assessment explaining disabled non-financial metrics.",
+        "properties": {
+          "disabled_metrics": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Disabled Metrics",
+            "type": "array"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "is_gated": {
+            "title": "Is Gated",
+            "type": "boolean"
+          },
+          "recommended_alternatives": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Recommended Alternatives",
+            "type": "array"
+          },
+          "sector_category": {
+            "enum": [
+              "non_financial",
+              "bank",
+              "insurance",
+              "reit"
+            ],
+            "title": "Sector Category",
+            "type": "string"
+          },
+          "sic_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sic Code"
+          },
+          "sic_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sic Description"
+          }
+        },
+        "required": [
+          "sector_category",
+          "is_gated",
+          "explanation"
+        ],
+        "title": "SectorApplicability",
+        "type": "object"
+      },
       "SemanticReview": {
         "additionalProperties": false,
         "properties": {
@@ -4235,6 +9165,309 @@
           "review_key"
         ],
         "title": "SemanticReview",
+        "type": "object"
+      },
+      "SlotCapabilities": {
+        "additionalProperties": false,
+        "description": "Explicit wire and tool capabilities aligned with ``provider_capabilities.CapabilityProfile``.",
+        "properties": {
+          "context_tokens": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Tokens"
+          },
+          "continuation": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Continuation"
+          },
+          "continuation_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Continuation Fields"
+          },
+          "dynamic_tool_definitions": {
+            "default": false,
+            "title": "Dynamic Tool Definitions",
+            "type": "boolean"
+          },
+          "explicit_cache_control": {
+            "default": false,
+            "title": "Explicit Cache Control",
+            "type": "boolean"
+          },
+          "generation_parameters": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation Parameters"
+          },
+          "input_counter": {
+            "anyOf": [
+              {
+                "enum": [
+                  "utf8_byte_upper_bound",
+                  "chars_div_3"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Counter"
+          },
+          "mode": {
+            "default": "json_object",
+            "enum": [
+              "json_schema",
+              "tool",
+              "json_object"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "native_tools": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Native Tools"
+          },
+          "output_tokens": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Tokens"
+          },
+          "schema_dialect": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Dialect"
+          },
+          "stream": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage"
+          },
+          "version": {
+            "default": "v1",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Version",
+            "type": "string"
+          },
+          "work_context_tokens": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Context Tokens"
+          }
+        },
+        "title": "SlotCapabilities",
+        "type": "object"
+      },
+      "SlotUsageRecord": {
+        "additionalProperties": false,
+        "description": "Per-slot call and token usage accounting (no secret credentials).",
+        "properties": {
+          "calls": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Calls",
+            "type": "integer"
+          },
+          "elapsed_ms": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Elapsed Ms",
+            "type": "integer"
+          },
+          "failed_calls": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Failed Calls",
+            "type": "integer"
+          },
+          "fallback_used": {
+            "default": true,
+            "title": "Fallback Used",
+            "type": "boolean"
+          },
+          "input_tokens": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "output_tokens": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "protocol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protocol"
+          },
+          "slot": {
+            "enum": [
+              "fast_extractor",
+              "deep_reasoner",
+              "bear_reviewer",
+              "writer"
+            ],
+            "title": "Slot",
+            "type": "string"
+          },
+          "total_tokens": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "slot"
+        ],
+        "title": "SlotUsageRecord",
+        "type": "object"
+      },
+      "SlotUsageSummary": {
+        "additionalProperties": false,
+        "description": "Aggregated slot usage summary attached to EarningsDossier.",
+        "properties": {
+          "deep_report_tool_calls": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Deep Report Tool Calls",
+            "type": "integer"
+          },
+          "slots": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SlotUsageRecord"
+            },
+            "propertyNames": {
+              "enum": [
+                "fast_extractor",
+                "deep_reasoner",
+                "bear_reviewer",
+                "writer"
+              ]
+            },
+            "title": "Slots",
+            "type": "object"
+          },
+          "stage_0_model_calls": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Stage 0 Model Calls",
+            "type": "integer"
+          },
+          "total_calls": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Total Calls",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "slots"
+        ],
+        "title": "SlotUsageSummary",
         "type": "object"
       },
       "SourceInput": {
@@ -4419,6 +9652,264 @@
           "label"
         ],
         "title": "SourceRef",
+        "type": "object"
+      },
+      "SquadGap": {
+        "additionalProperties": false,
+        "description": "Explicit unresolved gap or degradation record.",
+        "properties": {
+          "code": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "fallback": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback"
+          },
+          "gap_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Gap Id",
+            "type": "string"
+          },
+          "is_blocking": {
+            "default": false,
+            "title": "Is Blocking",
+            "type": "boolean"
+          },
+          "message": {
+            "maxLength": 1200,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "stage": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Stage",
+            "type": "string"
+          },
+          "worker_role": {
+            "anyOf": [
+              {
+                "enum": [
+                  "worker_segments",
+                  "worker_forensics",
+                  "worker_guidance"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worker Role"
+          }
+        },
+        "required": [
+          "stage",
+          "code",
+          "message"
+        ],
+        "title": "SquadGap",
+        "type": "object"
+      },
+      "SurpriseComparison": {
+        "additionalProperties": false,
+        "properties": {
+          "abs_diff": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Abs Diff"
+          },
+          "actual_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Value"
+          },
+          "benchmark_type": {
+            "enum": [
+              "prior_guidance_midpoint",
+              "consensus"
+            ],
+            "title": "Benchmark Type",
+            "type": "string"
+          },
+          "benchmark_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark Value"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "formula": {
+            "title": "Formula",
+            "type": "string"
+          },
+          "guidance_high": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guidance High"
+          },
+          "guidance_low": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guidance Low"
+          },
+          "input_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Ids",
+            "type": "array"
+          },
+          "outcome": {
+            "enum": [
+              "Beat",
+              "Inline",
+              "Miss",
+              "Unavailable"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "pct_diff": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Diff"
+          },
+          "range_position": {
+            "default": "unavailable",
+            "enum": [
+              "above_high",
+              "within_range",
+              "below_low",
+              "midpoint_only",
+              "unavailable"
+            ],
+            "title": "Range Position",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "computed",
+              "unavailable",
+              "disabled_by_sector"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "xbrl_tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Xbrl Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "benchmark_type",
+          "outcome",
+          "unit",
+          "formula"
+        ],
+        "title": "SurpriseComparison",
         "type": "object"
       },
       "TableCell": {
@@ -4818,6 +10309,145 @@
         "title": "TopicUpdate",
         "type": "object"
       },
+      "TranscriptIndexEntry": {
+        "additionalProperties": false,
+        "description": "Lightweight Stage 0 index of an earnings call transcript without bloating prompts.",
+        "properties": {
+          "call_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Call Date"
+          },
+          "content_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Sha256"
+          },
+          "fallback_suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fallback Suggestions",
+            "type": "array"
+          },
+          "fiscal_quarter": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fiscal Quarter"
+          },
+          "fiscal_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fiscal Year"
+          },
+          "permissions": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Permissions",
+            "type": "object"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "sections": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sections",
+            "type": "array"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "speakers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Speakers",
+            "type": "array"
+          },
+          "status": {
+            "default": "unavailable",
+            "enum": [
+              "available",
+              "unavailable",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          }
+        },
+        "title": "TranscriptIndexEntry",
+        "type": "object"
+      },
       "TurnAttribution": {
         "additionalProperties": false,
         "description": "Attribution that must travel with a result, for example the GDELT Project citation.",
@@ -4971,6 +10601,40 @@
         "title": "UserAnchor",
         "type": "object"
       },
+      "UserSteeringInstruction": {
+        "additionalProperties": false,
+        "description": "Mid-run user instruction routed to Lead Coordinator.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "instruction_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Instruction Id",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "text": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sequence",
+          "text"
+        ],
+        "title": "UserSteeringInstruction",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -5009,6 +10673,117 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "ValuationAndExpectationsResult": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "enterprise_value": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "ev_to_ebit": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "ev_to_ebitda": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "ev_to_fcf_ex_sbc": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "ev_to_ntm_ebitda": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "ev_to_ntm_sales": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "ev_to_sales": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "fcf_ex_sbc": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "fcf_ex_sbc_yield_pct": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "fcf_yield_pct": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "market_cap": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "monetary_unit": {
+            "title": "Monetary Unit",
+            "type": "string"
+          },
+          "p_to_fcf": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "pe_forward": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "pe_ttm": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "reverse_dcf": {
+            "$ref": "#/components/schemas/ReverseDcfResult"
+          },
+          "sector_applicability": {
+            "$ref": "#/components/schemas/SectorApplicability"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          }
+        },
+        "required": [
+          "monetary_unit",
+          "sector_applicability",
+          "market_cap",
+          "enterprise_value",
+          "pe_ttm",
+          "pe_forward",
+          "ev_to_sales",
+          "ev_to_ntm_sales",
+          "ev_to_ebitda",
+          "ev_to_ntm_ebitda",
+          "ev_to_ebit",
+          "p_to_fcf",
+          "fcf_yield_pct",
+          "fcf_ex_sbc",
+          "ev_to_fcf_ex_sbc",
+          "fcf_ex_sbc_yield_pct",
+          "reverse_dcf"
+        ],
+        "title": "ValuationAndExpectationsResult",
         "type": "object"
       },
       "VersionInput": {
@@ -5060,6 +10835,225 @@
           "parent_version_id"
         ],
         "title": "VersionRestoreInput",
+        "type": "object"
+      },
+      "WorkerTask": {
+        "additionalProperties": false,
+        "description": "Bounded, read-only Stage 2/2.5 task dispatched by Lead Coordinator.",
+        "properties": {
+          "allowed_tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Tools",
+            "type": "array"
+          },
+          "focus_items": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Focus Items",
+            "type": "array"
+          },
+          "objective": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Objective",
+            "type": "string"
+          },
+          "round_number": {
+            "default": 1,
+            "maximum": 2.0,
+            "minimum": 1.0,
+            "title": "Round Number",
+            "type": "integer"
+          },
+          "skip_reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Reason"
+          },
+          "soft_turn_limit": {
+            "default": 4,
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "Soft Turn Limit",
+            "type": "integer"
+          },
+          "status": {
+            "default": "planned",
+            "enum": [
+              "planned",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "steering_instruction_sequence": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Steering Instruction Sequence",
+            "type": "integer"
+          },
+          "target_flag_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Target Flag Ids",
+            "type": "array"
+          },
+          "target_r_files": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Target R Files",
+            "type": "array"
+          },
+          "target_section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Target Section Keys",
+            "type": "array"
+          },
+          "task_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Task Id",
+            "type": "string"
+          },
+          "worker_role": {
+            "enum": [
+              "worker_segments",
+              "worker_forensics",
+              "worker_guidance"
+            ],
+            "title": "Worker Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "worker_role",
+          "objective"
+        ],
+        "title": "WorkerTask",
+        "type": "object"
+      },
+      "WorkingCapitalForensicsGroup": {
+        "additionalProperties": false,
+        "properties": {
+          "ar_vs_revenue_growth_pp": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "ar_yoy_growth_pct": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "ccc": {
+            "$ref": "#/components/schemas/WorkingCapitalItemWithDeltas"
+          },
+          "cogs_yoy_growth_pct": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "dio": {
+            "$ref": "#/components/schemas/WorkingCapitalItemWithDeltas"
+          },
+          "dpo": {
+            "$ref": "#/components/schemas/WorkingCapitalItemWithDeltas"
+          },
+          "dso": {
+            "$ref": "#/components/schemas/WorkingCapitalItemWithDeltas"
+          },
+          "inventory_turnover": {
+            "$ref": "#/components/schemas/WorkingCapitalItemWithDeltas"
+          },
+          "inventory_vs_cogs_growth_pp": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "inventory_vs_revenue_growth_pp": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "inventory_yoy_growth_pct": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "revenue_yoy_growth_pct": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          }
+        },
+        "required": [
+          "ar_yoy_growth_pct",
+          "revenue_yoy_growth_pct",
+          "ar_vs_revenue_growth_pp",
+          "inventory_yoy_growth_pct",
+          "cogs_yoy_growth_pct",
+          "inventory_vs_cogs_growth_pp",
+          "inventory_vs_revenue_growth_pp",
+          "inventory_turnover",
+          "dso",
+          "dio",
+          "dpo",
+          "ccc"
+        ],
+        "title": "WorkingCapitalForensicsGroup",
+        "type": "object"
+      },
+      "WorkingCapitalItemWithDeltas": {
+        "additionalProperties": false,
+        "properties": {
+          "current": {
+            "$ref": "#/components/schemas/DiagnosticMetric"
+          },
+          "prior_qoq": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiagnosticMetric"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prior_yoy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiagnosticMetric"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "qoq_delta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiagnosticMetric"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "yoy_delta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiagnosticMetric"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "current"
+        ],
+        "title": "WorkingCapitalItemWithDeltas",
         "type": "object"
       }
     }
@@ -6279,6 +12273,322 @@
           }
         },
         "summary": "Recalculate Research"
+      }
+    },
+    "/v2/research/topics/{topic_id}/earnings-squad/deep-report": {
+      "post": {
+        "description": "Render and cache Deep Report from a locked ``EarningsDossier`` (0 retrieval tool calls).",
+        "operationId": "generate_earnings_squad_deep_report_v2_research_topics__topic_id__earnings_squad_deep_report_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EarningsSquadDeepReportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EarningsSquadDeepReportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generate Earnings Squad Deep Report"
+      }
+    },
+    "/v2/research/topics/{topic_id}/earnings-squad/dossier": {
+      "get": {
+        "description": "Return locked ``EarningsDossier``, sequenced ``org_events``, and ``slot_routing_summary``.",
+        "operationId": "get_earnings_squad_dossier_v2_research_topics__topic_id__earnings_squad_dossier_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EarningsSquadDossierResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Earnings Squad Dossier"
+      }
+    },
+    "/v2/research/topics/{topic_id}/earnings-squad/events": {
+      "get": {
+        "description": "Stream structured ``org_graph_event`` SSE frames for the topic's active/latest squad run.",
+        "operationId": "stream_earnings_squad_events_v2_research_topics__topic_id__earnings_squad_events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "After",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stream Earnings Squad Events"
+      }
+    },
+    "/v2/research/topics/{topic_id}/earnings-squad/export": {
+      "get": {
+        "description": "Export locked ``EarningsDossier`` as Markdown, CSV, or XLSX enforcing source export permissions.",
+        "operationId": "export_earnings_squad_dossier_v2_research_topics__topic_id__earnings_squad_export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "markdown",
+              "enum": [
+                "markdown",
+                "csv",
+                "xlsx"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "report_mode",
+            "required": false,
+            "schema": {
+              "default": "auto",
+              "enum": [
+                "auto",
+                "memo",
+                "deep_report"
+              ],
+              "title": "Report Mode",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Earnings Squad Dossier"
+      }
+    },
+    "/v2/research/topics/{topic_id}/earnings-squad/run": {
+      "post": {
+        "description": "Execute (or resume from checkpoint) the 6-stage Scheme 2 US Earnings Research Squad.",
+        "operationId": "run_earnings_squad_v2_research_topics__topic_id__earnings_squad_run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EarningsSquadApiRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EarningsSquadRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Earnings Squad"
+      }
+    },
+    "/v2/research/topics/{topic_id}/earnings-squad/steer": {
+      "post": {
+        "description": "Submit Lead-directed mid-run (or checkpoint-resume) user steering instruction.",
+        "operationId": "steer_earnings_squad_v2_research_topics__topic_id__earnings_squad_steer_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EarningsSquadSteerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EarningsSquadSteerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Steer Earnings Squad"
       }
     },
     "/v2/research/topics/{topic_id}/facts/confirm-direction": {

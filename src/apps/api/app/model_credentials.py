@@ -13,7 +13,7 @@ from hashlib import sha256
 import os
 from pathlib import Path
 from threading import RLock
-from typing import Any, Literal
+from typing import Any, Literal, Mapping
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -21,6 +21,13 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .openai_compatible import OpenAICompatibleSettings
 from .phase3 import ProviderFailure
 from .provider_capabilities import ChatGenerationParameters
+from .research_model_slots import (
+    ModelSlotBinding,
+    ModelSlotConfig,
+    SlotRoutingSummary,
+    slot_routing_summary,
+    slot_routing_summary_model,
+)
 
 
 ModelProtocol = Literal["openai_chat_completions", "openai_responses", "anthropic_messages"]
@@ -55,11 +62,15 @@ class ModelConfigUpdate(BaseModel):
     model: str | None = Field(default=None, min_length=1, max_length=128)
     api_key: str | None = Field(default=None, min_length=8, max_length=512)
     clear_api_key: bool = False
+    model_slots: ModelSlotConfig | None = None
+    clear_model_slots: bool = False
 
     @model_validator(mode="after")
     def validate_key_action(self) -> "ModelConfigUpdate":
         if self.api_key is not None and self.clear_api_key:
             raise ValueError("api_key and clear_api_key are mutually exclusive")
+        if self.model_slots is not None and self.clear_model_slots:
+            raise ValueError("model_slots and clear_model_slots are mutually exclusive")
         if self.mode == "platform" and any((self.protocol is not None, self.base_url is not None, self.model is not None, self.api_key is not None, self.clear_api_key, self.messages_options is not None, self.generation_parameters is not None)):
             raise ValueError("platform mode does not accept personal model fields")
         for name in ("base_url", "model", "api_key"):
@@ -87,6 +98,8 @@ class ModelConfigResponse(BaseModel):
     model: str | None = None
     key_hint: str | None = Field(default=None, pattern=r"^••••[A-Za-z0-9]{4}$")
     research_tools_verified_at: datetime | None = None
+    model_slots: ModelSlotConfig | None = None
+    model_slots_summary: SlotRoutingSummary | None = None
     updated_at: datetime | None = None
 
 
@@ -112,6 +125,7 @@ class StoredModelConfig(BaseModel):
     encrypted_api_key: str | None = Field(default=None, min_length=32, max_length=4096)
     key_hint: str | None = Field(default=None, pattern=r"^••••[A-Za-z0-9]{4}$")
     research_tools_verified_at: datetime | None = None
+    model_slots: ModelSlotConfig | None = None
     updated_at: datetime
 
     @model_validator(mode="after")
@@ -179,17 +193,66 @@ class AccountModelSettings:
         value = self.repository.get(account_id)
         return value if value is None or isinstance(value, StoredModelConfig) else StoredModelConfig.model_validate(value)
 
+    @staticmethod
+    def _normalize_account_slots(slots: ModelSlotConfig | None) -> ModelSlotConfig | None:
+        if slots is None or slots.is_empty():
+            return None
+        for binding in slots.as_dict().values():
+            if binding.allow_private_network:
+                raise ModelCredentialError(422, "validation_error", "Account model slots must use public HTTPS endpoints.")
+        return slots
+
+    @staticmethod
+    def _primary_slot_profile_from_stored(stored: StoredModelConfig | None) -> ModelSlotBinding | None:
+        if stored is None or stored.mode != "personal" or not stored.base_url or not stored.model:
+            return None
+        options = stored.messages_options
+        return ModelSlotBinding(
+            protocol=stored.protocol,
+            base_url=stored.base_url,
+            model=stored.model,
+            credential_ref="account_primary",
+            endpoint_version=options.version if options else None,
+            generation_parameters=stored.generation_parameters if stored.protocol != "anthropic_messages" else None,
+            messages_auth_scheme=options.auth_scheme if stored.protocol == "anthropic_messages" and options else None,
+            messages_max_tokens=options.max_tokens if stored.protocol == "anthropic_messages" and options else None,
+            messages_effort=options.effort if stored.protocol == "anthropic_messages" and options else None,
+            tools_verified=stored.research_tools_verified_at is not None,
+        )
+
+    def _summary_for_stored(
+        self,
+        stored: StoredModelConfig,
+        *,
+        primary_profile: Any = None,
+    ) -> SlotRoutingSummary | None:
+        slots = stored.model_slots
+        if slots is None or slots.is_empty():
+            return None
+        resolved_primary = primary_profile if primary_profile is not None else self._primary_slot_profile_from_stored(stored)
+        return slot_routing_summary_model(slots, primary_profile=resolved_primary)
+
     def snapshot(self, account_id: str) -> ModelConfigResponse:
         stored = self._stored(account_id)
         if stored is None:
             return ModelConfigResponse(mode="platform", configured=True)
+        slots = stored.model_slots if stored.model_slots and not stored.model_slots.is_empty() else None
+        slots_summary = self._summary_for_stored(stored) if slots is not None else None
         if not stored.key_hint:
-            return ModelConfigResponse(mode=stored.mode, configured=True, updated_at=stored.updated_at)
+            return ModelConfigResponse(
+                mode=stored.mode,
+                configured=True,
+                model_slots=slots,
+                model_slots_summary=slots_summary,
+                updated_at=stored.updated_at,
+            )
         return ModelConfigResponse(
             mode=stored.mode, configured=True, protocol=stored.protocol,
             generation_parameters=stored.generation_parameters,
             messages_options=stored.messages_options, research_tools_verified_at=stored.research_tools_verified_at,
-            base_url=stored.base_url, model=stored.model, key_hint=stored.key_hint, updated_at=stored.updated_at,
+            base_url=stored.base_url, model=stored.model, key_hint=stored.key_hint,
+            model_slots=slots, model_slots_summary=slots_summary,
+            updated_at=stored.updated_at,
         )
 
     def _mutate(self, account_id, operation):
@@ -199,11 +262,19 @@ class AccountModelSettings:
         with self._lock:
             return operation()
 
+    def _next_slots(self, existing: StoredModelConfig | None, request: ModelConfigUpdate) -> ModelSlotConfig | None:
+        if request.clear_model_slots:
+            return None
+        if "model_slots" in request.model_fields_set:
+            return self._normalize_account_slots(request.model_slots)
+        return existing.model_slots if existing else None
+
     def update(self, account_id: str, request: ModelConfigUpdate, *, now: datetime | None = None) -> ModelConfigResponse:
         current_time = now or datetime.now(timezone.utc)
 
         def operation() -> ModelConfigResponse:
             existing = self._stored(account_id)
+            next_slots = self._next_slots(existing, request)
             if request.mode == "platform":
                 # Keep a saved personal configuration (key still encrypted) so the
                 # account can switch back without re-entering it; DELETE removes it.
@@ -218,6 +289,7 @@ class AccountModelSettings:
                     model=existing.model if existing else None,
                     encrypted_api_key=existing.encrypted_api_key if existing else None,
                     key_hint=existing.key_hint if existing else None,
+                    model_slots=next_slots,
                     updated_at=current_time,
                 ))
                 return self.snapshot(account_id)
@@ -277,8 +349,62 @@ class AccountModelSettings:
                 model=model,
                 encrypted_api_key=encrypted,
                 key_hint=hint,
+                model_slots=next_slots,
                 updated_at=current_time,
             ))
+            return self.snapshot(account_id)
+
+        return self._mutate(account_id, operation)
+
+    def model_slots(self, account_id: str) -> ModelSlotConfig | None:
+        stored = self._stored(account_id)
+        if stored is None or stored.model_slots is None or stored.model_slots.is_empty():
+            return None
+        return stored.model_slots
+
+    def primary_slot_profile(self, account_id: str) -> ModelSlotBinding | None:
+        return self._primary_slot_profile_from_stored(self._stored(account_id))
+
+    def slot_routing_summary(self, account_id: str, *, primary_profile: Any = None) -> dict[str, Any]:
+        stored = self._stored(account_id)
+        slots = stored.model_slots if stored else None
+        resolved_primary = primary_profile if primary_profile is not None else self._primary_slot_profile_from_stored(stored)
+        return slot_routing_summary(slots, primary_profile=resolved_primary)
+
+    def update_model_slots(
+        self,
+        account_id: str,
+        slots: ModelSlotConfig | Mapping[str, Any] | None,
+        *,
+        now: datetime | None = None,
+    ) -> ModelConfigResponse:
+        current_time = now or datetime.now(timezone.utc)
+        if slots is None:
+            parsed_slots: ModelSlotConfig | None = None
+        elif isinstance(slots, ModelSlotConfig):
+            parsed_slots = slots
+        else:
+            try:
+                parsed_slots = ModelSlotConfig.model_validate(slots)
+            except ValueError:
+                raise ModelCredentialError(422, "validation_error", "Model slot configuration is invalid.") from None
+        normalized_slots = self._normalize_account_slots(parsed_slots)
+
+        def operation() -> ModelConfigResponse:
+            existing = self._stored(account_id)
+            if existing is None:
+                if normalized_slots is not None:
+                    self.repository.put(account_id, StoredModelConfig(
+                        account_id=account_id,
+                        mode="platform",
+                        model_slots=normalized_slots,
+                        updated_at=current_time,
+                    ))
+                return self.snapshot(account_id)
+            self.repository.put(account_id, existing.model_copy(update={
+                "model_slots": normalized_slots,
+                "updated_at": current_time,
+            }))
             return self.snapshot(account_id)
 
         return self._mutate(account_id, operation)

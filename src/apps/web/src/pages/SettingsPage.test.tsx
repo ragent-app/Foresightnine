@@ -201,4 +201,240 @@ describe("SettingsPage", () => {
     const sent = (body.providers as Array<Record<string, unknown>>).find((item) => item.provider_id === "tushare")!;
     expect(sent.api_key).toBe("tushare-token-0123456789");
   });
+
+  it("renders 4 research model slots with fallback labels, edits/clears slots, and never exposes raw keys", async () => {
+    let currentSlots: Record<string, Record<string, unknown>> | undefined;
+    const buildModelResponse = () => {
+      if (!currentSlots || Object.keys(currentSlots).length === 0) return PLATFORM;
+      const configuredSlots = Object.keys(currentSlots);
+      const allSlots = ["fast_extractor", "deep_reasoner", "bear_reviewer", "writer"] as const;
+      const fallbackSlots = allSlots.filter((slot) => !currentSlots![slot]);
+      const slotsSummary = Object.fromEntries(
+        allSlots.map((slot) => {
+          const binding = currentSlots![slot];
+          return [
+            slot,
+            binding
+              ? {
+                  slot,
+                  role: slot,
+                  configured: true,
+                  fallback_used: false,
+                  source: "slot_override",
+                  protocol: binding.protocol,
+                  base_url: binding.base_url,
+                  model: binding.model,
+                  credential_ref: binding.credential_ref ?? null,
+                  capability_valid: true,
+                }
+              : {
+                  slot,
+                  role: slot,
+                  configured: false,
+                  fallback_used: true,
+                  source: "primary_fallback",
+                  model: "research-model-example",
+                  capability_valid: true,
+                },
+          ];
+        }),
+      );
+      return {
+        ...PLATFORM,
+        model_slots: currentSlots,
+        model_slots_summary: {
+          schema_version: "v1",
+          is_valid: true,
+          cross_family_bear_review: Boolean(currentSlots.bear_reviewer),
+          configured_slots: configuredSlots,
+          fallback_slots: fallbackSlots,
+          heterogeneous_slots: configuredSlots,
+          errors: [],
+          slots: slotsSummary,
+        },
+      };
+    };
+
+    const fetchMock = mockApi((url, init) => {
+      if (url.pathname === "/v1/account/model-config" && init.method === "PUT") {
+        const body = JSON.parse(String(init.body)) as {
+          clear_model_slots?: boolean;
+          model_slots?: Record<string, Record<string, unknown>>;
+        };
+        if (body.clear_model_slots) currentSlots = undefined;
+        else if ("model_slots" in body) currentSlots = body.model_slots;
+        return jsonResponse(buildModelResponse());
+      }
+      if (url.pathname === "/v1/account/model-config") return jsonResponse(buildModelResponse());
+      return undefined;
+    });
+
+    renderSettings("/settings?tab=model");
+    expect(await screen.findByText("fast_extractor")).toBeTruthy();
+    expect(screen.getByText("买方投研小组模型槽位（可选）")).toBeTruthy();
+    for (const slot of ["fast_extractor", "deep_reasoner", "bear_reviewer", "writer"]) {
+      expect(screen.getByText(slot)).toBeTruthy();
+    }
+    expect(screen.getAllByText(/默认回落主研究模型/).length).toBe(4);
+
+    // Collapsing and expanding preserves clean summary.
+    fireEvent.click(screen.getByRole("button", { name: "收起" }));
+    expect(screen.queryByText("fast_extractor")).toBeNull();
+    expect(screen.getByText("默认回落主研究模型")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "展开" }));
+    expect(screen.getByText("bear_reviewer")).toBeTruthy();
+
+    // Configure bear_reviewer with cross-family protocol and verify raw secrets are rejected.
+    fireEvent.click(screen.getByRole("button", { name: "配置 bear_reviewer" }));
+    expect(screen.queryByLabelText("API Key")).toBeNull();
+    fireEvent.change(await screen.findByLabelText("协议"), { target: { value: "anthropic_messages" } });
+    fireEvent.change(screen.getByLabelText("服务地址"), { target: { value: "https://bear.example.com/v1" } });
+    fireEvent.change(screen.getByLabelText("模型名称"), { target: { value: "bear-cross-family-model" } });
+    fireEvent.change(screen.getByLabelText("非密钥凭据引用（可选）"), { target: { value: "sk-live-secret-9999" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存槽位" }));
+    expect(await screen.findByText(/切勿填写明文 API Key 或令牌/)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("非密钥凭据引用（可选）"), { target: { value: "env:BEAR_KEY" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存槽位" }));
+
+    await screen.findByText("Anthropic Messages · bear-cross-family-model");
+    expect(screen.getByText(/引用 env:BEAR_KEY/)).toBeTruthy();
+    expect(screen.getByText("跨家族互审")).toBeTruthy();
+    expect(screen.getAllByText(/默认回落主研究模型/).length).toBe(3);
+
+    // Configure fast_extractor alongside bear_reviewer.
+    fireEvent.click(screen.getByRole("button", { name: "配置 fast_extractor" }));
+    fireEvent.change(await screen.findByLabelText("服务地址"), { target: { value: "https://fast.example.com/v1" } });
+    fireEvent.change(screen.getByLabelText("模型名称"), { target: { value: "fast-worker-model" } });
+    fireEvent.click(screen.getByLabelText(/已确认支持原生工具调用/));
+    fireEvent.click(screen.getByRole("button", { name: "保存槽位" }));
+    await screen.findByText("OpenAI Chat Completions · fast-worker-model");
+
+    // Clearing fast_extractor keeps bear_reviewer intact.
+    fireEvent.click(screen.getByRole("button", { name: "清除 fast_extractor" }));
+    await waitFor(() => expect(screen.queryByText("OpenAI Chat Completions · fast-worker-model")).toBeNull());
+    expect(screen.getByText("Anthropic Messages · bear-cross-family-model")).toBeTruthy();
+
+    // Clearing the remaining slot sends clear_model_slots: true and restores all 4 fallbacks.
+    fireEvent.click(screen.getByRole("button", { name: "清除 bear_reviewer" }));
+    await waitFor(() => expect(screen.getAllByText(/默认回落主研究模型/).length).toBe(4));
+
+    const putBodies = fetchMock.mock.calls
+      .filter(([input, init]) => new URL(String(input)).pathname === "/v1/account/model-config" && init?.method === "PUT")
+      .map(([, init]) => JSON.parse(String(init!.body)) as Record<string, unknown>);
+    expect(putBodies).toEqual([
+      {
+        mode: "platform",
+        model_slots: {
+          bear_reviewer: {
+            protocol: "anthropic_messages",
+            base_url: "https://bear.example.com/v1",
+            model: "bear-cross-family-model",
+            credential_ref: "env:BEAR_KEY",
+          },
+        },
+      },
+      {
+        mode: "platform",
+        model_slots: {
+          bear_reviewer: {
+            protocol: "anthropic_messages",
+            base_url: "https://bear.example.com/v1",
+            model: "bear-cross-family-model",
+            credential_ref: "env:BEAR_KEY",
+          },
+          fast_extractor: {
+            protocol: "openai_chat_completions",
+            base_url: "https://fast.example.com/v1",
+            model: "fast-worker-model",
+            tools_verified: true,
+          },
+        },
+      },
+      {
+        mode: "platform",
+        model_slots: {
+          bear_reviewer: {
+            protocol: "anthropic_messages",
+            base_url: "https://bear.example.com/v1",
+            model: "bear-cross-family-model",
+            credential_ref: "env:BEAR_KEY",
+          },
+        },
+      },
+      {
+        mode: "platform",
+        clear_model_slots: true,
+      },
+    ]);
+  });
+
+  it("saves, masks, toggles, and clears the optional FMP BYOK API Key with compliance note", async () => {
+    let fmpState = {
+      provider_id: "fmp",
+      display_name: "Financial Modeling Prep (FMP)",
+      enabled: true,
+      requires_key: true,
+      personal_key_configured: false,
+      platform_available: false,
+      platform_key_allowed: false,
+      key_hint: null as string | null,
+    };
+
+    const fetchMock = mockApi((url, init) => {
+      if (url.pathname === "/v1/account/market-data-config" && init.method === "PUT") {
+        const body = JSON.parse(String(init.body)) as {
+          fmp?: { enabled: boolean; api_key?: string; clear_api_key?: boolean };
+        };
+        if (body.fmp) {
+          if (body.fmp.clear_api_key) {
+            fmpState = { ...fmpState, enabled: body.fmp.enabled, personal_key_configured: false, key_hint: null };
+          } else if (body.fmp.api_key) {
+            fmpState = {
+              ...fmpState,
+              enabled: body.fmp.enabled,
+              personal_key_configured: true,
+              key_hint: `••••${body.fmp.api_key.slice(-4)}`,
+            };
+          } else {
+            fmpState = { ...fmpState, enabled: body.fmp.enabled };
+          }
+        }
+        return jsonResponse({ ...MARKET, earnings_providers: [fmpState] });
+      }
+      if (url.pathname === "/v1/account/market-data-config") {
+        return jsonResponse({ ...MARKET, earnings_providers: [fmpState] });
+      }
+      return undefined;
+    });
+
+    renderSettings("/settings?tab=data");
+    expect(await screen.findByText("FMP（一致预期与电话会纪要）BYOK API Key")).toBeTruthy();
+    expect(screen.getByText(/export=False/)).toBeTruthy();
+    expect(screen.getByText(/未设置个人 BYOK 密钥/)).toBeTruthy();
+
+    // Save FMP BYOK key and verify masked key hint without exposing raw key.
+    fireEvent.click(screen.getByRole("button", { name: "设置 FMP 密钥" }));
+    fireEvent.change(await screen.findByLabelText("FMP BYOK API Key"), { target: { value: "fmp-byok-secret-9876" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(await screen.findByText("我的 BYOK 密钥 ••••9876")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("fmp-byok-secret-9876");
+
+    // Disable FMP and then clear the FMP key.
+    fireEvent.click(screen.getByRole("switch", { name: "启用 FMP（一致预期与电话会纪要）" }));
+    await screen.findByText(/我的 BYOK 密钥 ••••9876 · 已停用/);
+
+    fireEvent.click(screen.getByRole("button", { name: "清除 FMP 密钥" }));
+    await screen.findByText(/未设置个人 BYOK 密钥/);
+
+    const puts = fetchMock.mock.calls
+      .filter(([input, init]) => new URL(String(input)).pathname === "/v1/account/market-data-config" && init?.method === "PUT")
+      .map(([, init]) => JSON.parse(String(init!.body)) as { fmp?: Record<string, unknown> });
+    expect(puts.map((item) => item.fmp)).toEqual([
+      { provider_id: "fmp", enabled: true, api_key: "fmp-byok-secret-9876" },
+      { provider_id: "fmp", enabled: false },
+      { provider_id: "fmp", enabled: false, clear_api_key: true },
+    ]);
+  });
 });

@@ -159,20 +159,62 @@ _YAHOO_NOTES = (
     "data. Only an operator running a personal development deployment may enable it by policy; remove before any "
     "public release. Export stays off."
 )
+_FMP_NOTES = (
+    "Financial Modeling Prep (FMP): user's own BYOK key is allowed for personal research with store/display/model_input "
+    "and owner-scoped caching (export=False). Platform key (FORESIGHTNINE_FMP_API_KEY) is denied by default "
+    "(license_platform_key_not_permitted) unless explicitly opted in for personal/development use via "
+    "FORESIGHTNINE_FMP_ALLOW_PLATFORM_KEY=true or an explicit FinDataPolicy."
+)
 CN_CATEGORIES = ("identity", "bars_daily", "financials")
+FMP_CATEGORIES = ("consensus", "transcripts", "earnings_consensus", "earnings_transcript")
+FMP_ALLOW_PLATFORM_ENV = "FORESIGHTNINE_FMP_ALLOW_PLATFORM_KEY"
 
 
-def default_policy() -> FinDataPolicy:
+def _parse_env_flag(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def default_policy(*, allow_fmp_platform: bool = False) -> FinDataPolicy:
     sec = lambda cat: PolicyRule(provider="sec_edgar", category=cat, store=True, display=True,
                                  model_input=True, export=True, notes="SEC public disclosure; cite source on export.")
+    fmp_platform_rules = [
+        PolicyRule(
+            provider="fmp",
+            category=cat,
+            credential_owner="platform",
+            store=allow_fmp_platform,
+            display=allow_fmp_platform,
+            model_input=allow_fmp_platform,
+            export=False,
+            owner_scoped=False,
+            deny=not allow_fmp_platform,
+            deny_reason="license_platform_key_not_permitted",
+            notes=_FMP_NOTES,
+        )
+        for cat in FMP_CATEGORIES
+    ]
+    fmp_byok_rules = [
+        PolicyRule(
+            provider="fmp",
+            category=cat,
+            credential_owner="user_byok",
+            store=True,
+            display=True,
+            model_input=True,
+            export=False,
+            owner_scoped=True,
+            notes="User's own FMP API key, personal use; owner-scoped, no export, no cross-account cache.",
+        )
+        for cat in FMP_CATEGORIES
+    ]
     return FinDataPolicy(
-        version="2026-11-20-default",
+        version="2026-11-24-default",
         notes=("Conservative built-in policy. SEC EDGAR public data allowed incl. export (SEC fair-access: declare a "
-               "User-Agent with contact, max 10 req/s; verify terms periodically). EDGAR full-text search "
-               "(efts.sec.gov, undocumented-but-public endpoint) is deliberately not listed and so denied until the "
-               "operator adds 'filing_search'. " + _TD_NOTES),
+               "User-Agent with contact, max 10 req/s; verify terms periodically). Unscoped EDGAR full-text search "
+               "('filing_search') remains unlisted and denied by default; strictly single-CIK search "
+               "('filing_search_cik') is allowed. FMP defaults to user_byok (export=False). " + _TD_NOTES),
         rules=[
-            sec("identity"), sec("filings"), sec("financials"), sec("ownership"),
+            sec("identity"), sec("filings"), sec("financials"), sec("ownership"), sec("filing_search_cik"),
             # Twelve Data: platform key denied; the same rule applies to every category.
             *[PolicyRule(provider="twelve_data", category=cat, credential_owner="platform", deny=True,
                          deny_reason="license_platform_key_not_permitted",
@@ -193,6 +235,8 @@ def default_policy() -> FinDataPolicy:
                          notes="User's own Tushare token, personal use; owner-scoped, no export.") for cat in CN_CATEGORIES],
             *[PolicyRule(provider="baostock", category=cat, store=True, display=True, model_input=True, export=False,
                          notes=_BS_NOTES) for cat in CN_CATEGORIES],
+            *fmp_platform_rules,
+            *fmp_byok_rules,
             PolicyRule(provider="yahoo", category="bars_daily", deny=True, deny_reason="license_terms_restrict_commercial_use",
                        notes=_YAHOO_NOTES),
         ])
@@ -205,9 +249,10 @@ def deny_all_policy(error: str) -> FinDataPolicy:
 
 def load_policy(env: dict[str, str] | None = None) -> FinDataPolicy:
     """Env JSON replaces the default entirely; an invalid value denies everything."""
-    raw = (env if env is not None else os.environ).get(POLICY_ENV, "").strip()
+    environ = env if env is not None else os.environ
+    raw = environ.get(POLICY_ENV, "").strip()
     if not raw:
-        return default_policy()
+        return default_policy(allow_fmp_platform=_parse_env_flag(environ.get(FMP_ALLOW_PLATFORM_ENV)))
     try:
         return FinDataPolicy.model_validate_json(raw)
     except ValidationError:

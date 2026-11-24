@@ -1,0 +1,125 @@
+{
+ "id": "kpi_saas_cloud",
+ "version": "1.0.0",
+ "layer": "l2_industry_kpi",
+ "parent_pack_id": "earnings_review",
+ "title_zh": "软件与云服务行业 KPI",
+ "title_en": "Software & Cloud KPIs",
+ "sector_scope": "Enterprise SaaS, Cloud Infrastructure, Cybersecurity & Application Software (SEC SIC 7371-7374, 7376-7379)",
+ "sic_major_groups": [
+  "73"
+ ],
+ "kpis": [
+  {
+   "id": "rpo_crpo",
+   "name_en": "RPO & Current RPO (cRPO)",
+   "name_zh": "剩余履约义务 (RPO / cRPO)",
+   "definition_and_formula": "cRPO = contracted backlog recognized over next 12 months; track YoY/QoQ growth & cRPO/RPO ratio",
+   "preferred_tools": [
+    "sec_filing_tables",
+    "sec_filing_sections",
+    "sec_earnings_release",
+    "earnings_transcript"
+   ],
+   "where_to_look": "10-Q/10-K Revenue Note (R*.htm), MD&A, 8-K 99.1 KPI summary",
+   "red_flags": [
+    "cRPO YoY decelerating faster than recognized revenue",
+    "RPO expansion driven purely by longer contract duration without cRPO growth"
+   ],
+   "required": true
+  },
+  {
+   "id": "deferred_revenue_billings",
+   "name_en": "Deferred Revenue & Calculated Billings",
+   "name_zh": "递延收入与计算账单 (Billings)",
+   "definition_and_formula": "Calculated Billings = Revenue + QoQ change in Total Deferred Revenue (note invoicing duration shifts)",
+   "preferred_tools": [
+    "sec_filing_tables",
+    "sec_earnings_release",
+    "calculate_financials"
+   ],
+   "where_to_look": "Balance sheet & Contract Balances note (R*.htm), 8-K 99.1",
+   "red_flags": [
+    "Billings growth trailing revenue growth by >5pp",
+    "Pull-forward via multi-year upfront billing or duration changes"
+   ],
+   "required": true
+  },
+  {
+   "id": "nrr_expansion",
+   "name_en": "Net Revenue Retention (NRR / DBNER)",
+   "name_zh": "净收入留存率 (NRR)",
+   "definition_and_formula": "Ending ARR from prior-year cohort / Starting ARR (check seat expansion vs gross churn & down-sell)",
+   "preferred_tools": [
+    "sec_filing_sections",
+    "sec_fulltext_search",
+    "earnings_transcript"
+   ],
+   "where_to_look": "MD&A Key Business Metrics & earnings call Q&A",
+   "red_flags": [
+    "NRR step-down >= 300bps YoY or management stopping NRR disclosure",
+    "Gross churn rising while price hikes mask seat contraction"
+   ],
+   "required": true
+  },
+  {
+   "id": "rule_of_40_fcf_ex_sbc",
+   "name_en": "Rule of 40 & FCF ex-SBC",
+   "name_zh": "40法则与剔除SBC自由现金流",
+   "definition_and_formula": "Rule of 40 = YoY Revenue Growth % + FCF Margin %; FCF ex-SBC = FCF - SBC; track SBC/Rev & net share dilution",
+   "preferred_tools": [
+    "earnings_quality_diagnostics",
+    "guidance_and_nongaap_reconciler"
+   ],
+   "where_to_look": "Cash flow statement, SBC Note (R*.htm) & 8-K Non-GAAP bridge",
+   "red_flags": [
+    "Rule of 40 < 40 on FCF ex-SBC basis while Non-GAAP margin looks high",
+    "SBC > 30% of FCF or diluted shares growing > 3% YoY"
+   ],
+   "required": true
+  }
+ ],
+ "filing_focus": [
+  "Revenue Disaggregation & Remaining Performance Obligations (R*.htm)",
+  "Stock-Based Compensation & Capitalized Software Costs (R*.htm)",
+  "sec_redline_diff on MD&A Key Metrics & Critical Accounting Estimates"
+ ],
+ "counter_evidence_angles": [
+  {
+   "angle": "Duration-inflated RPO or upfront billing masking slowing cRPO bookings",
+   "evidence_anchor": "cRPO vs total RPO growth gap or billings vs revenue deceleration in R*.htm/8-K",
+   "next_quarter_trigger": "Next-Q cRPO YoY growth < current-Q revenue YoY growth"
+  },
+  {
+   "angle": "Non-GAAP margin & Rule of 40 dependence on SBC dilution",
+   "evidence_anchor": "earnings_quality_diagnostics SBC/FCF > 30% or GAAP-to-Non-GAAP uplift gap",
+   "next_quarter_trigger": "Next-Q FCF ex-SBC margin compresses YoY or diluted share count rises > 2% YoY"
+  }
+ ],
+ "unit_and_period_checks": [
+  "cRPO (12m) vs total RPO vs ARR (annualized run-rate) kept strictly separate",
+  "Rule of 40 labeled explicitly as GAAP OPM, Non-GAAP OPM, FCF, or FCF ex-SBC basis",
+  "Invoicing duration / multi-year upfront billings normalized before YoY billings compare"
+ ],
+ "reconciliation": [
+  {
+   "metric": "Calculated Billings",
+   "source_classes": [
+    "3-statement deferred revenue",
+    "management billings disclosure"
+   ],
+   "note": "reconcile FX & unbilled/M&A adjustments"
+  },
+  {
+   "metric": "FCF vs FCF ex-SBC",
+   "source_classes": [
+    "cash flow statement",
+    "8-K Non-GAAP table"
+   ],
+   "note": "keep SBC add-back explicit and track net buyback offset"
+  }
+ ],
+ "limits": [
+  "NRR/ARR definitions are non-standardized across issuers; quote issuer definition or mark unavailable"
+ ]
+}

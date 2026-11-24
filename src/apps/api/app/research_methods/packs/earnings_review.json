@@ -1,13 +1,13 @@
 {
  "id": "earnings_review",
- "version": "1.3.0",
- "title_zh": "财报复盘",
- "title_en": "Earnings review",
+ "version": "2.0.0",
+ "title_zh": "财报深度拆解",
+ "title_en": "US earnings deep review",
  "applies_when": {
   "question_types": [
    "periodic results review",
-   "quarterly or annual report analysis",
-   "guidance and prior-period comparison"
+   "quarterly/annual report analysis",
+   "guidance & prior compare"
   ],
   "triggers": [
    {
@@ -99,19 +99,20 @@
  "evidence_requirements": [
   {
    "id": "entity",
-   "description": "Resolve the issuer and its reporting currency and fiscal calendar.",
+   "description": "Issuer, CIK, SIC (gate/L2 KPI), currency, fiscal calendar.",
    "preferred_tools": [
     "resolve_entity"
    ],
    "required": true,
    "freshness": "n/a",
-   "acceptance": "one unambiguous entity id",
-   "fallback": "State the identifier you assumed and that it is unverified."
+   "acceptance": "unique id",
+   "fallback": "Mark id unverified."
   },
   {
    "id": "statements",
-   "description": "Income statement, balance sheet and cash-flow lines for the latest period and the comparable prior period.",
+   "description": "3-statement & R*.htm segment/note tables (2 periods).",
    "preferred_tools": [
+    "sec_filing_tables",
     "company_financials",
     "filings",
     "issuer_documents",
@@ -119,14 +120,18 @@
     "news_search"
    ],
    "required": true,
-   "freshness": "latest filed period as of research_clock",
-   "acceptance": "lines carry period, unit, currency",
-   "fallback": "Use filed document text only; label figures non-standardized. For non-SEC issuers, acquire the periodic report found with issuer_documents and use extract_statements for statement rows."
+   "freshness": "latest <= clock",
+   "acceptance": "period, unit, currency",
+   "fallback": "Filing text only; mark non-standard."
   },
   {
    "id": "filing_text",
-   "description": "Earnings release or MD&A: drivers, segment notes, guidance, accounting-policy notes.",
+   "description": "Dual 8-K 99.1, 10-Q/K sections, redline & CIK EFTS.",
    "preferred_tools": [
+    "sec_earnings_release",
+    "sec_filing_sections",
+    "sec_redline_diff",
+    "sec_fulltext_search",
     "filings",
     "issuer_documents",
     "acquire_sources",
@@ -134,103 +139,114 @@
     "search_source"
    ],
    "required": true,
-   "freshness": "latest filing before research_clock",
-   "acceptance": "quoted passages recorded with record_facts",
-   "fallback": "Say primary text was not obtained; no memory-based figures. For issuers outside SEC coverage, list the issuer's own announcements and periodic reports with issuer_documents."
+   "freshness": "latest <= clock",
+   "acceptance": "quoted via record_facts",
+   "fallback": "Note text missing; no memory figures."
   },
   {
    "id": "prior_compare",
-   "description": "Prior-period and year-ago comparison computed deterministically.",
+   "description": "Deterministic YoY/QoQ growth & margin deltas.",
    "preferred_tools": [
     "calculate_financials"
    ],
    "required": true,
-   "freshness": "same lines as statements",
-   "acceptance": "every change and margin comes from a calculation",
-   "fallback": "Compute in the report; mark unaudited."
+   "freshness": "same",
+   "acceptance": "calculated deltas",
+   "fallback": "Compute explicitly; mark unaudited."
   },
   {
-   "id": "market_reaction",
-   "description": "Price move around the release, versus a broad benchmark, if the question asks.",
+   "id": "diagnostics_and_valuation",
+   "description": "R/Y/G quality flags, guidance/Non-GAAP tie, multiples & Reverse-DCF.",
    "preferred_tools": [
+    "earnings_quality_diagnostics",
+    "guidance_and_nongaap_reconciler",
+    "valuation_and_implied_expectations",
     "market_data"
    ],
    "required": false,
-   "freshness": "through last_completed_session",
-   "acceptance": "same-window benchmark included",
-   "fallback": "Omit; label any news price NOT market data."
+   "freshness": "last session",
+   "acceptance": "Decimal tie; degrade FCF<=0",
+   "fallback": "Omit DCF; news NOT market data."
+  },
+  {
+   "id": "consensus_and_transcript",
+   "description": "Consensus vs actuals & call remarks/Q&A.",
+   "preferred_tools": [
+    "earnings_consensus",
+    "earnings_transcript"
+   ],
+   "required": false,
+   "freshness": "latest call",
+   "acceptance": "BYOK/gaps noted",
+   "fallback": "Use 8-K 99.1 guidance; prompt upload."
   },
   {
    "id": "context",
-   "description": "Prior coverage and independent commentary on the results.",
+   "description": "Independent commentary.",
    "preferred_tools": [
     "search_library",
     "news_search"
    ],
    "required": false,
-   "freshness": "dated before research_clock",
-   "acceptance": "independent of the issuer release",
-   "fallback": "Note that commentary was not searched."
+   "freshness": "pre-clock",
+   "acceptance": "independent",
+   "fallback": "Note unsearched."
   }
  ],
  "counter_evidence": {
   "look_for": [
-   "one-off or non-recurring items",
-   "accounting or segment-definition changes",
-   "restatements",
-   "quality of cash conversion vs earnings",
-   "guidance cuts or withdrawn guidance"
+   "NO generic macro platitudes; anchor bear case to R/Y flag, redline, guidance/Non-GAAP gap, or Reverse-DCF mismatch + next-Q trigger",
+   "OCF/NI or FCF ex-SBC lag, AR/inv gap, SBC dilution, recurring add-backs"
   ],
   "min_search_actions": 1,
-  "if_none_found": "List where you searched and say no contrary evidence was found there."
+  "if_none_found": "List searched sections; none found."
  },
  "unit_and_period_checks": [
-  "fiscal vs calendar period and quarter label",
-  "units (thousands/millions) and currency",
-  "GAAP vs adjusted measures kept separate",
-  "year-ago vs sequential comparison named",
-  "shares and per-share basis (basic/diluted)"
+  "fiscal/calendar & 52/53-wk",
+  "Decimal scale/currency",
+  "GAAP vs Non-GAAP; FCF ex-SBC",
+  "YoY/QoQ & diluted shares",
+  "SIC gate"
  ],
  "reconciliation": [
   {
-   "metric": "revenue, net income, EPS",
+   "metric": "rev, NI, EPS",
    "source_classes": [
-    "structured financials",
-    "filing text"
+    "structured",
+    "filing"
    ],
-   "note": "must agree after unit normalization; explain any gap"
+   "note": "tie after scale"
   },
   {
-   "metric": "headline figures in news",
+   "metric": "Non-GAAP & guidance",
    "source_classes": [
-    "news",
-    "filing text"
+    "8-K 99.1",
+    "consensus"
    ],
-   "note": "prefer the filing; flag differences"
+   "note": "verify add-backs; note gaps"
   }
  ],
  "stopping_conditions": [
-  "statements and filing text for both periods obtained and calculations done",
-  "counter-evidence search done and recorded",
-  "primary filing unobtainable after fallbacks: report the gap and stop"
+  "filings, diagnostics, guidance/Non-GAAP & valuation (or degradations) done",
+  "anchored bear cases w/ next-Q trigger; missing filing stops w/ gap"
  ],
  "report_structure": {
   "sections": [
-   "Result summary",
-   "Period-over-period table",
-   "Drivers and segments",
-   "Guidance",
-   "Counter-evidence",
-   "Open items"
+   "Summary & Expectations Gap (Guidance/Non-GAAP)",
+   "Earnings Quality & Cash Forensics (R/Y/G)",
+   "Multi-Period Trends, Segments & KPIs",
+   "Cross-Period Redline & Policy Changes",
+   "Valuation Multiples & Reverse-DCF",
+   "Anchored Bear Case (w/ Next-Q Trigger) & Gaps"
   ],
   "must_state": [
-   "as-of date of each data series and the research clock",
-   "coverage gaps and missing sources",
-   "which figures are calculated vs quoted"
+   "as-of dates, clock & SIC gate",
+   "coverage gaps (consensus/transcript, FCF<=0 DCF)",
+   "calculated vs quoted; bear anchor + trigger"
   ]
  },
  "limits": [
-  "no consensus estimates in free sources: do not claim beat or miss; derive implied metrics (growth, margin change) and label them as inferred",
-  "call transcripts may be unavailable"
+  "degrade w/o FMP (8-K fallback) or when FCF<=0 (no DCF)",
+  "no generic macro bear platitudes w/o filing/numeric anchor"
  ]
 }

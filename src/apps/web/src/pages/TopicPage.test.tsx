@@ -2427,4 +2427,395 @@ describe("research turn instructions", () => {
     expect(JSON.parse(String(stopCall![1]!.body))).toEqual({});
     expect((stopCall![1]!.headers as Record<string, string>)["Content-Type"]).toMatch(/application\/json/);
   });
+
+  it("hydrates locked earnings squad dossier + collapsed OrgGraph, caches Deep Report, and opens ReaderPanel from citations", async () => {
+    const sector: ResearchV2.SectorApplicability = {
+      sic_code: "3674",
+      sic_description: "Semiconductors",
+      sector_category: "non_financial",
+      is_gated: false,
+      disabled_metrics: [],
+      recommended_alternatives: [],
+      explanation: "Non-financial tech issuer.",
+    };
+    const squadEvents: ResearchV2.OrgGraphEvent[] = [
+      { sequence: 1, node_id: "prefetch", role: "prefetch", display_name: "官方资料与确定性预计算", action_kind: "READING", runtime_state: "completed", stage: "stage_0", current_activity: "完成 10-Q/EX-99.1 预抓取" },
+      { sequence: 2, node_id: "lead", role: "lead", display_name: "Lead 主研究协调", parent_node_id: "prefetch", slot: "deep_reasoner", action_kind: "DELEGATING", runtime_state: "completed", stage: "stage_1", current_activity: "已派发并行 Worker" },
+      { sequence: 3, node_id: "worker_forensics", role: "worker_forensics", display_name: "财务质量与排雷小组", parent_node_id: "lead", slot: "fast_extractor", action_kind: "INSPECTING", runtime_state: "completed", stage: "stage_2", current_activity: "完成 AR/FCF 核查" },
+      { sequence: 4, node_id: "bear_reviewer", role: "bear_reviewer", display_name: "独立空头审查", parent_node_id: "lead", slot: "bear_reviewer", action_kind: "INSPECTING", runtime_state: "completed", stage: "stage_3", current_activity: "通过证据锚定反证" },
+      { sequence: 5, node_id: "writer", role: "writer", display_name: "底稿撰稿 (Writer)", parent_node_id: "bear_reviewer", slot: "writer", action_kind: "RESPONDING", runtime_state: "completed", stage: "stage_4", current_activity: "已生成锁定 Memo" },
+    ];
+    const baseDossier: ResearchV2.EarningsDossier = {
+      dossier_id: "dossier_nvda_q2",
+      run_id: "sqrun_done",
+      entity_id: "cik:0001045810",
+      symbol: "NVDA",
+      cik: "0001045810",
+      company_name: "NVIDIA Corp.",
+      period_label: "Q2 FY26",
+      locked: true,
+      dossier_sha256: "a".repeat(64),
+      sector_applicability: sector,
+      gate_report: { passed: true, exportable: true },
+      slot_usage_summary: { total_calls: 6, total_tokens: 18500, stage_0_model_calls: 0, deep_report_tool_calls: 0, slots: {} },
+      memo_markdown: "## 买方摘要\n\n云端与数据中心需求延续高景气。",
+      deep_report_markdown: null,
+      evidence_cards: [
+        {
+          card_id: "card_rev",
+          worker_role: "worker_segments",
+          topic_tag: "cloud_revenue",
+          finding: "云服务收入贡献主要增长。",
+          citations: [{ source_id: "s1", quotation: QUOTE, character_start: START, character_end: END, location: `${START}-${END}` }],
+        },
+      ],
+      bear_cases: [
+        {
+          bear_id: "bear_ar",
+          anchor_kind: "flag",
+          anchored_evidence_ids: ["card_rev"],
+          severity: "high",
+          thesis_challenge: "应收增速显著快于营收，需警惕渠道压货。",
+          next_quarter_invalidation_trigger: "下季 DSO 回落至 45 天以下",
+        },
+      ],
+      open_gaps: [],
+      snapshot: {
+        entity_id: "cik:0001045810",
+        symbol: "NVDA",
+        cik: "0001045810",
+        company_name: "NVIDIA Corp.",
+        period_label: "Q2 FY26",
+        sector_applicability: sector,
+        prefetched_sources: [{ source_id: "s1", title: "NVDA 10-Q Q2 FY26", retrieval_method: "sec_filing", kind: "official", content_sha256: "a".repeat(64), permissions: { display: true, export: true } }],
+        statements: [
+          {
+            period_label: "Q2 FY26",
+            period_type: "quarter",
+            currency: "USD",
+            monetary_unit: "USD millions",
+            revenue: { value: "48612", unit: "USD millions", currency: "USD" },
+            free_cash_flow: { value: "14500", unit: "USD millions", currency: "USD" },
+          },
+        ],
+        diagnostics: {
+          entity_id: "cik:0001045810",
+          symbol: "NVDA",
+          period_label: "Q2 FY26",
+          monetary_unit: "USD millions",
+          currency: "USD",
+          sector_applicability: sector,
+          flag_counts: { red: 1, yellow: 0, green: 0 },
+          thresholds_reference: {},
+          margin_bridge: [],
+          earnings_quality: {
+            reported_or_derived_fcf: { name: "fcf", status: "computed", value: "14500", unit: "USD millions", currency: "USD", formula: "ocf-capex" },
+            ocf_to_ni: { name: "ocf_to_ni", status: "computed", value: "1.15", unit: "ratio", formula: "ocf/ni" },
+            fcf_to_ni: { name: "fcf_to_ni", status: "computed", value: "1.05", unit: "ratio", formula: "fcf/ni" },
+            fcf_margin_pct: { name: "fcf_margin_pct", status: "computed", value: "29.8", unit: "percent", formula: "fcf/rev" },
+            sbc_to_revenue_pct: { name: "sbc_to_revenue_pct", status: "computed", value: "3.2", unit: "percent", formula: "sbc/rev" },
+            sbc_to_fcf_pct: { name: "sbc_to_fcf_pct", status: "computed", value: "10.7", unit: "percent", formula: "sbc/fcf" },
+            fcf_ex_sbc: { name: "fcf_ex_sbc", status: "computed", value: "12945", unit: "USD millions", currency: "USD", formula: "fcf-sbc" },
+            fcf_ex_sbc_margin_pct: { name: "fcf_ex_sbc_margin_pct", status: "computed", value: "26.6", unit: "percent", formula: "(fcf-sbc)/rev" },
+          },
+          working_capital: {
+            ar_yoy_growth_pct: { name: "ar_yoy_growth_pct", status: "computed", value: "38", unit: "percent", formula: "yoy" },
+            revenue_yoy_growth_pct: { name: "revenue_yoy_growth_pct", status: "computed", value: "20", unit: "percent", formula: "yoy" },
+            ar_vs_revenue_growth_pp: { name: "ar_vs_revenue_growth_pp", status: "computed", value: "18", unit: "pp", formula: "ar-rev" },
+            inventory_yoy_growth_pct: { name: "inv", status: "unavailable", value: null, unit: "percent", formula: "yoy" },
+            cogs_yoy_growth_pct: { name: "cogs", status: "unavailable", value: null, unit: "percent", formula: "yoy" },
+            inventory_vs_cogs_growth_pp: { name: "inv_cogs", status: "unavailable", value: null, unit: "pp", formula: "diff" },
+            inventory_vs_revenue_growth_pp: { name: "inv_rev", status: "unavailable", value: null, unit: "pp", formula: "diff" },
+            inventory_turnover: { current: { name: "inv_turn", status: "unavailable", value: null, unit: "ratio", formula: "x" } },
+            dso: { current: { name: "dso", status: "computed", value: "48", unit: "days", formula: "dso" } },
+            dio: { current: { name: "dio", status: "unavailable", value: null, unit: "days", formula: "dio" } },
+            dpo: { current: { name: "dpo", status: "unavailable", value: null, unit: "days", formula: "dpo" } },
+            ccc: { current: { name: "ccc", status: "unavailable", value: null, unit: "days", formula: "ccc" } },
+          },
+          capital_allocation: {
+            capex_to_revenue_pct: { name: "capex", status: "computed", value: "4.0", unit: "percent", formula: "x" },
+            capital_returned: { name: "ret", status: "computed", value: "3000", unit: "USD millions", formula: "x" },
+            payout_to_fcf_pct: { name: "payout", status: "computed", value: "20.7", unit: "percent", formula: "x" },
+            diluted_shares_yoy_pct: { name: "shares", status: "computed", value: "-0.8", unit: "percent", formula: "x" },
+          },
+          balance_sheet: {
+            position: "net_cash",
+            total_cash: { name: "cash", status: "computed", value: "30000", unit: "USD millions", formula: "x" },
+            total_debt: { name: "debt", status: "computed", value: "9000", unit: "USD millions", formula: "x" },
+            net_debt: { name: "nd", status: "computed", value: "-21000", unit: "USD millions", formula: "x" },
+            net_cash: { name: "nc", status: "computed", value: "21000", unit: "USD millions", formula: "x" },
+            net_debt_to_ttm_ebitda: { name: "nd_ebitda", status: "computed", value: "-0.5", unit: "multiple", formula: "x" },
+            interest_coverage: { name: "ic", status: "computed", value: "42", unit: "multiple", formula: "x" },
+            current_ratio: { name: "cr", status: "computed", value: "3.4", unit: "ratio", formula: "x" },
+          },
+          flags: [
+            {
+              flag_id: "wc_ar_gap",
+              group: "working_capital",
+              severity: "red",
+              metric_name: "ar_vs_revenue_growth_pp",
+              observed_value: "18.0",
+              unit: "pp",
+              threshold_rule: "> +15pp",
+              summary: "AR增速高于营收18pp",
+              investigation_prompt: "核查信用政策变化",
+            },
+          ],
+        },
+        valuation: null,
+        guidance_nongaap: null,
+        redline_summary: null,
+      },
+    };
+    const deepDossier: ResearchV2.EarningsDossier = {
+      ...baseDossier,
+      deep_report_markdown: "## 完整深研报告全文\n\n基于锁定底稿按需生成，零新增检索调用。",
+    };
+    let deepCalls = 0;
+
+    mockApi((url, init) => {
+      if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([turn(1, { report: "基础对话结论。" })]));
+      if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+      if (url.pathname === "/v2/research/topics/t1/earnings-squad/dossier") {
+        return jsonResponse({
+          topic_id: "t1",
+          run_id: "sqrun_done",
+          operation_id: "op_sq_done",
+          status: "completed",
+          org_events: squadEvents,
+          dossier: baseDossier,
+        } satisfies ResearchV2.EarningsSquadDossierResponse);
+      }
+      if (url.pathname === "/v2/research/topics/t1/earnings-squad/deep-report" && init.method === "POST") {
+        deepCalls += 1;
+        return jsonResponse({
+          topic_id: "t1",
+          run_id: "sqrun_done",
+          dossier_id: "dossier_nvda_q2",
+          dossier_sha256: "a".repeat(64),
+          cached: false,
+          deep_report_markdown: deepDossier.deep_report_markdown!,
+          deep_report_tool_calls: 0,
+          dossier: deepDossier,
+        } satisfies ResearchV2.EarningsSquadDeepReportResponse);
+      }
+      if (url.pathname.endsWith("/sources/s1/text")) return jsonResponse({ text: TEXT, content_sha256: "a".repeat(64) });
+      return undefined;
+    });
+
+    renderTopic();
+
+    // Collapsed OrgGraph summary bar + EarningsDossierView should hydrate cleanly.
+    const orgSummary = await screen.findByTestId("org-summary-bar");
+    expect(within(orgSummary).getByText("投研小组执行摘要条")).toBeTruthy();
+    expect(within(orgSummary).getAllByText("已完成").length).toBeGreaterThanOrEqual(1);
+    const dossierView = await screen.findByTestId("earnings-dossier-view");
+    expect(within(dossierView).getByRole("heading", { level: 2, name: "NVIDIA Corp." })).toBeTruthy();
+    expect(within(dossierView).getByText("NVDA")).toBeTruthy();
+    expect(screen.getByText(/云端与数据中心需求延续高景气/)).toBeTruthy();
+    expect(screen.getByText(/下季 DSO 回落至 45 天以下/)).toBeTruthy();
+
+    // Switching to Deep Report requests deep-report once, and toggling back/forth uses cached dossier.
+    fireEvent.click(screen.getByRole("tab", { name: "完整深研报告 (Deep Report)" }));
+    expect(await screen.findByText(/基于锁定底稿按需生成，零新增检索调用/)).toBeTruthy();
+    expect(deepCalls).toBe(1);
+
+    fireEvent.click(screen.getByRole("tab", { name: "买方备忘录 (Memo)" }));
+    expect(await screen.findByText(/云端与数据中心需求延续高景气/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "完整深研报告 (Deep Report)" }));
+    expect(await screen.findByText(/基于锁定底稿按需生成，零新增检索调用/)).toBeTruthy();
+    expect(deepCalls).toBe(1);
+
+    // Clicking a bear-case evidence anchor opens ReaderPanel with highlighted quote.
+    const bearCard = screen.getByTestId("bear-case-card");
+    fireEvent.click(within(bearCard).getByRole("button", { name: "card_rev" }));
+    expect(await screen.findByText(QUOTE, { selector: "mark" })).toBeTruthy();
+  });
+
+  it("launches earnings squad, streams live SSE org_graph_event, steers Lead mid-run, and resolves locked dossier", async () => {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn((query: string) => ({
+        matches:
+          query === "(min-width: 600px)" ||
+          query === "(min-width: 900px)" ||
+          query === "(min-width: 1280px)",
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    );
+    const sector: ResearchV2.SectorApplicability = {
+      sic_code: "7372",
+      sic_description: "Prepackaged Software",
+      sector_category: "non_financial",
+      is_gated: false,
+      disabled_metrics: [],
+      recommended_alternatives: [],
+      explanation: "Eligible non-financial issuer.",
+    };
+    const finalDossier: ResearchV2.EarningsDossier = {
+      dossier_id: "dossier_aapl_live",
+      run_id: "sqrun_live",
+      entity_id: "cik:0000320193",
+      symbol: "AAPL",
+      cik: "0000320193",
+      company_name: "Apple Inc.",
+      period_label: "Q3 FY26",
+      locked: true,
+      dossier_sha256: "b".repeat(64),
+      sector_applicability: sector,
+      gate_report: { passed: true, exportable: true },
+      slot_usage_summary: { total_calls: 4, total_tokens: 9200, stage_0_model_calls: 0, deep_report_tool_calls: 0, slots: {} },
+      memo_markdown: "## Apple 买方快评\n\n服务毛利率创新高。",
+      open_gaps: [],
+      snapshot: {
+        entity_id: "cik:0000320193",
+        symbol: "AAPL",
+        cik: "0000320193",
+        company_name: "Apple Inc.",
+        period_label: "Q3 FY26",
+        sector_applicability: sector,
+        statements: [],
+      },
+    };
+
+    let squadFinished = false;
+    let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
+    const encoder = new TextEncoder();
+    const runBodies: Array<Record<string, unknown>> = [];
+    const steerBodies: Array<Record<string, unknown>> = [];
+
+    mockApi((url, init) => {
+      if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([]));
+      if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([]);
+      if (url.pathname === "/v2/research/topics/t1/earnings-squad/dossier") {
+        if (!squadFinished) {
+          return jsonResponse({ error_code: "not_found", message: "no squad run" }, { status: 404 });
+        }
+        return jsonResponse({
+          topic_id: "t1",
+          run_id: "sqrun_live",
+          operation_id: "op_sq_live",
+          status: "completed",
+          org_events: [
+            { sequence: 1, node_id: "prefetch", role: "prefetch", display_name: "官方资料与确定性预计算", action_kind: "READING", runtime_state: "completed", stage: "stage_0", current_activity: "完成预计算" },
+            { sequence: 2, node_id: "lead", role: "lead", display_name: "Lead 主研究协调", parent_node_id: "prefetch", slot: "deep_reasoner", action_kind: "DELEGATING", runtime_state: "completed", stage: "stage_1", current_activity: "已完成调度" },
+            { sequence: 3, node_id: "writer", role: "writer", display_name: "底稿撰稿 (Writer)", parent_node_id: "lead", slot: "writer", action_kind: "RESPONDING", runtime_state: "completed", stage: "stage_4", current_activity: "已锁定档案" },
+          ],
+          dossier: finalDossier,
+        } satisfies ResearchV2.EarningsSquadDossierResponse);
+      }
+      if (url.pathname === "/v2/research/topics/t1/earnings-squad/run" && init.method === "POST") {
+        runBodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+        return jsonResponse(
+          {
+            topic_id: "t1",
+            run_id: "sqrun_live",
+            operation_id: "op_sq_live",
+            status: "running",
+            org_events: [
+              { sequence: 1, node_id: "prefetch", role: "prefetch", display_name: "官方资料与确定性预计算", action_kind: "READING", runtime_state: "completed", stage: "stage_0", current_activity: "完成 SEC 预抓取" },
+            ],
+            dossier: null,
+          } satisfies ResearchV2.EarningsSquadRunResponse,
+          { status: 202 },
+        );
+      }
+      if (url.pathname === "/v2/research/topics/t1/earnings-squad/events") {
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            streamController = controller;
+          },
+        });
+        return new Response(body, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+        });
+      }
+      if (url.pathname === "/v2/research/topics/t1/earnings-squad/steer" && init.method === "POST") {
+        const parsed = JSON.parse(String(init.body)) as Record<string, unknown>;
+        steerBodies.push(parsed);
+        return jsonResponse({
+          topic_id: "t1",
+          run_id: "sqrun_live",
+          operation_id: "op_sq_live",
+          status: "queued",
+          instruction: { sequence: 1, instruction_id: "steer_1", text: String(parsed["text"]), created_at: NOW },
+        } satisfies ResearchV2.EarningsSquadSteerResponse);
+      }
+      return undefined;
+    });
+
+    const { container } = renderTopic();
+
+    const tickerInput = await screen.findByRole("textbox", { name: "美股代码 (Ticker，可选)" });
+    fireEvent.change(tickerInput, { target: { value: "aapl" } });
+    fireEvent.click(screen.getByRole("button", { name: "启动美股财报买方小组" }));
+
+    await waitFor(() => expect(runBodies).toHaveLength(1));
+    expect(runBodies[0]?.["symbol"]).toBe("AAPL");
+    expect(runBodies[0]?.["execution_mode"]).toBe("async");
+
+    // Live steering input and expanded OrgGraphPanel should render while running.
+    const steerField = await screen.findByRole("textbox", { name: "向 Lead 发送中场调度指令" });
+    await waitFor(() => expect(streamController).not.toBeNull());
+
+    const liveEvent: ResearchV2.OrgGraphEvent = {
+      sequence: 2,
+      node_id: "lead_coordinator",
+      role: "lead_coordinator",
+      display_name: "Lead 主研究协调",
+      parent_node_id: "prefetch_engine",
+      slot: "deep_reasoner",
+      action_kind: "DELEGATING",
+      runtime_state: "running",
+      stage: "stage_1",
+      current_activity: "正在指派财务质量排查",
+    };
+    streamController!.enqueue(
+      encoder.encode(`id: org:2\nevent: org_graph_event\ndata: ${JSON.stringify(liveEvent)}\n\n`),
+    );
+
+    expect((await screen.findAllByText(/正在指派财务质量排查/)).length).toBeGreaterThanOrEqual(1);
+
+    // Selecting a node opens the right-hand process drawer and tells AppLayout (.app.with-panel) to reserve drawer width.
+    const leadNode = container.querySelector('[data-node-id="lead_coordinator"]');
+    expect(leadNode).toBeTruthy();
+    fireEvent.click(leadNode!);
+    const drawer = await screen.findByRole("complementary", { name: "Lead 主研究协调" });
+    expect(within(drawer).getAllByText(/正在指派财务质量排查/).length).toBeGreaterThanOrEqual(1);
+    await waitFor(() => {
+      expect(container.querySelector(".app")?.classList.contains("with-panel")).toBe(true);
+    });
+    fireEvent.click(within(drawer).getByRole("button", { name: "关闭" }));
+    await waitFor(() => {
+      expect(container.querySelector(".app")?.classList.contains("with-panel")).toBe(false);
+    });
+
+    fireEvent.change(steerField, { target: { value: "核查服务业务毛利率与 SBC 加回" } });
+    fireEvent.click(screen.getByRole("button", { name: "发送调度指令" }));
+    await waitFor(() => expect(steerBodies).toHaveLength(1));
+    expect(steerBodies[0]?.["text"]).toBe("核查服务业务毛利率与 SBC 加回");
+    expect(await screen.findByText(/#1 核查服务业务毛利率与 SBC 加回/)).toBeTruthy();
+
+    // Terminal SSE frame triggers dossier fetch and reveals locked EarningsDossierView.
+    squadFinished = true;
+    streamController!.enqueue(
+      encoder.encode(`id: done:completed\nevent: run.terminal\ndata: ${JSON.stringify({ operation_id: "op_sq_live", operation_status: "completed", version_id: null })}\n\n`),
+    );
+    streamController!.close();
+
+    const dossierView = await screen.findByTestId("earnings-dossier-view");
+    expect(within(dossierView).getByRole("heading", { level: 2, name: "Apple Inc." })).toBeTruthy();
+    expect(within(dossierView).getByText("AAPL")).toBeTruthy();
+    expect(await screen.findByText(/服务毛利率创新高/)).toBeTruthy();
+    const orgSummary = await screen.findByTestId("org-summary-bar");
+    expect(within(orgSummary).getByText("投研小组执行摘要条")).toBeTruthy();
+    expect(within(orgSummary).getAllByText("已完成").length).toBeGreaterThanOrEqual(1);
+  });
 });
