@@ -4,8 +4,9 @@ from __future__ import annotations
 from datetime import date
 from hashlib import sha256
 import re
+import subprocess
 from threading import Event
-from typing import Any
+from typing import Any, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -13,13 +14,20 @@ from ....research_signals import LazyAttachmentRef, RawEventCandidate, Suppresse
 from ...policy import FinDataPolicy
 from ..base import StreamTransport, Transport
 from ..sec_deep import strip_html_preserving_tables
-from .form8k import ParsedExhibitMeta, condense_ex99_preserving_tables, discover_filing_exhibits
-from .pacing import PacingTelemetry, RawSubmissionRow, SecPacingLimiter, sec_get_text
+from .form8k import ParsedExhibitMeta, _SAFE_FILENAME_RE, condense_ex99_preserving_tables, discover_filing_exhibits
+from .pacing import PacingTelemetry, RawSubmissionRow, SecPacingError, SecPacingLimiter, sec_get_bytes, sec_get_json, sec_get_text
 from .rules import SecEventsRules
 
 _HTML_LIKELY_RE = re.compile(r"<(?:html|body|div|table|p|span|tr|td)\b", re.IGNORECASE)
 _SIGNATURES_6K_RE = re.compile(r"(?im)^\s*(?:SIGNATURES?|SIGNATORIES)\s*$")
 _BOARD_MEETING_RE = re.compile(r"\b(?:date|notice)\s+of\s+board\s+meeting\b", re.IGNORECASE)
+_XBRL_REPORT_HTM_RE = re.compile(r"^r\d+\.htm$", re.IGNORECASE)
+_COVER_PAGE_THRESHOLD_CHARS = 2000
+_MAX_FALLBACK_HTML_FILES = 3
+_MAX_FALLBACK_PDF_FILES = 2
+_MAX_FALLBACK_PDF_BYTES = 12_000_000
+_MAX_FALLBACK_PDF_PAGES = 20
+_MAX_FALLBACK_PDF_CHARS = 80_000
 
 
 class Raw6kParsed(BaseModel):
@@ -64,6 +72,110 @@ def _strip_6k_tail(text: str) -> str:
     if m and m.start() > 120:
         return raw[: m.start()].strip()
     return raw
+
+
+def _extract_pdf_text(
+    pdf_bytes: bytes,
+    *,
+    max_pages: int = _MAX_FALLBACK_PDF_PAGES,
+    max_chars: int = _MAX_FALLBACK_PDF_CHARS,
+) -> str:
+    """Extract plain text from a 6-K PDF exhibit via ``pdftotext`` (poppler-utils)."""
+    if not pdf_bytes:
+        return ""
+    try:
+        proc = subprocess.run(
+            ["pdftotext", "-l", str(max_pages), "-", "-"],
+            input=pdf_bytes,
+            capture_output=True,
+            timeout=15,
+            check=False,
+        )
+    except Exception:
+        return ""
+    if proc.returncode != 0 or not proc.stdout:
+        return ""
+    text = proc.stdout.decode("utf-8", errors="replace").replace("\x00", "")
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    return text[:max_chars]
+
+
+def _entry_size_int(entry: Mapping[str, Any]) -> int:
+    raw_sz = entry.get("size")
+    if isinstance(raw_sz, int):
+        return raw_sz
+    if isinstance(raw_sz, str) and raw_sz.strip().isdigit():
+        return int(raw_sz.strip())
+    return 0
+
+
+def _discover_6k_cover_fallback_files(
+    row: RawSubmissionRow,
+    *,
+    user_agent: str | None,
+    limiter: SecPacingLimiter | None,
+    policy: FinDataPolicy | None,
+    transport: Transport | None,
+    stream_transport: StreamTransport | None,
+    cancel_event: Event | None,
+    deadline: float | None,
+    telemetry: PacingTelemetry | None,
+) -> tuple[list[tuple[str, str, str | None]], list[tuple[str, str, str | None]]]:
+    """Return ``(html_files, pdf_files)`` as ``(filename, url, description)`` sorted by size desc."""
+    base_url = f"https://www.sec.gov/Archives/edgar/data/{int(row.cik)}/{row.nodash}"
+    try:
+        idx_doc, _sha = sec_get_json(
+            f"{base_url}/index.json",
+            category="filings",
+            user_agent=user_agent,
+            limiter=limiter,
+            policy=policy,
+            transport=transport,
+            stream_transport=stream_transport,
+            cancel_event=cancel_event,
+            deadline=deadline,
+            telemetry=telemetry,
+        )
+    except SecPacingError as err:
+        if err.reason in ("cancelled", "deadline_exceeded", "forbidden", "sec_contact_unconfigured"):
+            raise
+        return [], []
+    except Exception:
+        return [], []
+
+    directory = idx_doc.get("directory") if isinstance(idx_doc, Mapping) else None
+    entries = directory.get("item") if isinstance(directory, Mapping) else None
+    if not isinstance(entries, list):
+        return [], []
+
+    html_ranked: list[tuple[int, str, str, str | None]] = []
+    pdf_ranked: list[tuple[int, str, str, str | None]] = []
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            continue
+        name = entry.get("name")
+        if not isinstance(name, str) or not _SAFE_FILENAME_RE.fullmatch(name):
+            continue
+        low = name.lower()
+        if row.primary_document and name == row.primary_document:
+            continue
+        if low.endswith(("-index.htm", "-index.html", "-index-headers.html")):
+            continue
+        if _XBRL_REPORT_HTM_RE.match(name):
+            continue
+        desc = str(entry.get("description") or "").strip() or None
+        sz = _entry_size_int(entry)
+        if low.endswith((".htm", ".html")):
+            html_ranked.append((sz, name, f"{base_url}/{name}", desc))
+        elif low.endswith(".pdf"):
+            pdf_ranked.append((sz, name, f"{base_url}/{name}", desc))
+
+    html_ranked.sort(key=lambda item: (-item[0], item[1]))
+    pdf_ranked.sort(key=lambda item: (-item[0], item[1]))
+    return (
+        [(n, u, d) for _sz, n, u, d in html_ranked[:_MAX_FALLBACK_HTML_FILES]],
+        [(n, u, d) for _sz, n, u, d in pdf_ranked[:_MAX_FALLBACK_PDF_FILES]],
+    )
 
 
 def parse_6k_raw(
@@ -151,6 +263,117 @@ def parse_6k_raw(
                 max_chars=rules.form8k.ex99_max_excerpt_chars,
             )
             ex99_descriptions[ex.filename] = ex.description
+
+    # v6.1 P0-3: Cover-page-only 6-K fallback — fetch non-ex99 HTML or PDF exhibits in same SEC directory
+    if len(cleaned_primary) < _COVER_PAGE_THRESHOLD_CHARS and not ex99_texts:
+        fb_html, fb_pdf = _discover_6k_cover_fallback_files(
+            row,
+            user_agent=user_agent,
+            limiter=limiter,
+            policy=policy,
+            transport=transport,
+            stream_transport=stream_transport,
+            cancel_event=cancel_event,
+            deadline=deadline,
+            telemetry=telemetry,
+        )
+        known_names = {ex.filename for ex in exhibits}
+        for fname, furl, fdesc in fb_html:
+            try:
+                ex_raw, _ex_ct, _ex_sha = sec_get_text(
+                    furl,
+                    category="filings",
+                    user_agent=user_agent,
+                    limiter=limiter,
+                    policy=policy,
+                    transport=transport,
+                    stream_transport=stream_transport,
+                    max_bytes=10_000_000,
+                    large=True,
+                    cancel_event=cancel_event,
+                    deadline=deadline,
+                    telemetry=telemetry,
+                )
+            except SecPacingError as err:
+                if err.reason in ("cancelled", "deadline_exceeded", "forbidden", "sec_contact_unconfigured"):
+                    raise
+                continue
+            except Exception:
+                continue
+            cleaned_fb, parsed_tables = (
+                strip_html_preserving_tables(ex_raw)
+                if _HTML_LIKELY_RE.search(ex_raw[:8192])
+                else (ex_raw, [])
+            )
+            cleaned_fb = cleaned_fb.strip()
+            if not cleaned_fb:
+                continue
+            ex99_texts[fname] = cleaned_fb
+            ex99_excerpts[fname] = condense_ex99_preserving_tables(
+                cleaned_fb,
+                [t.raw_markdown for t in parsed_tables if t.raw_markdown],
+                keywords=rules.form8k.ex99_high_density_keywords,
+                max_chars=rules.form8k.ex99_max_excerpt_chars,
+            )
+            ex99_descriptions[fname] = fdesc or "6-K fallback HTML exhibit"
+            if fname not in known_names:
+                known_names.add(fname)
+                exhibits.append(
+                    ParsedExhibitMeta(
+                        filename=fname,
+                        exhibit_type="6-K-HTML",
+                        attachment_role="ex99_press_release",
+                        sec_url=furl,
+                        description=fdesc,
+                    )
+                )
+
+        if not ex99_texts and fb_pdf:
+            for fname, furl, fdesc in fb_pdf:
+                try:
+                    pdf_bytes, _pdf_ct, _pdf_sha = sec_get_bytes(
+                        furl,
+                        accept="application/pdf, */*",
+                        category="filings",
+                        user_agent=user_agent,
+                        limiter=limiter,
+                        policy=policy,
+                        transport=transport,
+                        stream_transport=stream_transport,
+                        max_bytes=_MAX_FALLBACK_PDF_BYTES,
+                        large=True,
+                        cancel_event=cancel_event,
+                        deadline=deadline,
+                        telemetry=telemetry,
+                    )
+                except SecPacingError as err:
+                    if err.reason in ("cancelled", "deadline_exceeded", "forbidden", "sec_contact_unconfigured"):
+                        raise
+                    continue
+                except Exception:
+                    continue
+                pdf_text = _extract_pdf_text(pdf_bytes)
+                if not pdf_text:
+                    continue
+                ex99_texts[fname] = pdf_text
+                ex99_excerpts[fname] = condense_ex99_preserving_tables(
+                    pdf_text,
+                    [],
+                    keywords=rules.form8k.ex99_high_density_keywords,
+                    max_chars=rules.form8k.ex99_max_excerpt_chars,
+                )
+                ex99_descriptions[fname] = fdesc or "6-K fallback PDF exhibit"
+                if fname not in known_names:
+                    known_names.add(fname)
+                    exhibits.append(
+                        ParsedExhibitMeta(
+                            filename=fname,
+                            exhibit_type="6-K-PDF",
+                            attachment_role="ex99_press_release",
+                            sec_url=furl,
+                            description=fdesc,
+                        )
+                    )
 
     return Raw6kParsed(
         cik=row.cik,

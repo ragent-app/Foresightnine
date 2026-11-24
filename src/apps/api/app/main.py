@@ -18,7 +18,7 @@ import re
 import secrets
 import tempfile
 from pathlib import Path
-from threading import Event, RLock, Thread
+from threading import BoundedSemaphore, Event, RLock, Thread
 from time import monotonic, sleep
 from typing import Annotated, Any, Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -5312,6 +5312,28 @@ def _reconcile_orphaned_earnings_squads() -> int:
     return reconciled
 
 
+_PLATFORM_LLM_GATE_LOCK = RLock()
+_PLATFORM_LLM_GATE: tuple[int, BoundedSemaphore] | None = None
+
+
+def _platform_llm_concurrency_gate() -> BoundedSemaphore:
+    """Return process-wide concurrency gate for platform-managed LLM slots (BYOK exempt)."""
+    global _PLATFORM_LLM_GATE
+    raw = os.environ.get("FORESIGHTNINE_PLATFORM_LLM_MAX_CONCURRENCY", "").strip()
+    limit = 2
+    if raw:
+        try:
+            parsed = int(raw)
+            if 1 <= parsed <= 8:
+                limit = parsed
+        except ValueError:
+            pass
+    with _PLATFORM_LLM_GATE_LOCK:
+        if _PLATFORM_LLM_GATE is None or _PLATFORM_LLM_GATE[0] != limit:
+            _PLATFORM_LLM_GATE = (limit, BoundedSemaphore(limit))
+        return _PLATFORM_LLM_GATE[1]
+
+
 class _AccountSlotModelRunner:
     """Adapter bridging ``SquadModelRunner`` to ForesightNine wire ``LlmProvider`` instances."""
 
@@ -5327,7 +5349,10 @@ class _AccountSlotModelRunner:
         slot_timeouts: Mapping[str, float] | None = None,
         default_timeout_seconds: float | None = None,
         max_transient_retries: int = 2,
+        max_rate_limit_retries: int = 3,
         retry_base_seconds: float = 0.5,
+        rate_limit_backoff_schedule: tuple[float, ...] = (5.0, 15.0, 35.0),
+        concurrency_gate: Any = None,
         sleeper: Callable[[float], None] | None = None,
     ) -> None:
         self._providers = dict(providers_by_slot)
@@ -5339,7 +5364,10 @@ class _AccountSlotModelRunner:
         self._slot_timeouts = dict(slot_timeouts or {})
         self._default_timeout_seconds = default_timeout_seconds
         self._max_transient_retries = max(0, int(max_transient_retries))
+        self._max_rate_limit_retries = max(0, int(max_rate_limit_retries))
         self._retry_base_seconds = max(0.0, float(retry_base_seconds))
+        self._rate_limit_backoff_schedule = rate_limit_backoff_schedule or (5.0, 15.0, 35.0)
+        self._concurrency_gate = concurrency_gate
         self._sleeper = sleeper
         self._lock = RLock()
         self._next_gen = 0
@@ -5491,7 +5519,9 @@ class _AccountSlotModelRunner:
                 return cur is None or cur[0] != call_gen
 
         model_resp = None
-        for attempt in range(self._max_transient_retries + 1):
+        transient_attempts = 0
+        rate_limit_attempts = 0
+        while True:
             if _is_cancelled():
                 raise ProviderFailure("provider_cancelled", "Provider request was cancelled.", retryable=False)
             if _is_superseded():
@@ -5508,7 +5538,19 @@ class _AccountSlotModelRunner:
                 timeout_seconds=turn_timeout,
                 cancel_event=cancel_signal,
             )
+            gate = self._concurrency_gate
+            gate_acquired = False
             try:
+                if gate is not None:
+                    while not gate_acquired:
+                        if _is_cancelled():
+                            raise ProviderFailure("provider_cancelled", "Provider request was cancelled.", retryable=False)
+                        if _is_superseded():
+                            raise ProviderFailure("provider_cancelled", "Turn superseded by steering reset.", retryable=False)
+                        if self._budget is not None and math.isfinite(self._budget.deadline):
+                            if self._budget.deadline - monotonic() <= 0:
+                                raise ProviderFailure("provider_budget_exhausted", "Research time budget is exhausted.", retryable=False)
+                        gate_acquired = bool(gate.acquire(timeout=0.5))
                 model_resp = adapter.complete_turn(turn)
                 break
             except ProviderFailure as exc:
@@ -5516,23 +5558,43 @@ class _AccountSlotModelRunner:
                     raise
                 if _is_superseded():
                     raise ProviderFailure("provider_cancelled", "Turn superseded by steering reset.", retryable=False) from exc
-                if not exc.retryable or attempt >= self._max_transient_retries:
-                    if exc.code == "provider_request_rejected":
-                        from .research_diagnostics import log_provider_rejection
+                is_rate_limit = (
+                    exc.code in ("rate_limited", "provider_rate_limited")
+                    or getattr(exc, "upstream_status", None) == 429
+                )
+                if is_rate_limit:
+                    if not exc.retryable or rate_limit_attempts >= self._max_rate_limit_retries:
+                        raise
+                    retry_after_raw = getattr(exc, "retry_after", None)
+                    if isinstance(retry_after_raw, (int, float)) and not isinstance(retry_after_raw, bool) and math.isfinite(retry_after_raw) and retry_after_raw > 0:
+                        delay = min(60.0, max(1.0, float(retry_after_raw)))
+                    else:
+                        sched_idx = min(rate_limit_attempts, len(self._rate_limit_backoff_schedule) - 1)
+                        delay = float(self._rate_limit_backoff_schedule[sched_idx]) * random.uniform(0.85, 1.15)
+                    rate_limit_attempts += 1
+                else:
+                    if not exc.retryable or transient_attempts >= self._max_transient_retries:
+                        if exc.code == "provider_request_rejected":
+                            from .research_diagnostics import log_provider_rejection
 
-                        log_provider_rejection(
-                            type(adapter).__name__,
-                            exc,
-                            context={
-                                "model": getattr(getattr(adapter, "settings", None), "model", None),
-                                "stage": mreq.stage,
-                                "role": mreq.role,
-                                "conversation_id": str(conv_id),
-                            },
-                        )
-                    raise
-                base_delay = self._retry_base_seconds * (2 ** attempt)
-                delay = min(8.0, base_delay) * random.uniform(0.75, 1.25)
+                            log_provider_rejection(
+                                type(adapter).__name__,
+                                exc,
+                                context={
+                                    "model": getattr(getattr(adapter, "settings", None), "model", None),
+                                    "stage": mreq.stage,
+                                    "role": mreq.role,
+                                    "conversation_id": str(conv_id),
+                                },
+                            )
+                        raise
+                    base_delay = self._retry_base_seconds * (2 ** transient_attempts)
+                    delay = min(8.0, base_delay) * random.uniform(0.75, 1.25)
+                    transient_attempts += 1
+                # Release concurrency gate BEFORE sleeping on backoff so other callers are not blocked.
+                if gate_acquired and gate is not None:
+                    gate.release()
+                    gate_acquired = False
                 if self._budget is not None and math.isfinite(self._budget.deadline):
                     rem = self._budget.deadline - monotonic()
                     if rem <= 0 or delay >= rem:
@@ -5543,6 +5605,9 @@ class _AccountSlotModelRunner:
                     cancel_signal.wait(delay)
                 else:
                     sleep(delay)
+            finally:
+                if gate_acquired and gate is not None:
+                    gate.release()
 
         assert model_resp is not None
         with self._lock:
@@ -7253,6 +7318,7 @@ def _resolve_sec_events_runtime(
             cancel_event=hook_dict.get("cancel_event"),
             budget=budget,
             slot_max_output_tokens=slot_max_tokens,
+            concurrency_gate=None if is_personal else _platform_llm_concurrency_gate(),
         )
     elif effective_resolved_slots is None and effective_slot_bindings is None and effective_slot_overrides is not None:
         try:

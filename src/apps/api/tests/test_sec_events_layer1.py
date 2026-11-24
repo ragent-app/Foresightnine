@@ -1421,3 +1421,66 @@ def test_additional_edge_cases_across_forms_and_scale_anchor() -> None:
     assert semi_anchor.taxonomy_used == "ifrs-full"
     assert semi_anchor.currency == "EUR"
     assert semi_anchor.latest_ttm_revenue == "1150"
+
+
+def test_6k_cover_page_fallback_fetches_non_ex99_html() -> None:
+    """v6.1 P0-3: When 6-K primary is cover-page-only (<2000 chars) and no EX-99 matches, fetch non-ex99 HTML."""
+    from datetime import date as _date
+    from types import SimpleNamespace
+    from app.fin_data.adapters.sec_events.form6k import parse_6k_raw
+    from app.fin_data.adapters.sec_events.pacing import RawSubmissionRow
+    from app.fin_data.adapters.sec_events.rules import load_sec_events_rules
+
+    rules = load_sec_events_rules()
+    cik = "0001046179"
+    acc = "0001046179-26-000101"
+    nodash = acc.replace("-", "")
+    base = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{nodash}"
+    cover_html = "<html><body><p>FORM 6-K REPORT OF FOREIGN PRIVATE ISSUER. Exhibit 99.1 attached.</p></body></html>"
+    index_json = (
+        '{"directory":{"item":['
+        '{"name":"tsm-cover.htm","size":"120"},'
+        '{"name":"tsm-revenue20261008.htm","size":"4200"},'
+        '{"name":"0001046179-26-000101-index.htm","size":"3000"}'
+        ']}}'
+    )
+    body_html = "<html><body><p>TSMC September 2026 consolidated net revenue was NT$285.4 billion, up 24.1% YoY.</p></body></html>"
+
+    def transport(_method: str, url: str, _headers: dict[str, str], _body: bytes, _timeout: float) -> object:
+        if url.endswith("tsm-cover.htm"):
+            return SimpleNamespace(status_code=200, status=200, body=cover_html.encode(), headers={"Content-Type": "text/html"})
+        if url.endswith("index.json"):
+            return SimpleNamespace(status_code=200, status=200, body=index_json.encode(), headers={"Content-Type": "application/json"})
+        if url.endswith("tsm-revenue20261008.htm"):
+            return SimpleNamespace(status_code=200, status=200, body=body_html.encode(), headers={"Content-Type": "text/html"})
+        return SimpleNamespace(status_code=404, status=404, body=b"", headers={})
+
+    def stream_transport(_method: str, url: str, headers: dict[str, str], body: bytes, timeout: float, sink: object) -> object:
+        reply = transport(_method, url, headers, body, timeout)
+        if reply.body:  # type: ignore[attr-defined]
+            sink.write(reply.body)  # type: ignore[attr-defined]
+        return SimpleNamespace(status_code=reply.status_code, status=reply.status, body=b"", headers=reply.headers)  # type: ignore[attr-defined]
+
+    row = RawSubmissionRow(
+        cik=cik,
+        accession=acc,
+        nodash=nodash,
+        form="6-K",
+        filed_at=_date(2026, 10, 8),
+        primary_document="tsm-cover.htm",
+        primary_document_url=f"{base}/tsm-cover.htm",
+    )
+    parsed = parse_6k_raw(
+        row,
+        rules,
+        user_agent="TestAgent test@example.com",
+        limiter=None,
+        policy=None,
+        transport=transport,
+        stream_transport=stream_transport,
+        cancel_event=None,
+        deadline=None,
+        telemetry=None,
+    )
+    assert "tsm-revenue20261008.htm" in parsed.ex99_texts
+    assert "NT$285.4 billion" in parsed.ex99_texts["tsm-revenue20261008.htm"]

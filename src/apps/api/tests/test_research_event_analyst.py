@@ -670,33 +670,40 @@ def test_skeptic_pass_slot_routing_isolation_and_asymmetric_matrix() -> None:
         assert "OBJECTIVE_CLUSTER_SKELETONS:" in req.user_prompt
         assert "acc=0001-26-000304" in req.user_prompt or "acc=0001-26-000301" in req.user_prompt
 
-        if "c_refuted" in req.user_prompt:
-            return {
-                "candidate_id": "c_refuted",
-                "verdict": "downgrade_to_log_only",
-                "rationale": "Explicit no-disagreement clause in Item 4.01.",
-                "refuting_quotes": [{
-                    "source_id": c_refuted.source_id,
-                    "quotation": "did not result from any disagreement on accounting principles",
-                }],
-                "recommended_disposition": "log_only",
-            }
-        if "c_stat" in req.user_prompt:
-            return {
-                "candidate_id": "c_stat",
-                "verdict": "downgrade_to_suppress",
-                "rationale": "Restatement is non-cash.",
-                "refuting_quotes": [{
-                    "source_id": c_stat.source_id,
-                    "quotation": "Reclassification is non-cash.",
-                }],
-                "recommended_disposition": "suppress",
-            }
+        # Batched Skeptic receives all 3 push_alert targets (c_quiet excluded from targets) in 1 call
+        assert "TARGET candidate_id=c_refuted" in req.user_prompt
+        assert "TARGET candidate_id=c_stat" in req.user_prompt
+        assert "TARGET candidate_id=c_dissent" in req.user_prompt
+        assert "TARGET candidate_id=c_quiet" not in req.user_prompt
         return {
-            "candidate_id": "c_dissent",
-            "verdict": "dissent",
-            "rationale": "CEO transitions can also represent planned succession.",
-            "refuting_quotes": [],
+            "reviews": [
+                {
+                    "candidate_id": "c_refuted",
+                    "verdict": "downgrade_to_log_only",
+                    "rationale": "Explicit no-disagreement clause in Item 4.01.",
+                    "refuting_quotes": [{
+                        "source_id": c_refuted.source_id,
+                        "quotation": "did not result from any disagreement on accounting principles",
+                    }],
+                    "recommended_disposition": "log_only",
+                },
+                {
+                    "candidate_id": "c_stat",
+                    "verdict": "downgrade_to_suppress",
+                    "rationale": "Restatement is non-cash.",
+                    "refuting_quotes": [{
+                        "source_id": c_stat.source_id,
+                        "quotation": "Reclassification is non-cash.",
+                    }],
+                    "recommended_disposition": "suppress",
+                },
+                {
+                    "candidate_id": "c_dissent",
+                    "verdict": "dissent",
+                    "rationale": "CEO transitions can also represent planned succession.",
+                    "refuting_quotes": [],
+                },
+            ]
         }
 
     runner = ScriptedRunner(handler)
@@ -708,7 +715,8 @@ def test_skeptic_pass_slot_routing_isolation_and_asymmetric_matrix() -> None:
             "bear_reviewer": EventSlotBinding(slot="bear_reviewer", model="bear-cross-family", fallback_used=False),
         },
     )
-    assert res.metrics.l2_skeptic_calls == 3  # c_quiet skipped
+    assert res.metrics.l2_skeptic_calls == 3  # 3 push_alerts reviewed (c_quiet skipped)
+    assert sum(1 for r in runner.requests if r.stage == "sec_event_skeptic") == 1  # batched into 1 LLM call!
     assert res.metrics.l2_skeptic_downgrades == 1  # only c_refuted downgraded
 
     by_cid = {s.payload["candidate_id"]: s for s in res.signals}

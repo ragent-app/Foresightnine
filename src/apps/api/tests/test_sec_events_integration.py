@@ -740,3 +740,72 @@ def test_analyze_endpoint_respects_cancel_event_and_resolve_squad_slots_fallback
     polled = _poll_analysis_until_terminal(client, headers, op_id)
     assert polled["operation"]["status"] == "cancelled"
     assert "analysis" not in polled or polled["analysis"] is None
+
+
+def test_platform_runner_429_long_backoff_and_concurrency_gate() -> None:
+    """v6.1 P0-2: Platform runner releases concurrency gate before 429 long backoff & respects retry_after."""
+    from threading import BoundedSemaphore
+    from types import SimpleNamespace
+    from app import main as app_main
+    from app.phase3 import ProviderFailure
+    from app.research_earnings_squad import SlotModelRequest
+
+    slept: list[float] = []
+    calls = {"n": 0}
+    gate = BoundedSemaphore(1)
+
+    class _Flaky429Adapter:
+        def complete_turn(self, _turn: object) -> object:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                err = ProviderFailure("rate_limited", "429 retry_after", retryable=True)
+                err.upstream_status = 429
+                err.retry_after = 12.0  # type: ignore[attr-defined]
+                raise err
+            if calls["n"] == 2:
+                err = ProviderFailure("rate_limited", "429 schedule", retryable=True)
+                err.upstream_status = 429
+                raise err
+            return SimpleNamespace(
+                message={"role": "assistant", "content": '{"ok": true}'},
+                tool_calls=(),
+                finish_reason="stop",
+                usage={"input_tokens": 10, "output_tokens": 5},
+            )
+
+    def _check_gate_free_during_sleep(sec: float) -> None:
+        # Gate MUST be released before backoff sleep so other threads are not starved
+        assert gate.acquire(blocking=False) is True
+        gate.release()
+        slept.append(sec)
+
+    runner = app_main._AccountSlotModelRunner(
+        providers_by_slot={},
+        default_provider=_Flaky429Adapter(),
+        concurrency_gate=gate,
+        rate_limit_backoff_schedule=(5.0, 15.0, 35.0),
+        sleeper=_check_gate_free_during_sleep,
+    )
+    req = SimpleNamespace(
+        stage="sec_event_analysis",
+        role="event_analyst",
+        slot="deep_reasoner",
+        system_prompt="sys",
+        user_prompt="usr",
+        messages=[{"role": "system", "content": "sys"}, {"role": "user", "content": "usr"}],
+        tools=(),
+        turn_index=0,
+        conversation_id="conv_429_test",
+        response_schema=None,
+        response_schema_name=None,
+        max_output_tokens=None,
+    )
+    resp = runner.invoke(req)
+    assert resp.content == '{"ok": true}'
+    assert calls["n"] == 3
+    assert len(slept) == 2
+    assert slept[0] == 12.0  # respected retry_after
+    assert 12.0 <= slept[1] <= 18.0  # 2nd 429 used schedule[1] = 15.0 * [0.85, 1.15]
+    # Gate cleanly released after completion
+    assert gate.acquire(blocking=False) is True
+    gate.release()
