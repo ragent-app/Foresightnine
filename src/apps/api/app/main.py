@@ -5624,7 +5624,15 @@ def _build_squad_slot_provider(
         primary_msg_opts = primary_config.messages_options
         slot_name = getattr(slot_entry, "slot", None)
         default_slot_max = _SQUAD_SLOT_MAX_OUTPUT_TOKENS.get(str(slot_name), 8192)
-        gen_max = getattr(slot_gen_params, "max_output_tokens", None) if slot_gen_params is not None else None
+        gen_max = (
+            (
+                getattr(slot_gen_params, "max_output_tokens", None)
+                or getattr(slot_gen_params, "max_completion_tokens", None)
+                or getattr(slot_gen_params, "max_tokens", None)
+            )
+            if slot_gen_params is not None
+            else None
+        )
         max_tokens = (
             getattr(slot_entry, "messages_max_tokens", None)
             or gen_max
@@ -5805,13 +5813,23 @@ def _resolve_earnings_squad_runtime(
                 slot_gen = getattr(slot_entry, "generation_parameters", None)
                 cap = (
                     getattr(slot_entry, "messages_max_tokens", None)
-                    or (getattr(slot_gen, "max_output_tokens", None) if slot_gen is not None else None)
+                    or (
+                        getattr(slot_gen, "max_output_tokens", None)
+                        or getattr(slot_gen, "max_completion_tokens", None)
+                        or getattr(slot_gen, "max_tokens", None)
+                        if slot_gen is not None
+                        else None
+                    )
                 )
             if cap is None and config is not None and not slot_overridden:
                 if config.messages_options is not None and config.messages_options.max_tokens:
                     cap = config.messages_options.max_tokens
-                elif config.generation_parameters is not None and config.generation_parameters.max_output_tokens:
-                    cap = config.generation_parameters.max_output_tokens
+                elif config.generation_parameters is not None:
+                    cap = (
+                        getattr(config.generation_parameters, "max_output_tokens", None)
+                        or getattr(config.generation_parameters, "max_completion_tokens", None)
+                        or getattr(config.generation_parameters, "max_tokens", None)
+                    )
             if type(cap) is int and cap > 0:
                 slot_max_tokens[sname] = cap
         model_runner = _AccountSlotModelRunner(

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 import threading
 import time
+from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
@@ -14,7 +15,7 @@ from starlette.requests import Request
 
 import app.main as api
 from app.anthropic_messages import AnthropicMessagesProvider
-from app.model_credentials import MessagesOptions, StoredModelConfig
+from app.model_credentials import MessagesOptions, ModelConfigUpdate, ModelCredentialCipher, StoredModelConfig
 from app.model_protocol import ModelResponse, ModelToolCall, ModelUsage
 from app.openai_compatible import OpenAICompatibleLlmProvider, OpenAICompatibleSettings
 from app.openai_responses import OpenAIResponsesProvider
@@ -926,3 +927,118 @@ def test_resolve_earnings_squad_runtime_wires_market_price_fn_and_graceful_fallb
 
     monkeypatch.setattr(FinDataToolbox, "market_data", boom_market_data)
     assert orch._prefetch_deps.market_price_fn("cik:0000320193", "AAPL") is None
+
+
+# --------------------------------------------------------------------------- 6. Personal generation_parameters Regression (topic_11e55b1df00649e8865baf53f2b7ddd9)
+def test_resolve_earnings_squad_runtime_personal_chat_generation_params_without_max_output_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr("app.openai_compatible._require_public_dns", lambda host, port: ["93.184.216.34"])
+    monkeypatch.setattr(api.model_settings, "cipher", ModelCredentialCipher(b"p" * 32))
+
+    client = TestClient(api.app)
+    account, headers = _register_account(client)
+    topic_resp = client.post(
+        "/v2/research/topics",
+        headers=headers,
+        json={"question": "Analyze MSFT Q2 FY26 earnings"},
+    )
+    assert topic_resp.status_code == 201, topic_resp.text
+    topic = api.research_topics.get(account.account_id, topic_resp.json()["topic_id"])
+
+    # 1) Exact real-world reproduction: personal openai_chat_completions config with ChatGenerationParameters
+    # (which defines only reasoning_effort/temperature/top_p/seed and has no max_output_tokens attr).
+    gen_params = ChatGenerationParameters(temperature=0.2, reasoning_effort="medium")
+    assert not hasattr(gen_params, "max_output_tokens")
+    api.model_settings.update(
+        account.account_id,
+        ModelConfigUpdate(
+            mode="personal",
+            protocol="openai_chat_completions",
+            base_url="https://api.example.test/v1",
+            model="gpt-4o",
+            api_key="sk-test-personal-1234",
+            generation_parameters=gen_params,
+        ),
+    )
+    stored_cfg = api.model_settings._stored(account.account_id)
+    assert stored_cfg is not None
+    assert api.model_settings.record_tools_result(stored_cfg, True)
+
+    cp_store = api._RepoSquadCheckpointStore(
+        account_id=account.account_id,
+        topic_id=topic.topic_id,
+        state_lock_key=api._squad_state_key(account.account_id, topic.topic_id),
+    )
+    orch_real, _summary = api._resolve_earnings_squad_runtime(
+        account=account,
+        topic=topic,
+        request=None,
+        http_request=_http_request(headers),
+        operation_id="sqop_personal_gen_params",
+        run_id="sqrun_personal_gen_params",
+        checkpoint_store=cp_store,
+        org_sink=lambda _ev: None,
+    )
+    assert orch_real._model_runner._slot_max_output_tokens == {}
+    assert orch_real._model_runner._resolve_max_output_tokens(
+        SlotModelRequest(
+            slot="fast_extractor",
+            stage="stage_2_workers",
+            role="worker_segments",
+            system_prompt="sys",
+            user_prompt="extract",
+            messages=[{"role": "system", "content": "sys"}, {"role": "user", "content": "extract"}],
+            binding=_binding("fast_extractor"),
+        )
+    ) == 8192
+
+    # 2) Fallback resolution when generation_parameters exposes max_tokens=4096 (no max_output_tokens attr)
+    real_settings, real_config = api.model_settings.runtime_configuration(account.account_id)
+    assert real_settings is not None and real_config is not None
+    max_tokens_gen = SimpleNamespace(max_tokens=4096)
+    config_with_max_tokens = StoredModelConfig.model_construct(
+        **{**real_config.model_dump(), "generation_parameters": max_tokens_gen}
+    )
+    monkeypatch.setattr(
+        api.model_settings,
+        "runtime_configuration",
+        lambda _aid: (real_settings, config_with_max_tokens),
+    )
+    monkeypatch.setattr(api.model_settings, "primary_slot_profile", lambda _aid: None)
+
+    orch_fallback, _summary2 = api._resolve_earnings_squad_runtime(
+        account=account,
+        topic=topic,
+        request=None,
+        http_request=_http_request(headers),
+        operation_id="sqop_personal_max_tokens",
+        run_id="sqrun_personal_max_tokens",
+        checkpoint_store=cp_store,
+        org_sink=lambda _ev: None,
+    )
+    assert orch_fallback._model_runner._slot_max_output_tokens == {
+        "fast_extractor": 4096,
+        "deep_reasoner": 4096,
+        "bear_reviewer": 4096,
+        "writer": 4096,
+    }
+
+    # 3) _build_squad_slot_provider anthropic_messages slot honors max_tokens / max_completion_tokens safely
+    anth_slot = ResolvedModelSlot(
+        slot="writer",
+        role="dossier_writer",
+        fallback_used=False,
+        source="slot_override",
+        protocol="anthropic_messages",
+        base_url="https://api.example.test/v1",
+        model="claude-writer",
+        credential_ref="account_primary",
+        native_tools_supported=True,
+        capability_valid=True,
+        differs_from_primary=True,
+    )
+    object.__setattr__(anth_slot, "generation_parameters", max_tokens_gen)
+    p_anth = api._build_squad_slot_provider(account.account_id, anth_slot, real_settings, real_config)
+    assert isinstance(p_anth, AnthropicMessagesProvider)
+    assert p_anth.max_tokens == 4096
