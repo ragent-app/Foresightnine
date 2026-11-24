@@ -79,3 +79,13 @@ def enforce_optional_offline_network(monkeypatch):
     monkeypatch.setattr(socket.socket, 'connect_ex', connect_ex)
     yield
     assert not attempted, 'Offline acceptance attempted an external network request; mock its provider or adapter.'
+
+
+@pytest.fixture(autouse=True)
+def scripted_runs_skip_topic_title(request, monkeypatch):
+    """Scripted providers replay an exact sequence of research calls; the one-off title call that
+    names a new topic is outside that sequence. Its behaviour is covered in test_research_topic_title."""
+    if request.module.__name__.endswith("test_research_topic_title"):
+        return
+    import app.research_topic_title as topic_title
+    monkeypatch.setattr(topic_title, "summarise_title", lambda **kwargs: None)

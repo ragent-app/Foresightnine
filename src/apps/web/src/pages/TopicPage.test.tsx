@@ -156,6 +156,20 @@ describe("TopicPage", () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/turn_1/instructions"))).toBe(true);
   });
 
+  it("titles the page with the summary and keeps the first question as a bubble", async () => {
+    const titled = { ...topicWith([turn(1, { question: "Northwind 示例公司的收入增长有多快？", report: "收入增长 18%。" })]), title: "Northwind 收入增速" };
+    mockApi((url) => {
+      if (url.pathname === "/v2/research/topics/t1") return jsonResponse(titled);
+      if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+      return undefined;
+    });
+    renderTopic();
+    expect(await screen.findByRole("heading", { level: 1, name: "Northwind 收入增速" })).toBeTruthy();
+    const first = screen.getByRole("region", { name: "第 1 轮" });
+    expect(within(first).getByText("Northwind 示例公司的收入增长有多快？")).toBeTruthy();
+    expect(within(first).getByRole("button", { name: "复制问题" })).toBeTruthy();
+  });
+
   it("shows a partial turn with its gaps and offers to continue when recovery allows it", async () => {
     const partial = turn(1, { status: "partial", reason: "no_submission", gaps: [{ code: "no_cited_claims", message: "x" }] });
     const completed = turn(2, {

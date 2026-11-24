@@ -594,15 +594,15 @@ export function TurnView({ turn, actions, first = false, tools, askTools, editin
     const citation = claim?.citations?.[focus.citation_index];
     focusLabel = citation ? `深挖引用 ${view.citations.numberFor(citation)}` : "深挖引用";
   }
-  // The first question is already the page's large title; repeating it adds nothing.
+  // The question is shown as asked; the page title only summarises it. The first turn needs no stamp.
   return (
     <section id={`turn-${turn.turn_id}`} className={first ? "turn turn-first" : "turn"} aria-label={`第 ${number} 轮`}>
       {!first ? <TurnStamp number={number} iso={turn.started_at} /> : null}
       {editing && onEditDone ? (
         <AskEditor initial={turn.question} onDone={onEditDone} />
-      ) : !first || focusLabel ? (
+      ) : (
         <AskBubble text={turn.question} focusLabel={focusLabel} tools={askTools} />
-      ) : null}
+      )}
       {(turn.user_instructions ?? []).map((instruction) => (
         <div key={instruction.instruction_id}><AskBubble text={instruction.text} /><span className="meta">{instructionReceiptLabel(instruction.status)}</span><InstructionDelivery instruction={instruction} /></div>
       ))}
@@ -648,7 +648,7 @@ export function InterruptedTurn({ number, startedAt, question, status, actions, 
   return (
     <section className={first ? "turn turn-first" : "turn"} aria-label={`第 ${number} 轮`}>
       {!first ? <TurnStamp number={number} iso={startedAt} /> : null}
-      {question && !first ? <AskBubble text={question} /> : null}
+      {question ? <AskBubble text={question} /> : null}
       <div className="answer">
         <div className="callout error" role="note">
           <span className="h">{status === "cancelled" ? "已停止" : "运行中断"}</span>
@@ -709,7 +709,7 @@ export function LiveTurn({ number, startedAt, question, live = null, sectionRef,
       aria-busy="true"
     >
       {!isContinue && !first ? <TurnStamp number={number} iso={startedAt} /> : null}
-      {!isContinue && !first && question ? <AskBubble text={question} /> : null}
+      {!isContinue && question ? <AskBubble text={question} /> : null}
       {continuing === "regenerate" && editedQuestion ? <AskBubble text={editedQuestion} /> : null}
       {(progress?.instructions ?? []).slice().sort((a, b) => a.sequence - b.sequence).map((instruction) => (
         <div key={instruction.instruction_id}><AskBubble text={instruction.text} /><span className="meta">{instructionReceiptLabel(instruction.status)}</span></div>

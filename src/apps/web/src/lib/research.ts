@@ -629,14 +629,25 @@ export function versionWithTurn(versions: readonly ResearchV2.ResearchVersion[],
   return null;
 }
 
+const TITLE_FALLBACK_CHARS = 24;
+
+/** Until a title is summarised (or for topics from before titles), the question's opening stands in. */
+export function shortQuestion(question: string): string {
+  const text = question.replace(/\s+/g, " ").trim();
+  if (text.length <= TITLE_FALLBACK_CHARS) return text;
+  const sentence = /^(.{6,}?)[。！？!?；;]/.exec(text)?.[1];
+  if (sentence && sentence.length <= TITLE_FALLBACK_CHARS) return sentence;
+  return `${text.slice(0, TITLE_FALLBACK_CHARS).trimEnd()}…`;
+}
+
 export function topicTitle(topic: ResearchTopic): string {
   const named = topic.title?.trim();
   if (named) return named;
   const question = topic.request.question?.trim();
-  if (question) return question;
+  if (question) return shortQuestion(question);
   for (let i = topic.versions.length - 1; i >= 0; i -= 1) {
     const first = topic.versions[i]?.content.turns?.[0]?.question.trim();
-    if (first) return first;
+    if (first) return shortQuestion(first);
   }
   return "文档概览";
 }

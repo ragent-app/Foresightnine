@@ -1134,6 +1134,8 @@ def run_research_agent(
     ocr_pages: Callable[[ResearchSource, list[int]], OcrOutcome] | None = None,
     news_providers: list[Any] | None = None,
     issuer_docs: IssuerDocuments | None = None,
+    title_question: str | None = None,
+    on_title: Callable[[str], None] | None = None,
 ) -> RuntimeOutcome:
     """Execute serially; a pending external call is never replayed on recovery.
 
@@ -1327,6 +1329,10 @@ def run_research_agent(
 
     if not callable(getattr(model, 'complete_turn', None)) and callable(getattr(model, 'complete', None)):
         model = ChatResearchAdapter(model)
+    if title_question:
+        # The first turn of a topic names it; at most once per run, never repeated on recovery.
+        from .research_topic_title import summarise_title
+        summarise_title(state=state, model=model, context=context, save=save, question=title_question, on_title=on_title)
     presend_retries, presend_base = presend_retry_settings()
     submission_retries = 0
     seen: set[str] = set(state.get('seen', []))

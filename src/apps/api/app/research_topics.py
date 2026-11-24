@@ -472,6 +472,8 @@ class TopicMeta(BaseModel):
     topic_id: str
     owner_id: str
     title: str | None = None
+    # True while the title is the one summarised from the first question; a rename clears it.
+    title_generated: bool = False
     pinned_at: datetime | None = None
     deleted_at: datetime | None = None
     forked_from: TopicOrigin | None = None
@@ -645,11 +647,28 @@ class ResearchTopics:
         changes: dict[str, object] = {}
         if "title" in request.model_fields_set:
             changes["title"] = request.title or None
+            changes["title_generated"] = False
         if "pinned" in request.model_fields_set:
             changes["pinned_at"] = (meta.pinned_at or now or datetime.now(timezone.utc)) if request.pinned else None
         meta = meta.model_copy(update=changes)
         self._put_meta(meta)
         return self._with_meta(topic, meta)
+
+    def title_state(self, owner: str, topic_id: str) -> tuple[str | None, bool]:
+        """The current title and whether it was summarised rather than chosen by the user."""
+        meta = self._meta(owner, topic_id)
+        return (meta.title, meta.title_generated) if meta is not None else (None, False)
+
+    def set_generated_title(self, owner: str, topic_id: str, title: str, *, replace_generated: bool = False) -> bool:
+        """Name a topic from its first question unless the user has named it."""
+        if self.meta_repository is None:
+            return False
+        self.get(owner, topic_id)
+        meta = self._meta(owner, topic_id) or TopicMeta(topic_id=topic_id, owner_id=owner)
+        if meta.title and not (replace_generated and meta.title_generated):
+            return False
+        self._put_meta(meta.model_copy(update={"title": title, "title_generated": True}))
+        return True
 
     def soft_delete(self, owner: str, topic_id: str, *, now: datetime | None = None) -> TopicDeletion:
         self.get(owner, topic_id)

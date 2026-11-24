@@ -3610,7 +3610,18 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
                 # Build on the version before the replaced turn; the head check above still guards the append.
                 parent_now = next(item for item in latest_topic.versions if item.version_id == rebase_base.version_id)
             research_clock = build_research_clock(lifecycle_clock.now())
+            # The first question names the topic unless the user already did; an edited first
+            # question renames a topic whose title was summarised.
+            title_question = None
+            renaming = bool(turn_meta.get('replaces_turn_id'))
+            if turn_meta.get('index') == 1 and turn_meta.get('question_origin') == 'user':
+                current_title, generated = research_topics.title_state(account.account_id, topic_id)
+                if not current_title or (generated and renaming):
+                    title_question = str(turn_meta.get('question') or '') or None
             outcome = run_research_agent(question=effective_question, sources=sources, model=provider,
+                title_question=title_question,
+                on_title=lambda title: research_topics.set_generated_title(
+                    account.account_id, topic_id, title, replace_generated=renaming),
                 context=context, discover=discover, acquire=acquire if retrieval_permitted else None,
                 fin_data=fin_data, capabilities=capabilities,
                 news_providers=run_news_providers,
@@ -4392,6 +4403,8 @@ def _build_research_run_progress_view(
     doc = TURN_RECORDS.get(turn_id) if turn_id else None
     if doc and doc['account_id'] == topic.owner_id and doc['topic_id'] == topic.topic_id:
         progress.update(_turn_progress_fields(doc, operation.status, version))
+    # Lets an open page pick up a title summarised while the first turn runs.
+    progress['topic_title'] = topic.title
     return progress
 
 

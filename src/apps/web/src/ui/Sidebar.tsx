@@ -161,7 +161,8 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
     const pinned: ResearchV2.ResearchTopic[] = [];
     const result = new Map<DateGroup, ResearchV2.ResearchTopic[]>();
     for (const topic of sorted) {
-      if (needle && !topicTitle(topic).toLowerCase().includes(needle)) continue;
+      // Search the summarised title and the question as asked.
+      if (needle && ![topicTitle(topic), topic.request.question ?? ""].some((text) => text.toLowerCase().includes(needle))) continue;
       if (topic.pinned_at) { pinned.push(topic); continue; }
       const group = dateGroup(topic.updated_at);
       result.set(group, [...(result.get(group) ?? []), topic]);

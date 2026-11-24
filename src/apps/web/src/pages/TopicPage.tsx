@@ -157,6 +157,21 @@ export function TopicPage() {
       ? latestRun
       : null;
   const progressMatches = (operationId: string | undefined) => progress.progress?.operation_id === operationId;
+
+  // The first turn names the topic a few seconds after it starts: pick the title up as soon as the
+  // progress reports it, and otherwise look again every few seconds while that turn runs.
+  const awaitingTitle = Boolean(topic && !topic.title?.trim() && activeRun && turns.length === 0);
+  const reportedTitle = progress.progress?.topic_title?.trim() || null;
+  useEffect(() => {
+    if (!awaitingTitle) return undefined;
+    const refresh = () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.topic(topicId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.topics });
+    };
+    if (reportedTitle) { refresh(); return undefined; }
+    const timer = window.setInterval(refresh, 5000);
+    return () => window.clearInterval(timer);
+  }, [awaitingTitle, reportedTitle, queryClient, topicId]);
   const recoveryOperation = activeRun
     ? null
     : orphanRun?.operation_id ?? (lastTurn?.status === "partial" ? lastTurn.operation_ids[lastTurn.operation_ids.length - 1] ?? null : null);
@@ -811,7 +826,7 @@ export function TopicPage() {
                   key={turn.turn_id}
                   turn={turn}
                   waiting={awaitingUser && turn.turn_id === progress.progress?.turn.turn_id}
-                  first={index === 0 && turn.question.trim() === title.trim()}
+                  first={index === 0}
                   {...(index === turns.length - 1 && canModifyLast ? latestTurnControls(turn) : view ? { tools: { menu: [forkEntry(turn)] } } : {})}
                   actions={index === turns.length - 1 && turn.status === "partial" && !orphanRun && !activeRun && !awaitingUser ? turnActions(turn.question, turn.reason !== "submitted", turn.turn_id) : null}
                 />
@@ -862,10 +877,10 @@ export function TopicPage() {
                   onDraftGrow={onDraftGrow}
                   continuing={continuingMode}
                   editedQuestion={continuingMode === "regenerate" && pendingContinue && lastTurn && pendingContinue.question !== lastTurn.question ? pendingContinue.question : null}
-                  first={turns.length === 0 && liveQuestion.trim() === title.trim()}
+                  first={turns.length === 0}
                 />
               ) : !live && pendingAsk ? (
-                <LiveTurn sectionRef={liveTurnRef} number={turns.length + 1} startedAt={pendingAsk.at} question={pendingAsk.question} live={null} first={turns.length === 0 && pendingAsk.question.trim() === title.trim()} />
+                <LiveTurn sectionRef={liveTurnRef} number={turns.length + 1} startedAt={pendingAsk.at} question={pendingAsk.question} live={null} first={turns.length === 0} />
               ) : null}
               {turns.length === 0 && !live && !orphanRun && !pendingAsk && !runs.isLoading ? (
                 <div className="turn">
