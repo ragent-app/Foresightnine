@@ -30,6 +30,18 @@ export function useLiveStream(stream?: LiveStreamStore | undefined): TransientSt
   );
 }
 
+/** Whether a draft is on screen; re-renders only when that changes, not on every token. */
+export function useHasDraft(stream?: LiveStreamStore | undefined): boolean {
+  return useSyncExternalStore(
+    stream ? stream.subscribe : noopSubscribe,
+    () => {
+      const state = stream ? stream.getSnapshot() : EMPTY_STREAM;
+      return Boolean(state.draftReport.trim() || state.heldDraft?.trim());
+    },
+    () => false,
+  );
+}
+
 /**
  * The report as it is being written, in the place the answer will appear. A draft sent back by
  * review stays readable while the writer revises it, instead of disappearing.

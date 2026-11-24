@@ -371,21 +371,60 @@ def current_activity(checkpoint: Mapping[str, Any] | None) -> dict[str, Any] | N
             'started_at': _text(pending.get('started_at'), TIMESTAMP_LIMIT),
         }
     tool_name: str | None = None
+    call: Mapping[str, Any] | None = None
     if kind in _TOOL_BY_PENDING:
         tool_name = _TOOL_BY_PENDING[kind]
     elif kind == 'tool_batch':
         calls, cursor = pending.get('calls'), pending.get('cursor')
         if isinstance(calls, list) and type(cursor) is int and 0 <= cursor < len(calls) and isinstance(calls[cursor], Mapping):
-            tool_name = _text(calls[cursor].get('name'), NAME_LIMIT)
+            call = calls[cursor]
+            tool_name = _text(call.get('name'), NAME_LIMIT)
     if tool_name:
-        return {
+        activity = {
             'kind': 'tool',
             'name': tool_name,
             'rationale': _text(pending.get('rationale'), RATIONALE_LIMIT),
             'target': _text(pending.get('target'), TARGET_LIMIT),
             'started_at': _text(pending.get('started_at'), TIMESTAMP_LIMIT),
         }
+        hosts = _activity_hosts(checkpoint or {}, tool_name, call)
+        if hosts:
+            activity['hosts'] = hosts
+        return activity
     return None
+
+
+_HOST_TOOLS = frozenset({'acquire_sources', 'read_sources', 'outline_source', 'search_source'})
+
+
+def _activity_hosts(checkpoint: Mapping[str, Any], tool_name: str, call: Mapping[str, Any] | None) -> list[str]:
+    """The websites the current step fetches or reads, for showing their icons; at most four."""
+    from .research_favicons import host_of
+    if tool_name not in _HOST_TOOLS or call is None:
+        return []
+    args = call.get('arguments')
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except ValueError:
+            return []
+    if not isinstance(args, Mapping):
+        return []
+    urls: list[str] = []
+    if tool_name == 'acquire_sources':
+        urls = [u for u in args.get('urls') or [] if isinstance(u, str)]
+    else:
+        by_source = {sid: url for url, sid in (checkpoint.get('acquired_lead_sources') or {}).items()
+                     if isinstance(url, str) and isinstance(sid, str)}
+        ids = [r.get('source_id') for r in args.get('reads') or [] if isinstance(r, Mapping)]
+        ids.append(args.get('source_id'))
+        urls = [by_source[sid] for sid in ids if isinstance(sid, str) and sid in by_source]
+    hosts: list[str] = []
+    for url in urls:
+        host = host_of(url)
+        if host and host not in hosts:
+            hosts.append(host)
+    return hosts[:4]
 
 
 def _interim_counts(checkpoint: Mapping[str, Any] | None, saved_turn: Any) -> dict[str, int]:

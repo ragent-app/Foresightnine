@@ -1,8 +1,8 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { useCallback, useMemo, useState, type ReactNode, type Ref } from "react";
 import { Link } from "react-router-dom";
-import type { CurrentActivity, ProgressEvent, RecoveryStatus } from "../../api/types";
-import { formatInterimParts, formulaLabel, gapText, isSystemReason, modelPhaseLabel, recoveryReasonLabel, reviewReasonText, toolLabel, turnReasonLabel, VERIFY_NOTE } from "../../lib/copy";
+import type { ProgressEvent, RecoveryStatus } from "../../api/types";
+import { formulaLabel, gapText, isSystemReason, modelPhaseLabel, recoveryReasonLabel, reviewReasonText, toolLabel, turnReasonLabel, VERIFY_NOTE } from "../../lib/copy";
 import { displayTurnNumber, formatClock, formatDuration, formatInteger, formatQuantity, turnStamp } from "../../lib/format";
 import { answerSummary, claimRole, parseAttributions, parseTurnEvents, partialSummary, ROLE_LABEL, stepRows, toolStepCount, turnCharts, turnContent, turnDurationMs } from "../../lib/research";
 import { Disclosure } from "../../ui/controls";
@@ -17,8 +17,9 @@ import { CitationButton } from "./Citation";
 import { AttributionLine, EvidenceViews, evidenceAlert, hasEvidenceViews } from "./EvidenceViews";
 import { answerBody, cellText, columnHeader, conclusionText, draftNote, keyCalculations, shortPeriod, tableLayout } from "../../lib/answerBody";
 import { ChartCard } from "./charts/ChartCard";
-import { LiveActiveStream, LiveDraftPreview } from "./LiveStreamView";
-import { latestFinds, liveStages } from "../../lib/liveStages";
+import { LiveDraftPreview, useHasDraft } from "./LiveStreamView";
+import { liveStages, sourceHosts } from "../../lib/liveStages";
+import { SiteIcons } from "../../ui/SiteIcon";
 import { QuestionParts } from "./QuestionParts";
 import { ProcessTimeline } from "./ProcessTimeline";
 import { LIVE_TURN, useTopicView, type LiveRun } from "./context";
@@ -347,6 +348,7 @@ export function AnswerBlock({ turn, actions, tools, waiting = false }: { turn: R
   const parts = turn.question_parts ?? [];
   const [partsOpen, setPartsOpen] = useState(partial && !reportText);
   const checks = hasEvidenceViews(turn);
+  const hosts = useMemo(() => sourceHosts(events), [events]);
   const alert = useMemo(() => evidenceAlert(turn), [turn]);
   const attributions = useMemo(() => parseAttributions(turn.attributions), [turn.attributions]);
   const { lead, rest } = useMemo(() => splitLead(reportText), [reportText]);
@@ -461,7 +463,8 @@ export function AnswerBlock({ turn, actions, tools, waiting = false }: { turn: R
         {missing > 0 || hasLimits ? (
           <FootToggle label={missing > 0 ? `还差 ${missing} 项` : "限制"} open={partsOpen} onToggle={() => setPartsOpen((open) => !open)} />
         ) : null}
-        <button type="button" className="foot-btn" onClick={() => view.openPanel({ kind: "record", tab: recordTab, turnKey: turn.turn_id })}>
+        <button type="button" className="foot-btn" onClick={() => view.openPanel({ kind: "record", tab: hosts.length > 0 ? "sources" : recordTab, turnKey: turn.turn_id })}>
+          {hosts.length > 0 ? <SiteIcons hosts={hosts} /> : null}
           本轮记录
           <Icon name="chev" size={14} />
         </button>
@@ -683,17 +686,28 @@ export function LiveTurn({ number, startedAt, question, live = null, sectionRef,
 }) {
   const view = useTopicView();
   const now = useNow(true);
-  const [expanded, setExpanded] = useState(true);
   const progress = live?.progress ?? null;
   const status = progress?.operation_status ?? live?.operation.status ?? "pending";
   const isPending = status === "pending";
   const startIso = progress?.started_at ?? live?.operation.created_at ?? startedAt;
   const startedMs = Date.parse(startIso);
   const elapsed = Number.isNaN(startedMs) ? "" : formatClock(Math.max(0, now - startedMs));
-  const found = formatInterimParts(progress?.interim).join(" · ");
   const events = live?.events ?? [];
   const current = progress?.current ?? null;
   const hasTimeline = events.length > 0 || current !== null;
+  // One status line and one line of what is happening; counts, stages and raw output are in the panel.
+  const drafting = useHasDraft(live?.stream);
+  const stages = useMemo(() => liveStages(events, current), [events, current]);
+  const phase = settling || isPending ? null : drafting ? "写报告" : stages.find((stage) => stage.state === "active")?.label ?? null;
+  const note = useMemo(() => {
+    for (const event of [...events].reverse()) if (event.kind === "model" && event.note?.trim()) return event.note.trim();
+    return null;
+  }, [events]);
+  const liveHosts = current?.kind === "tool" ? current.hosts ?? [] : [];
+  const activity = drafting || settling ? null
+    : current?.kind === "tool" ? (current.rationale?.trim() || [toolLabel(current.name), current.target].filter(Boolean).join("："))
+    : current ? note ?? modelPhaseLabel(current.phase, current.retry_attempt)
+    : hasTimeline ? note : isPending ? "任务已提交，等待调度开始…" : "正在准备研究上下文…";
   const isContinue = continuing === "continue" || continuing === "deliver" || continuing === "regenerate";
   const statusTitle = settling ? "正在保存结果" : continuing === "regenerate"
     ? (isPending ? "排队中 · 重新生成" : "正在重新生成")
@@ -717,38 +731,24 @@ export function LiveTurn({ number, startedAt, question, live = null, sectionRef,
         <div key={instruction.instruction_id}><AskBubble text={instruction.text} /><span className="meta">{instructionReceiptLabel(instruction.status)}</span></div>
       ))}
       <div className="answer live-turn">
-        <div className="live-turn-head">
+        <button
+          type="button"
+          className="live-head"
+          title="查看完整过程"
+          disabled={!live}
+          onClick={() => view.openPanel({ kind: "record", tab: "steps", turnKey: LIVE_TURN })}
+        >
           <span className="dot running" aria-hidden="true" />
-          <button
-            type="button"
-            className="live-turn-title"
-            title="打开过程面板"
-            disabled={!live}
-            onClick={() => view.openPanel({ kind: "record", tab: "steps", turnKey: LIVE_TURN })}
-          >
-            {statusTitle}
-          </button>
-          {found ? <span className="live-turn-meta">{found}</span> : null}
+          <span className="live-turn-title">{statusTitle}{phase ? <span className="live-phase"> · {phase}</span> : null}</span>
           <span className="grow" />
           {elapsed ? <span className="live-turn-time">{elapsed}</span> : null}
-          <button
-            type="button"
-            className="link live-turn-toggle"
-            aria-expanded={expanded}
-            onClick={() => setExpanded((value) => !value)}
-          >
-            {expanded ? "收起" : "展开"}
-            <Icon name={expanded ? "up" : "down"} size={14} />
-          </button>
-        </div>
-        {expanded ? (
-          <LiveStagesView
-            events={events}
-            current={current}
-            idleText={hasTimeline ? null : isPending ? "任务已提交，等待调度开始…" : "正在准备研究上下文…"}
-            stream={live?.stream}
-            onOpenProcess={live ? () => view.openPanel({ kind: "record", tab: "steps", turnKey: LIVE_TURN }) : null}
-          />
+          {live ? <Icon name="chev" size={14} /> : null}
+        </button>
+        {activity ? (
+          <p className="live-now">
+            {liveHosts.length > 0 ? <SiteIcons hosts={liveHosts} /> : null}
+            <span className="live-now-text">{activity}</span>
+          </p>
         ) : null}
         <LiveDraftPreview stream={live?.stream} onGrow={onDraftGrow} />
       </div>
@@ -758,57 +758,3 @@ export function LiveTurn({ number, startedAt, question, live = null, sectionRef,
 
 export const PendingTurn = LiveTurn;
 
-/**
- * Where the run is, in five plain stages; then the model's latest note in its own words, what it is
- * doing now and what it has just found. Its raw thinking is one click away, not on the page.
- */
-function LiveStagesView({ events, current, idleText, stream, onOpenProcess }: {
-  events: ProgressEvent[]; current: CurrentActivity | null; idleText: string | null;
-  stream?: LiveRun["stream"] | undefined; onOpenProcess: (() => void) | null;
-}) {
-  const [thinkingOpen, setThinkingOpen] = useState(false);
-  const stages = useMemo(() => liveStages(events, current), [events, current]);
-  const finds = useMemo(() => latestFinds(events), [events]);
-  const note = useMemo(() => {
-    for (const event of [...events].reverse()) if (event.kind === "model" && event.note?.trim()) return event.note.trim();
-    return null;
-  }, [events]);
-  const target = current?.kind === "tool" && current.target && current.target !== current.rationale ? current.target : null;
-  const now = current
-    ? current.kind === "tool" ? toolLabel(current.name) : modelPhaseLabel(current.phase, current.retry_attempt)
-    : idleText;
-  const why = current?.kind === "tool" ? current.rationale ?? null : null;
-  return (
-    <div className="live-stages">
-      <ol className="stage-row" aria-label="研究阶段">
-        {stages.map((stage) => (
-          <li key={stage.key} className={`stage ${stage.state}`} aria-current={stage.state === "active" ? "step" : undefined}>
-            <span className="stage-dot" aria-hidden="true" />
-            <span className="stage-label">{stage.label}</span>
-            {stage.detail ? <span className="stage-detail">{stage.detail}</span> : null}
-          </li>
-        ))}
-      </ol>
-      {note ? <p className="live-note">{note}</p> : null}
-      {now ? (
-        <p className="live-now">
-          <span className="live-now-label">{now}</span>
-          {why ? <span>{why}</span> : null}
-          {target ? <span className="live-target">{target}</span> : null}
-        </p>
-      ) : null}
-      {finds.length > 0 ? <p className="live-finds">刚获取：{finds.map((title) => `《${title}》`).join("、")}</p> : null}
-      <div className="live-links">
-        {stream ? (
-          <button type="button" className="link" aria-expanded={thinkingOpen} onClick={() => setThinkingOpen((open) => !open)}>
-            {thinkingOpen ? "收起模型输出" : "查看模型输出"}
-          </button>
-        ) : null}
-        {onOpenProcess && events.length > 0 ? (
-          <button type="button" className="link" onClick={onOpenProcess}>查看完整过程 ›</button>
-        ) : null}
-      </div>
-      {thinkingOpen && stream ? <LiveActiveStream stream={stream} /> : null}
-    </div>
-  );
-}

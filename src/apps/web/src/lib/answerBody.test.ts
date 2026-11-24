@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { answerBody, cellText, conclusionText, currentCalculations, keyCalculations, readableNumber, shortPeriod, tableLayout } from "./answerBody";
-import { latestFinds, liveStages } from "./liveStages";
+import { latestFinds, liveStages, sourceHosts } from "./liveStages";
 import type { ProgressEvent } from "../api/types";
 
 const calc = (id: string, value: string, inputs: [string, string]): ResearchV2.ResearchCalculation => ({
@@ -85,5 +85,18 @@ describe("live stages", () => {
     expect(stages.find((s) => s.key === "write")!.detail).toBe("第 2 稿");
     expect(stages.find((s) => s.key === "find")!.state).toBe("active");
     expect(stages.find((s) => s.key === "write")!.state).toBe("done");
+  });
+});
+
+describe("source hosts", () => {
+  it("lists the sites documents were obtained from, once each, in order", () => {
+    const acquire = (index: number, items: Record<string, unknown>[]): ProgressEvent =>
+      ({ index, kind: "tool", name: "acquire_sources", status: "completed", reason: null, rationale: null, denied_count: null,
+         summary: { kind: "acquire_sources", items } } as unknown as ProgressEvent);
+    const events = [
+      acquire(0, [{ host: "WWW.CNBC.com", status: "acquired" }, { host: "apnews.com", status: "failed" }]),
+      acquire(1, [{ host: "www.cnbc.com", status: "acquired" }, { host: "nvidianews.nvidia.com", status: "retrieved" }]),
+    ];
+    expect(sourceHosts(events)).toEqual(["www.cnbc.com", "nvidianews.nvidia.com"]);
   });
 });

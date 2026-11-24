@@ -100,7 +100,7 @@ export interface InterimSummary {
 
 export type CurrentActivity =
   | { kind: "model"; phase?: ModelPhase | null; retry_attempt?: number | null; started_at?: string | null }
-  | { kind: "tool"; name: string; rationale?: string | null; target?: string | null; started_at?: string | null };
+  | { kind: "tool"; name: string; rationale?: string | null; target?: string | null; started_at?: string | null; hosts?: string[] };
 
 // apps/api/app/research_progress.py build_progress
 export type ProgressEvent =

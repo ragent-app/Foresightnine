@@ -254,17 +254,18 @@ describe("TopicPage", () => {
     expect(screen.getAllByRole("button", { name: "停止研究" })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "取消" })).toBeNull();
     const liveRegion = screen.getByRole("region", { name: "第 2 轮" });
-    expect(within(liveRegion).getByText(/读取年报附注/)).toBeTruthy();
+    // One status line (with the stage) and one line of what is happening now; counts, stages and
+    // the model's notes are in the process panel the status line opens.
     expect(within(liveRegion).getByText("正在研究")).toBeTruthy();
-    expect(within(liveRegion).getByText(/发现 3 条线索 · 获取 1 份资料 · 记下 2 个数字/)).toBeTruthy();
-    expect(within(liveRegion).getByText("先检查年报附注中的收入明细。")).toBeTruthy();
-    // The live turn shows stages and the current step; every tool call is in the process panel.
-    expect(within(liveRegion).getByRole("list", { name: "研究阶段" })).toBeTruthy();
-    expect(within(liveRegion).getByText("《Northwind 年报》0–8,000 字")).toBeTruthy();
-    fireEvent.click(within(liveRegion).getByRole("button", { name: "收起" }));
+    expect(within(liveRegion).getByText(/读资料/)).toBeTruthy();
+    expect(within(liveRegion).getByText("读取年报附注")).toBeTruthy();
+    expect(within(liveRegion).queryByText(/发现 3 条线索/)).toBeNull();
     expect(within(liveRegion).queryByText("先检查年报附注中的收入明细。")).toBeNull();
-    fireEvent.click(within(liveRegion).getByRole("button", { name: "展开" }));
-    expect(within(liveRegion).getByText("先检查年报附注中的收入明细。")).toBeTruthy();
+    fireEvent.click(within(liveRegion).getByRole("button", { name: /正在研究/ }));
+    const panel = await screen.findByRole("dialog");
+    expect(await within(panel).findByText("先检查年报附注中的收入明细。")).toBeTruthy();
+    fireEvent.click(within(panel).getByRole("button", { name: "关闭" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     const composer = screen.getByRole("textbox", { name: "追问" }) as HTMLTextAreaElement;
     expect(composer.disabled).toBe(false);
     expect(composer.placeholder).toBe("追加研究要求…");
@@ -874,9 +875,8 @@ describe("TopicPage", () => {
       });
 
       const liveRegion = await screen.findByRole("region", { name: "第 2 轮" });
-      expect(await within(liveRegion).findByText("先通过 SSE 检索年报。")).toBeTruthy();
-      expect(within(liveRegion).getByText("Northwind 10-K")).toBeTruthy();
-      expect(within(liveRegion).getAllByText(/搜索年报/).length).toBeGreaterThan(0);
+      // The live turn says what the current step is for; notes and targets are in the process panel.
+      expect(await within(liveRegion).findByText("搜索年报")).toBeTruthy();
 
       // Send heartbeat, duplicate ev:0, new step.event, current update, and transient L3 stream frames.
       streamController!.enqueue(encoder.encode(": heartbeat\n\n"));
@@ -918,14 +918,14 @@ describe("TopicPage", () => {
 
       expect(await within(liveRegion).findByText("精读收入附注")).toBeTruthy();
       // Tool-level detail lives in the process panel, one click from the live turn.
-      fireEvent.click(within(liveRegion).getByRole("button", { name: "查看完整过程 ›" }));
+      expect(await within(liveRegion).findByText("精读收入附注")).toBeTruthy();
+      fireEvent.click(within(liveRegion).getByRole("button", { name: /正在研究/ }));
       const processPanel = await screen.findByRole("dialog");
       expect(await within(processPanel).findByText("发现 2 条线索（可用 1 · 受限 1）")).toBeTruthy();
+      expect(within(processPanel).getAllByText("先通过 SSE 检索年报。")).toHaveLength(1);
+      expect(within(processPanel).getByText("《Northwind 10-K》0–8,000 字")).toBeTruthy();
       fireEvent.click(within(processPanel).getByRole("button", { name: "关闭" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-      expect(within(liveRegion).getAllByText("先通过 SSE 检索年报。")).toHaveLength(1);
-      expect(within(liveRegion).getByText("《Northwind 10-K》0–8,000 字")).toBeTruthy();
-      expect(within(liveRegion).getByText(/精读收入附注/)).toBeTruthy();
 
       completed = true;
       sendFrame("done:op_2", "run.terminal", {
@@ -941,7 +941,7 @@ describe("TopicPage", () => {
       expect(await screen.findByText("SSE 完成报告。")).toBeTruthy();
       const completedRegion = await screen.findByRole("region", { name: "第 2 轮" });
       expect(within(completedRegion).getByText("SSE 完成报告。")).toBeTruthy();
-      await waitFor(() => expect(screen.queryByTitle("打开过程面板")).toBeNull());
+      await waitFor(() => expect(screen.queryByTitle("查看完整过程")).toBeNull());
       const progressCalls = fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/op_2/progress"));
       expect(progressCalls).toHaveLength(0);
     });
@@ -985,11 +985,11 @@ describe("TopicPage", () => {
       });
       const { container } = renderTopic();
       const liveRegion = await screen.findByRole("region", { name: "第 2 轮" });
-      expect(await within(liveRegion).findByText("<b>加粗不生效</b>")).toBeTruthy();
-      expect(within(liveRegion).getByText("<img src=x onerror=alert(1)>")).toBeTruthy();
-      expect(within(liveRegion).getByText("<script>alert(2)</script>")).toBeTruthy();
-      fireEvent.click(within(liveRegion).getByRole("button", { name: "查看完整过程 ›" }));
+      expect(await within(liveRegion).findByText("<img src=x onerror=alert(1)>")).toBeTruthy();
+      fireEvent.click(within(liveRegion).getByRole("button", { name: /正在研究/ }));
       const panel = await screen.findByRole("dialog");
+      expect(await within(panel).findByText("<b>加粗不生效</b>")).toBeTruthy();
+      expect(within(panel).getByText("<script>alert(2)</script>")).toBeTruthy();
       fireEvent.click(within(panel).getByRole("button", { name: "展开线索 (1)" }));
       expect(within(panel).getByText("<svg onload=alert(3)>")).toBeTruthy();
       expect(container.querySelector("svg[onload]")).toBeNull();
@@ -1064,20 +1064,21 @@ describe("TopicPage", () => {
         sendFrame("stream.delta", { operation_id: "op_2", call_seq: 1, channel: "thinking", delta: "思考步骤B。", seq: 1 });
         sendFrame("stream.delta", { operation_id: "op_2", call_seq: 1, channel: "text", delta: "正在核对财报数据。", seq: 2 });
 
-        // Raw model output is one click away, not on the page by default.
+        // Raw model output is not on the page; it streams in the process panel the status line opens.
         expect(within(liveRegion).queryByText("模型思考过程 · 非正式结论")).toBeNull();
-        fireEvent.click(within(liveRegion).getByRole("button", { name: "查看模型输出" }));
-        expect(await within(liveRegion).findByText("模型思考过程 · 非正式结论")).toBeTruthy();
-        expect(within(liveRegion).getByText("思考步骤A。思考步骤B。")).toBeTruthy();
-        expect(within(liveRegion).getByText("正在核对财报数据。")).toBeTruthy();
+        fireEvent.click(within(liveRegion).getByRole("button", { name: /正在研究/ }));
+        const panel = await screen.findByRole("dialog");
+        expect(await within(panel).findByText("模型思考过程 · 非正式结论")).toBeTruthy();
+        expect(within(panel).getByText("思考步骤A。思考步骤B。")).toBeTruthy();
+        expect(within(panel).getByText("正在核对财报数据。")).toBeTruthy();
         expect(durationSpy.mock.calls.length).toBe(turn1CallsBeforeThinking);
 
         // Manual collapse toggle works and stays collapsed during the same call_seq.
-        fireEvent.click(within(liveRegion).getByRole("button", { name: "收起模型思考过程" }));
-        expect(within(liveRegion).queryByText(/思考步骤A/)).toBeNull();
+        fireEvent.click(within(panel).getByRole("button", { name: "收起模型思考过程" }));
+        expect(within(panel).queryByText(/思考步骤A/)).toBeNull();
         sendFrame("stream.delta", { operation_id: "op_2", call_seq: 1, channel: "thinking", delta: "思考步骤C。", seq: 3 });
         await new Promise((resolve) => setTimeout(resolve, 25));
-        expect(within(liveRegion).queryByText(/思考步骤C/)).toBeNull();
+        expect(within(panel).queryByText(/思考步骤C/)).toBeNull();
 
         // Tool transition resets transient model thought stream automatically.
         sendFrame("stream.reset", { operation_id: "op_2", call_seq: 1, reason: "tool_started" });
@@ -1089,8 +1090,11 @@ describe("TopicPage", () => {
           interim: null,
           updated_at: NOW,
         });
-        await waitFor(() => expect(within(liveRegion).queryByText("模型思考过程 · 非正式结论")).toBeNull());
-        expect(await within(liveRegion).findByText("《Northwind 年报》")).toBeTruthy();
+        await waitFor(() => expect(within(panel).queryByText("模型思考过程 · 非正式结论")).toBeNull());
+        expect(await within(panel).findByText("《Northwind 年报》")).toBeTruthy();
+        fireEvent.click(within(panel).getByRole("button", { name: "关闭" }));
+        await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+        expect(within(liveRegion).getByText("阅读原文")).toBeTruthy();
 
         // Draft report bursts (25 deltas) render inside dashed preview WITHOUT re-rendering historical Turn 1.
         const turn1CallsBeforeDraftBurst = durationSpy.mock.calls.length;
@@ -1475,9 +1479,12 @@ describe("TopicPage", () => {
       sendFrame("stream.delta", { operation_id: "op_3", call_seq: 1, channel: "thinking", delta: "续跑思考轨迹。", seq: 0 });
       sendFrame("stream.delta", { operation_id: "op_3", call_seq: 1, channel: "draft_report", delta: "续跑未核验草稿。", seq: 1 });
 
-      fireEvent.click(await within(contRegion).findByRole("button", { name: "查看模型输出" }));
-      expect(await within(contRegion).findByText("续跑思考轨迹。")).toBeTruthy();
       expect(await within(contRegion).findByText("续跑未核验草稿。")).toBeTruthy();
+      fireEvent.click(await within(contRegion).findByRole("button", { name: /正在继续研究/ }));
+      const contPanel = await screen.findByRole("dialog");
+      expect(await within(contPanel).findByText("续跑思考轨迹。")).toBeTruthy();
+      fireEvent.click(within(contPanel).getByRole("button", { name: "关闭" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
       expect(screen.getAllByText("问题 1")).toHaveLength(1);
       unmount();
 
@@ -1510,8 +1517,8 @@ describe("TopicPage", () => {
         updated_at: NOW,
         version_id: null,
       })}\n\nevent: stream.delta\ndata: ${JSON.stringify({ operation_id: "op_3", call_seq: 1, channel: "thinking", delta: "重连思考恢复。", seq: 0 })}\n\n`));
-      fireEvent.click(await within(refreshRegion).findByRole("button", { name: "查看模型输出" }));
-      expect(await within(refreshRegion).findByText("重连思考恢复。")).toBeTruthy();
+      fireEvent.click(await within(refreshRegion).findByRole("button", { name: /正在继续研究/ }));
+      expect(await within(await screen.findByRole("dialog")).findByText("重连思考恢复。")).toBeTruthy();
     });
 
     it("2) shows continuation deliver mode labels on partial turn '交付已有成果'", async () => {
@@ -1675,8 +1682,8 @@ describe("TopicPage", () => {
         version_id: null,
       })}\n\nevent: stream.delta\ndata: ${JSON.stringify({ operation_id: "op_9", call_seq: 1, channel: "thinking", delta: "追问实时思考。", seq: 0 })}\n\n`));
 
-      fireEvent.click(await within(liveRegion).findByRole("button", { name: "查看模型输出" }));
-      expect(await within(liveRegion).findByText("追问实时思考。")).toBeTruthy();
+      fireEvent.click(await within(liveRegion).findByRole("button", { name: /正在研究/ }));
+      expect(await within(await screen.findByRole("dialog")).findByText("追问实时思考。")).toBeTruthy();
       expect(screen.getAllByText("第二轮新追问")).toHaveLength(1);
     });
 
@@ -1710,7 +1717,7 @@ describe("TopicPage", () => {
         version_id: null,
       })}\n\nevent: stream.delta\ndata: ${JSON.stringify({ operation_id: "op_2", call_seq: 1, channel: "thinking", delta: "面板中的实时思考", seq: 0 })}\n\nevent: stream.delta\ndata: ${JSON.stringify({ operation_id: "op_2", call_seq: 1, channel: "tool_status", delta: "面板正在起草报告…", seq: 1 })}\n\n`));
 
-      fireEvent.click(await screen.findByTitle("打开过程面板"));
+      fireEvent.click(await screen.findByTitle("查看完整过程"));
       const dialog = await screen.findByRole("dialog");
       expect(await within(dialog).findByText("面板中的实时思考")).toBeTruthy();
       expect(within(dialog).getByText("面板正在起草报告…")).toBeTruthy();

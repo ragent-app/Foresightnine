@@ -87,6 +87,20 @@ export function liveStages(events: readonly ProgressEvent[], current: CurrentAct
   }));
 }
 
+/** Websites the run obtained documents from, in the order first used; for the answer's source icons. */
+export function sourceHosts(events: readonly ProgressEvent[], limit = 8): string[] {
+  const hosts: string[] = [];
+  for (const event of events) {
+    if (event.kind !== "tool" || event.name !== "acquire_sources") continue;
+    for (const item of items(summaryOf(event).items)) {
+      const host = typeof item.host === "string" ? item.host.trim().toLowerCase() : "";
+      if (host && (item.status === "acquired" || item.status === "retrieved") && !hosts.includes(host)) hosts.push(host);
+      if (hosts.length >= limit) return hosts;
+    }
+  }
+  return hosts;
+}
+
 /** Titles of the most recently obtained documents, newest first. */
 export function latestFinds(events: readonly ProgressEvent[], limit = 2): string[] {
   const titles: string[] = [];

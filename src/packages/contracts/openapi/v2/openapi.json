@@ -11479,6 +11479,60 @@
         "summary": "Get Research Capabilities"
       }
     },
+    "/v2/research/favicons/{host}": {
+      "get": {
+        "description": "A website's own icon, fetched by the server; the page cannot load images from other origins.",
+        "operationId": "get_research_favicon_v2_research_favicons__host__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host",
+            "required": true,
+            "schema": {
+              "title": "Host",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Research Favicon"
+      }
+    },
     "/v2/research/identities/sec-search": {
       "post": {
         "operationId": "search_research_sec_identities_v2_research_identities_sec_search_post",

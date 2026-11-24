@@ -4698,6 +4698,19 @@ def _turn_progress_fields(doc: dict, operation_status: str, version: ResearchVer
 
 
 
+@app.get("/v2/research/favicons/{host}", include_in_schema=False)
+def get_research_favicon(host: str, authorization: str | None = Header(default=None)) -> Response:
+    """A website's own icon, fetched by the server; the page cannot load images from other origins."""
+    _authenticated_account(authorization)
+    from .research_favicons import favicon, normalize_host
+    normalized = normalize_host(host)
+    icon = favicon(normalized) if normalized else None
+    if icon is None:
+        raise ApiProblem(404, "not_found", "No icon for this site.")
+    return Response(content=icon[0], media_type=icon[1],
+                    headers={"Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff"})
+
+
 @app.get("/v2/research/topics/{topic_id}/runs/{operation_id}/progress", include_in_schema=False)
 def get_research_run_progress(topic_id: str, operation_id: str, http_request: Request,
                               after: Annotated[int, Query(ge=0)] = 0) -> dict:

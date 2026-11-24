@@ -1,5 +1,5 @@
 /** GENERATED FILE — DO NOT EDIT. Source: openapi/v2/openapi.json
- * SHA-256: 328370c13a7d8b8768f0923368c4da4ec8d03f5a0b542c983279be83296905ff
+ * SHA-256: e55bb9fd3401d46a378ab61b4434870db58c69a26fd0fe197af8cd6e424cd247
  */
 export type AnalyzeMarketSeriesRequest = { readonly "benchmark_selection_reason"?: string | null; readonly "benchmark_source_id"?: string | null; readonly "decimal_places"?: number; readonly "end_date"?: string | null; readonly "price_basis"?: "adjusted" | "raw"; readonly "source_id": string; readonly "start_date"?: string | null; };
 export type AttachSourcesInput = { readonly "parent_version_id": string; readonly "source_ids": readonly (string)[]; };
