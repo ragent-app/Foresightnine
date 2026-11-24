@@ -93,7 +93,7 @@ export function AddSourcesPanel({ asOfIso, onAdded, onClose, initial, locked = f
   const ids = useId();
   const secAvailable = useSecAvailable();
   const webFetchAvailable = useWebFetchAvailable();
-  const allowedHosts = useResearchCapabilities().data?.sources.find((item) => item.name === "official_html_pdf")?.hosts;
+  const allowedHosts = useResearchCapabilities().data?.sources?.find((item) => item.name === "official_html_pdf")?.hosts;
   const fileInput = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<AddSourceTab>(initial?.tab ?? (initial?.url ? "url" : "file"));
   const [file, setFile] = useState<File | null>(initial?.file ?? null);

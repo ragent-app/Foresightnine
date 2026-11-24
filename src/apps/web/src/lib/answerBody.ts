@@ -19,8 +19,8 @@ export function answerBody(turn: Turn): AnswerBody {
 
 export function draftNote(hasCheckedClaims: boolean): string {
   return hasCheckedClaims
-    ? "这份报告没有全部通过独立核验。带编号的句子已对照原文核对，其余分析是模型根据已读资料作出的判断。"
-    : "这份报告没有通过独立核验，是模型根据已读资料作出的分析，请对照资料阅读。";
+    ? "部分完成：带编号的句子已对照原文核对，其余是模型根据资料作出的判断。"
+    : "部分完成：这份报告是模型根据资料作出的分析，没有通过独立核验。";
 }
 
 function inputKey(calc: Calculation): string {

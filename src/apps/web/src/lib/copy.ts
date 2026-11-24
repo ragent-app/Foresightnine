@@ -363,6 +363,19 @@ export function reviewReasonText(reason: string | null | undefined, _status?: "a
   return REVIEW_REASON_LABEL[text] ?? text;
 }
 
+/** Gaps the server files under "model_reported" although no model wrote them. */
+const SYSTEM_REPORTED = new Set([
+  "核心问题的依据或可展示答案仍需核验。",
+  "核心问题尚缺少可展示的有据答案。",
+  "部分结论缺少独立语义核验。",
+  "核心要求尚未满足。",
+]);
+
+export function isSystemReason(message: string): boolean {
+  const text = message.trim();
+  return text in REVIEW_REASON_LABEL || SYSTEM_REPORTED.has(text) || /^补充指令 \d+：/.test(text);
+}
+
 export function gapText(gap: { code: string; message: string }): string {
   if (gap.code === "provider_error") {
     const localized = PROVIDER_ERROR_MESSAGE_LABEL[gap.message.trim()];
@@ -386,6 +399,7 @@ export const VERIFICATION_LABEL: Readonly<Record<string, string>> = {
 
 export const CALC_CHECK_LABEL: Readonly<Record<string, string>> = {
   "input_status:unverifiable": "输入不可核验",
+  "input_status:matched": "输入与原文一致",
   "result_status:matched": "结果一致",
   "period_order_check:not_checked": "期间顺序未检查",
   "period_granularity_check:not_established": "期间粒度未确认",
@@ -404,8 +418,10 @@ export function calcChecks(calc: ResearchV2.ResearchCalculation): { label: strin
   for (const [field, value] of fields) {
     if (typeof value !== "string" || value === "") continue;
     const key = `${field}:${value}`;
-    const label = CALC_CHECK_LABEL[key] ?? `${field}: ${value}`;
-    const tone: CalcCheckTone = key === "result_status:matched" ? "support" : key in CALC_CHECK_LABEL ? "review" : "neutral";
+    // Unlabelled machine states are not shown.
+    const label = CALC_CHECK_LABEL[key];
+    if (!label) continue;
+    const tone: CalcCheckTone = key === "result_status:matched" || key === "input_status:matched" ? "support" : "review";
     checks.push({ label, tone });
   }
   return checks;

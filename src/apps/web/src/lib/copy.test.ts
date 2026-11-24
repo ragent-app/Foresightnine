@@ -182,8 +182,8 @@ describe("calcChecks", () => {
       { label: "期间粒度未确认", tone: "review" },
     ]);
   });
-  it("falls back for unknown values with neutral tone", () => {
-    expect(calcChecks({ ...base, result_status: "mismatch" })).toEqual([{ label: "result_status: mismatch", tone: "neutral" }]);
+  it("does not show unlabelled machine states", () => {
+    expect(calcChecks({ ...base, result_status: "mismatch" })).toEqual([]);
   });
   it("names model timeouts and dropped connections as stop reasons", () => {
     expect(turnReasonLabel("provider_timeout")).toBe("模型服务请求超时");

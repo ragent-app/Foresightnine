@@ -1,4 +1,5 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
+import { currentCalculations, shortPeriod } from "../../lib/answerBody";
 import { useId, useState } from "react";
 import { ApiError } from "../../api/http";
 import { useCreateCalculation, useRecalculate, useVersionSources } from "../../api/queries";
@@ -165,6 +166,19 @@ export function Permissions({ source }: { source: AvailableVersionSource }) {
   );
 }
 
+/** One line for the list: what kind of source and when it is from. */
+export function sourceSummary(source: AvailableVersionSource): string {
+  const date = (source.published_at ? formatDateTime(source.published_at) : formatDateTime(source.obtained_at)).slice(0, 10);
+  return [SOURCE_KIND_LABEL[source.kind] ?? source.kind, source.published_at ? `发布 ${date}` : `获取 ${date}`, source.is_simulated ? "模拟数据" : ""]
+    .filter(Boolean).join(" · ");
+}
+
+/** Only what the reader cannot do with a source is worth a line; full permissions are in its details. */
+export function sourceRestrictions(source: AvailableVersionSource): string | null {
+  const denied = PERMISSION_ORDER.filter((key) => !source.permissions[key]).map((key) => PERMISSION_LABEL[key]);
+  return denied.length ? `不可${denied.join("、")}` : null;
+}
+
 export function sourceMeta(source: AvailableVersionSource): string {
   const parts = [SOURCE_KIND_LABEL[source.kind] ?? source.kind, retrievalMethodLabel(source.retrieval_method)];
   if (source.published_at) parts.push(`公开 ${formatDateTime(source.published_at)}`);
@@ -237,7 +251,7 @@ function SourcesTab() {
   const query = useVersionSources(view.topicId, view.version.version_id);
   const secAvailable = useSecAvailable();
   const webFetchAvailable = useWebFetchAvailable();
-  const allowedHosts = useResearchCapabilities().data?.sources.find((item) => item.name === "official_html_pdf")?.hosts;
+  const allowedHosts = useResearchCapabilities().data?.sources?.find((item) => item.name === "official_html_pdf")?.hosts;
   const fetchOptions = { webFetchEnabled: webFetchAvailable, allowedHosts };
   const asOf = view.topic.request.as_of ?? null;
   const candidates = (view.content.source_candidates ?? []).map((row) => ({
@@ -271,19 +285,26 @@ function SourcesTab() {
               return (
                 <div key={source.source_id} className="item">
                   <span className="title">{source.title}</span>
-                  <span className="meta">{sourceMeta(source)}</span>
-                  <Permissions source={source} />
+                  <span className="meta">{sourceSummary(source)}</span>
+                  {sourceRestrictions(source) ? <span className="flag">{sourceRestrictions(source)}</span> : null}
                   {reason ? <span className="flag">下一轮不会读取：{INELIGIBLE_TEXT[reason]}</span> : null}
                   {source.pdf_text_spacing_warning ? (
                     <span className="flag">
                       {canReextract ? "PDF 提取的文字间距可能有误，可以换一种顺序重新提取。" : "PDF 提取的文字间距可能有误，可对照原始文档或保存后重新上传提取。"}
                     </span>
                   ) : null}
-                  {coverage.totalCharacters ? <CoverageBar ranges={coverage.ranges} total={coverage.totalCharacters} /> : null}
-                  <span className="meta">
-                    {coverage.totalCharacters !== null ? `已读 ${formatInteger(coverage.readCharacters)} / ${formatInteger(coverage.totalCharacters)} 字符` : `已读 ${formatInteger(coverage.readCharacters)} 字符`}
-                    {" · "}{VERIFICATION_LABEL[source.verification] ?? source.verification}
-                  </span>
+                  {coverage.totalCharacters && coverage.readCharacters < coverage.totalCharacters ? (
+                    <span className="meta">只读了其中 {Math.max(1, Math.round((coverage.readCharacters / coverage.totalCharacters) * 100))}%</span>
+                  ) : null}
+                  <Disclosure summary="详情">
+                    <span className="meta">{sourceMeta(source)}</span>
+                    <Permissions source={source} />
+                    {coverage.totalCharacters ? <CoverageBar ranges={coverage.ranges} total={coverage.totalCharacters} /> : null}
+                    <span className="meta">
+                      {coverage.totalCharacters !== null ? `已读 ${formatInteger(coverage.readCharacters)} / ${formatInteger(coverage.totalCharacters)} 字符` : `已读 ${formatInteger(coverage.readCharacters)} 字符`}
+                      {" · "}{VERIFICATION_LABEL[source.verification] ?? source.verification}
+                    </span>
+                  </Disclosure>
                   <div className="actions-row">
                     <button type="button" className="btn" onClick={() => view.openPanel({ kind: "reader", sourceId: source.source_id, range: coverage.ranges[0] ?? null })}>打开原文</button>
                     <DownloadOriginalButton source={source} />
@@ -348,6 +369,7 @@ function NumbersTab() {
   const calculations = view.content.calculations ?? [];
   const facts = view.content.facts ?? [];
   const factById = new Map(facts.map((fact) => [fact.fact_id, fact]));
+  const current = new Set(currentCalculations(calculations).map((calc) => calc.calculation_id));
   const openFact = (fact: ResearchV2.ResearchFact) =>
     view.openPanel({ kind: "reader", sourceId: fact.source_id, range: [fact.location.character_start, fact.location.character_end] });
   if (calculations.length === 0 && facts.length === 0) return <p className="empty-note">还没有记录数字。</p>;
@@ -357,25 +379,37 @@ function NumbersTab() {
         <div>
           <div className="gtitle">计算 · {calculations.length}</div>
           <div className="list">
-            {calculations.map((calc, index) => {
+            {[...calculations.map((calc, index) => ({ calc, index }))]
+              .sort((a, b) => Number(!current.has(a.calc.calculation_id)) - Number(!current.has(b.calc.calculation_id)))
+              .map(({ calc, index }) => {
               const quantity = formatQuantity(calc.value, calc.unit, calc.currency);
               const turn = view.turnNumber(calc.turn_id);
+              const superseded = !current.has(calc.calculation_id);
+              const problems = calcChecks(calc).filter((check) => check.label === "输入不可核验");
               return (
-                <div key={calc.calculation_id} className="item">
+                <div key={calc.calculation_id} className={superseded ? "item superseded" : "item"}>
                   <div className="line">
-                    <div className="grow">{calculationTitle(calc)}<div className="meta">{calc.expression}</div></div>
+                    <div className="grow">
+                      {calculationTitle(calc)}
+                      <div className="meta">{[turn ? `第 ${turn} 轮` : "你添加", superseded ? "已被后面的计算更正" : ""].filter(Boolean).join(" · ")}</div>
+                      {problems.map((check) => <div key={check.label} className="flag">{check.label}</div>)}
+                    </div>
                     <div className="right"><div className="value lg">{quantity.value}</div>{quantity.unit ? <div className="meta">{quantity.unit}</div> : null}</div>
                   </div>
-                  <div className="chips">
-                    {calc.inputs.map((input) => {
-                      const fact = factById.get(input.fact_id);
-                      return fact ? (
-                        <button key={input.fact_id} type="button" className="fact-ref" onClick={() => openFact(fact)} title={fact.label}>{input.fact_id}</button>
-                      ) : <span key={input.fact_id} className="mono">{input.fact_id}</span>;
-                    })}
-                    {calcChecks(calc).map((check) => <span key={check.label} className={`role light ${check.tone}`}>{check.label}</span>)}
-                    {turn ? <span>第 {turn} 轮</span> : <span>你添加</span>}
-                  </div>
+                  <Disclosure summary="核对详情">
+                    <div className="meta">{calc.expression}</div>
+                    <div className="chips">
+                      {calc.inputs.map((input) => {
+                        const fact = factById.get(input.fact_id);
+                        return fact ? (
+                          <button key={input.fact_id} type="button" className="fact-ref" onClick={() => openFact(fact)} title={input.fact_id}>
+                            {[fact.label, fact.period, formatQuantity(fact.value, fact.unit, fact.currency).value].filter(Boolean).join(" · ")}
+                          </button>
+                        ) : <span key={input.fact_id} className="meta">{[input.value, input.period].filter(Boolean).join(" · ")}</span>;
+                      })}
+                      {calcChecks(calc).map((check) => <span key={check.label} className={`role light ${check.tone}`}>{check.label}</span>)}
+                    </div>
+                  </Disclosure>
                   {calc.legacy_unit_warning ? <RecalculateRow index={index} /> : null}
                 </div>
               );
@@ -395,7 +429,7 @@ function NumbersTab() {
                   <div className="line">
                     <div className="grow">
                       {fact.label}
-                      <div className="meta">{[fact.fact_id, fact.period, turn ? `第 ${turn} 轮` : null].filter(Boolean).join(" · ")}</div>
+                      <div className="meta">{[fact.period ? shortPeriod(fact.period) : null, turn ? `第 ${turn} 轮` : null].filter(Boolean).join(" · ")}</div>
                       {factFlags(fact).map((flag) => <div key={flag} className="flag">{flag}</div>)}
                     </div>
                     <div className="right"><div className="value">{quantity.value}</div>{quantity.unit ? <div className="meta">{quantity.unit}</div> : null}</div>

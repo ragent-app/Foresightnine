@@ -59,8 +59,8 @@ function EvidenceLink({ reference, turnId }: { reference: ResearchV2.QuestionPar
   return null;
 }
 
-export function QuestionParts({ turn }: { turn: ResearchV2.ResearchTurn }) {
-  const parts = turn.question_parts ?? [];
+export function QuestionParts({ turn, onlyMissing = false }: { turn: ResearchV2.ResearchTurn; onlyMissing?: boolean }) {
+  const parts = (turn.question_parts ?? []).filter((part) => !onlyMissing || part.status !== "answered");
   if (!parts.length) return null;
   return (
     <section className="parts" aria-label="问题各部分的进展">

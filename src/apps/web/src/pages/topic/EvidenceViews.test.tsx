@@ -67,9 +67,9 @@ describe("EvidenceViews", () => {
   it("distinguishes search attempts, sourced findings, and a single uncorroborated observation", () => {
     const single = { version: 1, rows: [{ row_id: "single", title: { zh: "收盘价", en: "Close" }, status: "single_source", badge: "single_source", independent_source_count: 1, cells: [{ fact_id: "f", source_id: "s", source_class: "market_data", display_value: "97.17 USD", quotation_excerpt: "Close 97.17" }] }] };
     render(<EvidenceViews turn={turn({ reconciliation: single, counter_evidence: { attempts: [{ scope: "external", target: "估值", hypothesis: "需求转弱", status: "completed" }, { scope: "document", target: "估值", hypothesis: "风险", status: "completed", source_id: "s" }], linked_findings: [{ target_claim_id: "c1", source_id: "s2", quotation: "Demand weakened" }] } })} />);
-    expect(screen.getByText(/外部搜索 1 次；文内搜索 1 次；关联反证 1 条/)).toBeTruthy();
+    expect(screen.getByText("外部搜索 1 次、文内搜索 1 次，找到 1 条可能的反证。")).toBeTruthy();
     expect(screen.getByText("Demand weakened")).toBeTruthy();
-    expect(screen.getByText("独立性未核实")).toBeTruthy();
+    expect(screen.getByText("来源独立性未核实")).toBeTruthy();
     expect(screen.getByText("仅单一来源，未交叉核实")).toBeTruthy();
     expect(screen.getByText("Close 97.17")).toBeTruthy();
   });

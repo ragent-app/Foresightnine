@@ -125,7 +125,9 @@ describe("TopicPage", () => {
       return undefined;
     });
     renderTopic();
-    fireEvent.click(await screen.findByRole("button", { name: "问题要求与依据核验" }));
+    // Requirement reviews live in this turn's record, under 过程.
+    fireEvent.click(await screen.findByRole("button", { name: "本轮记录" }));
+    fireEvent.click(await within(await screen.findByRole("dialog")).findByRole("tab", { name: "过程" }));
     const records = await screen.findByRole("region", { name: "问题要求与依据核验" });
     expect(within(records).getByText("核对收入", { exact: true })).toBeTruthy();
     expect(within(records).getByText("成立条件：同一财年")).toBeTruthy();
@@ -170,13 +172,13 @@ describe("TopicPage", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Northwind 示例公司的收入增长有多快？" })).toBeTruthy();
     const turn2 = screen.getByRole("region", { name: "第 2 轮" });
     // Completion is shown only for a saved final answer.
-    expect(within(turn2).getByText("已完成")).toBeTruthy();
+    expect(within(turn2).queryByText("已完成")).toBeNull();
     // The challenging claim stays visible; supporting claims sit in the collapsed evidence.
     expect(within(turn2).getByText("待复核")).toBeTruthy();
+    // Every part is answered, so the parts are not repeated under the answer.
     expect(within(turn2).queryByRole("region", { name: "问题各部分的进展" })).toBeNull();
-    fireEvent.click(within(turn2).getByRole("button", { name: "已回答 1/1 部分" }));
-    expect(within(turn2).getByRole("region", { name: "问题各部分的进展" })).toBeTruthy();
-    fireEvent.click(within(turn2).getByRole("button", { name: "依据 1 条" }));
+    expect(within(turn2).queryByRole("button", { name: /还差/ })).toBeNull();
+    fireEvent.click(within(turn2).getByRole("button", { name: "依据 1" }));
     expect(within(turn2).getByText("支持")).toBeTruthy();
     const marker = within(turn2).getByRole("link", { name: "查看依据" });
     expect(marker.textContent).toBe("1");
@@ -732,17 +734,11 @@ describe("TopicPage", () => {
       });
       renderTopic();
       const region = await screen.findByRole("region", { name: "第 1 轮" });
-      const toggle = within(region).getByRole("button", { name: "过程 2 步" });
-      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      // The process is not repeated under the answer; it is in this turn's record.
       expect(within(region).queryByText("首先搜索公司官方披露。")).toBeNull();
-
-      fireEvent.click(toggle);
-      expect(toggle.getAttribute("aria-expanded")).toBe("true");
-      expect(within(region).getByText("首先搜索公司官方披露。")).toBeTruthy();
-      expect(within(region).getByText("发现 1 条线索（可用 1）")).toBeTruthy();
-
-      fireEvent.click(within(region).getByRole("button", { name: /在研究记录中查看/ }));
+      fireEvent.click(within(region).getByRole("button", { name: "本轮记录" }));
       const dialog = await screen.findByRole("dialog");
+      fireEvent.click(within(dialog).getByRole("tab", { name: "过程" }));
       expect(within(dialog).getByText("首先搜索公司官方披露。")).toBeTruthy();
       expect(within(dialog).getByText("发现 1 条线索（可用 1）")).toBeTruthy();
     });
@@ -797,13 +793,11 @@ describe("TopicPage", () => {
       });
       renderTopic();
       const region = await screen.findByRole("region", { name: "第 1 轮" });
-      fireEvent.click(within(region).getByRole("button", { name: "过程 1 步" }));
-      expect(within(region).getByText("旧版读取")).toBeTruthy();
-      // Under the answer a model call with nothing to say is not a step; accounting lives in the record panel.
-      expect(within(region).queryByText("模型调用")).toBeNull();
       expect(within(region).queryByText("模型调用 · 400 输入 / 100 输出 Token")).toBeNull();
-      fireEvent.click(within(region).getByRole("button", { name: /在研究记录中查看/ }));
+      fireEvent.click(within(region).getByRole("button", { name: "本轮记录" }));
       const dialog = await screen.findByRole("dialog");
+      fireEvent.click(within(dialog).getByRole("tab", { name: "过程" }));
+      expect(within(dialog).getByText("旧版读取")).toBeTruthy();
       expect(within(dialog).getByText("模型调用 · 400 输入 / 100 输出 Token")).toBeTruthy();
     });
   });
@@ -1811,12 +1805,16 @@ describe("TopicPage", () => {
         const extLink = within(turn1Region).getByRole("link", { name: /SEC 原文/ }) as HTMLAnchorElement;
         expect(extLink.href).toBe("https://www.sec.gov/Archives/edgar/data/1/a.htm");
         expect(within(turn1Region).getByText("云服务收入").tagName).toBe("STRONG");
-        fireEvent.click(within(turn1Region).getByRole("button", { name: "依据 1 条" }));
+        fireEvent.click(within(turn1Region).getByRole("button", { name: "依据 1" }));
         expect(within(turn1Region).getByRole("button", { name: "引用 1" })).toBeTruthy();
 
-        // Expand collapsed process summary and confirm inline Markdown in model.note.
-        fireEvent.click(within(turn1Region).getByRole("button", { name: "过程 1 步" }));
-        expect(within(turn1Region).getByText("10-K 附注").tagName).toBe("STRONG");
+        // Model notes keep their inline Markdown in the turn's process record.
+        fireEvent.click(within(turn1Region).getByRole("button", { name: "本轮记录" }));
+        const processPanel = await screen.findByRole("dialog");
+        fireEvent.click(within(processPanel).getByRole("tab", { name: "过程" }));
+        expect(within(processPanel).getByText("10-K 附注").tagName).toBe("STRONG");
+        fireEvent.click(within(processPanel).getByRole("button", { name: "关闭" }));
+        await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
         await waitFor(() => expect(streamCtrl).toBeTruthy());
         streamCtrl!.enqueue(encoder.encode(`id: cp:0\nevent: progress.snapshot\ndata: ${JSON.stringify({
@@ -2133,8 +2131,8 @@ describe("TopicPage", () => {
       const fetchMock = api(topic, (url) => (url.pathname === "/v2/research/topics/t1/versions/v2/restore" ? jsonResponse(topicWith([old]), { status: 201 }) : undefined));
       renderTopic();
       const region = await screen.findByRole("region", { name: "第 1 轮" });
-      expect(within(region).getByRole("button", { name: "重新生成的回答" })).toBeTruthy();
       fireEvent.click(within(region).getByRole("button", { name: "更多回答操作" }));
+      expect(await screen.findByRole("menuitem", { name: "查看上一次的回答" })).toBeTruthy();
       fireEvent.click(await screen.findByRole("menuitem", { name: "恢复上一次的回答" }));
       await waitFor(() => {
         const call = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/versions/v2/restore"));
@@ -2347,14 +2345,14 @@ describe("research turn instructions", () => {
     });
     renderTopic();
     const completed = within(await screen.findByRole("region", { name: "第 1 轮" }));
-    expect(completed.getByText("已完成")).toBeTruthy();
+    // A final result needs no label; its stated limit reads beside it and the rest is one tap away.
+    expect(completed.queryByText("已完成")).toBeNull();
     expect(completed.getByText("缺少同日发行在外股数。")).toBeTruthy();
     expect(completed.queryByText("研究限制")).toBeNull();
     expect(completed.queryByRole("button", { name: "重新提问" })).toBeNull();
-    const details = completed.getByText("查看依据与限制").closest("details")!;
-    expect(details.open).toBe(false);
-    fireEvent.click(completed.getByText("查看依据与限制"));
-    expect(details.open).toBe(true);
+    // With no report to read, the limits are already open.
+    expect(completed.getByRole("button", { name: "限制" }).getAttribute("aria-expanded")).toBe("true");
+    expect(completed.getByText("部分结论因引文位置无法核实而未保留。")).toBeTruthy();
     expect(within(screen.getByRole("region", { name: "第 2 轮" })).getByText("已停止")).toBeTruthy();
   });
 

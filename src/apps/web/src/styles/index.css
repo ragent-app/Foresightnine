@@ -986,3 +986,29 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 .live-now > span + span::before { content: " · "; color: var(--on-tertiary); }
 .live-now-label { color: var(--on-surface); }
 .live-target { color: var(--on-tertiary); }
+/* Missing parts: the status stays one word on one line; system limits follow as a short list. */
+.parts .part-head { justify-content: space-between; }
+.parts .part-status { flex: none; white-space: nowrap; }
+.parts-fold { display: flex; flex-direction: column; gap: 10px; }
+.turn-limits { display: flex; flex-direction: column; gap: 6px; padding: 0 16px; font-size: 14px; color: var(--on-variant); }
+.turn-limits ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+/* Phones: captions that remain are 13px, never 12px. */
+@media (max-width: 899px) {
+  .note, .meta, .stat span, .tc-label, .draft-state, .stage-detail, .live-finds, .live-links .link, .research-table figcaption .sub { font-size: 13px; }
+}
+.list .item.superseded .grow, .list .item.superseded .right { opacity: 0.55; }
+@media (max-width: 899px) { .topic-conclusion .tc-label, .stamp { font-size: 13px; } }
+/* Keep the sticky row labels inside the table's own layer, below the composer. */
+.research-table .md-table-scroll { isolation: isolate; }
+/* Phones: key numbers sit in one row of three, each with a short label. */
+@media (max-width: 899px) {
+  .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; }
+  .stat b { font-size: 20px; }
+  .stat span { overflow-wrap: anywhere; }
+}
+.stat .stat-when::before { content: " · "; }
+@media (max-width: 899px) {
+  .stat span { overflow-wrap: normal; word-break: keep-all; }
+  .stat .stat-when { display: block; white-space: nowrap; }
+  .stat .stat-when::before { content: none; }
+}

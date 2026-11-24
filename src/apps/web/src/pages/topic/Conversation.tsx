@@ -2,7 +2,7 @@ import type { ResearchV2 } from "@foresightnine/contracts";
 import { useCallback, useMemo, useState, type ReactNode, type Ref } from "react";
 import { Link } from "react-router-dom";
 import type { CurrentActivity, ProgressEvent, RecoveryStatus } from "../../api/types";
-import { formatInterimParts, formulaLabel, gapText, modelPhaseLabel, recoveryReasonLabel, reviewReasonText, toolLabel, turnReasonLabel, VERIFY_NOTE } from "../../lib/copy";
+import { formatInterimParts, formulaLabel, gapText, isSystemReason, modelPhaseLabel, recoveryReasonLabel, reviewReasonText, toolLabel, turnReasonLabel, VERIFY_NOTE } from "../../lib/copy";
 import { displayTurnNumber, formatClock, formatDuration, formatInteger, formatQuantity, turnStamp } from "../../lib/format";
 import { answerSummary, claimRole, parseAttributions, parseTurnEvents, partialSummary, ROLE_LABEL, stepRows, toolStepCount, turnCharts, turnContent, turnDurationMs } from "../../lib/research";
 import { Disclosure } from "../../ui/controls";
@@ -39,6 +39,15 @@ export interface TurnActions {
    * republishes the same content (362 acceptance), so it is not offered.
    */
   deliverable: boolean;
+}
+
+/** A key number's caption: the formula, then its span (month-day only when the dates share a year). */
+export function statCaption(calc: ResearchV2.ResearchCalculation): { name: string; when: string } {
+  const periods = [...new Set(calc.inputs.map((input) => input.period).filter((p): p is string => Boolean(p)).map(shortPeriod))];
+  const dated = periods.length > 0 && periods.every((period) => /^\d{4}-\d{2}-\d{2}$/.test(period));
+  const sameYear = dated && new Set(periods.map((p) => p.slice(0, 4))).size === 1;
+  const when = dated ? [...periods].sort().map((p) => (sameYear ? p.slice(5) : p)).join(" → ") : periods.join(" 对 ");
+  return { name: formulaLabel(calc.formula_id), when };
 }
 
 export function calculationTitle(calc: ResearchV2.ResearchCalculation): string {
@@ -163,19 +172,13 @@ export function GapCallout({ turn, actions, tone }: { turn: ResearchV2.ResearchT
   const parts = tone === "partial" ? missingParts(turn) : [];
   const needsMarketKey = gaps.some((gap) => gap.code === "market_data_key_required");
   if (turn.lifecycle_status === "completed" || turn.lifecycle_status === "stopped") {
-    const descriptions = gaps.map((gap) => gap.code === "model_reported" ? gap.message : gapText(gap));
-    const first = gaps.findIndex((gap) => gap.code === "model_reported" && gap.message.trim());
-    const headline = descriptions[first] ?? parts[0] ?? descriptions[0];
-    const remaining = [...new Set([...descriptions, ...parts])].filter((line) => line && line !== headline);
-    if (!headline && !turn.partial_notes?.trim()) return null;
+    // Only the writer's own stated limitation reads next to the answer; system gaps and run notes
+    // are listed with the missing parts.
+    const stated = statedLimit(turn);
+    if (!stated && !needsMarketKey) return null;
     return <div className="meta" role="note" aria-label="结论适用范围">
-      {headline && <p>{headline}</p>}
+      {stated ? <p>{stated.message}</p> : null}
       {needsMarketKey && <Link className="link" to="/settings?tab=data">前往设置，添加自己的 Twelve Data key</Link>}
-      {(remaining.length > 0 || turn.partial_notes?.trim()) && <details>
-        <summary>查看依据与限制</summary>
-        {remaining.length > 0 && <ul>{remaining.map((line) => <li key={line}>{line}</li>)}</ul>}
-        {turn.partial_notes?.trim() && <PartialNotesBlock notes={turn.partial_notes} />}
-      </details>}
     </div>;
   }
   if (tone === "completed" && gaps.length === 0) return null;
@@ -222,7 +225,10 @@ function StatLine({ calculations, turnId }: { calculations: readonly ResearchV2.
         return (
           <button key={calc.calculation_id} type="button" className="stat" onClick={() => view.openPanel({ kind: "record", tab: "numbers", turnKey: turnId })}>
             <b>{quantity.value}{quantity.unit ? <small> {quantity.unit}</small> : null}</b>
-            <span>{calculationTitle(calc)}</span>
+            <span title={calculationTitle(calc)}>
+              <span className="stat-name">{statCaption(calc).name}</span>
+              {statCaption(calc).when ? <span className="stat-when">{statCaption(calc).when}</span> : null}
+            </span>
           </button>
         );
       })}
@@ -338,12 +344,9 @@ export function AnswerBlock({ turn, actions, tools, waiting = false }: { turn: R
   // A draft supersedes the reviewed fragments the run kept as notes.
   const partialNotes = partial && !isDraft ? (turn.partial_notes ?? "").trim() : "";
   const events = useMemo(() => parseTurnEvents(turn.events), [turn.events]);
-  const rows = useMemo(() => stepRows(events), [events]);
-  const toolSteps = useMemo(() => toolStepCount(events), [events]);
-  const [processOpen, setProcessOpen] = useState(false);
   const parts = turn.question_parts ?? [];
   const [partsOpen, setPartsOpen] = useState(partial && !reportText);
-  const [checksOpen, setChecksOpen] = useState(false);
+  const checks = hasEvidenceViews(turn);
   const alert = useMemo(() => evidenceAlert(turn), [turn]);
   const attributions = useMemo(() => parseAttributions(turn.attributions), [turn.attributions]);
   const { lead, rest } = useMemo(() => splitLead(reportText), [reportText]);
@@ -388,9 +391,11 @@ export function AnswerBlock({ turn, actions, tools, waiting = false }: { turn: R
     [],
   );
 
-  const answered = parts.filter((part) => part.status === "answered").length;
-  const recordLinks = answerSummary(turn, view.content).filter((part) => part.tab === "numbers" || part.tab === "sources");
-  const steps = toolSteps > 0 ? toolSteps : rows.length;
+  const missing = parts.filter((part) => part.status !== "answered").length;
+  const limits = limitLines(turn);
+  const hasLimits = limits.lines.length > 0 || Boolean(limits.notes);
+  // The record opens where this answer's material is: its numbers, else its sources, else its steps.
+  const recordTab = answerSummary(turn, view.content).find((part) => part.tab === "numbers" || part.tab === "sources")?.tab ?? "steps";
   const [copied, setCopied] = useState(false);
   const markdown = () => answerMarkdown(turn, {
     claims: view.content.claims ?? [], turnClaims: items.claims, tables: view.content.tables ?? [], charts: view.content.charts ?? [],
@@ -405,6 +410,7 @@ export function AnswerBlock({ turn, actions, tools, waiting = false }: { turn: R
   const copyMenu: MenuEntry[] = [
     { key: "plain", label: "复制为纯文本", icon: "copy", onSelect: () => void copyWithToast(markdownToPlain(markdown()), "已复制回答") },
     { key: "question", label: "复制问题", icon: "copy", onSelect: () => void copyWithToast(turn.question, "已复制问题") },
+    ...(turn.replaces_turn_id ? [{ key: "previous", label: "查看上一次的回答", icon: "undo" as const, onSelect: () => view.openPanel({ kind: "review" }) }] : []),
     ...(tools?.menu?.length ? ["separator" as const, ...tools.menu] : []),
   ];
 
@@ -445,36 +451,20 @@ export function AnswerBlock({ turn, actions, tools, waiting = false }: { turn: R
       {trailingTables.map((table) => <div key={table.table_id}>{tablesById.get(table.table_id)}</div>)}
       <ClaimList claims={elevated} showRole className="claims elevated" />
       <GapCallout turn={turn} actions={actions} tone={partial ? "partial" : "completed"} />
-      {alert ? <p className="note evidence-alert">{alert}<button type="button" className="link" onClick={() => setChecksOpen(true)}>查看核查</button></p> : null}
+      {alert ? <p className="note evidence-alert">{alert}<button type="button" className="link" onClick={() => view.setEvidence(turn.turn_id, true)}>查看核查</button></p> : null}
       <AttributionLine items={attributions} />
       {!lifecycle && partialNotes ? <PartialNotesBlock notes={partialNotes} /> : null}
       <div className="answer-foot">
-        {supporting.length > 0 ? (
-          <FootToggle label={`依据 ${supporting.length} 条`} open={evidenceOpen} onToggle={() => view.setEvidence(turn.turn_id, !evidenceOpen)} />
+        {supporting.length > 0 || checks ? (
+          <FootToggle label={supporting.length > 0 ? `依据 ${supporting.length}` : "核查"} open={evidenceOpen} onToggle={() => view.setEvidence(turn.turn_id, !evidenceOpen)} />
         ) : null}
-        {parts.length > 0 ? (
-          <FootToggle label={`已回答 ${answered}/${parts.length} 部分`} open={partsOpen} onToggle={() => setPartsOpen((open) => !open)} />
+        {missing > 0 || hasLimits ? (
+          <FootToggle label={missing > 0 ? `还差 ${missing} 项` : "限制"} open={partsOpen} onToggle={() => setPartsOpen((open) => !open)} />
         ) : null}
-        {rows.length > 0 ? (
-          <FootToggle label={`过程 ${steps} 步`} open={processOpen} onToggle={() => setProcessOpen((open) => !open)} />
-        ) : null}
-        {hasEvidenceViews(turn) ? (
-          <FootToggle label="数据与核查" open={checksOpen} onToggle={() => setChecksOpen((open) => !open)} />
-        ) : null}
-        {recordLinks.map((part) => (
-          <button key={part.tab} type="button" className="foot-btn" onClick={() => view.openPanel({ kind: "record", tab: part.tab, turnKey: turn.turn_id })}>
-            {part.label}
-            <Icon name="chev" size={14} />
-          </button>
-        ))}
-        {(turn.requirement_plan?.length || turn.semantic_reviews?.length) ? (
-          <button type="button" className="foot-btn" onClick={() => view.openPanel({ kind: "record", tab: "steps", turnKey: turn.turn_id })}>问题要求与依据核验<Icon name="chev" size={14} /></button>
-        ) : null}
-        {turn.replaces_turn_id ? (
-          <button type="button" className="foot-btn" title="上一次的回答保留在版本历史中" onClick={() => view.openPanel({ kind: "review" })}>
-            重新生成的回答
-          </button>
-        ) : null}
+        <button type="button" className="foot-btn" onClick={() => view.openPanel({ kind: "record", tab: recordTab, turnKey: turn.turn_id })}>
+          本轮记录
+          <Icon name="chev" size={14} />
+        </button>
         <span className="grow" />
         <div className="answer-tools" role="group" aria-label="回答操作">
           {tools?.primary}
@@ -484,25 +474,25 @@ export function AnswerBlock({ turn, actions, tools, waiting = false }: { turn: R
           <Menu label="更多回答操作" trigger={<Icon name="more" size={16} />} triggerClassName="icon-btn tool" items={copyMenu} />
         </div>
       </div>
-      {supporting.length > 0 ? (
+      {supporting.length > 0 || checks ? (
         <div className="evidence" hidden={!evidenceOpen}>
-          <div className="gtitle"><span className="role support">支持</span>{supporting.length}</div>
-          <ClaimList claims={supporting} showRole={false} />
-          <p className="note">{VERIFY_NOTE}</p>
+          {supporting.length > 0 ? (
+            <>
+              <div className="gtitle"><span className="role support">支持</span>{supporting.length}</div>
+              <ClaimList claims={supporting} showRole={false} />
+              <p className="note">{VERIFY_NOTE}</p>
+            </>
+          ) : null}
+          {checks && evidenceOpen ? <EvidenceViews turn={turn} attribution={false} /> : null}
         </div>
       ) : items.claims.length > 0 ? <p className="note">{VERIFY_NOTE}</p> : null}
-      {partsOpen ? <QuestionParts turn={turn} /> : null}
-      {checksOpen ? <EvidenceViews turn={turn} attribution={false} /> : null}
-      {processOpen ? (
-        <div className="turn-process-body">
-          <ProcessTimeline events={events} />
-          <div className="turn-process-foot">
-            <button type="button" className="link" onClick={() => view.openPanel({ kind: "record", tab: "steps", turnKey: turn.turn_id })}>
-              在研究记录中查看 ›
-            </button>
-          </div>
+      {partsOpen ? (
+        <div className="parts-fold">
+          {/* Without a report, the answered parts are the answer, so they stay. */}
+          {missing > 0 ? <QuestionParts turn={turn} onlyMissing={Boolean(body)} /> : null}
+          <TurnLimits turn={turn} />
         </div>
-      ) : null}
+            ) : null}
     </div>
   );
 }
@@ -519,17 +509,43 @@ export function TopicConclusion({ turns }: { turns: readonly ResearchV2.Research
   const text = conclusionText(body.text);
   // A one-paragraph answer is its own summary; repeating it at the top adds nothing.
   if (!text || text === conclusionText(body.text.replace(/\n\s*\n/g, " "))) return null;
-  const number = displayTurnNumber(latest);
   return (
-    <a className="topic-conclusion" href={`#turn-${latest.turn_id}`} onClick={(event) => {
+    <a className="topic-conclusion" aria-label={`当前结论，来自第 ${displayTurnNumber(latest)} 轮`} href={`#turn-${latest.turn_id}`} onClick={(event) => {
       const target = document.getElementById(`turn-${latest.turn_id}`);
       if (!target) return;
       event.preventDefault();
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     }}>
-      <span className="tc-label">当前结论 · 来自第 {number} 轮{body.kind === "draft" ? " · 未全部核验" : ""}</span>
+      <span className="tc-label">当前结论</span>
       <span className="tc-text">{text}</span>
     </a>
+  );
+}
+
+/** The writer's own first stated limitation, which reads next to the answer. */
+function statedLimit(turn: ResearchV2.ResearchTurn): ResearchV2.ResearchGap | undefined {
+  return (turn.gaps ?? []).find((gap) => gap.code === "model_reported" && gap.message.trim() && !isSystemReason(gap.message));
+}
+
+function limitLines(turn: ResearchV2.ResearchTurn): { lines: string[]; notes: string } {
+  if (turn.lifecycle_status !== "completed" && turn.lifecycle_status !== "stopped") return { lines: [], notes: "" };
+  const stated = statedLimit(turn);
+  const lines = [...new Set((turn.gaps ?? []).filter((gap) => gap !== stated).map((gap) => gapText(gap)).filter(Boolean))];
+  // The server's own progress summary repeats the counts and stop reason already listed.
+  const notes = turn.partial_notes?.trim() ?? "";
+  return { lines, notes: notes.startsWith("部分结果已保留") ? "" : notes };
+}
+
+/** Limits recorded for a turn that ended, listed under its missing parts rather than beside the answer. */
+function TurnLimits({ turn }: { turn: ResearchV2.ResearchTurn }) {
+  const { lines, notes } = limitLines(turn);
+  if (lines.length === 0 && !notes) return null;
+  return (
+    <div className="turn-limits">
+      <div className="gtitle">限制</div>
+      {lines.length > 0 ? <ul>{lines.map((line) => <li key={line}>{line}</li>)}</ul> : null}
+      {notes ? <PartialNotesBlock notes={notes} /> : null}
+    </div>
   );
 }
 
@@ -538,11 +554,10 @@ function AnswerStatus({ turn, waiting, draft }: { turn: ResearchV2.ResearchTurn;
   const stopped = turn.lifecycle_status === "stopped" || (!turn.lifecycle_status && String(turn.reason) === "provider_cancelled");
   // A submitted final result with documented limits is complete; a run that stopped short is not.
   const finished = turn.status === "completed" || (turn.lifecycle_status === "completed" && turn.reason === "submitted" && !draft);
-  const label = waiting ? "等待你的补充"
-    : stopped ? "已停止"
-    : finished ? "已完成"
-    : "部分完成";
-  return <span className={`meta answer-status${!finished && !waiting && !stopped ? " partial" : ""}`}>{label}</span>;
+  // A finished answer needs no label; a draft says what it is in its own note.
+  if (!waiting && !stopped && (finished || draft)) return null;
+  const label = waiting ? "等待你的补充" : stopped ? "已停止" : "部分完成";
+  return <span className={`meta answer-status${!waiting && !stopped ? " partial" : ""}`}>{label}</span>;
 }
 
 function ResearchTableView({ table }: { table: ResearchV2.ResearchTable }) {

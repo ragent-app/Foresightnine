@@ -157,16 +157,22 @@ export function AttributionLine({ items }: { items: readonly TurnAttributionView
   );
 }
 
+/** One sentence on what was searched; the individual searches are one tap away. */
 function CounterEvidenceView({ value }: { value: unknown }) {
   if (!value || typeof value !== "object") return null;
   const data = value as Record<string, unknown>;
   const attempts = Array.isArray(data.attempts) ? data.attempts.filter((a): a is Record<string, unknown> => !!a && typeof a === "object") : [];
   const findings = Array.isArray(data.linked_findings) ? data.linked_findings.filter((a): a is Record<string, unknown> => !!a && typeof a === "object") : [];
   if (!attempts.length && !findings.length) return null;
+  const external = attempts.filter((a) => a.scope === "external").length;
+  const internal = attempts.filter((a) => a.scope === "document").length;
+  const searched = [external ? `外部搜索 ${external} 次` : "", internal ? `文内搜索 ${internal} 次` : ""].filter(Boolean).join("、");
   return <div className="ev-block"><div className="gtitle">反证检查</div>
-    <p className="note">外部搜索 {attempts.filter((a) => a.scope === "external").length} 次；文内搜索 {attempts.filter((a) => a.scope === "document").length} 次；关联反证 {findings.length} 条。搜索未找到结果不代表不存在反证，来源独立性与模型解释仍需核查。</p>
-    <ul>{attempts.map((a, index) => <li key={index}>{a.scope === "external" ? "外部搜索" : "文内搜索"}：{String(a.target ?? "")} · 查找 {String(a.hypothesis ?? "")} · {String(a.status ?? "未知")}{a.source_id ? ` · 来源 ${String(a.source_id)}` : ""}</li>)}</ul>
-    {findings.length ? <ul>{findings.map((f, index) => <li key={index}>关联观点 {String(f.target_claim_id ?? "")} · 来源 {String(f.source_id ?? "")}<blockquote>{String(f.quotation ?? "")}</blockquote><span className="note">独立性未核实</span></li>)}</ul> : <p className="note">尚无已关联的反证。</p>}
+    <p>{searched ? `${searched}，` : ""}{findings.length ? `找到 ${findings.length} 条可能的反证。` : "没有找到反证。没找到不代表不存在。"}</p>
+    {findings.length ? <ul>{findings.map((f, index) => <li key={index}><blockquote>{String(f.quotation ?? "")}</blockquote><span className="note">来源独立性未核实</span></li>)}</ul> : null}
+    {attempts.length ? <Disclosure summary="查看搜索了什么">
+      <ul>{attempts.map((a, index) => <li key={index}>{String(a.hypothesis ?? a.target ?? "")}</li>)}</ul>
+    </Disclosure> : null}
   </div>;
 }
 
