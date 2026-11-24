@@ -5120,6 +5120,11 @@ _SQUAD_STAGE_TIMEOUT_FLOORS: dict[str, float] = {
     "stage_3b_gate_memo": 120.0,
     "deep_report": 180.0,
     "steering": 90.0,
+    "sec_event_analysis": 240.0,
+    "sec_event_analysis_mode_b_round1": 240.0,
+    "sec_event_analysis_mode_b_round2": 240.0,
+    "sec_event_omission_repair": 180.0,
+    "sec_event_skeptic": 180.0,
 }
 _SQUAD_SLOT_MAX_OUTPUT_TOKENS: dict[str, int] = {
     "fast_extractor": 8192,
@@ -5135,6 +5140,11 @@ _SQUAD_STAGE_MAX_OUTPUT_TOKENS: dict[str, int] = {
     "stage_3b_gate_memo": 8192,
     "deep_report": 16384,
     "steering": 4096,
+    "sec_event_analysis": 16384,
+    "sec_event_analysis_mode_b_round1": 16384,
+    "sec_event_analysis_mode_b_round2": 16384,
+    "sec_event_omission_repair": 16384,
+    "sec_event_skeptic": 16384,
 }
 
 
