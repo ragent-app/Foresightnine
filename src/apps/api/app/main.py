@@ -6388,6 +6388,14 @@ def _start_auto_routed_earnings_squad(
             "budget": {key: value for key, value in _request_payload(request).items() if key != "question_override"},
         })
 
+    def _seal_squad_turn(operation_id: str) -> None:
+        try:
+            doc = turn_instructions.read(*identity)
+            if doc.get("status") == "open":
+                turn_instructions.seal(*identity, doc["sequence"], operation_id=operation_id)
+        except Exception:
+            pass
+
     def build_squad_operation(operation_id: str) -> tuple[BaseModel, str]:
         execute_run = runtime_holder["execute_run"]
         status_out, dossier_out, err_out, is_config_err = execute_run()
@@ -6401,8 +6409,10 @@ def _start_auto_routed_earnings_squad(
             return outcome, dossier_out.dossier_id
         if status_out == "cancelled":
             _update_turn_status(topic_id, operation_id, "stopped")
+            _seal_squad_turn(operation_id)
             raise ApiProblem(500, "internal_error", err_out or "Earnings squad execution was cancelled.")
         _update_turn_status(topic_id, operation_id, "failed")
+        _seal_squad_turn(operation_id)
         if is_config_err:
             raise ApiProblem(422, "invalid_request", err_out or "Invalid model slot configuration.")
         raise ApiProblem(500, "internal_error", err_out or "Earnings squad execution failed.")
@@ -6410,6 +6420,7 @@ def _start_auto_routed_earnings_squad(
     def commit_squad_operation(operation_id: str, result: BaseModel) -> None:
         assert isinstance(result, _SquadOperationOutcome)
         _update_turn_status(topic_id, operation_id, "completed", result.dossier_id)
+        _seal_squad_turn(operation_id)
 
     op_resp, replayed = operations.submit_async(
         endpoint=f"/v1/research/topics/{topic_id}/runs",

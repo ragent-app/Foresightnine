@@ -255,7 +255,12 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
             {items.map((topic) => {
               const current = topic.topic_id === currentId;
               const status = statusByTopic.get(topic.topic_id);
-              const savedVersion = status?.version_id && topic.versions.some((version) => version.version_id === status.version_id);
+              const isSquadStatus =
+                (status as { run_mode?: string } | undefined)?.run_mode === "earnings_squad"
+                || (status?.version_id ?? "").startsWith("dossier_");
+              const savedVersion = isSquadStatus
+                ? Boolean(status?.version_id)
+                : Boolean(status?.version_id && topic.versions.some((version) => version.version_id === status.version_id));
               const currentTone: Tone | null = status
                 ? status.logical_status === "running" ? "running"
                   : status.logical_status === "awaiting_user" ? "waiting"
