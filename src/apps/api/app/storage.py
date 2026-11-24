@@ -305,11 +305,37 @@ class InMemoryDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
             if owner == owner_id:
                 yield key, value
 
+    def get_many(self, keys: Sequence[str]) -> dict[str, ValueT]:
+        """Fetch multiple non-expired documents in one batch."""
+        now = self._current_time()
+        out: dict[str, ValueT] = {}
+        for key in keys:
+            if not key or key in out:
+                continue
+            val = self._values.get(key)
+            if val is not None and self._is_visible(val, now=now):
+                out[key] = val
+        return out
+
+    def put_many(self, items: Mapping[str, ValueT]) -> dict[str, int]:
+        """Persist multiple documents in one batch."""
+        out: dict[str, int] = {}
+        for key, value in items.items():
+            out[key] = self.put(key, value)
+        return out
+
 
 _GET_SQL = f"""
 SELECT document, version
 FROM {DOCUMENT_TABLE}
 WHERE collection = %s AND document_key = %s
+  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+""".strip()
+
+_GET_MANY_SQL = f"""
+SELECT document_key, document, version
+FROM {DOCUMENT_TABLE}
+WHERE collection = %s AND document_key = ANY(%s)
   AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
 """.strip()
 
@@ -547,6 +573,72 @@ class PostgresDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
         if row is None:
             raise StorageConflictError("Storage document version conflict.")
         return int(row[0] if not isinstance(row, Mapping) else row["version"])
+
+    def get_many(self, keys: Sequence[str]) -> dict[str, ValueT]:
+        """Fetch multiple non-expired documents in a single short-lived query."""
+        unique_keys = [k for k in dict.fromkeys(keys) if isinstance(k, str) and k]
+        if not unique_keys:
+            return {}
+        try:
+            cursor = self._ambient_cursor()
+            if cursor is not None:
+                cursor.execute(_GET_MANY_SQL, (self.collection, unique_keys))
+                rows = cursor.fetchall()
+            else:
+                with self._connection() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(_GET_MANY_SQL, (self.collection, unique_keys))
+                        rows = cursor.fetchall()
+        except StorageRuntimeError:
+            raise
+        except Exception as error:
+            raise StorageRuntimeError("PostgreSQL storage batch read failed.") from error
+        out: dict[str, ValueT] = {}
+        try:
+            for row in rows:
+                if isinstance(row, Mapping):
+                    key = row["document_key"]
+                    doc = self._document_from_row(row)
+                else:
+                    key = row[0]
+                    doc = self._document_from_row(row[1:])
+                out[key] = self._value_loader(doc)
+        except Exception as error:
+            raise StorageRuntimeError("Stored document could not be loaded.") from error
+        return out
+
+    def put_many(self, items: Mapping[str, ValueT]) -> dict[str, int]:
+        """Persist multiple documents in a single short-lived transaction (no N+1 connections)."""
+        if not items:
+            return {}
+        prepared: list[tuple[str, tuple[Any, ...]]] = []
+        for key, value in items.items():
+            _validate_key(key)
+            document = _json_document(self._value_dumper(value))
+            expires_at = getattr(value, "expires_at", None)
+            if expires_at is not None and expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            prepared.append((key, (self.collection, key, self._jsonb_parameter(document), expires_at)))
+        out: dict[str, int] = {}
+        try:
+            cursor = self._ambient_cursor()
+            if cursor is not None:
+                for key, params in prepared:
+                    cursor.execute(_PUT_SQL, params)
+                    row = cursor.fetchone()
+                    out[key] = int(row[0] if not isinstance(row, Mapping) else row["version"])
+            else:
+                with self._connection() as connection:
+                    with connection.cursor() as cursor:
+                        for key, params in prepared:
+                            cursor.execute(_PUT_SQL, params)
+                            row = cursor.fetchone()
+                            out[key] = int(row[0] if not isinstance(row, Mapping) else row["version"])
+        except StorageRuntimeError:
+            raise
+        except Exception as error:
+            raise StorageRuntimeError("PostgreSQL storage batch write failed.") from error
+        return out
 
     def with_advisory_lock(self, key: str, operation: Callable[[], ValueT]) -> ValueT:
         """Run a callback while holding a cross-process account lock.

@@ -263,39 +263,11 @@ def _clean_nonblank(value: str, field_name: str) -> str:
     return cleaned
 
 
-def _norm_quote_text(text: str) -> str:
-    folded = (
-        text.replace("\u2018", "'")
-        .replace("\u2019", "'")
-        .replace("\u201c", '"')
-        .replace("\u201d", '"')
-        .replace("\u2013", "-")
-        .replace("\u2014", "-")
-        .replace("\u2212", "-")
-        .replace("\u00a0", " ")
-    )
-    folded = re.sub(r"([\$€£¥])\s+(?=\d)", r"\1", folded)
-    return re.sub(r"\s+", " ", folded).strip().casefold()
-
-
-def _norm_quote_table_tolerant(text: str) -> str:
-    """Normalize 8-K/10-Q HTML table formatting (pipes, markdown bold, spaces around punctuation)
-    while preserving exact word and digit sequence for strict anti-hallucination verification."""
-    folded = _norm_quote_text(text)
-    folded = folded.replace("|", " ").replace("**", " ").replace("__", " ")
-    folded = re.sub(r"\s*([,;:%()\-/])\s*", r" \1 ", folded)
-    return re.sub(r"\s+", " ", folded).strip()
-
-
-def _quotation_matches_source(quotation: str, src_text: str) -> bool:
-    if quotation in src_text:
-        return True
-    if _norm_quote_text(quotation) in _norm_quote_text(src_text):
-        return True
-    q_tab = _norm_quote_table_tolerant(quotation)
-    if len(q_tab) >= 8 and q_tab in _norm_quote_table_tolerant(src_text):
-        return True
-    return False
+from .research_llm_primitives import (
+    norm_quote_table_tolerant as _norm_quote_table_tolerant,
+    norm_quote_text as _norm_quote_text,
+    quotation_matches_source as _quotation_matches_source,
+)
 
 
 def _truncate_str(value: str, limit: int) -> str:
