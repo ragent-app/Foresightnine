@@ -6366,6 +6366,17 @@ class EarningsSquadOrchestrator:
                 if on_worker_complete is not None:
                     on_worker_complete(task.worker_role, batch, cp)
 
+        emitter.emit(
+            stage="stage_2_5_review",
+            node_id="lead_coordinator",
+            action_kind="RESPONDING",
+            runtime_state="completed",
+            current_activity=(
+                f"Stage 2.5 follow-up complete ({len(active_followups)} targeted task(s)); "
+                "handing off to Bear Reviewer."
+            ),
+            slot="deep_reasoner",
+        )
         state["stage25_executed"] = True
 
     # --------------------------------------------------------------------------- Stage 3A Bear Reviewer
