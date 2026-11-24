@@ -59,7 +59,7 @@ TOOL_CATEGORY: dict[str, str] = {
     "earnings_consensus": "financial_statements",
     "filings": "filings", "issuer_documents": "filings", "sec_filings": "filings", "sec_full_text_search": "filings",
     "sec_earnings_release": "filings", "sec_filing_tables": "filings", "sec_filing_sections": "filings",
-    "sec_redline_diff": "filings", "sec_fulltext_search": "filings",
+    "sec_redline_diff": "filings", "sec_fulltext_search": "filings", "sec_material_events": "filings",
     "news_search": "news_web", "acquire_sources": "news_web", "earnings_transcript": "news_web",
 }
 _MACRO_TOOL = re.compile(r"^(?:macro|fred|world_?bank|imf|ecb|oecd|bls|census)", re.I)
@@ -245,8 +245,9 @@ def _category_of_source(src: Mapping[str, Any], action_tool: str | None, issuer_
         return "financial_statements"
     if method == "fmp_transcript" or action_tool == "earnings_transcript":
         return "news_web"
-    if method in ("sec_earnings_release", "sec_filing_table", "sec_filing_sections") or action_tool in (
+    if method in ("sec_earnings_release", "sec_filing_table", "sec_filing_sections", "sec_material_events") or action_tool in (
         "sec_earnings_release", "sec_filing_tables", "sec_filing_sections", "sec_redline_diff", "sec_fulltext_search",
+        "sec_material_events",
     ):
         return "filings"
     if kind == "market_data" or method in ("market_data", "historical_prices") or action_tool in ("historical_prices", "market_data") \

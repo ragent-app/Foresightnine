@@ -25,6 +25,7 @@ _GROUPS = {
         'sec_filing_sections': (),
         'sec_redline_diff': (),
         'sec_fulltext_search': ('filings_available',),
+        'sec_material_events': ('filings_available',),
     },
     'earnings_analysis': {
         'earnings_consensus': ('earnings_consensus_available',),

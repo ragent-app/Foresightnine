@@ -26,6 +26,7 @@ from .research_fin_tools import (
     SecFilingSectionsRequest,
     SecFilingTablesRequest,
     SecFulltextSearchRequest,
+    SecMaterialEventsRequest,
     SecRedlineDiffRequest,
     ValuationToolRequest,
 )
@@ -1113,6 +1114,18 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         compaction_role='bulk',
         is_fin_tool=True,
         activity_summarizer=_rationale_summarizer(_fin_summary_target('query')),
+    ),
+    ToolSpec(
+        name='sec_material_events',
+        description=(
+            'Deterministically scan material SEC disclosures for one issuer (material Form 8-K/8-K/A items and exhibits, '
+            'Form 4/4/A insider trades vs 10b5-1 baselines, Schedule 13D/13G activist/passive ownership, and FPI 6-K) '
+            'scoped strictly to one validated 10-digit CIK with as_of cutoff, trailing lookback window, and noise suppression.'
+        ),
+        input_model=SecMaterialEventsRequest,
+        compaction_role='bulk',
+        is_fin_tool=True,
+        activity_summarizer=_rationale_summarizer(_fin_summary_target('as_of')),
     ),
     ToolSpec(
         name='earnings_consensus',

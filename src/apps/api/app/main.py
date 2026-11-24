@@ -4,7 +4,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from copy import copy, deepcopy
 from dataclasses import asdict, replace as dataclass_replace
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
@@ -30,7 +30,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, model_validator
 from starlette.middleware.cors import CORSMiddleware
 
 from .contract_models import (
@@ -68,6 +68,7 @@ from .models import (
     MarketDataShardOperationResponse,
     MarketDataShardRequest,
     MethodologyResponse,
+    Operation,
     OperationResponse,
     ProbabilityAssessment,
     ProbabilityOperationResponse,
@@ -172,7 +173,14 @@ from .research_uploads import HtmlUploadRequest, PdfFailure, PdfReextractRequest
 from .earnings_external_data import ExternalEarningsService
 from .fin_data.adapters.fmp import FmpEarningsAdapter
 from .fin_data.adapters.sec_deep import SecDeepAdapter
-from .fin_data.adapters.sec_edgar import SecEdgarAdapter
+from .fin_data.adapters.sec_edgar import SecEdgarAdapter, cik10
+from .fin_data.adapters.sec_events import (
+    EventCategory,
+    SecPacingError,
+    SecPacingLimiter,
+    scan_sec_material_events,
+)
+from .fin_data.adapters.sec_events.form8k import fetch_lazy_attachment
 from .research_earnings_diagnostics import GuidanceMetricInput, NonGaapBridgeInput, PeriodFinancials
 from .research_earnings_export import ExportUnavailableError, MarkdownReportMode, export_earnings_dossier
 from .research_earnings_routing import (
@@ -202,12 +210,15 @@ from .research_earnings_squad import (
     render_deep_report,
     resolve_squad_slots,
 )
+from .research_event_analyst import analyze_sec_events
+from .research_fin_tools import SecEventCategoryInput, normalize_sec_event_categories
 from .research_model_slots import (
     ModelSlotConfig,
     ModelSlotError,
     resolve_model_slots,
     slot_routing_summary,
 )
+from .research_signals import LazyAttachmentRef, SecEventAnalysisResult, SecEventScanResult
 
 _DEFAULT_FETCH_OFFICIAL_TEXT = fetch_official_text
 _DEFAULT_RESERVE_SEC_REQUEST = reserve_sec_request
@@ -519,6 +530,13 @@ EARNINGS_SQUAD_STATES = build_repository(storage_config, "earnings_squad_states"
 EARNINGS_SQUAD_CHECKPOINTS = build_repository(storage_config, "earnings_squad_checkpoints")
 turn_instructions = ResearchRunInstructions(TURN_RECORDS)
 SOURCE_RATE_LIMITS = build_repository(storage_config, "source_rate_limits")
+SEC_EVENTS_L1_RAW = build_repository(storage_config, "sec_events_l1_raw")
+SEC_EVENTS_L2_SEMANTIC = build_repository(storage_config, "sec_events_l2_semantic")
+SEC_EVENTS_ANALYSIS_RESULTS = build_repository(
+    storage_config,
+    "sec_events_analysis_results",
+    value_loader=SecEventAnalysisResult.model_validate,
+)
 (
     SESSIONS,
     THESES,
@@ -772,6 +790,9 @@ def reset_state() -> None:
     EARNINGS_SQUAD_STATES.clear()
     EARNINGS_SQUAD_CHECKPOINTS.clear()
     SOURCE_RATE_LIMITS.clear()
+    SEC_EVENTS_L1_RAW.clear()
+    SEC_EVENTS_L2_SEMANTIC.clear()
+    SEC_EVENTS_ANALYSIS_RESULTS.clear()
     abuse_control.reset()
     telemetry.reset()
     SESSIONS.clear()
@@ -824,6 +845,9 @@ def cleanup_expired_state() -> object:
     for operation_id, _challenge in tuple(CHALLENGE_OPERATION_RESULTS.items_for_retention()):
         if operations.store.get_operation(operation_id) is None:
             CHALLENGE_OPERATION_RESULTS.delete(operation_id)
+    for operation_id, _analysis in tuple(SEC_EVENTS_ANALYSIS_RESULTS.items_for_retention()):
+        if operations.store.get_operation(operation_id) is None:
+            SEC_EVENTS_ANALYSIS_RESULTS.delete(operation_id)
     research_live_broker.prune_expired()
     return report
 
@@ -3667,7 +3691,8 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
             persist=lambda item, **kwargs: research_sources.create(account.account_id, item, **kwargs),
             reserve_call=context.reserve_search, reserve_sec=reserve_sec_for_run,
             remaining_seconds=lambda: context.budget.deadline - context.now(), ensure_running=context.ensure_running,
-            now=lifecycle_clock.now, disabled_reason=fin_disabled_reason, cancel_event=context.cancel_event())
+            now=lifecycle_clock.now, disabled_reason=fin_disabled_reason, cancel_event=context.cancel_event(),
+            l1_cache=SEC_EVENTS_L1_RAW)
         capabilities.update(fin_data.capabilities())
         capabilities.update(fin_data.earnings_capabilities())
         def note_fin_result(name: str, result: dict[str, Any]) -> None:
@@ -3676,6 +3701,7 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
             if name not in (
                 'company_financials', 'filings', 'sec_earnings_release',
                 'sec_filing_tables', 'sec_filing_sections', 'sec_redline_diff', 'sec_fulltext_search',
+                'sec_material_events',
             ):
                 return
             # A-share structured financials come from third-party aggregators (Tushare/BaoStock), not the issuer's
@@ -5718,6 +5744,56 @@ def _platform_primary_slot_profile(primary_provider: Any) -> Any:
         return None
 
 
+def _build_slot_providers_and_caps(
+    *,
+    account_id: str,
+    slot_names: Sequence[str],
+    resolved_slots: Any,
+    settings: OpenAICompatibleSettings | None,
+    config: StoredModelConfig | None,
+) -> tuple[dict[str, Any], dict[str, int]]:
+    """Build per-slot wire providers and output caps for overridden logical slots."""
+    slot_providers: dict[str, Any] = {}
+    slot_max_tokens: dict[str, int] = {}
+    for sname in slot_names:
+        cap: int | None = None
+        slot_overridden = False
+        if resolved_slots is not None:
+            slot_entry = resolved_slots.slot_for(sname)
+            slot_overridden = bool(getattr(slot_entry, "differs_from_primary", False))
+            p_override = _build_squad_slot_provider(
+                account_id,
+                slot_entry,
+                settings,
+                config,
+            )
+            if p_override is not None:
+                slot_providers[sname] = p_override
+            slot_gen = getattr(slot_entry, "generation_parameters", None)
+            cap = (
+                getattr(slot_entry, "messages_max_tokens", None)
+                or (
+                    getattr(slot_gen, "max_output_tokens", None)
+                    or getattr(slot_gen, "max_completion_tokens", None)
+                    or getattr(slot_gen, "max_tokens", None)
+                    if slot_gen is not None
+                    else None
+                )
+            )
+        if cap is None and config is not None and not slot_overridden:
+            if config.messages_options is not None and config.messages_options.max_tokens:
+                cap = config.messages_options.max_tokens
+            elif config.generation_parameters is not None:
+                cap = (
+                    getattr(config.generation_parameters, "max_output_tokens", None)
+                    or getattr(config.generation_parameters, "max_completion_tokens", None)
+                    or getattr(config.generation_parameters, "max_tokens", None)
+                )
+        if type(cap) is int and cap > 0:
+            slot_max_tokens[sname] = cap
+    return slot_providers, slot_max_tokens
+
+
 def _resolve_earnings_squad_runtime(
     *,
     account: LocalAccount,
@@ -5813,44 +5889,13 @@ def _resolve_earnings_squad_runtime(
                 except SquadConfigurationError as error:
                     raise ApiProblem(422, "invalid_request", str(error)) from error
 
-        slot_providers: dict[str, Any] = {}
-        slot_max_tokens: dict[str, int] = {}
-        for sname in ("fast_extractor", "deep_reasoner", "bear_reviewer", "writer"):
-            cap: int | None = None
-            slot_overridden = False
-            if effective_resolved_slots is not None:
-                slot_entry = effective_resolved_slots.slot_for(sname)
-                slot_overridden = bool(getattr(slot_entry, "differs_from_primary", False))
-                p_override = _build_squad_slot_provider(
-                    account.account_id,
-                    slot_entry,
-                    settings,
-                    config,
-                )
-                if p_override is not None:
-                    slot_providers[sname] = p_override
-                slot_gen = getattr(slot_entry, "generation_parameters", None)
-                cap = (
-                    getattr(slot_entry, "messages_max_tokens", None)
-                    or (
-                        getattr(slot_gen, "max_output_tokens", None)
-                        or getattr(slot_gen, "max_completion_tokens", None)
-                        or getattr(slot_gen, "max_tokens", None)
-                        if slot_gen is not None
-                        else None
-                    )
-                )
-            if cap is None and config is not None and not slot_overridden:
-                if config.messages_options is not None and config.messages_options.max_tokens:
-                    cap = config.messages_options.max_tokens
-                elif config.generation_parameters is not None:
-                    cap = (
-                        getattr(config.generation_parameters, "max_output_tokens", None)
-                        or getattr(config.generation_parameters, "max_completion_tokens", None)
-                        or getattr(config.generation_parameters, "max_tokens", None)
-                    )
-            if type(cap) is int and cap > 0:
-                slot_max_tokens[sname] = cap
+        slot_providers, slot_max_tokens = _build_slot_providers_and_caps(
+            account_id=account.account_id,
+            slot_names=("fast_extractor", "deep_reasoner", "bear_reviewer", "writer"),
+            resolved_slots=effective_resolved_slots,
+            settings=settings,
+            config=config,
+        )
         model_runner = _AccountSlotModelRunner(
             providers_by_slot=slot_providers,
             default_provider=_with_squad_provider_timeout_floor(primary_provider),
@@ -6953,6 +6998,555 @@ async def stream_earnings_squad_events(
             research_live_broker.unsubscribe(subscriber)
 
     return StreamingResponse(live_squad_stream(), media_type="text/event-stream", headers=sse_headers)
+
+
+# --------------------------------------------------------------------------- V1 SEC Material Events & Bounded Analyst
+class SecEventsScanApiRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    entity_id: str | None = Field(default=None, max_length=120)
+    cik: str | None = Field(default=None, pattern=r"^\d{1,10}$")
+    ticker: str | None = Field(default=None, max_length=32)
+    categories: list[SecEventCategoryInput] | None = Field(default=None, max_length=4)
+    lookback_days: int = Field(default=90, ge=1, le=730)
+    as_of: date | None = None
+    seen_accessions: dict[str, str | None] | list[str] | None = None
+    include_suppressed: bool = False
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> "SecEventsScanApiRequest":
+        if not (self.entity_id or self.cik or self.ticker):
+            raise ValueError("Provide entity_id, cik, or ticker.")
+        return self
+
+
+class SecEventsAnalyzeApiRequest(SecEventsScanApiRequest):
+    thesis_context: str | None = Field(default=None, max_length=4000)
+    active_red_yellow_flags: list[dict[str, Any]] | None = None
+    fold_amendments: bool = False
+    slot_overrides: ModelSlotConfig | None = None
+    max_model_calls: int | None = Field(default=None, ge=0)
+    max_search_calls: int | None = Field(default=None, ge=0)
+    max_total_tokens: int | None = Field(default=None, ge=1)
+    max_elapsed_seconds: float | None = Field(default=None, ge=0)
+
+
+class SecEventAnalysisOperationResponse(BaseModel):
+    operation: Operation
+    analysis: SecEventAnalysisResult | None = None
+    error: dict[str, Any] | None = None
+
+
+def set_sec_events_hook(hook: Any) -> None:
+    """Install or clear an optional SEC events runtime hook on ``app.state``."""
+    app.state.sec_events_hook = hook
+
+
+def _read_sec_events_hook(
+    *,
+    account: LocalAccount,
+    request: SecEventsScanApiRequest,
+) -> dict[str, Any]:
+    hook = getattr(app.state, "sec_events_hook", None)
+    if hook is None:
+        return {}
+    if callable(hook):
+        import inspect
+        sig = inspect.signature(hook)
+        candidate_kwargs = {"account": account, "request": request}
+        if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+            res = hook(**candidate_kwargs)
+        else:
+            res = hook(**{k: v for k, v in candidate_kwargs.items() if k in sig.parameters})
+        return dict(res) if isinstance(res, Mapping) else {}
+    return dict(hook) if isinstance(hook, Mapping) else {}
+
+
+def _sec_events_config_from_hook(hook_dict: Mapping[str, Any]) -> dict[str, Any]:
+    hook_transport = hook_dict.get("transport")
+    hook_stream = hook_dict.get("stream_transport")
+    hook_sub = hook_dict.get("submissions_override")
+    hook_facts = hook_dict.get("facts_override")
+    injected_io = any(x is not None for x in (hook_transport, hook_stream, hook_sub, hook_facts))
+
+    ua_raw = hook_dict.get("user_agent")
+    if isinstance(ua_raw, str) and ua_raw.strip():
+        try:
+            sec_ua = validate_user_agent(ua_raw)
+        except SecFailure as error:
+            raise ApiProblem(503, "sec_contact_unconfigured", error.message, retryable=False) from error
+    else:
+        env_ua, env_ok = _configured_sec_user_agent()
+        if env_ok and env_ua:
+            sec_ua = env_ua
+        elif injected_io or hook_dict.get("lazy_fetcher") is not None:
+            sec_ua = "ForesightNine-Test/1.0 test@example.com"
+        else:
+            raise ApiProblem(
+                503,
+                "sec_contact_unconfigured",
+                "SEC EDGAR user agent is not configured.",
+                retryable=False,
+            )
+
+    limiter = hook_dict.get("limiter")
+    if limiter is None:
+        limiter = SecPacingLimiter() if injected_io else SecPacingLimiter.from_env()
+
+    return {
+        "user_agent": sec_ua,
+        "transport": hook_transport,
+        "stream_transport": hook_stream,
+        "submissions_override": hook_sub,
+        "facts_override": hook_facts,
+        "limiter": limiter,
+        "policy": hook_dict.get("policy"),
+        "rules": hook_dict.get("rules"),
+        "now_fn": hook_dict.get("now_fn") or lifecycle_clock.now,
+        "l1_cache": hook_dict["l1_cache"] if "l1_cache" in hook_dict else SEC_EVENTS_L1_RAW,
+        "l2_cache": hook_dict["l2_cache"] if "l2_cache" in hook_dict else SEC_EVENTS_L2_SEMANTIC,
+        "company_identity_fn": hook_dict.get("company_identity_fn"),
+    }
+
+
+def _resolve_sec_events_cik(
+    request: SecEventsScanApiRequest,
+    cfg: Mapping[str, Any],
+) -> tuple[str, str | None, str | None]:
+    """Resolve ``(cik10, symbol, entity_id)`` from ``cik``, ``entity_id``, or ``ticker``."""
+    raw_eid = (request.entity_id or "").strip() or None
+    sym = (request.ticker or "").strip().upper() or None
+    if not sym and raw_eid and ":" in raw_eid and not raw_eid.lower().startswith("cik:"):
+        sym = raw_eid.split(":", 1)[1].strip().upper() or None
+
+    raw_cik = (request.cik or "").strip() or None
+    if raw_cik is None and raw_eid and raw_eid.lower().startswith("cik:"):
+        raw_cik = raw_eid.split(":", 1)[1].strip() or None
+
+    if raw_cik is not None:
+        try:
+            normalized = cik10(raw_cik)
+        except Exception as error:
+            raise ApiProblem(422, "invalid_request", f"Invalid CIK: {raw_cik!r}.") from error
+        return normalized, sym, raw_eid or f"cik:{normalized}"
+
+    if not sym:
+        raise ApiProblem(422, "invalid_request", "Provide entity_id, cik, or ticker.")
+
+    id_fn = cfg.get("company_identity_fn")
+    if callable(id_fn):
+        resolved = id_fn(sym)
+        if not resolved:
+            raise ApiProblem(404, "not_found", f"Could not resolve SEC CIK for ticker {sym!r}.")
+        try:
+            normalized = cik10(str(resolved))
+        except Exception as error:
+            raise ApiProblem(422, "invalid_request", f"Invalid resolved CIK for ticker {sym!r}.") from error
+        return normalized, sym, raw_eid or f"cik:{normalized}"
+
+    adapter = SecEdgarAdapter(
+        user_agent=cfg["user_agent"],
+        transport=cfg.get("transport"),
+        policy=cfg.get("policy"),
+        now_fn=cfg.get("now_fn") or lifecycle_clock.now,
+    )
+    res = adapter.company_identity(sym)
+    if res.status == "rate_limited":
+        raise ApiProblem(429, "rate_limited", "SEC EDGAR rate limit reached resolving ticker.", retryable=True)
+    if res.status == "unavailable":
+        raise ApiProblem(503, "service_unavailable", "SEC EDGAR ticker lookup is unavailable.", retryable=True)
+    if res.status not in ("ok", "partial") or not res.data:
+        raise ApiProblem(404, "not_found", f"Could not resolve SEC CIK for ticker {sym!r}.")
+    exact = next(
+        (ref for ref in res.data if (getattr(ref, "symbol", None) or "").strip().upper() == sym),
+        res.data[0],
+    )
+    found_cik = (getattr(exact, "identifiers", None) or {}).get("cik")
+    if not found_cik:
+        raise ApiProblem(404, "not_found", f"Could not resolve SEC CIK for ticker {sym!r}.")
+    normalized = cik10(str(found_cik))
+    return normalized, sym, raw_eid or getattr(exact, "entity_id", None) or f"cik:{normalized}"
+
+
+def _filter_sec_events_bear_slot(slot_bindings: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """Keep explicit ``deep_reasoner`` while allowing ``bear_reviewer`` only when independently configured."""
+    if not isinstance(slot_bindings, Mapping):
+        return None
+    out: dict[str, Any] = {}
+    if slot_bindings.get("deep_reasoner") is not None:
+        out["deep_reasoner"] = slot_bindings["deep_reasoner"]
+    bear = slot_bindings.get("bear_reviewer")
+    if bear is not None and not getattr(bear, "fallback_used", True):
+        out["bear_reviewer"] = bear
+    return out or None
+
+
+def _resolve_sec_events_runtime(
+    *,
+    account: LocalAccount,
+    request: SecEventsAnalyzeApiRequest,
+    http_request: Request,
+    hook_dict: Mapping[str, Any],
+    budget: ResearchExecutionBudget | None,
+) -> tuple[Any, dict[str, Any] | None, Any]:
+    """Resolve ``(model_runner, slot_bindings, resolved_slots)`` for Layer 2 bounded event analysis."""
+    stored_slots = model_settings.model_slots(account.account_id)
+    primary_profile = model_settings.primary_slot_profile(account.account_id)
+    requested_slots = request.slot_overrides if request.slot_overrides is not None else stored_slots
+
+    effective_resolved_slots = hook_dict.get("resolved_slots")
+    effective_slot_bindings = hook_dict.get("slot_bindings")
+    effective_primary_profile = hook_dict["primary_profile"] if "primary_profile" in hook_dict else primary_profile
+    effective_slot_overrides = hook_dict["slot_overrides"] if "slot_overrides" in hook_dict else requested_slots
+
+    model_runner = hook_dict.get("model_runner")
+    if model_runner is None:
+        primary_provider, is_personal = _model_provider_for_account(account, http_request, research=True)
+        try:
+            settings, config = model_settings.runtime_configuration(account.account_id)
+        except ModelCredentialError as error:
+            raise ApiProblem(error.status_code, error.code, error.message, retryable=error.status_code == 503) from error
+
+        if not is_personal and effective_primary_profile is None:
+            effective_primary_profile = _platform_primary_slot_profile(primary_provider)
+
+        if effective_resolved_slots is None and effective_slot_bindings is None:
+            if effective_primary_profile is not None:
+                try:
+                    effective_resolved_slots = resolve_model_slots(
+                        effective_primary_profile,
+                        effective_slot_overrides,
+                        strict=True,
+                    )
+                except ModelSlotError as error:
+                    raise ApiProblem(422, "invalid_request", str(error)) from error
+            else:
+                fallback_model = getattr(primary_provider, "name", None) or "platform_primary"
+                try:
+                    effective_slot_bindings = resolve_squad_slots(
+                        primary_profile={"model": fallback_model, "native_tools": True},
+                        slot_overrides=effective_slot_overrides,
+                    )
+                except SquadConfigurationError as error:
+                    raise ApiProblem(422, "invalid_request", str(error)) from error
+
+        slot_providers, slot_max_tokens = _build_slot_providers_and_caps(
+            account_id=account.account_id,
+            slot_names=("deep_reasoner", "bear_reviewer"),
+            resolved_slots=effective_resolved_slots,
+            settings=settings,
+            config=config,
+        )
+        model_runner = _AccountSlotModelRunner(
+            providers_by_slot=slot_providers,
+            default_provider=_with_squad_provider_timeout_floor(primary_provider),
+            cancel_event=hook_dict.get("cancel_event"),
+            budget=budget,
+            slot_max_output_tokens=slot_max_tokens,
+        )
+    elif effective_resolved_slots is None and effective_slot_bindings is None and effective_slot_overrides is not None:
+        try:
+            effective_slot_bindings = resolve_squad_slots(
+                primary_profile=effective_primary_profile or {"model": "platform_primary", "native_tools": True},
+                slot_overrides=effective_slot_overrides,
+            )
+        except SquadConfigurationError as error:
+            raise ApiProblem(422, "invalid_request", str(error)) from error
+
+    filtered_bindings = (
+        None
+        if effective_resolved_slots is not None
+        else _filter_sec_events_bear_slot(effective_slot_bindings)
+    )
+    return model_runner, filtered_bindings, effective_resolved_slots
+
+
+def _handle_sec_pacing_error(error: SecPacingError) -> ApiProblem:
+    if error.reason == "sec_contact_unconfigured":
+        return ApiProblem(503, error.reason, error.message, retryable=False)
+    if error.reason == "provider_rate_limited":
+        return ApiProblem(429, "rate_limited", error.message, retryable=True, retry_after=error.retry_after_seconds)
+    if error.reason in ("forbidden", "invalid_sec_url") or "denied" in error.reason or "policy" in error.reason:
+        return ApiProblem(403, error.reason, error.message, retryable=False)
+    return ApiProblem(
+        503 if error.retryable else 502,
+        "service_unavailable" if error.retryable else error.reason,
+        error.message,
+        retryable=error.retryable,
+    )
+
+
+@app.post(
+    "/v2/research/sec-events/scan",
+    response_model=SecEventScanResult,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+    include_in_schema=False,
+)
+def scan_sec_events_endpoint(
+    http_request: Request,
+    request: SecEventsScanApiRequest,
+) -> SecEventScanResult:
+    """Run deterministic Layer 1 SEC material events scan (0 LLM)."""
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    try:
+        mapped_cats: list[EventCategory] | None = normalize_sec_event_categories(request.categories)
+    except ValueError as error:
+        raise ApiProblem(422, "invalid_request", str(error)) from error
+
+    hook_dict = _read_sec_events_hook(account=account, request=request)
+    cfg = _sec_events_config_from_hook(hook_dict)
+    cik_val, sym_val, entity_val = _resolve_sec_events_cik(request, cfg)
+    try:
+        scan_result, _texts = scan_sec_material_events(
+            cik_val,
+            user_agent=cfg["user_agent"],
+            as_of=request.as_of,
+            lookback_days=request.lookback_days,
+            categories=mapped_cats,
+            seen_accessions=request.seen_accessions,
+            l1_cache=cfg["l1_cache"],
+            rules=cfg["rules"],
+            transport=cfg["transport"],
+            stream_transport=cfg["stream_transport"],
+            limiter=cfg["limiter"],
+            policy=cfg["policy"],
+            now_fn=cfg["now_fn"],
+            cancel_event=hook_dict.get("cancel_event"),
+            symbol=sym_val,
+            entity_id=entity_val,
+            submissions_override=cfg["submissions_override"],
+            facts_override=cfg["facts_override"],
+        )
+    except SecPacingError as error:
+        raise _handle_sec_pacing_error(error) from error
+
+    if not request.include_suppressed and scan_result.suppressed_events:
+        return scan_result.model_copy(update={"suppressed_events": []})
+    return scan_result
+
+
+_SEC_EVENTS_ANALYZE_OP_ENDPOINT = "/v1/research/sec-events/analyze"
+
+
+@app.post(
+    "/v2/research/sec-events/analyze",
+    response_model=OperationResponse,
+    response_model_exclude_none=True,
+    status_code=202,
+    responses=ERROR_RESPONSES,
+    include_in_schema=False,
+)
+def analyze_sec_events_endpoint(
+    http_request: Request,
+    response: Response,
+    idempotency_key: IdempotencyKey,
+    request: SecEventsAnalyzeApiRequest,
+) -> OperationResponse:
+    """Start Layer 1 + Layer 2 Bounded Event Agent analysis as a 202 async operation."""
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    owner_subject = f"account:{account.account_id}"
+    req_payload = request.model_dump(mode="json", exclude_unset=True)
+    existing = operations.replay_async(
+        endpoint=_SEC_EVENTS_ANALYZE_OP_ENDPOINT,
+        idempotency_key=idempotency_key,
+        owner_subject=owner_subject,
+        request_payload=req_payload,
+    )
+    if existing is not None:
+        _mark_replay(response, True)
+        return existing
+
+    try:
+        mapped_cats: list[EventCategory] | None = normalize_sec_event_categories(request.categories)
+    except ValueError as error:
+        raise ApiProblem(422, "invalid_request", str(error)) from error
+
+    hook_dict = _read_sec_events_hook(account=account, request=request)
+    cfg = _sec_events_config_from_hook(hook_dict)
+    cik_val, sym_val, entity_val = _resolve_sec_events_cik(request, cfg)
+
+    effective_budget = hook_dict.get("budget")
+    if effective_budget is None and any(
+        v is not None
+        for v in (
+            request.max_model_calls,
+            request.max_search_calls,
+            request.max_total_tokens,
+            request.max_elapsed_seconds,
+        )
+    ):
+        deadline_ts = (
+            monotonic() + request.max_elapsed_seconds
+            if request.max_elapsed_seconds is not None
+            else float("inf")
+        )
+        effective_budget = ResearchExecutionBudget(
+            request.max_model_calls,
+            request.max_search_calls,
+            request.max_total_tokens,
+            deadline_ts,
+        )
+
+    model_runner, filtered_bindings, effective_resolved_slots = _resolve_sec_events_runtime(
+        account=account,
+        request=request,
+        http_request=http_request,
+        hook_dict=hook_dict,
+        budget=effective_budget,
+    )
+
+    staged_analyses: dict[str, SecEventAnalysisResult] = {}
+
+    def build_sec_events_operation(operation_id: str) -> tuple[BaseModel, str]:
+        op_cancel = operations.cancel_event(operation_id)
+        hook_cancel = hook_dict.get("cancel_event")
+
+        class _CombinedCancel:
+            def is_set(self) -> bool:
+                return bool(op_cancel.is_set() or (hook_cancel is not None and hook_cancel.is_set()))
+
+            def wait(self, timeout: float | None = None) -> bool:
+                return bool(op_cancel.wait(timeout))
+
+        cancel_sig: Any = _CombinedCancel() if hook_cancel is not None else op_cancel
+        if cancel_sig.is_set():
+            raise ProviderFailure("provider_cancelled", "SEC events analysis operation was cancelled.", retryable=False)
+
+        if callable(getattr(model_runner, "bind_runtime", None)):
+            model_runner.bind_runtime(cancel_event=cancel_sig, budget=effective_budget)
+
+        op_deadline = (
+            effective_budget.deadline
+            if effective_budget is not None and math.isfinite(effective_budget.deadline)
+            else None
+        )
+        try:
+            scan_result, source_texts = scan_sec_material_events(
+                cik_val,
+                user_agent=cfg["user_agent"],
+                as_of=request.as_of,
+                lookback_days=request.lookback_days,
+                categories=mapped_cats,
+                seen_accessions=request.seen_accessions,
+                l1_cache=cfg["l1_cache"],
+                rules=cfg["rules"],
+                transport=cfg["transport"],
+                stream_transport=cfg["stream_transport"],
+                limiter=cfg["limiter"],
+                policy=cfg["policy"],
+                now_fn=cfg["now_fn"],
+                deadline=op_deadline,
+                cancel_event=cancel_sig,
+                symbol=sym_val,
+                entity_id=entity_val,
+                submissions_override=cfg["submissions_override"],
+                facts_override=cfg["facts_override"],
+            )
+        except SecPacingError as error:
+            raise _handle_sec_pacing_error(error) from error
+
+        if cancel_sig.is_set():
+            raise ProviderFailure("provider_cancelled", "SEC events analysis operation was cancelled.", retryable=False)
+
+        hook_lazy_fetcher = hook_dict.get("lazy_fetcher")
+        if callable(hook_lazy_fetcher):
+            lazy_fetcher = hook_lazy_fetcher
+        else:
+            def _fetch_lazy(ref: LazyAttachmentRef) -> str:
+                content = fetch_lazy_attachment(
+                    ref,
+                    user_agent=cfg["user_agent"],
+                    limiter=cfg["limiter"],
+                    policy=cfg["policy"],
+                    transport=cfg["transport"],
+                    stream_transport=cfg["stream_transport"],
+                    cancel_event=cancel_sig,
+                    deadline=op_deadline,
+                )
+                return content.text
+
+            lazy_fetcher = _fetch_lazy
+
+        analysis = analyze_sec_events(
+            scan_result=scan_result,
+            source_texts=source_texts,
+            runner=model_runner,
+            slot_bindings=filtered_bindings,
+            resolved_slots=effective_resolved_slots,
+            lazy_fetcher=lazy_fetcher,
+            l2_cache=cfg["l2_cache"],
+            rules=cfg["rules"],
+            active_red_yellow_flags=request.active_red_yellow_flags,
+            thesis_context=request.thesis_context,
+            budget=effective_budget,
+            cancel_event=cancel_sig,
+            fold_amendments=request.fold_amendments,
+        )
+        if cancel_sig.is_set():
+            raise ProviderFailure("provider_cancelled", "SEC events analysis operation was cancelled.", retryable=False)
+
+        if not request.include_suppressed and analysis.suppressed_events:
+            analysis = analysis.model_copy(update={"suppressed_events": []})
+        staged_analyses[operation_id] = analysis
+        return analysis, f"sec_events_analysis:{operation_id}"
+
+    def commit_sec_events_operation(operation_id: str, result: BaseModel) -> None:
+        final_analysis = staged_analyses.pop(operation_id, None) or result
+        assert isinstance(final_analysis, SecEventAnalysisResult)
+        SEC_EVENTS_ANALYSIS_RESULTS.put(operation_id, final_analysis)
+
+    def rollback_sec_events_operation(operation_id: str, _result: BaseModel) -> None:
+        staged_analyses.pop(operation_id, None)
+        SEC_EVENTS_ANALYSIS_RESULTS.delete(operation_id)
+
+    op_resp, replayed = operations.submit_async(
+        endpoint=_SEC_EVENTS_ANALYZE_OP_ENDPOINT,
+        idempotency_key=idempotency_key,
+        owner_subject=owner_subject,
+        request_payload=req_payload,
+        result_field="research",
+        build_result=build_sec_events_operation,
+        commit_result=commit_sec_events_operation,
+        rollback_result=rollback_sec_events_operation,
+    )
+    _mark_replay(response, replayed)
+    return op_resp
+
+
+@app.get(
+    "/v2/research/sec-events/analyze/{operation_id}",
+    response_model=SecEventAnalysisOperationResponse,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+    include_in_schema=False,
+)
+def get_sec_events_analysis(
+    operation_id: str,
+    http_request: Request,
+) -> SecEventAnalysisOperationResponse:
+    """Poll status and retrieve ``SecEventAnalysisResult`` for an async SEC events analysis operation."""
+    _authenticated_account(http_request.headers.get("Authorization"))
+    _require_operation_owner(http_request, operation_id)
+    operation = operations._cache_operation(operation_id)
+    if operation.endpoint != _SEC_EVENTS_ANALYZE_OP_ENDPOINT:
+        raise ApiProblem(404, "not_found", "SEC events analysis operation not found.")
+    analysis: SecEventAnalysisResult | None = None
+    error_payload: dict[str, Any] | None = None
+    if operation.status == "completed":
+        analysis = SEC_EVENTS_ANALYSIS_RESULTS.get(operation_id)
+        if analysis is None:
+            raise ApiProblem(
+                409,
+                "lifecycle_conflict",
+                "SEC events analysis result is unavailable for this completed operation.",
+            )
+    elif operation.status == "failed":
+        for ev in reversed(operations.store.get_events(operation_id)):
+            if ev.get("event") == "operation.error" and isinstance(ev.get("error"), Mapping):
+                error_payload = dict(ev["error"])
+                break
+    return SecEventAnalysisOperationResponse(operation=operation, analysis=analysis, error=error_payload)
 
 
 def _operation_owner_subject(request: Request) -> str:

@@ -12,8 +12,11 @@ The default policy denies the platform key.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from hashlib import sha256
+import math
 import re
 from datetime import date, datetime, timezone
+from time import monotonic
 from typing import Any, Callable, Literal, Mapping, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
@@ -41,6 +44,12 @@ from .fin_data.adapters.sec_deep import (
     sec_redline_diff as sec_deep_redline_diff,
 )
 from .fin_data.adapters.sec_edgar import STANDARD_LINES, SecEdgarAdapter, cik10
+from .fin_data.adapters.sec_events import (
+    EventCategory,
+    SecPacingError,
+    SecPacingLimiter,
+    scan_sec_material_events,
+)
 from .fin_data.adapters.tushare import TushareAdapter
 from .fin_data.adapters.twelve_data import TwelveDataAdapter
 from .fin_data.adapters.yahoo import YahooAdapter
@@ -343,6 +352,59 @@ class ValuationToolRequest(ValuationRequest):
     rationale: str = Field(min_length=1, max_length=500, description='Why this valuation and implied expectations analysis is needed.')
 
 
+SecEventCategoryInput = Literal['8k', 'form4', '13dg', '6k']
+
+_SEC_EVENT_CATEGORY_MAP: dict[str, EventCategory] = {
+    '8k': 'material_8k',
+    'material_8k': 'material_8k',
+    'form4': 'insider_trade',
+    'insider_trade': 'insider_trade',
+    '13dg': 'ownership_13dg',
+    'ownership_13dg': 'ownership_13dg',
+    '6k': 'foreign_6k',
+    'foreign_6k': 'foreign_6k',
+}
+
+
+def normalize_sec_event_categories(categories: Sequence[str] | None) -> list[EventCategory] | None:
+    """Map short (``8k``, ``form4``, ``13dg``, ``6k``) or canonical Layer 1 category names."""
+    if not categories:
+        return None
+    mapped: list[EventCategory] = []
+    seen: set[EventCategory] = set()
+    for raw in categories:
+        key = str(raw).strip().lower()
+        cat = _SEC_EVENT_CATEGORY_MAP.get(key)
+        if cat is None:
+            raise ValueError(f'Unsupported SEC event category: {raw!r}.')
+        if cat not in seen:
+            seen.add(cat)
+            mapped.append(cat)
+    return mapped or None
+
+
+class SecMaterialEventsRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    entity_id: str | None = Field(default=None, max_length=64, description='entity_id from resolve_entity.')
+    cik: str | None = Field(default=None, pattern=r'^\d{1,10}$')
+    ticker: str | None = Field(default=None, max_length=16, description='Exact US ticker when no entity_id or cik.')
+    categories: list[SecEventCategoryInput] | None = Field(
+        default=None,
+        max_length=4,
+        description="Optional event categories ('8k', 'form4', '13dg', '6k'); omit to scan all categories.",
+    )
+    lookback_days: int = Field(default=90, ge=1, le=730, description='Trailing calendar day window ending at as_of.')
+    as_of: date | None = Field(default=None, description='Optional cutoff date (inclusive on filed_at) preventing look-ahead.')
+    include_suppressed: bool = Field(default=False, description='Include deterministic Layer 1 filtered noise records.')
+    rationale: str = Field(default='', max_length=500, description='Why material SEC events are needed.')
+
+    @model_validator(mode='after')
+    def one_identity(self) -> 'SecMaterialEventsRequest':
+        if not (self.entity_id or self.cik or self.ticker):
+            raise ValueError('Give entity_id, cik or ticker.')
+        return self
+
+
 # --------------------------------------------------------------------------- outcome
 @dataclass
 class FinToolOutcome:
@@ -431,7 +493,8 @@ class FinDataToolbox:
                  tushare_key: str | None = None, tushare_owner: str = 'user_byok', tushare_transport=None,
                  baostock_runner: Any = _AUTO, cn_probe: ReachabilityProbe | None = None, yahoo_transport=None,
                  on_result: Callable[[str, dict[str, Any]], None] | None = None,
-                 fmp_key: str | None = None, fmp_owner: str = 'user_byok', fmp_transport=None) -> None:
+                 fmp_key: str | None = None, fmp_owner: str = 'user_byok', fmp_transport=None,
+                 l1_cache: Any = None, sec_events_limiter: SecPacingLimiter | None = None) -> None:
         self.account_id, self._market_key = account_id, market_key or None
         self._owner = credential_owner if credential_owner in ('platform', 'user_byok') else 'user_byok'
         try:
@@ -439,6 +502,7 @@ class FinDataToolbox:
         except SecFailure:
             self._sec_ua = None
         self._persist, self._remaining, self._ensure_running = persist, remaining_seconds, ensure_running
+        self._reserve_call = reserve_call
         self._now = now or (lambda: datetime.now(timezone.utc))
         self.disabled_reason = disabled_reason
         self._policy = policy or load_policy()
@@ -455,6 +519,8 @@ class FinDataToolbox:
         self._fmp_key = fmp_key.strip() if isinstance(fmp_key, str) and fmp_key.strip() else None
         self._fmp_owner = fmp_owner if fmp_owner in ('platform', 'user_byok') else 'user_byok'
         self._fmp_transport = fmp_transport
+        self._l1_cache = l1_cache
+        self._sec_events_limiter = sec_events_limiter
 
     # -- capability flags (first user message; tools stay static)
     @property
@@ -1239,6 +1305,303 @@ class FinDataToolbox:
         }
         out.update(extra)
         return out
+
+    def sec_material_events_key(self, req: SecMaterialEventsRequest) -> str:
+        cats = ','.join(sorted(set(req.categories))) if req.categories else 'all'
+        return '|'.join([
+            'sec_material_events',
+            self._identity_key(req),
+            cats,
+            str(req.lookback_days),
+            req.as_of.isoformat() if req.as_of else '',
+            str(req.include_suppressed),
+        ])
+
+    @staticmethod
+    def _format_sec_material_events_digest(
+        scan_result: Any,
+        source_texts: Mapping[str, str],
+        *,
+        label: str,
+        max_total_chars: int = 180_000,
+        max_entry_chars: int = 12_000,
+    ) -> tuple[str, dict[str, str]]:
+        lines: list[str] = [
+            f"SEC Layer 1 Material Events Scan: {label} (CIK {scan_result.cik})",
+            (
+                f"as_of: {scan_result.as_of.isoformat() if scan_result.as_of else '-'} | "
+                f"lookback_days: {scan_result.lookback_days} | "
+                f"is_fpi: {scan_result.is_fpi} | fpi_exempt_from_form4: {scan_result.fpi_exempt_from_form4} | "
+                f"rules_version: {scan_result.rules_version} | parser_version: {scan_result.parser_version}"
+            ),
+        ]
+        if scan_result.scale_anchor is not None:
+            sa = scan_result.scale_anchor
+            lines.append(
+                f"scale_anchor: taxonomy={sa.taxonomy_used or '-'} | currency={sa.currency or '-'} | "
+                f"ttm_rev={sa.latest_ttm_revenue or '-'} | net_inc={sa.latest_net_income or '-'} | "
+                f"assets={sa.latest_total_assets or '-'} | float_usd={sa.public_float_usd or '-'} | "
+                f"shares={sa.shares_outstanding or '-'} | basis={sa.share_unit_basis}"
+            )
+        if scan_result.open_gaps:
+            lines.append("open_gaps: " + "; ".join(scan_result.open_gaps))
+        lines.append("")
+        if not scan_result.target_candidates:
+            lines.append("No material non-earnings SEC event candidates matched the active window and categories.")
+        else:
+            lines.append(f"=== TARGET CANDIDATES ({len(scan_result.target_candidates)}) ===")
+            for cand in scan_result.target_candidates:
+                lines.append(
+                    f"[{cand.candidate_id}] {cand.form} | filed {cand.filed_at.isoformat()} | "
+                    f"event_date {cand.event_date.isoformat() if cand.event_date else '-'} | "
+                    f"accn {cand.accession} | items {','.join(cand.items) or '-'} | "
+                    f"critical {','.join(cand.statutory_critical_items) or '-'} | source_id {cand.source_id}"
+                )
+                lines.append(f"url: {cand.sec_url}")
+                if cand.excerpt:
+                    snippet = cand.excerpt[:max_entry_chars]
+                    if len(cand.excerpt) > max_entry_chars:
+                        snippet += "\n...[truncated]"
+                    lines.append(snippet)
+                lines.append("")
+
+        if scan_result.recent_context_candidates:
+            lines.append(f"=== RECENT CONTEXT ({len(scan_result.recent_context_candidates)}) ===")
+            for ctx_c in scan_result.recent_context_candidates:
+                lines.append(
+                    f"[context] {ctx_c.form} | filed {ctx_c.filed_at.isoformat()} | "
+                    f"accn {ctx_c.accession} | items {','.join(ctx_c.items) or '-'}"
+                )
+            lines.append("")
+
+        compact_texts: dict[str, str] = {}
+        compact_budget = 24_000
+        compact_used = 0
+        # Keep supplementary exhibit/source texts cleanly registered and bounded.
+        candidate_sids = {c.source_id for c in scan_result.target_candidates}
+        ordered_sids = sorted(source_texts.keys(), key=lambda s: (0 if s.endswith(':ex16') else 1 if s in candidate_sids else 2, s))
+        for sid in ordered_sids:
+            raw_txt = source_texts.get(sid) or ""
+            if not raw_txt:
+                continue
+            rem_compact = compact_budget - compact_used
+            if rem_compact > 0:
+                clipped = raw_txt if (len(raw_txt) <= rem_compact or sid.endswith(':ex16')) else (raw_txt[: max(0, rem_compact - 24)].rstrip() + "\n...[compact cap]")
+                compact_texts[sid] = clipped
+                compact_used += len(clipped)
+            if sid not in candidate_sids:
+                lines.append(f"=== EXHIBIT / SUPPLEMENT SOURCE ({sid}) ===")
+                lines.append(raw_txt[:max_entry_chars])
+                lines.append("")
+
+        full_text = "\n".join(lines).strip()
+        if len(full_text) > max_total_chars:
+            full_text = full_text[: max_total_chars - 32].rstrip() + "\n...[digest budget cap reached]"
+        return full_text, compact_texts
+
+    def sec_material_events(
+        self,
+        req: SecMaterialEventsRequest,
+        entities: Mapping[str, Mapping[str, Any]] | None = None,
+    ) -> FinToolOutcome:
+        blocked = self._sec_blocked()
+        if blocked:
+            return FinToolOutcome(blocked)
+        sec = self._sec()
+        info, failure = self._cik(req, entities or {}, sec)
+        if failure:
+            return FinToolOutcome(failure)
+
+        try:
+            self._reserve_call()
+        except Exception as err:
+            wait = getattr(err, 'retry_after', None)
+            return FinToolOutcome({
+                'status': 'rate_limited',
+                'reason': 'rate_limit',
+                'message': str(err),
+                'retryable': True,
+                **({'retry_after_seconds': float(wait)} if isinstance(wait, (int, float)) and wait > 0 else {}),
+            })
+
+        try:
+            mapped_cats = normalize_sec_event_categories(req.categories)
+        except ValueError as err:
+            return FinToolOutcome({'status': 'failed', 'reason': 'invalid_request', 'message': str(err)})
+
+        rem_sec = self._remaining()
+        deadline_ts = (monotonic() + max(0.0, rem_sec)) if math.isfinite(rem_sec) else None
+        events_limiter = self._sec_events_limiter or SecPacingLimiter()
+
+        try:
+            scan_result, source_texts = scan_sec_material_events(
+                info['cik'],
+                user_agent=self._sec_ua,
+                as_of=req.as_of,
+                lookback_days=req.lookback_days,
+                categories=mapped_cats,
+                l1_cache=self._l1_cache,
+                transport=self._sec_transport,
+                stream_transport=self._sec_stream,
+                limiter=events_limiter,
+                policy=self._policy,
+                now_fn=self._now,
+                deadline=deadline_ts,
+                cancel_event=self._cancel,
+                symbol=info.get('symbol'),
+                entity_id=info.get('entity_id'),
+            )
+        except SecPacingError as err:
+            if err.reason == 'sec_contact_unconfigured':
+                return FinToolOutcome({'status': 'unavailable', 'reason': err.reason, 'message': err.message})
+            if err.reason in ('forbidden', 'invalid_sec_url') or 'denied' in err.reason or 'policy' in err.reason:
+                return FinToolOutcome({'status': 'denied', 'reason': err.reason, 'message': err.message})
+            if err.reason == 'provider_rate_limited':
+                return FinToolOutcome({
+                    'status': 'rate_limited',
+                    'reason': err.reason,
+                    'message': err.message,
+                    'retryable': True,
+                    **({'retry_after_seconds': err.retry_after_seconds} if err.retry_after_seconds is not None else {}),
+                })
+            return FinToolOutcome({
+                'status': 'unavailable' if err.retryable else 'failed',
+                'reason': err.reason,
+                'message': err.message,
+                'retryable': err.retryable,
+            })
+
+        sub_gap = next((g for g in scan_result.open_gaps if g.startswith('submissions_unavailable:')), None)
+        if (
+            sub_gap is not None
+            and not scan_result.target_candidates
+            and not scan_result.recent_context_candidates
+            and not scan_result.suppressed_events
+            and scan_result.scale_anchor is None
+        ):
+            sub_reason = sub_gap.split(':', 1)[1]
+            status_str = 'unavailable' if sub_reason in (
+                'source_timeout', 'source_unavailable', 'provider_rate_limited', 'deadline_exceeded', 'cancelled',
+            ) else 'failed'
+            return FinToolOutcome({
+                'status': status_str,
+                'reason': sub_reason,
+                'entity_id': scan_result.entity_id,
+                'cik': scan_result.cik,
+                'open_gaps': list(scan_result.open_gaps),
+                'metrics': scan_result.metrics.model_dump(mode='json', exclude_none=True),
+            })
+
+        pol_perm = self._policy.decide('sec_edgar', 'filings')
+        if isinstance(pol_perm, Denied):
+            return FinToolOutcome({'status': 'denied', 'reason': pol_perm.reason, 'message': pol_perm.message})
+
+        label = str(scan_result.company_name or scan_result.symbol or info.get('name') or info.get('symbol') or scan_result.entity_id)
+        digest_text, compact_texts = self._format_sec_material_events_digest(
+            scan_result,
+            source_texts,
+            label=label,
+        )
+        digest_sha = sha256(digest_text.encode('utf-8')).hexdigest()
+
+        filed_dates = [
+            c.filed_at
+            for c in (*scan_result.target_candidates, *scan_result.recent_context_candidates)
+        ]
+        pub_day = max(filed_dates) if filed_dates else (scan_result.as_of or req.as_of or self._now().date())
+        pub_dt = datetime(pub_day.year, pub_day.month, pub_day.day, tzinfo=timezone.utc)
+        sub_url = f"https://data.sec.gov/submissions/CIK{scan_result.cik}.json"
+        prov_meta: dict[str, Any] = {
+            'provider': 'sec_edgar',
+            'endpoint': sub_url,
+            'endpoints': [sub_url],
+            'provider_calls': scan_result.metrics.total_filings_inspected,
+            'credential_owner': 'platform_public_data',
+            'entity_id': scan_result.entity_id,
+            'cik': scan_result.cik,
+            'rules_version': scan_result.rules_version,
+            'parser_version': scan_result.parser_version,
+            'provider_response_sha256': digest_sha,
+            'retrieved_at': self._now().isoformat(),
+            'permissions': pol_perm.model_dump(mode='json'),
+        }
+        try:
+            source = self._persist(
+                SourceInput(
+                    title=f"{label} SEC Material Events ({scan_result.lookback_days}d scan)",
+                    text=digest_text,
+                    url=sub_url,
+                    kind='official',
+                    published_at=pub_dt,
+                    permissions=self._source_permissions(pol_perm),
+                ),
+                retrieval_method='sec_material_events',
+                response_sha256=digest_sha,
+                response_content_type='text/plain',
+                provenance=prov_meta,
+            )
+        except (ValueError, ValidationError):
+            return FinToolOutcome({'status': 'denied', 'reason': 'source_not_storable'})
+
+        leads: list[dict[str, Any]] = []
+        for cand in scan_result.target_candidates:
+            leads.append({
+                'url': canonical_source_url(cand.sec_url),
+                'title': f"{label} {cand.form} ({cand.filed_at.isoformat()}) {','.join(cand.items)}".strip()[:300],
+                'published_at': f"{cand.filed_at.isoformat()}T00:00:00+00:00",
+            })
+
+        is_partial = bool(scan_result.failed_accessions or scan_result.open_gaps)
+        suppressed_out = (
+            [s.model_dump(mode='json', exclude_none=True) for s in scan_result.suppressed_events]
+            if req.include_suppressed
+            else []
+        )
+        out: dict[str, Any] = {
+            'status': 'partial' if is_partial else 'ok',
+            'reason': 'partial_scan' if is_partial else 'ok',
+            'permissions': pol_perm.model_dump(mode='json'),
+            'provenance': prov_meta,
+            'cost': {'provider_calls': int(scan_result.metrics.total_filings_inspected)},
+            'source_id': source.source_id,
+            'title': source.title,
+            'total_characters': len(source.text),
+            'content_sha256': source.content_sha256,
+            'cik': scan_result.cik,
+            'entity_id': scan_result.entity_id,
+            'symbol': scan_result.symbol,
+            'company_name': scan_result.company_name,
+            'as_of': scan_result.as_of.isoformat() if scan_result.as_of else None,
+            'lookback_days': scan_result.lookback_days,
+            'is_fpi': scan_result.is_fpi,
+            'fpi_exempt_from_form4': scan_result.fpi_exempt_from_form4,
+            'rules_version': scan_result.rules_version,
+            'parser_version': scan_result.parser_version,
+            'scale_anchor': scan_result.scale_anchor.model_dump(mode='json', exclude_none=True) if scan_result.scale_anchor else None,
+            'timing_context': dict(scan_result.timing_context),
+            'historical_precedent': dict(scan_result.historical_precedent),
+            'candidates': [c.model_dump(mode='json', exclude_none=True) for c in scan_result.target_candidates],
+            'recent_context_candidates': [c.model_dump(mode='json', exclude_none=True) for c in scan_result.recent_context_candidates],
+            'suppressed': suppressed_out,
+            'failed': [f.model_dump(mode='json', exclude_none=True) for f in scan_result.failed_accessions],
+            'processed_accessions': dict(scan_result.processed_accessions),
+            'open_gaps': list(scan_result.open_gaps),
+            'metrics': scan_result.metrics.model_dump(mode='json', exclude_none=True),
+            'source_texts': compact_texts,
+            'usage_note': 'Quote candidate or exhibit passages from source_id via outline_source / search_source / read_sources.',
+        }
+        return FinToolOutcome(
+            out,
+            source=source,
+            leads=leads,
+            entities={
+                scan_result.entity_id: {
+                    'company': scan_result.company_name or info.get('name'),
+                    'symbol': scan_result.symbol or info.get('symbol'),
+                    'identifiers': {'cik': scan_result.cik},
+                }
+            },
+        )
 
     def earnings_release_key(self, req: SecEarningsReleaseRequest) -> str:
         return '|'.join([

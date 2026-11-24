@@ -72,6 +72,7 @@ RetrievalMethod = Literal[
     "sec_earnings_release",
     "sec_filing_table",
     "sec_filing_sections",
+    "sec_material_events",
     "historical_prices",
     "market_data",
     "sec_companyfacts",

@@ -831,6 +831,318 @@
         "title": "ClassifiedNonGaapAdjustment",
         "type": "object"
       },
+      "CompanySignalEnvelope": {
+        "additionalProperties": false,
+        "description": "Canonical signal emitted by any background vertical engine for downstream Agents & Direction B.",
+        "properties": {
+          "affected_thesis_pillars": {
+            "items": {
+              "enum": [
+                "growth",
+                "margin",
+                "cash_quality",
+                "capital_allocation",
+                "valuation",
+                "risk"
+              ],
+              "type": "string"
+            },
+            "title": "Affected Thesis Pillars",
+            "type": "array"
+          },
+          "amends_accession": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amends Accession"
+          },
+          "cik": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cik"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "cross_filing_links": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cross Filing Links",
+            "type": "array"
+          },
+          "direction": {
+            "enum": [
+              "positive",
+              "negative",
+              "neutral",
+              "mixed"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "disclosed_at": {
+            "title": "Disclosed At",
+            "type": "string"
+          },
+          "disposition": {
+            "enum": [
+              "push_alert",
+              "log_only",
+              "suppress"
+            ],
+            "title": "Disposition",
+            "type": "string"
+          },
+          "engine_id": {
+            "default": "sec_events",
+            "enum": [
+              "sec_events",
+              "earnings_squad",
+              "peer_matrix",
+              "call_qa",
+              "sector_plugin",
+              "supply_chain"
+            ],
+            "title": "Engine Id",
+            "type": "string"
+          },
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "event_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Date"
+          },
+          "event_subtype": {
+            "title": "Event Subtype",
+            "type": "string"
+          },
+          "event_thread_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Thread Key"
+          },
+          "evidence_completeness": {
+            "default": "complete",
+            "enum": [
+              "complete",
+              "preliminary_pending_amendment",
+              "insufficient_in_excerpt"
+            ],
+            "title": "Evidence Completeness",
+            "type": "string"
+          },
+          "fail_safe_triggered": {
+            "default": false,
+            "title": "Fail Safe Triggered",
+            "type": "boolean"
+          },
+          "grounding_status": {
+            "default": "verified",
+            "enum": [
+              "verified",
+              "needs_review",
+              "fail_safe_deterministic"
+            ],
+            "title": "Grounding Status",
+            "type": "string"
+          },
+          "impact_scope": {
+            "default": "company_only",
+            "enum": [
+              "company_only",
+              "sector_readthrough",
+              "supply_chain_readthrough"
+            ],
+            "title": "Impact Scope",
+            "type": "string"
+          },
+          "key_facts": {
+            "additionalProperties": true,
+            "title": "Key Facts",
+            "type": "object"
+          },
+          "market_pricing_context": {
+            "default": "price_reaction_unobserved",
+            "title": "Market Pricing Context",
+            "type": "string"
+          },
+          "mentioned_counterparties": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Mentioned Counterparties",
+            "type": "array"
+          },
+          "open_questions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Open Questions",
+            "type": "array"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/SignalProvenance"
+          },
+          "quantified_financial_impact": {
+            "items": {
+              "$ref": "#/components/schemas/QuantifiedFinancialImpact"
+            },
+            "title": "Quantified Financial Impact",
+            "type": "array"
+          },
+          "reporting_lag_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporting Lag Days"
+          },
+          "severity": {
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "signal_id": {
+            "title": "Signal Id",
+            "type": "string"
+          },
+          "skeptic_counter_check": {
+            "default": "",
+            "title": "Skeptic Counter Check",
+            "type": "string"
+          },
+          "skeptic_dissent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skeptic Dissent"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "superseded_by_accession": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By Accession"
+          },
+          "suppression_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suppression Reason"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          },
+          "thesis_impact": {
+            "default": "",
+            "title": "Thesis Impact",
+            "type": "string"
+          },
+          "upcoming_milestones": {
+            "items": {
+              "$ref": "#/components/schemas/UpcomingMilestone"
+            },
+            "title": "Upcoming Milestones",
+            "type": "array"
+          },
+          "verbatim_quotes": {
+            "items": {
+              "$ref": "#/components/schemas/SignalQuote"
+            },
+            "title": "Verbatim Quotes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "signal_id",
+          "entity_id",
+          "disclosed_at",
+          "disposition",
+          "severity",
+          "direction",
+          "event_subtype",
+          "summary",
+          "provenance"
+        ],
+        "title": "CompanySignalEnvelope",
+        "type": "object"
+      },
       "ConfirmDirectionRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3010,6 +3322,246 @@
         "title": "EarningsSquadSteerResponse",
         "type": "object"
       },
+      "ErrorDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "location": {
+            "minLength": 1,
+            "title": "Location",
+            "type": "string"
+          },
+          "message": {
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location",
+          "message"
+        ],
+        "title": "ErrorDetail",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "details": {
+            "items": {
+              "$ref": "#/components/schemas/ErrorDetail"
+            },
+            "title": "Details",
+            "type": "array"
+          },
+          "error_code": {
+            "enum": [
+              "bad_request",
+              "validation_error",
+              "not_found",
+              "invalid_state_transition",
+              "confirmation_requirements_not_met",
+              "idempotency_conflict",
+              "invalid_operation_token",
+              "invalid_last_event_id",
+              "contract_violation",
+              "lifecycle_conflict",
+              "quota_exceeded",
+              "unsupported_media_type",
+              "request_too_large",
+              "invalid_request",
+              "rate_limited",
+              "captcha_required",
+              "internal_error"
+            ],
+            "title": "Error Code",
+            "type": "string"
+          },
+          "message": {
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "schema_version": {
+            "const": "v1",
+            "title": "Schema Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "error_code",
+          "message",
+          "request_id",
+          "retryable",
+          "details"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "EventRunMetrics": {
+        "additionalProperties": false,
+        "properties": {
+          "completion_tokens": {
+            "default": 0,
+            "title": "Completion Tokens",
+            "type": "integer"
+          },
+          "disposition_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Disposition Counts",
+            "type": "object"
+          },
+          "elapsed_ms": {
+            "default": 0,
+            "title": "Elapsed Ms",
+            "type": "integer"
+          },
+          "l1_cache_hits": {
+            "default": 0,
+            "title": "L1 Cache Hits",
+            "type": "integer"
+          },
+          "l1_cache_misses": {
+            "default": 0,
+            "title": "L1 Cache Misses",
+            "type": "integer"
+          },
+          "l1_candidates_emitted": {
+            "default": 0,
+            "title": "L1 Candidates Emitted",
+            "type": "integer"
+          },
+          "l1_failed_count": {
+            "default": 0,
+            "title": "L1 Failed Count",
+            "type": "integer"
+          },
+          "l1_overflow_deferred": {
+            "default": 0,
+            "title": "L1 Overflow Deferred",
+            "type": "integer"
+          },
+          "l1_suppressed_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "L1 Suppressed Counts",
+            "type": "object"
+          },
+          "l2_batches_run": {
+            "default": 0,
+            "title": "L2 Batches Run",
+            "type": "integer"
+          },
+          "l2_cache_hits": {
+            "default": 0,
+            "title": "L2 Cache Hits",
+            "type": "integer"
+          },
+          "l2_drilldown_turns": {
+            "default": 0,
+            "title": "L2 Drilldown Turns",
+            "type": "integer"
+          },
+          "l2_fail_safes": {
+            "default": 0,
+            "title": "L2 Fail Safes",
+            "type": "integer"
+          },
+          "l2_invariant_corrections": {
+            "default": 0,
+            "title": "L2 Invariant Corrections",
+            "type": "integer"
+          },
+          "l2_negation_warnings": {
+            "default": 0,
+            "title": "L2 Negation Warnings",
+            "type": "integer"
+          },
+          "l2_omission_repairs": {
+            "default": 0,
+            "title": "L2 Omission Repairs",
+            "type": "integer"
+          },
+          "l2_skeptic_calls": {
+            "default": 0,
+            "title": "L2 Skeptic Calls",
+            "type": "integer"
+          },
+          "l2_skeptic_downgrades": {
+            "default": 0,
+            "title": "L2 Skeptic Downgrades",
+            "type": "integer"
+          },
+          "model_used": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Used"
+          },
+          "parser_version": {
+            "default": "v1",
+            "title": "Parser Version",
+            "type": "string"
+          },
+          "prompt_tokens": {
+            "default": 0,
+            "title": "Prompt Tokens",
+            "type": "integer"
+          },
+          "protocol_used": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protocol Used"
+          },
+          "reasoning_tokens": {
+            "default": 0,
+            "title": "Reasoning Tokens",
+            "type": "integer"
+          },
+          "rules_version": {
+            "default": "v1",
+            "title": "Rules Version",
+            "type": "string"
+          },
+          "total_filings_inspected": {
+            "default": 0,
+            "title": "Total Filings Inspected",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "default": 0,
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "title": "EventRunMetrics",
+        "type": "object"
+      },
       "EvidenceCard": {
         "additionalProperties": false,
         "description": "Structured evidence output emitted by read-only Stage 2/2.5 workers.",
@@ -3187,6 +3739,47 @@
           "quotation"
         ],
         "title": "EvidenceCitation",
+        "type": "object"
+      },
+      "FailedAccession": {
+        "additionalProperties": false,
+        "properties": {
+          "accession": {
+            "title": "Accession",
+            "type": "string"
+          },
+          "error_reason": {
+            "title": "Error Reason",
+            "type": "string"
+          },
+          "filed_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filed At"
+          },
+          "form": {
+            "title": "Form",
+            "type": "string"
+          },
+          "retryable": {
+            "default": true,
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "accession",
+          "form",
+          "error_reason"
+        ],
+        "title": "FailedAccession",
         "type": "object"
       },
       "FetchSourceRequest": {
@@ -3751,6 +4344,65 @@
           "excerpt"
         ],
         "title": "InstructionTextLocation",
+        "type": "object"
+      },
+      "LazyAttachmentRef": {
+        "additionalProperties": false,
+        "description": "Deferred handle for large SEC attachments (e.g. EX-10.1 / EX-4.*) to prevent 512MB OOM.",
+        "properties": {
+          "attachment_role": {
+            "default": "other_exhibit",
+            "enum": [
+              "ex16_auditor_letter",
+              "ex99_press_release",
+              "ex10_material_contract",
+              "ex4_debt_indenture",
+              "other_exhibit"
+            ],
+            "title": "Attachment Role",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "exhibit_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exhibit Type"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "sec_url": {
+            "title": "Sec Url",
+            "type": "string"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "filename",
+          "sec_url"
+        ],
+        "title": "LazyAttachmentRef",
         "type": "object"
       },
       "MarginBridgeItem": {
@@ -5749,6 +6401,69 @@
         "title": "PublicCalculationRequest",
         "type": "object"
       },
+      "QuantifiedFinancialImpact": {
+        "additionalProperties": false,
+        "properties": {
+          "affected_period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affected Period"
+          },
+          "amount_or_range": {
+            "title": "Amount Or Range",
+            "type": "string"
+          },
+          "cash_or_non_cash": {
+            "default": "unspecified",
+            "enum": [
+              "cash",
+              "non_cash",
+              "mixed",
+              "unspecified"
+            ],
+            "title": "Cash Or Non Cash",
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "materiality_ratio_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Materiality Ratio Note"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          }
+        },
+        "required": [
+          "metric",
+          "amount_or_range"
+        ],
+        "title": "QuantifiedFinancialImpact",
+        "type": "object"
+      },
       "QuestionPartReference": {
         "additionalProperties": false,
         "properties": {
@@ -5853,6 +6568,182 @@
           }
         },
         "title": "QuestionPartReference",
+        "type": "object"
+      },
+      "RawEventCandidate": {
+        "additionalProperties": false,
+        "description": "Layer 1 objective candidate passed to Layer 2 (strictly de-anchored: no subjective severity).",
+        "properties": {
+          "accession": {
+            "title": "Accession",
+            "type": "string"
+          },
+          "amends_accession": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amends Accession"
+          },
+          "candidate_id": {
+            "title": "Candidate Id",
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "material_8k",
+              "insider_trade",
+              "ownership_13dg",
+              "foreign_6k"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "cik": {
+            "title": "Cik",
+            "type": "string"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "content_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Sha256"
+          },
+          "event_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Date"
+          },
+          "event_thread_key": {
+            "title": "Event Thread Key",
+            "type": "string"
+          },
+          "excerpt": {
+            "default": "",
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "facts": {
+            "additionalProperties": true,
+            "title": "Facts",
+            "type": "object"
+          },
+          "filed_at": {
+            "format": "date",
+            "title": "Filed At",
+            "type": "string"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "form": {
+            "title": "Form",
+            "type": "string"
+          },
+          "is_context_only": {
+            "default": false,
+            "title": "Is Context Only",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "lazy_attachments": {
+            "items": {
+              "$ref": "#/components/schemas/LazyAttachmentRef"
+            },
+            "title": "Lazy Attachments",
+            "type": "array"
+          },
+          "reporting_lag_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporting Lag Days"
+          },
+          "sec_url": {
+            "title": "Sec Url",
+            "type": "string"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          },
+          "statutory_critical_items": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Statutory Critical Items",
+            "type": "array"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          }
+        },
+        "required": [
+          "candidate_id",
+          "cik",
+          "category",
+          "form",
+          "accession",
+          "event_thread_key",
+          "filed_at",
+          "source_id",
+          "sec_url"
+        ],
+        "title": "RawEventCandidate",
         "type": "object"
       },
       "ReadRange": {
@@ -9070,6 +9961,150 @@
         "title": "SavedResearchInstruction",
         "type": "object"
       },
+      "ScaleAnchor": {
+        "additionalProperties": false,
+        "description": "SEC-native company scale metrics (strictly ``owner_scoped=False``).",
+        "properties": {
+          "as_of_filed_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Filed Date"
+          },
+          "cik": {
+            "title": "Cik",
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "latest_net_income": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Net Income"
+          },
+          "latest_total_assets": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Total Assets"
+          },
+          "latest_ttm_revenue": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Ttm Revenue"
+          },
+          "public_float_as_of_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Float As Of Date"
+          },
+          "public_float_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Float Usd"
+          },
+          "scale_anchor_gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scale Anchor Gaps",
+            "type": "array"
+          },
+          "share_unit_basis": {
+            "default": "common_shares",
+            "enum": [
+              "common_shares",
+              "ordinary_vs_adr_unverified"
+            ],
+            "title": "Share Unit Basis",
+            "type": "string"
+          },
+          "shares_outstanding": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shares Outstanding"
+          },
+          "shares_outstanding_as_of_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shares Outstanding As Of Date"
+          },
+          "taxonomy_used": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taxonomy Used"
+          }
+        },
+        "required": [
+          "cik"
+        ],
+        "title": "ScaleAnchor",
+        "type": "object"
+      },
       "ScenarioCalculationReceipt": {
         "additionalProperties": false,
         "properties": {
@@ -9304,6 +10339,623 @@
           "permissions"
         ],
         "title": "SecConceptRequest",
+        "type": "object"
+      },
+      "SecEventAnalysisOperationResponse": {
+        "properties": {
+          "analysis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SecEventAnalysisResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/Operation"
+          }
+        },
+        "required": [
+          "operation"
+        ],
+        "title": "SecEventAnalysisOperationResponse",
+        "type": "object"
+      },
+      "SecEventAnalysisResult": {
+        "additionalProperties": false,
+        "description": "Output of Layer 1 + Layer 2 Bounded Event Agent.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "cik": {
+            "title": "Cik",
+            "type": "string"
+          },
+          "cluster_reasoning_chains": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cluster Reasoning Chains",
+            "type": "array"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "failed_accessions": {
+            "items": {
+              "$ref": "#/components/schemas/FailedAccession"
+            },
+            "title": "Failed Accessions",
+            "type": "array"
+          },
+          "fpi_exempt_from_form4": {
+            "default": false,
+            "title": "Fpi Exempt From Form4",
+            "type": "boolean"
+          },
+          "is_fpi": {
+            "default": false,
+            "title": "Is Fpi",
+            "type": "boolean"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/EventRunMetrics"
+          },
+          "open_gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Open Gaps",
+            "type": "array"
+          },
+          "processed_accessions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Processed Accessions",
+            "type": "object"
+          },
+          "scale_anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScaleAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "signals": {
+            "items": {
+              "$ref": "#/components/schemas/CompanySignalEnvelope"
+            },
+            "title": "Signals",
+            "type": "array"
+          },
+          "suppressed_events": {
+            "items": {
+              "$ref": "#/components/schemas/SuppressedEventRecord"
+            },
+            "title": "Suppressed Events",
+            "type": "array"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          }
+        },
+        "required": [
+          "cik",
+          "entity_id"
+        ],
+        "title": "SecEventAnalysisResult",
+        "type": "object"
+      },
+      "SecEventScanResult": {
+        "additionalProperties": false,
+        "description": "Output of Layer 1 deterministic scan (0 LLM).",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "cik": {
+            "title": "Cik",
+            "type": "string"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "failed_accessions": {
+            "items": {
+              "$ref": "#/components/schemas/FailedAccession"
+            },
+            "title": "Failed Accessions",
+            "type": "array"
+          },
+          "fpi_exempt_from_form4": {
+            "default": false,
+            "title": "Fpi Exempt From Form4",
+            "type": "boolean"
+          },
+          "historical_precedent": {
+            "additionalProperties": true,
+            "title": "Historical Precedent",
+            "type": "object"
+          },
+          "is_fpi": {
+            "default": false,
+            "title": "Is Fpi",
+            "type": "boolean"
+          },
+          "lookback_days": {
+            "default": 90,
+            "title": "Lookback Days",
+            "type": "integer"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/EventRunMetrics"
+          },
+          "open_gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Open Gaps",
+            "type": "array"
+          },
+          "parser_version": {
+            "default": "v1",
+            "title": "Parser Version",
+            "type": "string"
+          },
+          "processed_accessions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Processed Accessions",
+            "type": "object"
+          },
+          "recent_context_candidates": {
+            "items": {
+              "$ref": "#/components/schemas/RawEventCandidate"
+            },
+            "title": "Recent Context Candidates",
+            "type": "array"
+          },
+          "rules_version": {
+            "default": "v1",
+            "title": "Rules Version",
+            "type": "string"
+          },
+          "scale_anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScaleAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "suppressed_events": {
+            "items": {
+              "$ref": "#/components/schemas/SuppressedEventRecord"
+            },
+            "title": "Suppressed Events",
+            "type": "array"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          },
+          "target_candidates": {
+            "items": {
+              "$ref": "#/components/schemas/RawEventCandidate"
+            },
+            "title": "Target Candidates",
+            "type": "array"
+          },
+          "timing_context": {
+            "additionalProperties": true,
+            "title": "Timing Context",
+            "type": "object"
+          }
+        },
+        "required": [
+          "cik",
+          "entity_id"
+        ],
+        "title": "SecEventScanResult",
+        "type": "object"
+      },
+      "SecEventsAnalyzeApiRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "active_red_yellow_flags": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Red Yellow Flags"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "categories": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "8k",
+                    "form4",
+                    "13dg",
+                    "6k"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categories"
+          },
+          "cik": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{1,10}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cik"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "fold_amendments": {
+            "default": false,
+            "title": "Fold Amendments",
+            "type": "boolean"
+          },
+          "include_suppressed": {
+            "default": false,
+            "title": "Include Suppressed",
+            "type": "boolean"
+          },
+          "lookback_days": {
+            "default": 90,
+            "maximum": 730.0,
+            "minimum": 1.0,
+            "title": "Lookback Days",
+            "type": "integer"
+          },
+          "max_elapsed_seconds": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Elapsed Seconds"
+          },
+          "max_model_calls": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Model Calls"
+          },
+          "max_search_calls": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Search Calls"
+          },
+          "max_total_tokens": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Total Tokens"
+          },
+          "seen_accessions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seen Accessions"
+          },
+          "slot_overrides": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelSlotConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "thesis_context": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thesis Context"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
+          }
+        },
+        "title": "SecEventsAnalyzeApiRequest",
+        "type": "object"
+      },
+      "SecEventsScanApiRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "categories": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "8k",
+                    "form4",
+                    "13dg",
+                    "6k"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categories"
+          },
+          "cik": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{1,10}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cik"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "include_suppressed": {
+            "default": false,
+            "title": "Include Suppressed",
+            "type": "boolean"
+          },
+          "lookback_days": {
+            "default": 90,
+            "maximum": 730.0,
+            "minimum": 1.0,
+            "title": "Lookback Days",
+            "type": "integer"
+          },
+          "seen_accessions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seen Accessions"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
+          }
+        },
+        "title": "SecEventsScanApiRequest",
         "type": "object"
       },
       "SecIdentityRequest": {
@@ -9542,6 +11194,189 @@
           "review_key"
         ],
         "title": "SemanticReview",
+        "type": "object"
+      },
+      "SignalProvenance": {
+        "additionalProperties": false,
+        "properties": {
+          "accession": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accession"
+          },
+          "cik": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cik"
+          },
+          "content_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Sha256"
+          },
+          "exportable": {
+            "default": true,
+            "title": "Exportable",
+            "type": "boolean"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "form": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Form"
+          },
+          "owner_scoped": {
+            "default": false,
+            "title": "Owner Scoped",
+            "type": "boolean"
+          },
+          "provider": {
+            "default": "sec_edgar",
+            "title": "Provider",
+            "type": "string"
+          },
+          "sec_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sec Url"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          }
+        },
+        "title": "SignalProvenance",
+        "type": "object"
+      },
+      "SignalQuote": {
+        "additionalProperties": false,
+        "properties": {
+          "accession": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accession"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "match_space": {
+            "anyOf": [
+              {
+                "enum": [
+                  "raw",
+                  "norm_text",
+                  "norm_table"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Space"
+          },
+          "quotation": {
+            "title": "Quotation",
+            "type": "string"
+          },
+          "quote_context_warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote Context Warning"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          },
+          "surrounding_context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surrounding Context"
+          },
+          "verified": {
+            "default": false,
+            "title": "Verified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "source_id",
+          "quotation"
+        ],
+        "title": "SignalQuote",
         "type": "object"
       },
       "SlotCapabilities": {
@@ -10111,6 +11946,65 @@
           "message"
         ],
         "title": "SquadGap",
+        "type": "object"
+      },
+      "SuppressedEventRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "accession": {
+            "title": "Accession",
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "material_8k",
+              "insider_trade",
+              "ownership_13dg",
+              "foreign_6k"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "filed_at": {
+            "format": "date",
+            "title": "Filed At",
+            "type": "string"
+          },
+          "form": {
+            "title": "Form",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "summary_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Hint"
+          },
+          "suppression_reason": {
+            "title": "Suppression Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accession",
+          "form",
+          "filed_at",
+          "category",
+          "suppression_reason"
+        ],
+        "title": "SuppressedEventRecord",
         "type": "object"
       },
       "SurpriseComparison": {
@@ -10955,6 +12849,44 @@
         "title": "TurnUsage",
         "type": "object"
       },
+      "UpcomingMilestone": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "expected_date_or_window": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Date Or Window"
+          },
+          "trigger_type": {
+            "default": "other",
+            "enum": [
+              "amendment_expected",
+              "closing_date",
+              "effective_date",
+              "earnings_call",
+              "regulatory",
+              "other"
+            ],
+            "title": "Trigger Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "description"
+        ],
+        "title": "UpcomingMilestone",
+        "type": "object"
+      },
       "UserAnchor": {
         "additionalProperties": false,
         "properties": {
@@ -11640,6 +13572,377 @@
           }
         },
         "summary": "Search Research Sec Identities"
+      }
+    },
+    "/v2/research/sec-events/analyze": {
+      "post": {
+        "description": "Start Layer 1 + Layer 2 Bounded Event Agent analysis as a 202 async operation.",
+        "operationId": "analyze_sec_events_endpoint_v2_research_sec_events_analyze_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecEventsAnalyzeApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Analyze Sec Events Endpoint"
+      }
+    },
+    "/v2/research/sec-events/analyze/{operation_id}": {
+      "get": {
+        "description": "Poll status and retrieve ``SecEventAnalysisResult`` for an async SEC events analysis operation.",
+        "operationId": "get_sec_events_analysis_v2_research_sec_events_analyze__operation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "title": "Operation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecEventAnalysisOperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Get Sec Events Analysis"
+      }
+    },
+    "/v2/research/sec-events/scan": {
+      "post": {
+        "description": "Run deterministic Layer 1 SEC material events scan (0 LLM).",
+        "operationId": "scan_sec_events_endpoint_v2_research_sec_events_scan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecEventsScanApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecEventScanResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Scan Sec Events Endpoint"
       }
     },
     "/v2/research/sources": {
