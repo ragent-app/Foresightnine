@@ -80,6 +80,7 @@ class Raw13dgParsed(BaseModel):
     has_cash_settled_derivatives_or_trs: bool = False
     explicit_13g_to_13d_conversion: bool = False
     explicit_amends_accession: str | None = None
+    subject_issuer_cik: str | None = None
     excerpt: str = ""
 
 
@@ -170,6 +171,12 @@ def _parse_13dg_xml(
         raise ValueError(f"Unsafe DTD/ENTITY in 13D/G XML {accession}")
     root = ET.fromstring(xml_text.strip())
     family, is_amend, is_modern = _normalize_form_family(form)
+    subj_cik_raw = _find_first_text(root, "issuerCik", "issuerCIK", "subjectCompanyCik")
+    subject_issuer_cik = (
+        cik10(subj_cik_raw)
+        if (subj_cik_raw and subj_cik_raw.strip().isdigit() and int(subj_cik_raw) > 0)
+        else None
+    )
 
     person_nodes = [
         node
@@ -288,6 +295,7 @@ def _parse_13dg_xml(
         has_cash_settled_derivatives_or_trs=has_deriv,
         explicit_13g_to_13d_conversion=explicit_conv,
         explicit_amends_accession=amends_acc,
+        subject_issuer_cik=subject_issuer_cik,
         excerpt=excerpt,
     )
 
@@ -649,6 +657,30 @@ def process_13dg_batch(
 
     for raw in ordered:
         filed_d = date.fromisoformat(raw.filed_at)
+        target_cik_norm = cik10(raw.cik)
+        is_self_as_filer = (
+            (raw.subject_issuer_cik is not None and cik10(raw.subject_issuer_cik) != target_cik_norm)
+            or any(p.cik == target_cik_norm for p in raw.reporting_persons if p.cik)
+            or (
+                raw.form_family == "13G"
+                and company_name
+                and _normalize_filer_key(raw.primary_filer_name, None) == _normalize_filer_key(company_name, None)
+            )
+        )
+        if is_self_as_filer:
+            if filed_d >= target_start:
+                suppressed.append(
+                    SuppressedEventRecord(
+                        accession=raw.accession,
+                        form=raw.form,
+                        filed_at=filed_d,
+                        category="ownership_13dg",
+                        suppression_reason="filer_not_subject_issuer",
+                        summary_hint=f"{raw.primary_filer_name} filed {raw.form} as reporting person on another issuer",
+                    )
+                )
+            continue
+
         prior = last_by_filer.get(raw.primary_filer_key)
         last_by_filer[raw.primary_filer_key] = raw
 

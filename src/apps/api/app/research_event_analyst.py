@@ -714,6 +714,7 @@ def _split_cluster_by_char_budget(
     cluster: list[RawEventCandidate],
     *,
     max_batch_chars: int,
+    max_candidates_per_batch: int = 8,
 ) -> list[list[RawEventCandidate]]:
     sub_batches: list[list[RawEventCandidate]] = []
     current: list[RawEventCandidate] = []
@@ -722,7 +723,10 @@ def _split_cluster_by_char_budget(
     for cand in cluster:
         bounded = _clip_excerpt_to_budget(cand, max_batch_chars)
         cand_chars = len(bounded.excerpt)
-        if current and current_chars + cand_chars > max_batch_chars:
+        if current and (
+            current_chars + cand_chars > max_batch_chars
+            or len(current) >= max_candidates_per_batch
+        ):
             sub_batches.append(current)
             current = [bounded]
             current_chars = cand_chars
@@ -842,7 +846,11 @@ def select_and_cluster_candidates(
         coalesced: list[list[RawEventCandidate]] = []
         for grp in raw_batches:
             grp_chars = sum(len(c.excerpt) for c in grp)
-            if coalesced and sum(len(c.excerpt) for c in coalesced[-1]) + grp_chars <= max_batch_chars:
+            if (
+                coalesced
+                and sum(len(c.excerpt) for c in coalesced[-1]) + grp_chars <= max_batch_chars
+                and len(coalesced[-1]) + len(grp) <= 9
+            ):
                 coalesced[-1].extend(grp)
             else:
                 coalesced.append(list(grp))
