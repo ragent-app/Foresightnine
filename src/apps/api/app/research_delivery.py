@@ -46,6 +46,13 @@ def assess(question: str, state: dict, source_by_id: dict, *, as_of: Any = None,
                 row.update(status='satisfied', reason=review.get('reason', ''),
                            references=[{'claim_id': review['claim_id']}],
                            verdict=review['verdict'], condition=review.get('condition'))
+                continue
+            # Supported premises that each answer part of a compound requirement are
+            # shown as a partial answer; they never complete the requirement alone.
+            partial = [r for r in matches if r.get('verdict') == 'partial']
+            if partial:
+                row.update(status='partial', reason=partial[0].get('reason', ''),
+                           references=[{'claim_id': r['claim_id']} for r in partial], verdict='partial')
         # A broad question can contain several requested deliverables. Keep its
         # display consistent with the current core plan and its verified answers.
         core_plan = [row for row in rows if row.get('kind') == 'generic:planned' and row.get('core')]

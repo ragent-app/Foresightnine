@@ -33,7 +33,11 @@ export const TOOL_LABEL: Readonly<Record<string, string>> = {
   record_facts: "记录数字",
   calculate_financials: "计算",
   create_chart: "生成图表",
-  submit_research: "提交结论",
+  create_table: "生成表格",
+  plan_research_requirements: "拆解问题要求",
+  checkpoint_report_draft: "起草报告",
+  checkpoint_question_part: "暂存分段回答",
+  submit_research: "提交核验",
 };
 
 export const CHART_TYPE_LABEL: Readonly<Record<string, string>> = {
@@ -92,6 +96,13 @@ export const TOOL_STATUS_LABEL: Readonly<Record<string, string>> = {
   unavailable: "不可用",
   denied_or_unavailable: "无权限或不可用",
   unknown: "结果未知",
+  ok: "完成",
+  saved: "已保存",
+  created: "已生成",
+  empty: "没有结果",
+  needs_attention: "需修改后重交",
+  skipped: "已跳过",
+  partial: "部分完成",
 };
 
 export function toolStatusLabel(status: string | null): string {
@@ -180,7 +191,8 @@ export const TOOL_REASON_LABEL: Readonly<Record<string, string>> = {
 
 export function toolReasonLabel(reason: string | null): string | null {
   if (reason === null) return null;
-  return TOOL_REASON_LABEL[reason] ?? reason;
+  // Unlabelled machine codes (e.g. "no_match") say nothing to the reader.
+  return TOOL_REASON_LABEL[reason] ?? (/^[a-z0-9_]+$/.test(reason) ? null : reason);
 }
 
 export const TURN_REASON_LABEL: Readonly<Record<string, string>> = {
@@ -333,12 +345,33 @@ export const GAP_LABEL: Readonly<Record<string, string>> = {
   acquisition_result_unknown: "资料获取结果未知，需要核对。",
 };
 
+/** Internal English review reasons, in the words the reader needs. */
+const REVIEW_REASON_LABEL: Readonly<Record<string, string>> = {
+  "A grounded answer requires independent semantic review.": "还没有经过独立核验的回答。",
+  "This planned deliverable requires independent review.": "这一项还没有经过独立核验的回答。",
+  "Evidence contradicts a candidate answer.": "资料与候选回答相矛盾。",
+  "The user instruction has no linked answer.": "这条补充要求还没有对应的回答。",
+  "Report prose is not bound to a reviewed claim.": "报告中有内容未经独立核验。",
+};
+
+/**
+ * Review reasons written by the reviewer follow the question's language and are shown as written;
+ * the system's own fixed English reasons are translated.
+ */
+export function reviewReasonText(reason: string | null | undefined, _status?: "answered" | "partial" | "unresolved"): string {
+  const text = (reason ?? "").trim();
+  return REVIEW_REASON_LABEL[text] ?? text;
+}
+
 export function gapText(gap: { code: string; message: string }): string {
   if (gap.code === "provider_error") {
     const localized = PROVIDER_ERROR_MESSAGE_LABEL[gap.message.trim()];
     return localized ?? `模型服务返回错误。（${gap.message}）`;
   }
-  if (gap.code === "model_reported") return `模型说明：${gap.message}`;
+  if (gap.code === "model_reported") {
+    const text = gap.message.trim();
+    return REVIEW_REASON_LABEL[text] ?? `模型说明：${text}`;
+  }
   const knownGap = GAP_LABEL[gap.code];
   if (knownGap) return knownGap;
   const knownTurnReason = TURN_REASON_LABEL[gap.code];

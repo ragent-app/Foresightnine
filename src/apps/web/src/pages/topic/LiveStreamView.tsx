@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { TransientStreamState } from "../../api/types";
+import { RETRACTED_SUBMISSION_NOTICE } from "../../api/queries";
 import { PROCESS_NOTE_LABEL } from "../../lib/copy";
 import { formatInteger } from "../../lib/format";
 import { splitStableMarkdownBlocks } from "../../lib/markdownStream";
@@ -29,15 +30,20 @@ export function useLiveStream(stream?: LiveStreamStore | undefined): TransientSt
   );
 }
 
-/** Dashed-border unverified preview for incremental `submit_research.report` deltas. */
+/**
+ * The report as it is being written, in the place the answer will appear. A draft sent back by
+ * review stays readable while the writer revises it, instead of disappearing.
+ */
 export function LiveDraftPreview({ stream, onGrow }: { stream?: LiveStreamStore | undefined; onGrow?: (() => void) | undefined }) {
   const state = useLiveStream(stream);
-  const hasDraft = state.draftReport.trim().length > 0;
+  const writing = state.draftReport.trim().length > 0;
+  const held = !writing && (state.heldDraft ?? "").trim().length > 0;
+  const text = writing ? state.draftReport : held ? state.heldDraft ?? "" : "";
   const blockCount = useMemo(() => {
-    if (!hasDraft) return 0;
-    const split = splitStableMarkdownBlocks(state.draftReport);
+    if (!text) return 0;
+    const split = splitStableMarkdownBlocks(text);
     return split.stableBlocks.length + (split.activeTail.trim() ? 1 : 0);
-  }, [hasDraft, state.draftReport]);
+  }, [text]);
   const onGrowRef = useRef(onGrow);
   onGrowRef.current = onGrow;
 
@@ -45,20 +51,19 @@ export function LiveDraftPreview({ stream, onGrow }: { stream?: LiveStreamStore 
     if (blockCount > 0) onGrowRef.current?.();
   }, [blockCount]);
 
-  if (!hasDraft) return null;
+  if (!text) return null;
 
-  const streamingDraft = state.activeChannel === "draft_report";
+  const streamingDraft = writing && state.activeChannel === "draft_report";
   return (
-    <div className="draft-preview" role="region" aria-label="未核验报告草稿预览">
-      <div className="draft-warning">
-        <Icon name="alert" size={14} />
-        <span>草稿生成中 · 引文与数值尚未经服务端核验，最终结果以核验后为准</span>
-      </div>
+    <div className={`draft-preview${held ? " is-held" : ""}`} role="region" aria-label="报告草稿">
+      <p className="draft-state" role="status">
+        {held ? RETRACTED_SUBMISSION_NOTICE : streamingDraft ? "正在写报告 · 写完后会核对引文和数字" : "报告草稿 · 正在核对引文和数字"}
+      </p>
       <div className="report draft-report">
         <MarkdownContent
-          content={state.draftReport}
+          content={text}
           variant="draft"
-          streaming
+          streaming={writing}
           showCursor={streamingDraft}
         />
       </div>
@@ -148,7 +153,7 @@ function LiveStepContent({ state }: { state: TransientStreamState }) {
 
   return (
     <div className="ls-step">
-      {state.retractedNotice ? <p className="ls-retracted">{state.retractedNotice}</p> : null}
+      {state.retractedNotice && !state.heldDraft ? <p className="ls-retracted">{state.retractedNotice}</p> : null}
       {showToolStatus && statusLine ? <p className="ls-tool-status">{statusLine}</p> : null}
       <LiveThinkingBlock
         thinking={state.thinking}

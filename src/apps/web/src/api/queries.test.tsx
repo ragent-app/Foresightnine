@@ -363,7 +363,7 @@ describe("useRunProgress (SSE primary + polling fallback)", () => {
     await waitFor(() => expect(notifications.mock.calls.length).toBeGreaterThanOrEqual(1));
     expect(notifications.mock.calls.length).toBeLessThanOrEqual(3);
 
-    // submission_rejected clears draft immediately and preserves retractedNotice across tool_status until new prose arrives.
+    // submission_rejected moves the draft aside (still readable) and keeps the notice across tool_status until new prose arrives.
     const countBeforeReset = notifications.mock.calls.length;
     act(() => {
       controller.push?.(sseFrame("stream.reset", { operation_id: "op1", call_seq: 1, reason: "submission_rejected" }));
@@ -371,18 +371,20 @@ describe("useRunProgress (SSE primary + polling fallback)", () => {
     await waitFor(() => expect(notifications.mock.calls.length).toBe(countBeforeReset + 1));
     expect(result.current.getStreamSnapshot()).toMatchObject({
       draftReport: "",
+      heldDraft: "稿10稿11稿12稿13稿14稿15稿16稿17稿18稿19",
       thinking: "",
       text: "",
       toolStatus: null,
       activeChannel: null,
-      retractedNotice: "草稿引文或格式未通过核验，模型正在修正…",
+      retractedNotice: "核验发现需要修改的地方，正在修改这份草稿…",
     });
 
     act(() => {
       controller.push?.(sseFrame("stream.delta", { operation_id: "op1", call_seq: 2, channel: "tool_status", delta: "正在修正引文…", seq: 0 }));
     });
     await waitFor(() => expect(result.current.getStreamSnapshot().toolStatus).toBe("正在修正引文…"));
-    expect(result.current.getStreamSnapshot().retractedNotice).toBe("草稿引文或格式未通过核验，模型正在修正…");
+    expect(result.current.getStreamSnapshot().retractedNotice).toBe("核验发现需要修改的地方，正在修改这份草稿…");
+    expect(result.current.getStreamSnapshot().heldDraft).toBe("稿10稿11稿12稿13稿14稿15稿16稿17稿18稿19");
 
     // New thinking/draft_report clears retractedNotice; caps prevent unbounded memory growth.
     const huge = "A".repeat(25_000);
@@ -401,6 +403,7 @@ describe("useRunProgress (SSE primary + polling fallback)", () => {
     });
     await waitFor(() => expect(result.current.getStreamSnapshot().thinking).toBe(""));
     expect(result.current.getStreamSnapshot().retractedNotice).toBeNull();
+    expect(result.current.getStreamSnapshot().heldDraft).toBe("");
     unsubscribe();
     unmount();
   });

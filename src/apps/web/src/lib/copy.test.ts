@@ -19,7 +19,7 @@ describe("labels", () => {
     expect(toolLabel("search_library")).toBe("检索资料库");
     expect(toolLabel("news_search")).toBe("搜索线索");
     expect(toolLabel("sec_company_concept")).toBe("查询 SEC 结构化数据");
-    expect(toolLabel("submit_research")).toBe("提交结论");
+    expect(toolLabel("submit_research")).toBe("提交核验");
     expect(toolLabel("calculate_financials")).toBe("计算");
     expect(toolLabel("issuer_documents")).toBe("查询公司官网文档");
     expect(toolLabel("extract_statements")).toBe("抽取财务报表");
@@ -70,7 +70,9 @@ describe("labels", () => {
       expect(label).toBeTruthy();
       expect(label).not.toBe(reason);
     }
-    expect(toolReasonLabel("other")).toBe("other");
+    // Unlabelled machine codes are not shown; free text passes through.
+    expect(toolReasonLabel("other")).toBeNull();
+    expect(toolReasonLabel("来源暂不可用")).toBe("来源暂不可用");
     expect(toolReasonLabel(null)).toBeNull();
     expect(INVALID_NOTE).toBe("“参数被拒”表示模型提交的参数没有通过校验，已退回给模型修正。");
   });

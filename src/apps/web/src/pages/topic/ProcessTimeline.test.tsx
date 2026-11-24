@@ -186,7 +186,7 @@ describe("ProcessTimeline", () => {
     expect(screen.getAllByText("运行中暂存")).toHaveLength(2);
 
     // active current row
-    expect(screen.getByText("提交结论")).toBeTruthy();
+    expect(screen.getByText("提交核验")).toBeTruthy();
     expect(screen.getByText("汇总已核验结论")).toBeTruthy();
     expect(screen.getByText("正在核验引文位置与研究结论")).toBeTruthy();
   });

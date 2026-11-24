@@ -214,7 +214,7 @@ describe("stepRows", () => {
       kind: "tool", index: 5, tool: "news_search", label: "搜索线索", status: "不可用", tone: "review", rationale: "找线索", reason: "搜索没有开启或不可用",
     });
     expect(rows[6]).toMatchObject({ tool: null, label: "工具", status: "weird", tone: "neutral", reason: null });
-    expect(rows[7]).toEqual({ kind: "tool", index: 7, tool: "submit_research", label: "提交结论", status: "完成", tone: "support", rationale: null, reason: null });
+    expect(rows[7]).toEqual({ kind: "tool", index: 7, tool: "submit_research", label: "提交核验", status: "完成", tone: "support", rationale: null, reason: null });
   });
   it("maps every status to a tone", () => {
     const tone = (status: string): string | undefined => {

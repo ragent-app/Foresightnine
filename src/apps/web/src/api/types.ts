@@ -148,6 +148,8 @@ export interface TransientStreamState {
   text: string;
   toolStatus: string | null;
   draftReport: string;
+  /** The last draft sent back by review; it stays readable until the writer starts the next one. */
+  heldDraft?: string;
   activeChannel: StreamChannel | null;
   retractedNotice: string | null;
   lastSeq: number;

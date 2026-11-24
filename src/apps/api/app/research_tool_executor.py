@@ -3072,6 +3072,10 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
     req = inv.req
     instructions = {item['sequence']: item for item in ctx.state.get('user_instructions', [])
                     if isinstance(item, dict) and type(item.get('sequence')) is int}
+    # If this candidate cannot be delivered as a reviewed answer, the user still sees the
+    # writer's wording, labelled as unreviewed. A later instruction makes it stale.
+    if isinstance(req.report, str) and req.report.strip():
+        ctx.state['_writer_draft'] = {'report': req.report, 'instruction_sequence': max(instructions, default=0)}
     sequences = [row.sequence for row in req.instruction_results]
     if len(sequences) != len(set(sequences)):
         raise ValueError('instruction_results must not contain duplicate sequences.')
@@ -3244,7 +3248,7 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
             attempts.extend(item['attempt_key'] for item in feedback)
             # Retain independently reviewed clauses if the writer cannot repair
             # the remaining gap; never promote a rejected or unreviewed draft.
-            approved = {r['claim_id'] for r in current_reviews if r['verdict'] in ('supported', 'conditional')}
+            approved = {r['claim_id'] for r in current_reviews if r['verdict'] in ('supported', 'conditional', 'partial')}
             approved -= {r['claim_id'] for r in current_reviews if r['verdict'] == 'contradicted'}
             retained = ctx.state.setdefault('draft_claims', [])
             retained_ids = {c.get('claim_id') for c in retained if isinstance(c, dict)}
@@ -3275,7 +3279,7 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
     from .research_semantic_review import candidates as review_candidates, parse_reviews
     review_items = review_candidates(requirements, support_claims, ctx.state, ctx.source_by_id, ctx.as_of)
     checked_reviews = parse_reviews(json.dumps({'reviews': ctx.state.get('_semantic_reviews', [])}), review_items)
-    reviewed_ids = {r['claim_id'] for r in checked_reviews if r['verdict'] in ('supported', 'conditional')}
+    reviewed_ids = {r['claim_id'] for r in checked_reviews if r['verdict'] in ('supported', 'conditional', 'partial')}
     rejected_ids = {r['claim_id'] for r in checked_reviews if r['verdict'] == 'contradicted'}
     # We can deliver a complete reviewed answer even when individual premises
     # offered by the writer would each be too weak to answer the question alone.
@@ -3510,10 +3514,13 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
     pending_before_submission = ctx.state.get('pending')
     # Partial output contains only located claims and saved observations;
     # unvalidated free-form report text is not delivered as a conclusion.
+    writer_report = (ctx.state.get('_writer_draft') or {}).get('report', '')
+    draft_report = '' if report or writer_report.strip() == (partial_notes or '').strip() else writer_report
     ctx.state['submission'] = {
         'status': status,
         'report': report,
         'partial_notes': partial_notes,
+        'draft_report': draft_report,
         'claims': claims,
         'gaps': gaps,
         'stopping_reason': req.stopping_reason,
@@ -3543,6 +3550,7 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
             gaps=gaps,
             stopping_note=req.stopping_reason,
             partial_notes=partial_notes,
+            draft_report=draft_report,
         )
     from .research_diagnostics import delivery_trace, trace_identifier
     diagnostic = ctx.context.private_diagnostics.setdefault(ctx.batch_call_id, {})

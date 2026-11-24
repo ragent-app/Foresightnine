@@ -390,10 +390,15 @@ function statusTone(status: string | null): StepTone {
     case "completed":
     case "read":
     case "acquired":
+    case "ok":
+    case "saved":
+    case "created":
       return "support";
     case "invalid":
     case "unavailable":
     case "denied_or_unavailable":
+    case "empty":
+    case "needs_attention":
       return "review";
     case "failed":
     case "unknown":

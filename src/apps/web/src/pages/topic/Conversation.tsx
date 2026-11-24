@@ -1,10 +1,10 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { useCallback, useMemo, useState, type ReactNode, type Ref } from "react";
 import { Link } from "react-router-dom";
-import type { ProgressEvent, RecoveryStatus } from "../../api/types";
-import { formatInterimParts, formulaLabel, gapText, recoveryReasonLabel, turnReasonLabel, VERIFY_NOTE } from "../../lib/copy";
+import type { CurrentActivity, ProgressEvent, RecoveryStatus } from "../../api/types";
+import { formatInterimParts, formulaLabel, gapText, modelPhaseLabel, recoveryReasonLabel, reviewReasonText, toolLabel, turnReasonLabel, VERIFY_NOTE } from "../../lib/copy";
 import { displayTurnNumber, formatClock, formatDuration, formatInteger, formatQuantity, turnStamp } from "../../lib/format";
-import { answerSummary, claimRole, parseTurnEvents, partialSummary, ROLE_LABEL, stepRows, toolStepCount, turnCharts, turnContent, turnDurationMs } from "../../lib/research";
+import { answerSummary, claimRole, parseAttributions, parseTurnEvents, partialSummary, ROLE_LABEL, stepRows, toolStepCount, turnCharts, turnContent, turnDurationMs } from "../../lib/research";
 import { Disclosure } from "../../ui/controls";
 import { Icon } from "../../ui/icons";
 import { ClaimRefContext, extractReferencedChartIds, extractReferencedTableIds, MarkdownContent, type ClaimRefs } from "../../ui/MarkdownContent";
@@ -14,9 +14,11 @@ import { showToast } from "../../ui/toast";
 import { answerMarkdown, markdownToPlain } from "../../lib/answerCopy";
 import { copyText } from "../../lib/clipboard";
 import { CitationButton } from "./Citation";
-import { EvidenceViews } from "./EvidenceViews";
+import { AttributionLine, EvidenceViews, evidenceAlert, hasEvidenceViews } from "./EvidenceViews";
+import { answerBody, cellText, columnHeader, conclusionText, draftNote, keyCalculations, shortPeriod, tableLayout } from "../../lib/answerBody";
 import { ChartCard } from "./charts/ChartCard";
-import { LiveDraftPreview, LiveEmptyOrStream } from "./LiveStreamView";
+import { LiveActiveStream, LiveDraftPreview } from "./LiveStreamView";
+import { latestFinds, liveStages } from "../../lib/liveStages";
 import { QuestionParts } from "./QuestionParts";
 import { ProcessTimeline } from "./ProcessTimeline";
 import { LIVE_TURN, useTopicView, type LiveRun } from "./context";
@@ -40,9 +42,12 @@ export interface TurnActions {
 }
 
 export function calculationTitle(calc: ResearchV2.ResearchCalculation): string {
-  const periods = [...new Set(calc.inputs.map((input) => input.period).filter(Boolean))];
+  const periods = [...new Set(calc.inputs.map((input) => input.period).filter((p): p is string => Boolean(p)).map(shortPeriod))];
   const name = formulaLabel(calc.formula_id);
-  return periods.length > 0 ? `${name} · ${periods.join(" 对 ")}` : name;
+  // Dated periods read as a span, earliest first; other labels keep the formula's input order.
+  const dated = periods.every((period) => /^\d{4}-\d{2}-\d{2}$/.test(period));
+  if (periods.length === 0) return name;
+  return dated ? `${name} · ${[...periods].sort().join(" → ")}` : `${name} · ${periods.join(" 对 ")}`;
 }
 
 export function usageMeta(turn: ResearchV2.ResearchTurn): string {
@@ -143,7 +148,7 @@ function missingParts(turn: ResearchV2.ResearchTurn): string[] {
   return (turn.question_parts ?? [])
     .filter((part) => part.status !== "answered")
     .map((part) => {
-      const reason = part.reason?.trim();
+      const reason = reviewReasonText(part.reason, part.status);
       if (reason) return `${part.question}：${reason}`;
       return part.status === "partial" ? `${part.question}：只回答了一部分` : part.question;
     });
@@ -212,7 +217,7 @@ function StatLine({ calculations, turnId }: { calculations: readonly ResearchV2.
   if (calculations.length === 0) return null;
   return (
     <div className="stats">
-      {calculations.slice(0, 3).map((calc) => {
+      {calculations.map((calc) => {
         const quantity = formatQuantity(calc.value, calc.unit, calc.currency);
         return (
           <button key={calc.calculation_id} type="button" className="stat" onClick={() => view.openPanel({ kind: "record", tab: "numbers", turnKey: turnId })}>
@@ -279,19 +284,35 @@ function ClaimList({ claims, showRole, className = "claims" }: { claims: readonl
 const LIST_START = /^(\s*[-*+]\s|\s*\d+[.)]\s|\s*>|\s*\||\s*```|\s*~~~|\s*\[\[(chart|table):)/;
 
 /**
- * Splits the report's opening — leading headings and the first prose paragraph — from the rest,
- * so the direct answer can be set as the lead with the key numbers right under it.
+ * Splits the report's opening from the rest, so the direct answer is set as the lead with the key
+ * numbers right under it. A paragraph the writer marked as the conclusion near the top becomes the
+ * lead (answer first); otherwise the leading headings and the first prose paragraph do.
  */
 export function splitLead(report: string): { lead: string; rest: string } {
   const lines = report.replace(/\r\n?/g, "\n").split("\n");
   let index = 0;
   while (index < lines.length && (lines[index]!.trim() === "" || /^#{1,6}\s/.test(lines[index]!))) index += 1;
-  const start = index;
-  while (index < lines.length && lines[index]!.trim() !== "") index += 1;
-  const paragraph = lines.slice(start, index);
-  if (paragraph.length === 0 || paragraph.some((line) => LIST_START.test(line))) return { lead: "", rest: report };
-  return { lead: lines.slice(0, index).join("\n").trim(), rest: lines.slice(index).join("\n").trim() };
+  // Paragraph ranges [from, to) after the leading headings; stop at the first fence so code is never split.
+  const ranges: [number, number][] = [];
+  for (let i = index; i < lines.length && ranges.length < 6;) {
+    if (lines[i]!.trim() === "") { i += 1; continue; }
+    if (/^\s*(```|~~~)/.test(lines[i]!)) break;
+    const from = i;
+    while (i < lines.length && lines[i]!.trim() !== "") i += 1;
+    ranges.push([from, i]);
+  }
+  const text = ([from, to]: [number, number]) => lines.slice(from, to).join("\n");
+  const prose = (range: [number, number]) => !lines.slice(range[0], range[1]).some((line) => LIST_START.test(line) || /^#{1,6}\s/.test(line));
+  const marked = ranges.findIndex((range) => prose(range) && CONCLUSION_MARK.test(text(range)));
+  const chosen = marked >= 0 ? ranges[marked]! : ranges[0] && prose(ranges[0]) ? ranges[0] : null;
+  if (!chosen) return { lead: "", rest: report };
+  const headings = lines.slice(0, index).join("\n").trim();
+  const lead = [headings, text(chosen)].filter(Boolean).join("\n\n");
+  const rest = [...lines.slice(index, chosen[0]), ...lines.slice(chosen[1])].join("\n").trim();
+  return { lead, rest };
 }
+
+const CONCLUSION_MARK = /^\s*(?:\*\*|__)?\s*(?:核心判断|结论|总结|核心结论|一句话结论|Bottom line|Conclusion|Summary)\s*(?:\*\*|__)?\s*[:：]/i;
 
 function FootToggle({ label, open, onToggle }: { label: string; open: boolean; onToggle: () => void }) {
   return (
@@ -311,14 +332,20 @@ export function AnswerBlock({ turn, actions, tools, waiting = false }: { turn: R
   const items = turnContent(view.content, turn);
   const partial = turn.status === "partial";
   const lifecycle = turn.lifecycle_status;
-  const reportText = (turn.report ?? "").trim();
-  const partialNotes = partial ? (turn.partial_notes ?? "").trim() : "";
+  const body = answerBody(turn);
+  const reportText = body?.text ?? "";
+  const isDraft = body?.kind === "draft";
+  // A draft supersedes the reviewed fragments the run kept as notes.
+  const partialNotes = partial && !isDraft ? (turn.partial_notes ?? "").trim() : "";
   const events = useMemo(() => parseTurnEvents(turn.events), [turn.events]);
   const rows = useMemo(() => stepRows(events), [events]);
   const toolSteps = useMemo(() => toolStepCount(events), [events]);
   const [processOpen, setProcessOpen] = useState(false);
   const parts = turn.question_parts ?? [];
   const [partsOpen, setPartsOpen] = useState(partial && !reportText);
+  const [checksOpen, setChecksOpen] = useState(false);
+  const alert = useMemo(() => evidenceAlert(turn), [turn]);
+  const attributions = useMemo(() => parseAttributions(turn.attributions), [turn.attributions]);
   const { lead, rest } = useMemo(() => splitLead(reportText), [reportText]);
 
   const supporting = items.claims.filter((claim) => claimRole(claim) === "support");
@@ -343,11 +370,7 @@ export function AnswerBlock({ turn, actions, tools, waiting = false }: { turn: R
   }, [view.content.charts]);
 
   const tablesById = useMemo(() => new Map((view.content.tables ?? []).map((table) => [table.table_id,
-    <figure key={table.table_id} className="research-table">
-      <figcaption>{table.title}{table.subtitle ? ` — ${table.subtitle}` : ""}</figcaption>
-      <div className="md-table-wrap"><div className="md-table-scroll"><table><thead><tr><th scope="col"></th>{table.columns.map((column) => <th scope="col" key={column.key}>{column.label}{column.unit ? ` (${column.unit})` : ""}</th>)}</tr></thead>
-        <tbody>{table.rows.map((row, index) => <tr key={index}><th scope="row">{row.label ?? ""}</th>{table.columns.map((column) => <td key={column.key}>{row.cells[column.key]?.display_value ?? "—"}</td>)}</tr>)}</tbody></table></div></div>
-    </figure>,
+    <ResearchTableView key={table.table_id} table={table} />,
   ])), [view.content.tables]);
 
   const inlineTableIds = useMemo(() => extractReferencedTableIds(reportText), [reportText]);
@@ -387,14 +410,15 @@ export function AnswerBlock({ turn, actions, tools, waiting = false }: { turn: R
 
   return (
     <div className="answer">
-      {waiting ? <span className="meta">等待你的补充</span> : lifecycle === "stopped" || (!lifecycle && String(turn.reason) === "provider_cancelled") ? <span className="meta">已停止</span> : lifecycle === "completed" || (!lifecycle && turn.status === "completed") ? <span className="meta">已完成</span> : null}
+      <AnswerStatus turn={turn} waiting={waiting} draft={isDraft} />
+      {isDraft ? <p className="draft-note" role="note">{draftNote(items.claims.length > 0)}</p> : null}
       <ClaimRefContext.Provider value={claimRefs}>
         {lead ? (
           <div className="report answer-lead">
             <MarkdownContent content={lead} variant="report" />
           </div>
         ) : null}
-        <StatLine calculations={items.calculations} turnId={turn.turn_id} />
+        <StatLine calculations={keyCalculations(items.calculations, reportText || null)} turnId={turn.turn_id} />
         {rest ? (
           <div className="report">
             <MarkdownContent
@@ -420,8 +444,9 @@ export function AnswerBlock({ turn, actions, tools, waiting = false }: { turn: R
       ) : null}
       {trailingTables.map((table) => <div key={table.table_id}>{tablesById.get(table.table_id)}</div>)}
       <ClaimList claims={elevated} showRole className="claims elevated" />
-      <EvidenceViews turn={turn} />
       <GapCallout turn={turn} actions={actions} tone={partial ? "partial" : "completed"} />
+      {alert ? <p className="note evidence-alert">{alert}<button type="button" className="link" onClick={() => setChecksOpen(true)}>查看核查</button></p> : null}
+      <AttributionLine items={attributions} />
       {!lifecycle && partialNotes ? <PartialNotesBlock notes={partialNotes} /> : null}
       <div className="answer-foot">
         {supporting.length > 0 ? (
@@ -432,6 +457,9 @@ export function AnswerBlock({ turn, actions, tools, waiting = false }: { turn: R
         ) : null}
         {rows.length > 0 ? (
           <FootToggle label={`过程 ${steps} 步`} open={processOpen} onToggle={() => setProcessOpen((open) => !open)} />
+        ) : null}
+        {hasEvidenceViews(turn) ? (
+          <FootToggle label="数据与核查" open={checksOpen} onToggle={() => setChecksOpen((open) => !open)} />
         ) : null}
         {recordLinks.map((part) => (
           <button key={part.tab} type="button" className="foot-btn" onClick={() => view.openPanel({ kind: "record", tab: part.tab, turnKey: turn.turn_id })}>
@@ -464,6 +492,7 @@ export function AnswerBlock({ turn, actions, tools, waiting = false }: { turn: R
         </div>
       ) : items.claims.length > 0 ? <p className="note">{VERIFY_NOTE}</p> : null}
       {partsOpen ? <QuestionParts turn={turn} /> : null}
+      {checksOpen ? <EvidenceViews turn={turn} attribution={false} /> : null}
       {processOpen ? (
         <div className="turn-process-body">
           <ProcessTimeline events={events} />
@@ -475,6 +504,65 @@ export function AnswerBlock({ turn, actions, tools, waiting = false }: { turn: R
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * With several turns, the latest conclusion sits under the title so the page reads as one line of
+ * inquiry; it links to the turn it comes from.
+ */
+export function TopicConclusion({ turns }: { turns: readonly ResearchV2.ResearchTurn[] }) {
+  if (turns.length < 2) return null;
+  const latest = [...turns].reverse().find((turn) => answerBody(turn));
+  if (!latest) return null;
+  const body = answerBody(latest)!;
+  const text = conclusionText(body.text);
+  // A one-paragraph answer is its own summary; repeating it at the top adds nothing.
+  if (!text || text === conclusionText(body.text.replace(/\n\s*\n/g, " "))) return null;
+  const number = displayTurnNumber(latest);
+  return (
+    <a className="topic-conclusion" href={`#turn-${latest.turn_id}`} onClick={(event) => {
+      const target = document.getElementById(`turn-${latest.turn_id}`);
+      if (!target) return;
+      event.preventDefault();
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }}>
+      <span className="tc-label">当前结论 · 来自第 {number} 轮{body.kind === "draft" ? " · 未全部核验" : ""}</span>
+      <span className="tc-text">{text}</span>
+    </a>
+  );
+}
+
+/** The answer's state in a word or two; a run that ended is not the same as an answer that is complete. */
+function AnswerStatus({ turn, waiting, draft }: { turn: ResearchV2.ResearchTurn; waiting: boolean; draft: boolean }) {
+  const stopped = turn.lifecycle_status === "stopped" || (!turn.lifecycle_status && String(turn.reason) === "provider_cancelled");
+  // A submitted final result with documented limits is complete; a run that stopped short is not.
+  const finished = turn.status === "completed" || (turn.lifecycle_status === "completed" && turn.reason === "submitted" && !draft);
+  const label = waiting ? "等待你的补充"
+    : stopped ? "已停止"
+    : finished ? "已完成"
+    : "部分完成";
+  return <span className={`meta answer-status${!finished && !waiting && !stopped ? " partial" : ""}`}>{label}</span>;
+}
+
+function ResearchTableView({ table }: { table: ResearchV2.ResearchTable }) {
+  const { rowLabels, columns } = tableLayout(table);
+  return (
+    <figure className="research-table">
+      <figcaption>{table.title}{table.subtitle ? <span className="sub">{table.subtitle}</span> : null}</figcaption>
+      <div className="md-table-wrap"><div className="md-table-scroll"><table>
+        <thead><tr>{rowLabels ? <th scope="col"></th> : null}{columns.map((column) => <th scope="col" key={column.key}>{columnHeader(column)}</th>)}</tr></thead>
+        <tbody>{table.rows.map((row, index) => (
+          <tr key={index}>
+            {rowLabels ? <th scope="row">{row.label ?? ""}</th> : null}
+            {columns.map((column) => {
+              const display = row.cells[column.key]?.display_value;
+              return <td key={column.key} title={display ?? undefined}>{cellText(display, column.unit)}</td>;
+            })}
+          </tr>
+        ))}</tbody>
+      </table></div></div>
+    </figure>
   );
 }
 
@@ -493,7 +581,7 @@ export function TurnView({ turn, actions, first = false, tools, askTools, editin
   }
   // The first question is already the page's large title; repeating it adds nothing.
   return (
-    <section className={first ? "turn turn-first" : "turn"} aria-label={`第 ${number} 轮`}>
+    <section id={`turn-${turn.turn_id}`} className={first ? "turn turn-first" : "turn"} aria-label={`第 ${number} 轮`}>
       {!first ? <TurnStamp number={number} iso={turn.started_at} /> : null}
       {editing && onEditDone ? (
         <AskEditor initial={turn.question} onDone={onEditDone} />
@@ -519,7 +607,7 @@ function InstructionDelivery({ instruction }: { instruction: ResearchV2.SavedRes
   const labels: Record<string, string> = { linked_for_review: "已关联依据，待核实", unresolved: "尚未核实", limited: "受资料或权限限制", superseded: "已被后续要求取代", supersession_needs_review: "已定位原文，取代关系待核验" };
   return <div className="meta">
     {instruction.delivery_status ? (labels[instruction.delivery_status] ?? "尚未核实") : "尚未核实"}
-    {instruction.reason ? ` · ${instruction.reason}` : null}
+    {reviewReasonText(instruction.reason) ? ` · ${reviewReasonText(instruction.reason)}` : null}
     {(instruction.text_locations?.length ?? 0) > 0 ? <details><summary>查看相关原文</summary>{instruction.text_locations!.map((location, index) => <p key={index}>{location.field === "partial_notes" ? "过程说明" : "报告"}{location.instruction_sequence != null ? ` · 指令 ${location.instruction_sequence}` : ""}：{location.excerpt}</p>)}</details> : null}
     {(instruction.references ?? []).map((ref, index) => {
       const id = typeof ref === "string" ? ref : ref.claim_id ?? ref.fact_id ?? ref.calculation_id;
@@ -637,14 +725,13 @@ export function LiveTurn({ number, startedAt, question, live = null, sectionRef,
           </button>
         </div>
         {expanded ? (
-          hasTimeline ? (
-            <ProcessTimeline events={events} current={current} live stream={live?.stream} />
-          ) : (
-            <LiveEmptyOrStream
-              stream={live?.stream}
-              idleText={isPending ? "任务已提交，等待调度开始…" : "正在准备研究上下文…"}
-            />
-          )
+          <LiveStagesView
+            events={events}
+            current={current}
+            idleText={hasTimeline ? null : isPending ? "任务已提交，等待调度开始…" : "正在准备研究上下文…"}
+            stream={live?.stream}
+            onOpenProcess={live ? () => view.openPanel({ kind: "record", tab: "steps", turnKey: LIVE_TURN }) : null}
+          />
         ) : null}
         <LiveDraftPreview stream={live?.stream} onGrow={onDraftGrow} />
       </div>
@@ -653,3 +740,58 @@ export function LiveTurn({ number, startedAt, question, live = null, sectionRef,
 }
 
 export const PendingTurn = LiveTurn;
+
+/**
+ * Where the run is, in five plain stages; then the model's latest note in its own words, what it is
+ * doing now and what it has just found. Its raw thinking is one click away, not on the page.
+ */
+function LiveStagesView({ events, current, idleText, stream, onOpenProcess }: {
+  events: ProgressEvent[]; current: CurrentActivity | null; idleText: string | null;
+  stream?: LiveRun["stream"] | undefined; onOpenProcess: (() => void) | null;
+}) {
+  const [thinkingOpen, setThinkingOpen] = useState(false);
+  const stages = useMemo(() => liveStages(events, current), [events, current]);
+  const finds = useMemo(() => latestFinds(events), [events]);
+  const note = useMemo(() => {
+    for (const event of [...events].reverse()) if (event.kind === "model" && event.note?.trim()) return event.note.trim();
+    return null;
+  }, [events]);
+  const target = current?.kind === "tool" && current.target && current.target !== current.rationale ? current.target : null;
+  const now = current
+    ? current.kind === "tool" ? toolLabel(current.name) : modelPhaseLabel(current.phase, current.retry_attempt)
+    : idleText;
+  const why = current?.kind === "tool" ? current.rationale ?? null : null;
+  return (
+    <div className="live-stages">
+      <ol className="stage-row" aria-label="研究阶段">
+        {stages.map((stage) => (
+          <li key={stage.key} className={`stage ${stage.state}`} aria-current={stage.state === "active" ? "step" : undefined}>
+            <span className="stage-dot" aria-hidden="true" />
+            <span className="stage-label">{stage.label}</span>
+            {stage.detail ? <span className="stage-detail">{stage.detail}</span> : null}
+          </li>
+        ))}
+      </ol>
+      {note ? <p className="live-note">{note}</p> : null}
+      {now ? (
+        <p className="live-now">
+          <span className="live-now-label">{now}</span>
+          {why ? <span>{why}</span> : null}
+          {target ? <span className="live-target">{target}</span> : null}
+        </p>
+      ) : null}
+      {finds.length > 0 ? <p className="live-finds">刚获取：{finds.map((title) => `《${title}》`).join("、")}</p> : null}
+      <div className="live-links">
+        {stream ? (
+          <button type="button" className="link" aria-expanded={thinkingOpen} onClick={() => setThinkingOpen((open) => !open)}>
+            {thinkingOpen ? "收起模型输出" : "查看模型输出"}
+          </button>
+        ) : null}
+        {onOpenProcess && events.length > 0 ? (
+          <button type="button" className="link" onClick={onOpenProcess}>查看完整过程 ›</button>
+        ) : null}
+      </div>
+      {thinkingOpen && stream ? <LiveActiveStream stream={stream} /> : null}
+    </div>
+  );
+}

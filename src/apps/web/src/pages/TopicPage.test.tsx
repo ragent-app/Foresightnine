@@ -242,6 +242,8 @@ describe("TopicPage", () => {
     expect(within(liveRegion).getByText("正在研究")).toBeTruthy();
     expect(within(liveRegion).getByText(/发现 3 条线索 · 获取 1 份资料 · 记下 2 个数字/)).toBeTruthy();
     expect(within(liveRegion).getByText("先检查年报附注中的收入明细。")).toBeTruthy();
+    // The live turn shows stages and the current step; every tool call is in the process panel.
+    expect(within(liveRegion).getByRole("list", { name: "研究阶段" })).toBeTruthy();
     expect(within(liveRegion).getByText("《Northwind 年报》0–8,000 字")).toBeTruthy();
     fireEvent.click(within(liveRegion).getByRole("button", { name: "收起" }));
     expect(within(liveRegion).queryByText("先检查年报附注中的收入明细。")).toBeNull();
@@ -797,8 +799,8 @@ describe("TopicPage", () => {
       const region = await screen.findByRole("region", { name: "第 1 轮" });
       fireEvent.click(within(region).getByRole("button", { name: "过程 1 步" }));
       expect(within(region).getByText("旧版读取")).toBeTruthy();
-      // Under the answer a model step only says it ran; token accounting lives in the record panel.
-      expect(within(region).getByText("模型调用")).toBeTruthy();
+      // Under the answer a model call with nothing to say is not a step; accounting lives in the record panel.
+      expect(within(region).queryByText("模型调用")).toBeNull();
       expect(within(region).queryByText("模型调用 · 400 输入 / 100 输出 Token")).toBeNull();
       fireEvent.click(within(region).getByRole("button", { name: /在研究记录中查看/ }));
       const dialog = await screen.findByRole("dialog");
@@ -906,7 +908,13 @@ describe("TopicPage", () => {
       sendFrame("cp:2", "stream.delta", { operation_id: "op_2", call_seq: 1, channel: "thinking", delta: "暂存思考", seq: 0 });
       sendFrame("cp:2", "stream.reset", { operation_id: "op_2", call_seq: 1, reason: "next_step" });
 
-      expect(await within(liveRegion).findByText("发现 2 条线索（可用 1 · 受限 1）")).toBeTruthy();
+      expect(await within(liveRegion).findByText("精读收入附注")).toBeTruthy();
+      // Tool-level detail lives in the process panel, one click from the live turn.
+      fireEvent.click(within(liveRegion).getByRole("button", { name: "查看完整过程 ›" }));
+      const processPanel = await screen.findByRole("dialog");
+      expect(await within(processPanel).findByText("发现 2 条线索（可用 1 · 受限 1）")).toBeTruthy();
+      fireEvent.click(within(processPanel).getByRole("button", { name: "关闭" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
       expect(within(liveRegion).getAllByText("先通过 SSE 检索年报。")).toHaveLength(1);
       expect(within(liveRegion).getByText("《Northwind 10-K》0–8,000 字")).toBeTruthy();
       expect(within(liveRegion).getByText(/精读收入附注/)).toBeTruthy();
@@ -972,8 +980,10 @@ describe("TopicPage", () => {
       expect(await within(liveRegion).findByText("<b>加粗不生效</b>")).toBeTruthy();
       expect(within(liveRegion).getByText("<img src=x onerror=alert(1)>")).toBeTruthy();
       expect(within(liveRegion).getByText("<script>alert(2)</script>")).toBeTruthy();
-      fireEvent.click(within(liveRegion).getByRole("button", { name: "展开线索 (1)" }));
-      expect(within(liveRegion).getByText("<svg onload=alert(3)>")).toBeTruthy();
+      fireEvent.click(within(liveRegion).getByRole("button", { name: "查看完整过程 ›" }));
+      const panel = await screen.findByRole("dialog");
+      fireEvent.click(within(panel).getByRole("button", { name: "展开线索 (1)" }));
+      expect(within(panel).getByText("<svg onload=alert(3)>")).toBeTruthy();
       expect(container.querySelector("svg[onload]")).toBeNull();
       expect(container.querySelector("img")).toBeNull();
       expect(container.querySelector("script")).toBeNull();
@@ -1046,6 +1056,9 @@ describe("TopicPage", () => {
         sendFrame("stream.delta", { operation_id: "op_2", call_seq: 1, channel: "thinking", delta: "思考步骤B。", seq: 1 });
         sendFrame("stream.delta", { operation_id: "op_2", call_seq: 1, channel: "text", delta: "正在核对财报数据。", seq: 2 });
 
+        // Raw model output is one click away, not on the page by default.
+        expect(within(liveRegion).queryByText("模型思考过程 · 非正式结论")).toBeNull();
+        fireEvent.click(within(liveRegion).getByRole("button", { name: "查看模型输出" }));
         expect(await within(liveRegion).findByText("模型思考过程 · 非正式结论")).toBeTruthy();
         expect(within(liveRegion).getByText("思考步骤A。思考步骤B。")).toBeTruthy();
         expect(within(liveRegion).getByText("正在核对财报数据。")).toBeTruthy();
@@ -1077,27 +1090,29 @@ describe("TopicPage", () => {
         for (let i = 1; i <= 25; i += 1) {
           sendFrame("stream.delta", { operation_id: "op_2", call_seq: 2, channel: "draft_report", delta: `草稿句${i} `, seq: i });
         }
-        const draftBox = await within(liveRegion).findByRole("region", { name: "未核验报告草稿预览" });
-        expect(within(draftBox).getByText("草稿生成中 · 引文与数值尚未经服务端核验，最终结果以核验后为准")).toBeTruthy();
+        const draftBox = await within(liveRegion).findByRole("region", { name: "报告草稿" });
+        expect(within(draftBox).getByText("正在写报告 · 写完后会核对引文和数字")).toBeTruthy();
         expect(await within(draftBox).findByText(/草稿句25/)).toBeTruthy();
         expect(durationSpy.mock.calls.length).toBe(turn1CallsBeforeDraftBurst);
 
-        // submission_rejected retracts dashed draft preview immediately and displays notice.
+        // submission_rejected keeps the draft readable while it is revised, with a notice.
         sendFrame("stream.reset", { operation_id: "op_2", call_seq: 2, reason: "submission_rejected" });
-        await waitFor(() => expect(within(liveRegion).queryByRole("region", { name: "未核验报告草稿预览" })).toBeNull());
-        expect(await within(liveRegion).findByText("草稿引文或格式未通过核验，模型正在修正…")).toBeTruthy();
+        expect(await within(liveRegion).findByText("核验发现需要修改的地方，正在修改这份草稿…")).toBeTruthy();
+        expect(within(liveRegion).getByRole("region", { name: "报告草稿" })).toBeTruthy();
+        expect(within(liveRegion).getByText(/草稿句25/)).toBeTruthy();
 
-        // Revised draft clears notice; run.terminal transitions to verified AnswerBlock.
+        // The revised draft replaces it and clears the notice; run.terminal transitions to verified AnswerBlock.
         sendFrame("stream.delta", { operation_id: "op_2", call_seq: 3, channel: "draft_report", delta: "修正后的草稿段落。", seq: 0 });
         expect(await within(liveRegion).findByText("修正后的草稿段落。")).toBeTruthy();
-        expect(within(liveRegion).queryByText("草稿引文或格式未通过核验，模型正在修正…")).toBeNull();
+        expect(within(liveRegion).queryByText("核验发现需要修改的地方，正在修改这份草稿…")).toBeNull();
+        expect(within(liveRegion).queryByText(/草稿句25/)).toBeNull();
 
         completed = true;
         sendFrame("run.terminal", { operation_id: "op_2", operation_status: "completed", version_id: "v2" }, "done:completed");
         streamController!.close();
 
         expect(await screen.findByText("正式核验完成报告。")).toBeTruthy();
-        await waitFor(() => expect(screen.queryByRole("region", { name: "未核验报告草稿预览" })).toBeNull());
+        await waitFor(() => expect(screen.queryByRole("region", { name: "报告草稿" })).toBeNull());
       } finally {
         durationSpy.mockRestore();
       }
@@ -1162,7 +1177,7 @@ describe("TopicPage", () => {
 
       savedPartial = true;
       sendFrame("stream.reset", { operation_id: "op_2", call_seq: 1, reason: "submission_partial" });
-      await waitFor(() => expect(screen.queryByRole("region", { name: "未核验报告草稿预览" })).toBeNull());
+      await waitFor(() => expect(screen.queryByRole("region", { name: "报告草稿" })).toBeNull());
 
       sendFrame("run.terminal", { operation_id: "op_2", operation_status: "failed", version_id: "v2" }, "done:failed");
       streamController!.close();
@@ -1450,8 +1465,9 @@ describe("TopicPage", () => {
       sendFrame("stream.delta", { operation_id: "op_3", call_seq: 1, channel: "thinking", delta: "续跑思考轨迹。", seq: 0 });
       sendFrame("stream.delta", { operation_id: "op_3", call_seq: 1, channel: "draft_report", delta: "续跑未核验草稿。", seq: 1 });
 
+      fireEvent.click(await within(contRegion).findByRole("button", { name: "查看模型输出" }));
       expect(await within(contRegion).findByText("续跑思考轨迹。")).toBeTruthy();
-      expect(within(contRegion).getByText("续跑未核验草稿。")).toBeTruthy();
+      expect(await within(contRegion).findByText("续跑未核验草稿。")).toBeTruthy();
       expect(screen.getAllByText("问题 1")).toHaveLength(1);
       unmount();
 
@@ -1484,6 +1500,7 @@ describe("TopicPage", () => {
         updated_at: NOW,
         version_id: null,
       })}\n\nevent: stream.delta\ndata: ${JSON.stringify({ operation_id: "op_3", call_seq: 1, channel: "thinking", delta: "重连思考恢复。", seq: 0 })}\n\n`));
+      fireEvent.click(await within(refreshRegion).findByRole("button", { name: "查看模型输出" }));
       expect(await within(refreshRegion).findByText("重连思考恢复。")).toBeTruthy();
     });
 
@@ -1648,6 +1665,7 @@ describe("TopicPage", () => {
         version_id: null,
       })}\n\nevent: stream.delta\ndata: ${JSON.stringify({ operation_id: "op_9", call_seq: 1, channel: "thinking", delta: "追问实时思考。", seq: 0 })}\n\n`));
 
+      fireEvent.click(await within(liveRegion).findByRole("button", { name: "查看模型输出" }));
       expect(await within(liveRegion).findByText("追问实时思考。")).toBeTruthy();
       expect(screen.getAllByText("第二轮新追问")).toHaveLength(1);
     });
@@ -1730,7 +1748,8 @@ describe("TopicPage", () => {
       topicCommitted = true;
       await client.invalidateQueries({ queryKey: queryKeys.topic("t1") });
 
-      expect(await screen.findByText("已落盘正式报告。")).toBeTruthy();
+      // The report also leads the page as the current conclusion once there are two turns.
+      expect((await screen.findAllByText("已落盘正式报告。")).length).toBeGreaterThan(0);
       await waitFor(() => expect(screen.queryByText("正在研究")).toBeNull());
       expect(screen.getAllByRole("region", { name: "第 2 轮" })).toHaveLength(1);
     });
@@ -1820,7 +1839,7 @@ describe("TopicPage", () => {
           operation_id: "op_2", call_seq: 1, channel: "draft_report", delta: "## 草稿对比\n\n| 指标 | 数值 |\n| --- | ---: |\n| 收入 | **$130.5B** |", seq: 0,
         })}\n\n`));
 
-        const draftBox = await within(liveRegion).findByRole("region", { name: "未核验报告草稿预览" });
+        const draftBox = await within(liveRegion).findByRole("region", { name: "报告草稿" });
         expect(await within(draftBox).findByRole("heading", { level: 2, name: "草稿对比" })).toBeTruthy();
         expect(within(draftBox).getByText("$130.5B").tagName).toBe("STRONG");
         expect(draftBox.querySelector("table")).toBeTruthy();
@@ -1929,7 +1948,7 @@ describe("TopicPage", () => {
           "[[chart:c_price]]",
           "```",
           "",
-          "报告结尾段落。",
+          "报告结尾段落，收入增长 31.07%。",
         ].join("\n"),
       });
 

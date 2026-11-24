@@ -26,7 +26,7 @@ import { optionTokens } from "./research/optionTokens";
 import { ResearchSettingsPanel } from "./research/ResearchSettingsPanel";
 import { CitationSheet } from "./topic/Citation";
 import { TopicContext, type FocusCitation, type LiveRun, type PanelState, type TopicView } from "./topic/context";
-import { InterruptedTurn, LiveTurn, TurnView, type AnswerTools, type TurnActions } from "./topic/Conversation";
+import { InterruptedTurn, LiveTurn, TopicConclusion, TurnView, type AnswerTools, type TurnActions } from "./topic/Conversation";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys, useTopics } from "../api/queries";
 import { appendInstruction, continueTurn as continueWaitingTurn, stopResearchTurn } from "../api/writes";
@@ -805,6 +805,7 @@ export function TopicPage() {
                   </div>
                 ) : null}
               </header>
+              <TopicConclusion turns={turns} />
               {turns.map((turn, index) => (
                 <TurnView
                   key={turn.turn_id}

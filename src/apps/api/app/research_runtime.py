@@ -13,6 +13,7 @@ import json
 import logging
 import math
 import os
+import re
 from time import sleep
 from types import SimpleNamespace
 from typing import Any, Callable, Mapping
@@ -232,6 +233,43 @@ class RuntimeOutcome:
     cache_usage: dict[str, Any] | None = None
     tables: list[dict] = field(default_factory=list)
     question_parts: list[dict] = field(default_factory=list)
+    # The writer's last report when it could not be delivered as a reviewed answer.
+    # Shown separately and labelled as not independently reviewed; never a finding.
+    draft_report: str = ''
+
+
+def latest_draft(state: Mapping) -> str:
+    """The writer's most recent report that answers the current instructions."""
+    current = max((x.get('sequence', 0) for x in state.get('user_instructions', [])
+                   if isinstance(x, Mapping) and type(x.get('sequence')) is int), default=0)
+    writer = state.get('_writer_draft')
+    if isinstance(writer, Mapping):
+        text = writer.get('report')
+        if writer.get('instruction_sequence') == current and isinstance(text, str) and text.strip():
+            return text
+        return ''
+    for draft in reversed(state.get('submission_drafts') or []):
+        if not isinstance(draft, Mapping):
+            continue
+        if draft.get('instruction_sequence', current) != current:
+            continue
+        text = draft.get('draft_report') or draft.get('report')
+        if isinstance(text, str) and text.strip():
+            return text
+    return ''
+
+
+def displayable_draft(text: str, claims: list[dict], state: Mapping) -> str:
+    """Keep anchors only to items delivered with the turn; the prose itself stays unreviewed."""
+    if not isinstance(text, str) or not text.strip():
+        return ''
+    known = {'claim': {c.get('claim_id') for c in claims if isinstance(c, Mapping)},
+             'table': {t.get('table_id') for t in state.get('tables', []) if isinstance(t, Mapping)},
+             'chart': {c.get('chart_id') for c in state.get('charts', []) if isinstance(c, Mapping)}}
+    def keep(match: re.Match) -> str:
+        return match.group(0) if match.group(2) in known[match.group(1)] else ''
+    cleaned = re.sub(r'\s?\[\[(claim|table|chart):([A-Za-z0-9_-]{1,100})\]\]', keep, text)
+    return cleaned.strip()[:40000]
 
 
 def _extract_model_note(message: Any) -> str | None:
@@ -1148,6 +1186,7 @@ def run_research_agent(
         gaps: list[dict] | None = None,
         stopping_note: str | None = None,
         partial_notes: str | None = None,
+        draft_report: str = '',
     ) -> RuntimeOutcome:
         derived: list[dict] = []
         if status == 'partial':
@@ -1204,6 +1243,7 @@ def run_research_agent(
         parts = assemble_parts(question, state, source_by_id, {s.source_id for s in sources if _is_source_eligible(s, as_of)}, requirements, display_claims)
         if status == 'completed' and (incomplete_delivery(requirements) or any(p.get('core', True) and p.get('requirements') and p.get('status') != 'answered' for p in parts)):
             status = 'partial'
+            draft_report = draft_report or report
             report = ''
             unique.append(gap('model_reported', '核心问题的依据或可展示答案仍需核验。'))
             if not resolved_partial_notes:
@@ -1213,7 +1253,7 @@ def run_research_agent(
         candidate_items = review_candidates(requirements, display_claims, state, source_by_id, as_of)
         verified = parse_reviews(json.dumps({'reviews': state.get('_semantic_reviews', [])}), candidate_items)
         denied = {item['claim_id'] for item in verified if item['verdict'] == 'contradicted'}
-        supported = {item['claim_id'] for item in verified if item['verdict'] in ('supported', 'conditional')} - denied
+        supported = {item['claim_id'] for item in verified if item['verdict'] in ('supported', 'conditional', 'partial')} - denied
         from .research_observations import deterministic_observation_ids
         observations = deterministic_observation_ids(outcome_claims, state, source_by_id, as_of) - denied
         outcome_claims = [claim for claim in outcome_claims if claim.get('claim_id') in supported
@@ -1221,6 +1261,13 @@ def run_research_agent(
         outcome_claims = [({**claim, 'reasoning': None, 'qualification': None, 'grounding_status': 'needs_review'}
                            if claim.get('claim_id') in observations and claim.get('claim_id') not in supported else claim)
                           for claim in outcome_claims]
+        draft_report = draft_report or latest_draft(state)
+        # Only when the writer's own wording would otherwise be lost.
+        if (status == 'partial' and reason != 'awaiting_user' and not report.strip()
+                and draft_report.strip() != (partial_notes or '').strip()):
+            draft_report = displayable_draft(draft_report, outcome_claims + previous_claims, state)
+        else:
+            draft_report = ''
         delivered = RuntimeOutcome(
             status,
             reason,
@@ -1243,6 +1290,7 @@ def run_research_agent(
             cache_usage=cache_usage_out,
             tables=list(state.get('tables', [])),
             question_parts=parts,
+            draft_report=draft_report,
         )
         # This is the operation's resulting object. The last observed call is
         # an ordering association, not a claim that it produced every item.
@@ -1272,6 +1320,7 @@ def run_research_agent(
             gaps=submission['gaps'],
             stopping_note=submission['stopping_reason'],
             partial_notes=submission.get('partial_notes') if sub_status == 'partial' else None,
+            draft_report=submission.get('draft_report') or '',
         )
     if state.get('pending') and state['pending'].get('kind') not in ('tool_batch', 'model_returned'):
         return outcome('partial', 'external_result_unknown', gaps=[gap('external_result_unknown')])

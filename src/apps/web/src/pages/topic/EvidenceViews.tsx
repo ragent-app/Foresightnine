@@ -170,8 +170,25 @@ function CounterEvidenceView({ value }: { value: unknown }) {
   </div>;
 }
 
+/** Whether a turn has any saved check views to fold under the answer. */
+export function hasEvidenceViews(turn: ResearchV2.ResearchTurn): boolean {
+  return Boolean(parseReconciliation(turn.reconciliation) || parseCoverageMap(turn.coverage_map) || turn.counter_evidence);
+}
+
+/** One line worth reading next to the answer: stale data or a material mismatch between sources. */
+export function evidenceAlert(turn: ResearchV2.ResearchTurn): string | null {
+  const coverage = parseCoverageMap(turn.coverage_map);
+  const reconciliation = parseReconciliation(turn.reconciliation);
+  const stale = coverage?.rows.some((row) => row.data_as_of && stalenessLabel(row)?.stale) ?? false;
+  const differs = reconciliation?.rows.some((row) => row.badge === "differs_material") ?? false;
+  if (stale && differs) return "部分数据已过期，且不同来源的数字有明显差异。";
+  if (stale) return "部分数据已过期。";
+  if (differs) return "不同来源的数字有明显差异。";
+  return null;
+}
+
 /** 数据截至、口径核对表、覆盖与缺口地图和来源署名，来自一轮研究保存的确定性视图。 */
-export function EvidenceViews({ turn }: { turn: ResearchV2.ResearchTurn }) {
+export function EvidenceViews({ turn, attribution = true }: { turn: ResearchV2.ResearchTurn; attribution?: boolean }) {
   const reconciliation = useMemo(() => parseReconciliation(turn.reconciliation), [turn.reconciliation]);
   const coverage = useMemo(() => parseCoverageMap(turn.coverage_map), [turn.coverage_map]);
   const attributions = useMemo(() => parseAttributions(turn.attributions), [turn.attributions]);
@@ -187,7 +204,7 @@ export function EvidenceViews({ turn }: { turn: ResearchV2.ResearchTurn }) {
           {coverage ? <CoverageMapBlock coverage={coverage} /> : null}
         </Disclosure>
       ) : null}
-      <AttributionLine items={attributions} />
+      {attribution ? <AttributionLine items={attributions} /> : null}
     </div>
   );
 }

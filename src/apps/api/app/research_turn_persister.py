@@ -223,6 +223,7 @@ def build_research_turn(
         reason=outcome.reason,
         report=outcome.report,
         partial_notes=outcome.partial_notes,
+        draft_report=getattr(outcome, 'draft_report', '') or '',
         question_parts=outcome.question_parts,
         stopping_note=outcome.stopping_note,
         claim_ids=[item["claim_id"] for item in outcome.claims],

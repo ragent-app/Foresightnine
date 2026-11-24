@@ -355,6 +355,9 @@ class ResearchTurn(BaseModel):
     reason: str
     report: str = ""
     partial_notes: str | None = None
+    # The writer's wording when it could not be delivered as a reviewed answer. Not a finding:
+    # shown and exported only with an explicit "not independently reviewed" label.
+    draft_report: str = ""
     question_parts: list[ResearchQuestionPart] = Field(default_factory=list)
     requirement_plan: list[PlannedRequirement] = Field(default_factory=list)
     requirement_plan_history: list[list[PlannedRequirement]] = Field(default_factory=list)

@@ -1,5 +1,5 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
-import { formulaLabel } from "../../lib/copy";
+import { formulaLabel, reviewReasonText } from "../../lib/copy";
 import { useTopicView } from "./context";
 
 const PART_STATUS = { answered: "已回答", partial: "部分回答", unresolved: "尚未完成" } as const;
@@ -68,7 +68,7 @@ export function QuestionParts({ turn }: { turn: ResearchV2.ResearchTurn }) {
         <li key={part.id ?? `${index}-${part.question}`} className={`part ${part.status}`}>
           <div className="part-head"><b>{part.question}</b><span className="part-status">{PART_STATUS[part.status]}</span></div>
           {part.answer ? <p>{part.answer}</p> : null}
-          {part.reason ? <p className="part-reason">{part.reason}</p> : null}
+          {reviewReasonText(part.reason, part.status) ? <p className="part-reason">{reviewReasonText(part.reason, part.status)}</p> : null}
           {(part.references ?? []).map((ref, i) => (
             <EvidenceLink key={i} reference={ref} turnId={turn.turn_id} />
           ))}

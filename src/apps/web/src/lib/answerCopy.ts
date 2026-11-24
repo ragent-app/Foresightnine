@@ -1,4 +1,5 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
+import { answerBody, draftNote } from "./answerBody";
 import type { AvailableVersionSource } from "../api/types";
 import { claimRole, ROLE_LABEL, type CitationIndex } from "./research";
 
@@ -58,7 +59,9 @@ export function answerMarkdown(turn: ResearchV2.ResearchTurn, context: AnswerCop
   };
 
   const parts: string[] = [];
-  const report = (turn.report ?? "").trim();
+  const body = answerBody(turn);
+  const report = body?.text ?? "";
+  if (body?.kind === "draft") parts.push(`> ${draftNote(context.turnClaims.length > 0)}`);
   if (report) {
     const out: string[] = [];
     let fenced = false;

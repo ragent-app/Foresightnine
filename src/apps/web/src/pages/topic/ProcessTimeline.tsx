@@ -279,6 +279,8 @@ function TimelineStepRow({ row, live, inPanel = false }: { row: StepRow; live: b
       );
     }
     const failed = row.text.startsWith("模型调用失败");
+    // Under the answer, a model call with nothing to say is noise between the steps it chose.
+    if (!inPanel && !failed) return null;
     return (
       <li className={`pt-row pt-model${failed ? " is-error" : ""}`}>
         <span className="pt-ic" aria-hidden="true">

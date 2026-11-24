@@ -532,7 +532,7 @@ function StepsTab({ turnKey, onTurn }: { turnKey: string | undefined; onTurn: (t
 }
 
 const REVIEW_VERDICT: Record<string, string> = {
-  supported: "复核认为支持", conditional: "在条件下成立", weaker: "仅支持较弱结论",
+  supported: "复核认为支持", conditional: "在条件下成立", partial: "依据支持，只回答了一部分", weaker: "仅支持较弱结论",
   contradicted: "与依据冲突", irrelevant: "依据不相关", insufficient: "依据不足",
 };
 

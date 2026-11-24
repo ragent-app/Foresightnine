@@ -107,6 +107,7 @@ def reconcile_saved_answers(content: ResearchContent, turn: ResearchTurn) -> Non
         turn.status = "partial"
         turn.report = ""
         turn.partial_notes = None
+        turn.draft_report = ""
         if not any(gap.code == "answer_evidence_unavailable" for gap in turn.gaps):
             turn.gaps.append(ResearchGap(code="answer_evidence_unavailable", message=reason))
 
@@ -136,7 +137,7 @@ def invalidate_edited_answers(before: ResearchContent, after: ResearchContent) -
                 part.references, part.requirements = [], []
                 affected = True
         if affected:
-            turn.report, turn.partial_notes, turn.status = '', None, 'partial'
+            turn.report, turn.partial_notes, turn.draft_report, turn.status = '', None, '', 'partial'
             for instruction in turn.user_instructions:
                 instruction.references = [ref for ref in instruction.references
                                           if ref.claim_id not in claims and ref.fact_id not in facts
@@ -191,7 +192,7 @@ def visible_answer_content(content: ResearchContent, can_display: Callable[[str]
     for turn in safe.turns:
         # Free text, tool events and aggregate views can contain observations from multiple sources.
         # Retain only answers that have their own complete, currently displayable evidence chain.
-        turn.report, turn.partial_notes, turn.stopping_note = "", None, None
+        turn.report, turn.partial_notes, turn.draft_report, turn.stopping_note = "", None, "", None
         # Review rationales may discuss several documents. On a changed access
         # boundary expose only the original independently filtered answer references.
         turn.semantic_reviews = []

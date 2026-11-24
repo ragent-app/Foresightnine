@@ -109,9 +109,9 @@ describe("LiveStreamView", () => {
     });
     const { container } = render(<LiveDraftPreview stream={store} onGrow={onGrow} />);
 
-    const box = screen.getByRole("region", { name: "未核验报告草稿预览" });
+    const box = screen.getByRole("region", { name: "报告草稿" });
     expect(box.className).toContain("draft-preview");
-    expect(screen.getByText("草稿生成中 · 引文与数值尚未经服务端核验，最终结果以核验后为准")).toBeTruthy();
+    expect(screen.getByText("正在写报告 · 写完后会核对引文和数字")).toBeTruthy();
     expect(screen.getByText("第一段未核验草稿。")).toBeTruthy();
     expect(screen.getByText("第二段未核验草稿。")).toBeTruthy();
     expect(container.querySelector(".stream-cursor")).toBeTruthy();
@@ -127,11 +127,20 @@ describe("LiveStreamView", () => {
     });
     expect(onGrow).toHaveBeenCalledTimes(2);
 
-    // Retraction unmounts preview immediately.
+    // A draft sent back by review stays readable, dimmed, while it is revised.
     act(() => {
-      update({ draftReport: "", activeChannel: null, retractedNotice: "草稿引文或格式未通过核验，模型正在修正…" });
+      update({ draftReport: "", heldDraft: "第一段未核验草稿。", activeChannel: null, retractedNotice: "核验发现需要修改的地方，正在修改这份草稿…" });
     });
-    expect(screen.queryByRole("region", { name: "未核验报告草稿预览" })).toBeNull();
+    const held = screen.getByRole("region", { name: "报告草稿" });
+    expect(held.className).toContain("is-held");
+    expect(screen.getByText("核验发现需要修改的地方，正在修改这份草稿…")).toBeTruthy();
+    expect(container.querySelector(".stream-cursor")).toBeNull();
+
+    // A reset that ends the run removes it.
+    act(() => {
+      update({ draftReport: "", heldDraft: "", activeChannel: null, retractedNotice: null });
+    });
+    expect(screen.queryByRole("region", { name: "报告草稿" })).toBeNull();
   });
 
   it("renders untrusted HTML payloads inside thinking, text, toolStatus, and draftReport strictly as plain text", () => {

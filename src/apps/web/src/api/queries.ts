@@ -133,7 +133,7 @@ const MAX_THINKING_CHARS = 24_000;
 const MAX_TEXT_CHARS = 12_000;
 const MAX_TOOL_STATUS_CHARS = 500;
 const MAX_DRAFT_REPORT_CHARS = 100_000;
-export const RETRACTED_SUBMISSION_NOTICE = "草稿引文或格式未通过核验，模型正在修正…";
+export const RETRACTED_SUBMISSION_NOTICE = "核验发现需要修改的地方，正在修改这份草稿…";
 
 const EMPTY_TRANSIENT_STREAM: TransientStreamState = {
   callSeq: null,
@@ -269,7 +269,7 @@ export function useRunProgress(topicId: string, operationId: string | null) {
       let current = streamRef.current;
       if (current.callSeq !== msg.call_seq) {
         if (current.callSeq !== null && msg.call_seq < current.callSeq) return;
-        current = { ...emptyTransientStream(), callSeq: msg.call_seq, retractedNotice: current.retractedNotice };
+        current = { ...emptyTransientStream(), callSeq: msg.call_seq, retractedNotice: current.retractedNotice, heldDraft: current.heldDraft ?? "" };
       } else if (msg.seq <= current.lastSeq) {
         return;
       }
@@ -285,6 +285,7 @@ export function useRunProgress(topicId: string, operationId: string | null) {
       } else if (msg.channel === "draft_report") {
         next.draftReport = appendPrefixCap(next.draftReport, msg.delta, MAX_DRAFT_REPORT_CHARS);
         next.retractedNotice = null;
+        next.heldDraft = "";
       }
       streamRef.current = next;
       scheduleStreamNotify();
@@ -300,11 +301,13 @@ export function useRunProgress(topicId: string, operationId: string | null) {
           : msg.reason === "failed" || msg.reason === "cancelled" || msg.reason === "submission_partial"
             ? null
             : current.retractedNotice;
+      const ended = msg.reason === "failed" || msg.reason === "cancelled" || msg.reason === "submission_partial";
       streamRef.current = {
         ...emptyTransientStream(),
         callSeq: Math.max(current.callSeq ?? 0, msg.call_seq),
         lastSeq: msg.call_seq === current.callSeq ? current.lastSeq : -1,
         retractedNotice: keepNotice,
+        heldDraft: ended ? "" : msg.reason === "submission_rejected" ? (current.draftReport || current.heldDraft || "") : (current.heldDraft ?? ""),
       };
       flushStreamNotify();
     };

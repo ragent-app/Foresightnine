@@ -3252,6 +3252,11 @@
             ],
             "title": "Coverage Map"
           },
+          "draft_report": {
+            "default": "",
+            "title": "Draft Report",
+            "type": "string"
+          },
           "events": {
             "items": {
               "additionalProperties": true,
@@ -4211,6 +4216,7 @@
             "enum": [
               "supported",
               "conditional",
+              "partial",
               "weaker",
               "contradicted",
               "irrelevant",
