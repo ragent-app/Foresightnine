@@ -254,9 +254,28 @@ def load_policy(env: dict[str, str] | None = None) -> FinDataPolicy:
     if not raw:
         return default_policy(allow_fmp_platform=_parse_env_flag(environ.get(FMP_ALLOW_PLATFORM_ENV)))
     try:
-        return FinDataPolicy.model_validate_json(raw)
+        policy = FinDataPolicy.model_validate_json(raw)
     except ValidationError:
         return deny_all_policy("invalid_policy_json")
+    # Backward-compatible inheritance: if a custom policy allows sec_edgar/filings and has no
+    # explicit rule (allow or deny) for single-CIK sec_edgar/filing_search_cik, inherit permissions
+    # from sec_edgar/filings while keeping unscoped filing_search denied by default.
+    has_cik_rule = any(r.provider == "sec_edgar" and r.category == "filing_search_cik" for r in policy.rules)
+    if not has_cik_rule:
+        filings_rules = [
+            r for r in policy.rules
+            if r.provider == "sec_edgar" and r.category == "filings" and not r.deny
+        ]
+        if filings_rules:
+            inherited = [
+                r.model_copy(update={
+                    "category": "filing_search_cik",
+                    "notes": "Inherited from sec_edgar/filings for strictly single-CIK EFTS search.",
+                })
+                for r in filings_rules
+            ]
+            policy = policy.model_copy(update={"rules": [*policy.rules, *inherited]})
+    return policy
 
 
 def cache_scope_key(permissions: Permissions, account_id: str | None) -> str:

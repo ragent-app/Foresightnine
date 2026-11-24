@@ -264,8 +264,194 @@ def _clean_nonblank(value: str, field_name: str) -> str:
 
 
 def _norm_quote_text(text: str) -> str:
-    folded = text.replace("\u2018", "'").replace("\u2019", "'").replace("\u201c", '"').replace("\u201d", '"')
+    folded = (
+        text.replace("\u2018", "'")
+        .replace("\u2019", "'")
+        .replace("\u201c", '"')
+        .replace("\u201d", '"')
+        .replace("\u2013", "-")
+        .replace("\u2014", "-")
+        .replace("\u2212", "-")
+        .replace("\u00a0", " ")
+    )
+    folded = re.sub(r"([\$€£¥])\s+(?=\d)", r"\1", folded)
     return re.sub(r"\s+", " ", folded).strip().casefold()
+
+
+def _norm_quote_table_tolerant(text: str) -> str:
+    """Normalize 8-K/10-Q HTML table formatting (pipes, markdown bold, spaces around punctuation)
+    while preserving exact word and digit sequence for strict anti-hallucination verification."""
+    folded = _norm_quote_text(text)
+    folded = folded.replace("|", " ").replace("**", " ").replace("__", " ")
+    folded = re.sub(r"\s*([,;:%()\-/])\s*", r" \1 ", folded)
+    return re.sub(r"\s+", " ", folded).strip()
+
+
+def _quotation_matches_source(quotation: str, src_text: str) -> bool:
+    if quotation in src_text:
+        return True
+    if _norm_quote_text(quotation) in _norm_quote_text(src_text):
+        return True
+    q_tab = _norm_quote_table_tolerant(quotation)
+    if len(q_tab) >= 8 and q_tab in _norm_quote_table_tolerant(src_text):
+        return True
+    return False
+
+
+def _truncate_str(value: str, limit: int) -> str:
+    if len(value) <= limit:
+        return value
+    return value[:limit] + f"\n...[truncated {len(value) - limit} chars]"
+
+
+def _compact_tool_output_for_worker(tool_name: str, out: Any) -> Any:
+    """Cap oversized raw tool payloads before appending to worker LLM context.
+
+    Full source texts remain untouched in ``source_texts`` for server-side citation gating.
+    """
+    if not isinstance(out, Mapping):
+        return out
+    data = dict(out)
+
+    if tool_name == "sec_filing_tables":
+        tables = data.get("tables")
+        if isinstance(tables, list):
+            capped_tables = []
+            for tbl in tables[:6]:
+                if not isinstance(tbl, Mapping):
+                    capped_tables.append(tbl)
+                    continue
+                tcopy = dict(tbl)
+                rows = tcopy.get("rows")
+                if isinstance(rows, list) and len(rows) > 80:
+                    tcopy["rows"] = [*rows[:60], *rows[-20:]]
+                    tcopy["rows_truncated"] = True
+                    tcopy["total_rows"] = len(rows)
+                for k in ("markdown", "text", "html_text"):
+                    if isinstance(tcopy.get(k), str) and len(tcopy[k]) > 10000:
+                        tcopy[k] = _truncate_str(tcopy[k], 10000)
+                capped_tables.append(tcopy)
+            data["tables"] = capped_tables
+        for k in ("markdown", "text", "content"):
+            if isinstance(data.get(k), str) and len(data[k]) > 12000:
+                data[k] = _truncate_str(data[k], 12000)
+
+    elif tool_name == "sec_redline_diff":
+        for sec_key in ("added", "removed", "revised"):
+            items = data.get(sec_key)
+            if isinstance(items, list):
+                trimmed = []
+                for it in items[:12]:
+                    if isinstance(it, Mapping):
+                        ic = dict(it)
+                        for tk in ("current_text", "prior_text", "redline_markup", "text"):
+                            if isinstance(ic.get(tk), str) and len(ic[tk]) > 600:
+                                ic[tk] = _truncate_str(ic[tk], 600)
+                        trimmed.append(ic)
+                    elif isinstance(it, str):
+                        trimmed.append(_truncate_str(it, 600))
+                    else:
+                        trimmed.append(it)
+                data[sec_key] = trimmed
+        sections = data.get("section_diffs")
+        if isinstance(sections, Mapping):
+            new_secs: dict[str, Any] = {}
+            for sk, sv in sections.items():
+                if not isinstance(sv, Mapping):
+                    new_secs[sk] = sv
+                    continue
+                svc = dict(sv)
+                for sec_key in ("added", "removed", "revised"):
+                    items = svc.get(sec_key)
+                    if isinstance(items, list):
+                        svc[sec_key] = [
+                            {
+                                k: (_truncate_str(v, 500) if isinstance(v, str) and len(v) > 500 else v)
+                                for k, v in it.items()
+                            }
+                            if isinstance(it, Mapping)
+                            else it
+                            for it in items[:8]
+                        ]
+                new_secs[sk] = svc
+            data["section_diffs"] = new_secs
+
+    elif tool_name in ("read_sources", "sec_filing_sections", "sec_earnings_release"):
+        if isinstance(data.get("reads"), list):
+            capped_reads = []
+            for r in data["reads"]:
+                if isinstance(r, Mapping):
+                    rc = dict(r)
+                    if isinstance(rc.get("text"), str) and len(rc["text"]) > 12000:
+                        rc["text"] = _truncate_str(rc["text"], 12000)
+                        rc["truncated_for_context"] = True
+                    capped_reads.append(rc)
+                else:
+                    capped_reads.append(r)
+            data["reads"] = capped_reads
+        for k in ("text", "content", "markdown", "raw_text"):
+            if isinstance(data.get(k), str) and len(data[k]) > 12000:
+                data[k] = _truncate_str(data[k], 12000)
+                data["truncated_for_context"] = True
+
+    serialized = json.dumps(data, ensure_ascii=False, default=str)
+    if len(serialized) > 18000:
+        for k in ("text", "content", "markdown", "raw_text", "excerpt"):
+            if isinstance(data.get(k), str) and len(data[k]) > 6000:
+                data[k] = _truncate_str(data[k], 6000)
+                data["truncated_for_context"] = True
+    return data
+
+
+def _compact_stale_worker_tool_messages(messages: list[dict[str, Any]], *, keep_recent_tool_turns: int = 1) -> None:
+    """Compact tool-result messages from turns older than the most recent tool turn.
+
+    Prevents O(T^2) token growth across multi-turn worker loops while keeping the latest turn
+    verbatim and retaining full source texts on the server for citation gating.
+    """
+    assistant_tool_indices = [
+        idx for idx, m in enumerate(messages)
+        if m.get("role") == "assistant" and m.get("tool_calls")
+    ]
+    if len(assistant_tool_indices) <= keep_recent_tool_turns:
+        return
+    cutoff_idx = assistant_tool_indices[-keep_recent_tool_turns]
+    for idx in range(cutoff_idx):
+        msg = messages[idx]
+        if msg.get("role") != "tool":
+            continue
+        raw = msg.get("content")
+        if not isinstance(raw, str) or len(raw) <= 1200:
+            continue
+        try:
+            parsed = json.loads(raw)
+        except ValueError:
+            msg["content"] = _truncate_str(raw, 800)
+            continue
+        if isinstance(parsed, Mapping) and parsed.get("compacted_for_context"):
+            continue
+        if isinstance(parsed, Mapping):
+            summary: dict[str, Any] = {
+                "compacted_for_context": True,
+                "status": parsed.get("status"),
+                "reason": parsed.get("reason"),
+                "source_id": parsed.get("source_id"),
+                "title": parsed.get("title"),
+                "note": "Already inspected in an earlier turn; full text remains indexed for citation verification.",
+            }
+            if isinstance(parsed.get("reads"), list):
+                summary["read_source_ids"] = [
+                    r.get("source_id") for r in parsed["reads"]
+                    if isinstance(r, Mapping) and r.get("source_id")
+                ]
+            preview_src = parsed.get("text") or parsed.get("markdown") or parsed.get("content") or raw
+            if isinstance(preview_src, str):
+                summary["preview"] = preview_src[:500]
+            msg["content"] = json.dumps(
+                {k: v for k, v in summary.items() if v is not None},
+                ensure_ascii=False,
+                default=str,
+            )
 
 
 # --------------------------------------------------------------------------- Errors
@@ -2439,7 +2625,7 @@ def gate_evidence_cards(
                     continue
                 src_text = texts.get(cit.source_id)
                 if src_text is not None:
-                    if cit.quotation not in src_text and _norm_quote_text(cit.quotation) not in _norm_quote_text(src_text):
+                    if not _quotation_matches_source(cit.quotation, src_text):
                         unverified_cits.append({
                             "card_id": card.card_id,
                             "source_id": cit.source_id,
@@ -2963,36 +3149,139 @@ def _compact_snapshot_for_worker(snapshot: EarningsPrefetchSnapshot) -> dict[str
     }
 
 
+def _compact_redline_for_prompt(redline: Any, *, max_items: int = 6, max_chars: int = 350) -> dict[str, Any] | None:
+    if redline is None:
+        return None
+    return {
+        "total_added": redline.total_added,
+        "total_removed": redline.total_removed,
+        "total_revised": redline.total_revised,
+        "total_filtered_noise": redline.total_filtered_noise,
+        "sections": {
+            k: {
+                "has_substantive_changes": sec.has_substantive_changes,
+                "added_count": len(sec.added),
+                "removed_count": len(sec.removed),
+                "revised_count": len(sec.revised),
+                "added_previews": [(p.current_text or "")[:max_chars] for p in sec.added[:max_items]],
+                "removed_previews": [(p.prior_text or "")[:max_chars] for p in sec.removed[:max_items]],
+                "revised_previews": [(p.redline_markup or p.current_text or "")[:max_chars] for p in sec.revised[:max_items]],
+            }
+            for k, sec in redline.section_diffs.items()
+        },
+    }
+
+
+def _build_source_footnotes(dossier_core: Mapping[str, Any]) -> list[dict[str, str]]:
+    """Deterministically map internal source_ids to clean institutional footnote labels [1], [2], ..."""
+    snap = dossier_core.get("snapshot") if isinstance(dossier_core.get("snapshot"), Mapping) else {}
+    sym = str(dossier_core.get("symbol") or dossier_core.get("company_name") or "").strip()
+    seen: dict[str, dict[str, str]] = {}
+
+    def _register(sid: str, label: str, kind: str = "filing") -> None:
+        sid = sid.strip()
+        if not sid or sid in seen:
+            return
+        idx = len(seen) + 1
+        seen[sid] = {
+            "ref": f"[{idx}]",
+            "source_id": sid,
+            "label": label.strip() or sid,
+            "kind": kind,
+        }
+
+    for ref in (snap.get("prefetched_sources") or []):
+        if not isinstance(ref, Mapping):
+            continue
+        sid = str(ref.get("source_id") or "").strip()
+        if not sid:
+            continue
+        title = str(ref.get("title") or "").strip()
+        kind = str(ref.get("kind") or "filing").strip()
+        filed = str(ref.get("filed_at") or "").strip()[:10]
+        if title and filed and filed not in title:
+            label = f"{title} ({filed})"
+        elif title:
+            label = title
+        else:
+            label = f"{sym} {kind}" + (f" ({filed})" if filed else "")
+        _register(sid, label, kind)
+
+    for c in (dossier_core.get("evidence_cards") or []):
+        if not isinstance(c, Mapping):
+            continue
+        for cit in (c.get("citations") or []):
+            if not isinstance(cit, Mapping):
+                continue
+            sid = str(cit.get("source_id") or "").strip()
+            loc = str(cit.get("location") or "").strip()
+            if sid and sid not in seen:
+                label = f"{sym} {loc}".strip() if loc else f"{sym} SEC Filing".strip()
+                _register(sid, label, "filing")
+
+    return list(seen.values())
+
+
 def build_isolated_bear_prompt(
     snapshot: EarningsPrefetchSnapshot,
     cards: Sequence[EvidenceCard],
     open_gaps: Sequence[SquadGap],
+    *,
+    question: str | None = None,
 ) -> tuple[str, str]:
     """Build a physically isolated adversarial Bear Reviewer prompt with ZERO bull narrative."""
     valid_anchors = sorted(collect_valid_evidence_anchors(snapshot, cards, open_gaps))
     example_anchor = valid_anchors[0] if valid_anchors else "flag_example"
-    example_json = json.dumps({
-        "batch_id": "bearbatch_example",
-        "items": [
-            {
-                "bear_id": "bear_1",
-                "thesis_challenge": "Accounts receivable grew +50% YoY vs +20% revenue growth, compressing OCF/NI below 0.70x.",
-                "anchored_evidence_ids": [example_anchor],
-                "anchor_kind": "flag",
-                "next_quarter_invalidation_trigger": "AR YoY growth minus revenue YoY growth narrows to <= +5.0 pp next quarter.",
-                "supporting_numbers": ["AR +50% YoY", "Revenue +20% YoY"],
-                "severity": "high",
-            }
-        ],
-        "rejected_items": [],
-        "reviewer_notes": "All challenges anchored strictly to verified diagnostic flags and EvidenceCards.",
-    }, ensure_ascii=False)
+    use_zh = _contains_cjk(question) or any(_contains_cjk(c.finding) for c in cards)
+    if use_zh:
+        lang_rule = (
+            "LANGUAGE REQUIREMENT: Write `thesis_challenge`, `next_quarter_invalidation_trigger`, and `reviewer_notes` "
+            "in concise, institutional Simplified Chinese (简体中文), keeping exact English `anchored_evidence_ids` "
+            "and standard financial abbreviations (GAAP, Non-GAAP, DSO, DIO, CCC, FCF, Reverse-DCF, RPO)."
+        )
+        example_json = json.dumps({
+            "batch_id": "bearbatch_example",
+            "items": [
+                {
+                    "bear_id": "bear_1",
+                    "thesis_challenge": "应收账款同比增长 +50%，显著快于营收 +20% 增速，导致 OCF/净利润降至 0.70x 以下。",
+                    "anchored_evidence_ids": [example_anchor],
+                    "anchor_kind": "flag",
+                    "next_quarter_invalidation_trigger": "下季度应收账款同比增速与营收同比增速剪刀差收窄至 <= +5.0 pp。",
+                    "supporting_numbers": ["AR +50% YoY", "Revenue +20% YoY", "OCF/NI 0.68x"],
+                    "severity": "high",
+                }
+            ],
+            "rejected_items": [],
+            "reviewer_notes": "全部反证均严格锚定至已核验诊断旗标与证据卡片。",
+        }, ensure_ascii=False)
+    else:
+        lang_rule = (
+            "LANGUAGE REQUIREMENT: Match the language of the user's question (English if English, Simplified Chinese if Chinese)."
+        )
+        example_json = json.dumps({
+            "batch_id": "bearbatch_example",
+            "items": [
+                {
+                    "bear_id": "bear_1",
+                    "thesis_challenge": "Accounts receivable grew +50% YoY vs +20% revenue growth, compressing OCF/NI below 0.70x.",
+                    "anchored_evidence_ids": [example_anchor],
+                    "anchor_kind": "flag",
+                    "next_quarter_invalidation_trigger": "AR YoY growth minus revenue YoY growth narrows to <= +5.0 pp next quarter.",
+                    "supporting_numbers": ["AR +50% YoY", "Revenue +20% YoY"],
+                    "severity": "high",
+                }
+            ],
+            "rejected_items": [],
+            "reviewer_notes": "All challenges anchored strictly to verified diagnostic flags and EvidenceCards.",
+        }, ensure_ascii=False)
 
     system_prompt = (
         "You are an independent buy-side Adversarial Bear Reviewer (bear_reviewer).\n"
         "You receive ONLY deterministic financial diagnostics, SEC disclosures/redlines, "
         "valuation expectations, open gaps, and factual EvidenceCards. You must NOT rely on any bull thesis "
-        "or optimistic narrative.\n\n"
+        "or optimistic narrative.\n"
+        f"{lang_rule}\n\n"
         "STRICT JSON CONTRACT — BearCaseBatch (extra='forbid' on outer batch AND every BearCaseItem; "
         "NO extra keys like 'summary', 'bear_cases', or 'confidence'; output ONLY raw JSON):\n"
         "- Outer BearCaseBatch keys: batch_id (str), items (list[BearCaseItem]), rejected_items (list, usually []), reviewer_notes (str, max 2000).\n"
@@ -3018,7 +3307,7 @@ def build_isolated_bear_prompt(
         "sector_applicability": snapshot.sector_applicability.model_dump(mode="json"),
         "valid_anchors": valid_anchors,
         "diagnostic_flags": [f.model_dump(mode="json") for f in snapshot.flags],
-        "redline_summary": snapshot.redline_summary.model_dump(mode="json") if snapshot.redline_summary else None,
+        "redline_summary": _compact_redline_for_prompt(snapshot.redline_summary),
         "guidance_nongaap": snapshot.guidance_nongaap.model_dump(mode="json") if snapshot.guidance_nongaap else None,
         "valuation": snapshot.valuation.model_dump(mode="json") if snapshot.valuation else None,
         "evidence_cards": [
@@ -3026,15 +3315,22 @@ def build_isolated_bear_prompt(
                 "card_id": c.card_id,
                 "worker_role": c.worker_role,
                 "topic_tag": c.topic_tag,
-                "finding": c.finding,
-                "supporting_fact_ids": c.supporting_fact_ids,
-                "caveat": c.caveat,
-                "unresolved_gaps": c.unresolved_gaps,
-                "citations": [cit.model_dump(mode="json") for cit in c.citations],
+                "finding": (c.finding or "")[:900],
+                "supporting_fact_ids": c.supporting_fact_ids[:10],
+                "caveat": (c.caveat or "")[:300] or None,
+                "unresolved_gaps": list(c.unresolved_gaps[:5]),
+                "citations": [
+                    {
+                        "source_id": cit.source_id,
+                        "location": cit.location,
+                        "quotation": (cit.quotation or "")[:260],
+                    }
+                    for cit in c.citations[:4]
+                ],
             }
             for c in cards
         ],
-        "open_gaps": [g.model_dump(mode="json") for g in open_gaps],
+        "open_gaps": [g.model_dump(mode="json") for g in open_gaps[:20]],
     }
     return system_prompt, json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
 
@@ -3043,15 +3339,18 @@ def _build_writer_payload(dossier_core: Mapping[str, Any], *, mode: Literal["mem
     slimmed = dict(dossier_core)
     if "snapshot" in slimmed and slimmed["snapshot"] is not None:
         slimmed["snapshot"] = _compact_snapshot_for_writer(slimmed["snapshot"])
+    footnotes = _build_source_footnotes(slimmed)
     return json.dumps(
         {
             "render_mode": mode,
+            "source_footnotes": footnotes,
             "locked_dossier": slimmed,
             "rules": [
                 "Use ONLY facts, numbers, citations, bear cases, and open gaps present in locked_dossier.",
-                "Cite evidence inline using [card_id], source_id, and fact_id where available.",
+                "Cite sources cleanly using numbered footnotes [1], [2], etc. from source_footnotes, and include a concise Sources list at the end.",
+                "NEVER output raw internal IDs or debug strings such as 'Gate 状态: exportable: true, passed: false', 'source_...', '[card_...]', or raw JSON field names.",
                 "Respect sector_applicability: never fabricate or report disabled_by_sector metrics.",
-                "Do not invoke any retrieval tools; report open_gaps and bear invalidation triggers explicitly.",
+                "Do not invoke any retrieval tools; report open_gaps and bear invalidation triggers clearly in natural institutional prose.",
             ],
         },
         ensure_ascii=False,
@@ -3139,7 +3438,9 @@ def _build_writer_system_prompt(
 ) -> str:
     sections, must_state = _l1_writer_guidance(sic_code)
     lang_rule = (
-        "Write the report in Simplified Chinese (简体中文), keeping exact English tickers, SEC form names, fact_ids, and card_ids intact."
+        "Write the entire report (including all bear-case arguments and boundaries) in natural, institutional "
+        "Simplified Chinese (简体中文), keeping standard English tickers, SEC form names (8-K, 10-Q, 10-K), "
+        "and financial abbreviations (GAAP, Non-GAAP, DSO, DIO, CCC, FCF, Reverse-DCF, RPO) intact."
         if _contains_cjk(question)
         else "Match the language of the user's question (Chinese if Chinese, English if English)."
     )
@@ -3150,14 +3451,19 @@ def _build_writer_system_prompt(
     )
     return (
         f"You are an institutional buy-side equity research writer (writer slot). "
-        f"Render a {mode_desc} in clean Markdown strictly from the server-gated `locked_dossier` JSON.\n"
+        f"Render a {mode_desc} in clean, publication-grade Markdown strictly from the server-gated `locked_dossier` JSON.\n"
         f"Rules:\n"
         f"1. You have ZERO retrieval tools. Do NOT emit tool calls and do NOT alter or invent any number, period, unit, or fact.\n"
         f"2. {lang_rule}\n"
         f"3. Required report structure sections (L1 earnings_review): {' | '.join(sections)}.\n"
         f"4. Must explicitly state: {'; '.join(must_state)}.\n"
-        f"5. Cite evidence inline using `[card_id]`, `source_id`, and `fact_id` where available; include each accepted bear case's anchor IDs and `next_quarter_invalidation_trigger`.\n"
-        f"6. Respect `sector_applicability` boundaries (never compute or report `disabled_by_sector` metrics) and explicitly surface all `open_gaps`."
+        f"5. CITATION STYLE (INSTITUTIONAL): Use clean numbered footnotes `[1]`, `[2]` matching `source_footnotes` in the payload, "
+        f"and end with a concise `## 参考来源` (or `## Sources`) table mapping each `[n]` to its human-readable filing/data label. "
+        f"NEVER expose internal engineering identifiers or raw debug fields in the prose — specifically forbid strings like "
+        f"`Gate 状态: exportable: true, passed: false`, `source_...`, `[card_...]`, `fact_id` hashes, or raw JSON keys.\n"
+        f"6. Include every accepted bear case with its concrete numeric basis and next-quarter invalidation trigger.\n"
+        f"7. Respect `sector_applicability` boundaries (never compute or report `disabled_by_sector` metrics) and summarize "
+        f"any `open_gaps` or gate-excluded items in plain institutional prose under `## 研究边界与资料缺口` (or `## Research Boundaries & Data Gaps`)."
     )
 
 
@@ -3853,6 +4159,7 @@ class EarningsSquadOrchestrator:
                 snapshot=snapshot,
                 cards=all_cards,
                 open_gaps=state["open_gaps"],
+                question=request.question,
                 ledger=ledger,
                 emitter=emitter,
             )
@@ -5383,6 +5690,7 @@ class EarningsSquadOrchestrator:
             )
 
     def _execute_worker_task(
+
         self,
         *,
         request: SquadPrefetchRequest,
@@ -5482,6 +5790,8 @@ class EarningsSquadOrchestrator:
 
         for turn_idx in range(loop_limit):
             check_active()
+            if turn_idx >= 2:
+                _compact_stale_worker_tool_messages(messages, keep_recent_tool_turns=1)
             is_wrapup_turn = (turn_idx == loop_limit - 1) and (turn_idx >= 1)
             turn_tools = [] if is_wrapup_turn else allowed_defs
             if is_wrapup_turn:
@@ -5552,12 +5862,24 @@ class EarningsSquadOrchestrator:
                             "used_fallback": False,
                             "last_error": str(last_parse_err)[:400] if last_parse_err else None,
                         })
+                        has_deliverable = bool(batch.cards)
+                        is_effectively_done = batch.status == "completed" or (
+                            batch.status == "partial" and has_deliverable
+                        )
+                        gap_note = f" ({len(batch.unresolved_gaps)} gap(s))" if batch.unresolved_gaps else ""
                         emitter.emit(
                             stage=stage_name,
                             node_id=role,
-                            action_kind="RESPONDING",
-                            runtime_state="completed" if batch.status == "completed" else "blocked",
-                            current_activity=f"{role} emitted {len(batch.cards)} EvidenceCard(s) in {turns_used} turn(s).",
+                            action_kind="RESPONDING" if is_effectively_done else "BLOCKED",
+                            runtime_state=(
+                                "completed"
+                                if is_effectively_done
+                                else ("failed" if batch.status == "failed" else "blocked")
+                            ),
+                            current_activity=(
+                                f"{role} emitted {len(batch.cards)} EvidenceCard(s) "
+                                f"in {turns_used} turn(s){gap_note}."
+                            ),
                             edge_event=OrgEdgeEvent(
                                 from_node_id=role,
                                 to_node_id="lead_coordinator",
@@ -5798,10 +6120,11 @@ class EarningsSquadOrchestrator:
                             source_permissions[sid] = src.permissions.model_dump(mode="json")
                     elif isinstance(out, Mapping) and isinstance(out.get("source_id"), str) and isinstance(out.get("text"), str):
                         source_texts[out["source_id"]] = out["text"]
+                compacted_out = _compact_tool_output_for_worker(tc.name, out)
                 tool_result_msgs.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
-                    "content": json.dumps(out, ensure_ascii=False, default=str),
+                    "content": json.dumps(compacted_out, ensure_ascii=False, default=str),
                 })
 
             messages.append({"role": "assistant", "content": None, "tool_calls": assistant_calls_msg})
@@ -6011,6 +6334,7 @@ class EarningsSquadOrchestrator:
         snapshot: EarningsPrefetchSnapshot,
         cards: Sequence[EvidenceCard],
         open_gaps: Sequence[SquadGap],
+        question: str | None = None,
         ledger: SquadExecutionLedger,
         emitter: OrgGraphEmitter,
     ) -> tuple[BearCaseBatch, list[SquadGap]]:
@@ -6031,7 +6355,7 @@ class EarningsSquadOrchestrator:
             slot="bear_reviewer",
         )
 
-        sys_prompt, user_prompt = build_isolated_bear_prompt(snapshot, cards, open_gaps)
+        sys_prompt, user_prompt = build_isolated_bear_prompt(snapshot, cards, open_gaps, question=question)
         try:
             parsed_batch, used_fallback, last_err = self._invoke_and_parse_with_repair(
                 slot="bear_reviewer",

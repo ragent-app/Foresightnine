@@ -258,8 +258,101 @@ def _collect(raw: Iterable[dict], kind: str, *, flow: bool, derive_q4: bool, tag
             if kind == "quarter" or first.get("fp") == "FY":
                 periods.append(_period(group, kind, tag, unit))
     if flow and kind == "quarter" and derive_q4:
-        periods.extend(_derive_q4(raw, tag, unit, {p.end for p in periods}))
+        have_ends = {p.end for p in periods}
+        ytd_derived = _derive_ytd_quarters(raw, tag, unit, have_ends)
+        periods.extend(ytd_derived)
+        have_ends.update(p.end for p in ytd_derived)
+        periods.extend(_derive_q4(raw, tag, unit, have_ends))
     return sorted(periods, key=lambda p: p.end, reverse=True)
+
+
+def _derive_ytd_quarters(raw: Iterable[dict], tag: str, unit: str, have_ends: set[date]) -> list[Period]:
+    """Derive standalone Q2/Q3/Q4 cash-flow/flow quarters from SEC 10-Q/10-K YTD cumulative durations.
+
+    US 10-Q cash flow statements typically disclose only 6M YTD (Q2) and 9M YTD (Q3) cumulative
+    durations rather than standalone ~90d quarters:
+      - Q2 = 6M YTD - Q1
+      - Q3 = 9M YTD - 6M YTD
+      - Q4 = FY - 9M YTD
+    All arithmetic uses exact Decimal values on the same XBRL tag and unit, marked derived=True.
+    """
+    groups: dict[tuple[date | None, date], list[dict]] = {}
+    for e in _entries(raw):
+        groups.setdefault((e["_start"], e["_end"]), []).append(e)
+
+    quarters: list[Period] = []
+    halves: list[Period] = []
+    nines: list[Period] = []
+    years: list[Period] = []
+    for (start, end), group in groups.items():
+        if start is None:
+            continue
+        days = (end - start).days
+        if 78 <= days <= 105:
+            quarters.append(_period(group, "quarter", tag, unit))
+        elif 160 <= days <= 205:
+            halves.append(_period(group, "half", tag, unit))
+        elif 250 <= days <= 295:
+            nines.append(_period(group, "nine_months", tag, unit))
+        elif 340 <= days <= 380:
+            years.append(_period(group, "year", tag, unit))
+
+    near = lambda a, b: a is not None and b is not None and abs((a - b).days) <= 5
+    seen_ends = set(have_ends)
+    out: list[Period] = []
+
+    for half in sorted(halves, key=lambda p: p.end, reverse=True):
+        if half.end in seen_ends or half.start is None:
+            continue
+        q1 = next(
+            (q for q in quarters if near(q.start, half.start) and 60 <= (half.end - q.end).days <= 115),
+            None,
+        )
+        if q1 is None:
+            continue
+        fy_prefix = half.label.split("-")[0] if half.label else None
+        out.append(Period(
+            q1.end + timedelta(days=1), half.end, "quarter", half.value - q1.value,
+            unit, tag, f"{fy_prefix}-Q2" if fy_prefix else None, half.form, half.filed,
+            half.accession, None, True, "6M YTD minus Q1, same tag",
+        ))
+        seen_ends.add(half.end)
+
+    for nine in sorted(nines, key=lambda p: p.end, reverse=True):
+        if nine.end in seen_ends or nine.start is None:
+            continue
+        half = next(
+            (h for h in halves if near(h.start, nine.start) and 60 <= (nine.end - h.end).days <= 115),
+            None,
+        )
+        if half is None:
+            continue
+        fy_prefix = nine.label.split("-")[0] if nine.label else None
+        out.append(Period(
+            half.end + timedelta(days=1), nine.end, "quarter", nine.value - half.value,
+            unit, tag, f"{fy_prefix}-Q3" if fy_prefix else None, nine.form, nine.filed,
+            nine.accession, None, True, "9M YTD minus 6M YTD, same tag",
+        ))
+        seen_ends.add(nine.end)
+
+    for annual in sorted(years, key=lambda p: p.end, reverse=True):
+        if annual.end in seen_ends or annual.start is None:
+            continue
+        nine = next(
+            (n for n in nines if near(n.start, annual.start) and 60 <= (annual.end - n.end).days <= 115),
+            None,
+        )
+        if nine is None:
+            continue
+        fy_prefix = annual.label.split("-")[0] if annual.label else None
+        out.append(Period(
+            nine.end + timedelta(days=1), annual.end, "quarter", annual.value - nine.value,
+            unit, tag, f"{fy_prefix}-Q4" if fy_prefix else None, annual.form, annual.filed,
+            annual.accession, None, True, "FY minus 9M YTD, same tag",
+        ))
+        seen_ends.add(annual.end)
+
+    return out
 
 
 def _derive_q4(raw: Iterable[dict], tag: str, unit: str, have_ends: set[date]) -> list[Period]:
@@ -594,7 +687,11 @@ def derive_period_metrics(lines: Iterable[StatementLine], *, decimal_places: int
             continue
         # Only feed reported base lines and derived single-quarter lines into period derivations;
         # never cascade over outputs previously produced by derive_period_metrics().
-        if item.derived and item.basis != "single_quarter_derived" and not (item.derivation or "").startswith("FY minus"):
+        if (
+            item.derived
+            and item.basis != "single_quarter_derived"
+            and not (item.derivation or "").startswith(("FY minus", "6M YTD minus", "9M YTD minus"))
+        ):
             continue
         key = (item.entity_id, item.taxonomy, item.line, item.period_start, item.period_end,
                item.basis, item.unit, item.currency)

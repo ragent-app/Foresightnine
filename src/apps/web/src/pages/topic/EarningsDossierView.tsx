@@ -354,6 +354,41 @@ export function EarningsDossierView({
     return map;
   }, [evidenceCards]);
 
+  const sourceLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of prefetchedSources) {
+      const title = (s.title || "").trim();
+      if (title) {
+        map.set(s.source_id, title);
+      }
+    }
+    return map;
+  }, [prefetchedSources]);
+
+  const flagLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const f of snap.flags ?? []) {
+      const label = (f.metric_name || f.flag_id || "").trim();
+      if (f.flag_id && label) map.set(f.flag_id, label);
+    }
+    return map;
+  }, [snap.flags]);
+
+  const formatSourceRefLabel = (sourceId: string, loc?: string | null): string => {
+    const base = sourceLabelById.get(sourceId) ?? sourceId;
+    return loc ? `${base} · ${loc}` : base;
+  };
+
+  const formatAnchorLabel = (anchorId: string): string => {
+    const card = cardsById.get(anchorId);
+    if (card) return card.topic_tag || anchorId;
+    const flagLbl = flagLabelById.get(anchorId);
+    if (flagLbl) return flagLbl;
+    const srcLbl = sourceLabelById.get(anchorId);
+    if (srcLbl) return srcLbl;
+    return anchorId;
+  };
+
   const defaultSecFilingSourceId = useMemo(() => {
     const filingSrc = prefetchedSources.find(
       (s) =>
@@ -1386,7 +1421,7 @@ export function EarningsDossierView({
                       <span className="meta">引文溯源:</span>
                       {(card.citations ?? []).map((cit, cIdx) => {
                         const loc = formatCitationLocation(cit);
-                        const label = loc ? `${cit.source_id} · ${loc}` : cit.source_id;
+                        const label = formatSourceRefLabel(cit.source_id, loc);
                         return (
                           <button
                             key={`${card.card_id}-cit-${cIdx}`}
@@ -1450,7 +1485,7 @@ export function EarningsDossierView({
                             title={cit.quotation}
                             onClick={() => onInspectSource?.(cit.source_id, loc)}
                           >
-                            {loc ? `${cit.source_id} · ${loc}` : cit.source_id}
+                            {formatSourceRefLabel(cit.source_id, loc)}
                           </button>
                         );
                       })}
@@ -1596,16 +1631,17 @@ export function EarningsDossierView({
                   </div>
                 ) : null}
 
-                <div className="chips" aria-label="锚定证据 ID">
-                  <span className="meta">锚定证据 ID:</span>
+                <div className="chips" aria-label="锚定证据">
+                  <span className="meta">锚定证据:</span>
                   {bear.anchored_evidence_ids.map((anchorId) => (
                     <button
                       key={anchorId}
                       type="button"
                       className="fact-ref"
+                      title={anchorId}
                       onClick={() => handleInspectAnchor(anchorId)}
                     >
-                      {anchorId}
+                      {formatAnchorLabel(anchorId)}
                     </button>
                   ))}
                 </div>

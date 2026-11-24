@@ -838,12 +838,12 @@ describe("EarningsDossierView", () => {
       />,
     );
 
-    // Click citation button on evidence card
-    fireEvent.click(screen.getByRole("button", { name: "sec_ex99_1 · EX-99.1 Paragraph 3" }));
+    // Click citation button on evidence card (human-readable title + location)
+    fireEvent.click(screen.getByRole("button", { name: /EX-99\.1 Paragraph 3/ }));
     expect(onInspectSource).toHaveBeenCalledWith("sec_ex99_1", "EX-99.1 Paragraph 3");
 
     // Click anchored_evidence_id on bear case card -> resolves card_seg_1 citation
-    fireEvent.click(screen.getByRole("button", { name: "card_seg_1" }));
+    fireEvent.click(screen.getByTitle("card_seg_1"));
     expect(onInspectSource).toHaveBeenCalledWith("sec_ex99_1", "EX-99.1 Paragraph 3");
 
     // Click multi-quarter financial table citation and redline source button
