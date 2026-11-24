@@ -127,6 +127,8 @@ export interface RunProgress {
   operation_status: OperationStatus;
   turn: { index: number; question: string; turn_id?: string };
   logical_status?: "running" | "awaiting_user" | "completed" | "stopped" | "failed";
+  run_mode?: "earnings_squad" | "legacy_single_loop" | null;
+  squad_run_id?: string | null;
   /** The topic's title, which the first turn summarises from its question while it runs. */
   topic_title?: string | null;
   clarification?: { question: string; why_it_matters: string; requirement_id: string } | null;

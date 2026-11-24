@@ -2699,6 +2699,17 @@
             "title": "Checkpoint Completed Stages",
             "type": "array"
           },
+          "cik": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cik"
+          },
           "dossier": {
             "anyOf": [
               {
@@ -2733,6 +2744,12 @@
           },
           "run_id": {
             "title": "Run Id",
+            "type": "string"
+          },
+          "run_mode": {
+            "const": "earnings_squad",
+            "default": "earnings_squad",
+            "title": "Run Mode",
             "type": "string"
           },
           "slot_routing_summary": {
@@ -2757,6 +2774,17 @@
             "title": "Steering Instructions",
             "type": "array"
           },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
+          },
           "topic_id": {
             "title": "Topic Id",
             "type": "string"
@@ -2779,6 +2807,17 @@
             },
             "title": "Checkpoint Completed Stages",
             "type": "array"
+          },
+          "cik": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cik"
           },
           "dossier": {
             "anyOf": [
@@ -2816,6 +2855,12 @@
             "title": "Run Id",
             "type": "string"
           },
+          "run_mode": {
+            "const": "earnings_squad",
+            "default": "earnings_squad",
+            "title": "Run Mode",
+            "type": "string"
+          },
           "slot_routing_summary": {
             "additionalProperties": true,
             "title": "Slot Routing Summary",
@@ -2830,6 +2875,17 @@
             ],
             "title": "Status",
             "type": "string"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
           },
           "topic_id": {
             "title": "Topic Id",
@@ -7300,6 +7356,28 @@
       "ResearchRunListEntry": {
         "additionalProperties": false,
         "properties": {
+          "cik": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cik"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
           "current_operation_id": {
             "anyOf": [
               {
@@ -7310,6 +7388,17 @@
               }
             ],
             "title": "Current Operation Id"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
           },
           "logical_status": {
             "anyOf": [
@@ -7332,6 +7421,43 @@
           "operation": {
             "$ref": "#/components/schemas/Operation"
           },
+          "run_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "earnings_squad",
+                  "legacy_single_loop"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Mode"
+          },
+          "squad_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Squad Run Id"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
+          },
           "turn_id": {
             "anyOf": [
               {
@@ -7353,6 +7479,17 @@
       "ResearchRunRequest": {
         "additionalProperties": false,
         "properties": {
+          "allow_auto_squad": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Auto Squad"
+          },
           "auto_fetch_official": {
             "default": false,
             "title": "Auto Fetch Official",
@@ -7523,8 +7660,83 @@
       "ResearchStartResponse": {
         "additionalProperties": false,
         "properties": {
+          "cik": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cik"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
           "operation": {
             "$ref": "#/components/schemas/Operation"
+          },
+          "routing_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Routing Reason"
+          },
+          "run_mode": {
+            "default": "legacy_single_loop",
+            "enum": [
+              "earnings_squad",
+              "legacy_single_loop"
+            ],
+            "title": "Run Mode",
+            "type": "string"
+          },
+          "squad_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Squad Run Id"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
           },
           "turn_id": {
             "title": "Turn Id",
@@ -7632,6 +7844,17 @@
       },
       "ResearchTopic": {
         "properties": {
+          "cik": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cik"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -7666,11 +7889,48 @@
           "request": {
             "$ref": "#/components/schemas/ResearchInput"
           },
+          "run_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "earnings_squad",
+                  "legacy_single_loop"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Mode"
+          },
           "schema_version": {
             "const": "1",
             "default": "1",
             "title": "Schema Version",
             "type": "string"
+          },
+          "squad_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Squad Run Id"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
           },
           "title": {
             "anyOf": [
@@ -8048,6 +8308,17 @@
       },
       "ResearchTurnSummary": {
         "properties": {
+          "cik": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cik"
+          },
           "current_operation_id": {
             "title": "Current Operation Id",
             "type": "string"
@@ -8062,6 +8333,43 @@
             ],
             "title": "Logical Status",
             "type": "string"
+          },
+          "run_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "earnings_squad",
+                  "legacy_single_loop"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Mode"
+          },
+          "squad_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Squad Run Id"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
           },
           "topic_id": {
             "title": "Topic Id",

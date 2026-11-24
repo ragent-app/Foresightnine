@@ -1012,3 +1012,329 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   .stat .stat-when { display: block; white-space: nowrap; }
   .stat .stat-when::before { content: none; }
 }
+
+/* ==========================================================================
+   Ragent_product-aligned Organization Graph (Circular Morandi Orbs + Frosted Badges)
+   ========================================================================== */
+.question-bubble {
+  align-self: flex-end;
+  max-width: min(88%, 540px);
+  margin: 0 0 12px auto;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--s-low);
+  color: var(--on-surface);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.question-bubble p { margin: 0; }
+
+.org-graph-panel {
+  border-radius: 18px;
+  border: 1px solid var(--separator);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.org-graph-panel.org-ragent-collapsed {
+  padding: 10px 14px;
+}
+
+.org-ragent-summary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.org-ragent-summary-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.org-ragent-dot-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.org-ragent-orb-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+  flex: none;
+}
+
+.org-ragent-orb-dot.is-purple { background: linear-gradient(135deg, #657aa5 0%, #6e76a6 55%, #7b73a1 100%); }
+.org-ragent-orb-dot.is-blue { background: linear-gradient(135deg, #6487a8 0%, #6e84a6 55%, #7a80a1 100%); }
+.org-ragent-orb-dot.is-green { background: linear-gradient(135deg, #64887f 0%, #6e887c 55%, #7a8a78 100%); }
+.org-ragent-orb-dot.is-grey { background: linear-gradient(135deg, #6f8997 0%, #798696 55%, #838293 100%); }
+.org-ragent-orb-dot.is-warm { background: linear-gradient(135deg, #958263 0%, #9b846c 55%, #a08776 100%); }
+.org-ragent-orb-dot.is-muted { opacity: 0.35; }
+
+.org-ragent-summary-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+.org-ragent-summary-meta {
+  font-size: 12px;
+  color: var(--on-tertiary);
+}
+
+.org-ragent-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px 4px;
+}
+
+.org-ragent-head-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.org-ragent-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--on-surface);
+  letter-spacing: -0.01em;
+}
+
+.org-ragent-stage-pill {
+  font-size: 12px;
+  color: var(--on-variant);
+  background: var(--s-low);
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.org-ragent-toggle-btn {
+  border: none;
+  background: transparent;
+  color: var(--on-variant);
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.org-ragent-toggle-btn:hover {
+  background: var(--s-low);
+  color: var(--on-surface);
+}
+
+.org-ragent-canvas-wrap {
+  padding: 4px 12px 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.org-ragent-svg {
+  width: 100%;
+  max-width: 440px;
+  height: auto;
+  display: block;
+  overflow: visible;
+  user-select: none;
+}
+
+.org-ragent-node-group {
+  cursor: pointer;
+  outline: none;
+  transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.org-ragent-node-group.is-idle {
+  opacity: 0.42;
+}
+
+.org-ragent-node-group.is-skipped {
+  opacity: 0.34;
+}
+
+.org-ragent-node-group:focus-visible .org-ragent-focus-ring {
+  opacity: 1;
+}
+
+.org-ragent-focus-ring {
+  fill: none;
+  stroke: var(--on-surface);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.org-ragent-node-group.is-selected .org-ragent-focus-ring {
+  opacity: 0.55;
+  stroke-dasharray: none;
+}
+
+.org-ragent-node-label {
+  font-size: 12px;
+  font-weight: 500;
+  fill: var(--on-surface);
+  text-anchor: middle;
+}
+
+.org-ragent-node-group.is-idle .org-ragent-node-label,
+.org-ragent-node-group.is-skipped .org-ragent-node-label {
+  fill: var(--on-tertiary);
+}
+
+.org-ragent-edge {
+  fill: none;
+  stroke: var(--on-variant);
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  opacity: 0.22;
+  transition: opacity 220ms ease;
+}
+
+.org-ragent-edge.is-active {
+  opacity: 0.44;
+}
+
+.org-ragent-edge.is-review {
+  stroke-dasharray: 4 5;
+  opacity: 0.28;
+}
+
+.org-ragent-edge.is-review.is-active {
+  opacity: 0.54;
+}
+
+.org-ragent-badge-bg {
+  fill: rgba(255, 255, 255, 0.88);
+  stroke: rgba(15, 23, 42, 0.1);
+  stroke-width: 1;
+}
+
+.org-ragent-badge-arc {
+  fill: none;
+  stroke: var(--on-surface);
+  stroke-opacity: 0.32;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: org-ragent-spin 1600ms linear infinite;
+}
+
+@keyframes org-ragent-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.org-ragent-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px 12px;
+  font-size: 12px;
+  color: var(--on-tertiary);
+}
+
+.org-ragent-drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 2px 16px;
+}
+
+.org-ragent-drawer-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--on-variant);
+}
+
+.org-ragent-drawer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.org-ragent-drawer-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--on-tertiary);
+  letter-spacing: 0.02em;
+}
+
+.org-ragent-drawer-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--on-surface);
+}
+
+.org-ragent-drawer-blocker {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--error) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--error) 24%, transparent);
+  font-size: 13px;
+  color: var(--error);
+}
+
+.org-ragent-log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.org-ragent-log-item {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--s-low);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.org-ragent-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+.org-ragent-log-time {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--on-tertiary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .org-ragent-badge-arc {
+    animation: none;
+  }
+  .org-ragent-node-group {
+    transition: none;
+  }
+}

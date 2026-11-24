@@ -681,6 +681,30 @@ export function TopicPage() {
 
   const send = () => {
     const question = text.trim();
+    if (squadStatus === "running") {
+      if (!question || steerBusy) return;
+      setSteerBusy(true);
+      setSteerError(null);
+      void steerEarningsSquad(
+        topicId,
+        question,
+        { idempotencyKey: createSquadIdempotencyKey("squad-steer") },
+      ).then((response) => {
+        if (topicIdRef.current !== topicId) return;
+        setSquadSteeringHistory((previous) => [
+          ...previous.filter((item) => item.sequence !== response.instruction.sequence),
+          response.instruction,
+        ]);
+        updateText("");
+        followLiveOutput();
+      }).catch((error: unknown) => {
+        if (topicIdRef.current !== topicId) return;
+        setSteerError(describeError(error));
+      }).finally(() => {
+        if (topicIdRef.current === topicId) setSteerBusy(false);
+      });
+      return;
+    }
     if (awaitingUser && progress.progress?.turn.turn_id && latestRun && question && !instructionBusy) {
       void answerClarification(question);
       return;
@@ -753,10 +777,19 @@ export function TopicPage() {
     startTurn.mutate(body, {
       onSuccess: (response) => {
         setPendingContinue(null);
-        setAskedOp({ operationId: response.operation.operation_id, question });
-        setPendingAsk({ question, at: new Date().toISOString(), turnsAt: turns.length, operationId: response.operation.operation_id });
         updateText("");
         setFocus(null);
+        const startResp = response as ResearchV2.ResearchStartResponse;
+        if (startResp.run_mode === "earnings_squad") {
+          setAskedOp(null);
+          setPendingAsk(null);
+          setSquadRunId(startResp.squad_run_id ?? response.operation.operation_id);
+          setSquadStatus("running");
+          followLiveOutput();
+          return;
+        }
+        setAskedOp({ operationId: response.operation.operation_id, question });
+        setPendingAsk({ question, at: new Date().toISOString(), turnsAt: turns.length, operationId: response.operation.operation_id });
         followLiveOutput();
       },
     });
@@ -767,9 +800,14 @@ export function TopicPage() {
     startTurn.mutate(
       { parent_version_id: version.version_id, ...runRequestFields(options) },
       {
-        onSuccess: () => {
+        onSuccess: (response) => {
           setPendingContinue(null);
           setAskedOp(null);
+          const startResp = response as ResearchV2.ResearchStartResponse;
+          if (startResp.run_mode === "earnings_squad") {
+            setSquadRunId(startResp.squad_run_id ?? response.operation.operation_id);
+            setSquadStatus("running");
+          }
           followLiveOutput();
         },
       },
@@ -932,8 +970,28 @@ export function TopicPage() {
   const liveIndex = live?.progress?.turn.index ?? 0;
   const liveCommitted = live !== null && turns.some((turn) => turn.operation_ids.includes(live.operation.operation_id));
   const liveTerminal = live?.progress != null && (live.progress.logical_status ? live.progress.logical_status !== "running" : !isActiveStatus(live.progress.operation_status));
-  const showLiveTurn = live !== null && !liveCommitted && !liveTerminal;
-  const showPendingTurn = showLiveTurn || (!live && pendingAsk !== null);
+  const activeRunMeta = activeRun as (ResearchV2.Operation & { run_mode?: string | null; squad_run_id?: string | null }) | null;
+  const isAutoRoutedSquadRun = Boolean(
+    topic?.run_mode === "earnings_squad"
+    || activeRunMeta?.run_mode === "earnings_squad"
+    || live?.progress?.run_mode === "earnings_squad",
+  );
+  const showSquadWorkspace = squadStatus !== "idle" || squadDossier !== null || isAutoRoutedSquadRun;
+
+  useEffect(() => {
+    if (!isAutoRoutedSquadRun || squadStatus !== "idle" || squadDossier !== null) return;
+    const nextRunId = topic?.squad_run_id ?? activeRunMeta?.squad_run_id ?? live?.progress?.squad_run_id ?? activeRun?.operation_id ?? null;
+    if (nextRunId) {
+      setSquadRunId(nextRunId);
+      squadRunIdRef.current = nextRunId;
+    }
+    if (activeRun || live?.progress?.logical_status === "running") {
+      setSquadStatus("running");
+    }
+  }, [isAutoRoutedSquadRun, squadStatus, squadDossier, topic?.squad_run_id, activeRunMeta?.squad_run_id, activeRun, live?.progress?.squad_run_id, live?.progress?.logical_status]);
+
+  const showLiveTurn = live !== null && !liveCommitted && !liveTerminal && !showSquadWorkspace;
+  const showPendingTurn = showLiveTurn || (!live && pendingAsk !== null && !showSquadWorkspace);
   const isContinuingLastTurn =
     showLiveTurn
     && lastTurn !== null
@@ -1175,7 +1233,7 @@ export function TopicPage() {
               ) : !live && pendingAsk ? (
                 <LiveTurn sectionRef={liveTurnRef} number={turns.length + 1} startedAt={pendingAsk.at} question={pendingAsk.question} live={null} first={turns.length === 0} />
               ) : null}
-              {turns.length === 0 && !live && !orphanRun && !pendingAsk && !runs.isLoading && squadStatus === "idle" && !squadDossier ? (
+              {turns.length === 0 && !live && !orphanRun && !pendingAsk && !runs.isLoading && !showSquadWorkspace ? (
                 <div className="turn">
                   <div className="callout" role="note">
                     <span className="h">这个研究还没有开始。</span>
@@ -1186,79 +1244,13 @@ export function TopicPage() {
                   </div>
                 </div>
               ) : null}
-              <div className="turn earnings-squad-workspace" data-testid="earnings-squad-workspace">
-                <section className="chart-card" aria-label="美股财报买方投研小组">
-                  <div className="chart-head">
-                    <div className="chart-title-wrap">
-                      <div className="chart-title-row">
-                        <h2 className="chart-title">美股财报买方投研小组</h2>
-                        {squadStatus !== "idle" ? (
-                          <span className={`role light ${SQUAD_STATUS_META[squadStatus].tone}`}>
-                            {SQUAD_STATUS_META[squadStatus].label}
-                          </span>
-                        ) : null}
-                        {squadDossier?.symbol ? (
-                          <span className="chart-badge is-updated">{squadDossier.symbol}</span>
-                        ) : null}
-                      </div>
-                      <p className="chart-subtitle">
-                        {squadStatus === "running"
-                          ? "多 Agent 组织树正在并行取证，可向 Lead 发送中场调度指令调整关注焦点。"
-                          : squadDossier
-                            ? "已锁定单一事实底稿与买方档案，支持 Memo / Deep Report 秒切及多格式导出。"
-                            : "可选：基于 SEC EDGAR 与已配置数据连接器启动 Lead Coordinator、并行专题 Worker、Bear Review 与撰稿小组。"}
-                      </p>
+              {showSquadWorkspace ? (
+                <div className="turn earnings-squad-workspace" data-testid="earnings-squad-workspace">
+                  {turns.length === 0 && topic?.request.question ? (
+                    <div className="question-bubble" data-testid="squad-question-bubble">
+                      <p>{topic.request.question}</p>
                     </div>
-                  </div>
-
-                  {squadStatus !== "running" ? (
-                    <form
-                      className="input-row"
-                      aria-label="启动美股财报买方小组"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void handleLaunchSquad();
-                      }}
-                    >
-                      <input
-                        type="text"
-                        aria-label="美股代码 (Ticker，可选)"
-                        placeholder="美股代码，如 AAPL / NVDA（可选，留空自动识别）"
-                        value={squadSymbol}
-                        onChange={(event) => setSquadSymbol(event.target.value)}
-                        disabled={squadLaunching}
-                      />
-                      <button type="submit" className="btn primary" disabled={squadLaunching}>
-                        {squadLaunching ? "正在启动…" : squadDossier ? "重新运行财报小组" : "启动美股财报买方小组"}
-                      </button>
-                    </form>
-                  ) : (
-                    <form
-                      className="input-row"
-                      aria-label="中场调度指令"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void handleSteerSquad();
-                      }}
-                    >
-                      <input
-                        type="text"
-                        aria-label="向 Lead 发送中场调度指令"
-                        placeholder="向 Lead 发送中场调度指令，例如：核查存货周转与 Non-GAAP SBC 加回…"
-                        value={steerInput}
-                        onChange={(event) => setSteerInput(event.target.value)}
-                        disabled={steerBusy}
-                      />
-                      <button
-                        type="submit"
-                        className="btn primary"
-                        disabled={steerBusy || steerInput.trim().length === 0}
-                      >
-                        {steerBusy ? "发送调度…" : "发送调度指令"}
-                      </button>
-                    </form>
-                  )}
-
+                  ) : null}
                   {squadSteeringHistory.length > 0 ? (
                     <div className="chips" aria-label="已下达调度指令">
                       <span>已下达调度：</span>
@@ -1269,43 +1261,38 @@ export function TopicPage() {
                       ))}
                     </div>
                   ) : null}
-
                   {squadError ? (
                     <span className="inline-error" role="alert">{squadError}</span>
                   ) : null}
                   {steerError ? (
                     <span className="inline-error" role="alert">{steerError}</span>
                   ) : null}
-                </section>
-
-                {squadStatus !== "idle" || orgGraphState.nodes.length > 0 ? (
                   <OrgGraphPanel
                     key={squadRunId ?? "default"}
                     state={orgGraphState}
-                    runStatus={squadStatus}
-                    title="投研小组实时组织执行树"
+                    runStatus={squadStatus === "idle" && isAutoRoutedSquadRun ? "running" : squadStatus}
+                    title="投研小组组织图"
                     onSelectNode={(node) => {
                       const open = node !== null;
                       setOrgDrawerOpen(open);
                       if (open) setPanel(null);
                     }}
                   />
-                ) : null}
-
-                {squadDossier ? (
-                  <EarningsDossierView
-                    dossier={squadDossier}
-                    topicId={topicId}
-                    reportMode={reportMode}
-                    onReportModeChange={setReportMode}
-                    onRequestDeepReport={handleRequestDeepReport}
-                    deepReportLoading={deepReportLoading}
-                    deepReportError={deepReportError}
-                    onInspectSource={handleInspectSource}
-                    slotRoutingSummary={squadSlotRouting}
-                  />
-                ) : null}
-              </div>
+                  {squadDossier ? (
+                    <EarningsDossierView
+                      dossier={squadDossier}
+                      topicId={topicId}
+                      reportMode={reportMode}
+                      onReportModeChange={setReportMode}
+                      onRequestDeepReport={handleRequestDeepReport}
+                      deepReportLoading={deepReportLoading}
+                      deepReportError={deepReportError}
+                      onInspectSource={handleInspectSource}
+                      slotRoutingSummary={squadSlotRouting}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
             </TopicContext.Provider>
           )}
         </div>
@@ -1334,9 +1321,9 @@ export function TopicPage() {
                 addDisabled={locked}
                 onDropFiles={(files) => { if (files[0]) setPanel({ kind: "add", initial: { tab: "file", file: files[0] } }); }}
                 label="追问"
-                placeholder={awaitingUser ? "补充这项信息…" : activeRun ? "追加研究要求…" : "继续追问…"}
+                placeholder={awaitingUser ? "补充这项信息…" : squadStatus === "running" ? "向 Lead 发送中场调度指令…" : activeRun ? "追加研究要求…" : "继续追问…"}
                 submitLabel="发送"
-                disabled={startTurn.isPending && !activeRun}
+                disabled={startTurn.isPending && !activeRun && squadStatus !== "running"}
                 onStop={live ? () => {
                   const turnId = live.progress?.turn.turn_id;
                   if (!turnId) { if (live.progress) cancel.mutate(live.operation); else setInstructionError("正在取得研究轮次，请稍后停止。"); return; }
@@ -1348,7 +1335,7 @@ export function TopicPage() {
                   }).catch((error) => setInstructionError(describeError(error))).finally(() => setStoppingTurn(false));
                 } : undefined}
                 stopping={cancelling || stoppingTurn}
-                busy={startTurn.isPending || instructionBusy}
+                busy={startTurn.isPending || instructionBusy || steerBusy}
                 canSubmit={text.trim().length > 0}
                 tokens={tokens}
                 error={instructionError ?? (startTurn.isError && turns.length > 0 ? describeError(startTurn.error) : null)}

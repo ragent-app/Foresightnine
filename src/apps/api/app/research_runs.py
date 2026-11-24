@@ -52,6 +52,8 @@ class ResearchRunRequest(BaseModel):
     replace_turn_id: str | None = Field(default=None, min_length=1, max_length=100)
     # Required when review edits made after the replaced turn would not carry over.
     discard_review_edits: bool = Field(default=False, strict=True)
+    # Optional override for default-entry US earnings squad auto-routing (None = automatic).
+    allow_auto_squad: bool | None = Field(default=None, strict=True)
 
     @field_validator("selected_source_ids")
     @classmethod

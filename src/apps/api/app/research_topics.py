@@ -464,6 +464,10 @@ class ResearchTopic(BaseModel):
     title: str | None = None
     pinned_at: datetime | None = None
     forked_from: TopicOrigin | None = None
+    run_mode: Literal["earnings_squad", "legacy_single_loop"] | None = None
+    squad_run_id: str | None = None
+    ticker: str | None = None
+    cik: str | None = None
 
 
 class TopicMeta(BaseModel):

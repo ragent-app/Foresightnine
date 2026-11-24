@@ -164,6 +164,11 @@ from .fin_data.adapters.sec_deep import SecDeepAdapter
 from .fin_data.adapters.sec_edgar import SecEdgarAdapter
 from .research_earnings_diagnostics import GuidanceMetricInput, NonGaapBridgeInput, PeriodFinancials
 from .research_earnings_export import ExportUnavailableError, MarkdownReportMode, export_earnings_dossier
+from .research_earnings_routing import (
+    EarningsSquadRouteDecision,
+    derive_sources_mode,
+    detect_us_earnings_squad_route,
+)
 from .research_earnings_squad import (
     EarningsDossier,
     EarningsSquadOrchestrator,
@@ -538,6 +543,22 @@ def _publish_research_terminal(operation_id: str, status: str) -> None:
     owner_id = inputs.get("owner_id")
     topic_id = inputs.get("topic_id")
     if not isinstance(owner_id, str) or not isinstance(topic_id, str):
+        return
+    if inputs.get("run_mode") == "earnings_squad":
+        row = EARNINGS_SQUAD_STATES.get(_squad_state_key(owner_id, topic_id)) or {}
+        dossier_raw = row.get("dossier") if isinstance(row, Mapping) else None
+        ver_id = dossier_raw.get("dossier_id") if isinstance(dossier_raw, Mapping) else None
+        org_events = list(row.get("org_events") or []) if isinstance(row, Mapping) else []
+        research_live_broker.publish_terminal(
+            operation_id,
+            operation_status=status,
+            version_id=ver_id,
+            progress={
+                "org_events": org_events,
+                "logical_status": "stopped" if status == "cancelled" else status,
+                "current_operation_id": operation_id,
+            },
+        )
         return
     version = None
     if status == "completed":
@@ -1998,9 +2019,26 @@ def _version_reader(topic: ResearchTopic):
     return read
 
 
+def _topic_squad_metadata(owner_id: str, topic_id: str) -> dict[str, Any]:
+    row = EARNINGS_SQUAD_STATES.get(_squad_state_key(owner_id, topic_id))
+    if not isinstance(row, Mapping):
+        return {}
+    dossier_raw = row.get("dossier") if isinstance(row.get("dossier"), Mapping) else {}
+    return {
+        "run_mode": row.get("run_mode") or "earnings_squad",
+        "squad_run_id": row.get("run_id"),
+        "ticker": row.get("ticker") or dossier_raw.get("symbol"),
+        "cik": row.get("cik") or dossier_raw.get("cik"),
+    }
+
+
 def _visible_topic(topic: ResearchTopic) -> ResearchTopic:
     read = _version_reader(topic)
-    return topic.model_copy(update={"versions": [read(version) for version in topic.versions]})
+    updates: dict[str, Any] = {"versions": [read(version) for version in topic.versions]}
+    squad_meta = _topic_squad_metadata(topic.owner_id, topic.topic_id)
+    if squad_meta:
+        updates.update(squad_meta)
+    return topic.model_copy(update=updates)
 
 
 @app.get("/v2/research/topics", response_model=list[ResearchTopic], include_in_schema=False)
@@ -3129,12 +3167,25 @@ def _merge_official_fetch_status(current: str, next_status: str | None, *, auto_
 
 class ResearchStartResponse(OperationResponse):
     turn_id: str
+    run_mode: Literal["earnings_squad", "legacy_single_loop"] = "legacy_single_loop"
+    squad_run_id: str | None = None
+    ticker: str | None = None
+    cik: str | None = None
+    entity_id: str | None = None
+    company_name: str | None = None
+    routing_reason: str | None = None
 
 
 class ResearchRunListEntry(OperationResponse):
     turn_id: str | None = None
     current_operation_id: str | None = None
     logical_status: Literal["running", "awaiting_user", "completed", "stopped", "failed"] | None = None
+    run_mode: Literal["earnings_squad", "legacy_single_loop"] | None = None
+    squad_run_id: str | None = None
+    ticker: str | None = None
+    cik: str | None = None
+    entity_id: str | None = None
+    company_name: str | None = None
 
 
 class ResearchTurnSummary(BaseModel):
@@ -3143,6 +3194,10 @@ class ResearchTurnSummary(BaseModel):
     current_operation_id: str
     logical_status: Literal["running", "awaiting_user", "completed", "stopped", "failed"]
     version_id: str | None = None
+    run_mode: Literal["earnings_squad", "legacy_single_loop"] | None = None
+    squad_run_id: str | None = None
+    ticker: str | None = None
+    cik: str | None = None
 
 
 class ResearchTurnStopped(BaseModel):
@@ -3192,10 +3247,12 @@ def _update_turn_status(topic_id: str, operation_id: str, status: str, version_i
     TURN_STATUS.with_advisory_lock('turn-status:' + topic_id, update)
 
 
-@app.get('/v2/research/turn-statuses', response_model=list[ResearchTurnSummary], include_in_schema=False)
+@app.get('/v2/research/turn-statuses', response_model=list[ResearchTurnSummary], response_model_exclude_none=True, include_in_schema=False)
 def get_latest_turn_statuses(http_request: Request) -> list[dict]:
     account = _authenticated_account(http_request.headers.get('Authorization'))
-    return [{key: row.get(key) for key in ('topic_id', 'turn_id', 'current_operation_id', 'logical_status', 'version_id')}
+    keys = ('topic_id', 'turn_id', 'current_operation_id', 'logical_status', 'version_id',
+            'run_mode', 'squad_run_id', 'ticker', 'cik')
+    return [{key: row.get(key) for key in keys}
             for _, row in owner_items(TURN_STATUS, account.account_id) if row['owner_id'] == account.account_id]
 
 
@@ -3219,6 +3276,23 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                        idempotency_key: IdempotencyKey, http_request: Request) -> OperationResponse:
     account = _authenticated_account(http_request.headers.get("Authorization"))
     return _start_research_for_account(topic_id, request, response, idempotency_key, http_request, account)
+
+
+def _start_response_from_inputs(operation: Operation, stored: Mapping[str, Any]) -> ResearchStartResponse:
+    turn_id = str((stored.get("turn") or {}).get("turn_id") or "")
+    if stored.get("run_mode") == "earnings_squad":
+        return ResearchStartResponse(
+            operation=operation,
+            turn_id=turn_id,
+            run_mode="earnings_squad",
+            squad_run_id=stored.get("squad_run_id"),
+            ticker=stored.get("ticker"),
+            cik=stored.get("cik"),
+            entity_id=stored.get("entity_id"),
+            company_name=stored.get("company_name"),
+            routing_reason=stored.get("routing_reason"),
+        )
+    return ResearchStartResponse(operation=operation, turn_id=turn_id)
 
 
 def _start_research_for_account(topic_id: str, request: ResearchRunRequest, response: Response,
@@ -3259,7 +3333,7 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
                 raise ApiProblem(409, 'idempotency_conflict', 'The idempotency key belongs to another research run.')
         _mark_replay(response, True)
         stored = RESEARCH_RUN_INPUTS[existing.operation.operation_id]
-        return ResearchStartResponse(operation=existing.operation, turn_id=stored["turn"]["turn_id"])
+        return _start_response_from_inputs(existing.operation, stored)
     parent_version = next((item for item in topic.versions if item.version_id == request.parent_version_id), None)
     if parent_version is None:
         raise ApiProblem(409, "lifecycle_conflict", "Research changed before the run was admitted.")
@@ -3299,6 +3373,45 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
                      'focus_citation': request.focus_citation.model_dump() if request.focus_citation else None,
                      'started_at': lifecycle_clock.now().isoformat(), 'parent_version_id': request.parent_version_id,
                      'operation_ids': []}
+    # Default-entry deterministic auto-routing to Scheme 2 US Earnings Buy-Side Squad.
+    should_check_auto_squad = (
+        continuation_input is None
+        and request.replace_turn_id is None
+        and request.focus_citation is None
+        and request.max_model_calls != 0
+        and request.max_total_tokens != 0
+        and request.max_elapsed_seconds != 0
+        and request.allow_auto_squad is not False
+    )
+    if should_check_auto_squad:
+        sec_agent_raw, sec_ok = _configured_sec_user_agent()
+        routing_sec = SecEdgarAdapter(user_agent=sec_agent_raw) if sec_ok and sec_agent_raw else None
+        supplied_fields = request.model_fields_set
+        sources_mode = derive_sources_mode(request, has_attached_sources=bool(source_ids))
+        route_decision = detect_us_earnings_squad_route(
+            effective_question,
+            sources_mode=sources_mode,
+            allow_auto_squad=request.allow_auto_squad is not False,
+            sec_adapter=routing_sec,
+            discover_sources=request.discover_sources if "discover_sources" in supplied_fields else None,
+            auto_fetch_official=request.auto_fetch_official if "auto_fetch_official" in supplied_fields else None,
+            selected_source_ids=request.selected_source_ids,
+        )
+        if route_decision.should_route:
+            return _start_auto_routed_earnings_squad(
+                topic_id=topic_id,
+                topic=topic,
+                request=request,
+                run_request_payload=run_request_payload,
+                response=response,
+                idempotency_key=idempotency_key,
+                http_request=http_request,
+                account=account,
+                effective_question=effective_question,
+                question_origin=question_origin,
+                turn_meta=turn_meta,
+                route_decision=route_decision,
+            )
     # Idempotency uses the caller's original request, while a newly admitted
     # operation persists the resolved policy. A continuation always retains
     # its original server-owned policy rather than applying today's defaults.
@@ -4409,6 +4522,7 @@ def list_research_runs(topic_id: str, http_request: Request) -> list[OperationRe
     except TopicNotFound as error:
         raise ApiProblem(404, "not_found", "Research topic not found.") from error
     endpoint = f"/v1/research/topics/{topic_id}/runs"
+    squad_state = EARNINGS_SQUAD_STATES.get(_squad_state_key(account.account_id, topic_id))
     result: list[OperationResponse] = []
     for operation_id, session_id in operations.store.session_ids().items():
         if session_id != topic_id:
@@ -4419,8 +4533,35 @@ def list_research_runs(topic_id: str, http_request: Request) -> list[OperationRe
         op = operations._cache_operation(operation_id)
         turn_id = (TURN_RECORDS.get(operation_id) or {}).get('turn_id')
         doc = TURN_RECORDS.get(turn_id) if turn_id else None
-        fields = {}
-        if doc and doc['account_id'] == account.account_id:
+        inputs = RESEARCH_RUN_INPUTS.get(operation_id) or {}
+        fields: dict[str, Any] = {}
+        if inputs.get("run_mode") == "earnings_squad":
+            squad_status_now = (
+                squad_state.get("status")
+                if isinstance(squad_state, Mapping) and squad_state.get("run_id") == inputs.get("squad_run_id")
+                else None
+            )
+            if op.status == "cancelled" or squad_status_now == "cancelled":
+                logical_status = "stopped"
+            elif op.status in {"pending", "running"} or squad_status_now == "running":
+                logical_status = "running"
+            elif op.status == "completed" or squad_status_now == "completed":
+                logical_status = "completed"
+            else:
+                logical_status = "failed"
+            dossier_raw = squad_state.get("dossier") if isinstance(squad_state, Mapping) and isinstance(squad_state.get("dossier"), Mapping) else {}
+            fields = {
+                "turn_id": turn_id or (inputs.get("turn") or {}).get("turn_id"),
+                "current_operation_id": operation_id,
+                "logical_status": logical_status,
+                "run_mode": "earnings_squad",
+                "squad_run_id": inputs.get("squad_run_id"),
+                "ticker": inputs.get("ticker") or dossier_raw.get("symbol"),
+                "cik": inputs.get("cik") or dossier_raw.get("cik"),
+                "entity_id": inputs.get("entity_id") or dossier_raw.get("entity_id"),
+                "company_name": inputs.get("company_name") or dossier_raw.get("company_name"),
+            }
+        elif doc and doc['account_id'] == account.account_id:
             version = next((v for v in reversed(topic.versions) if _agent_turn_for(v, doc['operation_id'])), None)
             fields = {'turn_id': turn_id, 'current_operation_id': doc['operation_id'],
                       'logical_status': _logical_run_status(doc, op.status, version)}
@@ -4476,6 +4617,38 @@ def _authorize_research_run_progress(
 def _build_research_run_progress_view(
     topic: ResearchTopic, operation: Operation, inputs: Mapping[str, Any], *, after: int
 ) -> dict[str, Any]:
+    if inputs.get("run_mode") == "earnings_squad":
+        progress = build_progress(
+            operation_id=operation.operation_id,
+            operation_status=str(operation.status),
+            inputs=inputs,
+            checkpoint=None,
+            saved_turn=None,
+            version_id=None,
+            after=after,
+        )
+        squad_state = EARNINGS_SQUAD_STATES.get(_squad_state_key(topic.owner_id, topic.topic_id)) or {}
+        squad_status = squad_state.get("status") if isinstance(squad_state, Mapping) else None
+        dossier_raw = squad_state.get("dossier") if isinstance(squad_state, Mapping) and isinstance(squad_state.get("dossier"), Mapping) else {}
+        if operation.status == "cancelled" or squad_status == "cancelled":
+            logical = "stopped"
+        elif operation.status in {"pending", "running"} or squad_status == "running":
+            logical = "running"
+        elif operation.status == "completed" or squad_status == "completed":
+            logical = "completed"
+        else:
+            logical = "failed"
+        progress.update({
+            "logical_status": logical,
+            "current_operation_id": operation.operation_id,
+            "run_mode": "earnings_squad",
+            "squad_run_id": inputs.get("squad_run_id"),
+            "ticker": inputs.get("ticker") or dossier_raw.get("symbol"),
+            "cik": inputs.get("cik") or dossier_raw.get("cik"),
+            "version_id": dossier_raw.get("dossier_id"),
+            "topic_title": topic.title,
+        })
+        return progress
     version = next(
         (
             v
@@ -4737,6 +4910,9 @@ class EarningsSquadRunResponse(BaseModel):
     run_id: str
     operation_id: str
     status: Literal["running", "completed", "failed", "cancelled"]
+    run_mode: Literal["earnings_squad"] = "earnings_squad"
+    ticker: str | None = None
+    cik: str | None = None
     dossier: EarningsDossier | None = None
     org_events: list[OrgGraphEvent] = Field(default_factory=list)
     slot_routing_summary: dict[str, Any] = Field(default_factory=dict)
@@ -4749,6 +4925,9 @@ class EarningsSquadDossierResponse(BaseModel):
     run_id: str
     operation_id: str
     status: Literal["running", "completed", "failed", "cancelled"]
+    run_mode: Literal["earnings_squad"] = "earnings_squad"
+    ticker: str | None = None
+    cik: str | None = None
     dossier: EarningsDossier | None = None
     org_events: list[OrgGraphEvent] = Field(default_factory=list)
     slot_routing_summary: dict[str, Any] = Field(default_factory=dict)
@@ -5239,35 +5418,58 @@ def _resolve_earnings_squad_runtime(
     return orch, routing_summary
 
 
-@app.post(
-    "/v2/research/topics/{topic_id}/earnings-squad/run",
-    response_model=EarningsSquadRunResponse,
-    include_in_schema=False,
-)
-def run_earnings_squad(
+class _SquadOperationOutcome(BaseModel):
+    run_id: str
+    dossier_id: str
+    ticker: str | None = None
+    cik: str | None = None
+
+
+def _cancel_active_earnings_squad(account_id: str, topic_id: str, operation_id: str) -> None:
+    if not topic_id:
+        return
+    with _ACTIVE_SQUAD_LOCK:
+        active = _ACTIVE_SQUAD_RUNS.get((account_id, topic_id))
+        active_orch = active.get("orchestrator") if active and active.get("operation_id") == operation_id else None
+    if active_orch is not None and callable(getattr(active_orch, "cancel", None)):
+        active_orch.cancel()
+    state_key = _squad_state_key(account_id, topic_id)
+
+    def mark_cancelled() -> None:
+        cur = EARNINGS_SQUAD_STATES.get(state_key)
+        if not isinstance(cur, Mapping) or cur.get("operation_id") != operation_id:
+            return
+        if cur.get("status") == "running":
+            EARNINGS_SQUAD_STATES.put(
+                state_key,
+                {**dict(cur), "status": "cancelled", "updated_at": lifecycle_clock.now().isoformat()},
+            )
+
+    EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", mark_cancelled)
+    _update_turn_status(topic_id, operation_id, "stopped")
+
+
+def _prepare_earnings_squad_execution(
+    *,
+    account: LocalAccount,
+    topic: ResearchTopic,
     topic_id: str,
     http_request: Request,
-    response: Response,
-    request: EarningsSquadApiRunRequest = Body(default_factory=EarningsSquadApiRunRequest),
-) -> EarningsSquadRunResponse:
-    """Execute (or resume from checkpoint) the 6-stage Scheme 2 US Earnings Research Squad."""
-    account = _authenticated_account(http_request.headers.get("Authorization"))
-    try:
-        topic = research_topics.get(account.account_id, topic_id)
-    except TopicNotFound as error:
-        raise ApiProblem(404, "not_found", "Research topic not found.") from error
-
+    request: EarningsSquadApiRunRequest,
+    operation_id: str,
+    run_id: str,
+    routing_reason: str | None = None,
+    cancel_checker: Callable[[], bool] | None = None,
+) -> tuple[
+    Callable[[], None],
+    Callable[[], tuple[str, EarningsDossier | None, str | None, bool]],
+    EarningsSquadOrchestrator,
+    dict[str, Any],
+    list[OrgGraphEvent],
+    SquadCheckpoint | None,
+]:
     state_key = _squad_state_key(account.account_id, topic_id)
-    with _ACTIVE_SQUAD_LOCK:
-        if (account.account_id, topic_id) in _ACTIVE_SQUAD_RUNS:
-            raise ApiProblem(409, "lifecycle_conflict", "An earnings squad run is already active for this topic.")
-
     prior_state = EARNINGS_SQUAD_STATES.get(state_key)
-    resume_target_run_id = request.resume_run_id or (
-        prior_state.get("run_id") if request.resume_from_checkpoint and isinstance(prior_state, Mapping) else None
-    )
-    run_id = request.run_id or resume_target_run_id or f"sqrun_{uuid4().hex[:12]}"
-    operation_id = f"sqop_{uuid4().hex[:16]}"
     cp_store = _RepoSquadCheckpointStore(account_id=account.account_id, topic_id=topic_id, state_lock_key=state_key)
 
     question = (request.question or "").strip() or (topic.request.question or "").strip() or DOCUMENT_OVERVIEW_QUESTION
@@ -5382,6 +5584,12 @@ def run_earnings_squad(
             "topic_id": topic_id,
             "run_id": run_id,
             "operation_id": operation_id,
+            "run_mode": "earnings_squad",
+            "ticker": request.symbol,
+            "cik": request.cik,
+            "entity_id": request.entity_id,
+            "company_name": request.company_name,
+            "routing_reason": routing_reason,
             "status": "running",
             "dossier": resume_cp.dossier.model_dump(mode="json") if resume_cp and resume_cp.dossier else None,
             "org_events": [ev.model_dump(mode="json") for ev in org_events_buf],
@@ -5393,14 +5601,10 @@ def run_earnings_squad(
             "updated_at": lifecycle_clock.now().isoformat(),
         })
 
-    EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", init_state)
-
-    with _ACTIVE_SQUAD_LOCK:
-        _ACTIVE_SQUAD_RUNS[(account.account_id, topic_id)] = {
-            "run_id": run_id,
-            "operation_id": operation_id,
-            "orchestrator": orch,
-        }
+    def persist_checkpoint_and_check_cancel(cp: SquadCheckpoint) -> None:
+        cp_store.save(cp)
+        if cancel_checker is not None and cancel_checker():
+            orch.cancel()
 
     def execute_run() -> tuple[str, EarningsDossier | None, str | None, bool]:
         status_out: Literal["completed", "failed", "cancelled"] = "completed"
@@ -5408,13 +5612,15 @@ def run_earnings_squad(
         err_out: str | None = None
         config_error = False
         try:
+            if cancel_checker is not None and cancel_checker():
+                orch.cancel()
             dossier_out = orch.run(
                 prefetch_req,
                 run_id=run_id,
                 resume_from=resume_cp,
                 user_instructions=seed_instructions,
-                on_stage_complete=lambda _stage, cp: cp_store.save(cp),
-                on_worker_complete=lambda _role, _batch, cp: cp_store.save(cp),
+                on_stage_complete=lambda _stage, cp: persist_checkpoint_and_check_cancel(cp),
+                on_worker_complete=lambda _role, _batch, cp: persist_checkpoint_and_check_cancel(cp),
             )
             status_out = "completed"
         except SquadCancelledError as exc:
@@ -5436,8 +5642,13 @@ def run_earnings_squad(
                 cur = EARNINGS_SQUAD_STATES.get(state_key) or {}
                 updated = dict(cur)
                 updated["status"] = status_out
+                updated["run_mode"] = "earnings_squad"
                 if dossier_out is not None:
                     updated["dossier"] = dossier_out.model_dump(mode="json")
+                    updated["ticker"] = dossier_out.symbol or updated.get("ticker")
+                    updated["cik"] = dossier_out.cik or updated.get("cik")
+                    updated["entity_id"] = dossier_out.entity_id or updated.get("entity_id")
+                    updated["company_name"] = dossier_out.company_name or updated.get("company_name")
                 if final_cp is not None:
                     updated["checkpoint"] = final_cp.model_dump(mode="json")
                     updated["checkpoint_completed_stages"] = list(final_cp.completed_stages)
@@ -5455,9 +5666,208 @@ def run_earnings_squad(
                 operation_id,
                 operation_status=status_out,
                 version_id=dossier_out.dossier_id if dossier_out is not None else None,
-                progress={"org_events": [ev.model_dump(mode="json") for ev in events_final]},
+                progress={
+                    "org_events": [ev.model_dump(mode="json") for ev in events_final],
+                    "logical_status": "stopped" if status_out == "cancelled" else status_out,
+                    "current_operation_id": operation_id,
+                },
             )
         return status_out, dossier_out, err_out, config_error
+
+    return init_state, execute_run, orch, routing_summary, org_events_buf, resume_cp
+
+
+def _start_auto_routed_earnings_squad(
+    *,
+    topic_id: str,
+    topic: ResearchTopic,
+    request: ResearchRunRequest,
+    run_request_payload: dict[str, Any],
+    response: Response,
+    idempotency_key: str,
+    http_request: Request,
+    account: LocalAccount,
+    effective_question: str,
+    question_origin: str,
+    turn_meta: dict[str, Any],
+    route_decision: EarningsSquadRouteDecision,
+) -> ResearchStartResponse:
+    squad_run_id = f"sqrun_{uuid4().hex[:12]}"
+    state_key = _squad_state_key(account.account_id, topic_id)
+    squad_req = EarningsSquadApiRunRequest(
+        question=effective_question,
+        entity_id=route_decision.entity_id,
+        cik=route_decision.cik,
+        symbol=route_decision.ticker,
+        company_name=route_decision.company_name,
+        as_of=topic.request.as_of,
+        execution_mode="async",
+        background=True,
+        run_id=squad_run_id,
+        max_model_calls=request.max_model_calls,
+        max_search_calls=request.max_search_calls,
+        max_total_tokens=request.max_total_tokens,
+        max_elapsed_seconds=float(request.max_elapsed_seconds) if request.max_elapsed_seconds is not None else None,
+    )
+    identity = (account.account_id, topic_id, turn_meta["turn_id"])
+    runtime_holder: dict[str, Any] = {}
+
+    def admit_squad_operation(operation_id: str) -> None:
+        current_status = TURN_STATUS.get(topic_id)
+        if current_status and current_status.get("owner_id") == account.account_id and current_status.get("logical_status") == "awaiting_user":
+            raise ApiProblem(409, "lifecycle_conflict", "Answer or stop the waiting research turn first.")
+        if _topic_has_active_run(account.account_id, topic_id):
+            raise ApiProblem(409, "lifecycle_conflict", "Another research run is already active for this topic.")
+        if research_topics.get(account.account_id, topic_id).versions[-1].version_id != request.parent_version_id:
+            raise ApiProblem(409, "lifecycle_conflict", "Research changed before the run was admitted.")
+
+        init_state, execute_run, orch, routing_summary, _events_buf, _resume_cp = _prepare_earnings_squad_execution(
+            account=account,
+            topic=topic,
+            topic_id=topic_id,
+            http_request=http_request,
+            request=squad_req,
+            operation_id=operation_id,
+            run_id=squad_run_id,
+            routing_reason=route_decision.reason,
+            cancel_checker=lambda: operations.cancel_event(operation_id).is_set(),
+        )
+        runtime_holder["execute_run"] = execute_run
+
+        TURN_RECORDS.put(operation_id, {
+            "account_id": account.account_id,
+            "topic_id": topic_id,
+            "turn_id": turn_meta["turn_id"],
+        })
+        try:
+            turn_instructions.begin(*identity, operation_id)
+        except (InstructionNotFound, InstructionConflict, InstructionInvalid) as error:
+            raise _turn_http_error(error) from error
+
+        EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", init_state)
+        with _ACTIVE_SQUAD_LOCK:
+            _ACTIVE_SQUAD_RUNS[(account.account_id, topic_id)] = {
+                "run_id": squad_run_id,
+                "operation_id": operation_id,
+                "orchestrator": orch,
+            }
+        TURN_STATUS.put(topic_id, {
+            "owner_id": account.account_id,
+            "topic_id": topic_id,
+            "turn_id": turn_meta["turn_id"],
+            "current_operation_id": operation_id,
+            "logical_status": "running",
+            "run_mode": "earnings_squad",
+            "squad_run_id": squad_run_id,
+            "ticker": route_decision.ticker,
+            "cik": route_decision.cik,
+        })
+        RESEARCH_RUN_INPUTS.put(operation_id, {
+            "schema_version": "1",
+            "operation_id": operation_id,
+            "owner_id": account.account_id,
+            "topic_id": topic_id,
+            "parent_version_id": request.parent_version_id,
+            "captured_at": lifecycle_clock.now().isoformat(),
+            "question_origin": question_origin,
+            "question": effective_question,
+            "turn": {**turn_meta, "operation_ids": [*turn_meta["operation_ids"], operation_id]},
+            "run_mode": "earnings_squad",
+            "squad_run_id": squad_run_id,
+            "ticker": route_decision.ticker,
+            "cik": route_decision.cik,
+            "entity_id": route_decision.entity_id,
+            "company_name": route_decision.company_name,
+            "routing_reason": route_decision.reason,
+            "slot_routing_summary": routing_summary,
+            "budget": {key: value for key, value in _request_payload(request).items() if key != "question_override"},
+        })
+
+    def build_squad_operation(operation_id: str) -> tuple[BaseModel, str]:
+        execute_run = runtime_holder["execute_run"]
+        status_out, dossier_out, err_out, is_config_err = execute_run()
+        if status_out == "completed" and dossier_out is not None:
+            outcome = _SquadOperationOutcome(
+                run_id=squad_run_id,
+                dossier_id=dossier_out.dossier_id,
+                ticker=dossier_out.symbol or route_decision.ticker,
+                cik=dossier_out.cik or route_decision.cik,
+            )
+            return outcome, dossier_out.dossier_id
+        if status_out == "cancelled":
+            _update_turn_status(topic_id, operation_id, "stopped")
+            raise ApiProblem(500, "internal_error", err_out or "Earnings squad execution was cancelled.")
+        _update_turn_status(topic_id, operation_id, "failed")
+        if is_config_err:
+            raise ApiProblem(422, "invalid_request", err_out or "Invalid model slot configuration.")
+        raise ApiProblem(500, "internal_error", err_out or "Earnings squad execution failed.")
+
+    def commit_squad_operation(operation_id: str, result: BaseModel) -> None:
+        assert isinstance(result, _SquadOperationOutcome)
+        _update_turn_status(topic_id, operation_id, "completed", result.dossier_id)
+
+    op_resp, replayed = operations.submit_async(
+        endpoint=f"/v1/research/topics/{topic_id}/runs",
+        idempotency_key=idempotency_key,
+        owner_subject=f"account:{account.account_id}",
+        request_payload=run_request_payload,
+        result_field="research",
+        build_result=build_squad_operation,
+        session_id=topic_id,
+        before_accept=admit_squad_operation,
+        commit_result=commit_squad_operation,
+    )
+    _mark_replay(response, replayed)
+    stored = RESEARCH_RUN_INPUTS[op_resp.operation.operation_id]
+    return _start_response_from_inputs(op_resp.operation, stored)
+
+
+@app.post(
+    "/v2/research/topics/{topic_id}/earnings-squad/run",
+    response_model=EarningsSquadRunResponse,
+    include_in_schema=False,
+)
+def run_earnings_squad(
+    topic_id: str,
+    http_request: Request,
+    response: Response,
+    request: EarningsSquadApiRunRequest = Body(default_factory=EarningsSquadApiRunRequest),
+) -> EarningsSquadRunResponse:
+    """Execute (or resume from checkpoint) the 6-stage Scheme 2 US Earnings Research Squad."""
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+
+    state_key = _squad_state_key(account.account_id, topic_id)
+    if _topic_has_active_run(account.account_id, topic_id):
+        raise ApiProblem(409, "lifecycle_conflict", "An earnings squad run is already active for this topic.")
+
+    prior_state = EARNINGS_SQUAD_STATES.get(state_key)
+    resume_target_run_id = request.resume_run_id or (
+        prior_state.get("run_id") if request.resume_from_checkpoint and isinstance(prior_state, Mapping) else None
+    )
+    run_id = request.run_id or resume_target_run_id or f"sqrun_{uuid4().hex[:12]}"
+    operation_id = f"sqop_{uuid4().hex[:16]}"
+
+    init_state, execute_run, orch, routing_summary, org_events_buf, resume_cp = _prepare_earnings_squad_execution(
+        account=account,
+        topic=topic,
+        topic_id=topic_id,
+        http_request=http_request,
+        request=request,
+        operation_id=operation_id,
+        run_id=run_id,
+    )
+    EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", init_state)
+
+    with _ACTIVE_SQUAD_LOCK:
+        _ACTIVE_SQUAD_RUNS[(account.account_id, topic_id)] = {
+            "run_id": run_id,
+            "operation_id": operation_id,
+            "orchestrator": orch,
+        }
 
     is_async = request.background or request.execution_mode == "async"
     if is_async:
@@ -5472,6 +5882,9 @@ def run_earnings_squad(
             run_id=run_id,
             operation_id=operation_id,
             status="running",
+            run_mode="earnings_squad",
+            ticker=request.symbol or (resume_cp.symbol if resume_cp else None),
+            cik=request.cik or (resume_cp.cik if resume_cp else None),
             dossier=resume_cp.dossier if resume_cp else None,
             org_events=list(org_events_buf),
             slot_routing_summary=routing_summary,
@@ -5489,6 +5902,9 @@ def run_earnings_squad(
         run_id=run_id,
         operation_id=operation_id,
         status=final_status,
+        run_mode="earnings_squad",
+        ticker=(final_dossier.symbol if final_dossier else None) or final_row.get("ticker") or request.symbol,
+        cik=(final_dossier.cik if final_dossier else None) or final_row.get("cik") or request.cik,
         dossier=final_dossier,
         org_events=[OrgGraphEvent.model_validate(ev) for ev in final_row.get("org_events") or []],
         slot_routing_summary=routing_summary,
@@ -5532,6 +5948,9 @@ def get_earnings_squad_dossier(
         run_id=str(row.get("run_id") or ""),
         operation_id=str(row.get("operation_id") or ""),
         status=str(row.get("status") or "completed"),
+        run_mode="earnings_squad",
+        ticker=row.get("ticker") or (dossier.symbol if dossier else None),
+        cik=row.get("cik") or (dossier.cik if dossier else None),
         dossier=dossier,
         org_events=org_events,
         slot_routing_summary=dict(row.get("slot_routing_summary") or {}),
@@ -7208,6 +7627,8 @@ def _deliver_saved_research(operation_id: str, owner_id: str, *, reason: str | N
     from .research_runtime import run_research_agent
 
     inputs = RESEARCH_RUN_INPUTS.get(operation_id) or {}
+    if inputs.get("run_mode") == "earnings_squad":
+        return
     checkpoint = inputs.get("runtime_checkpoint") or {}
     # Stopping a regeneration keeps the answer it was meant to replace.
     if _replaces_turn(inputs):
@@ -7259,7 +7680,12 @@ def cancel_operation(operation_id: str, request: CancelOperationRequest, respons
     owner = _operation_owner_subject(http_request)
     result, replayed = operations.cancel(operation_id, request.cancel_token, idempotency_key, owner_subject=owner)
     if result.operation.status == "cancelled" and result.operation.endpoint.startswith("/v1/research/topics/") and owner.startswith("account:"):
-        _deliver_cancelled_research(operation_id, owner.removeprefix("account:"))
+        account_id = owner.removeprefix("account:")
+        inputs = RESEARCH_RUN_INPUTS.get(operation_id) or {}
+        if inputs.get("run_mode") == "earnings_squad":
+            _cancel_active_earnings_squad(account_id, str(inputs.get("topic_id") or ""), operation_id)
+        else:
+            _deliver_cancelled_research(operation_id, account_id)
     # Cancellation does not prove that a provider request was never sent.
     # Known-unsent paths release their own reservations; unknown usage remains.
     _mark_replay(response, replayed)

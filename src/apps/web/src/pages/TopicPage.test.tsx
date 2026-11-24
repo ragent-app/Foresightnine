@@ -2606,9 +2606,9 @@ describe("research turn instructions", () => {
     renderTopic();
 
     // Collapsed OrgGraph summary bar + EarningsDossierView should hydrate cleanly.
-    const orgSummary = await screen.findByTestId("org-summary-bar");
+    const orgSummary = await screen.findByTestId("org-graph-summary-bar");
     expect(within(orgSummary).getByText("投研小组执行摘要条")).toBeTruthy();
-    expect(within(orgSummary).getAllByText("已完成").length).toBeGreaterThanOrEqual(1);
+    expect(within(orgSummary).getByText(/已完成/)).toBeTruthy();
     const dossierView = await screen.findByTestId("earnings-dossier-view");
     expect(within(dossierView).getByRole("heading", { level: 2, name: "NVIDIA Corp." })).toBeTruthy();
     expect(within(dossierView).getByText("NVDA")).toBeTruthy();
@@ -2687,15 +2687,25 @@ describe("research turn instructions", () => {
     let squadFinished = false;
     let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
     const encoder = new TextEncoder();
-    const runBodies: Array<Record<string, unknown>> = [];
     const steerBodies: Array<Record<string, unknown>> = [];
 
     mockApi((url, init) => {
-      if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([]));
+      if (url.pathname === "/v2/research/topics/t1") {
+        return jsonResponse({ ...topicWith([]), run_mode: "earnings_squad", squad_run_id: "sqrun_live", ticker: "AAPL", cik: "0000320193" });
+      }
       if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([]);
       if (url.pathname === "/v2/research/topics/t1/earnings-squad/dossier") {
         if (!squadFinished) {
-          return jsonResponse({ error_code: "not_found", message: "no squad run" }, { status: 404 });
+          return jsonResponse({
+            topic_id: "t1",
+            run_id: "sqrun_live",
+            operation_id: "op_sq_live",
+            status: "running",
+            org_events: [
+              { sequence: 1, node_id: "prefetch_engine", role: "prefetch", display_name: "官方资料与确定性预计算", action_kind: "READING", runtime_state: "completed", stage: "stage_0", current_activity: "完成 SEC 预抓取" },
+            ],
+            dossier: null,
+          } satisfies ResearchV2.EarningsSquadDossierResponse);
         }
         return jsonResponse({
           topic_id: "t1",
@@ -2703,28 +2713,12 @@ describe("research turn instructions", () => {
           operation_id: "op_sq_live",
           status: "completed",
           org_events: [
-            { sequence: 1, node_id: "prefetch", role: "prefetch", display_name: "官方资料与确定性预计算", action_kind: "READING", runtime_state: "completed", stage: "stage_0", current_activity: "完成预计算" },
-            { sequence: 2, node_id: "lead", role: "lead", display_name: "Lead 主研究协调", parent_node_id: "prefetch", slot: "deep_reasoner", action_kind: "DELEGATING", runtime_state: "completed", stage: "stage_1", current_activity: "已完成调度" },
-            { sequence: 3, node_id: "writer", role: "writer", display_name: "底稿撰稿 (Writer)", parent_node_id: "lead", slot: "writer", action_kind: "RESPONDING", runtime_state: "completed", stage: "stage_4", current_activity: "已锁定档案" },
+            { sequence: 1, node_id: "prefetch_engine", role: "prefetch", display_name: "官方资料与确定性预计算", action_kind: "READING", runtime_state: "completed", stage: "stage_0", current_activity: "完成预计算" },
+            { sequence: 2, node_id: "lead_coordinator", role: "lead_coordinator", display_name: "Lead 主研究协调", parent_node_id: "prefetch_engine", slot: "deep_reasoner", action_kind: "DELEGATING", runtime_state: "completed", stage: "stage_1", current_activity: "已完成调度" },
+            { sequence: 3, node_id: "dossier_writer", role: "dossier_writer", display_name: "底稿撰稿 (Writer)", parent_node_id: "lead_coordinator", slot: "writer", action_kind: "RESPONDING", runtime_state: "completed", stage: "stage_3b_write", current_activity: "已锁定档案" },
           ],
           dossier: finalDossier,
         } satisfies ResearchV2.EarningsSquadDossierResponse);
-      }
-      if (url.pathname === "/v2/research/topics/t1/earnings-squad/run" && init.method === "POST") {
-        runBodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
-        return jsonResponse(
-          {
-            topic_id: "t1",
-            run_id: "sqrun_live",
-            operation_id: "op_sq_live",
-            status: "running",
-            org_events: [
-              { sequence: 1, node_id: "prefetch", role: "prefetch", display_name: "官方资料与确定性预计算", action_kind: "READING", runtime_state: "completed", stage: "stage_0", current_activity: "完成 SEC 预抓取" },
-            ],
-            dossier: null,
-          } satisfies ResearchV2.EarningsSquadRunResponse,
-          { status: 202 },
-        );
       }
       if (url.pathname === "/v2/research/topics/t1/earnings-squad/events") {
         const body = new ReadableStream<Uint8Array>({
@@ -2753,17 +2747,9 @@ describe("research turn instructions", () => {
 
     const { container } = renderTopic();
 
-    const tickerInput = await screen.findByRole("textbox", { name: "美股代码 (Ticker，可选)" });
-    fireEvent.change(tickerInput, { target: { value: "aapl" } });
-    fireEvent.click(screen.getByRole("button", { name: "启动美股财报买方小组" }));
-
-    await waitFor(() => expect(runBodies).toHaveLength(1));
-    expect(runBodies[0]?.["symbol"]).toBe("AAPL");
-    expect(runBodies[0]?.["execution_mode"]).toBe("async");
-
-    // Live steering input and expanded OrgGraphPanel should render while running.
-    const steerField = await screen.findByRole("textbox", { name: "向 Lead 发送中场调度指令" });
+    // Auto-routed squad renders directly without any manual idle ticker card.
     await waitFor(() => expect(streamController).not.toBeNull());
+    expect(screen.queryByRole("button", { name: "启动美股财报买方小组" })).toBeNull();
 
     const liveEvent: ResearchV2.OrgGraphEvent = {
       sequence: 2,
@@ -2774,19 +2760,20 @@ describe("research turn instructions", () => {
       slot: "deep_reasoner",
       action_kind: "DELEGATING",
       runtime_state: "running",
-      stage: "stage_1",
+      stage: "stage_1_plan",
       current_activity: "正在指派财务质量排查",
     };
     streamController!.enqueue(
       encoder.encode(`id: org:2\nevent: org_graph_event\ndata: ${JSON.stringify(liveEvent)}\n\n`),
     );
 
-    expect((await screen.findAllByText(/正在指派财务质量排查/)).length).toBeGreaterThanOrEqual(1);
-
     // Selecting a node opens the right-hand process drawer and tells AppLayout (.app.with-panel) to reserve drawer width.
-    const leadNode = container.querySelector('[data-node-id="lead_coordinator"]');
-    expect(leadNode).toBeTruthy();
-    fireEvent.click(leadNode!);
+    const leadNode = await waitFor(() => {
+      const el = container.querySelector('[data-node-id="lead_coordinator"]');
+      expect(el).toBeTruthy();
+      return el!;
+    });
+    fireEvent.click(leadNode);
     const drawer = await screen.findByRole("complementary", { name: "Lead 主研究协调" });
     expect(within(drawer).getAllByText(/正在指派财务质量排查/).length).toBeGreaterThanOrEqual(1);
     await waitFor(() => {
@@ -2797,8 +2784,10 @@ describe("research turn instructions", () => {
       expect(container.querySelector(".app")?.classList.contains("with-panel")).toBe(false);
     });
 
+    // Unified single bottom dock Composer steers Lead while squad is running.
+    const steerField = await screen.findByPlaceholderText("向 Lead 发送中场调度指令…");
     fireEvent.change(steerField, { target: { value: "核查服务业务毛利率与 SBC 加回" } });
-    fireEvent.click(screen.getByRole("button", { name: "发送调度指令" }));
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
     await waitFor(() => expect(steerBodies).toHaveLength(1));
     expect(steerBodies[0]?.["text"]).toBe("核查服务业务毛利率与 SBC 加回");
     expect(await screen.findByText(/#1 核查服务业务毛利率与 SBC 加回/)).toBeTruthy();
@@ -2814,8 +2803,8 @@ describe("research turn instructions", () => {
     expect(within(dossierView).getByRole("heading", { level: 2, name: "Apple Inc." })).toBeTruthy();
     expect(within(dossierView).getByText("AAPL")).toBeTruthy();
     expect(await screen.findByText(/服务毛利率创新高/)).toBeTruthy();
-    const orgSummary = await screen.findByTestId("org-summary-bar");
+    const orgSummary = await screen.findByTestId("org-graph-summary-bar");
     expect(within(orgSummary).getByText("投研小组执行摘要条")).toBeTruthy();
-    expect(within(orgSummary).getAllByText("已完成").length).toBeGreaterThanOrEqual(1);
+    expect(within(orgSummary).getByText(/已完成/)).toBeTruthy();
   });
 });
