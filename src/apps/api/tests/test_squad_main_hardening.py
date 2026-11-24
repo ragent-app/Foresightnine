@@ -1042,3 +1042,213 @@ def test_resolve_earnings_squad_runtime_personal_chat_generation_params_without_
     p_anth = api._build_squad_slot_provider(account.account_id, anth_slot, real_settings, real_config)
     assert isinstance(p_anth, AnthropicMessagesProvider)
     assert p_anth.max_tokens == 4096
+
+
+# --------------------------------------------------------------------------- 7. Live OpenAIResponses End-to-End Squad + Rejection Diagnostics (topic_11e55b1df00649e8865baf53f2b7ddd9)
+def test_openai_responses_squad_e2e_and_safe_rejection_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    import json
+    import logging
+    from app import openai_compatible, openai_responses
+    from app.openai_compatible import HttpResponse
+
+    monkeypatch.setattr(openai_compatible, "_require_public_dns", lambda *_: None)
+    monkeypatch.setattr(api.model_settings, "cipher", ModelCredentialCipher(b"r" * 32))
+    client = TestClient(api.app)
+    reg = client.post("/v1/auth/local/register", json={
+        "email": f"{uuid4().hex}@example.test",
+        "password": "correct horse battery staple!",
+    })
+    assert reg.status_code == 201
+    headers = {"Authorization": "Bearer " + reg.json()["access_token"]}
+
+    # 1) Configure personal openai_responses with reasoning_effort="medium" and verify tool support
+    cfg_resp = client.put("/v1/account/model-config", headers=headers, json={
+        "mode": "personal",
+        "model": "gpt-5.6-terra",
+        "protocol": "openai_responses",
+        "base_url": "https://model.example.test/v1",
+        "api_key": "sk-resp-e2e-secret",
+        "generation_parameters": {"reasoning_effort": "medium"},
+    })
+    assert cfg_resp.status_code == 200
+    monkeypatch.setattr(
+        openai_responses,
+        "_default_transport",
+        lambda m, u, h, b, t, **kw: HttpResponse(200, json.dumps({
+            "status": "completed",
+            "output": [{
+                "type": "function_call",
+                "id": "fc_probe",
+                "name": "verify_connection",
+                "call_id": "call_probe",
+                "arguments": '{"value":"ok"}',
+            }],
+        })),
+    )
+    assert client.post("/v1/account/model-config/test", headers=headers).json() == {"status": "ready"}
+
+    src_resp = client.post("/v2/research/sources", headers=headers, json={
+        "title": "ACME Q4 Earnings Release",
+        "text": "ACME Q4 revenue rose 22% YoY to $1,500M driven by Cloud Subscriptions ($900M).",
+        "permissions": {"store": True, "display": True, "model_input": True, "export": True},
+    })
+    assert src_resp.status_code == 201
+    source_id = src_resp.json()["source_id"]
+
+    topic_resp = client.post("/v2/research/topics", headers=headers, json={
+        "question": "Analyze ACME Q4 earnings drivers",
+        "source_ids": [source_id],
+    })
+    assert topic_resp.status_code in (200, 201)
+    topic = topic_resp.json()
+    topic_id = topic["topic_id"]
+
+    # 2) Simulate HTTP 400 on Stage 1 due to unrecoverable 'input' rejection -> verify logs & safe rejection_details
+    def fail_transport(m, u, h, b, t, **kw):
+        return HttpResponse(400, json.dumps({
+            "error": {
+                "type": "invalid_request_error",
+                "code": "invalid_value",
+                "param": "input",
+                "message": "Invalid input for Bearer sk-resp-e2e-secret",
+            }
+        }))
+
+    monkeypatch.setattr(openai_responses, "_default_transport", fail_transport)
+    caplog.set_level(logging.WARNING)
+    bad_run = client.post(f"/v2/research/topics/{topic_id}/earnings-squad/run", headers=headers, json={
+        "symbol": "ACME",
+        "cik": "0001234567",
+        "company_name": "ACME Corp",
+        "execution_mode": "sync",
+    })
+    assert bad_run.status_code == 500
+    assert "sk-resp-e2e-secret" not in caplog.text
+    assert "provider_request_rejected" in caplog.text
+    assert "'error_param': 'input'" in caplog.text or '"error_param": "input"' in caplog.text
+    bad_dossier = client.get(f"/v2/research/topics/{topic_id}/earnings-squad/dossier", headers=headers).json()
+    assert bad_dossier["status"] == "failed"
+    assert bad_dossier["error"] == "Provider rejected the request."
+    assert bad_dossier["rejection_details"]["status_code"] == 400
+    assert bad_dossier["rejection_details"]["error_param"] == "input"
+    assert "sk-resp-e2e-secret" not in json.dumps(bad_dossier)
+
+    # 3) Full 6-stage OpenAIResponses squad run: Stage 1 -> Stage 2 tool loops -> Stage 2.5 -> Stage 3A -> Stage 3B Memo
+    wires_seen: list[dict] = []
+
+    def squad_responses_transport(m, u, h, b, t, **kw):
+        wire = json.loads(b)
+        wires_seen.append(wire)
+        assert wire["reasoning"] == {"effort": "medium"}
+        if wire.get("text", {}).get("format", {}).get("type") == "json_object":
+            # Every OpenAI Responses json_object wire MUST contain 'json' in wire['input']!
+            assert "json" in json.dumps(wire["input"]).lower()
+        instr = wire.get("instructions") or ""
+        if "ResearchDispatchPlan" in instr:
+            payload = {
+                "l1_pack_id": "earnings_review",
+                "selected_l2_pack_id": None,
+                "selected_l2_pack_reason": "Single filing review",
+                "tasks": [{
+                    "worker_role": "worker_segments",
+                    "status": "planned",
+                    "objective": "Verify ACME Q4 revenue",
+                    "target_r_files": [],
+                    "target_flag_ids": [],
+                    "target_section_keys": [],
+                    "soft_turn_limit": 3,
+                    "round_number": 1,
+                }],
+                "cross_worker_hypotheses": [],
+                "planning_notes": "Targeted segment check",
+                "instruction_sequence": 0,
+            }
+            return HttpResponse(200, json.dumps({
+                "status": "completed",
+                "output": [{"type": "message", "id": "m_s1", "role": "assistant", "content": [{"type": "output_text", "text": json.dumps(payload)}]}],
+                "usage": {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150},
+            }))
+        if "EvidenceCardBatch" in instr:
+            has_tool_result = any(item.get("type") == "function_call_output" for item in wire["input"])
+            if not has_tool_result and wire.get("tools"):
+                return HttpResponse(200, json.dumps({
+                    "status": "completed",
+                    "output": [
+                        {"type": "reasoning", "id": "rs_w", "summary": [], "encrypted_content": "enc-worker-1"},
+                        {
+                            "type": "function_call",
+                            "id": "fc_w",
+                            "call_id": "call_read_1",
+                            "name": "read_sources",
+                            "arguments": json.dumps({"reads": [{"source_id": source_id, "start": 0, "end": 200}], "rationale": "Read release"}),
+                        },
+                    ],
+                }))
+            batch = {
+                "task_id": "t_seg",
+                "worker_role": "worker_segments",
+                "round_number": 1,
+                "status": "completed",
+                "cards": [{
+                    "card_id": "c_rev",
+                    "worker_role": "worker_segments",
+                    "topic_tag": "revenue",
+                    "finding": "ACME Q4 revenue rose 22% YoY to $1,500M.",
+                    "citations": [{"source_id": source_id, "quotation": "ACME Q4 revenue rose 22% YoY to $1,500M"}],
+                }],
+                "unresolved_gaps": [],
+            }
+            return HttpResponse(200, json.dumps({
+                "status": "completed",
+                "output": [{"type": "message", "id": "m_s2", "role": "assistant", "content": [{"type": "output_text", "text": json.dumps(batch)}]}],
+            }))
+        if "Stage25ReviewDecision" in instr:
+            return HttpResponse(200, json.dumps({
+                "status": "completed",
+                "output": [{"type": "message", "id": "m_s25", "role": "assistant", "content": [{"type": "output_text", "text": '{"has_cross_worker_leads": false, "followup_tasks": [], "rationale": "Done"}'}]}],
+            }))
+        if "BearCaseBatch" in instr:
+            bear = {
+                "batch_id": "bb_1",
+                "items": [{
+                    "bear_id": "b_1",
+                    "title": "Growth concentration",
+                    "thesis_challenge": "Cloud Subscriptions accounts for $900M of $1,500M total revenue.",
+                    "anchored_evidence_ids": ["c_rev"],
+                    "anchor_kind": "evidence_card",
+                    "next_quarter_invalidation_trigger": "Cloud Subscriptions growth decelerating below 15%.",
+                }],
+                "rejected_items": [],
+                "reviewer_notes": "Anchored check.",
+            }
+            return HttpResponse(200, json.dumps({
+                "status": "completed",
+                "output": [{"type": "message", "id": "m_s3a", "role": "assistant", "content": [{"type": "output_text", "text": json.dumps(bear)}]}],
+            }))
+        return HttpResponse(200, json.dumps({
+            "status": "completed",
+            "output": [{"type": "message", "id": "m_s3b", "role": "assistant", "content": [{"type": "output_text", "text": "# ACME Q4 Earnings Memo\n\nRevenue reached $1,500M (+22% YoY) [c_rev]."}]}],
+        }))
+
+    monkeypatch.setattr(openai_responses, "_default_transport", squad_responses_transport)
+    ok_run = client.post(f"/v2/research/topics/{topic_id}/earnings-squad/run", headers=headers, json={
+        "symbol": "ACME",
+        "cik": "0001234567",
+        "company_name": "ACME Corp",
+        "execution_mode": "sync",
+    })
+    assert ok_run.status_code == 200, ok_run.text
+    ok_body = ok_run.json()
+    assert ok_body["status"] == "completed"
+    assert ok_body["rejection_details"] is None
+    assert ok_body["dossier"]["evidence_cards"][0]["card_id"] == "c_rev"
+    assert "ACME Q4 Earnings Memo" in ok_body["dossier"]["memo_markdown"]
+    # Verify Stage 2 worker tool loop preserved encrypted reasoning & function_call_output pairing
+    assert any(
+        any(x.get("type") == "reasoning" and x.get("encrypted_content") == "enc-worker-1" for x in w["input"])
+        and any(x.get("type") == "function_call_output" and x.get("call_id") == "call_read_1" for x in w["input"])
+        for w in wires_seen
+    )

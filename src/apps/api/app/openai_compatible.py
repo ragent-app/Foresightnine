@@ -26,7 +26,13 @@ import ssl
 from time import monotonic, sleep
 from threading import BoundedSemaphore, Event, Lock, Thread
 from typing import Any, BinaryIO, Callable, Mapping, NoReturn, Protocol
-from .model_protocol import ModelResponse, extract_assistant_text
+from .model_protocol import (
+    ModelResponse,
+    _UNRELATED_REJECTION_PARAMETERS,
+    ensure_json_word_in_messages,
+    extract_assistant_text,
+    format_response_schema_instruction,
+)
 from .provider_capabilities import ChatGenerationParameters
 from urllib.parse import urlencode, urlsplit
 
@@ -94,6 +100,7 @@ class HttpResponse:
     # so existing injected test transports cannot accidentally expose headers.
     headers: Mapping[str, str] = field(default_factory=dict)
     safe_error: Mapping[str, str] = field(default_factory=dict)
+    rejection_summary: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -102,6 +109,7 @@ class BinaryHttpResponse:
     body: bytes
     headers: Mapping[str, str] = field(default_factory=dict)
     safe_error: Mapping[str, str] = field(default_factory=dict)
+    rejection_summary: Mapping[str, Any] = field(default_factory=dict)
 
 
 class _TransportFailure(OSError):
@@ -586,8 +594,10 @@ def _execute_binary_transport(
         if diagnostics:
             diagnostics.submission("response_received")
         if response.status < 200 or response.status >= 300:
-            from .research_diagnostics import safe_provider_error
-            return BinaryHttpResponse(response.status, b"", {str(key).lower(): str(value) for key, value in response.headers.items()}, safe_provider_error(content))
+            from .research_diagnostics import safe_provider_error, safe_rejection_details
+            safe_err = safe_provider_error(content)
+            rej_summary = safe_rejection_details(content, status_code=response.status, safe_error=safe_err)
+            return BinaryHttpResponse(response.status, b"", {str(key).lower(): str(value) for key, value in response.headers.items()}, safe_err, rej_summary)
         return BinaryHttpResponse(
             response.status,
             content,
@@ -751,7 +761,7 @@ def _default_transport(
         decoded = response.body.decode("utf-8")
     except UnicodeDecodeError as error:
         raise _TransportFailure() from error
-    return HttpResponse(response.status_code, decoded, response.headers, response.safe_error)
+    return HttpResponse(response.status_code, decoded, response.headers, response.safe_error, response.rejection_summary)
 
 
 class _SseLineParser:
@@ -884,8 +894,10 @@ def _execute_stream_worker(
                 err_bytes = response.read(_MAX_ERROR_RESPONSE_BYTES + 1)[:_MAX_ERROR_RESPONSE_BYTES]
             if diagnostics:
                 diagnostics.submission("response_received")
-            from .research_diagnostics import safe_provider_error
-            events_q.put(("response", HttpResponse(response.status, "", resp_headers, safe_provider_error(err_bytes))))
+            from .research_diagnostics import safe_provider_error, safe_rejection_details
+            safe_err = safe_provider_error(err_bytes)
+            rej_summary = safe_rejection_details(err_bytes, status_code=response.status, safe_error=safe_err)
+            events_q.put(("response", HttpResponse(response.status, "", resp_headers, safe_err, rej_summary)))
             return
 
         media_type = resp_headers.get("content-type", "").split(";", 1)[0].strip().lower()
@@ -1291,6 +1303,7 @@ class OpenAICompatibleLlmProvider(LlmProvider):
         )
         self._default_transport_used = transport is None and stream_transport is None
         self.stream_transport = stream_transport
+        self._prefer_max_completion_tokens = False
         if transport is not None:
             self.transport = transport
         else:
@@ -1475,6 +1488,12 @@ class OpenAICompatibleLlmProvider(LlmProvider):
             mode = profile.mode if profile else 'json_object'
             payload.pop('response_format')
             payload.update(wire_contract(contract, mode))
+        rf = payload.get("response_format")
+        if isinstance(rf, Mapping) and rf.get("type") == "json_object":
+            payload["messages"] = ensure_json_word_in_messages(
+                payload["messages"],
+                roles=("user", "system", "developer"),
+            )
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
     @staticmethod
@@ -1696,14 +1715,20 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                 raise ProviderFailure("provider_configuration_invalid", "Invalid response_format configuration.", retryable=False)
             if not tools:
                 wire["response_format"] = dict(response_format)
+                if response_format.get("type") == "json_object":
+                    wire["messages"] = ensure_json_word_in_messages(
+                        list(wire["messages"]),
+                        roles=("user", "system", "developer"),
+                    )
         if tools:
             wire["tools"] = tools
+        token_key = "max_completion_tokens" if self._prefer_max_completion_tokens else "max_tokens"
         if max_output_tokens is not None:
             if type(max_output_tokens) is not int or max_output_tokens < 1:
                 raise ProviderFailure("provider_budget_exhausted", "Research output budget is exhausted.", retryable=False)
-            wire["max_tokens"] = min(max_output_tokens, self.policy.max_output_tokens) if self.policy.max_output_tokens is not None else max_output_tokens
+            wire[token_key] = min(max_output_tokens, self.policy.max_output_tokens) if self.policy.max_output_tokens is not None else max_output_tokens
         elif self.policy.max_output_tokens is not None:
-            wire["max_tokens"] = self.policy.max_output_tokens
+            wire[token_key] = self.policy.max_output_tokens
         streaming = on_stream_event is not None and profile is not None and profile.stream is True
         if streaming:
             wire["stream"] = True
@@ -1903,11 +1928,13 @@ class OpenAICompatibleLlmProvider(LlmProvider):
             else 45.0
         )
         streamed_sse = False
+        retried_max_completion = False
+        retried_strip_rf = False
         call_started_at = monotonic()
         try:
             timeout = min(self.policy.timeout_seconds, timeout_seconds) if timeout_seconds is not None else self.policy.timeout_seconds
-            from .research_diagnostics import warn_if_timeout_output_mismatch
-            effective_max_tokens = wire.get("max_tokens")
+            from .research_diagnostics import safe_rejection_details, warn_if_timeout_output_mismatch
+            effective_max_tokens = wire.get("max_tokens") or wire.get("max_completion_tokens")
             warn_if_timeout_output_mismatch(
                 effective_max_tokens if type(effective_max_tokens) is int else None,
                 timeout,
@@ -1919,73 +1946,134 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {self.settings.api_key}",
             }
-            if streaming:
-                if active_stream_transport is not None:
-                    if on_submission is not None:
-                        on_submission()
-                    diagnostics.submission("started_unknown")
-                    fallback = _invoke_stream_transport(
-                        active_stream_transport,
-                        "POST",
-                        _endpoint(self.settings.base_url),
-                        headers,
-                        body,
-                        timeout,
-                        on_frame=handle_sse_frame,
-                        cancel_event=cancel_event,
-                        on_submission=on_submission,
-                        diagnostics=diagnostics,
-                    )
-                    diagnostics.submission("response_received")
-                    if fallback is not None:
-                        response = fallback
+            while True:
+                response = None
+                streamed_sse = False
+                if streaming:
+                    if active_stream_transport is not None:
+                        if on_submission is not None:
+                            on_submission()
+                        diagnostics.submission("started_unknown")
+                        fallback = _invoke_stream_transport(
+                            active_stream_transport,
+                            "POST",
+                            _endpoint(self.settings.base_url),
+                            headers,
+                            body,
+                            timeout,
+                            on_frame=handle_sse_frame,
+                            cancel_event=cancel_event,
+                            on_submission=on_submission,
+                            diagnostics=diagnostics,
+                        )
+                        diagnostics.submission("response_received")
+                        if fallback is not None:
+                            response = fallback
+                        else:
+                            streamed_sse = True
+                    elif self._default_transport_used:
+                        fallback = _default_stream_transport(
+                            "POST",
+                            _endpoint(self.settings.base_url),
+                            headers,
+                            body,
+                            timeout,
+                            on_frame=handle_sse_frame,
+                            allow_private_network=self.settings.allow_private_network,
+                            diagnostics=diagnostics,
+                            connect_timeout_seconds=connect_timeout,
+                            idle_timeout_seconds=idle_timeout,
+                            response_timeout_seconds=response_timeout,
+                            cancel_event=cancel_event,
+                            on_submission=on_submission,
+                        )
+                        if fallback is not None:
+                            response = fallback
+                        else:
+                            streamed_sse = True
                     else:
-                        streamed_sse = True
-                elif self._default_transport_used:
-                    fallback = _default_stream_transport(
-                        "POST",
-                        _endpoint(self.settings.base_url),
-                        headers,
-                        body,
-                        timeout,
-                        on_frame=handle_sse_frame,
-                        allow_private_network=self.settings.allow_private_network,
-                        diagnostics=diagnostics,
-                        connect_timeout_seconds=connect_timeout,
-                        idle_timeout_seconds=idle_timeout,
-                        response_timeout_seconds=response_timeout,
-                        cancel_event=cancel_event,
-                        on_submission=on_submission,
-                    )
-                    if fallback is not None:
-                        response = fallback
+                        if on_submission is not None:
+                            on_submission()
+                        response = self.transport("POST", _endpoint(self.settings.base_url), headers, body, timeout)
+                        diagnostics.submission("response_received")
+                        ct = str(getattr(response, "headers", {}).get("content-type", "")).split(";", 1)[0].strip().lower()
+                        if 200 <= response.status_code < 300 and ct == "text/event-stream":
+                            parser = _SseLineParser()
+                            for item in [*parser.feed_text(response.body), *parser.finish()]:
+                                if item[0] == "frame":
+                                    handle_sse_frame(item[1], item[2])
+                            response = None
+                            streamed_sse = True
+                else:
+                    if self._default_transport_used:
+                        response = _default_transport("POST", _endpoint(self.settings.base_url), headers, body, timeout,
+                            allow_private_network=self.settings.allow_private_network, diagnostics=diagnostics,
+                            connect_timeout_seconds=connect_timeout,
+                            response_timeout_seconds=response_timeout,
+                            cancel_event=cancel_event, on_submission=on_submission)
                     else:
-                        streamed_sse = True
-                else:
-                    if on_submission is not None:
-                        on_submission()
-                    response = self.transport("POST", _endpoint(self.settings.base_url), headers, body, timeout)
-                    diagnostics.submission("response_received")
-                    ct = str(getattr(response, "headers", {}).get("content-type", "")).split(";", 1)[0].strip().lower()
-                    if 200 <= response.status_code < 300 and ct == "text/event-stream":
-                        parser = _SseLineParser()
-                        for item in [*parser.feed_text(response.body), *parser.finish()]:
-                            if item[0] == "frame":
-                                handle_sse_frame(item[1], item[2])
-                        response = None
-                        streamed_sse = True
-            else:
-                if self._default_transport_used:
-                    response = _default_transport("POST", _endpoint(self.settings.base_url), headers, body, timeout,
-                        allow_private_network=self.settings.allow_private_network, diagnostics=diagnostics,
-                        connect_timeout_seconds=connect_timeout,
-                        response_timeout_seconds=response_timeout,
-                        cancel_event=cancel_event, on_submission=on_submission)
-                else:
-                    if on_submission is not None:
-                        on_submission()
-                    response = self.transport("POST", _endpoint(self.settings.base_url), headers, body, timeout)
-                    diagnostics.submission("response_received")
+                        if on_submission is not None:
+                            on_submission()
+                        response = self.transport("POST", _endpoint(self.settings.base_url), headers, body, timeout)
+                        diagnostics.submission("response_received")
+
+                if response is None or response.status_code not in (400, 422):
+                    break
+                rej = getattr(response, "rejection_summary", None) or safe_rejection_details(
+                    getattr(response, "body", b""),
+                    status_code=response.status_code,
+                    safe_error=getattr(response, "safe_error", None),
+                )
+                safe_err = getattr(response, "safe_error", None) or {}
+                err_param = str(rej.get("error_param") or safe_err.get("messages_parameter") or "")
+                err_msg_lower = str(rej.get("message") or "").lower()
+                retried_attempt = False
+                if (
+                    "max_tokens" in wire
+                    and not retried_max_completion
+                    and (
+                        err_param == "max_tokens"
+                        or "max_completion_tokens" in err_msg_lower
+                        or ("max_tokens" in err_msg_lower and ("unsupported" in err_msg_lower or "use " in err_msg_lower))
+                    )
+                ):
+                    self._prefer_max_completion_tokens = True
+                    retried_max_completion = True
+                    wire["max_completion_tokens"] = wire.pop("max_tokens")
+                    retried_attempt = True
+                elif (
+                    isinstance(wire.get("response_format"), Mapping)
+                    and wire["response_format"].get("type") in ("json_object", "json_schema")
+                    and not retried_strip_rf
+                    and err_param not in _UNRELATED_REJECTION_PARAMETERS
+                ):
+                    rf_obj = wire.pop("response_format")
+                    retried_strip_rf = True
+                    if rf_obj.get("type") == "json_schema":
+                        js_obj = rf_obj.get("json_schema")
+                        rf_schema = js_obj.get("schema") if isinstance(js_obj, Mapping) else None
+                        rf_name = js_obj.get("name") if isinstance(js_obj, Mapping) else None
+                        already_has_schema = any(
+                            "json schema:" in str(msg.get("content") or "").lower()
+                            for msg in wire["messages"]
+                            if isinstance(msg, Mapping)
+                        )
+                        if isinstance(rf_schema, Mapping) and not already_has_schema:
+                            note = format_response_schema_instruction(rf_schema, rf_name, has_tools=bool(tools))
+                            if note:
+                                next_msgs = [dict(m) if isinstance(m, Mapping) else m for m in wire["messages"]]
+                                if next_msgs and isinstance(next_msgs[0], dict) and next_msgs[0].get("role") == "system":
+                                    cur_sys = str(next_msgs[0].get("content") or "")
+                                    next_msgs[0]["content"] = f"{cur_sys}\n\n{note}" if cur_sys else note
+                                else:
+                                    next_msgs.insert(0, {"role": "system", "content": note})
+                                wire["messages"] = next_msgs
+                    retried_attempt = True
+                if not retried_attempt:
+                    break
+                body = json.dumps(wire, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
+                if self.policy.max_input_tokens is not None and len(body) > self.policy.max_input_tokens:
+                    raise ProviderFailure("provider_budget_exhausted", "Model input budget exceeded.", retryable=False)
         except ProviderFailure as error:
             error.provider_response_received = True
             if error.reported_tokens is None:
@@ -2092,8 +2180,12 @@ class OpenAICompatibleLlmProvider(LlmProvider):
             raise failure
         if not 200 <= response.status_code < 300:
             failure = ProviderFailure("provider_unavailable" if response.status_code in _RETRYABLE_STATUS_CODES else "provider_request_rejected", "Provider returned no usable result.", retryable=response.status_code in _RETRYABLE_STATUS_CODES)
-            from .research_diagnostics import set_rejection_details
+            from .research_diagnostics import log_provider_rejection, set_rejection_details
             set_rejection_details(failure, response)
+            if retried_strip_rf:
+                failure._response_format_retried = True
+            if failure.code == "provider_request_rejected":
+                log_provider_rejection("openai_chat_completions", failure, context={"model": self.settings.model})
             failure.provider_response_received = True
             raise failure
         try:
@@ -2268,6 +2360,10 @@ class OpenAICompatibleLlmProvider(LlmProvider):
             raise failure
         if not 200 <= response.status_code < 300:
             failure = ProviderFailure("provider_unavailable" if response.status_code in _RETRYABLE_STATUS_CODES else "provider_request_rejected", "Provider returned no usable structured result.", retryable=response.status_code in _RETRYABLE_STATUS_CODES)
+            from .research_diagnostics import log_provider_rejection, set_rejection_details
+            set_rejection_details(failure, response)
+            if failure.code == "provider_request_rejected":
+                log_provider_rejection("openai_chat_completions", failure, context={"model": self.settings.model})
             failure.provider_response_received = True
             raise failure
         # Retain only an enumerated finish classification, never response text.

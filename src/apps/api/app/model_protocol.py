@@ -3,7 +3,65 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 import json
 import math
+import re
 from typing import Any
+
+_JSON_WORD_RE = re.compile(r'\bjson\b', re.IGNORECASE)
+_JSON_OBJECT_INPUT_INSTRUCTION = 'Respond with a valid JSON object matching the schema in instructions.'
+_UNRELATED_REJECTION_PARAMETERS = frozenset({
+    'model', 'reasoning.effort', 'reasoning', 'max_output_tokens',
+    'max_tokens', 'max_completion_tokens', 'temperature', 'top_p', 'seed', 'stream',
+})
+
+
+def _content_has_json_word(value: Any) -> bool:
+    """Return True when text or structured message content contains the standalone word 'json'."""
+    if isinstance(value, str):
+        return bool(_JSON_WORD_RE.search(value))
+    if isinstance(value, Mapping):
+        if isinstance(value.get('text'), str) and _JSON_WORD_RE.search(value['text']):
+            return True
+        content = value.get('content')
+        if content is not None:
+            return _content_has_json_word(content)
+        return False
+    if isinstance(value, (list, tuple)):
+        return any(_content_has_json_word(item) for item in value)
+    return False
+
+
+def ensure_json_word_in_messages(
+    items: list[dict[str, Any]],
+    *,
+    roles: tuple[str, ...] = ('user',),
+    instruction: str = _JSON_OBJECT_INPUT_INSTRUCTION,
+    text_part_type: str = 'text',
+) -> list[dict[str, Any]]:
+    """Ensure message payloads satisfy API json_object 'json' word requirements without touching system prompts."""
+    for item in items:
+        if not isinstance(item, Mapping):
+            continue
+        role = item.get('role')
+        if role not in roles:
+            continue
+        if _content_has_json_word(item):
+            return items
+    updated = list(items)
+    if updated and isinstance(updated[-1], Mapping) and updated[-1].get('role') == 'user':
+        last = dict(updated[-1])
+        content = last.get('content')
+        if isinstance(content, str):
+            last['content'] = f'{content}\n\n{instruction}' if content else instruction
+            updated[-1] = last
+            return updated
+        if isinstance(content, list):
+            parts = list(content)
+            parts.append({'type': text_part_type, 'text': instruction})
+            last['content'] = parts
+            updated[-1] = last
+            return updated
+    updated.append({'role': 'user', 'content': instruction})
+    return updated
 
 
 def _reject_json_constant(token: str) -> Any:

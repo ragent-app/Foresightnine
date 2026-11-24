@@ -457,12 +457,147 @@ def sanitize_diagnostic_errors(value: object, *, schema: type[BaseModel] | None 
     return result
 
 _PROVIDER_PARAMETERS = frozenset(ChatGenerationParameters.model_fields) | {
-    "reasoning.effort", "reasoning", "input", "instructions", "max_output_tokens", "model", "max_tokens", "max_completion_tokens", "messages", "tools", "system", "thinking", "stream",
+    "reasoning.effort", "reasoning", "input", "instructions", "max_output_tokens", "model",
+    "max_tokens", "max_completion_tokens", "messages", "tools", "system", "thinking", "stream",
+    "text", "text.format", "response_format", "include", "output_config", "store",
 }
 
-_PROVIDER_ERROR_CODES = frozenset({'invalid_request_error', 'authentication_error', 'permission_error',
+_PROVIDER_ERROR_CODES = frozenset({
+    'invalid_request_error', 'authentication_error', 'permission_error',
     'not_found_error', 'rate_limit_error', 'server_error', 'invalid_api_key',
-    'context_length_exceeded', 'rate_limit_exceeded', 'insufficient_quota', 'invalid_request'})
+    'context_length_exceeded', 'rate_limit_exceeded', 'insufficient_quota', 'invalid_request',
+    'invalid_value', 'missing_required_parameter', 'unsupported_parameter',
+    'unsupported_value', 'invalid_json_schema', 'model_not_found', 'overloaded_error',
+})
+
+_REJECTION_BEARER_RE = re.compile(r"(?i)\bbearer\s+[^\s,;\"'<>]+")
+_REJECTION_SK_RE = re.compile(r"\bsk-[A-Za-z0-9_-]{6,}")
+_REJECTION_AIZA_RE = re.compile(r"\bAIza[A-Za-z0-9_-]{8,}")
+_REJECTION_JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9._-]+")
+_REJECTION_KV_RE = re.compile(
+    r"(?i)\b(x-api-key|api-key|api_key|apikey|secret|password|client_secret|access_token|token)\s*[:=]\s*[^\s,;\"'<>]+"
+)
+_REJECTION_LONG_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9_.-])(?=[A-Za-z0-9+/_-]*\d)(?=[A-Za-z0-9+/_-]*[A-Za-z])[A-Za-z0-9+/_-]{36,}={0,2}(?![A-Za-z0-9_.-])"
+)
+_REJECTION_LOGGER = logging.getLogger("foresightnine.provider_rejection")
+
+
+def _redact_rejection_text(value: object, *, max_length: int = 240) -> str:
+    """Redact potential credentials/URLs/tokens and bound rejection message length."""
+    from .earnings_external_data import redact_secrets
+
+    text = value if isinstance(value, str) else str(value or "")
+    cleaned = redact_secrets(text, max_length=0)
+    cleaned = _REJECTION_BEARER_RE.sub("Bearer ***", cleaned)
+    cleaned = _REJECTION_SK_RE.sub("sk-***", cleaned)
+    cleaned = _REJECTION_AIZA_RE.sub("AIza***", cleaned)
+    cleaned = _REJECTION_JWT_RE.sub("eyJ***", cleaned)
+    cleaned = _REJECTION_KV_RE.sub(lambda m: f"{m.group(1)}=***", cleaned)
+    cleaned = _REJECTION_LONG_TOKEN_RE.sub("***", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if max_length > 0 and len(cleaned) > max_length:
+        return cleaned[: max(1, max_length - 3)].rstrip() + "..."
+    return cleaned
+
+
+def safe_rejection_details(
+    body: str | bytes | None,
+    *,
+    status_code: int | None = None,
+    safe_error: object = None,
+) -> dict[str, Any]:
+    """Extract redacted, bounded rejection fields from a non-2xx provider response."""
+    import json
+
+    details: dict[str, Any] = {}
+    if type(status_code) is int and 100 <= status_code <= 599:
+        details["status_code"] = status_code
+
+    raw_text = ""
+    if isinstance(body, (bytes, bytearray)):
+        raw_text = bytes(body).decode("utf-8", errors="replace")
+    elif isinstance(body, str):
+        raw_text = body
+
+    parsed_error: dict[str, Any] | None = None
+    if raw_text.strip():
+        try:
+            raw_obj = json.loads(raw_text)
+        except (ValueError, UnicodeError, TypeError):
+            raw_obj = None
+        if isinstance(raw_obj, dict):
+            err_obj = raw_obj.get("error")
+            if isinstance(err_obj, dict):
+                parsed_error = err_obj
+            elif isinstance(raw_obj.get("message"), str):
+                parsed_error = raw_obj
+        if parsed_error is not None:
+            err_type = parsed_error.get("type")
+            if isinstance(err_type, str) and err_type.strip():
+                details["error_type"] = _redact_rejection_text(err_type, max_length=80)
+            err_code = parsed_error.get("code")
+            if isinstance(err_code, (str, int)) and str(err_code).strip():
+                details["error_code"] = _redact_rejection_text(str(err_code), max_length=80)
+            err_param = parsed_error.get("param")
+            if isinstance(err_param, str) and err_param.strip():
+                details["error_param"] = _redact_rejection_text(err_param, max_length=80)
+            err_msg = parsed_error.get("message")
+            if isinstance(err_msg, str) and err_msg.strip():
+                details["message"] = _redact_rejection_text(err_msg, max_length=240)
+        else:
+            snippet = _redact_rejection_text(raw_text, max_length=240)
+            if snippet:
+                details["message"] = snippet
+
+    if isinstance(safe_error, dict):
+        if "error_type" not in details:
+            mt = safe_error.get("messages_type") or safe_error.get("category")
+            if isinstance(mt, str) and mt not in ("", "unknown", "absent", "unrecognized"):
+                details["error_type"] = mt
+        if "error_code" not in details:
+            mc = safe_error.get("messages_code") or safe_error.get("code")
+            if isinstance(mc, str) and mc not in ("", "unknown", "absent", "unrecognized"):
+                details["error_code"] = mc
+        if "error_param" not in details:
+            mp = safe_error.get("messages_parameter")
+            if isinstance(mp, str) and mp not in ("", "unknown", "absent", "unrecognized"):
+                details["error_param"] = mp
+
+    return details
+
+
+def log_provider_rejection(
+    protocol: str,
+    failure: object,
+    *,
+    logger: logging.Logger | None = None,
+    context: dict[str, Any] | None = None,
+) -> None:
+    """Emit a safe, redacted warning log entry for upstream provider rejections."""
+    target_logger = logger or _REJECTION_LOGGER
+    status = getattr(failure, "upstream_status", None)
+    param = getattr(failure, "parameter", None)
+    code = getattr(failure, "code", None)
+    details = getattr(failure, "rejection_details", None)
+    payload: dict[str, Any] = {"protocol": protocol}
+    if isinstance(code, str) and code:
+        payload["code"] = code
+    if status is not None:
+        payload["status_code"] = status
+    if isinstance(param, str) and param:
+        payload["parameter"] = param
+    if isinstance(details, dict) and details:
+        for key in ("error_type", "error_code", "error_param", "message"):
+            if key in details and details[key] is not None:
+                payload[key] = details[key]
+    if isinstance(context, dict):
+        for key in ("model", "stage", "role", "conversation_id"):
+            val = context.get(key)
+            if isinstance(val, str) and val.strip():
+                payload[key] = val.strip()[:120]
+    target_logger.warning("provider_request_rejected %s", payload)
+
 
 def safe_provider_error(body: str | bytes) -> dict[str, str]:
     """Extract fixed standard error labels; never return a provider message."""
@@ -492,12 +627,28 @@ def safe_provider_error(body: str | bytes) -> dict[str, str]:
     return result
 
 def set_rejection_details(failure, response) -> None:
-    if 400 <= response.status_code <= 599:
-        failure.upstream_status = response.status_code
-    details = getattr(response, 'safe_error', None) or safe_provider_error(response.body)
+    status = getattr(response, 'status_code', None)
+    if type(status) is int and 400 <= status <= 599:
+        failure.upstream_status = status
+    safe_err = getattr(response, 'safe_error', None)
+    body = getattr(response, 'body', b'')
+    details = safe_err or safe_provider_error(body)
     parameter = details.get('messages_parameter')
     if isinstance(parameter, str) and parameter in _PROVIDER_PARAMETERS:
         failure.parameter = parameter
+    pre_summary = getattr(response, 'rejection_summary', None)
+    if isinstance(pre_summary, dict) and pre_summary:
+        rejection_details = dict(pre_summary)
+        if type(status) is int and 'status_code' not in rejection_details:
+            rejection_details['status_code'] = status
+    else:
+        rejection_details = safe_rejection_details(body, status_code=status if type(status) is int else None, safe_error=details)
+    if rejection_details:
+        failure.rejection_details = rejection_details
+        if failure.parameter is None:
+            err_param = rejection_details.get('error_param')
+            if isinstance(err_param, str) and err_param in _PROVIDER_PARAMETERS:
+                failure.parameter = err_param
 
 
 def safe_wire_metadata(wire: object, *, contract: object = None, wire_bytes: int | None = None) -> dict[str, Any]:

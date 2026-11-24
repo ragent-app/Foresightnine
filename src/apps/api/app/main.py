@@ -1422,6 +1422,10 @@ async def contract_violation_handler(request: Request, error: ContractViolation)
 async def provider_failure_handler(request: Request, error: ProviderFailure) -> JSONResponse:
     # Raw CLI/model diagnostics are intentionally not exposed or stored.
     _release_model_call(request)
+    if error.code == "provider_request_rejected":
+        from .research_diagnostics import log_provider_rejection
+
+        log_provider_rejection("http_endpoint", error)
     return _error(
         503 if error.retryable else 400,
         "internal_error" if error.retryable else "bad_request",
@@ -4969,6 +4973,7 @@ class EarningsSquadRunResponse(BaseModel):
     slot_routing_summary: dict[str, Any] = Field(default_factory=dict)
     checkpoint_completed_stages: list[str] = Field(default_factory=list)
     error: str | None = None
+    rejection_details: dict[str, Any] | None = None
 
 
 class EarningsSquadDossierResponse(BaseModel):
@@ -4985,6 +4990,7 @@ class EarningsSquadDossierResponse(BaseModel):
     steering_instructions: list[UserSteeringInstruction] = Field(default_factory=list)
     checkpoint_completed_stages: list[str] = Field(default_factory=list)
     error: str | None = None
+    rejection_details: dict[str, Any] | None = None
 
 
 class EarningsSquadDeepReportRequest(BaseModel):
@@ -5475,6 +5481,19 @@ class _AccountSlotModelRunner:
                 if _is_superseded():
                     raise ProviderFailure("provider_cancelled", "Turn superseded by steering reset.", retryable=False) from exc
                 if not exc.retryable or attempt >= self._max_transient_retries:
+                    if exc.code == "provider_request_rejected":
+                        from .research_diagnostics import log_provider_rejection
+
+                        log_provider_rejection(
+                            type(adapter).__name__,
+                            exc,
+                            context={
+                                "model": getattr(getattr(adapter, "settings", None), "model", None),
+                                "stage": mreq.stage,
+                                "role": mreq.role,
+                                "conversation_id": str(conv_id),
+                            },
+                        )
                     raise
                 base_delay = self._retry_base_seconds * (2 ** attempt)
                 delay = min(8.0, base_delay) * random.uniform(0.75, 1.25)
@@ -6158,6 +6177,7 @@ def _prepare_earnings_squad_execution(
             "checkpoint": resume_cp.model_dump(mode="json") if resume_cp else None,
             "checkpoint_completed_stages": list(resume_cp.completed_stages) if resume_cp else [],
             "error": None,
+            "rejection_details": None,
             "updated_at": lifecycle_clock.now().isoformat(),
         })
 
@@ -6170,6 +6190,7 @@ def _prepare_earnings_squad_execution(
         status_out: Literal["completed", "failed", "cancelled"] = "completed"
         dossier_out: EarningsDossier | None = None
         err_out: str | None = None
+        rejection_details_out: dict[str, Any] | None = None
         config_error = False
         try:
             if cancel_checker is not None and cancel_checker():
@@ -6193,6 +6214,17 @@ def _prepare_earnings_squad_execution(
         except Exception as exc:
             status_out = "failed"
             err_out = str(exc)
+            raw_rej = getattr(exc, "rejection_details", None)
+            if isinstance(raw_rej, Mapping) and raw_rej:
+                rejection_details_out = dict(raw_rej)
+            elif getattr(exc, "code", None) == "provider_request_rejected":
+                fallback_rej: dict[str, Any] = {}
+                if getattr(exc, "upstream_status", None) is not None:
+                    fallback_rej["status_code"] = exc.upstream_status
+                if getattr(exc, "parameter", None):
+                    fallback_rej["error_param"] = exc.parameter
+                if fallback_rej:
+                    rejection_details_out = fallback_rej
         finally:
             final_cp = cp_store.load(run_id)
             with event_lock:
@@ -6200,6 +6232,8 @@ def _prepare_earnings_squad_execution(
 
             def finalize_state() -> None:
                 cur = EARNINGS_SQUAD_STATES.get(state_key) or {}
+                if cur.get("operation_id") and cur.get("operation_id") != operation_id:
+                    return
                 updated = dict(cur)
                 updated["status"] = status_out
                 updated["run_mode"] = "earnings_squad"
@@ -6214,6 +6248,7 @@ def _prepare_earnings_squad_execution(
                     updated["checkpoint_completed_stages"] = list(final_cp.completed_stages)
                 updated["org_events"] = [ev.model_dump(mode="json") for ev in events_final]
                 updated["error"] = err_out
+                updated["rejection_details"] = rejection_details_out
                 updated["updated_at"] = lifecycle_clock.now().isoformat()
                 EARNINGS_SQUAD_STATES.put(state_key, updated)
 
@@ -6222,15 +6257,18 @@ def _prepare_earnings_squad_execution(
                 active = _ACTIVE_SQUAD_RUNS.get((account.account_id, topic_id))
                 if active and active.get("operation_id") == operation_id:
                     _ACTIVE_SQUAD_RUNS.pop((account.account_id, topic_id), None)
+            terminal_progress: dict[str, Any] = {
+                "org_events": [ev.model_dump(mode="json") for ev in events_final],
+                "logical_status": "stopped" if status_out == "cancelled" else status_out,
+                "current_operation_id": operation_id,
+            }
+            if rejection_details_out is not None:
+                terminal_progress["rejection_details"] = rejection_details_out
             research_live_broker.publish_terminal(
                 operation_id,
                 operation_status=status_out,
                 version_id=dossier_out.dossier_id if dossier_out is not None else None,
-                progress={
-                    "org_events": [ev.model_dump(mode="json") for ev in events_final],
-                    "logical_status": "stopped" if status_out == "cancelled" else status_out,
-                    "current_operation_id": operation_id,
-                },
+                progress=terminal_progress,
             )
         return status_out, dossier_out, err_out, config_error
 
@@ -6483,6 +6521,7 @@ def run_earnings_squad(
         slot_routing_summary=routing_summary,
         checkpoint_completed_stages=list(final_row.get("checkpoint_completed_stages") or []),
         error=final_err,
+        rejection_details=dict(final_row["rejection_details"]) if isinstance(final_row.get("rejection_details"), Mapping) else None,
     )
 
 
@@ -6530,6 +6569,7 @@ def get_earnings_squad_dossier(
         steering_instructions=steering,
         checkpoint_completed_stages=list(row.get("checkpoint_completed_stages") or []),
         error=row.get("error"),
+        rejection_details=dict(row["rejection_details"]) if isinstance(row.get("rejection_details"), Mapping) else None,
     )
 
 

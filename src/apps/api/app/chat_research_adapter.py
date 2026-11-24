@@ -7,10 +7,12 @@ from typing import Any
 from .model_protocol import (
     ModelResponse,
     ModelToolCall,
+    _UNRELATED_REJECTION_PARAMETERS,
     render_user_instructions,
     canonical_json_dumps,
     canonicalize_json_string,
     canonicalize_json_value,
+    ensure_json_word_in_messages,
     format_response_schema_instruction,
     merge_cancel_events,
     merge_optional_max_tokens,
@@ -41,7 +43,45 @@ class ChatResearchAdapter:
         user_content = canonicalize_json_string(turn.user)
         messages = [{'role': 'system', 'content': system_content}, {'role': 'user', 'content': user_content}]
         for exchange in turn.history:
-            messages.append(exchange.assistant.envelope)
+            assistant_msg = exchange.assistant.envelope
+            raw_calls = assistant_msg.get('tool_calls') if isinstance(assistant_msg, Mapping) else None
+            content_list = (
+                assistant_msg.get('content')
+                if isinstance(assistant_msg, Mapping) and isinstance(assistant_msg.get('content'), list)
+                else None
+            )
+            anthropic_tool_ids = {
+                b.get('id')
+                for b in (content_list or ())
+                if isinstance(b, Mapping) and b.get('type') == 'tool_use' and isinstance(b.get('id'), str) and b.get('id')
+            }
+            result_ids = {
+                r.tool_call_id
+                for r in exchange.results
+                if isinstance(r.tool_call_id, str) and r.tool_call_id
+            }
+            if isinstance(raw_calls, list) and raw_calls:
+                call_ids = {
+                    c.get('id')
+                    for c in raw_calls
+                    if isinstance(c, Mapping) and isinstance(c.get('id'), str) and c.get('id')
+                }
+                paired_ids = call_ids & result_ids
+                if call_ids != paired_ids:
+                    cleaned_calls = [c for c in raw_calls if isinstance(c, Mapping) and c.get('id') in paired_ids]
+                    assistant_copy = dict(assistant_msg)
+                    if cleaned_calls:
+                        assistant_copy['tool_calls'] = cleaned_calls
+                    else:
+                        assistant_copy.pop('tool_calls', None)
+                        if assistant_copy.get('content') in (None, ''):
+                            assistant_copy['content'] = '(empty)'
+                    assistant_msg = assistant_copy
+            elif anthropic_tool_ids:
+                paired_ids = anthropic_tool_ids & result_ids
+            else:
+                paired_ids = set()
+            messages.append(assistant_msg)
             messages.extend(
                 {
                     'role': 'tool',
@@ -49,6 +89,7 @@ class ChatResearchAdapter:
                     'content': canonicalize_json_string(result.content),
                 }
                 for result in exchange.results
+                if result.tool_call_id in paired_ids
             )
             followup = getattr(exchange, 'user_followup', None)
             if isinstance(followup, str) and followup.strip():
@@ -106,6 +147,8 @@ class ChatResearchAdapter:
     def estimate_turn_input(self, turn):
         wire_rf, include_note = self._resolve_response_format(turn)
         messages, tools = self._render(turn, include_schema_instruction=include_note)
+        if wire_rf is not None and wire_rf.get('type') == 'json_object':
+            messages = ensure_json_word_in_messages(messages, roles=('user', 'system', 'developer'))
         estimator = getattr(self.provider, 'estimate_native_input', None)
         if callable(estimator):
             base = estimator(messages, tools)
@@ -150,12 +193,31 @@ class ChatResearchAdapter:
             elif type(effective_max_output) is not int or effective_max_output < 1:
                 raise ProviderFailure('provider_budget_exhausted', 'Research output budget is exhausted.', retryable=False)
         if wire_rf is not None and (accepts_kwargs or 'response_format' in parameters):
+            if wire_rf.get('type') == 'json_object':
+                messages = ensure_json_word_in_messages(messages, roles=('user', 'system', 'developer'))
             kwargs['response_format'] = wire_rf
         for name, value in (('diagnostic_callback', diagnostic_callback), ('on_submission', on_submission),
                             ('on_stream_event', on_stream_event)):
             if value is not None and (accepts_kwargs or name in parameters):
                 kwargs[name] = value
-        response = self.provider.complete(messages, tools, **kwargs)
+        try:
+            response = self.provider.complete(messages, tools, **kwargs)
+        except ProviderFailure as exc:
+            err_param = str((getattr(exc, 'rejection_details', None) or {}).get('error_param') or getattr(exc, 'parameter', None) or '')
+            if (
+                wire_rf is not None
+                and 'response_format' in kwargs
+                and exc.code == 'provider_request_rejected'
+                and exc.upstream_status in (400, 422)
+                and not getattr(exc, '_response_format_retried', False)
+                and err_param not in _UNRELATED_REJECTION_PARAMETERS
+            ):
+                retry_messages, retry_tools = self._render(turn, include_schema_instruction=True)
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop('response_format', None)
+                response = self.provider.complete(retry_messages, retry_tools, **retry_kwargs)
+            else:
+                raise
         calls = []
         for call in response.tool_calls:
             raw = call.arguments

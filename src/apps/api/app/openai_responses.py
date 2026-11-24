@@ -8,7 +8,9 @@ from .model_protocol import (
     ModelResponse,
     ModelToolCall,
     ModelUsage,
+    _UNRELATED_REJECTION_PARAMETERS,
     canonical_json_dumps,
+    ensure_json_word_in_messages,
     extract_assistant_text,
     format_response_schema_instruction,
     merge_cancel_events,
@@ -22,7 +24,8 @@ from .openai_compatible import (
 from .phase3 import ProviderFailure, ProviderPolicy
 from .provider_capabilities import _strict_schema, research_profile, resolve_output_token_limit
 from .research_diagnostics import (
-    report_diagnostic_write_failure, safe_usage_diagnostics, safe_wire_metadata, set_rejection_details, wire_manifest,
+    log_provider_rejection, report_diagnostic_write_failure, safe_rejection_details,
+    safe_usage_diagnostics, safe_wire_metadata, set_rejection_details, wire_manifest,
 )
 from .transport_diagnostics import TransportDiagnostics
 
@@ -73,7 +76,10 @@ def _parse_response(data, usage):
             if enc is not None and not isinstance(enc, str):
                 raise ValueError()
             if isinstance(enc, str) and enc:
-                output.append({k: item[k] for k in ("type", "id", "summary", "encrypted_content") if k in item})
+                rec = {k: item[k] for k in ("type", "id", "summary", "encrypted_content") if k in item}
+                if "summary" not in rec or not isinstance(rec["summary"], list):
+                    rec["summary"] = []
+                output.append(rec)
         elif kind == "message" and item.get("role") == "assistant":
             if not isinstance(item.get("content"), list):
                 raise ValueError()
@@ -170,6 +176,8 @@ class OpenAIResponsesProvider:
         self.policy = ProviderPolicy(timeout_seconds=_llm_timeout_from_environment())
         # Set once an endpoint refuses streaming; this provider then asks for whole responses.
         self.stream_refused = False
+        # Set once an endpoint rejects include=["reasoning.encrypted_content"].
+        self.include_refused = False
 
     def research_capacity(self):
         return research_profile(self.settings, responses_endpoint(self.settings.base_url), self.name, "responses-v1")
@@ -178,23 +186,59 @@ class OpenAIResponsesProvider:
         params = self.settings.generation_parameters
         return params.model_dump_json(exclude_none=True) if params else ""
 
-    def _wire(self, turn, cap=None):
+    def _wire(
+        self,
+        turn,
+        cap=None,
+        *,
+        include_text_format: bool = True,
+        include_reasoning_encrypted: bool = True,
+        include_sampling_params: bool = True,
+    ):
         inputs = [{"role": "user", "content": turn.user}]
         for exchange in turn.history:
             envelope = exchange.assistant.envelope
             output_items = envelope.get("output") if isinstance(envelope, Mapping) else None
             if isinstance(output_items, list):
-                inputs.extend(
-                    item
+                call_ids_in_out = {
+                    item.get("call_id")
                     for item in output_items
-                    if not (isinstance(item, Mapping) and item.get("type") == "reasoning" and not item.get("encrypted_content"))
+                    if isinstance(item, Mapping)
+                    and item.get("type") == "function_call"
+                    and isinstance(item.get("call_id"), str)
+                    and item.get("call_id")
+                }
+                result_ids = {
+                    result.tool_call_id
+                    for result in exchange.results
+                    if isinstance(result.tool_call_id, str) and result.tool_call_id
+                }
+                paired_ids = call_ids_in_out & result_ids
+                for item in output_items:
+                    if not isinstance(item, Mapping):
+                        continue
+                    kind = item.get("type")
+                    if kind == "reasoning":
+                        if not item.get("encrypted_content"):
+                            continue
+                        rec = dict(item)
+                        if "summary" not in rec or not isinstance(rec["summary"], list):
+                            rec["summary"] = []
+                        inputs.append(rec)
+                    elif kind == "function_call":
+                        if item.get("call_id") in paired_ids:
+                            inputs.append(dict(item))
+                    else:
+                        inputs.append(dict(item))
+                inputs.extend(
+                    {"type": "function_call_output", "call_id": result.tool_call_id, "output": result.content}
+                    for result in exchange.results
+                    if result.tool_call_id in paired_ids
                 )
             elif isinstance(envelope, Mapping):
                 text = extract_assistant_text(envelope)
                 if text:
                     inputs.append({"role": "assistant", "content": text})
-            inputs.extend({"type": "function_call_output", "call_id": result.tool_call_id, "output": result.content}
-                          for result in exchange.results)
             followup = getattr(exchange, "user_followup", None)
             if isinstance(followup, str) and followup.strip():
                 inputs.append({"role": "user", "content": followup})
@@ -216,7 +260,7 @@ class OpenAIResponsesProvider:
                 if isinstance(response_schema_name, str) and response_schema_name.strip()
                 else "response"
             )
-            if not turn.tools:
+            if include_text_format and not turn.tools:
                 profile = self.research_capacity()
                 if profile is not None and getattr(profile, "mode", None) == "json_schema" and isinstance(response_schema, Mapping):
                     try:
@@ -239,13 +283,25 @@ class OpenAIResponsesProvider:
                     )
             else:
                 schema_note = format_response_schema_instruction(
-                    response_schema, schema_name, has_tools=True
+                    response_schema, schema_name, has_tools=bool(turn.tools)
                 )
         if schema_note:
             instructions_text = f"{instructions_text}\n\n{schema_note}" if instructions_text else schema_note
+        if text_format is not None and text_format.get("type") == "json_object":
+            inputs = ensure_json_word_in_messages(
+                inputs,
+                roles=("user",),
+                text_part_type="input_text",
+            )
 
-        wire = {"model": self.settings.model, "instructions": instructions_text, "input": inputs,
-                "store": False, "include": ["reasoning.encrypted_content"]}
+        wire = {
+            "model": self.settings.model,
+            "instructions": instructions_text,
+            "input": inputs,
+            "store": False,
+        }
+        if include_reasoning_encrypted and not self.include_refused:
+            wire["include"] = ["reasoning.encrypted_content"]
         if text_format is not None:
             wire["text"] = {"format": text_format}
         if turn.tools:
@@ -255,13 +311,64 @@ class OpenAIResponsesProvider:
         if params:
             if params.reasoning_effort is not None:
                 wire["reasoning"] = {"effort": params.reasoning_effort}
-            wire.update(params.model_dump(include={"temperature", "top_p"}, exclude_none=True))
+            if include_sampling_params:
+                wire.update(params.model_dump(include={"temperature", "top_p"}, exclude_none=True))
         if cap is not None:
             wire["max_output_tokens"] = cap
         return wire
 
     def estimate_turn_input(self, turn):
         return len(canonical_json_dumps(self._wire(turn)).encode()) + 64
+
+    def _classify_400_fallback(
+        self,
+        wire: dict,
+        response,
+        *,
+        retried_without_include: bool,
+        retried_without_sampling: bool,
+        retried_without_text: bool,
+    ) -> str | None:
+        if getattr(response, "status_code", None) not in (400, 422):
+            return None
+        details = getattr(response, "rejection_summary", None) or safe_rejection_details(
+            getattr(response, "body", b""),
+            status_code=response.status_code,
+            safe_error=getattr(response, "safe_error", None),
+        )
+        safe_err = getattr(response, "safe_error", None) or {}
+        err_param = str(details.get("error_param") or safe_err.get("messages_parameter") or "")
+        err_msg_lower = str(details.get("message") or "").lower()
+        if (
+            "include" in wire
+            and not retried_without_include
+            and (
+                err_param == "include"
+                or "encrypted_content" in err_msg_lower
+                or ("include" in err_msg_lower and ("unknown" in err_msg_lower or "unsupported" in err_msg_lower))
+            )
+        ):
+            return "strip_include"
+        if (
+            "reasoning" in wire
+            and ("temperature" in wire or "top_p" in wire)
+            and not retried_without_sampling
+            and (
+                err_param in ("temperature", "top_p")
+                or (
+                    err_param in ("reasoning", "reasoning.effort", "")
+                    and ("temperature" in err_msg_lower or "top_p" in err_msg_lower)
+                )
+            )
+        ):
+            return "strip_sampling"
+        if (
+            "text" in wire
+            and not retried_without_text
+            and err_param not in _UNRELATED_REJECTION_PARAMETERS
+        ):
+            return "strip_text"
+        return None
 
     def complete_turn(self, turn, *, cancel_event=None, timeout_seconds=None, diagnostic_callback=None,
                       max_output_tokens=None, on_submission=None, on_stream_event=None):
@@ -291,10 +398,63 @@ class OpenAIResponsesProvider:
             if timeout <= 0 or (effective_max_out_arg is not None and (type(effective_max_out_arg) is not int or effective_max_out_arg <= 0)):
                 raise ProviderFailure("provider_budget_exhausted", "Model budget exhausted.", retryable=False)
             cap = resolve_output_token_limit(effective_max_out_arg, self.policy.max_output_tokens)
-            wire = self._wire(turn, cap)
-            body = canonical_json_dumps(wire).encode()
-            if self.policy.max_input_tokens is not None and len(body) > self.policy.max_input_tokens:
-                raise ProviderFailure("provider_budget_exhausted", "Input exceeds the per-call budget.", retryable=False)
+
+            include_text_format = True
+            include_reasoning_encrypted = not self.include_refused
+            include_sampling_params = True
+            retried_without_include = False
+            retried_without_sampling = False
+            retried_without_text = False
+
+            def _build_and_check_wire() -> tuple[dict, bytes]:
+                next_wire = self._wire(
+                    turn,
+                    cap,
+                    include_text_format=include_text_format,
+                    include_reasoning_encrypted=include_reasoning_encrypted,
+                    include_sampling_params=include_sampling_params,
+                )
+                next_body = canonical_json_dumps(next_wire).encode()
+                if self.policy.max_input_tokens is not None and len(next_body) > self.policy.max_input_tokens:
+                    raise ProviderFailure("provider_budget_exhausted", "Input exceeds the per-call budget.", retryable=False)
+                return next_wire, next_body
+
+            def _maybe_fallback_response(resp, *, from_stream: bool) -> bool:
+                nonlocal include_reasoning_encrypted, include_sampling_params, include_text_format
+                nonlocal retried_without_include, retried_without_sampling, retried_without_text, wire, body
+                action = self._classify_400_fallback(
+                    wire,
+                    resp,
+                    retried_without_include=retried_without_include,
+                    retried_without_sampling=retried_without_sampling,
+                    retried_without_text=retried_without_text,
+                )
+                if action is None:
+                    return False
+                if from_stream and action == "strip_text":
+                    details = getattr(resp, "rejection_summary", None) or safe_rejection_details(
+                        getattr(resp, "body", b""),
+                        status_code=getattr(resp, "status_code", None),
+                        safe_error=getattr(resp, "safe_error", None),
+                    )
+                    err_param = str(details.get("error_param") or "")
+                    err_msg = str(details.get("message") or "").lower()
+                    if err_param not in ("text", "text.format", "response_format", "input") and "json" not in err_msg and "text" not in err_msg:
+                        return False
+                if action == "strip_include":
+                    self.include_refused = True
+                    include_reasoning_encrypted = False
+                    retried_without_include = True
+                elif action == "strip_sampling":
+                    include_sampling_params = False
+                    retried_without_sampling = True
+                elif action == "strip_text":
+                    include_text_format = False
+                    retried_without_text = True
+                wire, body = _build_and_check_wire()
+                return True
+
+            wire, body = _build_and_check_wire()
             url = responses_endpoint(self.settings.base_url)
             auth = {"Authorization": "Bearer " + self.settings.api_key, "Content-Type": "application/json"}
             if on_stream_event is not None and not self.stream_refused:
@@ -311,17 +471,25 @@ class OpenAIResponsesProvider:
                         raise ProviderFailure("provider_cancelled", "Request cancelled.", retryable=False)
                     return _parse_response(final, usage)
                 if response.status_code in (400, 422):
-                    # A request refused as invalid was not carried out: ask again for a whole response.
-                    self.stream_refused = True
+                    if not _maybe_fallback_response(response, from_stream=True):
+                        # A request refused as invalid was not carried out: ask again for a whole response.
+                        self.stream_refused = True
                     response = None
-            if response is None:
-                response = _default_transport("POST", url, {**auth, "Accept": "application/json"},
-                    body, timeout, diagnostics=diag, cancel_event=effective_cancel, on_submission=on_submission,
-                    allow_private_network=self.settings.allow_private_network)
-            if not 200 <= response.status_code < 300:
+            while True:
+                if response is None:
+                    response = _default_transport("POST", url, {**auth, "Accept": "application/json"},
+                        body, timeout, diagnostics=diag, cancel_event=effective_cancel, on_submission=on_submission,
+                        allow_private_network=self.settings.allow_private_network)
+                if 200 <= response.status_code < 300:
+                    break
+                if _maybe_fallback_response(response, from_stream=False):
+                    response = None
+                    continue
                 failure = ProviderFailure("provider_request_rejected", "Provider rejected the request.",
                                           retryable=response.status_code == 429 or response.status_code >= 500)
                 set_rejection_details(failure, response)
+                if failure.code == "provider_request_rejected":
+                    log_provider_rejection("openai_responses", failure, context={"model": self.settings.model})
                 raise failure
             data = json.loads(response.body)
             usage = _usage(data.get("usage"))

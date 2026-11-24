@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import nullcontext
+import copy
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -4783,7 +4785,7 @@ class EarningsSquadOrchestrator:
             "  * skip_reason: REQUIRED non-empty string if status='skipped'; omit or null if status='planned'\n"
             "  * allowed_tools: either omit or pass ONLY a subset of that role's permitted tools: "
             f"{json.dumps(allowed_tools_table)}\n"
-            "  * round_number: 1, soft_turn_limit: integer 1..12 (recommend 4)\n\n"
+            "  * round_number: 1, soft_turn_limit: integer 1..8 (recommend 4)\n\n"
             "Valid JSON example:\n"
             "{\n"
             '  "l1_pack_id": "earnings_review",\n'
@@ -4894,6 +4896,7 @@ class EarningsSquadOrchestrator:
                 emitter=emitter,
                 norm_kwargs={"instruction_seq": instruction_seq},
                 fallback_fn=lambda _exc: _fallback_dispatch_plan(snapshot, pack_ctx, instruction_seq=instruction_seq),
+                conversation_id=f"stage1:seq{instruction_seq}",
                 forbidden_tool_error="Lead Coordinator must not invoke retrieval tools during stage_1_plan.",
             )
             if used_fallback and gaps_out is not None:
@@ -5025,6 +5028,7 @@ class EarningsSquadOrchestrator:
                     worker_cancel=w_cancel,
                     source_texts=state["source_texts"],
                     source_permissions=state["source_permissions"],
+                    state_lock=cp_lock,
                 )
                 fut.add_done_callback(lambda _f: self._steering_wakeup.set())
                 active_futures[fut] = (role, task, w_cancel)
@@ -5319,6 +5323,7 @@ class EarningsSquadOrchestrator:
             emitter=emitter,
             norm_kwargs={"instructions": instructions},
             fallback_fn=lambda _exc: self._fallback_steering_decision(dispatch_plan, running_roles, instructions),
+            conversation_id=f"steering:seq{instructions[-1].sequence if instructions else 0}",
             forbidden_tool_error="Lead Coordinator must not invoke tools during steering impact evaluation.",
         )
         if used_fallback and gaps_out is not None:
@@ -5389,6 +5394,7 @@ class EarningsSquadOrchestrator:
         worker_cancel: Event,
         source_texts: dict[str, str],
         source_permissions: dict[str, dict[str, bool]],
+        state_lock: RLock | None = None,
     ) -> EvidenceCardBatch:
         stage_name = "stage_2_workers" if task.round_number == 1 else "stage_2_5_review"
         role = task.worker_role
@@ -5785,12 +5791,13 @@ class EarningsSquadOrchestrator:
                         blocker_text=str(out.get("message") or out.get("reason")),
                         slot="fast_extractor",
                     )
-                if isinstance(self._tool_runner, FinToolboxToolRunner):
-                    for sid, src in self._tool_runner._eligible_sources_snapshot().items():
-                        source_texts[sid] = src.text
-                        source_permissions[sid] = src.permissions.model_dump(mode="json")
-                elif isinstance(out, Mapping) and isinstance(out.get("source_id"), str) and isinstance(out.get("text"), str):
-                    source_texts[out["source_id"]] = out["text"]
+                with state_lock if state_lock is not None else nullcontext():
+                    if isinstance(self._tool_runner, FinToolboxToolRunner):
+                        for sid, src in self._tool_runner._eligible_sources_snapshot().items():
+                            source_texts[sid] = src.text
+                            source_permissions[sid] = src.permissions.model_dump(mode="json")
+                    elif isinstance(out, Mapping) and isinstance(out.get("source_id"), str) and isinstance(out.get("text"), str):
+                        source_texts[out["source_id"]] = out["text"]
                 tool_result_msgs.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
@@ -5903,6 +5910,7 @@ class EarningsSquadOrchestrator:
                     followup_tasks=[],
                     rationale=f"Deterministic Stage 2.5 fallback: skipped follow-up after schema validation failure ({exc})."[:1000],
                 ),
+                conversation_id="stage2_5_review",
                 forbidden_tool_error="Lead Coordinator must not invoke retrieval tools during stage_2_5_review.",
             )
             if used_fallback:
@@ -5975,6 +5983,7 @@ class EarningsSquadOrchestrator:
                     worker_cancel=Event(),
                     source_texts=state["source_texts"],
                     source_permissions=state["source_permissions"],
+                    state_lock=cp_lock,
                 ): task
                 for task in active_followups
             }
@@ -6035,6 +6044,7 @@ class EarningsSquadOrchestrator:
                 ledger=ledger,
                 emitter=emitter,
                 fallback_fn=lambda _exc: _fallback_bear_batch(snapshot, cards, open_gaps),
+                conversation_id="stage3a_bear",
                 forbidden_tool_error="bear_reviewer is not permitted to invoke tools.",
             )
             accepted, rejected, bear_gaps = gate_bear_cases(
@@ -6172,6 +6182,7 @@ class EarningsSquadOrchestrator:
                 messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
                 tools=[],
                 binding=self._slot_bindings["writer"],
+                conversation_id=f"{run_id}:stage3b_memo",
             ))
             usage = resp.usage
             if resp.tool_calls:
@@ -6238,11 +6249,29 @@ class EarningsSquadOrchestrator:
 
 
 # --------------------------------------------------------------------------- Parsing, Normalization, Repair & Fallbacks
+def _sanitize_tool_json_schema(node: Any) -> Any:
+    """Strip lookaround regex patterns (e.g. Pydantic Decimal lookaheads) rejected by strict schema engines."""
+    if isinstance(node, Mapping):
+        cleaned: dict[str, Any] = {}
+        for k, v in node.items():
+            if k == "pattern" and isinstance(v, str) and "(?" in v:
+                continue
+            cleaned[k] = _sanitize_tool_json_schema(v)
+        return cleaned
+    if isinstance(node, list):
+        return [_sanitize_tool_json_schema(item) for item in node]
+    return node
+
+
 @lru_cache(maxsize=64)
 def _tool_def_dict(tool_name: str) -> dict[str, Any]:
     spec = TOOL_REGISTRY[tool_name]
     tdef: ModelToolDefinition = spec.to_definition()
-    return {"name": tdef.name, "description": tdef.description, "input_schema": tdef.input_schema}
+    return {
+        "name": tdef.name,
+        "description": tdef.description,
+        "input_schema": _sanitize_tool_json_schema(copy.deepcopy(tdef.input_schema)),
+    }
 
 
 _FENCED_JSON_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.I)
@@ -6521,6 +6550,27 @@ def _normalize_worker_task_dict(raw: Any, *, default_round: int = 1, notes: list
             d["allowed_tools"] = tools_list
     if default_round == 2:
         d["round_number"] = 2
+    elif "round_number" in d:
+        try:
+            rn = int(d["round_number"])
+        except (TypeError, ValueError):
+            rn = default_round
+        if rn not in (1, 2):
+            clamped_rn = 1 if rn < 1 else 2
+            log.append(f"clamped round_number {rn} -> {clamped_rn}")
+            rn = clamped_rn
+        d["round_number"] = rn
+    if "soft_turn_limit" in d and d["soft_turn_limit"] is not None:
+        try:
+            tl = int(d["soft_turn_limit"])
+        except (TypeError, ValueError):
+            tl = 4
+            log.append("defaulted non-int soft_turn_limit -> 4")
+        if tl < 1 or tl > 8:
+            clamped_tl = max(1, min(8, tl))
+            log.append(f"clamped soft_turn_limit {tl} -> {clamped_tl}")
+            tl = clamped_tl
+        d["soft_turn_limit"] = tl
     return _strip_extra_keys(d, WorkerTask.model_fields.keys(), log, prefix="WorkerTask")
 
 
@@ -6668,7 +6718,8 @@ def _normalize_evidence_card_dict(
     ):
         if alias in d and target not in d:
             d[target] = d.pop(alias)
-    d.setdefault("card_id", f"{role}_r{round_number}_c{idx + 1}")
+    if not isinstance(d.get("card_id"), str) or not d["card_id"].strip():
+        d["card_id"] = f"{role}_r{round_number}_c{idx + 1}"
     d["worker_role"] = role
     d["round_number"] = round_number
     if "topic_tag" in d:
@@ -6725,7 +6776,8 @@ def _normalize_worker_batch_payload(
         if alias in d and target not in d:
             d[target] = d.pop(alias)
 
-    d.setdefault("task_id", task.task_id)
+    if not isinstance(d.get("task_id"), str) or not d["task_id"].strip():
+        d["task_id"] = task.task_id
     d["worker_role"] = role
     d["round_number"] = task.round_number
     d.setdefault("instruction_sequence", task.steering_instruction_sequence)
@@ -6868,6 +6920,21 @@ def _normalize_bear_batch(data: Any, *, notes: list[str] | None = None) -> Any:
         d["reviewer_notes"] = _coerce_to_str(d["reviewer_notes"], max_len=2000)
     if isinstance(d.get("items"), list):
         d["items"] = [_normalize_bear_item_dict(item, idx=i, notes=log) for i, item in enumerate(d["items"])]
+    if isinstance(d.get("rejected_items"), list):
+        norm_rej: list[Any] = []
+        for r_item in d["rejected_items"]:
+            if not isinstance(r_item, Mapping):
+                norm_rej.append(r_item)
+                continue
+            rd = dict(r_item)
+            for alias in ("reason", "rejected_reason", "rationale"):
+                if alias in rd and "rejection_reason" not in rd:
+                    rd["rejection_reason"] = rd.pop(alias)
+            rd["rejection_reason"] = _coerce_to_str(rd.get("rejection_reason"), max_len=1000) or "Unanchored bear case."
+            if "anchored_evidence_ids" in rd:
+                rd["anchored_evidence_ids"] = _coerce_to_str_list(rd["anchored_evidence_ids"])
+            norm_rej.append(_strip_extra_keys(rd, RejectedBearCase.model_fields.keys(), log, prefix="RejectedBearCase"))
+        d["rejected_items"] = norm_rej
     return _strip_extra_keys(d, BearCaseBatch.model_fields.keys(), log, prefix="BearCaseBatch")
 
 

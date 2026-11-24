@@ -249,10 +249,39 @@ class AnthropicMessagesProvider:
             for exchange in turn.history:
                 if messages and messages[-1].get('role') == 'assistant':
                     messages.append({'role': 'user', 'content': 'Continue.'})
-                messages.append(self._normalize_assistant_envelope(exchange.assistant.envelope))
+                assistant_msg = self._normalize_assistant_envelope(exchange.assistant.envelope)
+                tool_use_ids: set[str] = set()
+                if isinstance(assistant_msg, dict) and isinstance(assistant_msg.get('content'), list):
+                    tool_use_ids = {
+                        block['id']
+                        for block in assistant_msg['content']
+                        if isinstance(block, dict)
+                        and block.get('type') == 'tool_use'
+                        and isinstance(block.get('id'), str)
+                        and block['id']
+                    }
+                result_ids = {
+                    r.tool_call_id
+                    for r in exchange.results
+                    if isinstance(r.tool_call_id, str) and r.tool_call_id
+                }
+                paired_ids = tool_use_ids & result_ids
+                if tool_use_ids != paired_ids and isinstance(assistant_msg, dict) and isinstance(assistant_msg.get('content'), list):
+                    filtered_blocks = [
+                        block
+                        for block in assistant_msg['content']
+                        if not (
+                            isinstance(block, dict)
+                            and block.get('type') == 'tool_use'
+                            and block.get('id') not in paired_ids
+                        )
+                    ]
+                    assistant_msg = self._normalize_assistant_envelope({**assistant_msg, 'content': filtered_blocks})
+                messages.append(assistant_msg)
                 results_content: list[dict[str, Any]] = [
                     {'type': 'tool_result', 'tool_use_id': r.tool_call_id, 'content': r.content, 'is_error': r.is_error}
                     for r in exchange.results
+                    if r.tool_call_id in paired_ids
                 ]
                 raw_followup = getattr(exchange, 'user_followup', None)
                 followup = raw_followup if isinstance(raw_followup, str) and raw_followup.strip() else None
@@ -879,8 +908,10 @@ class AnthropicMessagesProvider:
                     failure = ProviderFailure('provider_unavailable', 'Provider is temporarily unavailable.', retryable=True)
                 else:
                     failure = ProviderFailure('provider_request_rejected', 'Provider rejected the request.', retryable=False)
-                from .research_diagnostics import set_rejection_details
+                from .research_diagnostics import log_provider_rejection, set_rejection_details
                 set_rejection_details(failure, response)
+                if failure.code == 'provider_request_rejected':
+                    log_provider_rejection('anthropic_messages', failure, context={'model': self.settings.model})
                 failure.provider_response_received = True
                 raise failure
             try:

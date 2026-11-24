@@ -1400,3 +1400,81 @@ def test_worker_soft_turn_limit_mandatory_wrapup_turn(limit: int) -> None:
     assert len(worker_reqs[0].tools) >= 1
     assert worker_reqs[1].tools == []
     assert [c.card_id for c in dossier.evidence_cards] == [f"c_wrap_{limit}"]
+
+
+# --------------------------------------------------------------------------- 9. Worker Tool Schema Sanitization & Normalizer Resilience
+def test_all_worker_tool_schemas_valid_and_lookaround_free() -> None:
+    from app.research_earnings_squad import (
+        WORKER_ALLOWED_TOOLS,
+        _tool_def_dict,
+    )
+    from app.research_tools_registry import TOOL_REGISTRY
+
+    def _walk(node: object) -> list[str]:
+        found: list[str] = []
+        if isinstance(node, dict):
+            if "pattern" in node and isinstance(node["pattern"], str) and "(?" in node["pattern"]:
+                found.append(node["pattern"])
+            for v in node.values():
+                found.extend(_walk(v))
+        elif isinstance(node, list):
+            for item in node:
+                found.extend(_walk(item))
+        return found
+
+    all_worker_tools = sorted({t for pool in WORKER_ALLOWED_TOOLS.values() for t in pool})
+    assert len(all_worker_tools) >= 10
+    for name in all_worker_tools:
+        assert name in TOOL_REGISTRY
+        tdef = _tool_def_dict(name)
+        schema = tdef["input_schema"]
+        assert isinstance(schema, dict) and schema.get("type") == "object"
+        assert isinstance(schema.get("properties"), dict) and len(schema["properties"]) >= 1
+        assert _walk(schema) == [], f"Lookaround regex left in worker tool schema {name}"
+
+
+def test_squad_normalizers_clamp_turn_limit_blank_ids_and_rejected_bears() -> None:
+    from app.research_earnings_squad import (
+        _normalize_bear_batch,
+        _normalize_evidence_card_dict,
+        _normalize_worker_batch_payload,
+        _normalize_worker_task_dict,
+    )
+
+    notes: list[str] = []
+    norm_task = _normalize_worker_task_dict({
+        "worker_role": "worker_segments",
+        "objective": "Analyze segments",
+        "soft_turn_limit": 12,
+        "round_number": 5,
+    }, notes=notes)
+    assert norm_task["soft_turn_limit"] == 8
+    assert norm_task["round_number"] == 2
+    assert any("soft_turn_limit" in n for n in notes)
+
+    task_obj = WorkerTask(worker_role="worker_segments", objective="Analyze segments")
+    card = _normalize_evidence_card_dict({
+        "card_id": "   ",
+        "topic_tag": "rev",
+        "finding": "Revenue was $100M.",
+        "citations": [{"source_id": "s1", "quotation": "Revenue was $100M."}],
+    }, role="worker_segments", round_number=1, idx=0, notes=notes)
+    assert card["card_id"] == "worker_segments_r1_c1"
+
+    batch = _normalize_worker_batch_payload({
+        "task_id": "",
+        "cards": [card],
+    }, task=task_obj, role="worker_segments", notes=notes)
+    assert batch["task_id"] == task_obj.task_id
+
+    bear_batch = _normalize_bear_batch({
+        "items": [],
+        "rejected_items": [{
+            "bear_id": "b1",
+            "reason": "Missing citation",
+            "extra_noise": "drop me",
+        }],
+    }, notes=notes)
+    assert bear_batch["rejected_items"][0]["rejection_reason"] == "Missing citation"
+    assert "extra_noise" not in bear_batch["rejected_items"][0]
+

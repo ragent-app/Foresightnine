@@ -2775,6 +2775,18 @@
             "title": "Org Events",
             "type": "array"
           },
+          "rejection_details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Details"
+          },
           "run_id": {
             "title": "Run Id",
             "type": "string"
@@ -2883,6 +2895,18 @@
             },
             "title": "Org Events",
             "type": "array"
+          },
+          "rejection_details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Details"
           },
           "run_id": {
             "title": "Run Id",

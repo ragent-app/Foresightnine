@@ -46,6 +46,7 @@ class ProviderFailure(RuntimeError):
         self.retryable = retryable
         self.upstream_status: int | None = None
         self.parameter: str | None = None
+        self.rejection_details: dict[str, Any] | None = None
         self.reported_tokens = reported_tokens if type(reported_tokens) is int and reported_tokens >= 0 else None
 
 

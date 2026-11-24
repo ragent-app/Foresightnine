@@ -432,6 +432,7 @@ def test_openai_responses_reasoning_fallback_followup_schema_and_runtime(monkeyp
     # Unencrypted reasoning item was omitted from replayable output so store=False Turn 2 never fails
     assert all(item.get('type') != 'reasoning' for item in r0.message['output'])
     assert sent[0][0]['text'] == {'format': {'type': 'json_object'}}
+    assert 'json' in json.dumps(sent[0][0]['input']).lower()
     assert sent[0][0]['max_output_tokens'] == 400
     assert sent[0][1] == 18.0
     assert 'JSON Schema:' in sent[0][0]['instructions']
@@ -452,7 +453,10 @@ def test_openai_responses_reasoning_fallback_followup_schema_and_runtime(monkeyp
     assert sent[1][0]['input'] == [
         {'role': 'user', 'content': 'Analyze AAPL.'},
         r0.message['output'][0],
-        {'role': 'user', 'content': 'Missing required field tasks.'},
+        {
+            'role': 'user',
+            'content': 'Missing required field tasks.\n\nRespond with a valid JSON object matching the schema in instructions.',
+        },
     ]
 
     # When tools are non-empty, text.format is omitted on wire while instructions preserve schema hint
@@ -595,4 +599,243 @@ def test_anthropic_combined_tool_result_and_user_followup_and_minimal_chat_provi
     with pytest.raises(ProviderFailure) as m_exc:
         adapter.complete_turn(ModelTurnInput('sys', 'q', (), (), max_output_tokens=0))
     assert m_exc.value.code == 'provider_budget_exhausted'
+
+
+def test_openai_responses_json_word_400_fallbacks_and_replay_pairing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(openai_compatible, '_require_public_dns', lambda *_: None)
+    from app.provider_capabilities import ChatGenerationParameters
+
+    settings = OpenAICompatibleSettings(
+        base_url='https://model.example.test/v1',
+        model='gpt-5.6-terra',
+        allowed_hosts=frozenset({('model.example.test', 443)}),
+        api_key='sk-resp',
+        personal=True,
+        tools_verified=True,
+        generation_parameters=ChatGenerationParameters(reasoning_effort='medium', temperature=0.2),
+    )
+    provider = OpenAIResponsesProvider(settings)
+
+    # 1) Already has 'json' in input -> not duplicated; missing 'json' -> injected
+    wire_has_json = provider._wire(ModelTurnInput(
+        'sys', 'Return valid JSON for AAPL.', (), (),
+        response_schema=SAMPLE_SCHEMA, response_schema_name='Plan',
+    ))
+    assert wire_has_json['input'] == [{'role': 'user', 'content': 'Return valid JSON for AAPL.'}]
+    assert wire_has_json['text'] == {'format': {'type': 'json_object'}}
+
+    # 2) Fallback cascade on 400: include rejected -> temperature rejected alongside reasoning -> text.format rejected
+    sent_wires: list[dict] = []
+    replies = iter([
+        HttpResponse(400, json.dumps({'error': {'type': 'invalid_request_error', 'param': 'include', 'message': 'Unsupported include reasoning.encrypted_content'}})),
+        HttpResponse(400, json.dumps({'error': {'type': 'invalid_request_error', 'param': 'temperature', 'message': 'temperature is not supported with reasoning.effort'}})),
+        HttpResponse(400, json.dumps({'error': {'type': 'invalid_request_error', 'param': 'text.format', 'message': 'text.format json_object rejected'}})),
+        HttpResponse(200, json.dumps({
+            'status': 'completed',
+            'output': [
+                {'type': 'reasoning', 'id': 'rs_1', 'encrypted_content': 'enc-only-no-summary'},
+                {'type': 'message', 'id': 'm_1', 'role': 'assistant', 'content': [{'type': 'output_text', 'text': '{"tasks": ["w1"]}'}]},
+            ],
+            'usage': {'input_tokens': 12, 'output_tokens': 6, 'total_tokens': 18},
+        })),
+    ])
+
+    def transport(method, url, headers, body, timeout, **kwargs):
+        sent_wires.append(json.loads(body))
+        return next(replies)
+
+    monkeypatch.setattr(openai_responses, '_default_transport', transport)
+    resp = provider.complete_turn(ModelTurnInput(
+        'sys', 'Analyze NVDA earnings.', (), (),
+        response_schema=SAMPLE_SCHEMA, response_schema_name='Plan',
+    ))
+    assert extract_assistant_text(resp.message) == '{"tasks": ["w1"]}'
+    assert len(sent_wires) == 4
+    assert 'include' in sent_wires[0] and 'temperature' in sent_wires[0] and 'text' in sent_wires[0]
+    assert 'include' not in sent_wires[1] and 'temperature' in sent_wires[1]
+    assert 'temperature' not in sent_wires[2] and 'text' in sent_wires[2] and sent_wires[2]['reasoning'] == {'effort': 'medium'}
+    assert 'text' not in sent_wires[3] and 'JSON Schema:' in sent_wires[3]['instructions']
+    assert provider.include_refused is True
+    # Missing summary on reasoning item defaulted to [] on parse so replay stays valid
+    reasoning_items = [item for item in resp.message['output'] if item.get('type') == 'reasoning']
+    assert reasoning_items and reasoning_items[0]['summary'] == []
+
+    # 3) Unpaired function_call / orphan function_call_output stripped during multi-turn replay
+    broken_ex = ModelTurnExchange(
+        ModelAssistantContinuation({
+            'role': 'assistant',
+            'content': '',
+            'output': [
+                {'type': 'function_call', 'call_id': 'c_ok', 'name': 'lookup', 'arguments': '{}'},
+                {'type': 'function_call', 'call_id': 'c_unpaired', 'name': 'lookup', 'arguments': '{}'},
+            ],
+        }),
+        (
+            ModelToolResult('c_ok', '{"x": 1}'),
+            ModelToolResult('c_orphan_result', '{"x": 2}'),
+        ),
+    )
+    repaired_wire = provider._wire(ModelTurnInput('sys', 'q', (), (broken_ex,)))
+    call_ids = [item.get('call_id') for item in repaired_wire['input'] if item.get('type') == 'function_call']
+    out_ids = [item.get('call_id') for item in repaired_wire['input'] if item.get('type') == 'function_call_output']
+    assert call_ids == ['c_ok'] and out_ids == ['c_ok']
+
+    # 4) json_schema 400 fallback injects schema note into instructions
+    monkeypatch.setenv('FORESIGHTNINE_LLM_ENDPOINT_VERSION', 'v1')
+    monkeypatch.setenv('FORESIGHTNINE_LLM_CAPABILITY_PROFILE', json.dumps({
+        'endpoint': 'https://model.example.test/v1/responses',
+        'model': 'gpt-5.6-terra',
+        'version': 'v1',
+        'mode': 'json_schema',
+        'schema_dialect': 'required_nullable_v1',
+        'native_tools': True,
+    }))
+    schema_wires: list[dict] = []
+    schema_replies = iter([
+        HttpResponse(400, json.dumps({'error': {'type': 'invalid_request_error', 'code': 'invalid_json_schema', 'param': 'text.format', 'message': 'Invalid schema'}})),
+        HttpResponse(200, json.dumps({
+            'status': 'completed',
+            'output': [{'type': 'message', 'id': 'm_js', 'role': 'assistant', 'content': [{'type': 'output_text', 'text': '{"ok": true}'}]}],
+        })),
+    ])
+    monkeypatch.setattr(
+        openai_responses,
+        '_default_transport',
+        lambda m, u, h, b, t, **kw: (schema_wires.append(json.loads(b)), next(schema_replies))[1],
+    )
+    p_js = OpenAIResponsesProvider(OpenAICompatibleSettings(
+        base_url='https://model.example.test/v1',
+        model='gpt-5.6-terra',
+        allowed_hosts=frozenset({('model.example.test', 443)}),
+        api_key='sk-resp',
+        personal=False,
+        tools_verified=True,
+    ))
+    js_res = p_js.complete_turn(ModelTurnInput('sys', 'Check status.', (), (), response_schema=STRICT_SCHEMA, response_schema_name='OkOut'))
+    assert extract_assistant_text(js_res.message) == '{"ok": true}'
+    assert schema_wires[0]['text']['format']['type'] == 'json_schema'
+    assert 'text' not in schema_wires[1] and 'JSON Schema:' in schema_wires[1]['instructions']
+
+
+def test_chat_completions_json_word_response_format_max_completion_and_pairing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(openai_compatible, '_require_public_dns', lambda *_: None)
+    monkeypatch.setenv('FORESIGHTNINE_LLM_ENDPOINT_VERSION', 'v1')
+    monkeypatch.setenv('FORESIGHTNINE_LLM_CAPABILITY_PROFILE', json.dumps({
+        'endpoint': 'https://model.example.test/v1/chat/completions',
+        'model': 'o-reasoning',
+        'version': 'v1',
+        'mode': 'json_schema',
+        'schema_dialect': 'required_nullable_v1',
+        'native_tools': True,
+        'stream': False,
+        'usage': True,
+    }))
+    sent: list[dict] = []
+    replies = iter([
+        HttpResponse(400, json.dumps({'error': {'type': 'invalid_request_error', 'param': 'max_tokens', 'message': "Unsupported parameter: 'max_tokens'. Use 'max_completion_tokens'."}})),
+        HttpResponse(400, json.dumps({'error': {'type': 'invalid_request_error', 'param': 'response_format', 'message': 'response_format json_schema rejected'}})),
+        HttpResponse(200, json.dumps({'choices': [{'finish_reason': 'stop', 'message': {'role': 'assistant', 'content': '{"ok": true}'}}]})),
+    ])
+
+    def transport(m, u, h, b, t):
+        sent.append(json.loads(b))
+        return next(replies)
+
+    settings = OpenAICompatibleSettings(
+        base_url='https://model.example.test/v1',
+        model='o-reasoning',
+        allowed_hosts=frozenset({('model.example.test', 443)}),
+        api_key='sk-chat',
+        personal=False,
+        tools_verified=True,
+    )
+    provider = OpenAICompatibleLlmProvider(settings, transport=transport)
+    adapter = ChatResearchAdapter(provider)
+    res = adapter.complete_turn(
+        ModelTurnInput('sys', 'Run check.', (), (), response_schema=STRICT_SCHEMA, response_schema_name='Ok'),
+        max_output_tokens=512,
+    )
+    assert extract_assistant_text(res.message) == '{"ok": true}'
+    assert len(sent) == 3
+    assert sent[0]['max_tokens'] == 512 and sent[0]['response_format']['type'] == 'json_schema'
+    assert sent[1]['max_completion_tokens'] == 512 and 'max_tokens' not in sent[1]
+    assert 'response_format' not in sent[2] and sent[2]['max_completion_tokens'] == 512
+    assert 'JSON Schema:' in sent[2]['messages'][0]['content']
+    assert provider._prefer_max_completion_tokens is True
+
+    # Direct complete() with json_object and no 'json' word anywhere injects 'json' cleanly
+    direct_sent: list[dict] = []
+    p_direct = OpenAICompatibleLlmProvider(
+        settings,
+        transport=lambda m, u, h, b, t: (
+            direct_sent.append(json.loads(b)),
+            HttpResponse(200, json.dumps({'choices': [{'finish_reason': 'stop', 'message': {'role': 'assistant', 'content': '{"ok": 1}'}}]})),
+        )[1],
+    )
+    p_direct.complete([{'role': 'system', 'content': 'Reply strictly.'}, {'role': 'user', 'content': 'Compute AAPL.'}], [], response_format={'type': 'json_object'})
+    assert 'json' in json.dumps(direct_sent[0]['messages']).lower()
+
+    # Unpaired tool calls / tool results sanitized across ChatResearchAdapter and AnthropicMessagesProvider
+    unpaired_chat = ModelTurnExchange(
+        ModelAssistantContinuation({
+            'role': 'assistant',
+            'content': None,
+            'tool_calls': [
+                {'id': 'c1', 'type': 'function', 'function': {'name': 'lookup', 'arguments': '{}'}},
+                {'id': 'c_missing', 'type': 'function', 'function': {'name': 'lookup', 'arguments': '{}'}},
+            ],
+        }),
+        (ModelToolResult('c1', 'res1'), ModelToolResult('c_orphan', 'res2')),
+    )
+    chat_msgs, _ = ChatResearchAdapter._render(ModelTurnInput('sys', 'q', (), (unpaired_chat,)))
+    assert [c['id'] for c in chat_msgs[2]['tool_calls']] == ['c1']
+    assert [m['tool_call_id'] for m in chat_msgs if m['role'] == 'tool'] == ['c1']
+
+    anth_wire = _anthropic_provider()._wire(ModelTurnInput('sys', 'q', (), (
+        ModelTurnExchange(
+            ModelAssistantContinuation({'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'tu_unpaired', 'name': 'lookup', 'input': {}}]}),
+            (),
+            user_followup='Retry without tools.',
+        ),
+    )))
+    assert all(
+        b.get('type') != 'tool_use'
+        for msg in anth_wire['messages']
+        if isinstance(msg.get('content'), list)
+        for b in msg['content']
+    )
+
+
+def test_safe_rejection_details_redacts_secrets_without_polluting_diagnostics(caplog: pytest.LogCaptureFixture) -> None:
+    from app.research_diagnostics import safe_provider_error, safe_rejection_details, sanitize_provider_error, set_rejection_details
+
+    raw_body = json.dumps({
+        'error': {
+            'type': 'invalid_request_error',
+            'code': 'invalid_value',
+            'param': 'text.format',
+            'message': 'Bad Authorization: Bearer sk-secretkey999999 and api_key=MY_KEY_123 at https://x.test?token=tok_secret on input[0].content',
+        }
+    })
+    safe_err = safe_provider_error(raw_body)
+    assert 'sk-secretkey' not in json.dumps(safe_err)
+    assert sanitize_provider_error(safe_err)['shape'] == 'error_object'
+
+    details = safe_rejection_details(raw_body, status_code=400, safe_error=safe_err)
+    assert details['status_code'] == 400
+    assert details['error_type'] == 'invalid_request_error'
+    assert details['error_code'] == 'invalid_value'
+    assert details['error_param'] == 'text.format'
+    assert 'sk-secretkey' not in details['message']
+    assert 'MY_KEY_123' not in details['message']
+    assert 'tok_secret' not in details['message']
+    assert len(details['message']) <= 240
+
+    failure = ProviderFailure('provider_request_rejected', 'Provider rejected the request.', retryable=False)
+    resp = HttpResponse(400, '', {}, safe_err, details)
+    set_rejection_details(failure, resp)
+    assert failure.upstream_status == 400
+    assert failure.parameter == 'text.format'
+    assert failure.rejection_details == details
+
 
