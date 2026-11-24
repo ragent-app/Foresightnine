@@ -219,6 +219,28 @@ from .research_model_slots import (
     slot_routing_summary,
 )
 from .research_signals import LazyAttachmentRef, SecEventAnalysisResult, SecEventScanResult
+from .research_thesis_ledger import (
+    ThesisClaim,
+    ThesisLedger,
+    ThesisLedgerHistoryView,
+    build_thesis_draft_from_dossier,
+    confirm_thesis_ledger_version,
+    diff_thesis_ledgers,
+)
+from .research_radar_scheduler import (
+    ChangeInboxItem,
+    FilingWatchSubscription,
+    InboxDecisionAction,
+    InboxImpactLevel,
+    InboxReviewState,
+    InboxSourceChannel,
+    RadarHealthSummary,
+    RadarSweepSummary,
+    WatchChannel,
+    apply_inbox_decision,
+    run_p1b_radar_sweep,
+    summarize_radar_health,
+)
 
 _DEFAULT_FETCH_OFFICIAL_TEXT = fetch_official_text
 _DEFAULT_RESERVE_SEC_REQUEST = reserve_sec_request
@@ -537,6 +559,27 @@ SEC_EVENTS_ANALYSIS_RESULTS = build_repository(
     "sec_events_analysis_results",
     value_loader=SecEventAnalysisResult.model_validate,
 )
+THESIS_LEDGERS = build_repository(
+    storage_config,
+    "thesis_ledgers",
+    value_loader=ThesisLedger.model_validate,
+)
+WATCH_SUBSCRIPTIONS = build_repository(
+    storage_config,
+    "watch_subscriptions",
+    value_loader=FilingWatchSubscription.model_validate,
+)
+DELTA_REVIEW_RUNS = build_repository(storage_config, "delta_review_runs")
+CHANGE_INBOX_ITEMS = build_repository(
+    storage_config,
+    "change_inbox_items",
+    value_loader=ChangeInboxItem.model_validate,
+)
+RADAR_SWEEP_RESULTS = build_repository(
+    storage_config,
+    "radar_sweep_results",
+    value_loader=RadarSweepSummary.model_validate,
+)
 (
     SESSIONS,
     THESES,
@@ -793,6 +836,11 @@ def reset_state() -> None:
     SEC_EVENTS_L1_RAW.clear()
     SEC_EVENTS_L2_SEMANTIC.clear()
     SEC_EVENTS_ANALYSIS_RESULTS.clear()
+    THESIS_LEDGERS.clear()
+    WATCH_SUBSCRIPTIONS.clear()
+    DELTA_REVIEW_RUNS.clear()
+    CHANGE_INBOX_ITEMS.clear()
+    RADAR_SWEEP_RESULTS.clear()
     abuse_control.reset()
     telemetry.reset()
     SESSIONS.clear()
@@ -7623,6 +7671,561 @@ def get_sec_events_analysis(
                 error_payload = dict(ev["error"])
                 break
     return SecEventAnalysisOperationResponse(operation=operation, analysis=analysis, error=error_payload)
+
+
+# --------------------------------------------------------------------------- Direction B: Thesis Ledger, Radar & Change Inbox
+
+class ThesisLedgerConfirmRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    claims: list[ThesisClaim] = Field(min_length=1)
+    symbol: str | None = None
+    cik: str | None = None
+    company_name: str | None = None
+    decision_summary: str | None = None
+
+
+class WatchSubscriptionCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cik: str | None = None
+    symbol: str | None = None
+    company_name: str | None = None
+    topic_id: str | None = None
+    watched_channels: list[WatchChannel] = Field(default_factory=lambda: ["v1_events", "earnings_delta"])
+    lookback_days: int = Field(default=30, ge=1, le=365)
+    check_interval_minutes: int = Field(default=60, ge=5, le=1440)
+    enabled: bool = True
+
+
+class WatchSubscriptionPatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool | None = None
+    topic_id: str | None = None
+    watched_channels: list[WatchChannel] | None = None
+    lookback_days: int | None = Field(default=None, ge=1, le=365)
+    check_interval_minutes: int | None = Field(default=None, ge=5, le=1440)
+
+
+class RadarCheckNowRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    subscription_ids: list[str] | None = None
+    as_of: date | None = None
+
+
+class RadarSweepOperationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    operation: OperationResponse
+    sweep: RadarSweepSummary | None = None
+    error: dict[str, Any] | None = None
+
+
+class ChangeInboxListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[ChangeInboxItem] = Field(default_factory=list)
+    unread_count: int = 0
+    total_count: int = 0
+
+
+class ChangeInboxDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: InboxDecisionAction
+    user_note: str | None = Field(default=None, max_length=1500)
+    edited_claims: list[ThesisClaim] | None = None
+
+
+class ChangeInboxDecisionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item: ChangeInboxItem
+    new_ledger: ThesisLedger | None = None
+
+
+def _account_ledgers_for_topic(account_id: str, topic_id: str) -> list[ThesisLedger]:
+    found: list[ThesisLedger] = []
+    for _k, val in THESIS_LEDGERS.items():
+        if isinstance(val, ThesisLedger) and val.account_id == account_id and val.topic_id == topic_id:
+            found.append(val)
+    found.sort(key=lambda lg: (lg.version, lg.created_at))
+    return found
+
+
+def _latest_confirmed_ledger(account_id: str, topic_id: str | None) -> ThesisLedger | None:
+    if not topic_id:
+        return None
+    confirmed = [lg for lg in _account_ledgers_for_topic(account_id, topic_id) if lg.review_status == "confirmed"]
+    return confirmed[-1] if confirmed else None
+
+
+def _latest_locked_dossier_for_topic(account_id: str, topic_id: str) -> Any | None:
+    latest: Any | None = None
+    latest_ts = ""
+    for _k, raw in EARNINGS_SQUAD_STATES.items():
+        if not isinstance(raw, Mapping):
+            continue
+        if raw.get("account_id") != account_id or raw.get("topic_id") != topic_id:
+            continue
+        dossier = raw.get("dossier")
+        if isinstance(dossier, Mapping):
+            ts = str(dossier.get("created_at") or raw.get("updated_at") or "")
+            if latest is None or ts >= latest_ts:
+                latest = dossier
+                latest_ts = ts
+    return latest
+
+
+def _account_subscriptions(account_id: str) -> list[FilingWatchSubscription]:
+    subs = [
+        val
+        for _k, val in WATCH_SUBSCRIPTIONS.items()
+        if isinstance(val, FilingWatchSubscription) and val.account_id == account_id
+    ]
+    subs.sort(key=lambda s: (s.symbol or s.cik, s.created_at))
+    return subs
+
+
+def _account_inbox_items(account_id: str) -> list[ChangeInboxItem]:
+    items = [
+        val
+        for _k, val in CHANGE_INBOX_ITEMS.items()
+        if isinstance(val, ChangeInboxItem) and val.account_id == account_id
+    ]
+    items.sort(key=lambda it: (it.updated_at, it.created_at), reverse=True)
+    return items
+
+
+@app.get(
+    "/v2/research/topics/{topic_id}/thesis-ledger",
+    response_model=ThesisLedgerHistoryView,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+)
+def get_topic_thesis_ledger(topic_id: str, http_request: Request) -> ThesisLedgerHistoryView:
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    all_ledgers = _account_ledgers_for_topic(account.account_id, topic_id)
+    confirmed = [lg for lg in all_ledgers if lg.review_status == "confirmed"]
+    drafts = [lg for lg in all_ledgers if lg.review_status == "draft"]
+    latest_conf = confirmed[-1] if confirmed else None
+    pending_draft = drafts[-1] if drafts else None
+    latest_diff = diff_thesis_ledgers(confirmed[-2], confirmed[-1]) if len(confirmed) >= 2 else None
+    return ThesisLedgerHistoryView(
+        topic_id=topic_id,
+        latest_confirmed=latest_conf,
+        pending_draft=pending_draft,
+        versions=confirmed,
+        latest_diff=latest_diff,
+    )
+
+
+@app.post(
+    "/v2/research/topics/{topic_id}/thesis-ledger/draft",
+    response_model=ThesisLedger,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+)
+def generate_topic_thesis_ledger_draft(topic_id: str, http_request: Request) -> ThesisLedger:
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    dossier = _latest_locked_dossier_for_topic(account.account_id, topic_id)
+    if dossier is None:
+        raise ApiProblem(404, "not_found", "No locked earnings dossier found for this topic.")
+    latest_conf = _latest_confirmed_ledger(account.account_id, topic_id)
+    draft = build_thesis_draft_from_dossier(
+        account_id=account.account_id,
+        topic_id=topic_id,
+        dossier=dossier,
+        existing_version=latest_conf.version if latest_conf is not None else 0,
+    )
+    THESIS_LEDGERS.put(f"{account.account_id}:{topic_id}:draft", draft)
+    return draft
+
+
+@app.post(
+    "/v2/research/topics/{topic_id}/thesis-ledger/confirm",
+    response_model=ThesisLedger,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+)
+def confirm_topic_thesis_ledger(
+    topic_id: str,
+    http_request: Request,
+    request: ThesisLedgerConfirmRequest,
+) -> ThesisLedger:
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    prev_conf = _latest_confirmed_ledger(account.account_id, topic_id)
+    draft_key = f"{account.account_id}:{topic_id}:draft"
+    base_draft = THESIS_LEDGERS.get(draft_key)
+    confirmed = confirm_thesis_ledger_version(
+        account_id=account.account_id,
+        topic_id=topic_id,
+        claims=request.claims,
+        previous_confirmed=prev_conf,
+        base_draft=base_draft if isinstance(base_draft, ThesisLedger) else None,
+        symbol=request.symbol,
+        cik=request.cik,
+        company_name=request.company_name,
+        decision_summary=request.decision_summary,
+    )
+    THESIS_LEDGERS.put(f"{account.account_id}:{topic_id}:v{confirmed.version}", confirmed)
+    if base_draft is not None:
+        THESIS_LEDGERS.delete(draft_key)
+    return confirmed
+
+
+@app.get(
+    "/v2/research/radar/subscriptions",
+    response_model=list[FilingWatchSubscription],
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+)
+def list_radar_subscriptions(http_request: Request) -> list[FilingWatchSubscription]:
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    return _account_subscriptions(account.account_id)
+
+
+@app.post(
+    "/v2/research/radar/subscriptions",
+    response_model=FilingWatchSubscription,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+)
+def create_radar_subscription(
+    http_request: Request,
+    request: WatchSubscriptionCreateRequest,
+) -> FilingWatchSubscription:
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    if not (request.cik or request.symbol):
+        raise ApiProblem(422, "invalid_request", "Either cik or symbol is required to create a radar subscription.")
+    if request.cik and request.cik.strip():
+        try:
+            cik_val = f"{int(request.cik.strip()):010d}"
+        except ValueError as err:
+            raise ApiProblem(422, "invalid_request", f"Invalid CIK: {request.cik}") from err
+        sym_val = request.symbol.strip().upper() if request.symbol and request.symbol.strip() else None
+    else:
+        cfg = _sec_events_config_from_hook({})
+        scan_proxy = SecEventsScanApiRequest(cik=request.cik, symbol=request.symbol)
+        cik_val, sym_val, _ent = _resolve_sec_events_cik(scan_proxy, cfg)
+    # Upsert if subscription for same (account_id, cik) already exists
+    for existing in _account_subscriptions(account.account_id):
+        if existing.cik == cik_val:
+            updated = existing.model_copy(
+                update={
+                    "symbol": sym_val or existing.symbol,
+                    "company_name": request.company_name or existing.company_name,
+                    "topic_id": request.topic_id if request.topic_id is not None else existing.topic_id,
+                    "watched_channels": list(request.watched_channels),
+                    "lookback_days": request.lookback_days,
+                    "check_interval_minutes": request.check_interval_minutes,
+                    "enabled": request.enabled,
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            )
+            WATCH_SUBSCRIPTIONS.put(updated.subscription_id, updated)
+            return updated
+    sub = FilingWatchSubscription(
+        account_id=account.account_id,
+        topic_id=request.topic_id,
+        cik=cik_val,
+        symbol=sym_val,
+        company_name=request.company_name,
+        enabled=request.enabled,
+        watched_channels=list(request.watched_channels),
+        lookback_days=request.lookback_days,
+        check_interval_minutes=request.check_interval_minutes,
+    )
+    WATCH_SUBSCRIPTIONS.put(sub.subscription_id, sub)
+    return sub
+
+
+@app.patch(
+    "/v2/research/radar/subscriptions/{subscription_id}",
+    response_model=FilingWatchSubscription,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+)
+def patch_radar_subscription(
+    subscription_id: str,
+    http_request: Request,
+    request: WatchSubscriptionPatchRequest,
+) -> FilingWatchSubscription:
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    sub = WATCH_SUBSCRIPTIONS.get(subscription_id)
+    if not isinstance(sub, FilingWatchSubscription) or sub.account_id != account.account_id:
+        raise ApiProblem(404, "not_found", "Radar subscription not found.")
+    updates: dict[str, Any] = {"updated_at": datetime.now(timezone.utc)}
+    if request.enabled is not None:
+        updates["enabled"] = request.enabled
+    if request.topic_id is not None:
+        updates["topic_id"] = request.topic_id
+    if request.watched_channels is not None:
+        updates["watched_channels"] = list(request.watched_channels)
+    if request.lookback_days is not None:
+        updates["lookback_days"] = request.lookback_days
+    if request.check_interval_minutes is not None:
+        updates["check_interval_minutes"] = request.check_interval_minutes
+    updated = sub.model_copy(update=updates)
+    WATCH_SUBSCRIPTIONS.put(updated.subscription_id, updated)
+    return updated
+
+
+@app.delete(
+    "/v2/research/radar/subscriptions/{subscription_id}",
+    status_code=204,
+    responses=ERROR_RESPONSES,
+)
+def delete_radar_subscription(subscription_id: str, http_request: Request) -> Response:
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    sub = WATCH_SUBSCRIPTIONS.get(subscription_id)
+    if not isinstance(sub, FilingWatchSubscription) or sub.account_id != account.account_id:
+        raise ApiProblem(404, "not_found", "Radar subscription not found.")
+    WATCH_SUBSCRIPTIONS.delete(subscription_id)
+    return Response(status_code=204)
+
+
+@app.get(
+    "/v2/research/radar/health",
+    response_model=RadarHealthSummary,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+)
+def get_radar_health(http_request: Request) -> RadarHealthSummary:
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    return summarize_radar_health(
+        _account_subscriptions(account.account_id),
+        _account_inbox_items(account.account_id),
+    )
+
+
+_RADAR_CHECK_NOW_OP_ENDPOINT = "/v2/research/radar/check-now"
+
+
+@app.post(
+    "/v2/research/radar/check-now",
+    response_model=OperationResponse,
+    response_model_exclude_none=True,
+    status_code=202,
+    responses=ERROR_RESPONSES,
+)
+def radar_check_now_endpoint(
+    http_request: Request,
+    response: Response,
+    idempotency_key: IdempotencyKey,
+    request: RadarCheckNowRequest = Body(default_factory=RadarCheckNowRequest),
+) -> OperationResponse:
+    """Trigger an async P1-B staggered priority-queue radar sweep for the account's subscriptions."""
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    owner_subject = f"account:{account.account_id}"
+    req_payload = request.model_dump(mode="json", exclude_unset=True)
+    existing = operations.replay_async(
+        endpoint=_RADAR_CHECK_NOW_OP_ENDPOINT,
+        idempotency_key=idempotency_key,
+        owner_subject=owner_subject,
+        request_payload=req_payload,
+    )
+    if existing is not None:
+        _mark_replay(response, True)
+        return existing
+
+    all_subs = _account_subscriptions(account.account_id)
+    if request.subscription_ids is not None:
+        wanted = set(request.subscription_ids)
+        target_subs = [s for s in all_subs if s.subscription_id in wanted]
+    else:
+        target_subs = [s for s in all_subs if s.enabled]
+
+    dummy_analyze_req = SecEventsAnalyzeApiRequest(cik=target_subs[0].cik if target_subs else "0001045810")
+    hook_dict = _read_sec_events_hook(account=account, request=dummy_analyze_req)
+    cfg = _sec_events_config_from_hook(hook_dict)
+    model_runner, filtered_bindings, effective_resolved_slots = _resolve_sec_events_runtime(
+        account=account,
+        request=dummy_analyze_req,
+        http_request=http_request,
+        hook_dict=hook_dict,
+        budget=hook_dict.get("budget"),
+    )
+
+    staged_sweeps: dict[str, RadarSweepSummary] = {}
+
+    def build_radar_operation(operation_id: str) -> tuple[BaseModel, str]:
+        op_cancel = operations.cancel_event(operation_id)
+        if callable(getattr(model_runner, "bind_runtime", None)):
+            model_runner.bind_runtime(cancel_event=op_cancel, budget=hook_dict.get("budget"))
+
+        def _scan_sub(sub: FilingWatchSubscription, seen_v1: list[str]) -> tuple[SecEventScanResult, dict[str, str]]:
+            return scan_sec_material_events(
+                sub.cik,
+                user_agent=cfg["user_agent"],
+                as_of=request.as_of,
+                lookback_days=sub.lookback_days,
+                seen_accessions=seen_v1 or None,
+                l1_cache=cfg["l1_cache"],
+                rules=cfg["rules"],
+                transport=cfg["transport"],
+                stream_transport=cfg["stream_transport"],
+                limiter=cfg["limiter"],
+                policy=cfg["policy"],
+                now_fn=cfg["now_fn"],
+                cancel_event=op_cancel,
+                symbol=sub.symbol,
+                submissions_override=cfg["submissions_override"],
+                facts_override=cfg["facts_override"],
+            )
+
+        def _fetch_lazy(ref: LazyAttachmentRef) -> str:
+            hook_lazy = hook_dict.get("lazy_fetcher")
+            if callable(hook_lazy):
+                return str(hook_lazy(ref) or "")
+            return fetch_lazy_attachment(
+                ref,
+                user_agent=cfg["user_agent"],
+                limiter=cfg["limiter"],
+                policy=cfg["policy"],
+                transport=cfg["transport"],
+                stream_transport=cfg["stream_transport"],
+                cancel_event=op_cancel,
+            ).text
+
+        def _analyze_sub(
+            sub: FilingWatchSubscription,
+            scan_res: SecEventScanResult,
+            source_texts: dict[str, str],
+            active_flags: list[str] | None,
+            thesis_ctx: str | None,
+        ) -> SecEventAnalysisResult:
+            return analyze_sec_events(
+                scan_result=scan_res,
+                source_texts=source_texts,
+                runner=model_runner,
+                slot_bindings=filtered_bindings,
+                resolved_slots=effective_resolved_slots,
+                lazy_fetcher=_fetch_lazy,
+                l2_cache=cfg["l2_cache"],
+                rules=cfg["rules"],
+                active_red_yellow_flags=active_flags,
+                thesis_context=thesis_ctx,
+                cancel_event=op_cancel,
+            )
+
+        summary = run_p1b_radar_sweep(
+            subscriptions=target_subs,
+            scan_fn=_scan_sub,
+            analyze_v1_fn=_analyze_sub,
+            ledger_loader=lambda sub: _latest_confirmed_ledger(account.account_id, sub.topic_id),
+            existing_inbox_loader=_account_inbox_items,
+            save_subscription=lambda s: WATCH_SUBSCRIPTIONS.put(s.subscription_id, s),
+            save_inbox_item=lambda it: CHANGE_INBOX_ITEMS.put(it.inbox_item_id, it),
+            as_of=request.as_of,
+        )
+        staged_sweeps[operation_id] = summary
+        return summary, f"radar_sweep:{operation_id}"
+
+    def commit_radar_operation(operation_id: str, result: BaseModel) -> None:
+        final_sweep = staged_sweeps.pop(operation_id, None) or result
+        assert isinstance(final_sweep, RadarSweepSummary)
+        RADAR_SWEEP_RESULTS.put(operation_id, final_sweep)
+
+    def rollback_radar_operation(operation_id: str, _result: BaseModel) -> None:
+        staged_sweeps.pop(operation_id, None)
+        RADAR_SWEEP_RESULTS.delete(operation_id)
+
+    op_resp, replayed = operations.submit_async(
+        endpoint=_RADAR_CHECK_NOW_OP_ENDPOINT,
+        idempotency_key=idempotency_key,
+        owner_subject=owner_subject,
+        request_payload=req_payload,
+        build_fn=build_radar_operation,
+        commit_fn=commit_radar_operation,
+        rollback_fn=rollback_radar_operation,
+    )
+    _mark_replay(response, replayed)
+    return op_resp
+
+
+@app.get(
+    "/v2/research/radar/check-now/{operation_id}",
+    response_model=RadarSweepOperationResponse,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+)
+def get_radar_check_now_operation(operation_id: str, http_request: Request) -> RadarSweepOperationResponse:
+    _authenticated_account(http_request.headers.get("Authorization"))
+    _require_operation_owner(http_request, operation_id)
+    operation = operations._cache_operation(operation_id)
+    if operation.endpoint != _RADAR_CHECK_NOW_OP_ENDPOINT:
+        raise ApiProblem(404, "not_found", "Radar sweep operation not found.")
+    sweep: RadarSweepSummary | None = None
+    error_payload: dict[str, Any] | None = None
+    if operation.status == "completed":
+        sweep = RADAR_SWEEP_RESULTS.get(operation_id)
+    elif operation.status == "failed":
+        for ev in reversed(operations.store.get_events(operation_id)):
+            if ev.get("event") == "operation.error" and isinstance(ev.get("error"), Mapping):
+                error_payload = dict(ev["error"])
+                break
+    return RadarSweepOperationResponse(operation=operation, sweep=sweep, error=error_payload)
+
+
+@app.get(
+    "/v2/research/inbox",
+    response_model=ChangeInboxListResponse,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+)
+def list_change_inbox(
+    http_request: Request,
+    symbol: str | None = Query(default=None),
+    impact_level: InboxImpactLevel | None = Query(default=None),
+    review_state: InboxReviewState | None = Query(default=None),
+    source_channel: InboxSourceChannel | None = Query(default=None),
+) -> ChangeInboxListResponse:
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    all_items = _account_inbox_items(account.account_id)
+    unread_count = sum(1 for it in all_items if it.review_state == "unread")
+    filtered = all_items
+    if symbol:
+        sym_u = symbol.strip().upper()
+        filtered = [it for it in filtered if (it.symbol or "").upper() == sym_u]
+    if impact_level:
+        filtered = [it for it in filtered if it.impact_level == impact_level]
+    if review_state:
+        filtered = [it for it in filtered if it.review_state == review_state]
+    if source_channel:
+        filtered = [it for it in filtered if it.source_channel == source_channel]
+    return ChangeInboxListResponse(items=filtered, unread_count=unread_count, total_count=len(filtered))
+
+
+@app.post(
+    "/v2/research/inbox/{inbox_item_id}/decide",
+    response_model=ChangeInboxDecisionResponse,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+)
+def decide_change_inbox_item(
+    inbox_item_id: str,
+    http_request: Request,
+    request: ChangeInboxDecisionRequest,
+) -> ChangeInboxDecisionResponse:
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    item = CHANGE_INBOX_ITEMS.get(inbox_item_id)
+    if not isinstance(item, ChangeInboxItem) or item.account_id != account.account_id:
+        raise ApiProblem(404, "not_found", "Change inbox item not found.")
+    confirmed_ledger = _latest_confirmed_ledger(account.account_id, item.topic_id)
+    updated_item, new_ledger = apply_inbox_decision(
+        item=item,
+        action=request.action,
+        user_note=request.user_note,
+        confirmed_ledger=confirmed_ledger,
+        edited_claims=request.edited_claims,
+    )
+    CHANGE_INBOX_ITEMS.put(updated_item.inbox_item_id, updated_item)
+    if new_ledger is not None:
+        THESIS_LEDGERS.put(f"{account.account_id}:{new_ledger.topic_id}:v{new_ledger.version}", new_ledger)
+    return ChangeInboxDecisionResponse(item=updated_item, new_ledger=new_ledger)
 
 
 def _operation_owner_subject(request: Request) -> str:
