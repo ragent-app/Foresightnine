@@ -1,0 +1,293 @@
+{
+  "rules_version": "v1",
+  "parser_version": "v1",
+  "limits": {
+    "default_lookback_days": 90,
+    "recent_context_days": 30,
+    "baseline_lookback_days": 365,
+    "max_target_candidates": 18,
+    "max_recent_context_candidates": 10,
+    "max_submissions_pages": 5,
+    "cluster_window_days": 14,
+    "exhibit_lazy_max_bytes": 2500000,
+    "exhibit_lazy_hard_cap_bytes": 3000000,
+    "source_texts_total_max_chars": 6000000
+  },
+  "form8k": {
+    "earnings_only_items": ["2.02"],
+    "earnings_companion_items": ["9.01", "7.01"],
+    "low_materiality_only_items": ["5.07", "5.03", "3.02", "3.03", "9.01"],
+    "statutory_critical_items": ["1.03", "2.04", "4.02"],
+    "keep_all_items": ["8.01", "5.02"],
+    "ex99_max_excerpt_chars": 12000,
+    "primary_max_excerpt_chars": 16000,
+    "ex99_high_density_keywords": [
+      "guidance",
+      "outlook",
+      "forecast",
+      "restructuring",
+      "impairment",
+      "write-down",
+      "writedown",
+      "severance",
+      "resign",
+      "resignation",
+      "terminated",
+      "termination",
+      "appointed",
+      "acquisition",
+      "merger",
+      "divestiture",
+      "agreement",
+      "credit facility",
+      "indenture",
+      "default",
+      "restatement",
+      "non-reliance",
+      "auditor",
+      "disagreement",
+      "investigation",
+      "subpoena",
+      "settlement",
+      "cybersecurity",
+      "unauthorized access",
+      "dividend",
+      "repurchase",
+      "buyback",
+      "bankruptcy",
+      "chapter 11",
+      "delisting"
+    ]
+  },
+  "form4": {
+    "keep_transaction_codes": ["P", "S"],
+    "exclude_transaction_codes": ["A", "M", "F", "G", "J", "C", "D", "W", "V", "K", "E", "H", "I", "L", "O", "U", "X", "Z"],
+    "dust_floor_usd": "25000",
+    "exempt_missing_price_from_dust_floor": true,
+    "exclude_confirmed_10b5_1": true,
+    "cluster_window_days": 14,
+    "plan_10b5_1_positive_patterns": [
+      "\\b10b5[-\\s]?1\\b",
+      "\\brule\\s+10b5-1\\b",
+      "\\bpre-?arranged\\s+trading\\s+plan\\b",
+      "\\btrading\\s+plan\\s+adopted\\s+on\\b"
+    ],
+    "plan_10b5_1_negative_patterns": [
+      "\\bnot\\s+(?:effected\\s+|made\\s+|executed\\s+|adopted\\s+)?(?:pursuant\\s+to|under)\\s+(?:a\\s+)?(?:rule\\s+)?10b5[-\\s]?1\\b",
+      "\\boutside\\s+(?:of\\s+)?(?:a\\s+)?(?:rule\\s+)?10b5[-\\s]?1\\b",
+      "\\bnon[-\\s]?10b5[-\\s]?1\\b"
+    ],
+    "officer_title_tiers": {
+      "ceo_cfo_chair": [
+        "\\bchief\\s+executive\\s+officer\\b",
+        "\\bceo\\b",
+        "\\bprincipal\\s+executive\\s+officer\\b",
+        "\\bchief\\s+financial\\s+officer\\b",
+        "\\bcfo\\b",
+        "\\bprincipal\\s+financial\\s+officer\\b",
+        "\\bexecutive\\s+chair(?:man|person)?\\b",
+        "\\bchair(?:man|woman|person)?\\s+of\\s+the\\s+board\\b",
+        "\\bboard\\s+chair\\b",
+        "\\bco-ceo\\b",
+        "(?<!vice\\s)(?<!assistant\\s)\\bpresident\\b"
+      ],
+      "c_suite_evp": [
+        "\\bchief\\s+operating\\s+officer\\b",
+        "\\bcoo\\b",
+        "\\bchief\\s+technology\\s+officer\\b",
+        "\\bcto\\b",
+        "\\bchief\\s+information\\s+officer\\b",
+        "\\bcio\\b",
+        "\\bchief\\s+marketing\\s+officer\\b",
+        "\\bcmo\\b",
+        "\\bchief\\s+revenue\\s+officer\\b",
+        "\\bcro\\b",
+        "\\bchief\\s+strategy\\s+officer\\b",
+        "\\bcso\\b",
+        "\\bchief\\s+legal\\s+officer\\b",
+        "\\bclo\\b",
+        "\\bgeneral\\s+counsel\\b",
+        "\\bchief\\s+accounting\\s+officer\\b",
+        "\\bcao\\b",
+        "\\bchief\\s+risk\\s+officer\\b",
+        "\\bchief\\s+medical\\s+officer\\b",
+        "\\bchief\\s+commercial\\s+officer\\b",
+        "\\bchief\\s+\\w+\\s+officer\\b",
+        "\\bsenior\\s+executive\\s+vice\\s+president\\b",
+        "\\bsevp\\b",
+        "\\bexecutive\\s+vice\\s+president\\b",
+        "\\bevp\\b"
+      ],
+      "vp_other_officer": [
+        "\\bsenior\\s+vice\\s+president\\b",
+        "\\bsvp\\b",
+        "\\bvice\\s+president\\b",
+        "\\bvp\\b",
+        "\\bcorporate\\s+secretary\\b",
+        "\\bsecretary\\b",
+        "\\btreasurer\\b",
+        "\\bcontroller\\b",
+        "\\bofficer\\b"
+      ]
+    }
+  },
+  "form13dg": {
+    "supported_forms": [
+      "SC 13D",
+      "SC 13D/A",
+      "SC 13G",
+      "SC 13G/A",
+      "SCHEDULE 13D",
+      "SCHEDULE 13D/A",
+      "SCHEDULE 13G",
+      "SCHEDULE 13G/A"
+    ],
+    "passive_reporting_person_types": ["IA", "IC", "BK"],
+    "passive_delta_threshold_pp": "1.0",
+    "passive_initial_13g_suppress_below_pct": "10.0",
+    "passive_institution_whitelist": [
+      "vanguard",
+      "blackrock",
+      "state street",
+      "fmr llc",
+      "fidelity",
+      "geode capital",
+      "northern trust",
+      "dimensional fund",
+      "t. rowe price",
+      "capital research",
+      "capital world",
+      "invesco",
+      "charles schwab",
+      "legal & general",
+      "norges bank",
+      "bank of new york mellon",
+      "bny mellon"
+    ]
+  },
+  "form6k": {
+    "fpi_indicator_forms": ["20-F", "20-F/A", "6-K", "6-K/A"],
+    "earnings_patterns": [
+      "\\b(?:first|second|third|fourth)\\s+quarter\\b.*\\b(?:results|earnings|financial)\\b",
+      "\\bq[1-4]\\s*(?:20\\d{2}|fy\\d{2,4})?\\s*(?:financial\\s+)?results\\b",
+      "\\b(?:quarterly|interim|half[-\\s]year|full[-\\s]year|annual)\\s+(?:financial\\s+)?(?:results|report|earnings|statements)\\b",
+      "\\bannounces?\\s+(?:unaudited\\s+)?(?:first|second|third|fourth|quarterly|annual|full[-\\s]year)\\s+.*(?:results|earnings)\\b",
+      "\\bearnings\\s+release\\b",
+      "\\bunaudited\\s+condensed\\s+consolidated\\s+(?:financial\\s+statements|income\\s+statements|balance\\s+sheets)\\b"
+    ],
+    "routine_noise_patterns": [
+      {
+        "rule_id": "routine_6k_buyback_return",
+        "pattern": "\\bnext\\s+day\\s+disclosure\\s+return\\b"
+      },
+      {
+        "rule_id": "routine_6k_monthly_return",
+        "pattern": "\\bmonthly\\s+return\\s+(?:of|on)\\s+(?:equity\\s+issuer|movements\\s+in\\s+securities)\\b"
+      },
+      {
+        "rule_id": "routine_6k_monthly_revenue",
+        "pattern": "\\bmonthly\\s+(?:net\\s+)?(?:sales|revenue)\\s+(?:report|announcement|update|flash)\\b"
+      },
+      {
+        "rule_id": "routine_6k_board_meeting_notice",
+        "pattern": "\\bdate\\s+of\\s+board\\s+meeting\\b|\\bnotice\\s+of\\s+board\\s+meeting\\b"
+      },
+      {
+        "rule_id": "routine_6k_proxy_or_agm_routine",
+        "pattern": "\\b(?:form\\s+of\\s+proxy|proxy\\s+form|poll\\s+results\\s+of\\s+(?:the\\s+)?annual\\s+general\\s+meeting)\\b"
+      }
+    ]
+  },
+  "negation_markers": [
+    "however",
+    "except",
+    "unless",
+    "provided that",
+    "subject to",
+    "not expected to have a material",
+    "no material impact",
+    "not material",
+    "no disagreement",
+    "no disagreements",
+    "did not result from any disagreement",
+    "not the result of any disagreement",
+    "routine",
+    "previously announced",
+    "previously disclosed",
+    "preliminary",
+    "cannot currently estimate",
+    "unable to estimate",
+    "non-binding",
+    "letter of intent",
+    "without admitting or denying",
+    "no assurance",
+    "tax withholding",
+    "pursuant to a rule 10b5-1"
+  ],
+  "event_subtypes": {
+    "leadership_change": {
+      "description": "CEO/CFO/chair/executive officer or key board leadership appointment, departure, or succession (e.g., Item 5.02).",
+      "affected_thesis_pillars": ["risk", "growth"]
+    },
+    "accounting_restatement_or_auditor": {
+      "description": "Non-reliance on prior financials / restatement (Item 4.02) or auditor change / resignation / dismissal (Item 4.01).",
+      "affected_thesis_pillars": ["risk", "cash_quality"]
+    },
+    "bankruptcy_or_default": {
+      "description": "Bankruptcy/receivership (Item 1.03) or triggering events accelerating/defaulting debt obligations (Item 2.04).",
+      "affected_thesis_pillars": ["risk", "capital_allocation", "valuation"]
+    },
+    "delisting_or_compliance": {
+      "description": "Notice of delisting or failure to satisfy continued listing rules (Item 3.01).",
+      "affected_thesis_pillars": ["risk", "valuation"]
+    },
+    "restructuring_or_impairment": {
+      "description": "Exit or disposal restructuring costs (Item 2.05) or material asset/goodwill impairments (Item 2.06).",
+      "affected_thesis_pillars": ["margin", "cash_quality", "risk"]
+    },
+    "ma_or_asset_transaction": {
+      "description": "Completion or definitive agreement for material acquisition, merger, spin-off, or asset disposition (Item 2.01 / 1.01).",
+      "affected_thesis_pillars": ["growth", "capital_allocation", "valuation"]
+    },
+    "material_commercial_contract": {
+      "description": "Entry into or termination of material commercial/supply/licensing agreements (Item 1.01 / 1.02).",
+      "affected_thesis_pillars": ["growth", "margin", "risk"]
+    },
+    "financing_and_capital_allocation": {
+      "description": "New credit facility, debt issuance, equity raise (Item 2.03), share buyback authorization, or dividend policy change.",
+      "affected_thesis_pillars": ["capital_allocation", "cash_quality", "valuation"]
+    },
+    "guidance_or_business_update": {
+      "description": "Non-earnings-release guidance update, pre-announcement, or major product/clinical/commercial milestone (Item 7.01 / 8.01 / 6-K).",
+      "affected_thesis_pillars": ["growth", "margin", "valuation"]
+    },
+    "cybersecurity_material_incident": {
+      "description": "Material cybersecurity incident disclosed under SEC Item 1.05 (distinct from voluntary Item 8.01 notices).",
+      "affected_thesis_pillars": ["risk", "margin"]
+    },
+    "regulatory_or_legal_action": {
+      "description": "Material litigation, SEC/DOJ/antitrust investigation, regulatory approval/rejection, or voluntary Item 8.01 cyber notice.",
+      "affected_thesis_pillars": ["risk", "margin", "cash_quality"]
+    },
+    "insider_open_market_buy": {
+      "description": "Form 4 discretionary open-market purchase (code P) by executives, directors, or 10% owners.",
+      "affected_thesis_pillars": ["valuation", "capital_allocation"]
+    },
+    "insider_discretionary_sale": {
+      "description": "Form 4 non-10b5-1 discretionary open-market sale (code S) or discretionary net sale after cashless exercise.",
+      "affected_thesis_pillars": ["risk", "valuation"]
+    },
+    "activist_13d": {
+      "description": "Schedule 13D / 13D/A / 13G->13D conversion signaling activist ownership, board push, or strategic alternatives.",
+      "affected_thesis_pillars": ["capital_allocation", "valuation", "risk"]
+    },
+    "institutional_stake_change": {
+      "description": "Material non-activist Schedule 13G / 13G/A ownership stake crossing or >= 1.0 pp change.",
+      "affected_thesis_pillars": ["capital_allocation", "valuation"]
+    },
+    "other_material": {
+      "description": "Fallback subtype for material SEC events not matching a narrower buy-side category.",
+      "affected_thesis_pillars": ["risk"]
+    }
+  }
+}
