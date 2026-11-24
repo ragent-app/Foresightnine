@@ -2676,6 +2676,14 @@ _DEFAULT_WRITER_SECTIONS: tuple[str, ...] = (
     "Valuation Multiples & Reverse-DCF",
     "Anchored Bear Case (w/ Next-Q Trigger) & Gaps",
 )
+_ZH_WRITER_SECTIONS: tuple[str, ...] = (
+    "核心结论与预期差（指引与 Non-GAAP 口径）",
+    "盈利质量与现金流排雷（R/Y/G 信号）",
+    "多期趋势、业务分部与核心 KPI",
+    "跨期披露红线与会计政策变动",
+    "估值倍数与 Reverse-DCF 隐含预期",
+    "证据锚定空头反证（含下季证伪指标）与研究边界",
+)
 _DEFAULT_WRITER_MUST_STATE: tuple[str, ...] = (
     "as-of dates, clock & SIC gate",
     "coverage gaps (consensus/transcript, FCF<=0 DCF)",
@@ -3064,10 +3072,43 @@ def _worker_tool_sop(
     )
 
 
-def _compact_snapshot_for_worker(snapshot: EarningsPrefetchSnapshot) -> dict[str, Any]:
-    """Return all Stage 0 snapshot metadata plus compact tables, fact_ids, summaries, and user uploads."""
+def _compact_table_catalog(cat: Any) -> dict[str, Any] | None:
+    if cat is None:
+        return None
+    seen: set[str] = set()
+    key_tables: list[dict[str, Any]] = []
+    for rep in [*cat.statements[:10], *cat.tables[:12], *cat.notes[:8]]:
+        if rep.r_file in seen:
+            continue
+        seen.add(rep.r_file)
+        key_tables.append({
+            "r_file": rep.r_file,
+            "short_name": rep.short_name,
+            "category": rep.normalized_category,
+        })
+    return {
+        "accession": cat.accession,
+        "report_count": cat.report_count,
+        "key_tables": key_tables,
+    }
+
+
+def _compact_snapshot_for_worker(
+    snapshot: EarningsPrefetchSnapshot,
+    *,
+    worker_role: WorkerRole | None = None,
+) -> dict[str, Any]:
+    """Return role-scoped Stage 0 snapshot metadata without duplicating heavy unused blobs."""
+    include_er = worker_role in (None, "worker_guidance", "worker_segments")
+    include_redline = worker_role in (None, "worker_forensics")
+    include_catalog = worker_role in (None, "worker_segments", "worker_forensics")
+    include_guidance_diag = worker_role in (None, "worker_guidance")
+    include_consensus = worker_role in (None, "worker_guidance")
+    include_flags = worker_role in (None, "worker_forensics", "worker_segments")
+    stmt_limit = 2 if worker_role == "worker_guidance" else 4
+
     er_summary = None
-    if snapshot.earnings_release is not None:
+    if include_er and snapshot.earnings_release is not None:
         cur = snapshot.earnings_release.current
         pri = snapshot.earnings_release.prior
         er_summary = {
@@ -3075,10 +3116,10 @@ def _compact_snapshot_for_worker(snapshot: EarningsPrefetchSnapshot) -> dict[str
             "current": {
                 "accession": cur.accession,
                 "filed_at": cur.filed_at.isoformat() if cur.filed_at else None,
-                "management_summary": (cur.management_summary or "")[:1000] or None,
+                "management_summary": (cur.management_summary or "")[:800] or None,
                 "management_highlights": list(cur.management_highlights[:6]),
                 "guidance_passages": [
-                    {"heading": g.heading, "horizon": g.horizon, "text": g.text[:400]}
+                    {"heading": g.heading, "horizon": g.horizon, "text": g.text[:350]}
                     for g in cur.guidance_passages[:5]
                 ],
                 "nongaap_titles": [n.title for n in cur.nongaap_reconciliations[:6] if n.title],
@@ -3087,7 +3128,7 @@ def _compact_snapshot_for_worker(snapshot: EarningsPrefetchSnapshot) -> dict[str
         }
 
     redline_compact = None
-    if snapshot.redline_summary is not None:
+    if include_redline and snapshot.redline_summary is not None:
         redline_compact = {
             "total_added": snapshot.redline_summary.total_added,
             "total_removed": snapshot.redline_summary.total_removed,
@@ -3098,14 +3139,14 @@ def _compact_snapshot_for_worker(snapshot: EarningsPrefetchSnapshot) -> dict[str
                     "has_substantive_changes": sec.has_substantive_changes,
                     "added_count": len(sec.added),
                     "revised_count": len(sec.revised),
-                    "added_previews": [(p.current_text or "")[:250] for p in sec.added[:2]],
-                    "revised_previews": [(p.redline_markup or p.current_text or "")[:250] for p in sec.revised[:2]],
+                    "added_previews": [(p.current_text or "")[:220] for p in sec.added[:2]],
+                    "revised_previews": [(p.redline_markup or p.current_text or "")[:220] for p in sec.revised[:2]],
                 }
                 for k, sec in snapshot.redline_summary.section_diffs.items()
             },
         }
 
-    return {
+    payload: dict[str, Any] = {
         "entity_id": snapshot.entity_id,
         "symbol": snapshot.symbol,
         "cik": snapshot.cik,
@@ -3113,40 +3154,37 @@ def _compact_snapshot_for_worker(snapshot: EarningsPrefetchSnapshot) -> dict[str
         "sic_code": snapshot.sic_code,
         "period_label": snapshot.period_label,
         "sector_applicability": snapshot.sector_applicability.model_dump(mode="json"),
-        "flags": [f.model_dump(mode="json") for f in snapshot.flags],
-        "statements_compact": _compact_statements_summary(snapshot.statements),
-        "derived_metrics_count": snapshot.derived_metrics.get("statement_lines_count") if isinstance(snapshot.derived_metrics, Mapping) else None,
+        "statements_compact": _compact_statements_summary(snapshot.statements)[:stmt_limit],
         "filing_accession": snapshot.filing_accession,
         "prior_filing_accession": snapshot.prior_filing_accession,
         "current_filing_url": snapshot.current_filing_url,
         "prior_filing_url": snapshot.prior_filing_url,
         "prior_sections_source_id": snapshot.prior_sections_source_id,
-        "filing_table_catalog": (
-            snapshot.filing_table_catalog.model_dump(mode="json")
-            if snapshot.filing_table_catalog
-            else None
-        ),
-        "earnings_release_summary": er_summary,
-        "redline_summary": redline_compact,
-        "guidance_nongaap": snapshot.guidance_nongaap.model_dump(mode="json") if snapshot.guidance_nongaap else None,
-        "valuation_summary": (
-            {
-                "reverse_dcf": snapshot.valuation.reverse_dcf.model_dump(mode="json"),
-                "pe_ttm": snapshot.valuation.pe_ttm.model_dump(mode="json") if snapshot.valuation.pe_ttm else None,
-                "ev_to_ebitda": snapshot.valuation.ev_to_ebitda.model_dump(mode="json") if snapshot.valuation.ev_to_ebitda else None,
-                "fcf_ex_sbc": snapshot.valuation.fcf_ex_sbc.model_dump(mode="json") if snapshot.valuation.fcf_ex_sbc else None,
-            }
-            if snapshot.valuation is not None
-            else None
-        ),
-        "prefetched_sources": [s.model_dump(mode="json") for s in snapshot.prefetched_sources],
-        "user_uploaded_sources": [
-            s.model_dump(mode="json") for s in snapshot.prefetched_sources if s.kind == "user_supplied"
+        "prefetched_sources": [
+            {"source_id": s.source_id, "kind": s.kind, "title": s.title, "retrieval_method": s.retrieval_method}
+            for s in snapshot.prefetched_sources
         ],
-        "consensus_status": snapshot.consensus_summary.status,
-        "consensus_records": [r.model_dump(mode="json") for r in snapshot.consensus_summary.records[:6]],
-        "transcript_index": snapshot.transcript_index.model_dump(mode="json"),
+        "user_uploaded_sources": [
+            {"source_id": s.source_id, "title": s.title}
+            for s in snapshot.prefetched_sources
+            if s.kind == "user_supplied"
+        ],
     }
+    if include_flags:
+        payload["flags"] = [f.model_dump(mode="json") for f in snapshot.flags]
+    if include_catalog:
+        payload["filing_table_catalog"] = _compact_table_catalog(snapshot.filing_table_catalog)
+    if include_er:
+        payload["earnings_release_summary"] = er_summary
+    if include_redline:
+        payload["redline_summary"] = redline_compact
+    if include_guidance_diag and snapshot.guidance_nongaap is not None:
+        payload["guidance_nongaap"] = snapshot.guidance_nongaap.model_dump(mode="json")
+    if include_consensus:
+        payload["consensus_status"] = snapshot.consensus_summary.status
+        payload["consensus_records"] = [r.model_dump(mode="json") for r in snapshot.consensus_summary.records[:6]]
+        payload["transcript_index"] = snapshot.transcript_index.model_dump(mode="json")
+    return payload
 
 
 def _compact_redline_for_prompt(redline: Any, *, max_items: int = 6, max_chars: int = 350) -> dict[str, Any] | None:
@@ -3437,11 +3475,13 @@ def _build_writer_system_prompt(
     question: str | None = None,
 ) -> str:
     sections, must_state = _l1_writer_guidance(sic_code)
+    use_zh = _contains_cjk(question)
+    effective_sections = list(_ZH_WRITER_SECTIONS) if use_zh else sections
     lang_rule = (
-        "Write the entire report (including all bear-case arguments and boundaries) in natural, institutional "
-        "Simplified Chinese (简体中文), keeping standard English tickers, SEC form names (8-K, 10-Q, 10-K), "
-        "and financial abbreviations (GAAP, Non-GAAP, DSO, DIO, CCC, FCF, Reverse-DCF, RPO) intact."
-        if _contains_cjk(question)
+        "Write the entire report (including all `##` section headings, bear-case arguments, and boundaries) "
+        "in natural, institutional Simplified Chinese (简体中文), keeping standard English tickers, SEC form names "
+        "(8-K, 10-Q, 10-K), and financial abbreviations (GAAP, Non-GAAP, DSO, DIO, CCC, FCF, Reverse-DCF, RPO) intact."
+        if use_zh
         else "Match the language of the user's question (Chinese if Chinese, English if English)."
     )
     mode_desc = (
@@ -3453,9 +3493,10 @@ def _build_writer_system_prompt(
         f"You are an institutional buy-side equity research writer (writer slot). "
         f"Render a {mode_desc} in clean, publication-grade Markdown strictly from the server-gated `locked_dossier` JSON.\n"
         f"Rules:\n"
-        f"1. You have ZERO retrieval tools. Do NOT emit tool calls and do NOT alter or invent any number, period, unit, or fact.\n"
+        f"1. You have ZERO retrieval tools. Do NOT emit tool calls and do NOT alter or invent any number, period, unit, or fact. "
+        f"Always use precomputed deltas/percentages from `locked_dossier` verbatim and verify any stated subtraction or delta exactly.\n"
         f"2. {lang_rule}\n"
-        f"3. Required report structure sections (L1 earnings_review): {' | '.join(sections)}.\n"
+        f"3. Required report structure `##` section headings: {' | '.join(effective_sections)}.\n"
         f"4. Must explicitly state: {'; '.join(must_state)}.\n"
         f"5. CITATION STYLE (INSTITUTIONAL): Use clean numbered footnotes `[1]`, `[2]` matching `source_footnotes` in the payload, "
         f"and end with a concise `## 参考来源` (or `## Sources`) table mapping each `[n]` to its human-readable filing/data label. "
@@ -5774,7 +5815,7 @@ class EarningsSquadOrchestrator:
             "l2_pack_id": l2_pack_id,
             "method_pack": l1_l2_pack,
             "task": task.model_dump(mode="json"),
-            "snapshot": _compact_snapshot_for_worker(snapshot),
+            "snapshot": _compact_snapshot_for_worker(snapshot, worker_role=role),
         }
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": sys_prompt},

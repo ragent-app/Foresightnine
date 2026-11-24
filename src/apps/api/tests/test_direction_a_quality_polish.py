@@ -323,5 +323,20 @@ def test_q5_bear_chinese_lock_and_writer_clean_footnotes() -> None:
     writer_sys = _build_writer_system_prompt(mode="memo", sic_code="3674", question="分析NVIDIA距今最新的财报")
     assert "NEVER expose internal engineering identifiers" in writer_sys
     assert "Gate 状态: exportable: true, passed: false" in writer_sys
+    assert "核心结论与预期差（指引与 Non-GAAP 口径）" in writer_sys
     writer_payload = json.loads(_build_writer_payload(dossier_core, mode="memo"))
     assert writer_payload["source_footnotes"][0]["ref"] == "[1]"
+
+
+def test_q1_role_scoped_worker_snapshot_omits_unused_sections() -> None:
+    from app.research_earnings_squad import _compact_snapshot_for_worker
+
+    snap = _minimal_snapshot()
+    seg = _compact_snapshot_for_worker(snap, worker_role="worker_segments")
+    forensics = _compact_snapshot_for_worker(snap, worker_role="worker_forensics")
+    guidance = _compact_snapshot_for_worker(snap, worker_role="worker_guidance")
+
+    assert "redline_summary" not in seg and "consensus_records" not in seg
+    assert "consensus_records" not in forensics and "transcript_index" not in forensics
+    assert "filing_table_catalog" not in guidance and "redline_summary" not in guidance
+    assert "consensus_status" in guidance and "transcript_index" in guidance
