@@ -480,7 +480,7 @@ def sec_get_text(
 ) -> tuple[str, str, str]:
     """Fetch SEC HTML/XML/text endpoint and decode cleanly; returns ``(text, content_type, sha256)``."""
     raw_body, content_type, digest = sec_get_bytes(url, accept=accept, **kwargs)
-    return _decode_bytes(raw_body, content_type), content_type, digest
+    return _decode_bytes(raw_body, content_type).replace("\x00", ""), content_type, digest
 
 
 @dataclass(frozen=True)

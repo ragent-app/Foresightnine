@@ -264,6 +264,8 @@ def discover_filing_exhibits(
                             continue
                         if primary_document and name == primary_document:
                             continue
+                        if not name.lower().endswith((".htm", ".html", ".txt", ".xml")):
+                            continue
                         etype = str(entry.get("type") or entry.get("document_type") or "").strip()
                         desc = str(entry.get("description") or "").strip() or None
                         role = _classify_exhibit(name, etype, desc)
@@ -312,6 +314,8 @@ def discover_filing_exhibits(
                 doc_name = row[2].split()[0] if row[2] else ""
                 doc_type = row[3].strip() if row[3] else ""
                 if not doc_name or not _SAFE_FILENAME_RE.fullmatch(doc_name) or doc_name == primary_document:
+                    continue
+                if not doc_name.lower().endswith((".htm", ".html", ".txt", ".xml")):
                     continue
                 role = _classify_exhibit(doc_name, doc_type, desc)
                 if role is not None and doc_name not in seen_files:
