@@ -1,6 +1,6 @@
 # 方向 B（阶段 C）深度架构与产品方案：持续跟踪、结构化假设台账与变化收件箱
 
-> **范式更新（2026-11-24）**：产品顶层交互与主副关系已确立为 **“方向 A 做后台高保真底稿引擎，方向 B 做前台 30 秒决策卡与变化雷达（渐进式下钻完整底稿）”**，详见 [product-paradigm-a-engine-b-radar-2026-11-24.md](./product-paradigm-a-engine-b-radar-2026-11-24.md)。本文档中的底层数据模型、SEC 过滤与 2 阶段增量引擎设计继续沿用，前台交互将按新范式重构。
+> **范式更新（2026-11-24）**：产品顶层交互与主副关系已确立为 **“方向 A 做后台高保真底稿引擎，方向 B 做前台 30 秒决策卡与变化雷达（渐进式下钻完整底稿）”**，详见 [product-paradigm-a-engine-b-radar-2026-11-24.md](./product-paradigm-a-engine-b-radar-2026-11-24.md)。融入 V1 已上线引擎与 P1-B 错峰调度的可执行落地规格见 [direction-b-radar-and-inbox-execution-plan-2026-11-24.md](./direction-b-radar-and-inbox-execution-plan-2026-11-24.md)。
 
 - **日期**：2026-11-24
 - **前置基线**：方向 A 美股单公司买方财报深研已连续在 **NVDA（半导体）**、**META（互联网广告）**、**JNJ（医药）** 三行业跑通端到端实测（0 失败、TTM FCF / Reverse-DCF 全激活、引文与空头锚定门控生效、组织图与侧栏生命周期全闭环）。
