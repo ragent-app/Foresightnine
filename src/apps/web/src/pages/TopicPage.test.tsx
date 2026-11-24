@@ -2864,4 +2864,293 @@ describe("research turn instructions", () => {
     expect(within(orgSummary).getByText("投研小组执行摘要条")).toBeTruthy();
     expect(within(orgSummary).getByText(/已完成/)).toBeTruthy();
   });
+
+  it("suppresses legacy InterruptedTurn on failed squad run, shows friendly Chinese error + collapsible detail, and cleanly retries/resumes from checkpoint", async () => {
+    const sector: ResearchV2.SectorApplicability = {
+      sic_code: "3674",
+      sic_description: "Semiconductors",
+      sector_category: "non_financial",
+      is_gated: false,
+      disabled_metrics: [],
+      recommended_alternatives: [],
+      explanation: "Non-financial issuer.",
+    };
+    const rawPydanticError = [
+      "1 validation error for ResearchDispatchPlan",
+      "tasks",
+      "  Field required [type=missing, input_value={'worker_tasks': []}, input_type=dict]",
+      "extra_field",
+      "  Extra inputs are not permitted [type=extra_forbidden]",
+    ].join("\n");
+    const failedEvents: ResearchV2.OrgGraphEvent[] = [
+      {
+        sequence: 1,
+        stage: "stage_0_prefetch",
+        node_id: "prefetch_engine",
+        role: "prefetch",
+        display_name: "Stage 0 Prefetch",
+        action_kind: "RESPONDING",
+        runtime_state: "completed",
+        current_activity: "完成 SEC 预抓取",
+      },
+      {
+        sequence: 2,
+        stage: "stage_1_plan",
+        node_id: "lead_coordinator",
+        role: "lead_coordinator",
+        display_name: "Lead Coordinator",
+        slot: "deep_reasoner",
+        action_kind: "FAILED",
+        runtime_state: "failed",
+        current_activity: "Stage 1 规划失败",
+        blocker_text: rawPydanticError,
+      },
+    ];
+    const resolvedDossier: ResearchV2.EarningsDossier = {
+      dossier_id: "dossier_nvda_retry",
+      run_id: "sqrun_bad",
+      entity_id: "cik:0001045810",
+      symbol: "NVDA",
+      cik: "0001045810",
+      company_name: "NVIDIA Corp.",
+      period_label: "Q2 FY26",
+      locked: true,
+      dossier_sha256: "c".repeat(64),
+      sector_applicability: sector,
+      gate_report: { passed: true, exportable: true },
+      slot_usage_summary: { total_calls: 4, total_tokens: 11200, stage_0_model_calls: 0, deep_report_tool_calls: 0, slots: {} },
+      memo_markdown: "## 恢复后买方摘要\n\n数据中心业务继续领先。",
+      open_gaps: [],
+      snapshot: {
+        entity_id: "cik:0001045810",
+        symbol: "NVDA",
+        cik: "0001045810",
+        company_name: "NVIDIA Corp.",
+        period_label: "Q2 FY26",
+        sector_applicability: sector,
+        statements: [],
+      },
+    };
+
+    let retried = false;
+    let completed = false;
+    let retryStreamController: ReadableStreamDefaultController<Uint8Array> | null = null;
+    const encoder = new TextEncoder();
+    const runBodies: Array<Record<string, unknown>> = [];
+    const eventQueries: string[] = [];
+
+    mockApi((url, init) => {
+      if (url.pathname === "/v2/research/topics/t1") {
+        return jsonResponse({ ...topicWith([]), run_mode: "earnings_squad", squad_run_id: "sqrun_bad", ticker: "NVDA", cik: "0001045810" });
+      }
+      if (url.pathname === "/v2/research/topics/t1/runs") {
+        // Failed auto-routed operation with turns=[] would trigger legacy orphanRun if not suppressed.
+        return jsonResponse([operation("op_bad", "failed")]);
+      }
+      if (url.pathname === "/v2/research/topics/t1/earnings-squad/dossier") {
+        if (!retried) {
+          return jsonResponse({
+            topic_id: "t1",
+            run_id: "sqrun_bad",
+            operation_id: "op_bad",
+            status: "failed",
+            ticker: "NVDA",
+            cik: "0001045810",
+            checkpoint_completed_stages: ["stage_0_prefetch"],
+            org_events: failedEvents,
+            dossier: null,
+            error: rawPydanticError,
+          } satisfies ResearchV2.EarningsSquadDossierResponse);
+        }
+        if (!completed) {
+          return jsonResponse({
+            topic_id: "t1",
+            run_id: "sqrun_bad",
+            operation_id: "op_retry",
+            status: "running",
+            ticker: "NVDA",
+            cik: "0001045810",
+            checkpoint_completed_stages: ["stage_0_prefetch"],
+            org_events: [failedEvents[0]!],
+            dossier: null,
+          } satisfies ResearchV2.EarningsSquadDossierResponse);
+        }
+        return jsonResponse({
+          topic_id: "t1",
+          run_id: "sqrun_bad",
+          operation_id: "op_retry",
+          status: "completed",
+          ticker: "NVDA",
+          cik: "0001045810",
+          checkpoint_completed_stages: ["stage_0_prefetch", "stage_1_plan", "stage_3b_gate_memo"],
+          org_events: [
+            failedEvents[0]!,
+            {
+              sequence: 3,
+              stage: "stage_3b_gate_memo",
+              node_id: "dossier_writer",
+              role: "writer",
+              display_name: "Dossier Writer",
+              slot: "writer",
+              action_kind: "RESPONDING",
+              runtime_state: "completed",
+              current_activity: "底稿锁定完成",
+            },
+          ],
+          dossier: resolvedDossier,
+        } satisfies ResearchV2.EarningsSquadDossierResponse);
+      }
+      if (url.pathname === "/v2/research/topics/t1/earnings-squad/run" && init.method === "POST") {
+        retried = true;
+        runBodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+        return jsonResponse({
+          topic_id: "t1",
+          run_id: "sqrun_bad",
+          operation_id: "op_retry",
+          status: "running",
+          ticker: "NVDA",
+          cik: "0001045810",
+          checkpoint_completed_stages: ["stage_0_prefetch"],
+          org_events: [failedEvents[0]!],
+          dossier: null,
+        } satisfies ResearchV2.EarningsSquadRunResponse, { status: 202 });
+      }
+      if (url.pathname === "/v2/research/topics/t1/earnings-squad/events") {
+        eventQueries.push(url.search);
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            retryStreamController = controller;
+          },
+        });
+        return new Response(body, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+        });
+      }
+      return undefined;
+    });
+
+    const { container } = renderTopic();
+
+    // Friendly Chinese error callout renders without legacy <InterruptedTurn> collision.
+    const errorCallout = await screen.findByTestId("squad-error-callout");
+    expect(within(errorCallout).getByText("投研小组执行失败")).toBeTruthy();
+    expect(within(errorCallout).getByText(/结构化研究计划或分析结果格式校验未通过/)).toBeTruthy();
+    expect(within(errorCallout).getByText(/已保存检查点阶段：预热取证/)).toBeTruthy();
+    expect(screen.queryByText("运行中断")).toBeNull();
+    expect(screen.queryByText("这一轮没有完成，也没有保存新的版本。")).toBeNull();
+    expect(screen.queryByText(/Extra inputs are not permitted/)).toBeNull();
+    expect(errorCallout.querySelectorAll("[style]").length).toBe(0);
+
+    // OrgGraphPanel shows aligned failed stage label in Chinese.
+    expect(container.querySelector(".org-ragent-stage-pill")?.textContent).toBe("任务派发 · 执行失败");
+
+    // Technical details stay collapsed by default and expand/collapse on click.
+    fireEvent.click(within(errorCallout).getByRole("button", { name: /查看技术详情/ }));
+    expect(screen.getByTestId("squad-error-detail").textContent).toContain("Extra inputs are not permitted");
+    fireEvent.click(within(errorCallout).getByRole("button", { name: /收起技术详情/ }));
+    expect(screen.queryByTestId("squad-error-detail")).toBeNull();
+
+    // Clicking "重新运行 / 从检查点恢复" re-launches runEarningsSquad, resets error, and resumes SSE.
+    fireEvent.click(within(errorCallout).getByRole("button", { name: /重新运行 \/ 从检查点恢复/ }));
+
+    await waitFor(() => expect(runBodies).toHaveLength(1));
+    expect(runBodies[0]).toMatchObject({
+      execution_mode: "async",
+      symbol: "NVDA",
+      cik: "0001045810",
+      resume_from_checkpoint: true,
+      resume_run_id: "sqrun_bad",
+    });
+    await waitFor(() => expect(screen.queryByTestId("squad-error-callout")).toBeNull());
+    await waitFor(() => expect(retryStreamController).not.toBeNull());
+    expect(eventQueries[0]).toBe("?after=1");
+
+    // Incoming SSE events + terminal frame transition straight to completed EarningsDossierView.
+    retryStreamController!.enqueue(
+      encoder.encode(
+        `id: org:2\nevent: org_graph_event\ndata: ${JSON.stringify({
+          sequence: 2,
+          stage: "stage_2_5_review",
+          node_id: "lead_coordinator",
+          role: "lead_coordinator",
+          display_name: "Lead Coordinator",
+          slot: "deep_reasoner",
+          action_kind: "INSPECTING",
+          runtime_state: "running",
+          current_activity: "交叉复核补证",
+        })}\n\n`,
+      ),
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".org-ragent-stage-pill")?.textContent).toBe("交叉补证");
+    });
+
+    completed = true;
+    retryStreamController!.enqueue(
+      encoder.encode(
+        `id: done:completed\nevent: run.terminal\ndata: ${JSON.stringify({ operation_id: "op_retry", operation_status: "completed", version_id: "dossier_nvda_retry" })}\n\n`,
+      ),
+    );
+    retryStreamController!.close();
+
+    const dossierView = await screen.findByTestId("earnings-dossier-view");
+    expect(within(dossierView).getByRole("heading", { level: 2, name: "NVIDIA Corp." })).toBeTruthy();
+    expect(await screen.findByText(/数据中心业务继续领先/)).toBeTruthy();
+  });
+
+  it("maps timeout errors cleanly to Chinese and suppresses InterruptedTurn even when /dossier returns 404 for a failed auto-routed run", async () => {
+    mockApi((url) => {
+      if (url.pathname === "/v2/research/topics/t1") {
+        return jsonResponse({ ...topicWith([]), run_mode: "earnings_squad", ticker: "MSFT" });
+      }
+      if (url.pathname === "/v2/research/topics/t1/runs") {
+        return jsonResponse([operation("op_timeout", "failed")]);
+      }
+      if (url.pathname === "/v2/research/topics/t1/earnings-squad/dossier") {
+        return jsonResponse({ error_code: "not_found", message: "No earnings squad run found" }, { status: 404 });
+      }
+      return undefined;
+    });
+
+    const { container } = renderTopic();
+
+    const errorCallout = await screen.findByTestId("squad-error-callout");
+    expect(within(errorCallout).getByText("投研小组执行失败")).toBeTruthy();
+    expect(within(errorCallout).getByRole("button", { name: /重新运行 \/ 从检查点恢复/ })).toBeTruthy();
+    expect(screen.queryByText("运行中断")).toBeNull();
+    expect(container.querySelector(".org-ragent-stage-pill")?.textContent).toBe("执行失败");
+  });
+
+  it("maps timeout errors to calm Chinese explanation with collapsible technical detail", async () => {
+    mockApi((url) => {
+      if (url.pathname === "/v2/research/topics/t1") {
+        return jsonResponse({ ...topicWith([]), run_mode: "earnings_squad", squad_run_id: "sqrun_to", ticker: "MSFT" });
+      }
+      if (url.pathname === "/v2/research/topics/t1/runs") {
+        return jsonResponse([operation("op_to", "failed")]);
+      }
+      if (url.pathname === "/v2/research/topics/t1/earnings-squad/dossier") {
+        return jsonResponse({
+          topic_id: "t1",
+          run_id: "sqrun_to",
+          operation_id: "op_to",
+          status: "failed",
+          ticker: "MSFT",
+          org_events: [],
+          dossier: null,
+          error: "ReadTimeoutError: HTTPSConnectionPool timed out after 20s",
+        } satisfies ResearchV2.EarningsSquadDossierResponse);
+      }
+      return undefined;
+    });
+
+    renderTopic();
+
+    const errorCallout = await screen.findByTestId("squad-error-callout");
+    expect(within(errorCallout).getByText(/模型或数据源响应超时/)).toBeTruthy();
+    expect(screen.queryByText(/ReadTimeoutError/)).toBeNull();
+    fireEvent.click(within(errorCallout).getByRole("button", { name: /查看技术详情/ }));
+    expect(screen.getByTestId("squad-error-detail").textContent).toContain("ReadTimeoutError");
+  });
 });

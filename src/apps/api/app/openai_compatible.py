@@ -26,7 +26,7 @@ import ssl
 from time import monotonic, sleep
 from threading import BoundedSemaphore, Event, Lock, Thread
 from typing import Any, BinaryIO, Callable, Mapping, NoReturn, Protocol
-from .model_protocol import ModelResponse
+from .model_protocol import ModelResponse, extract_assistant_text
 from .provider_capabilities import ChatGenerationParameters
 from urllib.parse import urlencode, urlsplit
 
@@ -65,7 +65,7 @@ _NON_PUBLIC_IPV6_NETWORKS = (
     ipaddress.ip_network("64:ff9b:1::/48"),
     ipaddress.ip_network("100::/64"),
 )
-_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504, 529})
 _STRUCTURED_OUTPUT_KEYS = frozenset({
     "claims", "objections", "missing_evidence", "questions", "rubric_scores",
     "unresolved_issues", "citation_ids", "public_fact_citation_ids", "native_search_used",
@@ -1627,7 +1627,8 @@ class OpenAICompatibleLlmProvider(LlmProvider):
     def complete(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, cancel_event=None, timeout_seconds: float | None = None,
                  diagnostic_callback=None, max_output_tokens: int | None = None, on_submission=None,
                  on_stream_event: Callable[[dict[str, Any]], None] | None = None,
-                 stream_transport: Callable[..., HttpResponse | None] | None = None) -> ModelResponse:
+                 stream_transport: Callable[..., HttpResponse | None] | None = None,
+                 response_format: Mapping[str, Any] | None = None) -> ModelResponse:
         seen_diagnostic = False
         def record(observation):
             nonlocal seen_diagnostic
@@ -1637,7 +1638,7 @@ class OpenAICompatibleLlmProvider(LlmProvider):
         try:
             return self._complete(messages, tools, cancel_event=cancel_event, timeout_seconds=timeout_seconds,
                 diagnostic_callback=record, max_output_tokens=max_output_tokens, on_submission=on_submission,
-                on_stream_event=on_stream_event, stream_transport=stream_transport)
+                on_stream_event=on_stream_event, stream_transport=stream_transport, response_format=response_format)
         except BaseException:
             if not seen_diagnostic and diagnostic_callback is not None:
                 from .research_diagnostics import report_diagnostic_write_failure
@@ -1650,7 +1651,8 @@ class OpenAICompatibleLlmProvider(LlmProvider):
     def _complete(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, cancel_event=None, timeout_seconds: float | None = None,
                  diagnostic_callback=None, max_output_tokens: int | None = None, on_submission=None,
                  on_stream_event: Callable[[dict[str, Any]], None] | None = None,
-                 stream_transport: Callable[..., HttpResponse | None] | None = None) -> ModelResponse:
+                 stream_transport: Callable[..., HttpResponse | None] | None = None,
+                 response_format: Mapping[str, Any] | None = None) -> ModelResponse:
         """Submit one native chat turn. Ambiguous submissions are never replayed."""
         from .model_protocol import ModelResponse, ModelToolCall
         from .research_diagnostics import report_diagnostic_write_failure, safe_wire_metadata
@@ -1661,7 +1663,12 @@ class OpenAICompatibleLlmProvider(LlmProvider):
             raise ProviderFailure("provider_secret_missing", "LLM provider secret is not configured.", retryable=False)
         if cancel_event is not None and cancel_event.is_set():
             raise ProviderFailure("provider_cancelled", "Provider request was cancelled.", retryable=True)
-        if timeout_seconds is not None and (not math.isfinite(timeout_seconds) or timeout_seconds <= 0):
+        if timeout_seconds is not None and (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, (int, float))
+            or not math.isfinite(timeout_seconds)
+            or timeout_seconds <= 0
+        ):
             raise ProviderFailure("provider_budget_exhausted", "Provider time budget is exhausted.", retryable=False)
         profile = self.research_capacity()
         if tools and (profile is None or profile.native_tools is not True):
@@ -1684,6 +1691,11 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                 wire.update(parameters)
             except (ValueError, TypeError):
                 raise ProviderFailure('provider_configuration_invalid', 'Model generation parameters are invalid.', retryable=False) from None
+        if response_format is not None:
+            if not isinstance(response_format, Mapping) or response_format.get("type") not in ("json_object", "json_schema", "text"):
+                raise ProviderFailure("provider_configuration_invalid", "Invalid response_format configuration.", retryable=False)
+            if not tools:
+                wire["response_format"] = dict(response_format)
         if tools:
             wire["tools"] = tools
         if max_output_tokens is not None:
@@ -1724,6 +1736,11 @@ class OpenAICompatibleLlmProvider(LlmProvider):
             set(profile.continuation_fields or ())
             if profile and profile.continuation is True
             else set()
+        )
+        allow_personal_reasoning = (
+            self.settings is not None
+            and getattr(self.settings, 'personal', False) is True
+            and (profile is None or profile.continuation is None)
         )
         for bad_field in allowed_continuation & {'role', 'content', 'tool_calls', 'refusal'}:
             raise ProviderFailure('provider_configuration_invalid', 'Invalid continuation field configuration.', retryable=False)
@@ -1781,10 +1798,17 @@ class OpenAICompatibleLlmProvider(LlmProvider):
             if delta.get("refusal"):
                 saw_refusal = True
             if "content" in delta and delta["content"] is not None:
-                if not isinstance(delta["content"], str):
+                raw_delta_content = delta["content"]
+                if isinstance(raw_delta_content, str):
+                    c_chunk = raw_delta_content
+                elif isinstance(raw_delta_content, list):
+                    for part in raw_delta_content:
+                        if not isinstance(part, (dict, str)):
+                            raise ValueError()
+                    c_chunk = extract_assistant_text({"content": raw_delta_content}) or ""
+                else:
                     raise ValueError()
                 saw_str_content = True
-                c_chunk = delta["content"]
                 if c_chunk:
                     reassembled_bytes += len(c_chunk.encode("utf-8"))
                     if reassembled_bytes > _MAX_RESPONSE_BYTES:
@@ -2039,6 +2063,8 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                         message['reasoning_content'] = ''.join(reasoning_parts)
                     for field_name, val in extra_continuation.items():
                         message[field_name] = val
+                elif allow_personal_reasoning and reasoning_parts:
+                    message['reasoning_content'] = ''.join(reasoning_parts)
                 if normalized_calls:
                     message['tool_calls'] = normalized_calls
                 if len(json.dumps(message, ensure_ascii=False, separators=(',', ':')).encode('utf-8')) > _MAX_RESPONSE_BYTES:
@@ -2081,11 +2107,28 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                 raise ProviderFailure('provider_output_truncated', 'Provider output was truncated.', retryable=False)
             if reason == 'content_filter' or raw.get('refusal'):
                 raise ProviderFailure('provider_output_refused', 'Provider declined the request.', retryable=False)
-            if raw.get('role') != 'assistant' or (raw.get('content') is not None and not isinstance(raw.get('content'), str)):
+            if raw.get('role') != 'assistant':
+                raise ValueError()
+            raw_content = raw.get('content')
+            if raw_content is None or isinstance(raw_content, str):
+                normalized_content = raw_content
+            elif isinstance(raw_content, list):
+                for part in raw_content:
+                    if not isinstance(part, (dict, str)):
+                        raise ValueError()
+                    if isinstance(part, dict) and part.get('type') == 'refusal':
+                        raise ProviderFailure('provider_output_refused', 'Provider declined the request.', retryable=False)
+                normalized_content = extract_assistant_text({'content': raw_content})
+            else:
                 raise ValueError()
             calls = []
             normalized_calls = []
-            for call in raw.get('tool_calls', []):
+            raw_tool_calls = raw.get('tool_calls')
+            if raw_tool_calls is None:
+                raw_tool_calls = []
+            elif not isinstance(raw_tool_calls, list):
+                raise ValueError()
+            for call in raw_tool_calls:
                 function = call['function']
                 if call['type'] != 'function' or not all(isinstance(x, str) and x for x in (call['id'], function['name'])) or not isinstance(function['arguments'], str):
                     raise ValueError()
@@ -2093,13 +2136,17 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                 normalized_calls.append({'id': call['id'], 'type':'function', 'function':{'name':function['name'], 'arguments':function['arguments']}})
             if len({call.id for call in calls}) != len(calls):
                 raise ValueError()
-            message = {'role':'assistant', 'content':raw.get('content')}
-            # Only deployment-approved protocol continuation fields are retained.
-            for field in (profile.continuation_fields or ()) if profile and profile.continuation is True else ():
-                if field in {'role', 'content', 'tool_calls', 'refusal'}:
-                    raise ValueError()
-                if field in raw:
-                    message[field] = raw[field]
+            message = {'role':'assistant', 'content':normalized_content}
+            # Only deployment-approved protocol continuation fields are retained, except
+            # personal BYOK thinking models where continuation_fields is unset.
+            if profile and profile.continuation is True:
+                for field in (profile.continuation_fields or ()):
+                    if field in {'role', 'content', 'tool_calls', 'refusal'}:
+                        raise ValueError()
+                    if field in raw:
+                        message[field] = raw[field]
+            elif allow_personal_reasoning and isinstance(raw.get('reasoning_content'), str):
+                message['reasoning_content'] = raw['reasoning_content']
             if normalized_calls:
                 message['tool_calls'] = normalized_calls
             usage = self._usage_from_dict(envelope.get('usage'))

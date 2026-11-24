@@ -1757,6 +1757,17 @@
             "title": "Created At",
             "type": "string"
           },
+          "current_filing_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Filing Url"
+          },
           "derived_metrics": {
             "additionalProperties": true,
             "title": "Derived Metrics",
@@ -1862,6 +1873,28 @@
               }
             ],
             "title": "Prior Filing Accession"
+          },
+          "prior_filing_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Filing Url"
+          },
+          "prior_sections_source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Sections Source Id"
           },
           "redline_summary": {
             "anyOf": [
@@ -5484,6 +5517,18 @@
             },
             "title": "Permissions",
             "type": "object"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
           },
           "retrieval_method": {
             "maxLength": 64,

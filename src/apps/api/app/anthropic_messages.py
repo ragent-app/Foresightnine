@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 import logging
+import math
 import socket
 from time import monotonic
 from typing import Any, Callable
@@ -13,6 +14,10 @@ from .model_protocol import (
     ModelUsage,
     canonical_json_dumps,
     canonicalize_json_value,
+    format_response_schema_instruction,
+    merge_cancel_events,
+    merge_optional_max_tokens,
+    merge_optional_timeout,
 )
 from .openai_compatible import (
     _MAX_RESPONSE_BYTES,
@@ -130,9 +135,15 @@ class AnthropicMessagesProvider:
                 calls.append(ModelToolCall(block['id'], block['name'], block['input']))
                 safe_blocks.append({'type': kind, 'id': block['id'], 'name': block['name'], 'input': block['input']})
             elif kind == 'thinking':
-                if not isinstance(block.get('thinking'), str) or not isinstance(block.get('signature'), str):
+                if not isinstance(block.get('thinking'), str):
                     raise ValueError()
-                safe_blocks.append({'type': kind, 'thinking': block['thinking'], 'signature': block['signature']})
+                sig = block.get('signature')
+                if sig is not None and not isinstance(sig, str):
+                    raise ValueError()
+                safe_block: dict[str, Any] = {'type': kind, 'thinking': block['thinking']}
+                if isinstance(sig, str):
+                    safe_block['signature'] = sig
+                safe_blocks.append(safe_block)
             elif kind == 'redacted_thinking':
                 if not isinstance(block.get('data'), str):
                     raise ValueError()
@@ -192,6 +203,30 @@ class AnthropicMessagesProvider:
                 messages[idx] = updated
                 return
 
+    @staticmethod
+    def _append_user_text_block(messages: list[dict[str, Any]], text: str) -> None:
+        if messages and messages[-1].get('role') == 'user':
+            last_content = messages[-1].get('content')
+            if isinstance(last_content, list):
+                blocks = list(last_content)
+            elif isinstance(last_content, str) and last_content:
+                blocks = [{'type': 'text', 'text': last_content}]
+            else:
+                blocks = []
+            blocks.append({'type': 'text', 'text': text})
+            messages[-1] = {**messages[-1], 'content': blocks}
+        else:
+            messages.append({'role': 'user', 'content': [{'type': 'text', 'text': text}]})
+
+    @staticmethod
+    def _normalize_assistant_envelope(envelope: Any) -> Any:
+        if not isinstance(envelope, dict):
+            return envelope
+        content = envelope.get('content')
+        if content is None or content == '' or content == []:
+            return {**envelope, 'role': envelope.get('role') or 'assistant', 'content': [{'type': 'text', 'text': '(empty)'}]}
+        return envelope
+
     def _wire(self, turn, cap=None, *, profile=None):
         effective_profile = profile if profile is not None else self.research_capacity()
         explicit_cache = bool(
@@ -200,22 +235,38 @@ class AnthropicMessagesProvider:
         raw_tail = getattr(turn, 'tail_note', None)
         tail_note = raw_tail if isinstance(raw_tail, str) and raw_tail.strip() else None
 
+        schema_instruction = format_response_schema_instruction(
+            getattr(turn, 'response_schema', None),
+            getattr(turn, 'response_schema_name', None),
+            has_tools=bool(turn.tools),
+        )
+        effective_system = turn.system
+        if schema_instruction:
+            effective_system = f'{turn.system}\n\n{schema_instruction}' if turn.system else schema_instruction
+
         if turn.history:
             messages: list[dict[str, Any]] = [{'role': 'user', 'content': turn.user}]
             for exchange in turn.history:
-                messages.append(exchange.assistant.envelope)
+                if messages and messages[-1].get('role') == 'assistant':
+                    messages.append({'role': 'user', 'content': 'Continue.'})
+                messages.append(self._normalize_assistant_envelope(exchange.assistant.envelope))
                 results_content: list[dict[str, Any]] = [
                     {'type': 'tool_result', 'tool_use_id': r.tool_call_id, 'content': r.content, 'is_error': r.is_error}
                     for r in exchange.results
                 ]
-                messages.append({'role': 'user', 'content': results_content})
+                raw_followup = getattr(exchange, 'user_followup', None)
+                followup = raw_followup if isinstance(raw_followup, str) and raw_followup.strip() else None
+                if results_content:
+                    if followup is not None:
+                        results_content.append({'type': 'text', 'text': followup})
+                    messages.append({'role': 'user', 'content': results_content})
+                elif followup is not None:
+                    messages.append({'role': 'user', 'content': followup})
             if explicit_cache:
-                used_breakpoints = (1 if turn.system else 0) + (1 if turn.tools else 0)
+                used_breakpoints = (1 if effective_system else 0) + (1 if turn.tools else 0)
                 self._mark_last_prefix_cache_control(messages, max_breakpoints=max(0, min(2, 4 - used_breakpoints)))
             if tail_note is not None:
-                last_content = messages[-1]['content']
-                if isinstance(last_content, list):
-                    messages[-1] = {**messages[-1], 'content': [*last_content, {'type': 'text', 'text': tail_note}]}
+                self._append_user_text_block(messages, tail_note)
         else:
             if explicit_cache:
                 user_blocks: list[dict[str, Any]] = [
@@ -231,14 +282,13 @@ class AnthropicMessagesProvider:
 
         instructions = render_user_instructions(turn)
         if instructions:
-            content = messages[-1]['content']
-            blocks = content if isinstance(content, list) else [{'type': 'text', 'text': content}]
-            messages[-1] = {**messages[-1], 'content': [*blocks, *({'type': 'text', 'text': text} for text in instructions)]}
+            for text in instructions:
+                self._append_user_text_block(messages, text)
 
         system_payload: Any = (
-            [{'type': 'text', 'text': turn.system, 'cache_control': {'type': 'ephemeral'}}]
-            if explicit_cache and turn.system
-            else turn.system
+            [{'type': 'text', 'text': effective_system, 'cache_control': {'type': 'ephemeral'}}]
+            if explicit_cache and effective_system
+            else effective_system
         )
         wire: dict[str, Any] = {
             'model': self.settings.model,
@@ -595,15 +645,25 @@ class AnthropicMessagesProvider:
 
         active_stream_transport = stream_transport or self.stream_transport
         streamed_sse = False
+        effective_cancel = merge_cancel_events(cancel_event, getattr(turn, 'cancel_event', None))
+        effective_max_out_arg = merge_optional_max_tokens(max_output_tokens, getattr(turn, 'max_output_tokens', None))
+        effective_timeout_arg = merge_optional_timeout(timeout_seconds, getattr(turn, 'timeout_seconds', None))
         try:
             try:
                 if not self.settings.api_key:
                     raise ProviderFailure('provider_secret_missing', 'Provider secret is not configured.', retryable=False)
-                if max_output_tokens is not None and (type(max_output_tokens) is not int or max_output_tokens < 1):
+                if effective_max_out_arg is not None and (type(effective_max_out_arg) is not int or effective_max_out_arg < 1):
                     raise ProviderFailure('provider_budget_exhausted', 'Output budget is exhausted.', retryable=False)
-                if cancel_event is not None and cancel_event.is_set():
+                if effective_cancel is not None and effective_cancel.is_set():
                     raise ProviderFailure('provider_cancelled', 'Provider request was cancelled.', retryable=True)
-                timeout = min(self.policy.timeout_seconds, timeout_seconds) if timeout_seconds is not None else self.policy.timeout_seconds
+                if effective_timeout_arg is not None and (
+                    isinstance(effective_timeout_arg, bool)
+                    or not isinstance(effective_timeout_arg, (int, float))
+                    or not math.isfinite(effective_timeout_arg)
+                    or effective_timeout_arg <= 0
+                ):
+                    raise ProviderFailure('provider_budget_exhausted', 'Time budget is exhausted.', retryable=False)
+                timeout = min(self.policy.timeout_seconds, float(effective_timeout_arg)) if effective_timeout_arg is not None else self.policy.timeout_seconds
                 if timeout <= 0:
                     raise ProviderFailure('provider_budget_exhausted', 'Time budget is exhausted.', retryable=False)
                 profile = self.research_capacity()
@@ -617,7 +677,7 @@ class AnthropicMessagesProvider:
                 )
                 effective_max_tokens = resolve_output_token_limit(
                     self.max_tokens,
-                    max_output_tokens,
+                    effective_max_out_arg,
                     getattr(self.policy, 'max_output_tokens', None),
                     getattr(profile, 'output_tokens', None),
                 )
@@ -653,7 +713,7 @@ class AnthropicMessagesProvider:
                             body,
                             timeout,
                             on_frame=handle_sse_frame,
-                            cancel_event=cancel_event,
+                            cancel_event=effective_cancel,
                             on_submission=on_submission,
                             diagnostics=diagnostics,
                         )
@@ -675,7 +735,7 @@ class AnthropicMessagesProvider:
                             connect_timeout_seconds=connect_timeout,
                             idle_timeout_seconds=idle_timeout,
                             response_timeout_seconds=response_timeout,
-                            cancel_event=cancel_event,
+                            cancel_event=effective_cancel,
                             on_submission=on_submission,
                         )
                         if fallback is not None:
@@ -704,7 +764,7 @@ class AnthropicMessagesProvider:
                         response = _default_transport('POST', _endpoint(self.settings.base_url), headers, body, timeout, allow_private_network=self.settings.allow_private_network, diagnostics=diagnostics,
                             connect_timeout_seconds=connect_timeout,
                             response_timeout_seconds=response_timeout,
-                            cancel_event=cancel_event, on_submission=on_submission)
+                            cancel_event=effective_cancel, on_submission=on_submission)
                     else:
                         if on_submission:
                             on_submission()
@@ -721,7 +781,7 @@ class AnthropicMessagesProvider:
                 failure = _build_transport_failure(
                     error,
                     diagnostics,
-                    cancelled=bool(cancel_event and cancel_event.is_set()),
+                    cancelled=bool(effective_cancel and effective_cancel.is_set()),
                     message='Provider request ended without a usable result.',
                     started_at=call_started_at,
                     wire_bytes=wire_bytes,
@@ -739,7 +799,7 @@ class AnthropicMessagesProvider:
                 raise failure from None
 
             if streamed_sse:
-                if cancel_event and cancel_event.is_set():
+                if effective_cancel and effective_cancel.is_set():
                     if stream_stop_reason is not None:
                         observed_stop_reason = stream_stop_reason
                         set_finish_reason(stream_stop_reason)
@@ -805,7 +865,7 @@ class AnthropicMessagesProvider:
                     raise failure from None
 
             assert response is not None
-            if cancel_event and cancel_event.is_set():
+            if effective_cancel and effective_cancel.is_set():
                 failure = ProviderFailure('provider_cancelled', 'Provider result discarded.', retryable=True)
                 failure.provider_response_received = True
                 usage = self._usage(response.body) if len(response.body.encode()) <= _MAX_RESPONSE_BYTES else None
@@ -815,6 +875,8 @@ class AnthropicMessagesProvider:
             if not 200 <= response.status_code < 300:
                 if response.status_code == 429:
                     failure = ProviderFailure('provider_rate_limited', 'Provider rate limit reached.', retryable=True)
+                elif response.status_code >= 500:
+                    failure = ProviderFailure('provider_unavailable', 'Provider is temporarily unavailable.', retryable=True)
                 else:
                     failure = ProviderFailure('provider_request_rejected', 'Provider rejected the request.', retryable=False)
                 from .research_diagnostics import set_rejection_details

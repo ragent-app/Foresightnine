@@ -40,7 +40,7 @@ import { appendInstruction, continueTurn as continueWaitingTurn, stopResearchTur
 import { showToast } from "../ui/toast";
 import { LiveCapsule } from "./topic/LiveBar";
 import { EarningsDossierView, type DossierReportMode } from "./topic/EarningsDossierView";
-import { OrgGraphPanel } from "./topic/OrgGraphPanel";
+import { OrgGraphPanel, STAGE_LABELS } from "./topic/OrgGraphPanel";
 import { createInitialOrgGraphState, orgGraphReducer, type OrgRunStatus } from "./topic/orgGraphReducer";
 import { ReaderPanel } from "./topic/ReaderPanel";
 import { RecordPanel } from "./topic/RecordPanel";
@@ -99,6 +99,125 @@ const SQUAD_STATUS_META: Readonly<Record<OrgRunStatus, { readonly label: string;
   failed: { label: "执行失败", tone: "error" },
   cancelled: { label: "已取消", tone: "neutral" },
 };
+
+interface FriendlySquadError {
+  readonly title: string;
+  readonly summary: string;
+  readonly technicalDetail: string | null;
+  readonly isCancelled: boolean;
+}
+
+const TECHNICAL_ERROR_PATTERNS = /Traceback|validation error|Field required|extra_forbidden|Extra inputs|JSONDecodeError|Exception:|Error:|\[type=|File "/i;
+
+function isCleanChineseErrorText(value: string): boolean {
+  return (
+    value.length > 0
+    && value.length <= 160
+    && !value.includes("\n")
+    && /[\u4e00-\u9fff]/.test(value)
+    && !TECHNICAL_ERROR_PATTERNS.test(value)
+  );
+}
+
+function truncateTechnicalDetail(raw: string, limit = 1200): string {
+  return raw.length > limit ? `${raw.slice(0, limit)}\n…` : raw;
+}
+
+interface SquadErrorRule {
+  readonly pattern: RegExp;
+  readonly summary: string;
+  readonly preferCleanChinese?: boolean;
+  readonly isCancelled?: boolean;
+  readonly title?: string;
+}
+
+const SQUAD_CANCELLED_SUMMARY = "本次研究已停止，已完成的阶段检查点已保留。您可以从检查点恢复或重新运行。";
+
+const SQUAD_ERROR_RULES: readonly SquadErrorRule[] = [
+  {
+    pattern: /validation error|Field required|extra_forbidden|Extra inputs are not permitted|JSONDecodeError|ResearchDispatchPlan|EvidenceCardBatch|Stage25ReviewDecision|BearCaseBatch|SteeringImpactDecision|WorkerTask|invalid_provider_output|schema/i,
+    summary: "模型返回的结构化研究计划或分析结果格式校验未通过，未能完成当前阶段处理。已完成阶段已保留，请点击下方按钮从检查点恢复或重新运行。",
+  },
+  {
+    pattern: /timeout|timed out|time budget|deadline|elapsed/i,
+    summary: "模型或数据源响应超时，本次分析在完成前中断。已完成的阶段检查点已保留，您可以从检查点恢复或重新运行。",
+  },
+  {
+    pattern: /429|rate.?limit|quota|overloaded|529|503|服务繁忙/i,
+    summary: "模型或外部数据服务当前请求繁忙或触发限流，请稍候片刻后点击下方按钮从检查点恢复或重新运行。",
+    preferCleanChinese: true,
+  },
+  {
+    pattern: /network|connection|connect|econn|socket|transport|网络连接失败/i,
+    summary: "连接模型接口或数据源时出现网络波动，请检查网络状态后重试或从检查点恢复。",
+    preferCleanChinese: true,
+  },
+  {
+    pattern: /Verify research tools|tools_verified|provider_configuration_invalid|Invalid model slot configuration|Messages version|api key|credential|unauthorized|forbidden|\b401\b|\b403\b|设置 → 模型/i,
+    summary: "当前模型槽位配置、研究工具验证或数据源凭据未就绪，请检查「设置 → 模型」中的协议与工具验证后重试。",
+    preferCleanChinese: true,
+  },
+  {
+    pattern: /budget|max_model_calls|max_total_tokens|max_search_calls|call limit/i,
+    summary: "本次运行已达到设定的调用次数或预算上限，可在调整设置后从检查点恢复或重新运行。",
+  },
+  {
+    pattern: /restart|worker_interrupted|interrupted/i,
+    summary: "服务在执行过程中发生中断或重启，已完成的阶段检查点已保留，可直接从检查点恢复。",
+  },
+  {
+    pattern: /cancel|stopped|已停止|已取消/i,
+    title: "投研小组已停止",
+    summary: SQUAD_CANCELLED_SUMMARY,
+    preferCleanChinese: true,
+    isCancelled: true,
+  },
+];
+
+function describeSquadError(rawError: string | null, status: OrgRunStatus): FriendlySquadError {
+  const trimmed = rawError?.trim() ?? "";
+  const cleanChinese = isCleanChineseErrorText(trimmed);
+  const technicalDetail = trimmed && !cleanChinese ? truncateTechnicalDetail(trimmed) : null;
+
+  if (status === "cancelled") {
+    return {
+      title: "投研小组已停止",
+      summary: cleanChinese ? trimmed : SQUAD_CANCELLED_SUMMARY,
+      technicalDetail,
+      isCancelled: true,
+    };
+  }
+
+  const title = status === "failed" ? "投研小组执行失败" : "本次操作未能完成";
+  if (!trimmed) {
+    return {
+      title,
+      summary: "投研小组未能完成本次财报分析。已完成的阶段检查点已保留，您可以尝试从检查点恢复或重新运行。",
+      technicalDetail: null,
+      isCancelled: false,
+    };
+  }
+
+  for (const rule of SQUAD_ERROR_RULES) {
+    if (rule.pattern.test(trimmed)) {
+      return {
+        title: rule.title ?? title,
+        summary: rule.preferCleanChinese && cleanChinese ? trimmed : rule.summary,
+        technicalDetail,
+        isCancelled: Boolean(rule.isCancelled),
+      };
+    }
+  }
+
+  return {
+    title,
+    summary: cleanChinese
+      ? trimmed
+      : "投研小组在执行过程中遇到内部异常，未能生成最终研究底稿。您可以尝试从检查点恢复或重新运行。",
+    technicalDetail,
+    isCancelled: false,
+  };
+}
 
 function createSquadIdempotencyKey(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -167,13 +286,20 @@ export function TopicPage() {
   const [sendPrompt, setSendPrompt] = useState<{ error: string | null } | null>(null);
 
   const [squadStatus, setSquadStatus] = useState<OrgRunStatus>("idle");
+  const squadStatusRef = useRef<OrgRunStatus>("idle");
+  squadStatusRef.current = squadStatus;
   const [squadRunId, setSquadRunId] = useState<string | null>(null);
   const squadRunIdRef = useRef<string | null>(null);
   squadRunIdRef.current = squadRunId;
   const [squadDossier, setSquadDossier] = useState<ResearchV2.EarningsDossier | null>(null);
   const [squadSlotRouting, setSquadSlotRouting] = useState<Readonly<Record<string, unknown>> | null>(null);
   const [squadSteeringHistory, setSquadSteeringHistory] = useState<readonly ResearchV2.UserSteeringInstruction[]>([]);
+  const [squadCheckpointStages, setSquadCheckpointStages] = useState<readonly string[]>([]);
+  const [squadTicker, setSquadTicker] = useState<string | null>(null);
+  const [squadCik, setSquadCik] = useState<string | null>(null);
   const [squadError, setSquadError] = useState<string | null>(null);
+  const [squadErrorDetailOpen, setSquadErrorDetailOpen] = useState(false);
+  const [squadHydrated, setSquadHydrated] = useState(false);
   const [squadLaunching, setSquadLaunching] = useState(false);
   const [squadSymbol, setSquadSymbol] = useState("");
   const [steerInput, setSteerInput] = useState("");
@@ -241,7 +367,13 @@ export function TopicPage() {
     const timer = window.setInterval(refresh, 5000);
     return () => window.clearInterval(timer);
   }, [awaitingTitle, reportedTitle, queryClient, topicId]);
-  const recoveryOperation = activeRun
+  const squadOwnedRun =
+    squadStatus !== "idle"
+    || squadDossier !== null
+    || squadError !== null
+    || topic?.run_mode === "earnings_squad"
+    || progress.progress?.run_mode === "earnings_squad";
+  const recoveryOperation = activeRun || (orphanRun && squadOwnedRun)
     ? null
     : orphanRun?.operation_id ?? (lastTurn?.status === "partial" ? lastTurn.operation_ids[lastTurn.operation_ids.length - 1] ?? null : null);
   const recovery = useRecoveryStatus(topicId, recoveryOperation);
@@ -257,6 +389,7 @@ export function TopicPage() {
     setPanel(null); setOrgDrawerOpen(false); setText((() => { try { return sessionStorage.getItem(draftKey) ?? ""; } catch { return ""; } })()); setReceipts([]); setInstructionBusy(false); setInstructionError(null); setClosedWaitingTurn(null); setFocus(null); setPendingAsk(null); setAskedOp(null); setPendingContinue(null); setAwayFromLive(false);
     nearBottomRef.current = true; lastScrollTopRef.current = 0; suppressScrollUntilRef.current = 0;
     setNotice(null); setOptions(DEFAULT_OPTIONS); setDraftState({}); setSendPrompt(null);
+    squadStatusRef.current = "idle";
     squadRunIdRef.current = null;
     orgGraphLastSeqRef.current = 0;
     dispatchOrgGraph({ type: "reset" });
@@ -265,7 +398,12 @@ export function TopicPage() {
     setSquadDossier(null);
     setSquadSlotRouting(null);
     setSquadSteeringHistory([]);
+    setSquadCheckpointStages([]);
+    setSquadTicker(null);
+    setSquadCik(null);
     setSquadError(null);
+    setSquadErrorDetailOpen(false);
+    setSquadHydrated(false);
     setSquadLaunching(false);
     setSquadSymbol("");
     setSteerInput("");
@@ -280,16 +418,23 @@ export function TopicPage() {
     (response: ResearchV2.EarningsSquadDossierResponse | ResearchV2.EarningsSquadRunResponse) => {
       if (topicIdRef.current !== response.topic_id) return;
       const previousRunId = squadRunIdRef.current;
+      const previousStatus = squadStatusRef.current;
       const switchedRun = Boolean(previousRunId && previousRunId !== response.run_id);
-      if (switchedRun) {
+      const restartedFromTerminal =
+        (previousStatus === "failed" || previousStatus === "cancelled")
+        && response.status === "running";
+      if (switchedRun || restartedFromTerminal) {
         orgGraphLastSeqRef.current = 0;
         dispatchOrgGraph({ type: "reset" });
-        setOrgDrawerOpen(false);
-        setSquadSteeringHistory([]);
-        if (!response.dossier) setSquadDossier(null);
+        if (switchedRun) {
+          setOrgDrawerOpen(false);
+          setSquadSteeringHistory([]);
+          if (!response.dossier) setSquadDossier(null);
+        }
       }
       squadRunIdRef.current = response.run_id;
       setSquadRunId(response.run_id);
+      setSquadHydrated(true);
 
       const events = response.org_events ?? [];
       if (events.length > 0) {
@@ -304,7 +449,17 @@ export function TopicPage() {
         dispatchOrgGraph({ type: "run_terminal", status: response.status });
       }
 
+      squadStatusRef.current = response.status;
       setSquadStatus(response.status);
+      if (response.ticker !== undefined) {
+        setSquadTicker(response.ticker ?? null);
+      }
+      if (response.cik !== undefined) {
+        setSquadCik(response.cik ?? null);
+      }
+      if (response.checkpoint_completed_stages !== undefined) {
+        setSquadCheckpointStages(response.checkpoint_completed_stages);
+      }
       if (response.dossier !== undefined) {
         setSquadDossier(response.dossier ?? null);
       }
@@ -315,6 +470,9 @@ export function TopicPage() {
         setSquadSteeringHistory(response.steering_instructions);
       }
       setSquadError(response.error ?? null);
+      if (!response.error) {
+        setSquadErrorDetailOpen(false);
+      }
     },
     [],
   );
@@ -330,6 +488,7 @@ export function TopicPage() {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted || topicIdRef.current !== topicId) return;
+        setSquadHydrated(true);
         if (error instanceof ApiError && error.status === 404) return;
         setSquadError(describeError(error));
       });
@@ -417,18 +576,24 @@ export function TopicPage() {
     if (!topicId || squadLaunching || squadStatus === "running") return;
     setSquadLaunching(true);
     setSquadError(null);
+    setSquadErrorDetailOpen(false);
     setSteerError(null);
     setDeepReportError(null);
     setReportMode("memo");
-    const trimmedSymbol = squadSymbol.trim().toUpperCase();
+    const resolvedSymbol = (squadSymbol.trim() || squadTicker || topicQuery.data?.ticker || "").trim().toUpperCase();
+    const resolvedCik = (squadCik || topicQuery.data?.cik || "").trim();
     const topicQuestion = topicQuery.data?.request.question?.trim() ?? "";
+    const canResumeCheckpoint = squadCheckpointStages.length > 0 || Boolean(squadRunId);
     try {
       const response = await runEarningsSquad(
         topicId,
         {
           execution_mode: "async",
-          ...(trimmedSymbol ? { symbol: trimmedSymbol } : {}),
+          ...(resolvedSymbol ? { symbol: resolvedSymbol } : {}),
+          ...(resolvedCik ? { cik: resolvedCik } : {}),
           ...(topicQuestion ? { question: topicQuestion } : {}),
+          ...(canResumeCheckpoint ? { resume_from_checkpoint: true } : {}),
+          ...(canResumeCheckpoint && squadRunId ? { resume_run_id: squadRunId } : {}),
         },
         { idempotencyKey: createSquadIdempotencyKey("squad-run") },
       );
@@ -440,7 +605,20 @@ export function TopicPage() {
     } finally {
       if (topicIdRef.current === topicId) setSquadLaunching(false);
     }
-  }, [topicId, squadLaunching, squadStatus, squadSymbol, topicQuery.data?.request.question, applySquadResponse]);
+  }, [
+    topicId,
+    squadLaunching,
+    squadStatus,
+    squadSymbol,
+    squadTicker,
+    squadCik,
+    squadCheckpointStages.length,
+    squadRunId,
+    topicQuery.data?.ticker,
+    topicQuery.data?.cik,
+    topicQuery.data?.request.question,
+    applySquadResponse,
+  ]);
 
   const handleSteerSquad = useCallback(async () => {
     const trimmed = steerInput.trim();
@@ -991,7 +1169,24 @@ export function TopicPage() {
     || activeRunMeta?.run_mode === "earnings_squad"
     || live?.progress?.run_mode === "earnings_squad",
   );
-  const showSquadWorkspace = squadStatus !== "idle" || squadDossier !== null || isAutoRoutedSquadRun;
+  const showSquadWorkspace =
+    squadStatus !== "idle" || squadDossier !== null || squadError !== null || isAutoRoutedSquadRun;
+  const effectiveSquadStatus: OrgRunStatus =
+    squadStatus !== "idle"
+      ? squadStatus
+      : squadError !== null
+        ? "failed"
+        : isAutoRoutedSquadRun
+          ? squadHydrated && !activeRun && orphanRun
+            ? (orphanRun.status === "cancelled" || progress.progress?.logical_status === "stopped" ? "cancelled" : "failed")
+            : "running"
+          : "idle";
+  const showSquadErrorCallout =
+    effectiveSquadStatus === "failed" || effectiveSquadStatus === "cancelled" || Boolean(squadError);
+  const squadErrorInfo = useMemo(
+    () => describeSquadError(squadError, effectiveSquadStatus),
+    [squadError, effectiveSquadStatus],
+  );
 
   useEffect(() => {
     if (!isAutoRoutedSquadRun || squadStatus !== "idle" || squadDossier !== null) return;
@@ -1006,8 +1201,14 @@ export function TopicPage() {
   }, [isAutoRoutedSquadRun, squadStatus, squadDossier, topic?.squad_run_id, activeRunMeta?.squad_run_id, activeRun, live?.progress?.squad_run_id, live?.progress?.logical_status]);
 
   const settling = live !== null && settlingRun !== null && live.operation.operation_id === settlingRun.operation_id;
-  const showLiveTurn = live !== null && !liveCommitted && (!liveTerminal || settling) && !showSquadWorkspace;
-  const showPendingTurn = showLiveTurn || (!live && pendingAsk !== null && !showSquadWorkspace);
+  const isLiveSquadRun = Boolean(
+    squadStatus === "running"
+    || activeRunMeta?.run_mode === "earnings_squad"
+    || live?.progress?.run_mode === "earnings_squad"
+    || (isAutoRoutedSquadRun && !pendingAsk && !askedOp),
+  );
+  const showLiveTurn = live !== null && !liveCommitted && (!liveTerminal || settling) && !isLiveSquadRun;
+  const showPendingTurn = showLiveTurn || (!live && pendingAsk !== null);
   const isContinuingLastTurn =
     showLiveTurn
     && lastTurn !== null
@@ -1223,7 +1424,7 @@ export function TopicPage() {
                   }}>停止研究</button>
                 </div></div>
               ) : null}
-              {orphanRun && !activeRun ? (
+              {orphanRun && !activeRun && !showSquadWorkspace ? (
                 <InterruptedTurn
                   number={turns.length + 1}
                   startedAt={orphanRun.created_at}
@@ -1278,8 +1479,52 @@ export function TopicPage() {
                       ))}
                     </div>
                   ) : null}
-                  {squadError ? (
-                    <span className="inline-error" role="alert">{squadError}</span>
+                  {showSquadErrorCallout ? (
+                    <div
+                      className={effectiveSquadStatus === "cancelled" && squadErrorInfo.isCancelled ? "callout" : "callout error"}
+                      role={effectiveSquadStatus === "cancelled" && squadErrorInfo.isCancelled ? "status" : "alert"}
+                      data-testid="squad-error-callout"
+                    >
+                      <span className="h">
+                        <Icon name="alert" size={16} />
+                        {squadErrorInfo.title}
+                      </span>
+                      <span>{squadErrorInfo.summary}</span>
+                      {squadCheckpointStages.length > 0 ? (
+                        <span className="why">
+                          已保存检查点阶段：{squadCheckpointStages.map((stage) => STAGE_LABELS[stage] ?? stage).join("、")}
+                        </span>
+                      ) : null}
+                      {squadErrorInfo.technicalDetail ? (
+                        <div>
+                          <button
+                            type="button"
+                            className="btn plain"
+                            aria-expanded={squadErrorDetailOpen}
+                            onClick={() => setSquadErrorDetailOpen((open) => !open)}
+                          >
+                            <Icon name={squadErrorDetailOpen ? "down" : "chev"} size={14} />
+                            {squadErrorDetailOpen ? "收起技术详情" : "查看技术详情"}
+                          </button>
+                          {squadErrorDetailOpen ? (
+                            <p className="ls-process-text pt-target" data-testid="squad-error-detail">
+                              {squadErrorInfo.technicalDetail}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <div className="actions">
+                        <button
+                          type="button"
+                          className="btn primary"
+                          disabled={squadLaunching || squadStatus === "running"}
+                          onClick={() => void handleLaunchSquad()}
+                        >
+                          <Icon name="regenerate" size={14} />
+                          {squadLaunching ? "正在启动…" : "重新运行 / 从检查点恢复"}
+                        </button>
+                      </div>
+                    </div>
                   ) : null}
                   {steerError ? (
                     <span className="inline-error" role="alert">{steerError}</span>
@@ -1287,7 +1532,7 @@ export function TopicPage() {
                   <OrgGraphPanel
                     key={squadRunId ?? "default"}
                     state={orgGraphState}
-                    runStatus={squadStatus === "idle" && isAutoRoutedSquadRun ? "running" : squadStatus}
+                    runStatus={effectiveSquadStatus}
                     title="投研小组组织图"
                     onSelectNode={(node) => {
                       const open = node !== null;

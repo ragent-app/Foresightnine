@@ -11,13 +11,15 @@ from decimal import Decimal
 from hashlib import sha256
 import json
 import logging
+import math
 import os
+import random
 import re
 import secrets
 import tempfile
 from pathlib import Path
-from threading import RLock, Thread
-from time import monotonic
+from threading import Event, RLock, Thread
+from time import monotonic, sleep
 from typing import Annotated, Any, Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
@@ -87,7 +89,16 @@ from .retention import RetentionPolicy, cleanup_research_state
 from .security import BodyTooLarge, SecurityBoundaryMiddleware, TrustedProxyResolver, build_captcha_verifier, build_security_config
 from .telemetry import record_provider_failure, record_stale_data_denial, telemetry
 from .phase4_live import LivePhase4Adapter
-from .phase3 import ChallengeDraft, ChallengeInput, LlmProvider, ProviderFailure, SearchEvidenceBundle, build_llm_provider, build_search_evidence_provider
+from .phase3 import (
+    ChallengeDraft,
+    ChallengeInput,
+    LlmProvider,
+    ProviderFailure,
+    ProviderPolicy,
+    SearchEvidenceBundle,
+    build_llm_provider,
+    build_search_evidence_provider,
+)
 from .openai_compatible import OpenAICompatibleLlmProvider, OpenAICompatibleSettings
 from .phase4 import DeterministicMockProbabilityAssessor, DeterministicMockWorldlineGenerator, ProbabilityAssessmentInput, WorldlineGenerationInput
 from .providers import FixedClock, MockDataProvider, MockFactorProvider, MockResearchProvider, RuntimeClock, build_attestation
@@ -360,6 +371,11 @@ ERROR_RESPONSES = {
 async def lifespan(_app: FastAPI):
     """Verify external state before accepting traffic in a persistent runtime."""
     _assert_runtime_ready()
+    try:
+        operations.recover_expired_leases()
+        _reconcile_orphaned_earnings_squads()
+    except Exception:
+        logging.getLogger(__name__).exception("Startup reconciliation failed")
     stopped = asyncio.Event()
     async def supervise() -> None:
         while not stopped.is_set():
@@ -4315,9 +4331,16 @@ def accept_research_findings(topic_id: str, turn_id: str, http_request: Request)
 
 def _reconcile_research_work() -> None:
     """Only jobs admitted with automatic continuation are eligible for this sweep."""
+    try:
+        operations.recover_expired_leases()
+    except Exception:
+        logging.getLogger(__name__).exception("Unable to recover expired operation leases")
+    try:
+        _reconcile_orphaned_earnings_squads()
+    except Exception:
+        logging.getLogger(__name__).exception("Unable to reconcile orphaned earnings squad runs")
     if not RESEARCH_WORK:
         return
-    operations.recover_expired_leases()
     for operation_id, work in list(RESEARCH_WORK.items()):
         try:
             _reconcile_research_attempt(operation_id, work)
@@ -4455,18 +4478,31 @@ def _reconcile_research_attempt(operation_id: str, work: dict, *, now: datetime 
 
 def _topic_has_active_run(account_id: str, topic_id: str) -> bool:
     with _ACTIVE_SQUAD_LOCK:
-        if (account_id, topic_id) in _ACTIVE_SQUAD_RUNS:
-            return True
+        active = _ACTIVE_SQUAD_RUNS.get((account_id, topic_id))
+        if active is not None:
+            thread_obj = active.get("thread") if isinstance(active, Mapping) else None
+            if thread_obj is None or (callable(getattr(thread_obj, "is_alive", None)) and thread_obj.is_alive()):
+                return True
     if any(work['account_id'] == account_id and work['topic_id'] == topic_id for work in RESEARCH_WORK.values()):
         return True
     endpoint = f"/v1/research/topics/{topic_id}/runs"
+    squad_state = EARNINGS_SQUAD_STATES.get(_squad_state_key(account_id, topic_id))
     for operation_id, session_id in operations.store.session_ids().items():
         if session_id != topic_id:
             continue
         record = operations.store.get_operation(operation_id)
-        if (record and record.get("endpoint") == endpoint and record.get("owner_subject") == f"account:{account_id}"
+        if not (record and record.get("endpoint") == endpoint and record.get("owner_subject") == f"account:{account_id}"
                 and record.get("status") in {"pending", "running"}):
-            return True
+            continue
+        inputs = RESEARCH_RUN_INPUTS.get(operation_id) or {}
+        if (
+            inputs.get("run_mode") == "earnings_squad"
+            and isinstance(squad_state, Mapping)
+            and squad_state.get("run_id") == inputs.get("squad_run_id")
+            and squad_state.get("status") in {"completed", "failed", "cancelled"}
+        ):
+            continue
+        return True
     return False
 
 
@@ -4543,9 +4579,11 @@ def list_research_runs(topic_id: str, http_request: Request) -> list[OperationRe
             )
             if op.status == "cancelled" or squad_status_now == "cancelled":
                 logical_status = "stopped"
+            elif squad_status_now in {"completed", "failed"}:
+                logical_status = squad_status_now
             elif op.status in {"pending", "running"} or squad_status_now == "running":
                 logical_status = "running"
-            elif op.status == "completed" or squad_status_now == "completed":
+            elif op.status == "completed":
                 logical_status = "completed"
             else:
                 logical_status = "failed"
@@ -5040,14 +5078,284 @@ class _RepoSquadCheckpointStore:
         return None
 
 
+_SQUAD_DEFAULT_TIMEOUT_SECONDS = 90.0
+_SQUAD_STAGE_TIMEOUT_FLOORS: dict[str, float] = {
+    "stage_0_prefetch": 60.0,
+    "stage_1_plan": 90.0,
+    "stage_2_workers": 90.0,
+    "stage_2_5_review": 90.0,
+    "stage_3a_bear": 120.0,
+    "stage_3b_gate_memo": 120.0,
+    "deep_report": 180.0,
+    "steering": 90.0,
+}
+_SQUAD_SLOT_MAX_OUTPUT_TOKENS: dict[str, int] = {
+    "fast_extractor": 8192,
+    "deep_reasoner": 8192,
+    "bear_reviewer": 8192,
+    "writer": 16384,
+}
+_SQUAD_STAGE_MAX_OUTPUT_TOKENS: dict[str, int] = {
+    "stage_1_plan": 4096,
+    "stage_2_workers": 8192,
+    "stage_2_5_review": 4096,
+    "stage_3a_bear": 8192,
+    "stage_3b_gate_memo": 8192,
+    "deep_report": 16384,
+    "steering": 4096,
+}
+
+
+class _CompositeCancelSignal:
+    """Thread-safe cancel signal combining a local Event with an optional lazy poller."""
+
+    def __init__(self, base_event: Any = None, checker: Callable[[], bool] | None = None) -> None:
+        self._base_event = base_event
+        self._checker = checker
+
+    def is_set(self) -> bool:
+        if self._base_event is not None and self._base_event.is_set():
+            return True
+        if self._checker is not None:
+            try:
+                if self._checker():
+                    if self._base_event is not None and hasattr(self._base_event, "set"):
+                        self._base_event.set()
+                    return True
+            except Exception:
+                return False
+        return False
+
+    def set(self) -> None:
+        if self._base_event is not None and hasattr(self._base_event, "set"):
+            self._base_event.set()
+
+    def wait(self, timeout: float | None = None) -> bool:
+        if self.is_set():
+            return True
+        if timeout is None or timeout <= 0:
+            return self.is_set()
+        if self._checker is None and self._base_event is not None and hasattr(self._base_event, "wait"):
+            return bool(self._base_event.wait(timeout))
+        deadline = monotonic() + timeout
+        while True:
+            if self.is_set():
+                return True
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                return False
+            slice_sec = min(remaining, 0.1)
+            if self._base_event is not None and hasattr(self._base_event, "wait"):
+                self._base_event.wait(slice_sec)
+            else:
+                sleep(slice_sec)
+
+
+def _squad_provider_timeout_floor() -> float:
+    raw_squad = os.environ.get("FORESIGHTNINE_SQUAD_LLM_TIMEOUT_SECONDS", "").strip()
+    if raw_squad:
+        try:
+            val = float(raw_squad)
+            if math.isfinite(val) and 0 < val <= 600:
+                return val
+        except ValueError:
+            pass
+    raw_env = os.environ.get("FORESIGHTNINE_LLM_TIMEOUT_SECONDS", "").strip()
+    if raw_env:
+        from .openai_compatible import _llm_timeout_from_environment
+        return _llm_timeout_from_environment()
+    return 180.0
+
+
+def _with_squad_provider_timeout_floor(provider: Any) -> Any:
+    """Return a shallow copy of provider with squad timeout floor applied when env timeout is unset."""
+    if provider is None:
+        return None
+    if os.environ.get("FORESIGHTNINE_LLM_TIMEOUT_SECONDS", "").strip() and not os.environ.get("FORESIGHTNINE_SQUAD_LLM_TIMEOUT_SECONDS", "").strip():
+        return provider
+    policy = getattr(provider, "policy", None)
+    if not isinstance(policy, ProviderPolicy):
+        return provider
+    floor = _squad_provider_timeout_floor()
+    if policy.timeout_seconds >= floor:
+        return provider
+    try:
+        cloned = copy(provider)
+        cloned.policy = dataclass_replace(policy, timeout_seconds=floor)
+        return cloned
+    except Exception:
+        return provider
+
+
+def _reconcile_orphaned_earnings_squads() -> int:
+    """Reconcile orphaned 'running' squad states after an API restart into checkpoint-resumable 'failed'."""
+    reconciled = 0
+    for state_key, row in list(EARNINGS_SQUAD_STATES.items()):
+        if not isinstance(row, Mapping) or row.get("status") != "running":
+            continue
+        account_id = str(row.get("account_id") or "")
+        topic_id = str(row.get("topic_id") or "")
+        op_id = str(row.get("operation_id") or "")
+        if not account_id or not topic_id:
+            continue
+        with _ACTIVE_SQUAD_LOCK:
+            active = _ACTIVE_SQUAD_RUNS.get((account_id, topic_id))
+            thread_obj = active.get("thread") if isinstance(active, Mapping) else None
+            is_live = (
+                active is not None
+                and active.get("operation_id") == op_id
+                and (thread_obj is None or (callable(getattr(thread_obj, "is_alive", None)) and thread_obj.is_alive()))
+            )
+        if is_live:
+            continue
+
+        did_reconcile = False
+        events_snapshot: list[Any] = []
+
+        def _mark_orphaned() -> None:
+            nonlocal did_reconcile, events_snapshot
+            cur = EARNINGS_SQUAD_STATES.get(state_key)
+            if not isinstance(cur, Mapping) or cur.get("status") != "running":
+                return
+            if op_id and str(cur.get("operation_id") or "") != op_id:
+                return
+            with _ACTIVE_SQUAD_LOCK:
+                cur_active = _ACTIVE_SQUAD_RUNS.get((account_id, topic_id))
+                cur_thread = cur_active.get("thread") if isinstance(cur_active, Mapping) else None
+                still_live = (
+                    cur_active is not None
+                    and cur_active.get("operation_id") == op_id
+                    and (cur_thread is None or (callable(getattr(cur_thread, "is_alive", None)) and cur_thread.is_alive()))
+                )
+                if still_live:
+                    return
+                if cur_active is not None and cur_active.get("operation_id") == op_id:
+                    _ACTIVE_SQUAD_RUNS.pop((account_id, topic_id), None)
+            completed_stages = list(cur.get("checkpoint_completed_stages") or [])
+            cp_raw = cur.get("checkpoint")
+            if not completed_stages and isinstance(cp_raw, Mapping):
+                completed_stages = list(cp_raw.get("completed_stages") or [])
+            err_msg = (
+                f"Earnings squad run interrupted by API restart (saved checkpoints: {', '.join(completed_stages)}). Resume from checkpoint to continue."
+                if completed_stages
+                else "Earnings squad run interrupted by API restart before completing a checkpoint. Retry or resume from checkpoint."
+            )
+            updated = dict(cur)
+            updated["status"] = "failed"
+            updated["error"] = err_msg
+            updated["error_code"] = "worker_interrupted_by_restart"
+            updated["can_resume_checkpoint"] = True
+            updated["updated_at"] = lifecycle_clock.now().isoformat()
+            EARNINGS_SQUAD_STATES.put(state_key, updated)
+            events_snapshot = list(updated.get("org_events") or [])
+            did_reconcile = True
+
+        EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", _mark_orphaned)
+        if did_reconcile:
+            reconciled += 1
+            if op_id:
+                _update_turn_status(topic_id, op_id, "failed")
+                try:
+                    research_live_broker.publish_terminal(
+                        op_id,
+                        operation_status="failed",
+                        progress={
+                            "org_events": events_snapshot,
+                            "logical_status": "failed",
+                            "current_operation_id": op_id,
+                        },
+                    )
+                except Exception:
+                    logging.getLogger(__name__).exception("Unable to publish terminal event for orphaned squad %s", op_id)
+    return reconciled
+
+
 class _AccountSlotModelRunner:
     """Adapter bridging ``SquadModelRunner`` to ForesightNine wire ``LlmProvider`` instances."""
 
-    def __init__(self, *, providers_by_slot: Mapping[str, Any], default_provider: Any) -> None:
+    def __init__(
+        self,
+        *,
+        providers_by_slot: Mapping[str, Any],
+        default_provider: Any,
+        cancel_event: Any = None,
+        cancel_checker: Callable[[], bool] | None = None,
+        budget: ResearchExecutionBudget | None = None,
+        slot_max_output_tokens: Mapping[str, int] | None = None,
+        slot_timeouts: Mapping[str, float] | None = None,
+        default_timeout_seconds: float | None = None,
+        max_transient_retries: int = 2,
+        retry_base_seconds: float = 0.5,
+        sleeper: Callable[[float], None] | None = None,
+    ) -> None:
         self._providers = dict(providers_by_slot)
         self._default_provider = default_provider
+        self._cancel_event = cancel_event
+        self._cancel_checker = cancel_checker
+        self._budget = budget
+        self._slot_max_output_tokens = dict(slot_max_output_tokens or {})
+        self._slot_timeouts = dict(slot_timeouts or {})
+        self._default_timeout_seconds = default_timeout_seconds
+        self._max_transient_retries = max(0, int(max_transient_retries))
+        self._retry_base_seconds = max(0.0, float(retry_base_seconds))
+        self._sleeper = sleeper
         self._lock = RLock()
-        self._turns: dict[tuple[str, str], tuple[str, list[Any], Any]] = {}
+        self._next_gen = 0
+        self._turns: dict[tuple[str, str, str], tuple[int, str, list[Any], Any]] = {}
+
+    def bind_runtime(
+        self,
+        *,
+        cancel_event: Any = None,
+        cancel_checker: Callable[[], bool] | None = None,
+        budget: ResearchExecutionBudget | None = None,
+    ) -> None:
+        with self._lock:
+            if cancel_event is not None:
+                self._cancel_event = cancel_event
+            if cancel_checker is not None:
+                self._cancel_checker = cancel_checker
+            if budget is not None:
+                self._budget = budget
+
+    def _effective_cancel_signal(self) -> Any:
+        if self._cancel_checker is not None:
+            return _CompositeCancelSignal(self._cancel_event, self._cancel_checker)
+        return self._cancel_event
+
+    def _resolve_timeout_seconds(self, mreq: SlotModelRequest) -> float:
+        if mreq.slot in self._slot_timeouts:
+            base = float(self._slot_timeouts[mreq.slot])
+        elif self._default_timeout_seconds is not None:
+            base = float(self._default_timeout_seconds)
+        else:
+            raw_squad = os.environ.get("FORESIGHTNINE_SQUAD_LLM_TIMEOUT_SECONDS", "").strip()
+            if raw_squad:
+                try:
+                    val = float(raw_squad)
+                    if math.isfinite(val) and 0 < val <= 600:
+                        base = val
+                    else:
+                        base = _SQUAD_STAGE_TIMEOUT_FLOORS.get(mreq.stage, _SQUAD_DEFAULT_TIMEOUT_SECONDS)
+                except ValueError:
+                    base = _SQUAD_STAGE_TIMEOUT_FLOORS.get(mreq.stage, _SQUAD_DEFAULT_TIMEOUT_SECONDS)
+            else:
+                base = _SQUAD_STAGE_TIMEOUT_FLOORS.get(mreq.stage, _SQUAD_DEFAULT_TIMEOUT_SECONDS)
+        if self._budget is not None and math.isfinite(self._budget.deadline):
+            remaining = self._budget.deadline - monotonic()
+            if remaining <= 0:
+                raise ProviderFailure("provider_budget_exhausted", "Research time budget is exhausted.", retryable=False)
+            return min(base, remaining)
+        return base
+
+    def _resolve_max_output_tokens(self, mreq: SlotModelRequest) -> int:
+        req_cap = getattr(mreq, "max_output_tokens", None)
+        if type(req_cap) is int and req_cap > 0:
+            return req_cap
+        slot_cap = self._slot_max_output_tokens.get(mreq.slot)
+        if type(slot_cap) is int and slot_cap > 0:
+            return slot_cap
+        return _SQUAD_STAGE_MAX_OUTPUT_TOKENS.get(mreq.stage) or _SQUAD_SLOT_MAX_OUTPUT_TOKENS.get(mreq.slot, 8192)
 
     def invoke(self, mreq: SlotModelRequest) -> SlotModelResponse:
         from .chat_research_adapter import ChatResearchAdapter
@@ -5057,6 +5365,7 @@ class _AccountSlotModelRunner:
             ModelToolResult,
             ModelTurnExchange,
             ModelTurnInput,
+            extract_assistant_text,
         )
 
         provider = self._providers.get(mreq.slot) or self._default_provider
@@ -5076,45 +5385,116 @@ class _AccountSlotModelRunner:
             )
             for t in mreq.tools
         )
-        key = (mreq.stage, mreq.role)
+        conv_id = getattr(mreq, "conversation_id", None) or "default"
+        key = (mreq.stage, mreq.role, str(conv_id))
         with self._lock:
+            self._next_gen += 1
+            call_gen = self._next_gen
             if mreq.turn_index == 0 or key not in self._turns:
                 init_user = (
                     mreq.messages[1]["content"]
-                    if len(mreq.messages) > 1 and isinstance(mreq.messages[1].get("content"), str)
+                    if len(mreq.messages) > 1 and isinstance(mreq.messages[1].get("content"), str) and mreq.messages[1].get("content")
                     else mreq.user_prompt
                 )
                 history: list[Any] = []
                 last_msg = None
             else:
-                init_user, history, last_msg = self._turns[key]
-                history = list(history)
+                _prev_gen, init_user, prev_history, last_msg = self._turns[key]
+                history = list(prev_history)
                 if last_msg is not None:
                     trailing_results: list[ModelToolResult] = []
+                    trailing_user_parts: list[str] = []
                     for msg in reversed(mreq.messages):
-                        if msg.get("role") == "tool":
+                        msg_role = msg.get("role")
+                        if msg_role == "assistant":
+                            break
+                        if msg_role == "tool":
                             trailing_results.append(
                                 ModelToolResult(
                                     tool_call_id=str(msg.get("tool_call_id") or ""),
                                     content=str(msg.get("content") or ""),
                                 )
                             )
-                        elif msg.get("role") == "assistant":
-                            break
+                        elif msg_role == "user":
+                            raw_user = msg.get("content")
+                            if isinstance(raw_user, list):
+                                raw_user = extract_assistant_text(msg)
+                            if isinstance(raw_user, str) and raw_user.strip():
+                                trailing_user_parts.append(raw_user)
                     trailing_results.reverse()
-                    history.append(ModelTurnExchange(ModelAssistantContinuation(last_msg), tuple(trailing_results)))
+                    trailing_user_parts.reverse()
+                    user_followup = "\n\n".join(trailing_user_parts) if trailing_user_parts else None
+                    if not trailing_results and user_followup is None and isinstance(mreq.user_prompt, str) and mreq.user_prompt.strip():
+                        user_followup = mreq.user_prompt
+                    if trailing_results or user_followup is not None:
+                        history.append(
+                            ModelTurnExchange(
+                                ModelAssistantContinuation(last_msg),
+                                tuple(trailing_results),
+                                user_followup=user_followup,
+                            )
+                        )
+            # Claim this generation immediately so any concurrent or superseded turn cannot clobber state.
+            self._turns[key] = (call_gen, init_user, history, last_msg)
 
-        turn = ModelTurnInput(
-            system=mreq.system_prompt,
-            user=init_user,
-            tools=tool_defs,
-            history=tuple(history),
-        )
-        model_resp = adapter.complete_turn(turn)
+        cancel_signal = self._effective_cancel_signal()
+        max_output_tokens = self._resolve_max_output_tokens(mreq)
+
+        def _is_cancelled() -> bool:
+            return cancel_signal is not None and bool(cancel_signal.is_set())
+
+        def _is_superseded() -> bool:
+            with self._lock:
+                cur = self._turns.get(key)
+                return cur is None or cur[0] != call_gen
+
+        model_resp = None
+        for attempt in range(self._max_transient_retries + 1):
+            if _is_cancelled():
+                raise ProviderFailure("provider_cancelled", "Provider request was cancelled.", retryable=False)
+            if _is_superseded():
+                raise ProviderFailure("provider_cancelled", "Turn superseded by steering reset.", retryable=False)
+            turn_timeout = self._resolve_timeout_seconds(mreq)
+            turn = ModelTurnInput(
+                system=mreq.system_prompt,
+                user=init_user,
+                tools=tool_defs,
+                history=tuple(history),
+                response_schema=mreq.response_schema,
+                response_schema_name=mreq.response_schema_name,
+                max_output_tokens=max_output_tokens,
+                timeout_seconds=turn_timeout,
+                cancel_event=cancel_signal,
+            )
+            try:
+                model_resp = adapter.complete_turn(turn)
+                break
+            except ProviderFailure as exc:
+                if _is_cancelled() or exc.code == "provider_cancelled":
+                    raise
+                if _is_superseded():
+                    raise ProviderFailure("provider_cancelled", "Turn superseded by steering reset.", retryable=False) from exc
+                if not exc.retryable or attempt >= self._max_transient_retries:
+                    raise
+                base_delay = self._retry_base_seconds * (2 ** attempt)
+                delay = min(8.0, base_delay) * random.uniform(0.75, 1.25)
+                if self._budget is not None and math.isfinite(self._budget.deadline):
+                    rem = self._budget.deadline - monotonic()
+                    if rem <= 0 or delay >= rem:
+                        raise
+                if self._sleeper is not None:
+                    self._sleeper(delay)
+                elif cancel_signal is not None and hasattr(cancel_signal, "wait"):
+                    cancel_signal.wait(delay)
+                else:
+                    sleep(delay)
+
+        assert model_resp is not None
         with self._lock:
-            self._turns[key] = (init_user, history, model_resp.message)
-        raw_content = model_resp.message.get("content") if isinstance(model_resp.message, Mapping) else None
-        text_out = raw_content if isinstance(raw_content, str) else None
+            cur = self._turns.get(key)
+            if cur is not None and cur[0] == call_gen:
+                self._turns[key] = (call_gen, init_user, history, model_resp.message)
+        text_out = extract_assistant_text(model_resp.message)
         return SlotModelResponse(
             content=text_out,
             tool_calls=tuple(model_resp.tool_calls or ()),
@@ -5126,7 +5506,10 @@ class _AccountSlotModelRunner:
 def _topic_attached_sources_for_squad(
     account_id: str,
     topic: ResearchTopic,
+    *,
+    as_of: datetime | None = None,
 ) -> tuple[dict[str, Any], dict[str, str], dict[str, dict[str, bool]]]:
+    effective_as_of = as_of if as_of is not None else topic.request.as_of
     source_ids = list(dict.fromkeys([*topic.request.source_ids, *topic.versions[-1].source_ids]))
     loaded: list[ResearchSource] = []
     for sid in source_ids:
@@ -5134,9 +5517,13 @@ def _topic_attached_sources_for_squad(
             loaded.append(research_sources.get(account_id, sid))
         except SourceNotFound:
             continue
-    eligible, _ = prepare_sources(loaded, topic.request.as_of)
-    source_by_id = {src.source_id: src for src in loaded}
-    texts = {src.source_id: src.text for src in eligible}
+    eligible, _ = prepare_sources(loaded, effective_as_of)
+    safe_eligible = [
+        src for src in eligible
+        if src.permissions.model_input and src.permissions.display and not src.is_simulated
+    ]
+    source_by_id = {src.source_id: src for src in safe_eligible}
+    texts = {src.source_id: src.text for src in safe_eligible}
     perms = {
         src.source_id: {
             "store": src.permissions.store,
@@ -5144,7 +5531,7 @@ def _topic_attached_sources_for_squad(
             "model_input": src.permissions.model_input,
             "export": src.permissions.export,
         }
-        for src in loaded
+        for src in safe_eligible
     }
     return source_by_id, texts, perms
 
@@ -5211,26 +5598,67 @@ def _build_squad_slot_provider(
         )
     except ProviderFailure:
         return None
+    native_supported = getattr(slot_entry, "native_tools_supported", None)
+    if native_supported is None:
+        slot_caps = getattr(slot_entry, "capabilities", None)
+        native_supported = getattr(slot_caps, "native_tools", None) if slot_caps is not None else None
+    slot_tools_verified = (
+        bool(native_supported)
+        if native_supported is not None
+        else bool(primary_settings.tools_verified)
+    )
+    slot_gen_params = getattr(slot_entry, "generation_parameters", None)
+    if slot_gen_params is None and proto == primary_config.protocol:
+        slot_gen_params = primary_settings.generation_parameters or primary_config.generation_parameters
+    slot_settings = dataclass_replace(
+        slot_settings,
+        tools_verified=slot_tools_verified,
+        generation_parameters=slot_gen_params,
+    )
+    timeout_floor = _squad_provider_timeout_floor()
     if proto == "openai_responses":
         from .openai_responses import OpenAIResponsesProvider
-        return OpenAIResponsesProvider(slot_settings)
+        return _with_squad_provider_timeout_floor(OpenAIResponsesProvider(slot_settings))
     if proto == "anthropic_messages":
         from .anthropic_messages import AnthropicMessagesProvider
-        from .openai_compatible import _llm_timeout_from_environment
-        from .phase3 import ProviderPolicy
-        max_tokens = getattr(slot_entry, "messages_max_tokens", None) or 4096
-        version = getattr(slot_entry, "endpoint_version", None) or "2023-06-01"
-        auth_scheme = getattr(slot_entry, "messages_auth_scheme", None) or "x-api-key"
-        effort = getattr(slot_entry, "messages_effort", None)
+        primary_msg_opts = primary_config.messages_options
+        slot_name = getattr(slot_entry, "slot", None)
+        default_slot_max = _SQUAD_SLOT_MAX_OUTPUT_TOKENS.get(str(slot_name), 8192)
+        gen_max = getattr(slot_gen_params, "max_output_tokens", None) if slot_gen_params is not None else None
+        max_tokens = (
+            getattr(slot_entry, "messages_max_tokens", None)
+            or gen_max
+            or (primary_msg_opts.max_tokens if primary_msg_opts is not None else None)
+            or default_slot_max
+        )
+        version = (
+            getattr(slot_entry, "endpoint_version", None)
+            or (primary_msg_opts.version if primary_msg_opts is not None else None)
+            or "2023-06-01"
+        )
+        auth_scheme = (
+            getattr(slot_entry, "messages_auth_scheme", None)
+            or (primary_msg_opts.auth_scheme if primary_msg_opts is not None else None)
+            or "x-api-key"
+        )
+        slot_effort = getattr(slot_entry, "messages_effort", None)
+        effort = (
+            slot_effort
+            if slot_effort is not None
+            else (primary_msg_opts.effort if primary_msg_opts is not None else None)
+        )
         return AnthropicMessagesProvider(
             slot_settings,
-            ProviderPolicy(max_output_tokens=max_tokens, timeout_seconds=_llm_timeout_from_environment()),
+            ProviderPolicy(max_output_tokens=max_tokens, timeout_seconds=timeout_floor),
             anthropic_version=version,
             auth_scheme=auth_scheme,
             max_tokens=max_tokens,
             effort=effort,
         )
-    return OpenAICompatibleLlmProvider(slot_settings)
+    return OpenAICompatibleLlmProvider(
+        slot_settings,
+        policy=ProviderPolicy(timeout_seconds=timeout_floor),
+    )
 
 
 def _platform_primary_slot_profile(primary_provider: Any) -> Any:
@@ -5273,6 +5701,8 @@ def _resolve_earnings_squad_runtime(
     run_id: str,
     checkpoint_store: _RepoSquadCheckpointStore,
     org_sink: Callable[[OrgGraphEvent], None],
+    cancel_event: Event | None = None,
+    cancel_checker: Callable[[], bool] | None = None,
 ) -> tuple[EarningsSquadOrchestrator, dict[str, Any]]:
     from .research_fin_tools import FinDataToolbox
 
@@ -5310,12 +5740,18 @@ def _resolve_earnings_squad_runtime(
         )
         return orch, routing_summary
 
-    source_by_id, init_texts, init_perms = _topic_attached_sources_for_squad(account.account_id, topic)
+    effective_as_of = request.as_of if (request and request.as_of is not None) else topic.request.as_of
+    source_by_id, init_texts, init_perms = _topic_attached_sources_for_squad(
+        account.account_id,
+        topic,
+        as_of=effective_as_of,
+    )
 
     effective_resolved_slots = hook_dict.get("resolved_slots")
     effective_slot_bindings = hook_dict.get("slot_bindings")
     effective_primary_profile = hook_dict.get("primary_profile") if "primary_profile" in hook_dict else primary_profile
     effective_slot_overrides = hook_dict.get("slot_overrides") if "slot_overrides" in hook_dict else requested_slots
+    effective_cancel_event = hook_dict.get("cancel_event") or cancel_event
 
     model_runner = hook_dict.get("model_runner")
     if model_runner is None:
@@ -5351,17 +5787,41 @@ def _resolve_earnings_squad_runtime(
                     raise ApiProblem(422, "invalid_request", str(error)) from error
 
         slot_providers: dict[str, Any] = {}
-        if effective_resolved_slots is not None:
-            for sname in ("fast_extractor", "deep_reasoner", "bear_reviewer", "writer"):
+        slot_max_tokens: dict[str, int] = {}
+        for sname in ("fast_extractor", "deep_reasoner", "bear_reviewer", "writer"):
+            cap: int | None = None
+            slot_overridden = False
+            if effective_resolved_slots is not None:
+                slot_entry = effective_resolved_slots.slot_for(sname)
+                slot_overridden = bool(getattr(slot_entry, "differs_from_primary", False))
                 p_override = _build_squad_slot_provider(
                     account.account_id,
-                    effective_resolved_slots.slot_for(sname),
+                    slot_entry,
                     settings,
                     config,
                 )
                 if p_override is not None:
                     slot_providers[sname] = p_override
-        model_runner = _AccountSlotModelRunner(providers_by_slot=slot_providers, default_provider=primary_provider)
+                slot_gen = getattr(slot_entry, "generation_parameters", None)
+                cap = (
+                    getattr(slot_entry, "messages_max_tokens", None)
+                    or (getattr(slot_gen, "max_output_tokens", None) if slot_gen is not None else None)
+                )
+            if cap is None and config is not None and not slot_overridden:
+                if config.messages_options is not None and config.messages_options.max_tokens:
+                    cap = config.messages_options.max_tokens
+                elif config.generation_parameters is not None and config.generation_parameters.max_output_tokens:
+                    cap = config.generation_parameters.max_output_tokens
+            if type(cap) is int and cap > 0:
+                slot_max_tokens[sname] = cap
+        model_runner = _AccountSlotModelRunner(
+            providers_by_slot=slot_providers,
+            default_provider=_with_squad_provider_timeout_floor(primary_provider),
+            cancel_event=effective_cancel_event,
+            cancel_checker=cancel_checker,
+            budget=hook_dict.get("budget"),
+            slot_max_output_tokens=slot_max_tokens,
+        )
 
     prefetch_deps = hook_dict.get("prefetch_deps")
     tool_runner = hook_dict.get("tool_runner")
@@ -5395,11 +5855,70 @@ def _resolve_earnings_squad_runtime(
         ext_service = ExternalEarningsService(provider=fmp_adapter, account_id=account.account_id)
         if tool_runner is None:
             tool_runner = FinToolboxToolRunner(fin_box, source_by_id=source_by_id)
+
+        def _resolve_live_market_price(entity_id: str | None, symbol: str | None) -> Decimal | None:
+            from .research_fin_tools import MarketDataRequest, MarketSpec
+            try:
+                eid_text = (entity_id or "").strip() or None
+                sym_text = (symbol or "").strip().upper() or None
+                req_eid = eid_text if (eid_text and ":" in eid_text and not eid_text.lower().startswith("cik:")) else None
+                req_exchange: str | None = None
+                if req_eid is not None:
+                    ex_part, sym_part = req_eid.split(":", 1)
+                    if not sym_text and sym_part.strip():
+                        sym_text = sym_part.strip().upper()
+                    req_exchange = ex_part.strip().upper() or None
+                if not req_eid and not sym_text:
+                    return None
+                if effective_as_of is not None:
+                    cutoff_day = effective_as_of.date()
+                    md_req = MarketDataRequest(
+                        entity_id=req_eid,
+                        symbol=None if req_eid else sym_text,
+                        exchange=req_exchange,
+                        interval="1day",
+                        start_date=cutoff_day - timedelta(days=10),
+                        end_date=cutoff_day,
+                        rationale="Stage 0 latest close price lookup for Reverse-DCF valuation.",
+                    )
+                else:
+                    md_req = MarketDataRequest(
+                        entity_id=req_eid,
+                        symbol=None if req_eid else sym_text,
+                        exchange=req_exchange,
+                        interval="1day",
+                        lookback="5d",
+                        rationale="Stage 0 latest close price lookup for Reverse-DCF valuation.",
+                    )
+                spec = fin_box.market_spec(md_req, {})
+                if not isinstance(spec, MarketSpec):
+                    return None
+                outcome = fin_box.market_data(spec)
+                if outcome is None or not isinstance(outcome.result, Mapping):
+                    return None
+                if outcome.result.get("status") not in ("ok", "partial"):
+                    return None
+                if outcome.source is not None and isinstance(getattr(outcome.source, "text", None), str):
+                    lines = [ln.strip() for ln in outcome.source.text.splitlines() if ln.strip()]
+                    for ln in reversed(lines):
+                        match = re.search(r"\bC\s+([0-9]+(?:\.[0-9]+)?)", ln)
+                        if match:
+                            return Decimal(match.group(1))
+                raw_close = outcome.result.get("close")
+                if raw_close is None:
+                    raw_close = outcome.result.get("close_price")
+                if raw_close is not None:
+                    return Decimal(str(raw_close))
+                return None
+            except Exception:
+                return None
+
         prefetch_deps = PrefetchDependencies(
             sec_adapter=sec_adapter,
             sec_deep=sec_deep,
             external_earnings=ext_service,
             tool_runner=tool_runner,
+            market_price_fn=_resolve_live_market_price,
             initial_source_texts=init_texts,
             initial_source_permissions=init_perms,
         )
@@ -5419,6 +5938,7 @@ def _resolve_earnings_squad_runtime(
             org_sinks=[org_sink],
             context=hook_dict.get("context"),
             budget=hook_dict.get("budget"),
+            cancel_event=effective_cancel_event,
             max_worker_concurrency=int(hook_dict.get("max_worker_concurrency") or 3),
         )
     except SquadConfigurationError as error:
@@ -5542,6 +6062,7 @@ def _prepare_earnings_squad_execution(
         EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", append_event)
         research_live_broker.publish_org_graph_event(operation_id, ev)
 
+    squad_cancel_event = Event()
     orch, routing_summary = _resolve_earnings_squad_runtime(
         account=account,
         topic=topic,
@@ -5551,6 +6072,8 @@ def _prepare_earnings_squad_execution(
         run_id=run_id,
         checkpoint_store=cp_store,
         org_sink=emit_org_event,
+        cancel_event=squad_cancel_event,
+        cancel_checker=cancel_checker,
     )
 
     # Apply explicit budget overrides if caller set any
@@ -5561,6 +6084,12 @@ def _prepare_earnings_squad_execution(
             request.max_search_calls,
             request.max_total_tokens,
             deadline,
+        )
+    if isinstance(orch._model_runner, _AccountSlotModelRunner):
+        orch._model_runner.bind_runtime(
+            cancel_event=orch._cancel_event,
+            cancel_checker=cancel_checker,
+            budget=orch._budget,
         )
 
     resume_cp: SquadCheckpoint | None = None
@@ -5757,13 +6286,20 @@ def _start_auto_routed_earnings_squad(
         except (InstructionNotFound, InstructionConflict, InstructionInvalid) as error:
             raise _turn_http_error(error) from error
 
-        EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", init_state)
         with _ACTIVE_SQUAD_LOCK:
             _ACTIVE_SQUAD_RUNS[(account.account_id, topic_id)] = {
                 "run_id": squad_run_id,
                 "operation_id": operation_id,
                 "orchestrator": orch,
             }
+        try:
+            EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", init_state)
+        except Exception:
+            with _ACTIVE_SQUAD_LOCK:
+                cur_active = _ACTIVE_SQUAD_RUNS.get((account.account_id, topic_id))
+                if cur_active and cur_active.get("operation_id") == operation_id:
+                    _ACTIVE_SQUAD_RUNS.pop((account.account_id, topic_id), None)
+            raise
         TURN_STATUS.put(topic_id, {
             "owner_id": account.account_id,
             "topic_id": topic_id,
@@ -5873,14 +6409,20 @@ def run_earnings_squad(
         operation_id=operation_id,
         run_id=run_id,
     )
-    EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", init_state)
-
     with _ACTIVE_SQUAD_LOCK:
         _ACTIVE_SQUAD_RUNS[(account.account_id, topic_id)] = {
             "run_id": run_id,
             "operation_id": operation_id,
             "orchestrator": orch,
         }
+    try:
+        EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", init_state)
+    except Exception:
+        with _ACTIVE_SQUAD_LOCK:
+            cur_active = _ACTIVE_SQUAD_RUNS.get((account.account_id, topic_id))
+            if cur_active and cur_active.get("operation_id") == operation_id:
+                _ACTIVE_SQUAD_RUNS.pop((account.account_id, topic_id), None)
+        raise
 
     is_async = request.background or request.execution_mode == "async"
     if is_async:

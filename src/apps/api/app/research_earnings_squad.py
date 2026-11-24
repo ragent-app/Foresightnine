@@ -13,6 +13,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from functools import lru_cache
 from hashlib import sha256
 import importlib
 import inspect
@@ -22,10 +23,12 @@ from pathlib import Path
 import re
 from threading import Event, RLock
 from time import monotonic
-from typing import Any, Callable, Iterable, Literal, Mapping, Protocol, Sequence, runtime_checkable
+from typing import Any, Callable, Iterable, Literal, Mapping, Protocol, Sequence, TypeVar, runtime_checkable
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+
+_TModel = TypeVar("_TModel", bound=BaseModel)
 
 from .earnings_external_data import (
     CONSENSUS_FALLBACK_SUGGESTIONS,
@@ -71,7 +74,16 @@ from .research_earnings_diagnostics import (
     period_financials_from_statement_lines,
     valuation_and_implied_expectations,
 )
-from .research_tools_registry import TOOL_REGISTRY
+from .research_source_policy import is_fred_source, source_eligibility
+from .research_sources import ResearchSource, SourcePermissions
+from .research_tools_registry import (
+    MAX_READ_SOURCES_BATCH_CHARS,
+    MAX_READ_SOURCE_SPAN_CHARS,
+    OutlineSourceRequest,
+    ReadRequest,
+    SearchSourceRequest,
+    TOOL_REGISTRY,
+)
 
 ValuationAndImpliedExpectationsResult = ValuationAndExpectationsResult
 
@@ -316,6 +328,7 @@ class PrefetchedSourceRef(_FrozenContract):
     permissions: dict[str, bool] = Field(default_factory=lambda: {
         "store": True, "display": True, "model_input": True, "export": True,
     })
+    published_at: datetime | None = None
     total_characters: int = Field(default=0, ge=0)
 
 
@@ -371,6 +384,9 @@ class EarningsPrefetchSnapshot(_FrozenContract):
     earnings_release: DualPeriodEarningsRelease | None = None
     filing_accession: str | None = None
     prior_filing_accession: str | None = None
+    current_filing_url: str | None = None
+    prior_filing_url: str | None = None
+    prior_sections_source_id: str | None = None
     filing_table_catalog: FilingTableCatalog | None = None
     redline_summary: FilingRedlineReport | None = None
     guidance_nongaap: GuidanceAndNonGaapResult | None = None
@@ -990,13 +1006,18 @@ def _read_attr_or_key(obj: Any, name: str) -> Any:
     return getattr(obj, name, None)
 
 
-def resolve_method_pack_context(
-    sic: str | int | None,
-    *,
-    preferred_pack_id: str | None = None,
+@lru_cache(maxsize=32)
+def _cached_model_json_schema(model_cls: type[BaseModel]) -> dict[str, Any]:
+    return model_cls.model_json_schema()
+
+
+@lru_cache(maxsize=128)
+def _resolve_method_pack_context_cached(
+    sic_key: str | None,
+    preferred_pack_id: str | None,
 ) -> dict[str, Any]:
-    """Resolve L1 earnings backbone + L2 non-financial industry KPI pack deterministically."""
-    sector = evaluate_sec_sic_gate(sic)
+    """Resolve and cache L1 earnings backbone + L2 non-financial industry KPI pack."""
+    sector = evaluate_sec_sic_gate(sic_key)
     if sector.is_gated:
         return {
             "l1_pack_id": "earnings_review",
@@ -1015,10 +1036,10 @@ def resolve_method_pack_context(
         if matched_l2 is None:
             matcher = getattr(rm, "match_industry_pack_by_sic", None)
             if callable(matcher):
-                matched_l2 = matcher(sic)
+                matched_l2 = matcher(sic_key)
         composer = getattr(rm, "compose_earnings_method_pack", None)
         if callable(composer):
-            composed = composer(sic=sic, industry_pack_id=matched_l2)
+            composed = composer(sic=sic_key, industry_pack_id=matched_l2)
     except Exception:
         composed = None
 
@@ -1041,6 +1062,16 @@ def resolve_method_pack_context(
         "recommended_alternatives": [],
         "composed_pack": composed,
     }
+
+
+def resolve_method_pack_context(
+    sic: str | int | None,
+    *,
+    preferred_pack_id: str | None = None,
+) -> dict[str, Any]:
+    """Resolve L1 earnings backbone + L2 non-financial industry KPI pack deterministically."""
+    sic_key = str(sic).strip() if sic is not None else None
+    return dict(_resolve_method_pack_context_cached(sic_key, preferred_pack_id))
 
 
 # --------------------------------------------------------------------------- Org Graph Emitter
@@ -1277,6 +1308,7 @@ class SlotModelRequest(_FrozenContract):
     response_schema: dict[str, Any] | None = None
     binding: SlotBinding
     turn_index: int = 0
+    conversation_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -1390,6 +1422,164 @@ class SquadToolRunner(Protocol):
     ) -> dict[str, Any]: ...
 
 
+_DIAGNOSTIC_TOOL_RUNNERS: dict[str, tuple[type[BaseModel], Callable[[Any], BaseModel]]] = {
+    "earnings_quality_diagnostics": (EarningsQualityRequest, earnings_quality_diagnostics),
+    "guidance_and_nongaap_reconciler": (GuidanceAndNonGaapRequest, guidance_and_nongaap_reconciler),
+    "valuation_and_implied_expectations": (ValuationRequest, valuation_and_implied_expectations),
+}
+
+_TOOL_ARGUMENT_HINTS: dict[str, str] = {
+    "sec_earnings_release": "Provide 'cik', 'ticker', or 'entity_id' (plus 'rationale'). Example: {'cik': '0000320193', 'rationale': 'Read 8-K release'}",
+    "sec_filing_tables": "Provide 'cik'/'ticker'/'entity_id', 18-24 char 'accession', optional 'r_file' (e.g. 'R2.htm'), and 'rationale'.",
+    "sec_filing_sections": "Provide either 'source_id' (e.g. from prefetched_sources) or 'url' (www.sec.gov), plus optional 'form' and 'section_keys'.",
+    "sec_redline_diff": "Provide 'current_source_id' or 'current_url' AND 'prior_source_id' or 'prior_url', plus optional 'section_keys'.",
+    "sec_fulltext_search": "Provide 'cik'/'ticker'/'entity_id', non-blank 'query', and 'rationale'.",
+    "earnings_consensus": "Provide 'symbol' or 'entity_id' and 'rationale'.",
+    "earnings_transcript": "Provide 'symbol' or 'entity_id' (optional 'fiscal_year', 'fiscal_quarter') and 'rationale'.",
+    "read_sources": "Provide {'reads': [{'source_id': '...', 'start': 0, 'end': 8000}], 'rationale': '...'}.",
+    "search_source": "Provide {'source_id': '...', 'query': '...', 'max_hits': 10, 'rationale': '...'}.",
+    "outline_source": "Provide {'source_id': '...', 'max_entries': 60}.",
+    "earnings_quality_diagnostics": "Provide 'current' PeriodFinancials (with 'period_label', 'revenue', etc.), optional 'prior_qoq'/'prior_yoy'/'ttm', 'sic', and 'rationale'.",
+    "guidance_and_nongaap_reconciler": "Provide 'period_label', 'guidance_metrics' and/or 'nongaap_bridges', and 'rationale'.",
+    "valuation_and_implied_expectations": "Provide 'close_price', 'diluted_shares', TTM metrics ('ttm_revenue', 'ttm_fcf', etc.), 'sic', and 'rationale'.",
+}
+
+
+def _normalize_as_of_datetime(as_of: date | datetime | None) -> datetime | None:
+    if as_of is None:
+        return None
+    if isinstance(as_of, datetime):
+        return as_of if as_of.utcoffset() is not None else as_of.replace(tzinfo=timezone.utc)
+    return datetime(as_of.year, as_of.month, as_of.day, 23, 59, 59, tzinfo=timezone.utc)
+
+
+def _norm_runner_entity_id(value: str) -> str:
+    text = value.strip()
+    if text.lower().startswith("cik:") and text[4:].isdigit():
+        return "cik:" + text[4:].zfill(10)
+    return text.upper()
+
+
+def _source_eligibility_status(
+    src: Any,
+    *,
+    as_of_dt: datetime | None,
+    in_flight_ids: set[str] | frozenset[str] = frozenset(),
+) -> tuple[bool, str]:
+    if src is None:
+        return False, "source_not_found"
+    if getattr(src, "is_simulated", False):
+        return False, "simulated"
+    url = getattr(src, "url", None)
+    if url is not None and is_fred_source(str(url)):
+        return False, "source_not_authorized"
+    perms = getattr(src, "permissions", None)
+    if isinstance(perms, Mapping):
+        if not perms.get("model_input", False):
+            return False, "model_permission_missing"
+        if not perms.get("display", False):
+            return False, "display_permission_missing"
+    elif perms is not None:
+        if not getattr(perms, "model_input", False):
+            return False, "model_permission_missing"
+        if not getattr(perms, "display", False):
+            return False, "display_permission_missing"
+
+    if as_of_dt is not None:
+        if isinstance(src, ResearchSource):
+            if (
+                src.source_id in in_flight_ids
+                and src.published_at is None
+                and src.retrieval_method
+                in ("sec_filing_table", "sec_filing_sections", "sec_earnings_release", "sec_companyfacts", "fmp_consensus")
+            ):
+                if src.revised_at is not None and src.revised_at > as_of_dt:
+                    return False, "availability_unestablished"
+                return True, "eligible"
+            code = source_eligibility([src], as_of_dt)[0][1]
+            return code == "eligible", code
+        pub_at = getattr(src, "published_at", None)
+        rev_at = getattr(src, "revised_at", None)
+        if pub_at is None:
+            return False, "availability_unestablished"
+        pub_dt = _normalize_as_of_datetime(pub_at)
+        rev_dt = _normalize_as_of_datetime(rev_at) if rev_at is not None else None
+        if (pub_dt is not None and pub_dt > as_of_dt) or (rev_dt is not None and rev_dt > as_of_dt):
+            return False, "availability_unestablished"
+    return True, "eligible"
+
+
+def _normalize_tool_arguments(
+    tool_name: str,
+    input_model: type[BaseModel],
+    arguments: Mapping[str, Any],
+    *,
+    worker_role: WorkerRole | None = None,
+) -> dict[str, Any]:
+    payload = dict(arguments) if isinstance(arguments, Mapping) else {}
+    fields = input_model.model_fields
+
+    if "ticker" in fields and "symbol" not in fields and "symbol" in payload and "ticker" not in payload:
+        sym_val = payload.pop("symbol")
+        if sym_val is not None:
+            payload["ticker"] = sym_val
+    elif "symbol" in fields and "ticker" not in fields and "ticker" in payload and "symbol" not in payload:
+        tkr_val = payload.pop("ticker")
+        if tkr_val is not None:
+            payload["symbol"] = tkr_val
+
+    if "accession" in fields and "accession_number" in payload and "accession" not in payload:
+        acc_val = payload.pop("accession_number")
+        if acc_val is not None:
+            payload["accession"] = acc_val
+
+    if tool_name == "guidance_and_nongaap_reconciler" and "period" in payload and "period_label" not in payload:
+        per_val = payload.pop("period")
+        if per_val is not None:
+            payload["period_label"] = per_val
+
+    if tool_name == "read_sources" and "reads" not in payload and "source_id" in payload:
+        read_item: dict[str, Any] = {"source_id": payload.pop("source_id")}
+        if "start" in payload:
+            read_item["start"] = payload.pop("start")
+        if "end" in payload:
+            read_item["end"] = payload.pop("end")
+        payload["reads"] = [read_item]
+
+    if "rationale" in fields:
+        raw_rat = payload.get("rationale")
+        if not isinstance(raw_rat, str) or not raw_rat.strip():
+            payload["rationale"] = f"Squad {worker_role or 'prefetch'} read-only lookup."
+    return payload
+
+
+def _tool_validation_error_payload(
+    tool_name: str,
+    input_model: type[BaseModel],
+    exc: ValidationError | ValueError,
+) -> dict[str, Any]:
+    errors_list: list[dict[str, str]] = []
+    if isinstance(exc, ValidationError):
+        for err in exc.errors()[:10]:
+            loc = ".".join(str(part) for part in err.get("loc", ())) or "<root>"
+            errors_list.append({
+                "loc": loc,
+                "type": str(err.get("type") or "validation_error"),
+                "msg": str(err.get("msg") or "Invalid value"),
+            })
+    else:
+        errors_list.append({"loc": "<root>", "type": "value_error", "msg": str(exc)})
+    return {
+        "status": "failed",
+        "reason": "invalid_tool_arguments",
+        "tool": tool_name,
+        "message": f"Invalid arguments for tool {tool_name!r}: {errors_list[0]['loc']} - {errors_list[0]['msg']}",
+        "validation_errors": errors_list,
+        "allowed_keys": sorted(input_model.model_fields.keys()),
+        "hint": _TOOL_ARGUMENT_HINTS.get(tool_name, "Match the tool JSON schema keys and required fields."),
+    }
+
+
 class FinToolboxToolRunner:
     """Adapter bridging ``FinDataToolbox`` + in-memory sources into ``SquadToolRunner``."""
 
@@ -1399,16 +1589,70 @@ class FinToolboxToolRunner:
         *,
         entities: dict[str, dict[str, Any]] | None = None,
         source_by_id: dict[str, Any] | None = None,
+        as_of: date | datetime | None = None,
     ) -> None:
         self._toolbox = toolbox
         self._entities = entities if entities is not None else {}
         self._source_by_id = source_by_id if source_by_id is not None else {}
+        self._as_of_dt = _normalize_as_of_datetime(as_of)
+        self._in_flight_source_ids: set[str] = set()
         self._lock = RLock()
+
+    def set_as_of(self, as_of: date | datetime | None) -> None:
+        with self._lock:
+            self._as_of_dt = _normalize_as_of_datetime(as_of)
+
+    def register_entity(self, entity_id: str, info: Mapping[str, Any]) -> None:
+        if not entity_id or not isinstance(info, Mapping):
+            return
+        entry = dict(info)
+        with self._lock:
+            self._entities[entity_id] = entry
+            self._entities[_norm_runner_entity_id(entity_id)] = entry
+            ids = entry.get("identifiers") if isinstance(entry.get("identifiers"), Mapping) else {}
+            cik_val = ids.get("cik") or entry.get("cik")
+            if isinstance(cik_val, str) and cik_val.strip().isdigit():
+                self._entities[f"cik:{cik10(cik_val.strip())}"] = entry
+            sym_val = entry.get("symbol")
+            if isinstance(sym_val, str) and sym_val.strip():
+                sym_up = sym_val.strip().upper()
+                self._entities[f"TICKER:{sym_up}"] = entry
+                self._entities[f"ticker:{sym_up}"] = entry
+
+    def register_source(self, source: Any, *, in_flight: bool = False) -> None:
+        sid = getattr(source, "source_id", None)
+        if not isinstance(sid, str) or not sid.strip():
+            return
+        with self._lock:
+            self._source_by_id[sid] = source
+            if in_flight:
+                self._in_flight_source_ids.add(sid)
+
+    def register_sources(self, sources: Iterable[Any], *, in_flight: bool = False) -> None:
+        for src in sources:
+            self.register_source(src, in_flight=in_flight)
+
+    @property
+    def entities(self) -> dict[str, dict[str, Any]]:
+        with self._lock:
+            return dict(self._entities)
 
     @property
     def source_by_id(self) -> dict[str, Any]:
         with self._lock:
             return dict(self._source_by_id)
+
+    def _eligible_sources_snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            as_of_dt = self._as_of_dt
+            in_flight = set(self._in_flight_source_ids)
+            raw = dict(self._source_by_id)
+        out: dict[str, Any] = {}
+        for sid, src in raw.items():
+            ok, _ = _source_eligibility_status(src, as_of_dt=as_of_dt, in_flight_ids=in_flight)
+            if ok:
+                out[sid] = src
+        return out
 
     def call_tool(
         self,
@@ -1423,59 +1667,186 @@ class FinToolboxToolRunner:
             raise SquadToolViolationError(
                 f"Worker {worker_role!r} is not permitted to invoke {tool_name!r}."
             )
+        if not isinstance(arguments, Mapping):
+            return {
+                "status": "failed",
+                "reason": "invalid_tool_arguments",
+                "tool": tool_name,
+                "message": f"Tool {tool_name!r} arguments must be a JSON object.",
+                "hint": _TOOL_ARGUMENT_HINTS.get(tool_name, "Pass a JSON object matching the tool schema."),
+            }
         if tool_name == "read_sources":
-            return self._local_read_sources(arguments)
+            return self._local_read_sources(arguments, worker_role=worker_role)
         if tool_name == "search_source":
-            return self._local_search_source(arguments)
+            return self._local_search_source(arguments, worker_role=worker_role)
         if tool_name == "outline_source":
-            return self._local_outline_source(arguments)
+            return self._local_outline_source(arguments, worker_role=worker_role)
 
         spec = TOOL_REGISTRY.get(tool_name)
         if spec is None:
             return {"status": "failed", "reason": "unknown_tool", "message": f"Unknown tool {tool_name!r}."}
-        req_payload = dict(arguments)
-        req_payload.setdefault("rationale", f"Squad {worker_role or 'prefetch'} read-only lookup.")
-        req = spec.input_model.model_validate(req_payload)
+
+        req_payload = _normalize_tool_arguments(tool_name, spec.input_model, arguments, worker_role=worker_role)
+        try:
+            req = spec.input_model.model_validate(req_payload)
+        except (ValidationError, ValueError) as exc:
+            return _tool_validation_error_payload(tool_name, spec.input_model, exc)
+
+        method = getattr(self._toolbox, tool_name, None)
+        if not callable(method) and tool_name in _DIAGNOSTIC_TOOL_RUNNERS:
+            return self._run_local_diagnostic_tool(tool_name, req)
+        if not callable(method):
+            return {"status": "unavailable", "reason": "tool_not_wired", "message": f"Toolbox missing {tool_name!r}."}
 
         with self._lock:
             entities_snapshot = dict(self._entities)
-            sources_snapshot = dict(self._source_by_id)
+        sources_snapshot = self._eligible_sources_snapshot()
 
-        method = getattr(self._toolbox, tool_name, None)
-        if not callable(method):
-            return {"status": "unavailable", "reason": "tool_not_wired", "message": f"Toolbox missing {tool_name!r}."}
         sig = inspect.signature(method)
         kwargs: dict[str, Any] = {}
         if "source_by_id" in sig.parameters:
             kwargs["source_by_id"] = sources_snapshot
-        if "entities" in sig.parameters:
-            outcome = method(req, entities_snapshot, **kwargs)
-        else:
-            outcome = method(req, **kwargs)
+        try:
+            if "entities" in sig.parameters:
+                outcome = method(req, entities_snapshot, **kwargs)
+            else:
+                outcome = method(req, **kwargs)
+        except SquadExecutionError:
+            raise
+        except (ValidationError, ValueError) as exc:
+            return _tool_validation_error_payload(tool_name, spec.input_model, exc)
+        except Exception as exc:
+            return {
+                "status": "failed",
+                "reason": "tool_execution_error",
+                "tool": tool_name,
+                "message": f"{tool_name} failed: {exc}",
+                "hint": _TOOL_ARGUMENT_HINTS.get(tool_name, "Verify input identifiers and try an alternative source."),
+            }
 
         with self._lock:
             if getattr(outcome, "entities", None):
-                self._entities.update(outcome.entities)
+                for eid, einfo in outcome.entities.items():
+                    self.register_entity(str(eid), einfo)
             if getattr(outcome, "source", None) is not None:
-                src = outcome.source
-                self._source_by_id[src.source_id] = src
+                self.register_source(outcome.source, in_flight=True)
         return dict(outcome.result)
 
-    def _local_read_sources(self, arguments: Mapping[str, Any]) -> dict[str, Any]:
-        reads = arguments.get("reads") or []
-        out: list[dict[str, Any]] = []
+    def _run_local_diagnostic_tool(self, tool_name: str, req: BaseModel) -> dict[str, Any]:
+        request_cls, runner = _DIAGNOSTIC_TOOL_RUNNERS[tool_name]
+        try:
+            payload_args = req.model_dump(mode="python", exclude={"rationale"})
+            inner_req = request_cls.model_validate(payload_args)
+            diagnostic = runner(inner_req)
+        except (ValidationError, ValueError) as exc:
+            return _tool_validation_error_payload(tool_name, request_cls, exc)
+        except Exception as exc:
+            return {
+                "status": "failed",
+                "reason": "tool_execution_error",
+                "tool": tool_name,
+                "message": f"{tool_name} execution failed: {exc}",
+                "hint": _TOOL_ARGUMENT_HINTS.get(tool_name, ""),
+            }
+        rendered = diagnostic.model_dump(mode="json")
+        req_dumped = req.model_dump(mode="json")
+        digest = sha256(
+            json.dumps(
+                {"tool": tool_name, "request": req_dumped, "result": rendered},
+                sort_keys=True,
+                ensure_ascii=False,
+                default=str,
+            ).encode("utf-8")
+        ).hexdigest()[:32]
+        return {
+            "status": "ok",
+            "analysis_id": f"earnings-diag-{digest}",
+            **rendered,
+        }
+
+    def _get_checked_local_source(self, source_id: str) -> tuple[Any | None, str]:
         with self._lock:
-            sources = dict(self._source_by_id)
-        for item in reads:
-            if not isinstance(item, Mapping):
-                continue
-            sid = str(item.get("source_id") or "")
-            src = sources.get(sid)
+            src = self._source_by_id.get(source_id)
+            as_of_dt = self._as_of_dt
+            in_flight = set(self._in_flight_source_ids)
+        if src is None:
+            return None, "source_not_found"
+        ok, code = _source_eligibility_status(src, as_of_dt=as_of_dt, in_flight_ids=in_flight)
+        if not ok:
+            return None, code
+        return src, "eligible"
+
+    def _local_read_sources(
+        self,
+        arguments: Mapping[str, Any],
+        *,
+        worker_role: WorkerRole | None = None,
+    ) -> dict[str, Any]:
+        req_payload = _normalize_tool_arguments("read_sources", ReadRequest, arguments, worker_role=worker_role)
+        try:
+            req = ReadRequest.model_validate(req_payload)
+        except (ValidationError, ValueError) as exc:
+            return _tool_validation_error_payload("read_sources", ReadRequest, exc)
+
+        total_requested = 0
+        planned: list[tuple[Any, int, int, str, str]] = []
+        for item in req.reads:
+            src, elig_code = self._get_checked_local_source(item.source_id)
             if src is None:
-                out.append({"source_id": sid, "status": "unavailable", "reason": "source_not_found"})
+                planned.append((None, 0, 0, item.source_id, elig_code))
                 continue
-            start = max(0, int(item.get("start") or 0))
-            end = min(len(src.text), int(item.get("end") or min(len(src.text), start + 8000)))
+            total_chars = len(src.text)
+            start = item.start
+            raw_end = item.end if item.end is not None else min(total_chars, start + MAX_READ_SOURCE_SPAN_CHARS)
+            if start >= total_chars or raw_end <= start:
+                return {
+                    "status": "failed",
+                    "reason": "invalid_source_range",
+                    "source_id": item.source_id,
+                    "total_characters": total_chars,
+                    "message": f"Invalid source range [{start}, {raw_end}) for {item.source_id} (total_characters={total_chars}).",
+                    "hint": f"Use 0 <= start < end <= {total_chars}.",
+                }
+            end = min(raw_end, total_chars)
+            span_chars = end - start
+            if span_chars > MAX_READ_SOURCE_SPAN_CHARS:
+                return {
+                    "status": "invalid",
+                    "reason": "read_span_too_large",
+                    "source_id": item.source_id,
+                    "total_characters": total_chars,
+                    "requested_characters": span_chars,
+                    "max_span_characters": MAX_READ_SOURCE_SPAN_CHARS,
+                    "message": (
+                        f"Requested span ({span_chars} chars) exceeds max {MAX_READ_SOURCE_SPAN_CHARS}. "
+                        "Use outline_source or search_source first, then read smaller slices."
+                    ),
+                }
+            total_requested += span_chars
+            planned.append((src, start, end, item.source_id, "eligible"))
+
+        if total_requested > MAX_READ_SOURCES_BATCH_CHARS:
+            return {
+                "status": "invalid",
+                "reason": "read_batch_too_large",
+                "requested_characters": total_requested,
+                "max_batch_characters": MAX_READ_SOURCES_BATCH_CHARS,
+                "message": (
+                    f"Total requested batch ({total_requested} chars) exceeds max {MAX_READ_SOURCES_BATCH_CHARS}. "
+                    "Split into smaller read_sources calls."
+                ),
+            }
+
+        out: list[dict[str, Any]] = []
+        for src, start, end, sid, code in planned:
+            if src is None:
+                out.append({
+                    "source_id": sid,
+                    "status": "unavailable" if code == "source_not_found" else "denied_or_unavailable",
+                    "reason": code,
+                })
+                continue
+            total_chars = len(src.text)
             out.append({
                 "source_id": sid,
                 "status": "ok",
@@ -1483,41 +1854,68 @@ class FinToolboxToolRunner:
                 "content_sha256": src.content_sha256,
                 "start": start,
                 "end": end,
+                "total_characters": total_chars,
+                "truncated": start > 0 or end < total_chars,
                 "text": src.text[start:end],
             })
         return {"status": "ok", "reads": out}
 
-    def _local_search_source(self, arguments: Mapping[str, Any]) -> dict[str, Any]:
-        sid = str(arguments.get("source_id") or "")
-        query = str(arguments.get("query") or "").strip()
-        with self._lock:
-            src = self._source_by_id.get(sid)
-        if src is None:
-            return {"status": "failed", "reason": "source_not_found"}
-        if not query:
-            return {"status": "failed", "reason": "invalid_request", "message": "query required"}
-        hits: list[dict[str, Any]] = []
-        lower_text = src.text.casefold()
-        lower_q = query.casefold()
-        pos = 0
-        while len(hits) < 10:
-            idx = lower_text.find(lower_q, pos)
-            if idx < 0:
-                break
-            lo = max(0, idx - 120)
-            hi = min(len(src.text), idx + len(query) + 180)
-            hits.append({"start": lo, "end": hi, "snippet": src.text[lo:hi]})
-            pos = idx + max(1, len(query))
-        return {"status": "ok", "source_id": sid, "hits": hits}
+    def _local_search_source(
+        self,
+        arguments: Mapping[str, Any],
+        *,
+        worker_role: WorkerRole | None = None,
+    ) -> dict[str, Any]:
+        req_payload = _normalize_tool_arguments("search_source", SearchSourceRequest, arguments, worker_role=worker_role)
+        try:
+            req = SearchSourceRequest.model_validate(req_payload)
+        except (ValidationError, ValueError) as exc:
+            return _tool_validation_error_payload("search_source", SearchSourceRequest, exc)
 
-    def _local_outline_source(self, arguments: Mapping[str, Any]) -> dict[str, Any]:
-        sid = str(arguments.get("source_id") or "")
-        with self._lock:
-            src = self._source_by_id.get(sid)
+        src, elig_code = self._get_checked_local_source(req.source_id)
         if src is None:
-            return {"status": "failed", "reason": "source_not_found"}
-        lines = [line for line in src.text.splitlines() if line.strip()][:25]
-        return {"status": "ok", "source_id": sid, "title": src.title, "preview_lines": lines}
+            return {
+                "status": "failed" if elig_code == "source_not_found" else "denied_or_unavailable",
+                "reason": elig_code,
+                "source_id": req.source_id,
+            }
+        from .research_tool_executor import _search_source_text
+
+        result = _search_source_text(
+            src,
+            query=req.query,
+            max_hits=req.max_hits,
+            case_sensitive=req.case_sensitive,
+        )
+        result["status"] = "ok"
+        return result
+
+    def _local_outline_source(
+        self,
+        arguments: Mapping[str, Any],
+        *,
+        worker_role: WorkerRole | None = None,
+    ) -> dict[str, Any]:
+        req_payload = _normalize_tool_arguments("outline_source", OutlineSourceRequest, arguments, worker_role=worker_role)
+        try:
+            req = OutlineSourceRequest.model_validate(req_payload)
+        except (ValidationError, ValueError) as exc:
+            return _tool_validation_error_payload("outline_source", OutlineSourceRequest, exc)
+
+        src, elig_code = self._get_checked_local_source(req.source_id)
+        if src is None:
+            return {
+                "status": "failed" if elig_code == "source_not_found" else "denied_or_unavailable",
+                "reason": elig_code,
+                "source_id": req.source_id,
+            }
+        from .research_tool_executor import _extract_source_outline
+
+        outline = _extract_source_outline(src, max_entries=req.max_entries)
+        outline["status"] = "ok"
+        if not outline.get("entries"):
+            outline["preview_lines"] = [line for line in src.text.splitlines() if line.strip()][:25]
+        return outline
 
 
 # --------------------------------------------------------------------------- Prefetch Inputs & Stage 0
@@ -1988,6 +2386,18 @@ def gate_evidence_cards(
             perms_by_src[sid] = dict(p)
 
     sha_by_src = {ref.source_id: ref.content_sha256 for ref in snapshot.prefetched_sources}
+    hard_excluded_codes = {
+        "source_excluded_simulated",
+        "source_excluded_source_not_authorized",
+        "source_excluded_model_permission_missing",
+        "source_excluded_display_permission_missing",
+        "source_excluded_after_as_of_cutoff",
+    }
+    excluded_sources = {
+        g.source
+        for g in snapshot.open_gaps
+        if g.code in hard_excluded_codes and isinstance(g.source, str) and g.source
+    }
     verified_cards: list[EvidenceCard] = []
     verified_ids: list[str] = []
     dropped_ids: list[str] = []
@@ -2007,6 +2417,13 @@ def gate_evidence_cards(
         for card in batch.cards:
             kept_citations: list[EvidenceCitation] = []
             for cit in card.citations:
+                if cit.source_id in excluded_sources:
+                    unverified_cits.append({
+                        "card_id": card.card_id,
+                        "source_id": cit.source_id,
+                        "reason": "source_excluded_by_policy",
+                    })
+                    continue
                 src_perms = perms_by_src.get(cit.source_id)
                 if src_perms is not None and src_perms.get("export") is False:
                     non_exportable.add(cit.source_id)
@@ -2062,22 +2479,531 @@ def gate_evidence_cards(
     return verified_cards, report, gaps
 
 
-# --------------------------------------------------------------------------- Prompt Builders (Isolated Bear Prompt)
+# --------------------------------------------------------------------------- Prompt Builders, Pack Injection & Writer Slimming
+_DEFAULT_WRITER_SECTIONS: tuple[str, ...] = (
+    "Summary & Expectations Gap (Guidance/Non-GAAP)",
+    "Earnings Quality & Cash Forensics (R/Y/G)",
+    "Multi-Period Trends, Segments & KPIs",
+    "Cross-Period Redline & Policy Changes",
+    "Valuation Multiples & Reverse-DCF",
+    "Anchored Bear Case (w/ Next-Q Trigger) & Gaps",
+)
+_DEFAULT_WRITER_MUST_STATE: tuple[str, ...] = (
+    "as-of dates, clock & SIC gate",
+    "coverage gaps (consensus/transcript, FCF<=0 DCF)",
+    "calculated vs quoted; bear anchor + trigger",
+)
+
+
+def _contains_cjk(text: str | None) -> bool:
+    return bool(text and re.search(r"[\u4e00-\u9fff]", text))
+
+
+def _l1_writer_guidance(sic: str | None) -> tuple[list[str], list[str]]:
+    ctx = resolve_method_pack_context(sic)
+    composed = ctx.get("composed_pack")
+    base = getattr(composed, "base_pack", None)
+    if base is not None and getattr(base, "report_structure", None) is not None:
+        return list(base.report_structure.sections), list(base.report_structure.must_state)
+    try:
+        rm = importlib.import_module("app.research_methods")
+        pack = getattr(rm, "get_pack", lambda _k: None)("earnings_review")
+        if pack is not None and getattr(pack, "report_structure", None) is not None:
+            return list(pack.report_structure.sections), list(pack.report_structure.must_state)
+    except Exception:
+        pass
+    return list(_DEFAULT_WRITER_SECTIONS), list(_DEFAULT_WRITER_MUST_STATE)
+
+
+def _compact_statements_summary(statements: Sequence[PeriodFinancials]) -> list[dict[str, Any]]:
+    key_fields = (
+        "revenue", "cost_of_revenue", "gross_profit", "operating_income",
+        "net_income", "ebitda", "sbc", "operating_cash_flow", "capex",
+        "free_cash_flow", "cash", "accounts_receivable", "inventory",
+        "total_debt", "shares_diluted",
+    )
+    out: list[dict[str, Any]] = []
+    for p in list(statements)[:6]:
+        metrics: dict[str, Any] = {}
+        for fname in key_fields:
+            mv = getattr(p, fname, None)
+            if mv is not None:
+                metrics[fname] = {
+                    "value": str(mv.value),
+                    "unit": mv.unit,
+                    "currency": mv.currency,
+                    "fact_id": mv.fact_id,
+                }
+        out.append({
+            "period_label": p.period_label,
+            "period_type": p.period_type,
+            "period_end": p.period_end.isoformat() if p.period_end else None,
+            "currency": p.currency,
+            "monetary_unit": p.monetary_unit,
+            "metrics": metrics,
+        })
+    return out
+
+
+def _compact_snapshot_for_writer(snapshot: EarningsPrefetchSnapshot | Mapping[str, Any]) -> dict[str, Any]:
+    """Build a compact structured snapshot for Stage 3B Writer without giant raw exhibit blobs."""
+    if isinstance(snapshot, EarningsPrefetchSnapshot):
+        statements_summary = _compact_statements_summary(snapshot.statements)
+        flags = [f.model_dump(mode="json") for f in snapshot.flags]
+        diag = snapshot.diagnostics
+        diag_summary = (
+            {
+                "margin_bridge": [m.model_dump(mode="json") for m in diag.margin_bridge],
+                "earnings_quality": diag.earnings_quality.model_dump(mode="json") if diag.earnings_quality else None,
+                "working_capital": diag.working_capital.model_dump(mode="json") if diag.working_capital else None,
+                "capital_allocation": diag.capital_allocation.model_dump(mode="json") if diag.capital_allocation else None,
+            }
+            if diag is not None
+            else None
+        )
+        er = snapshot.earnings_release
+        er_summary = None
+        if er is not None:
+            def _er_part(p: Any) -> dict[str, Any] | None:
+                if p is None:
+                    return None
+                return {
+                    "accession": p.accession,
+                    "filed_at": p.filed_at.isoformat() if p.filed_at else None,
+                    "period_of_report": p.period_of_report.isoformat() if p.period_of_report else None,
+                    "management_summary": (p.management_summary or "")[:1200] or None,
+                    "management_highlights": list(p.management_highlights[:8]),
+                    "guidance_passages": [
+                        {"heading": gp.heading, "horizon": gp.horizon, "text": gp.text[:500]}
+                        for gp in p.guidance_passages[:6]
+                    ],
+                    "nongaap_titles": [ng.title for ng in p.nongaap_reconciliations[:8] if ng.title],
+                    "gaps": list(p.gaps),
+                }
+            er_summary = {
+                "pairing_mode": er.pairing_mode,
+                "days_between_filings": er.days_between_filings,
+                "current": _er_part(er.current),
+                "prior": _er_part(er.prior),
+                "gaps": list(er.gaps),
+            }
+        redline = snapshot.redline_summary
+        redline_summary = None
+        if redline is not None:
+            redline_summary = {
+                "total_added": redline.total_added,
+                "total_removed": redline.total_removed,
+                "total_revised": redline.total_revised,
+                "total_filtered_noise": redline.total_filtered_noise,
+                "sections": {
+                    k: {
+                        "has_substantive_changes": sec.has_substantive_changes,
+                        "added_count": len(sec.added),
+                        "removed_count": len(sec.removed),
+                        "revised_count": len(sec.revised),
+                        "added_previews": [(p.current_text or "")[:300] for p in sec.added[:3]],
+                        "revised_previews": [(p.redline_markup or p.current_text or "")[:300] for p in sec.revised[:3]],
+                    }
+                    for k, sec in redline.section_diffs.items()
+                },
+            }
+        cat = snapshot.filing_table_catalog
+        cat_summary = (
+            {
+                "accession": cat.accession,
+                "report_count": cat.report_count,
+                "key_tables": [
+                    {"r_file": r.r_file, "short_name": r.short_name, "category": r.normalized_category}
+                    for r in [*cat.statements[:8], *cat.tables[:8], *cat.notes[:6]]
+                ],
+            }
+            if cat is not None
+            else None
+        )
+        return {
+            "snapshot_id": snapshot.snapshot_id,
+            "entity_id": snapshot.entity_id,
+            "symbol": snapshot.symbol,
+            "cik": snapshot.cik,
+            "company_name": snapshot.company_name,
+            "sic_code": snapshot.sic_code,
+            "sic_description": snapshot.sic_description,
+            "period_label": snapshot.period_label,
+            "as_of": snapshot.as_of.isoformat() if snapshot.as_of else None,
+            "filing_accession": snapshot.filing_accession,
+            "prior_filing_accession": snapshot.prior_filing_accession,
+            "sector_applicability": snapshot.sector_applicability.model_dump(mode="json"),
+            "statements_summary": statements_summary,
+            "flags": flags,
+            "diagnostics_summary": diag_summary,
+            "earnings_release_summary": er_summary,
+            "filing_table_catalog_summary": cat_summary,
+            "redline_summary": redline_summary,
+            "guidance_nongaap": snapshot.guidance_nongaap.model_dump(mode="json") if snapshot.guidance_nongaap else None,
+            "valuation": snapshot.valuation.model_dump(mode="json") if snapshot.valuation else None,
+            "consensus_summary": {
+                "status": snapshot.consensus_summary.status,
+                "provider": snapshot.consensus_summary.provider,
+                "records": [r.model_dump(mode="json") for r in snapshot.consensus_summary.records[:6]],
+            },
+            "transcript_index": snapshot.transcript_index.model_dump(mode="json"),
+            "prefetched_sources": [s.model_dump(mode="json") for s in snapshot.prefetched_sources],
+        }
+
+    # Mapping fallback (e.g. if dossier.model_dump() was passed to _build_writer_payload)
+    snap_dict = dict(snapshot)
+    if "statements" in snap_dict and "statements_summary" not in snap_dict:
+        raw_stmts = snap_dict.pop("statements") or []
+        snap_dict["statements_summary"] = [
+            {
+                "period_label": s.get("period_label"),
+                "period_type": s.get("period_type"),
+                "currency": s.get("currency"),
+                "metrics": {
+                    k: {"value": v.get("value"), "unit": v.get("unit"), "fact_id": v.get("fact_id")}
+                    for k, v in s.items()
+                    if isinstance(v, Mapping) and "value" in v
+                },
+            }
+            for s in raw_stmts[:6]
+            if isinstance(s, Mapping)
+        ]
+    snap_dict.pop("derived_metrics", None)
+    er_raw = snap_dict.pop("earnings_release", None)
+    if isinstance(er_raw, Mapping) and "earnings_release_summary" not in snap_dict:
+        def _slim_er_part(part: Any) -> dict[str, Any] | None:
+            if not isinstance(part, Mapping):
+                return None
+            return {
+                "accession": part.get("accession"),
+                "filed_at": part.get("filed_at"),
+                "management_summary": str(part.get("management_summary") or "")[:1200] or None,
+                "management_highlights": list((part.get("management_highlights") or [])[:8]),
+                "guidance_passages": [
+                    {"heading": g.get("heading"), "horizon": g.get("horizon"), "text": str(g.get("text") or "")[:500]}
+                    for g in (part.get("guidance_passages") or [])[:6]
+                    if isinstance(g, Mapping)
+                ],
+                "gaps": list(part.get("gaps") or []),
+            }
+        snap_dict["earnings_release_summary"] = {
+            "pairing_mode": er_raw.get("pairing_mode"),
+            "current": _slim_er_part(er_raw.get("current")),
+            "prior": _slim_er_part(er_raw.get("prior")),
+        }
+    cat_raw = snap_dict.pop("filing_table_catalog", None)
+    if isinstance(cat_raw, Mapping) and "filing_table_catalog_summary" not in snap_dict:
+        items = [
+            *(cat_raw.get("statements") or [])[:8],
+            *(cat_raw.get("tables") or [])[:8],
+            *(cat_raw.get("notes") or [])[:6],
+        ]
+        snap_dict["filing_table_catalog_summary"] = {
+            "accession": cat_raw.get("accession"),
+            "report_count": cat_raw.get("report_count"),
+            "key_tables": [
+                {"r_file": r.get("r_file"), "short_name": r.get("short_name"), "category": r.get("normalized_category")}
+                for r in items
+                if isinstance(r, Mapping)
+            ],
+        }
+    red_raw = snap_dict.get("redline_summary")
+    if isinstance(red_raw, Mapping) and "section_diffs" in red_raw:
+        sdiffs = red_raw.get("section_diffs") or {}
+        snap_dict["redline_summary"] = {
+            "total_added": red_raw.get("total_added"),
+            "total_removed": red_raw.get("total_removed"),
+            "total_revised": red_raw.get("total_revised"),
+            "total_filtered_noise": red_raw.get("total_filtered_noise"),
+            "sections": {
+                k: {
+                    "has_substantive_changes": sec.get("has_substantive_changes"),
+                    "added_count": len(sec.get("added") or []),
+                    "removed_count": len(sec.get("removed") or []),
+                    "revised_count": len(sec.get("revised") or []),
+                    "added_previews": [str(p.get("current_text") or "")[:300] for p in (sec.get("added") or [])[:3] if isinstance(p, Mapping)],
+                    "revised_previews": [str(p.get("redline_markup") or p.get("current_text") or "")[:300] for p in (sec.get("revised") or [])[:3] if isinstance(p, Mapping)],
+                }
+                for k, sec in sdiffs.items()
+                if isinstance(sec, Mapping)
+            },
+        }
+    return snap_dict
+
+
+@lru_cache(maxsize=128)
+def _render_l1_l2_pack_cached(
+    sic_key: str | None,
+    effective_preferred: str | None,
+    is_sector_gated: bool,
+) -> dict[str, Any]:
+    ctx = resolve_method_pack_context(sic_key, preferred_pack_id=effective_preferred)
+    composed = ctx.get("composed_pack")
+    base_pack = getattr(composed, "base_pack", None)
+    industry_pack = getattr(composed, "industry_pack", None)
+    rendered_text = getattr(composed, "rendered_prompt", None)
+    if not rendered_text and base_pack is not None:
+        try:
+            rm = importlib.import_module("app.research_methods")
+            render_fn = getattr(rm, "render_for_prompt", None)
+            if callable(render_fn):
+                rendered_text = render_fn(composed)
+        except Exception:
+            rendered_text = None
+
+    l1_checks: list[str] = []
+    l1_reqs: list[dict[str, Any]] = []
+    l1_reconcile: list[dict[str, Any]] = []
+    if base_pack is not None:
+        l1_checks = list(base_pack.unit_and_period_checks)
+        l1_reqs = [
+            {
+                "id": req.id,
+                "description": req.description,
+                "required": req.required,
+                "acceptance": req.acceptance,
+                "fallback": req.fallback,
+            }
+            for req in base_pack.evidence_requirements
+        ]
+        l1_reconcile = [
+            {"metric": r.metric, "source_classes": list(r.source_classes), "note": r.note}
+            for r in base_pack.reconciliation
+        ]
+
+    l2_kpis: list[dict[str, Any]] = []
+    l2_filing_focus: list[str] = []
+    l2_bear_angles: list[dict[str, Any]] = []
+    l2_checks: list[str] = []
+    if industry_pack is not None:
+        l2_kpis = [
+            {
+                "id": k.id,
+                "name_en": k.name_en,
+                "name_zh": k.name_zh,
+                "definition_and_formula": k.definition_and_formula,
+                "preferred_tools": list(k.preferred_tools),
+                "where_to_look": k.where_to_look,
+                "red_flags": list(k.red_flags),
+                "required": k.required,
+            }
+            for k in industry_pack.kpis
+        ]
+        l2_filing_focus = list(industry_pack.filing_focus)
+        l2_bear_angles = [
+            {"angle": a.angle, "evidence_anchor": a.evidence_anchor, "next_quarter_trigger": a.next_quarter_trigger}
+            for a in industry_pack.counter_evidence_angles
+        ]
+        l2_checks = list(industry_pack.unit_and_period_checks)
+
+    return {
+        "l1_pack_id": ctx["l1_pack_id"],
+        "l2_pack_id": ctx["l2_pack_id"],
+        "selection_reason": ctx["reason"],
+        "is_sector_gated": is_sector_gated,
+        "rendered_prompt": rendered_text or "",
+        "l1_evidence_requirements": l1_reqs,
+        "l1_unit_and_period_checks": l1_checks,
+        "l1_reconciliation": l1_reconcile,
+        "l2_kpis": l2_kpis,
+        "l2_filing_focus": l2_filing_focus,
+        "l2_counter_evidence_angles": l2_bear_angles,
+        "l2_unit_and_period_checks": l2_checks,
+    }
+
+
+def _render_l1_l2_pack_for_worker(
+    snapshot: EarningsPrefetchSnapshot,
+    *,
+    l2_pack_id: str | None,
+    worker_role: WorkerRole,
+) -> dict[str, Any]:
+    """Resolve and render L1 (earnings_review) + L2 (kpi_*) checklists & KPIs for Stage 2 workers."""
+    effective_preferred = None if snapshot.sector_applicability.is_gated else l2_pack_id
+    sic_key = str(snapshot.sic_code).strip() if snapshot.sic_code is not None else None
+    cached = _render_l1_l2_pack_cached(sic_key, effective_preferred, snapshot.sector_applicability.is_gated)
+    return {**cached, "worker_role": worker_role}
+
+
+def _worker_tool_sop(
+    role: WorkerRole,
+    allowed_set: set[str],
+    snapshot: EarningsPrefetchSnapshot,
+) -> str:
+    cik_hint = snapshot.cik or "<cik>"
+    sym_hint = snapshot.symbol or "<symbol>"
+    acc_hint = snapshot.filing_accession or "<accession_18_to_24_chars>"
+    common_read = (
+        "Local prefetched sources in `snapshot.prefetched_sources` are directly readable via "
+        "`read_sources` (`{\"reads\": [{\"source_id\": \"...\", \"start\": 0, \"end\": 8000}], \"rationale\": \"...\"}`), "
+        "`search_source` (`{\"source_id\": \"...\", \"query\": \"...\", \"rationale\": \"...\"}`), and "
+        "`outline_source` (`{\"source_id\": \"...\"}`)."
+    )
+    if role == "worker_segments":
+        order = (
+            f"Recommended tool order for worker_segments:\n"
+            f"1) Check `snapshot.filing_table_catalog` (`r_file`s) and call `sec_filing_tables` with "
+            f"`cik=\"{cik_hint}\"`, `accession=\"{acc_hint}\"`, `r_file=\"<R*.htm>\"`, `rationale=\"...\"` (omit `r_file` first if catalog absent).\n"
+            f"2) Inspect 8-K/10-Q/user-uploaded sources using `search_source`/`read_sources` (or `sec_earnings_release(cik=\"{cik_hint}\")` / `sec_filing_sections(source_id=\"...\")`).\n"
+            f"3) Optionally call `guidance_and_nongaap_reconciler(symbol=\"{sym_hint}\", period_label=..., guidance_metrics=[...], nongaap_bridges=[...], rationale=\"...\")` if reconciliations need deterministic check.\n"
+        )
+    elif role == "worker_forensics":
+        order = (
+            f"Recommended tool order for worker_forensics:\n"
+            f"1) Inspect Stage 0 `flags`, `redline_summary`, and `sec_sections` sources (`read_sources` / `search_source`).\n"
+            f"2) Call `sec_redline_diff` (using `current_source_id`/`prior_source_id` or `current_url`/`prior_url`), "
+            f"`sec_filing_tables(cik=\"{cik_hint}\", accession=\"{acc_hint}\", r_file=\"...\")`, or "
+            f"`sec_fulltext_search(cik=\"{cik_hint}\", query=\"...\", rationale=\"...\")`.\n"
+            f"3) Optionally call `earnings_quality_diagnostics` when recalculating PeriodFinancials.\n"
+        )
+    else:
+        order = (
+            f"Recommended tool order for worker_guidance:\n"
+            f"1) Inspect `snapshot.earnings_release_summary`, `snapshot.consensus_summary`, `snapshot.transcript_index`, and any user-uploaded sources via `read_sources`/`search_source`.\n"
+            f"2) Call `earnings_consensus(symbol=\"{sym_hint}\", rationale=\"...\")` and `earnings_transcript(symbol=\"{sym_hint}\", rationale=\"...\")` when FMP is configured, or `sec_earnings_release(cik=\"{cik_hint}\", rationale=\"...\")`.\n"
+            f"3) Call `guidance_and_nongaap_reconciler` / `valuation_and_implied_expectations` if structured guidance/Non-GAAP or valuation checks are needed.\n"
+        )
+    return (
+        f"{order}"
+        f"Tool argument conventions: SEC tools (`sec_earnings_release`, `sec_filing_tables`, `sec_filing_sections`, `sec_fulltext_search`) "
+        f"accept `cik` or `ticker` (plus `accession` >= 18 chars and `r_file` like `R10.htm` for tables); "
+        f"FMP & diagnostic tools accept `symbol` or `entity_id`.\n"
+        f"{common_read}\n"
+        f"Error & gap handling: if any tool returns `status=\"unavailable\"` / `\"failed\"` (e.g. `byok_key_required`), "
+        f"do NOT retry the exact same broken call; record the gap in `unresolved_gaps` and pivot to available 8-K/10-Q/user sources.\n"
+        f"Termination rule: stop calling tools once you have gathered verified quotes/facts (or exhausted available sources), "
+        f"and emit ONLY the final `EvidenceCardBatch` JSON object (strictly allowed tools only: {sorted(allowed_set)})."
+    )
+
+
+def _compact_snapshot_for_worker(snapshot: EarningsPrefetchSnapshot) -> dict[str, Any]:
+    """Return all Stage 0 snapshot metadata plus compact tables, fact_ids, summaries, and user uploads."""
+    er_summary = None
+    if snapshot.earnings_release is not None:
+        cur = snapshot.earnings_release.current
+        pri = snapshot.earnings_release.prior
+        er_summary = {
+            "pairing_mode": snapshot.earnings_release.pairing_mode,
+            "current": {
+                "accession": cur.accession,
+                "filed_at": cur.filed_at.isoformat() if cur.filed_at else None,
+                "management_summary": (cur.management_summary or "")[:1000] or None,
+                "management_highlights": list(cur.management_highlights[:6]),
+                "guidance_passages": [
+                    {"heading": g.heading, "horizon": g.horizon, "text": g.text[:400]}
+                    for g in cur.guidance_passages[:5]
+                ],
+                "nongaap_titles": [n.title for n in cur.nongaap_reconciliations[:6] if n.title],
+            } if cur else None,
+            "prior_accession": pri.accession if pri else None,
+        }
+
+    redline_compact = None
+    if snapshot.redline_summary is not None:
+        redline_compact = {
+            "total_added": snapshot.redline_summary.total_added,
+            "total_removed": snapshot.redline_summary.total_removed,
+            "total_revised": snapshot.redline_summary.total_revised,
+            "section_keys": list(snapshot.redline_summary.section_diffs.keys()),
+            "sections": {
+                k: {
+                    "has_substantive_changes": sec.has_substantive_changes,
+                    "added_count": len(sec.added),
+                    "revised_count": len(sec.revised),
+                    "added_previews": [(p.current_text or "")[:250] for p in sec.added[:2]],
+                    "revised_previews": [(p.redline_markup or p.current_text or "")[:250] for p in sec.revised[:2]],
+                }
+                for k, sec in snapshot.redline_summary.section_diffs.items()
+            },
+        }
+
+    return {
+        "entity_id": snapshot.entity_id,
+        "symbol": snapshot.symbol,
+        "cik": snapshot.cik,
+        "company_name": snapshot.company_name,
+        "sic_code": snapshot.sic_code,
+        "period_label": snapshot.period_label,
+        "sector_applicability": snapshot.sector_applicability.model_dump(mode="json"),
+        "flags": [f.model_dump(mode="json") for f in snapshot.flags],
+        "statements_compact": _compact_statements_summary(snapshot.statements),
+        "derived_metrics_count": snapshot.derived_metrics.get("statement_lines_count") if isinstance(snapshot.derived_metrics, Mapping) else None,
+        "filing_accession": snapshot.filing_accession,
+        "prior_filing_accession": snapshot.prior_filing_accession,
+        "current_filing_url": snapshot.current_filing_url,
+        "prior_filing_url": snapshot.prior_filing_url,
+        "prior_sections_source_id": snapshot.prior_sections_source_id,
+        "filing_table_catalog": (
+            snapshot.filing_table_catalog.model_dump(mode="json")
+            if snapshot.filing_table_catalog
+            else None
+        ),
+        "earnings_release_summary": er_summary,
+        "redline_summary": redline_compact,
+        "guidance_nongaap": snapshot.guidance_nongaap.model_dump(mode="json") if snapshot.guidance_nongaap else None,
+        "valuation_summary": (
+            {
+                "reverse_dcf": snapshot.valuation.reverse_dcf.model_dump(mode="json"),
+                "pe_ttm": snapshot.valuation.pe_ttm.model_dump(mode="json") if snapshot.valuation.pe_ttm else None,
+                "ev_to_ebitda": snapshot.valuation.ev_to_ebitda.model_dump(mode="json") if snapshot.valuation.ev_to_ebitda else None,
+                "fcf_ex_sbc": snapshot.valuation.fcf_ex_sbc.model_dump(mode="json") if snapshot.valuation.fcf_ex_sbc else None,
+            }
+            if snapshot.valuation is not None
+            else None
+        ),
+        "prefetched_sources": [s.model_dump(mode="json") for s in snapshot.prefetched_sources],
+        "user_uploaded_sources": [
+            s.model_dump(mode="json") for s in snapshot.prefetched_sources if s.kind == "user_supplied"
+        ],
+        "consensus_status": snapshot.consensus_summary.status,
+        "consensus_records": [r.model_dump(mode="json") for r in snapshot.consensus_summary.records[:6]],
+        "transcript_index": snapshot.transcript_index.model_dump(mode="json"),
+    }
+
+
 def build_isolated_bear_prompt(
     snapshot: EarningsPrefetchSnapshot,
     cards: Sequence[EvidenceCard],
     open_gaps: Sequence[SquadGap],
 ) -> tuple[str, str]:
     """Build a physically isolated adversarial Bear Reviewer prompt with ZERO bull narrative."""
+    valid_anchors = sorted(collect_valid_evidence_anchors(snapshot, cards, open_gaps))
+    example_anchor = valid_anchors[0] if valid_anchors else "flag_example"
+    example_json = json.dumps({
+        "batch_id": "bearbatch_example",
+        "items": [
+            {
+                "bear_id": "bear_1",
+                "thesis_challenge": "Accounts receivable grew +50% YoY vs +20% revenue growth, compressing OCF/NI below 0.70x.",
+                "anchored_evidence_ids": [example_anchor],
+                "anchor_kind": "flag",
+                "next_quarter_invalidation_trigger": "AR YoY growth minus revenue YoY growth narrows to <= +5.0 pp next quarter.",
+                "supporting_numbers": ["AR +50% YoY", "Revenue +20% YoY"],
+                "severity": "high",
+            }
+        ],
+        "rejected_items": [],
+        "reviewer_notes": "All challenges anchored strictly to verified diagnostic flags and EvidenceCards.",
+    }, ensure_ascii=False)
+
     system_prompt = (
-        "You are an independent buy-side Adversarial Bear Reviewer (bear_reviewer). "
+        "You are an independent buy-side Adversarial Bear Reviewer (bear_reviewer).\n"
         "You receive ONLY deterministic financial diagnostics, SEC disclosures/redlines, "
-        "valuation expectations, and factual EvidenceCards. You must NOT rely on any bull thesis "
-        "or optimistic narrative. Every BearCaseItem MUST anchor to concrete evidence IDs "
-        "(flag_id, redline section key, guidance/nongaap metric, valuation/Reverse-DCF metric, "
-        "or EvidenceCard card_id/fact_id), specify anchor_kind in {flag, redline, guidance_gap, valuation_gap}, "
-        "and define a concrete next_quarter_invalidation_trigger. Generic macro or competitive "
-        "platitudes without hard evidence anchors are rejected by the server gate."
+        "valuation expectations, open gaps, and factual EvidenceCards. You must NOT rely on any bull thesis "
+        "or optimistic narrative.\n\n"
+        "STRICT JSON CONTRACT — BearCaseBatch (extra='forbid' on outer batch AND every BearCaseItem; "
+        "NO extra keys like 'summary', 'bear_cases', or 'confidence'; output ONLY raw JSON):\n"
+        "- Outer BearCaseBatch keys: batch_id (str), items (list[BearCaseItem]), rejected_items (list, usually []), reviewer_notes (str, max 2000).\n"
+        "- BearCaseItem keys (extra='forbid'):\n"
+        "  * bear_id: non-blank str (e.g. 'bear_1')\n"
+        "  * thesis_challenge: non-blank str (max 3000) with concrete company metrics/numbers\n"
+        "  * anchored_evidence_ids: non-empty list[str] — MUST choose exact IDs from payload['valid_anchors']\n"
+        "  * anchor_kind: MUST be one of {'flag', 'redline', 'guidance_gap', 'valuation_gap'}\n"
+        "  * next_quarter_invalidation_trigger: non-blank str (max 1500) specifying measurable next-quarter falsification threshold\n"
+        "  * supporting_numbers: list[str] (strings only, e.g. ['+50% YoY', '0.68x'])\n"
+        "  * severity: MUST be one of {'high', 'medium', 'low'}\n"
+        "Generic macro or competitive platitudes without concrete numeric evidence and valid anchors are rejected by the server gate.\n\n"
+        f"Valid JSON example:\n{example_json}"
     )
     payload = {
         "entity": {
@@ -2088,6 +3014,7 @@ def build_isolated_bear_prompt(
             "period_label": snapshot.period_label,
         },
         "sector_applicability": snapshot.sector_applicability.model_dump(mode="json"),
+        "valid_anchors": valid_anchors,
         "diagnostic_flags": [f.model_dump(mode="json") for f in snapshot.flags],
         "redline_summary": snapshot.redline_summary.model_dump(mode="json") if snapshot.redline_summary else None,
         "guidance_nongaap": snapshot.guidance_nongaap.model_dump(mode="json") if snapshot.guidance_nongaap else None,
@@ -2111,14 +3038,18 @@ def build_isolated_bear_prompt(
 
 
 def _build_writer_payload(dossier_core: Mapping[str, Any], *, mode: Literal["memo", "deep_report"]) -> str:
+    slimmed = dict(dossier_core)
+    if "snapshot" in slimmed and slimmed["snapshot"] is not None:
+        slimmed["snapshot"] = _compact_snapshot_for_writer(slimmed["snapshot"])
     return json.dumps(
         {
             "render_mode": mode,
-            "locked_dossier": dossier_core,
+            "locked_dossier": slimmed,
             "rules": [
                 "Use ONLY facts, numbers, citations, bear cases, and open gaps present in locked_dossier.",
+                "Cite evidence inline using [card_id], source_id, and fact_id where available.",
                 "Respect sector_applicability: never fabricate or report disabled_by_sector metrics.",
-                "Do not invoke any retrieval tools; report open_gaps explicitly.",
+                "Do not invoke any retrieval tools; report open_gaps and bear invalidation triggers explicitly.",
             ],
         },
         ensure_ascii=False,
@@ -2130,18 +3061,53 @@ def _build_writer_payload(dossier_core: Mapping[str, Any], *, mode: Literal["mem
 def _deterministic_markdown_fallback(dossier_core: Mapping[str, Any], *, mode: Literal["memo", "deep_report"]) -> str:
     entity = dossier_core.get("symbol") or dossier_core.get("company_name") or dossier_core.get("entity_id")
     period = dossier_core.get("period_label") or "Latest Period"
-    title = "Buy-Side Earnings Memo" if mode == "memo" else "Deep Earnings Research Report"
+    use_zh = _contains_cjk(str(dossier_core.get("question") or "")) or any(
+        _contains_cjk(str(c.get("finding") or "")) for c in (dossier_core.get("evidence_cards") or [])
+    )
+    if use_zh:
+        title = "买方财报研究简报 (Memo)" if mode == "memo" else "深度财报研究报告 (Deep Report)"
+    else:
+        title = "Buy-Side Earnings Memo" if mode == "memo" else "Deep Earnings Research Report"
     lines = [f"# {title}: {entity} ({period})", ""]
+
+    snap = dossier_core.get("snapshot") if isinstance(dossier_core.get("snapshot"), Mapping) else {}
+    stmts = snap.get("statements_summary") or []
+    if stmts:
+        lines.append("## 核心财务指标摘要" if use_zh else "## Key Financial Summary")
+        latest = stmts[0]
+        metrics = latest.get("metrics") or {}
+        if metrics:
+            lines.append(f"- **Period ({latest.get('period_label')})**: " + ", ".join(
+                f"{k}={v.get('value')} {v.get('unit') or ''} [{v.get('fact_id') or '-'}]"
+                for k, v in list(metrics.items())[:8]
+                if isinstance(v, Mapping)
+            ))
+        lines.append("")
+
+    val = snap.get("valuation") if isinstance(snap.get("valuation"), Mapping) else {}
+    rdcf = val.get("reverse_dcf") if isinstance(val.get("reverse_dcf"), Mapping) else {}
+    if rdcf:
+        lines.append("## 估值与隐含预期" if use_zh else "## Valuation & Implied Expectations")
+        lines.append(
+            f"- Reverse-DCF status: `{rdcf.get('status')}`"
+            + (f" | implied 5Y FCF CAGR: {rdcf.get('implied_5y_fcf_cagr_pct')}%" if rdcf.get("implied_5y_fcf_cagr_pct") is not None else "")
+            + (f" ({rdcf.get('reason')})" if rdcf.get("reason") else "")
+        )
+        lines.append("")
+
     cards = dossier_core.get("evidence_cards") or []
     bears = dossier_core.get("bear_cases") or []
     gaps = dossier_core.get("open_gaps") or []
-    lines.append("## Key Evidence Findings")
+    lines.append("## 已核验证据发现" if use_zh else "## Key Evidence Findings")
     if cards:
         for c in cards:
-            lines.append(f"- **[{c.get('topic_tag')}]** ({c.get('card_id')}): {c.get('finding')}")
+            cits = c.get("citations") or []
+            cit_str = f" [sources: {', '.join(str(x.get('source_id')) for x in cits if isinstance(x, Mapping) and x.get('source_id'))}]" if cits else ""
+            lines.append(f"- **[{c.get('topic_tag')}]** (`{c.get('card_id')}`){cit_str}: {c.get('finding')}")
     else:
-        lines.append("- No verified evidence cards available.")
-    lines.extend(["", "## Adversarial Bear Cases"])
+        lines.append("- 暂无已核验证据卡片。" if use_zh else "- No verified evidence cards available.")
+
+    lines.extend(["", "## 证据锚定空头反证" if use_zh else "## Adversarial Bear Cases"])
     if bears:
         for b in bears:
             lines.append(
@@ -2149,8 +3115,9 @@ def _deterministic_markdown_fallback(dossier_core: Mapping[str, Any], *, mode: L
                 f"{b.get('thesis_challenge')} | Invalidation: {b.get('next_quarter_invalidation_trigger')}"
             )
     else:
-        lines.append("- No anchored bear cases recorded.")
-    lines.extend(["", "## Open Gaps & Boundaries"])
+        lines.append("- 暂无锚定空头反证。" if use_zh else "- No anchored bear cases recorded.")
+
+    lines.extend(["", "## 覆盖缺口与研究边界" if use_zh else "## Open Gaps & Boundaries"])
     sector = dossier_core.get("sector_applicability") or {}
     if sector.get("is_gated"):
         lines.append(f"- Sector gate active ({sector.get('sector_category')}): {sector.get('explanation')}")
@@ -2158,8 +3125,38 @@ def _deterministic_markdown_fallback(dossier_core: Mapping[str, Any], *, mode: L
         for g in gaps:
             lines.append(f"- [{g.get('stage')}] {g.get('code')}: {g.get('message')}")
     elif not sector.get("is_gated"):
-        lines.append("- None.")
+        lines.append("- 无。" if use_zh else "- None.")
     return "\n".join(lines)
+
+
+def _build_writer_system_prompt(
+    *,
+    mode: Literal["memo", "deep_report"],
+    sic_code: str | None,
+    question: str | None = None,
+) -> str:
+    sections, must_state = _l1_writer_guidance(sic_code)
+    lang_rule = (
+        "Write the report in Simplified Chinese (简体中文), keeping exact English tickers, SEC form names, fact_ids, and card_ids intact."
+        if _contains_cjk(question)
+        else "Match the language of the user's question (Chinese if Chinese, English if English)."
+    )
+    mode_desc = (
+        "concise, institutional Buy-Side Earnings Memo"
+        if mode == "memo"
+        else "comprehensive institutional Buy-Side Deep Research Report"
+    )
+    return (
+        f"You are an institutional buy-side equity research writer (writer slot). "
+        f"Render a {mode_desc} in clean Markdown strictly from the server-gated `locked_dossier` JSON.\n"
+        f"Rules:\n"
+        f"1. You have ZERO retrieval tools. Do NOT emit tool calls and do NOT alter or invent any number, period, unit, or fact.\n"
+        f"2. {lang_rule}\n"
+        f"3. Required report structure sections (L1 earnings_review): {' | '.join(sections)}.\n"
+        f"4. Must explicitly state: {'; '.join(must_state)}.\n"
+        f"5. Cite evidence inline using `[card_id]`, `source_id`, and `fact_id` where available; include each accepted bear case's anchor IDs and `next_quarter_invalidation_trigger`.\n"
+        f"6. Respect `sector_applicability` boundaries (never compute or report `disabled_by_sector` metrics) and explicitly surface all `open_gaps`."
+    )
 
 
 # --------------------------------------------------------------------------- On-Demand Deep Report
@@ -2219,12 +3216,15 @@ def render_deep_report(
 
     dossier_core = dossier.model_dump(
         mode="json",
-        exclude={"deep_report_markdown", "slot_usage_summary"},
+        exclude={"deep_report_markdown", "slot_usage_summary", "snapshot"},
     )
-    sys_prompt = (
-        "You are an institutional buy-side equity research writer (writer slot). "
-        "Produce the full Deep Report in Markdown strictly from the locked EarningsDossier. "
-        "You have ZERO retrieval tools and MUST NOT alter any number, period, unit, or fact."
+    dossier_core["snapshot"] = _compact_snapshot_for_writer(dossier.snapshot)
+    if dossier.dispatch_plan is not None and dossier.dispatch_plan.planning_notes:
+        dossier_core["planning_context"] = dossier.dispatch_plan.planning_notes[:400]
+    sys_prompt = _build_writer_system_prompt(
+        mode="deep_report",
+        sic_code=dossier.snapshot.sic_code,
+        question=dossier.memo_markdown[:400],
     )
     user_prompt = _build_writer_payload(dossier_core, mode="deep_report")
     call_id, before = active_ledger.admit_model_call("writer", stage="deep_report")
@@ -2244,6 +3244,7 @@ def render_deep_report(
             ],
             tools=[],  # Zero tools permitted
             binding=bindings["writer"],
+            conversation_id=f"{dossier.run_id}:deep_report",
         )
         resp = model_runner.invoke(req)
         usage = resp.usage
@@ -2284,17 +3285,17 @@ def render_deep_report(
     return dossier.model_copy(update={"deep_report_markdown": md})
 
 
-def _extract_markdown_from_response(
+def _extract_markdown_or_fallback(
     resp: SlotModelResponse,
     dossier_core: Mapping[str, Any],
     *,
     mode: Literal["memo", "deep_report"],
-) -> str:
+) -> tuple[str, bool]:
     if isinstance(resp.parsed, Mapping):
         for key in ("deep_report_markdown", "memo_markdown", "markdown", "report"):
             val = resp.parsed.get(key)
             if isinstance(val, str) and val.strip():
-                return val.strip()
+                return val.strip(), False
     if isinstance(resp.content, str) and resp.content.strip():
         txt = resp.content.strip()
         if txt.startswith("{") and txt.endswith("}"):
@@ -2304,11 +3305,21 @@ def _extract_markdown_from_response(
                     for key in ("deep_report_markdown", "memo_markdown", "markdown", "report"):
                         val = obj.get(key)
                         if isinstance(val, str) and val.strip():
-                            return val.strip()
+                            return val.strip(), False
             except ValueError:
                 pass
-        return txt
-    return _deterministic_markdown_fallback(dossier_core, mode=mode)
+        return txt, False
+    return _deterministic_markdown_fallback(dossier_core, mode=mode), True
+
+
+def _extract_markdown_from_response(
+    resp: SlotModelResponse,
+    dossier_core: Mapping[str, Any],
+    *,
+    mode: Literal["memo", "deep_report"],
+) -> str:
+    md, _ = _extract_markdown_or_fallback(resp, dossier_core, mode=mode)
+    return md
 
 
 # --------------------------------------------------------------------------- Orchestrator
@@ -2331,6 +3342,7 @@ class EarningsSquadOrchestrator:
         budget: ResearchExecutionBudget | None = None,
         cancel_event: Event | None = None,
         max_worker_concurrency: int = 3,
+        max_repair_attempts: int = 3,
     ) -> None:
         self._model_runner = model_runner
         self._prefetch_deps = prefetch_deps or PrefetchDependencies()
@@ -2354,15 +3366,18 @@ class EarningsSquadOrchestrator:
         self._budget = budget
         self._cancel_event = cancel_event or Event()
         self._max_worker_concurrency = max(1, min(3, max_worker_concurrency))
+        self._max_repair_attempts = max(0, int(max_repair_attempts))
 
         self._steering_lock = RLock()
         self._deep_report_lock = RLock()
+        self._diag_lock = RLock()
         self._steering_wakeup = Event()
         self._steering_queue: list[UserSteeringInstruction] = []
         self._next_instruction_seq = 0
         self._deep_report_cache: dict[tuple[str, str], str] = {}
         self._active_ledger: SquadExecutionLedger | None = None
         self._active_emitter: OrgGraphEmitter | None = None
+        self._repair_diagnostics: list[dict[str, Any]] = []
 
     @property
     def checkpoint_store(self) -> SquadCheckpointStore:
@@ -2371,6 +3386,15 @@ class EarningsSquadOrchestrator:
     @property
     def slot_bindings(self) -> dict[ModelSlot, SlotBinding]:
         return dict(self._slot_bindings)
+
+    @property
+    def repair_diagnostics(self) -> list[dict[str, Any]]:
+        with self._diag_lock:
+            return [dict(item) for item in self._repair_diagnostics]
+
+    def _record_repair_diagnostic(self, entry: Mapping[str, Any]) -> None:
+        with self._diag_lock:
+            self._repair_diagnostics.append(dict(entry))
 
     def cancel(self) -> None:
         self._cancel_event.set()
@@ -2441,6 +3465,77 @@ class EarningsSquadOrchestrator:
     async def run_async(self, *args: Any, **kwargs: Any) -> EarningsDossier:
         return await asyncio.to_thread(self.run, *args, **kwargs)
 
+    def _sync_stage0_into_tool_runner(
+        self,
+        *,
+        request: SquadPrefetchRequest,
+        snapshot: EarningsPrefetchSnapshot,
+        source_texts: Mapping[str, str],
+        source_permissions: Mapping[str, Mapping[str, bool]],
+    ) -> None:
+        if not isinstance(self._tool_runner, FinToolboxToolRunner):
+            return
+        self._tool_runner.set_as_of(request.as_of)
+        self._tool_runner.register_entity(
+            snapshot.entity_id,
+            {
+                "company": snapshot.company_name,
+                "symbol": snapshot.symbol,
+                "cik": snapshot.cik,
+                "identifiers": {**({"cik": snapshot.cik} if snapshot.cik else {})},
+            },
+        )
+        existing = self._tool_runner.source_by_id
+        for ref in snapshot.prefetched_sources:
+            if ref.source_id in existing:
+                continue
+            txt = source_texts.get(ref.source_id)
+            if not isinstance(txt, str) or not txt.strip():
+                continue
+            perms_raw = source_permissions.get(ref.source_id) or ref.permissions or {}
+            perms = SourcePermissions(
+                store=bool(perms_raw.get("store", True)),
+                model_input=bool(perms_raw.get("model_input", True)),
+                display=bool(perms_raw.get("display", True)),
+                export=bool(perms_raw.get("export", True)),
+            )
+            pub_at: datetime | None = ref.published_at
+            if pub_at is None:
+                if ref.source_id.startswith("src_8k_release_") and snapshot.earnings_release and snapshot.earnings_release.current:
+                    cur_er = snapshot.earnings_release.current
+                    pub_at = cur_er.accepted_at or datetime(cur_er.filed_at.year, cur_er.filed_at.month, cur_er.filed_at.day, tzinfo=timezone.utc)
+                elif ref.retrieval_method == "fmp_transcript" and snapshot.transcript_index.call_date is not None:
+                    pub_at = _normalize_as_of_datetime(snapshot.transcript_index.call_date)
+                elif ref.retrieval_method == "fmp_consensus" and snapshot.consensus_summary.records:
+                    pub_at = _normalize_as_of_datetime(snapshot.consensus_summary.records[0].period_end)
+            valid_url: Any = None
+            if ref.url and ref.url.startswith(("http://", "https://")):
+                valid_url = ref.url
+            rm_val = ref.retrieval_method if ref.retrieval_method in (
+                "user_supplied", "official_html", "sec_companyconcept", "user_pdf", "user_html",
+                "sec_filing_html", "sec_earnings_release", "sec_filing_table", "sec_filing_sections",
+                "historical_prices", "market_data", "sec_companyfacts", "structured_financials",
+                "fmp_consensus", "fmp_transcript", "web_html", "web_pdf",
+            ) else "official_html"
+            try:
+                src = ResearchSource(
+                    source_id=ref.source_id,
+                    owner_id=request.account_id or "squad_stage0",
+                    title=ref.title,
+                    text=txt,
+                    url=valid_url,
+                    kind=ref.kind,
+                    is_simulated=False,
+                    published_at=pub_at,
+                    obtained_at=_utcnow(),
+                    content_sha256=ref.content_sha256 or sha256(txt.encode("utf-8")).hexdigest(),
+                    retrieval_method=rm_val,
+                    permissions=perms,
+                )
+                self._tool_runner.register_source(src)
+            except Exception:
+                continue
+
     # --------------------------------------------------------------------------- Main Run Loop
     def run(
         self,
@@ -2454,6 +3549,8 @@ class EarningsSquadOrchestrator:
         on_worker_complete: Callable[[WorkerRole, EvidenceCardBatch, SquadCheckpoint], None] | None = None,
     ) -> EarningsDossier:
         """Execute or resume the 6-stage bounded buy-side earnings research squad."""
+        with self._diag_lock:
+            self._repair_diagnostics = []
         checkpoint = self._load_resume_checkpoint(run_id=run_id, resume_from=resume_from)
         active_run_id = checkpoint.run_id if checkpoint else (run_id or _new_id("squad"))
 
@@ -2557,6 +3654,12 @@ class EarningsSquadOrchestrator:
         # ---- Stage 0: Deterministic Parallel Prefetch (0 model calls)
         if "stage_0" in state["completed_stages"] and state["snapshot"] is not None:
             snapshot: EarningsPrefetchSnapshot = state["snapshot"]
+            self._sync_stage0_into_tool_runner(
+                request=request,
+                snapshot=snapshot,
+                source_texts=state["source_texts"],
+                source_permissions=state["source_permissions"],
+            )
             emitter.emit(
                 stage="stage_0_prefetch",
                 node_id="prefetch_engine",
@@ -2569,6 +3672,12 @@ class EarningsSquadOrchestrator:
                 request,
                 ledger=ledger,
                 emitter=emitter,
+                source_texts=state["source_texts"],
+                source_permissions=state["source_permissions"],
+            )
+            self._sync_stage0_into_tool_runner(
+                request=request,
+                snapshot=snapshot,
                 source_texts=state["source_texts"],
                 source_permissions=state["source_permissions"],
             )
@@ -2594,13 +3703,17 @@ class EarningsSquadOrchestrator:
             )
         else:
             mark_applied_existing_instructions()
+            stage1_gaps: list[SquadGap] = []
             dispatch_plan = self._run_stage_1_plan(
                 request=request,
                 snapshot=snapshot,
                 ledger=ledger,
                 emitter=emitter,
                 instruction_seq=max(state["applied_instruction_sequences"], default=0),
+                gaps_out=stage1_gaps,
             )
+            if stage1_gaps:
+                state["open_gaps"] = _merge_gaps(state["open_gaps"], stage1_gaps)
             state["dispatch_plan"] = dispatch_plan
             for task in dispatch_plan.tasks:
                 if task.status == "skipped":
@@ -2771,6 +3884,7 @@ class EarningsSquadOrchestrator:
             source_permissions=state["source_permissions"],
             ledger=ledger,
             emitter=emitter,
+            question=request.question,
         )
         state["dossier"] = dossier
         cp = save_checkpoint(stage_completed="stage_3b")
@@ -2877,6 +3991,19 @@ class EarningsSquadOrchestrator:
 
         entity_id = request.entity_id or (f"cik:{cik}" if cik else (f"ticker:{symbol}" if symbol else "us:unknown"))
         sector_app = evaluate_sec_sic_gate(sic_code, sic_description)
+        as_of_dt = _normalize_as_of_datetime(request.as_of)
+
+        if isinstance(self._tool_runner, FinToolboxToolRunner):
+            self._tool_runner.set_as_of(request.as_of)
+            self._tool_runner.register_entity(
+                entity_id,
+                {
+                    "company": company_name,
+                    "symbol": symbol,
+                    "cik": cik,
+                    "identifiers": {**({"cik": cik} if cik else {})},
+                },
+            )
 
         cur_filing, pri_filing = _pick_current_prior_periodic_filings(
             filings_list, as_of=as_of_d, preferred_form=request.filing_form
@@ -2885,6 +4012,7 @@ class EarningsSquadOrchestrator:
         prior_acc = request.prior_filing_accession or (pri_filing.accession if pri_filing else None)
         cur_url = request.current_filing_url or (cur_filing.primary_document_url if cur_filing else None)
         pri_url = request.prior_filing_url or (pri_filing.primary_document_url if pri_filing else None)
+        pri_sec_sid: str | None = None
 
         periods: list[PeriodFinancials] = list(request.period_financials)
         derived_metrics: dict[str, Any] = {}
@@ -2980,9 +4108,9 @@ class EarningsSquadOrchestrator:
                 source="sec_filing_tables",
             )]
 
-        def task_redline() -> tuple[FilingRedlineReport | None, FilingSectionsBundle | None, list[SquadGap]]:
+        def task_redline() -> tuple[FilingRedlineReport | None, FilingSectionsBundle | None, FilingSectionsBundle | None, list[SquadGap]]:
             if sec is None or not cur_url or not pri_url:
-                return None, None, []
+                return None, None, None, []
             c_res = sec_filing_sections(sec, url=cur_url, form=cur_filing.form if cur_filing else request.filing_form)
             p_res = sec_filing_sections(sec, url=pri_url, form=pri_filing.form if pri_filing else request.filing_form)
             if c_res.status in ("ok", "partial") and c_res.data and p_res.status in ("ok", "partial") and p_res.data:
@@ -2990,8 +4118,8 @@ class EarningsSquadOrchestrator:
                 p_bundle: FilingSectionsBundle = p_res.data[0]
                 report = sec_redline_diff(c_bundle, p_bundle)
                 assert isinstance(report, FilingRedlineReport)
-                return report, c_bundle, []
-            return None, None, [SquadGap(
+                return report, c_bundle, p_bundle, []
+            return None, None, None, [SquadGap(
                 stage="stage_0_prefetch",
                 code="redline_unavailable",
                 message="Could not compute cross-period redline diff from prior filing sections.",
@@ -3116,7 +4244,18 @@ class EarningsSquadOrchestrator:
                 if er_chunks:
                     er_text = "\n\n".join(er_chunks)
                     er_sid = f"src_8k_release_{cik or entity_id}"
+                    er_sha = sha256(er_text.encode("utf-8")).hexdigest()
                     er_perms = {"store": True, "display": True, "model_input": True, "export": True}
+                    cur_er = earnings_release.current or earnings_release.prior
+                    er_url = (
+                        cur_er.ex99_1.url if cur_er and cur_er.ex99_1
+                        else (cur_er.index_json_url if cur_er else None)
+                    )
+                    er_pub = (
+                        (cur_er.accepted_at or datetime(cur_er.filed_at.year, cur_er.filed_at.month, cur_er.filed_at.day, tzinfo=timezone.utc))
+                        if cur_er is not None
+                        else None
+                    )
                     source_texts[er_sid] = er_text
                     source_permissions[er_sid] = er_perms
                     prefetched_sources.append(PrefetchedSourceRef(
@@ -3124,19 +4263,41 @@ class EarningsSquadOrchestrator:
                         title=f"{symbol or entity_id} SEC 8-K Item 2.02 Earnings Release",
                         kind="official",
                         retrieval_method="sec_earnings_release",
-                        content_sha256=sha256(er_text.encode("utf-8")).hexdigest(),
+                        content_sha256=er_sha,
+                        url=er_url,
                         permissions=er_perms,
+                        published_at=er_pub,
                         total_characters=len(er_text),
                     ))
+                    if isinstance(self._tool_runner, FinToolboxToolRunner):
+                        self._tool_runner.register_source(ResearchSource(
+                            source_id=er_sid,
+                            owner_id=request.account_id or "squad_stage0",
+                            title=f"{symbol or entity_id} SEC 8-K Item 2.02 Earnings Release",
+                            text=er_text,
+                            url=er_url,
+                            kind="official",
+                            is_simulated=False,
+                            published_at=er_pub,
+                            obtained_at=_utcnow(),
+                            content_sha256=er_sha,
+                            retrieval_method="sec_earnings_release",
+                            permissions=SourcePermissions(**er_perms),
+                        ))
 
             table_catalog, g_cat = f_cat.result()
             gaps.extend(g_cat)
 
-            redline_report, cur_sections_bundle, g_red = f_red.result()
+            redline_report, cur_sections_bundle, pri_sections_bundle, g_red = f_red.result()
             gaps.extend(g_red)
             if cur_sections_bundle is not None and cur_sections_bundle.clean_text:
                 sec_sid = f"src_sec_sections_{filing_acc or cik or entity_id}"
                 sec_perms = {"store": True, "display": True, "model_input": True, "export": True}
+                cur_sec_pub = (
+                    (cur_filing.accepted_at or datetime(cur_filing.filed_at.year, cur_filing.filed_at.month, cur_filing.filed_at.day, tzinfo=timezone.utc))
+                    if cur_filing is not None
+                    else None
+                )
                 source_texts[sec_sid] = cur_sections_bundle.clean_text
                 source_permissions[sec_sid] = sec_perms
                 prefetched_sources.append(PrefetchedSourceRef(
@@ -3145,27 +4306,149 @@ class EarningsSquadOrchestrator:
                     kind="official",
                     retrieval_method="sec_filing_sections",
                     content_sha256=cur_sections_bundle.content_sha256,
+                    url=cur_url,
                     permissions=sec_perms,
+                    published_at=cur_sec_pub,
                     total_characters=len(cur_sections_bundle.clean_text),
                 ))
+                if isinstance(self._tool_runner, FinToolboxToolRunner):
+                    self._tool_runner.register_source(ResearchSource(
+                        source_id=sec_sid,
+                        owner_id=request.account_id or "squad_stage0",
+                        title=f"{symbol or entity_id} SEC {cur_sections_bundle.form or 'Filing'} Sections",
+                        text=cur_sections_bundle.clean_text,
+                        url=cur_url,
+                        kind="official",
+                        is_simulated=False,
+                        published_at=cur_sec_pub,
+                        obtained_at=_utcnow(),
+                        content_sha256=cur_sections_bundle.content_sha256,
+                        retrieval_method="sec_filing_sections",
+                        permissions=SourcePermissions(**sec_perms),
+                    ))
+
+            if pri_sections_bundle is not None and pri_sections_bundle.clean_text:
+                pri_sec_sid = f"src_sec_sections_prior_{prior_acc or cik or entity_id}"
+                pri_sec_perms = {"store": True, "display": True, "model_input": True, "export": True}
+                pri_sec_pub = (
+                    (pri_filing.accepted_at or datetime(pri_filing.filed_at.year, pri_filing.filed_at.month, pri_filing.filed_at.day, tzinfo=timezone.utc))
+                    if pri_filing is not None
+                    else None
+                )
+                source_texts[pri_sec_sid] = pri_sections_bundle.clean_text
+                source_permissions[pri_sec_sid] = pri_sec_perms
+                prefetched_sources.append(PrefetchedSourceRef(
+                    source_id=pri_sec_sid,
+                    title=f"{symbol or entity_id} Prior SEC {pri_sections_bundle.form or 'Filing'} Sections",
+                    kind="official",
+                    retrieval_method="sec_filing_sections",
+                    content_sha256=pri_sections_bundle.content_sha256,
+                    url=pri_url,
+                    permissions=pri_sec_perms,
+                    published_at=pri_sec_pub,
+                    total_characters=len(pri_sections_bundle.clean_text),
+                ))
+                if isinstance(self._tool_runner, FinToolboxToolRunner):
+                    self._tool_runner.register_source(ResearchSource(
+                        source_id=pri_sec_sid,
+                        owner_id=request.account_id or "squad_stage0",
+                        title=f"{symbol or entity_id} Prior SEC {pri_sections_bundle.form or 'Filing'} Sections",
+                        text=pri_sections_bundle.clean_text,
+                        url=pri_url,
+                        kind="official",
+                        is_simulated=False,
+                        published_at=pri_sec_pub,
+                        obtained_at=_utcnow(),
+                        content_sha256=pri_sections_bundle.content_sha256,
+                        retrieval_method="sec_filing_sections",
+                        permissions=SourcePermissions(**pri_sec_perms),
+                    ))
 
             consensus_summary, g_cons = f_cons.result()
             gaps.extend(g_cons)
+            if consensus_summary.status == "available" and consensus_summary.records:
+                con_sid = consensus_summary.source_id or f"src_consensus_{symbol or entity_id}"
+                con_lines = [
+                    f"{r.symbol} | period {r.fiscal_period or '-'} | period_end {r.period_end.isoformat() if r.period_end else '-'} | "
+                    f"rev_est_avg {r.revenue_estimate_avg if r.revenue_estimate_avg is not None else '-'} | "
+                    f"eps_est_avg {r.eps_estimate_avg if r.eps_estimate_avg is not None else '-'} | "
+                    f"rev_actual {r.revenue_actual if r.revenue_actual is not None else '-'} | "
+                    f"eps_actual {r.eps_actual if r.eps_actual is not None else '-'}"
+                    for r in consensus_summary.records
+                ]
+                con_text = "\n".join(con_lines)
+                con_sha = sha256(con_text.encode("utf-8")).hexdigest()
+                con_perms = dict(consensus_summary.permissions or {"store": True, "display": True, "model_input": True, "export": False})
+                source_texts[con_sid] = con_text
+                source_permissions[con_sid] = con_perms
+                consensus_summary = consensus_summary.model_copy(update={"source_id": con_sid})
+                prefetched_sources.append(PrefetchedSourceRef(
+                    source_id=con_sid,
+                    title=f"{symbol or entity_id} Street Earnings Consensus",
+                    kind="market_data",
+                    retrieval_method="fmp_consensus",
+                    content_sha256=con_sha,
+                    permissions=con_perms,
+                    published_at=as_of_dt,
+                    total_characters=len(con_text),
+                ))
+                if isinstance(self._tool_runner, FinToolboxToolRunner):
+                    self._tool_runner.register_source(ResearchSource(
+                        source_id=con_sid,
+                        owner_id=request.account_id or "squad_stage0",
+                        title=f"{symbol or entity_id} Street Earnings Consensus",
+                        text=con_text,
+                        kind="market_data",
+                        is_simulated=False,
+                        published_at=as_of_dt,
+                        obtained_at=_utcnow(),
+                        content_sha256=con_sha,
+                        retrieval_method="fmp_consensus",
+                        permissions=SourcePermissions(
+                            store=bool(con_perms.get("store", True)),
+                            model_input=bool(con_perms.get("model_input", True)),
+                            display=bool(con_perms.get("display", True)),
+                            export=bool(con_perms.get("export", False)),
+                        ),
+                    ))
 
             transcript_index, tr_text, g_tr = f_tr.result()
             gaps.extend(g_tr)
             if transcript_index.status == "available" and transcript_index.source_id and tr_text:
+                tr_sha = transcript_index.content_sha256 or sha256(tr_text.encode("utf-8")).hexdigest()
+                tr_perms = dict(transcript_index.permissions)
                 source_texts[transcript_index.source_id] = tr_text
-                source_permissions[transcript_index.source_id] = dict(transcript_index.permissions)
+                source_permissions[transcript_index.source_id] = tr_perms
+                tr_pub = _normalize_as_of_datetime(transcript_index.call_date)
                 prefetched_sources.append(PrefetchedSourceRef(
                     source_id=transcript_index.source_id,
                     title=f"{symbol} Earnings Call Transcript (FY{transcript_index.fiscal_year} Q{transcript_index.fiscal_quarter})",
                     kind="market_data",
                     retrieval_method="fmp_transcript",
-                    content_sha256=transcript_index.content_sha256 or sha256(tr_text.encode("utf-8")).hexdigest(),
-                    permissions=dict(transcript_index.permissions),
+                    content_sha256=tr_sha,
+                    permissions=tr_perms,
+                    published_at=tr_pub,
                     total_characters=len(tr_text),
                 ))
+                if isinstance(self._tool_runner, FinToolboxToolRunner):
+                    self._tool_runner.register_source(ResearchSource(
+                        source_id=transcript_index.source_id,
+                        owner_id=request.account_id or "squad_stage0",
+                        title=f"{symbol} Earnings Call Transcript (FY{transcript_index.fiscal_year} Q{transcript_index.fiscal_quarter})",
+                        text=tr_text,
+                        kind="market_data",
+                        is_simulated=False,
+                        published_at=_normalize_as_of_datetime(transcript_index.call_date),
+                        obtained_at=_utcnow(),
+                        content_sha256=tr_sha,
+                        retrieval_method="fmp_transcript",
+                        permissions=SourcePermissions(
+                            store=bool(tr_perms.get("store", True)),
+                            model_input=bool(tr_perms.get("model_input", True)),
+                            display=bool(tr_perms.get("display", True)),
+                            export=bool(tr_perms.get("export", False)),
+                        ),
+                    ))
 
             try:
                 close_price_dec = f_px.result()
@@ -3177,9 +4460,32 @@ class EarningsSquadOrchestrator:
                     source="market_data",
                 ))
 
-        # Capture any sources already persisted in FinToolboxToolRunner
+        # Capture any eligible topic-attached or pre-existing sources in FinToolboxToolRunner
+        existing_ref_ids = {ref.source_id for ref in prefetched_sources}
         if isinstance(self._tool_runner, FinToolboxToolRunner):
             for sid, src in self._tool_runner.source_by_id.items():
+                if sid in existing_ref_ids:
+                    continue
+                ok, elig_code = _source_eligibility_status(src, as_of_dt=as_of_dt)
+                if not ok:
+                    source_texts.pop(sid, None)
+                    source_permissions.pop(sid, None)
+                    pub_dt = _normalize_as_of_datetime(getattr(src, "published_at", None))
+                    rev_dt = _normalize_as_of_datetime(getattr(src, "revised_at", None))
+                    gap_code = (
+                        "source_excluded_after_as_of_cutoff"
+                        if elig_code == "availability_unestablished"
+                        and as_of_dt is not None
+                        and ((pub_dt is not None and pub_dt > as_of_dt) or (rev_dt is not None and rev_dt > as_of_dt))
+                        else f"source_excluded_{elig_code}"
+                    )
+                    gaps.append(SquadGap(
+                        stage="stage_0_prefetch",
+                        code=gap_code,
+                        message=f"Excluded ineligible source {sid!r} ({elig_code}).",
+                        source=sid,
+                    ))
+                    continue
                 source_texts[sid] = src.text
                 perms = src.permissions.model_dump(mode="json")
                 source_permissions[sid] = perms
@@ -3243,6 +4549,9 @@ class EarningsSquadOrchestrator:
             earnings_release=earnings_release,
             filing_accession=filing_acc,
             prior_filing_accession=prior_acc,
+            current_filing_url=cur_url,
+            prior_filing_url=pri_url,
+            prior_sections_source_id=pri_sec_sid,
             filing_table_catalog=table_catalog,
             redline_summary=redline_report,
             guidance_nongaap=guidance_res,
@@ -3265,7 +4574,171 @@ class EarningsSquadOrchestrator:
         )
         return snapshot
 
-    # --------------------------------------------------------------------------- Stage 1 Implementation
+    # --------------------------------------------------------------------------- Shared Schema Repair & Stage 1
+    def _invoke_and_parse_with_repair(
+        self,
+        *,
+        slot: ModelSlot,
+        stage: str,
+        role: str,
+        node_id: str,
+        system_prompt: str,
+        user_prompt: str,
+        model_cls: type[_TModel],
+        ledger: SquadExecutionLedger,
+        emitter: OrgGraphEmitter,
+        norm_kwargs: Mapping[str, Any] | None = None,
+        fallback_fn: Callable[[Exception], _TModel] | None = None,
+        conversation_id: str | None = None,
+        forbidden_tool_error: str | None = None,
+    ) -> tuple[_TModel, bool, Exception | None]:
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        max_repairs = max(0, int(self._max_repair_attempts))
+        total_attempts = 1 + max_repairs
+        last_exc: Exception | None = None
+        norm_args = dict(norm_kwargs or {})
+
+        for attempt_idx in range(total_attempts):
+            ledger.ensure_running(stage=stage)
+            if attempt_idx > 0:
+                emitter.emit(
+                    stage=stage,
+                    node_id=node_id,
+                    action_kind="INSPECTING",
+                    runtime_state="running",
+                    current_activity=(
+                        f"{role} repairing {model_cls.__name__} JSON output "
+                        f"(repair {attempt_idx}/{max_repairs})."
+                    ),
+                    slot=slot,
+                )
+            call_id, before = ledger.admit_model_call(slot, stage=stage)
+            t0 = monotonic()
+            failed = False
+            usage: ModelUsage | None = None
+            try:
+                resp = self._model_runner.invoke(SlotModelRequest(
+                    slot=slot,
+                    stage=stage,
+                    role=role,
+                    system_prompt=system_prompt,
+                    user_prompt=messages[-1]["content"],
+                    messages=list(messages),
+                    tools=[],
+                    response_schema_name=model_cls.__name__,
+                    response_schema=_cached_model_json_schema(model_cls),
+                    binding=self._slot_bindings[slot],
+                    turn_index=attempt_idx,
+                    conversation_id=conversation_id,
+                ))
+                usage = resp.usage
+                if resp.tool_calls:
+                    msg = forbidden_tool_error or f"{role} is not permitted to invoke tools during {stage}."
+                    raise SquadToolViolationError(msg, stage=stage)
+            except Exception:
+                failed = True
+                raise
+            finally:
+                ledger.settle_model_call(
+                    slot,
+                    call_id,
+                    before,
+                    usage=usage,
+                    elapsed_ms=int((monotonic() - t0) * 1000),
+                    failed=failed,
+                )
+
+            try:
+                parsed = _parse_model_output(resp, model_cls, **norm_args)
+                self._record_repair_diagnostic({
+                    "stage": stage,
+                    "role": role,
+                    "schema": model_cls.__name__,
+                    "repair_attempts": attempt_idx,
+                    "succeeded": True,
+                    "used_fallback": False,
+                    "last_error": str(last_exc)[:400] if last_exc else None,
+                })
+                return parsed, False, None
+            except (ValidationError, ValueError, TypeError) as exc:
+                last_exc = exc
+                if attempt_idx >= max_repairs:
+                    break
+                prior_raw = resp.content or ""
+                if not prior_raw and isinstance(resp.parsed, Mapping):
+                    prior_raw = json.dumps(resp.parsed, ensure_ascii=False, default=str)
+                messages.append({"role": "assistant", "content": prior_raw[:3000] or "<invalid output>"})
+                messages.append({
+                    "role": "user",
+                    "content": _format_pydantic_repair_prompt(
+                        model_cls,
+                        exc,
+                        attempt=attempt_idx + 1,
+                        max_attempts=max_repairs,
+                    ),
+                })
+
+        assert last_exc is not None
+        if fallback_fn is not None:
+            fallback_obj = fallback_fn(last_exc)
+            self._record_repair_diagnostic({
+                "stage": stage,
+                "role": role,
+                "schema": model_cls.__name__,
+                "repair_attempts": max_repairs,
+                "succeeded": False,
+                "used_fallback": True,
+                "last_error": str(last_exc)[:400],
+            })
+            return fallback_obj, True, last_exc
+
+        self._record_repair_diagnostic({
+            "stage": stage,
+            "role": role,
+            "schema": model_cls.__name__,
+            "repair_attempts": max_repairs,
+            "succeeded": False,
+            "used_fallback": False,
+            "last_error": str(last_exc)[:400],
+        })
+        raise last_exc
+
+    @staticmethod
+    def _fallback_steering_decision(
+        dispatch_plan: ResearchDispatchPlan,
+        running_roles: set[WorkerRole],
+        instructions: Sequence[UserSteeringInstruction],
+    ) -> SteeringImpactDecision:
+        seqs = [i.sequence for i in instructions]
+        instr_text = "; ".join(i.text for i in instructions if i.text)[:800]
+        planned_roles = [t.worker_role for t in dispatch_plan.tasks if t.status != "skipped"]
+        affected = list(dict.fromkeys([*running_roles, *planned_roles]))
+        if not affected:
+            affected = ["worker_segments"]
+        task_map = {t.worker_role: t for t in dispatch_plan.tasks}
+        updated_tasks: list[WorkerTask] = []
+        for r in affected:
+            base = task_map.get(r)
+            if base is not None:
+                updated_tasks.append(base.model_copy(update={
+                    "task_id": _new_id("task"),
+                    "status": "planned",
+                    "objective": f"{base.objective} | User steering: {instr_text}".strip(" |")[:2000],
+                    "steering_instruction_sequence": max(seqs) if seqs else base.steering_instruction_sequence,
+                }))
+        return SteeringImpactDecision(
+            instruction_sequences=seqs,
+            affected_workers=affected,
+            cancel_running_workers=sorted(running_roles),
+            invalidate_stage_2_5=True,
+            invalidate_stage_3a=True,
+            rationale="Deterministic steering fallback: re-dispatching active/running workers with latest user instructions.",
+            updated_tasks=updated_tasks,
+        )
+
     def _run_stage_1_plan(
         self,
         *,
@@ -3274,6 +4747,7 @@ class EarningsSquadOrchestrator:
         ledger: SquadExecutionLedger,
         emitter: OrgGraphEmitter,
         instruction_seq: int,
+        gaps_out: list[SquadGap] | None = None,
     ) -> ResearchDispatchPlan:
         ledger.ensure_running(stage="stage_1_plan")
         pack_ctx = resolve_method_pack_context(snapshot.sic_code)
@@ -3287,12 +4761,58 @@ class EarningsSquadOrchestrator:
             slot="deep_reasoner",
         )
 
+        allowed_tools_table = {r: sorted(v) for r, v in WORKER_ALLOWED_TOOLS.items()}
         sys_prompt = (
-            "You are the Lead Coordinator (deep_reasoner) of a bounded US Buy-Side Earnings Research Squad. "
-            "Inspect the Stage 0 EarningsPrefetchSnapshot, SIC sector gate, and L1/L2 method pack hint. "
-            "Produce a ResearchDispatchPlan JSON with selected_l2_pack_id and 1-3 read-only WorkerTask items "
-            "for worker_segments, worker_forensics, and worker_guidance. Explicitly mark a worker task as "
-            "status='skipped' with skip_reason when its required primary source is unavailable."
+            "You are the Lead Coordinator (deep_reasoner) of a bounded US Buy-Side Earnings Research Squad.\n"
+            "Inspect the Stage 0 snapshot, SIC sector applicability gate, and L1/L2 method pack hint, and return a SINGLE raw JSON object matching `ResearchDispatchPlan`.\n\n"
+            "STRICT CONTRACT RULES (extra='forbid' on BOTH ResearchDispatchPlan and WorkerTask — unknown keys like `worker_tasks` or `dispatch_rationale` cause validation errors):\n"
+            "- Top-level keys ONLY: "
+            '["l1_pack_id", "selected_l2_pack_id", "selected_l2_pack_reason", "tasks", "cross_worker_hypotheses", "planning_notes", "instruction_sequence"]\n'
+            "- Field types:\n"
+            "  * l1_pack_id: string (\"earnings_review\")\n"
+            "  * selected_l2_pack_id: string or null (MUST be null when sector_applicability.is_gated is true)\n"
+            "  * selected_l2_pack_reason: string explaining sector KPI pack choice or SIC gate\n"
+            "  * tasks: array of 1 to 3 unique WorkerTask objects for worker_segments, worker_forensics, worker_guidance\n"
+            "  * cross_worker_hypotheses: array of concise strings\n"
+            "  * planning_notes: plain string summary\n"
+            "  * instruction_sequence: integer matching input instruction_sequence\n"
+            "- Each WorkerTask keys ONLY: "
+            '["worker_role", "status", "skip_reason", "objective", "target_r_files", "target_flag_ids", "target_section_keys", "allowed_tools", "soft_turn_limit", "round_number"]\n'
+            "  * worker_role enum: [\"worker_segments\", \"worker_forensics\", \"worker_guidance\"]\n"
+            "  * status enum: [\"planned\", \"skipped\"]\n"
+            "  * skip_reason: REQUIRED non-empty string if status='skipped'; omit or null if status='planned'\n"
+            "  * allowed_tools: either omit or pass ONLY a subset of that role's permitted tools: "
+            f"{json.dumps(allowed_tools_table)}\n"
+            "  * round_number: 1, soft_turn_limit: integer 1..12 (recommend 4)\n\n"
+            "Valid JSON example:\n"
+            "{\n"
+            '  "l1_pack_id": "earnings_review",\n'
+            '  "selected_l2_pack_id": "kpi_saas_cloud",\n'
+            '  "selected_l2_pack_reason": "SIC 7372 maps to SaaS & Cloud KPI pack.",\n'
+            '  "tasks": [\n'
+            '    {"worker_role": "worker_segments", "status": "planned", "objective": "Verify segment revenue and NRR.", "target_r_files": ["R10.htm"], "target_flag_ids": [], "target_section_keys": [], "soft_turn_limit": 4, "round_number": 1},\n'
+            '    {"worker_role": "worker_forensics", "status": "planned", "objective": "Investigate DSO and redline changes.", "target_r_files": [], "target_flag_ids": ["ar_surge_vs_rev"], "target_section_keys": ["mda"], "soft_turn_limit": 4, "round_number": 1},\n'
+            '    {"worker_role": "worker_guidance", "status": "skipped", "skip_reason": "Consensus and transcript unavailable and no 8-K outlook provided.", "objective": "Skip guidance.", "target_r_files": [], "target_flag_ids": [], "target_section_keys": [], "soft_turn_limit": 4, "round_number": 1}\n'
+            "  ],\n"
+            '  "cross_worker_hypotheses": ["Check whether segment backlog expansion explains DSO divergence."],\n'
+            '  "planning_notes": "Targeted 2-worker dispatch with consensus skipped.",\n'
+            f'  "instruction_sequence": {instruction_seq}\n'
+            "}\n"
+            "Reply ONLY with raw JSON (no markdown commentary)."
+        )
+
+        composed_pack = pack_ctx.get("composed_pack")
+        ind_pack = getattr(composed_pack, "industry_pack", None)
+        l2_kpi_preview = [f"{k.id}: {k.name_en}" for k in ind_pack.kpis[:8]] if ind_pack else []
+        cat = snapshot.filing_table_catalog
+        cat_summary = (
+            {
+                "accession": cat.accession,
+                "statements": [{"r_file": t.r_file, "short_name": t.short_name} for t in cat.statements[:12]],
+                "tables": [{"r_file": t.r_file, "short_name": t.short_name} for t in cat.tables[:15]],
+            }
+            if cat is not None
+            else None
         )
         user_payload = {
             "question": request.question,
@@ -3302,17 +4822,58 @@ class EarningsSquadOrchestrator:
                 "suggested_l2_pack_id": pack_ctx["l2_pack_id"],
                 "reason": pack_ctx["reason"],
                 "recommended_alternatives": pack_ctx["recommended_alternatives"],
+                "suggested_l2_kpis": l2_kpi_preview,
             },
             "snapshot_summary": {
                 "entity_id": snapshot.entity_id,
                 "symbol": snapshot.symbol,
                 "cik": snapshot.cik,
+                "company_name": snapshot.company_name,
+                "period_label": snapshot.period_label,
                 "sic_code": snapshot.sic_code,
+                "filing_accession": snapshot.filing_accession,
+                "prior_filing_accession": snapshot.prior_filing_accession,
+                "current_filing_url": snapshot.current_filing_url,
+                "prior_filing_url": snapshot.prior_filing_url,
                 "sector_applicability": snapshot.sector_applicability.model_dump(mode="json"),
                 "flags": [f.model_dump(mode="json") for f in snapshot.flags],
                 "has_filing_catalog": snapshot.filing_table_catalog is not None,
+                "filing_table_catalog_summary": cat_summary,
                 "has_earnings_release": snapshot.earnings_release is not None,
                 "has_redline": snapshot.redline_summary is not None,
+                "redline_section_keys": (
+                    list(snapshot.redline_summary.section_diffs.keys())
+                    if snapshot.redline_summary
+                    else []
+                ),
+                "guidance_nongaap_summary": (
+                    {
+                        "warning_count": len(snapshot.guidance_nongaap.warnings),
+                        "warning_flag_ids": [w.flag_id for w in snapshot.guidance_nongaap.warnings],
+                    }
+                    if snapshot.guidance_nongaap is not None
+                    else None
+                ),
+                "valuation_summary": (
+                    {
+                        "pe_ttm": str(snapshot.valuation.pe_ttm.value) if snapshot.valuation.pe_ttm.value is not None else None,
+                        "ev_to_ebitda": str(snapshot.valuation.ev_to_ebitda.value) if snapshot.valuation.ev_to_ebitda.value is not None else None,
+                        "fcf_yield_pct": str(snapshot.valuation.fcf_yield_pct.value) if snapshot.valuation.fcf_yield_pct.value is not None else None,
+                    }
+                    if snapshot.valuation is not None
+                    else None
+                ),
+                "prefetched_sources": [
+                    {
+                        "source_id": s.source_id,
+                        "title": s.title,
+                        "kind": s.kind,
+                        "retrieval_method": s.retrieval_method,
+                        "total_characters": s.total_characters,
+                        "permissions": dict(s.permissions),
+                    }
+                    for s in snapshot.prefetched_sources[:20]
+                ],
                 "consensus_status": snapshot.consensus_summary.status,
                 "transcript_status": snapshot.transcript_index.status,
                 "open_gaps": [g.model_dump(mode="json") for g in snapshot.open_gaps],
@@ -3320,28 +4881,35 @@ class EarningsSquadOrchestrator:
         }
         user_prompt = json.dumps(user_payload, ensure_ascii=False, sort_keys=True, default=str)
 
-        call_id, before = ledger.admit_model_call("deep_reasoner", stage="stage_1_plan")
-        t0 = monotonic()
-        failed = False
-        usage: ModelUsage | None = None
         try:
-            resp = self._model_runner.invoke(SlotModelRequest(
+            plan, used_fallback, last_err = self._invoke_and_parse_with_repair(
                 slot="deep_reasoner",
                 stage="stage_1_plan",
                 role="lead_coordinator",
+                node_id="lead_coordinator",
                 system_prompt=sys_prompt,
                 user_prompt=user_prompt,
-                messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
-                response_schema_name="ResearchDispatchPlan",
-                response_schema=ResearchDispatchPlan.model_json_schema(),
-                binding=self._slot_bindings["deep_reasoner"],
-            ))
-            usage = resp.usage
-            plan = _parse_model_output(resp, ResearchDispatchPlan)
+                model_cls=ResearchDispatchPlan,
+                ledger=ledger,
+                emitter=emitter,
+                norm_kwargs={"instruction_seq": instruction_seq},
+                fallback_fn=lambda _exc: _fallback_dispatch_plan(snapshot, pack_ctx, instruction_seq=instruction_seq),
+                forbidden_tool_error="Lead Coordinator must not invoke retrieval tools during stage_1_plan.",
+            )
+            if used_fallback and gaps_out is not None:
+                gaps_out.append(SquadGap(
+                    stage="stage_1_plan",
+                    worker_role=None,
+                    code="stage1_plan_fallback_used",
+                    message=(
+                        f"Stage 1 Lead output failed ResearchDispatchPlan validation after "
+                        f"{self._max_repair_attempts} repair(s); deterministic 3-worker dispatch plan used "
+                        f"({last_err})."
+                    )[:1000],
+                ))
             if plan.instruction_sequence != instruction_seq:
                 plan = plan.model_copy(update={"instruction_sequence": instruction_seq})
         except Exception as exc:
-            failed = True
             emitter.emit(
                 stage="stage_1_plan",
                 node_id="lead_coordinator",
@@ -3352,8 +4920,6 @@ class EarningsSquadOrchestrator:
                 slot="deep_reasoner",
             )
             raise
-        finally:
-            ledger.settle_model_call("deep_reasoner", call_id, before, usage=usage, elapsed_ms=int((monotonic() - t0) * 1000), failed=failed)
 
         for task in plan.tasks:
             if task.status == "skipped":
@@ -3501,6 +5067,7 @@ class EarningsSquadOrchestrator:
                 )
                 if pending_instr:
                     running_roles = {r for _, (r, _, _) in active_futures.items()}
+                    steer_gaps: list[SquadGap] = []
                     decision = self._evaluate_steering_impact(
                         request=request,
                         snapshot=snapshot,
@@ -3510,7 +5077,11 @@ class EarningsSquadOrchestrator:
                         instructions=pending_instr,
                         ledger=ledger,
                         emitter=emitter,
+                        gaps_out=steer_gaps,
                     )
+                    if steer_gaps:
+                        with cp_lock:
+                            state["open_gaps"] = _merge_gaps(state["open_gaps"], steer_gaps)
                     for instr in pending_instr:
                         state["applied_instruction_sequences"].add(instr.sequence)
 
@@ -3596,6 +5167,7 @@ class EarningsSquadOrchestrator:
         )
         if not pending_instr:
             return
+        steer_gaps: list[SquadGap] = []
         decision = self._evaluate_steering_impact(
             request=request,
             snapshot=snapshot,
@@ -3605,7 +5177,11 @@ class EarningsSquadOrchestrator:
             instructions=pending_instr,
             ledger=ledger,
             emitter=emitter,
+            gaps_out=steer_gaps,
         )
+        if steer_gaps:
+            with cp_lock:
+                state["open_gaps"] = _merge_gaps(state["open_gaps"], steer_gaps)
         for instr in pending_instr:
             state["applied_instruction_sequences"].add(instr.sequence)
 
@@ -3686,6 +5262,7 @@ class EarningsSquadOrchestrator:
         instructions: Sequence[UserSteeringInstruction],
         ledger: SquadExecutionLedger,
         emitter: OrgGraphEmitter,
+        gaps_out: list[SquadGap] | None = None,
     ) -> SteeringImpactDecision:
         emitter.emit(
             stage="steering",
@@ -3695,11 +5272,29 @@ class EarningsSquadOrchestrator:
             current_activity=f"Evaluating mid-run user steering ({len(instructions)} new instruction(s)).",
             slot="deep_reasoner",
         )
+        allowed_tools_table = {r: sorted(v) for r, v in WORKER_ALLOWED_TOOLS.items()}
         sys_prompt = (
-            "You are the Lead Coordinator handling mid-run user steering instructions. "
-            "Incrementally evaluate impact and return SteeringImpactDecision JSON identifying ONLY "
-            "affected_workers (and cancel_running_workers / updated_tasks). Do NOT re-dispatch "
-            "unrelated completed workers."
+            "You are the Lead Coordinator handling mid-run user steering instructions.\n"
+            "Incrementally evaluate impact and return ONLY a single raw JSON object matching `SteeringImpactDecision`.\n"
+            "Do NOT re-dispatch unrelated completed workers.\n\n"
+            "STRICT CONTRACT RULES (extra='forbid' on SteeringImpactDecision and WorkerTask):\n"
+            '- Top-level keys ONLY: ["instruction_sequences", "affected_workers", "cancel_running_workers", "invalidate_stage_2_5", "invalidate_stage_3a", "rationale", "updated_tasks"]\n'
+            '- worker_role enum: ["worker_segments", "worker_forensics", "worker_guidance"]\n'
+            "- Every `worker_role` in `updated_tasks` MUST also appear in `affected_workers`.\n"
+            f"- Any `allowed_tools` inside `updated_tasks` MUST remain a subset of: {json.dumps(allowed_tools_table)}\n\n"
+            "Valid JSON example:\n"
+            "{\n"
+            f'  "instruction_sequences": {[i.sequence for i in instructions]},\n'
+            '  "affected_workers": ["worker_guidance"],\n'
+            '  "cancel_running_workers": [],\n'
+            '  "invalidate_stage_2_5": true,\n'
+            '  "invalidate_stage_3a": true,\n'
+            '  "rationale": "Only worker_guidance covers management outlook requested by the user.",\n'
+            '  "updated_tasks": [\n'
+            '    {"worker_role": "worker_guidance", "status": "planned", "objective": "Focus on FY26 capex outlook.", "target_r_files": [], "target_flag_ids": [], "target_section_keys": [], "soft_turn_limit": 4, "round_number": 1}\n'
+            "  ]\n"
+            "}\n"
+            "Reply ONLY with raw JSON (no markdown commentary)."
         )
         user_prompt = json.dumps({
             "question": request.question,
@@ -3712,34 +5307,35 @@ class EarningsSquadOrchestrator:
             },
             "snapshot_symbol": snapshot.symbol,
         }, ensure_ascii=False, sort_keys=True, default=str)
-        call_id, before = ledger.admit_model_call("deep_reasoner", stage="steering")
-        t0 = monotonic()
-        failed = False
-        usage: ModelUsage | None = None
-        try:
-            resp = self._model_runner.invoke(SlotModelRequest(
-                slot="deep_reasoner",
+        decision, used_fallback, last_err = self._invoke_and_parse_with_repair(
+            slot="deep_reasoner",
+            stage="steering",
+            role="lead_coordinator",
+            node_id="lead_coordinator",
+            system_prompt=sys_prompt,
+            user_prompt=user_prompt,
+            model_cls=SteeringImpactDecision,
+            ledger=ledger,
+            emitter=emitter,
+            norm_kwargs={"instructions": instructions},
+            fallback_fn=lambda _exc: self._fallback_steering_decision(dispatch_plan, running_roles, instructions),
+            forbidden_tool_error="Lead Coordinator must not invoke tools during steering impact evaluation.",
+        )
+        if used_fallback and gaps_out is not None:
+            gaps_out.append(SquadGap(
                 stage="steering",
-                role="lead_coordinator",
-                system_prompt=sys_prompt,
-                user_prompt=user_prompt,
-                messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
-                response_schema_name="SteeringImpactDecision",
-                response_schema=SteeringImpactDecision.model_json_schema(),
-                binding=self._slot_bindings["deep_reasoner"],
+                worker_role=None,
+                code="steering_fallback_used",
+                message=(
+                    f"Steering impact evaluation fell back after {self._max_repair_attempts} repair(s): "
+                    f"{last_err}"
+                )[:1000],
             ))
-            usage = resp.usage
-            decision = _parse_model_output(resp, SteeringImpactDecision)
-            if not decision.instruction_sequences:
-                decision = decision.model_copy(update={
-                    "instruction_sequences": [i.sequence for i in instructions]
-                })
-            return decision
-        except Exception:
-            failed = True
-            raise
-        finally:
-            ledger.settle_model_call("deep_reasoner", call_id, before, usage=usage, elapsed_ms=int((monotonic() - t0) * 1000), failed=failed)
+        if not decision.instruction_sequences:
+            decision = decision.model_copy(update={
+                "instruction_sequences": [i.sequence for i in instructions]
+            })
+        return decision
 
     def _collect_worker_future(
         self,
@@ -3818,48 +5414,81 @@ class EarningsSquadOrchestrator:
             for name in sorted(allowed_set)
             if name in TOOL_REGISTRY
         ]
+        l1_l2_pack = _render_l1_l2_pack_for_worker(
+            snapshot,
+            l2_pack_id=l2_pack_id,
+            worker_role=role,
+        )
+        tool_sop = _worker_tool_sop(role, allowed_set, snapshot)
         sys_prompt = (
-            f"You are {role} (slot fast_extractor), a strictly read-only financial analyst worker. "
-            f"Allowed tools: {sorted(allowed_set)}. You must NEVER write reports or call disallowed tools. "
-            f"Return EvidenceCardBatch JSON with verified citations and supporting_fact_ids."
+            f"You are {role} (slot fast_extractor), a strictly read-only institutional buy-side financial analyst worker.\n"
+            f"Allowed tools ONLY: {sorted(allowed_set)}. NEVER call disallowed or write tools.\n"
+            f"Follow the L1/L2 method pack checklists, unit/period checks, and KPI formulas provided in `method_pack`.\n\n"
+            f"{tool_sop}\n\n"
+            "FINAL OUTPUT CONTRACT (extra='forbid' on EvidenceCardBatch, EvidenceCard, and EvidenceCitation):\n"
+            '- Top-level EvidenceCardBatch keys ONLY: ["batch_id", "task_id", "worker_role", "round_number", "status", "cards", "unresolved_gaps", "tools_invoked", "blocked_tool_attempts", "tool_calls_made", "turns_used", "error", "instruction_sequence"]\n'
+            '  * status enum: ["completed", "partial", "failed", "skipped", "cancelled"] (use "completed" or "partial")\n'
+            '- Each EvidenceCard keys ONLY: ["card_id", "worker_role", "topic_tag", "finding", "supporting_fact_ids", "citations", "caveat", "unresolved_gaps", "numeric_claims", "round_number", "instruction_sequence"]\n'
+            '  * Provenance rule: every EvidenceCard MUST have non-empty `citations` OR non-empty `supporting_fact_ids`.\n'
+            '- Each EvidenceCitation keys ONLY: ["source_id", "quotation", "location", "character_start", "character_end", "content_sha256", "fact_id"]\n'
+            '  * `quotation` MUST be an exact verbatim excerpt from the source text returned by `read_sources`/`search_source`/Stage 0 (do NOT invent placeholders like "...").\n\n'
+            "Valid EvidenceCardBatch JSON example:\n"
+            "{\n"
+            f'  "task_id": "{task.task_id}",\n'
+            f'  "worker_role": "{role}",\n'
+            f'  "round_number": {task.round_number},\n'
+            '  "status": "completed",\n'
+            '  "cards": [\n'
+            "    {\n"
+            '      "card_id": "card_rev_1",\n'
+            f'      "worker_role": "{role}",\n'
+            '      "topic_tag": "segment_growth",\n'
+            '      "finding": "Cloud revenue reached $720M (+28% YoY) per EX-99.1 and R10.htm.",\n'
+            '      "citations": [{"source_id": "src_8k_release_0001", "quotation": "Cloud revenue was $720 million", "location": "EX-99.1"}],\n'
+            '      "supporting_fact_ids": [],\n'
+            '      "numeric_claims": [{"metric_name": "Cloud Revenue", "current_value": "$720M", "prior_value": "$562M", "unit": "USD millions", "period_label": "Q4 2025"}]\n'
+            "    }\n"
+            "  ],\n"
+            '  "unresolved_gaps": []\n'
+            "}\n"
+            "When ready to finish (or when tools are disabled), reply ONLY with a single raw JSON object."
         )
         init_payload = {
             "question": request.question,
             "worker_role": role,
             "round_number": task.round_number,
             "l2_pack_id": l2_pack_id,
+            "method_pack": l1_l2_pack,
             "task": task.model_dump(mode="json"),
-            "snapshot": {
-                "entity_id": snapshot.entity_id,
-                "symbol": snapshot.symbol,
-                "cik": snapshot.cik,
-                "period_label": snapshot.period_label,
-                "sector_applicability": snapshot.sector_applicability.model_dump(mode="json"),
-                "flags": [f.model_dump(mode="json") for f in snapshot.flags],
-                "filing_accession": snapshot.filing_accession,
-                "prior_filing_accession": snapshot.prior_filing_accession,
-                "filing_table_catalog": (
-                    snapshot.filing_table_catalog.model_dump(mode="json")
-                    if snapshot.filing_table_catalog
-                    else None
-                ),
-                "prefetched_sources": [s.model_dump(mode="json") for s in snapshot.prefetched_sources],
-                "consensus_status": snapshot.consensus_summary.status,
-                "transcript_index": snapshot.transcript_index.model_dump(mode="json"),
-            },
+            "snapshot": _compact_snapshot_for_worker(snapshot),
         }
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": json.dumps(init_payload, ensure_ascii=False, sort_keys=True, default=str)},
         ]
 
+        worker_conv_id = f"{task.task_id}:r{task.round_number}"
         tools_invoked: list[str] = []
         blocked_attempts: list[str] = []
         tool_calls_made = 0
         turns_used = 0
+        loop_limit = 2 if task.soft_turn_limit == 1 else task.soft_turn_limit
 
-        for turn_idx in range(task.soft_turn_limit):
+        for turn_idx in range(loop_limit):
             check_active()
+            is_wrapup_turn = (turn_idx == loop_limit - 1) and (turn_idx >= 1)
+            turn_tools = [] if is_wrapup_turn else allowed_defs
+            if is_wrapup_turn:
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "FINAL WRAP-UP TURN (tools disabled): You have reached the turn limit. "
+                        "Do NOT call any tools. Reply ONLY with a single raw JSON object matching `EvidenceCardBatch` "
+                        "(extra='forbid') synthesizing all verified findings gathered above, and list any remaining "
+                        "missing sources or unverified items in `unresolved_gaps`."
+                    ),
+                })
+
             turns_used += 1
             call_id, before = ledger.admit_model_call("fast_extractor", stage=stage_name)
             t0 = monotonic()
@@ -3873,11 +5502,12 @@ class EarningsSquadOrchestrator:
                     system_prompt=sys_prompt,
                     user_prompt=messages[-1]["content"],
                     messages=list(messages),
-                    tools=allowed_defs,
+                    tools=turn_tools,
                     response_schema_name="EvidenceCardBatch",
-                    response_schema=EvidenceCardBatch.model_json_schema(),
+                    response_schema=_cached_model_json_schema(EvidenceCardBatch),
                     binding=self._slot_bindings["fast_extractor"],
                     turn_index=turn_idx,
+                    conversation_id=worker_conv_id,
                 ))
                 usage = resp.usage
             except Exception:
@@ -3890,52 +5520,197 @@ class EarningsSquadOrchestrator:
                 )
 
             if not resp.tool_calls:
-                batch = _parse_worker_batch(
-                    resp,
-                    task=task,
-                    role=role,
-                    tools_invoked=tools_invoked,
-                    blocked_attempts=blocked_attempts,
-                    tool_calls_made=tool_calls_made,
-                    turns_used=turns_used,
-                )
+                max_repairs = max(0, int(self._max_repair_attempts))
+                cur_resp = resp
+                repair_forced_err: Exception | None = None
+                last_parse_err: Exception | None = None
+                for repair_idx in range(max_repairs + 1):
+                    try:
+                        if repair_forced_err is not None:
+                            raise repair_forced_err
+                        batch = _parse_worker_batch(
+                            cur_resp,
+                            task=task,
+                            role=role,
+                            tools_invoked=tools_invoked,
+                            blocked_attempts=blocked_attempts,
+                            tool_calls_made=tool_calls_made,
+                            turns_used=turns_used,
+                        )
+                        self._record_repair_diagnostic({
+                            "stage": stage_name,
+                            "role": role,
+                            "schema": "EvidenceCardBatch",
+                            "repair_attempts": repair_idx,
+                            "succeeded": True,
+                            "used_fallback": False,
+                            "last_error": str(last_parse_err)[:400] if last_parse_err else None,
+                        })
+                        emitter.emit(
+                            stage=stage_name,
+                            node_id=role,
+                            action_kind="RESPONDING",
+                            runtime_state="completed" if batch.status == "completed" else "blocked",
+                            current_activity=f"{role} emitted {len(batch.cards)} EvidenceCard(s) in {turns_used} turn(s).",
+                            edge_event=OrgEdgeEvent(
+                                from_node_id=role,
+                                to_node_id="lead_coordinator",
+                                is_review=True,
+                                edge_kind="report",
+                                label=f"{len(batch.cards)} cards",
+                            ),
+                            slot="fast_extractor",
+                        )
+                        return batch
+                    except (ValidationError, ValueError, TypeError) as exc:
+                        last_parse_err = exc
+                        repair_forced_err = None
+                        if repair_idx >= max_repairs:
+                            break
+                        check_active()
+                        prior_raw = cur_resp.content or ""
+                        if not prior_raw and isinstance(cur_resp.parsed, Mapping):
+                            prior_raw = json.dumps(cur_resp.parsed, ensure_ascii=False, default=str)
+                        messages.append({"role": "assistant", "content": prior_raw[:3000] or "<invalid output>"})
+                        messages.append({
+                            "role": "user",
+                            "content": _format_pydantic_repair_prompt(
+                                EvidenceCardBatch,
+                                exc,
+                                attempt=repair_idx + 1,
+                                max_attempts=max_repairs,
+                            ),
+                        })
+                        emitter.emit(
+                            stage=stage_name,
+                            node_id=role,
+                            action_kind="INSPECTING",
+                            runtime_state="running",
+                            current_activity=(
+                                f"{role} repairing EvidenceCardBatch JSON output "
+                                f"(repair {repair_idx + 1}/{max_repairs})."
+                            ),
+                            slot="fast_extractor",
+                        )
+                        turns_used += 1
+                        rep_call_id, rep_before = ledger.admit_model_call("fast_extractor", stage=stage_name)
+                        rep_t0 = monotonic()
+                        rep_failed = False
+                        rep_usage: ModelUsage | None = None
+                        try:
+                            cur_resp = self._model_runner.invoke(SlotModelRequest(
+                                slot="fast_extractor",
+                                stage=stage_name,
+                                role=role,
+                                system_prompt=sys_prompt,
+                                user_prompt=messages[-1]["content"],
+                                messages=list(messages),
+                                tools=[],
+                                response_schema_name="EvidenceCardBatch",
+                                response_schema=EvidenceCardBatch.model_json_schema(),
+                                binding=self._slot_bindings["fast_extractor"],
+                                turn_index=turn_idx + repair_idx + 1,
+                                conversation_id=worker_conv_id,
+                            ))
+                            rep_usage = cur_resp.usage
+                        except Exception:
+                            rep_failed = True
+                            raise
+                        finally:
+                            ledger.settle_model_call(
+                                "fast_extractor",
+                                rep_call_id,
+                                rep_before,
+                                usage=rep_usage,
+                                elapsed_ms=int((monotonic() - rep_t0) * 1000),
+                                failed=rep_failed,
+                            )
+                        if cur_resp.tool_calls:
+                            repair_forced_err = ValueError(
+                                "Tools are disabled during schema repair; emit ONLY valid EvidenceCardBatch JSON."
+                            )
+
+                # Partial Survival when worker exhausts all repair attempts
+                self._record_repair_diagnostic({
+                    "stage": stage_name,
+                    "role": role,
+                    "schema": "EvidenceCardBatch",
+                    "repair_attempts": max_repairs,
+                    "succeeded": False,
+                    "used_fallback": True,
+                    "last_error": str(last_parse_err)[:400] if last_parse_err else None,
+                })
+                repair_gap_msg = (
+                    f"{role} EvidenceCardBatch failed schema validation after {max_repairs} repair(s): "
+                    f"{last_parse_err}"
+                )[:1000]
                 emitter.emit(
                     stage=stage_name,
                     node_id=role,
                     action_kind="RESPONDING",
-                    runtime_state="completed" if batch.status == "completed" else "blocked",
-                    current_activity=f"{role} emitted {len(batch.cards)} EvidenceCard(s) in {turns_used} turn(s).",
+                    runtime_state="completed",
+                    current_activity=repair_gap_msg,
+                    blocker_text=repair_gap_msg,
                     edge_event=OrgEdgeEvent(
                         from_node_id=role,
                         to_node_id="lead_coordinator",
                         is_review=True,
                         edge_kind="report",
-                        label=f"{len(batch.cards)} cards",
+                        label="Partial (repair exhausted)",
                     ),
                     slot="fast_extractor",
                 )
-                return batch
+                return EvidenceCardBatch(
+                    task_id=task.task_id,
+                    worker_role=role,
+                    round_number=task.round_number,
+                    status="partial",
+                    cards=[],
+                    unresolved_gaps=[repair_gap_msg],
+                    tools_invoked=list(dict.fromkeys(tools_invoked)),
+                    blocked_tool_attempts=list(dict.fromkeys(blocked_attempts)),
+                    tool_calls_made=tool_calls_made,
+                    turns_used=turns_used,
+                    instruction_sequence=task.steering_instruction_sequence,
+                )
 
             # Execute tool calls inside the strict read-only subset boundary
-            if turn_idx >= task.soft_turn_limit - 1:
-                # Soft turn limit reached while still requesting tool calls; do not execute unbounded turns
+            if is_wrapup_turn or turn_idx >= loop_limit - 1:
+                # Wrap-up turn exhausted while still requesting tool calls; do not execute unbounded turns
                 break
 
             assistant_calls_msg: list[dict[str, Any]] = []
             tool_result_msgs: list[dict[str, Any]] = []
             for tc in resp.tool_calls:
                 check_active()
+                invalid_raw_json_err: str | None = None
                 tc_args = tc.arguments
-                if tc_args is None and tc.raw_arguments:
-                    try:
-                        tc_args = json.loads(tc.raw_arguments)
-                    except ValueError:
+                raw_args_for_msg = ""
+                if tc_args is None and tc.raw_arguments is not None:
+                    stripped_raw = tc.raw_arguments.strip()
+                    if not stripped_raw:
                         tc_args = {}
-                tc_args = tc_args or {}
+                    else:
+                        try:
+                            parsed_raw = json.loads(stripped_raw)
+                        except ValueError as exc:
+                            invalid_raw_json_err = str(exc)
+                            parsed_raw = None
+                        if isinstance(parsed_raw, Mapping):
+                            tc_args = dict(parsed_raw)
+                        elif invalid_raw_json_err is None:
+                            invalid_raw_json_err = f"Expected JSON object, got {type(parsed_raw).__name__}."
+                if tc_args is None:
+                    tc_args = {}
+                raw_args_for_msg = (
+                    tc.raw_arguments
+                    if invalid_raw_json_err is not None and tc.raw_arguments is not None
+                    else json.dumps(tc_args, ensure_ascii=False, default=str)
+                )
                 assistant_calls_msg.append({
                     "id": tc.id,
                     "type": "function",
-                    "function": {"name": tc.name, "arguments": json.dumps(tc_args)},
+                    "function": {"name": tc.name, "arguments": raw_args_for_msg},
                 })
 
                 if tc.name not in allowed_set or tc.name in DISALLOWED_WORKER_TOOLS:
@@ -3957,6 +5732,25 @@ class EarningsSquadOrchestrator:
                             "reason": "tool_not_allowed_for_worker",
                             "tool": tc.name,
                             "allowed_tools": sorted(allowed_set),
+                        }),
+                    })
+                    continue
+
+                if invalid_raw_json_err is not None:
+                    ledger.record_tool_call(stage=stage_name)
+                    tool_calls_made += 1
+                    tool_result_msgs.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": json.dumps({
+                            "status": "failed",
+                            "reason": "tool_arguments_invalid_json",
+                            "tool": tc.name,
+                            "message": f"Malformed JSON in tool arguments for {tc.name}: {invalid_raw_json_err}",
+                            "hint": _TOOL_ARGUMENT_HINTS.get(
+                                tc.name,
+                                "Pass a valid JSON object matching the tool parameter schema.",
+                            ),
                         }),
                     })
                     continue
@@ -3992,7 +5786,7 @@ class EarningsSquadOrchestrator:
                         slot="fast_extractor",
                     )
                 if isinstance(self._tool_runner, FinToolboxToolRunner):
-                    for sid, src in self._tool_runner.source_by_id.items():
+                    for sid, src in self._tool_runner._eligible_sources_snapshot().items():
                         source_texts[sid] = src.text
                         source_permissions[sid] = src.permissions.model_dump(mode="json")
                 elif isinstance(out, Mapping) and isinstance(out.get("source_id"), str) and isinstance(out.get("text"), str):
@@ -4064,44 +5858,64 @@ class EarningsSquadOrchestrator:
                 current_activity="Lead Coordinator reviewing Stage 2 EvidenceCardBatches for cross-worker leads.",
                 slot="deep_reasoner",
             )
+            allowed_tools_table = {r: sorted(v) for r, v in WORKER_ALLOWED_TOOLS.items()}
             sys_prompt = (
-                "You are the Lead Coordinator performing Stage 2.5 cross-worker review. "
+                "You are the Lead Coordinator performing Stage 2.5 cross-worker review.\n"
                 "You have a HARD CAP of 1 targeted follow-up round. If no cross-worker follow-up is needed, "
-                "set has_cross_worker_leads=false and followup_tasks=[]."
+                "set has_cross_worker_leads=false and followup_tasks=[].\n\n"
+                "STRICT CONTRACT RULES (extra='forbid' on Stage25ReviewDecision and WorkerTask):\n"
+                '- Top-level keys ONLY: ["has_cross_worker_leads", "followup_tasks", "rationale"]\n'
+                '- Nested WorkerTask keys ONLY: ["worker_role", "status", "skip_reason", "objective", "target_r_files", "target_flag_ids", "target_section_keys", "allowed_tools", "soft_turn_limit", "round_number"]\n'
+                '- worker_role enum: ["worker_segments", "worker_forensics", "worker_guidance"]\n'
+                "- In followup_tasks, every task MUST have a unique worker_role and round_number=2.\n"
+                f"- Any allowed_tools must be a subset of: {json.dumps(allowed_tools_table)}\n\n"
+                "Valid JSON example (no follow-up):\n"
+                '{"has_cross_worker_leads": false, "followup_tasks": [], "rationale": "Workers corroborate segments and cash conversion without unresolved leads."}\n'
+                "Reply ONLY with raw JSON (no markdown commentary)."
             )
+            cat = snapshot.filing_table_catalog
             user_prompt = json.dumps({
                 "question": request.question,
+                "l2_pack_id": dispatch_plan.selected_l2_pack_id,
                 "snapshot_flags": [f.model_dump(mode="json") for f in snapshot.flags],
+                "prefetched_source_ids": [s.source_id for s in snapshot.prefetched_sources[:20]],
+                "filing_table_r_files": (
+                    [r.r_file for r in [*cat.statements[:10], *cat.tables[:10]]]
+                    if cat is not None
+                    else []
+                ),
                 "worker_batches": {k: v.model_dump(mode="json") for k, v in state["worker_batches"].items()},
                 "open_gaps": [g.model_dump(mode="json") for g in state["open_gaps"]],
             }, ensure_ascii=False, sort_keys=True, default=str)
 
-            call_id, before = ledger.admit_model_call("deep_reasoner", stage="stage_2_5_review")
-            t0 = monotonic()
-            failed = False
-            usage: ModelUsage | None = None
-            try:
-                resp = self._model_runner.invoke(SlotModelRequest(
-                    slot="deep_reasoner",
-                    stage="stage_2_5_review",
-                    role="lead_coordinator",
-                    system_prompt=sys_prompt,
-                    user_prompt=user_prompt,
-                    messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
-                    response_schema_name="Stage25ReviewDecision",
-                    response_schema=Stage25ReviewDecision.model_json_schema(),
-                    binding=self._slot_bindings["deep_reasoner"],
-                ))
-                usage = resp.usage
-                decision = _parse_model_output(resp, Stage25ReviewDecision)
-            except Exception:
-                failed = True
-                raise
-            finally:
-                ledger.settle_model_call(
-                    "deep_reasoner", call_id, before, usage=usage,
-                    elapsed_ms=int((monotonic() - t0) * 1000), failed=failed,
-                )
+            decision, used_fallback, last_err = self._invoke_and_parse_with_repair(
+                slot="deep_reasoner",
+                stage="stage_2_5_review",
+                role="lead_coordinator",
+                node_id="lead_coordinator",
+                system_prompt=sys_prompt,
+                user_prompt=user_prompt,
+                model_cls=Stage25ReviewDecision,
+                ledger=ledger,
+                emitter=emitter,
+                fallback_fn=lambda exc: Stage25ReviewDecision(
+                    has_cross_worker_leads=False,
+                    followup_tasks=[],
+                    rationale=f"Deterministic Stage 2.5 fallback: skipped follow-up after schema validation failure ({exc})."[:1000],
+                ),
+                forbidden_tool_error="Lead Coordinator must not invoke retrieval tools during stage_2_5_review.",
+            )
+            if used_fallback:
+                with cp_lock:
+                    state["open_gaps"] = _merge_gaps(state["open_gaps"], [SquadGap(
+                        stage="stage_2_5_review",
+                        worker_role=None,
+                        code="stage25_fallback_skipped",
+                        message=(
+                            f"Stage 2.5 cross-worker review skipped follow-up via fallback after "
+                            f"{self._max_repair_attempts} repair(s): {last_err}"
+                        )[:1000],
+                    )])
             state["stage25_decision"] = decision
             save_checkpoint()
         else:
@@ -4209,36 +6023,41 @@ class EarningsSquadOrchestrator:
         )
 
         sys_prompt, user_prompt = build_isolated_bear_prompt(snapshot, cards, open_gaps)
-        call_id, before = ledger.admit_model_call("bear_reviewer", stage="stage_3a_bear")
-        t0 = monotonic()
-        failed = False
-        usage: ModelUsage | None = None
         try:
-            resp = self._model_runner.invoke(SlotModelRequest(
+            parsed_batch, used_fallback, last_err = self._invoke_and_parse_with_repair(
                 slot="bear_reviewer",
                 stage="stage_3a_bear",
                 role="bear_reviewer",
+                node_id="bear_reviewer",
                 system_prompt=sys_prompt,
                 user_prompt=user_prompt,
-                messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
-                tools=[],
-                response_schema_name="BearCaseBatch",
-                response_schema=BearCaseBatch.model_json_schema(),
-                binding=self._slot_bindings["bear_reviewer"],
-            ))
-            usage = resp.usage
-            if resp.tool_calls:
-                raise SquadToolViolationError("bear_reviewer is not permitted to invoke tools.", stage="stage_3a_bear")
-            raw_items, notes, batch_id = _extract_raw_bear_items(resp)
-            accepted, rejected, bear_gaps = gate_bear_cases(raw_items, snapshot, cards, open_gaps)
+                model_cls=BearCaseBatch,
+                ledger=ledger,
+                emitter=emitter,
+                fallback_fn=lambda _exc: _fallback_bear_batch(snapshot, cards, open_gaps),
+                forbidden_tool_error="bear_reviewer is not permitted to invoke tools.",
+            )
+            accepted, rejected, bear_gaps = gate_bear_cases(
+                parsed_batch.items, snapshot, cards, open_gaps
+            )
+            rejected_all = [*parsed_batch.rejected_items, *rejected]
+            if used_fallback:
+                bear_gaps = _merge_gaps(bear_gaps, [SquadGap(
+                    stage="stage_3a_bear",
+                    worker_role=None,
+                    code="stage3a_deterministic_fallback",
+                    message=(
+                        f"Bear Reviewer failed BearCaseBatch validation after "
+                        f"{self._max_repair_attempts} repair(s); deterministic flag/redline bear cases used ({last_err})."
+                    )[:1000],
+                )])
             bear_batch = BearCaseBatch(
-                batch_id=batch_id,
+                batch_id=parsed_batch.batch_id,
                 items=accepted,
-                rejected_items=rejected,
-                reviewer_notes=notes,
+                rejected_items=rejected_all,
+                reviewer_notes=parsed_batch.reviewer_notes,
             )
         except Exception as exc:
-            failed = True
             emitter.emit(
                 stage="stage_3a_bear",
                 node_id="bear_reviewer",
@@ -4249,11 +6068,6 @@ class EarningsSquadOrchestrator:
                 slot="bear_reviewer",
             )
             raise
-        finally:
-            ledger.settle_model_call(
-                "bear_reviewer", call_id, before, usage=usage,
-                elapsed_ms=int((monotonic() - t0) * 1000), failed=failed,
-            )
 
         emitter.emit(
             stage="stage_3a_bear",
@@ -4280,6 +6094,7 @@ class EarningsSquadOrchestrator:
         self,
         *,
         run_id: str,
+        question: str = "",
         snapshot: EarningsPrefetchSnapshot,
         dispatch_plan: ResearchDispatchPlan,
         batches: Sequence[EvidenceCardBatch],
@@ -4322,13 +6137,14 @@ class EarningsSquadOrchestrator:
         dossier_core = {
             "dossier_id": dossier_id,
             "run_id": run_id,
+            "question": question,
             "entity_id": snapshot.entity_id,
             "symbol": snapshot.symbol,
             "cik": snapshot.cik,
             "company_name": snapshot.company_name,
             "period_label": snapshot.period_label,
             "selected_l2_pack_id": dispatch_plan.selected_l2_pack_id,
-            "snapshot": snapshot.model_dump(mode="json"),
+            "snapshot": _compact_snapshot_for_writer(snapshot),
             "evidence_cards": [c.model_dump(mode="json") for c in verified_cards],
             "bear_cases": [b.model_dump(mode="json") for b in accepted_bears],
             "open_gaps": [g.model_dump(mode="json") for g in all_gaps],
@@ -4336,10 +6152,10 @@ class EarningsSquadOrchestrator:
             "gate_report": gate_report.model_dump(mode="json"),
         }
 
-        sys_prompt = (
-            "You are the Dossier Writer (writer slot). Render a concise, institutional Buy-Side Earnings Memo "
-            "in Markdown strictly from the server-gated EarningsDossier payload. "
-            "Do not invent numbers or ignore open_gaps or sector_applicability boundaries."
+        sys_prompt = _build_writer_system_prompt(
+            mode="memo",
+            sic_code=snapshot.sic_code,
+            question=question,
         )
         user_prompt = _build_writer_payload(dossier_core, mode="memo")
         call_id, before = ledger.admit_model_call("writer", stage="stage_3b_gate_memo")
@@ -4360,7 +6176,14 @@ class EarningsSquadOrchestrator:
             usage = resp.usage
             if resp.tool_calls:
                 raise SquadToolViolationError("Stage 3B writer is not permitted to invoke retrieval tools.", stage="stage_3b_gate_memo")
-            memo_md = _extract_markdown_from_response(resp, dossier_core, mode="memo")
+            memo_md, writer_fallback_used = _extract_markdown_or_fallback(resp, dossier_core, mode="memo")
+            if writer_fallback_used:
+                all_gaps = _merge_gaps(all_gaps, [SquadGap(
+                    stage="stage_3b_gate_memo",
+                    worker_role=None,
+                    code="stage3b_writer_fallback_used",
+                    message="Stage 3B Writer returned empty content; deterministic Markdown memo fallback used.",
+                )])
         except Exception as exc:
             failed = True
             emitter.emit(
@@ -4414,29 +6237,913 @@ class EarningsSquadOrchestrator:
         return dossier
 
 
-# --------------------------------------------------------------------------- Parsing & Normalization Helpers
+# --------------------------------------------------------------------------- Parsing, Normalization, Repair & Fallbacks
+@lru_cache(maxsize=64)
 def _tool_def_dict(tool_name: str) -> dict[str, Any]:
     spec = TOOL_REGISTRY[tool_name]
     tdef: ModelToolDefinition = spec.to_definition()
     return {"name": tdef.name, "description": tdef.description, "input_schema": tdef.input_schema}
 
 
+_FENCED_JSON_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.I)
+
+
+def _extract_balanced_json_candidates(text: str) -> list[str]:
+    """Scan text for balanced `{...}` or `[...]` JSON substrings, respecting JSON string escapes."""
+    candidates: list[str] = []
+    n = len(text)
+    idx = 0
+    while idx < n:
+        ch = text[idx]
+        if ch not in "{[":
+            idx += 1
+            continue
+        stack = [ch]
+        in_str = False
+        escaped = False
+        pos = idx + 1
+        while pos < n and stack:
+            cur = text[pos]
+            if in_str:
+                if escaped:
+                    escaped = False
+                elif cur == "\\":
+                    escaped = True
+                elif cur == '"':
+                    in_str = False
+            else:
+                if cur == '"':
+                    in_str = True
+                elif cur in "{[":
+                    stack.append(cur)
+                elif cur == "}" and stack[-1] == "{":
+                    stack.pop()
+                elif cur == "]" and stack[-1] == "[":
+                    stack.pop()
+                elif cur in "}]":
+                    break
+            pos += 1
+        if not stack:
+            candidates.append(text[idx:pos])
+            idx = pos
+        else:
+            idx += 1
+    return candidates
+
+
+def _extract_json_value(raw_text: str) -> Any:
+    """Robustly extract a JSON object or array from raw LLM text (prose, fences, or raw JSON)."""
+    stripped = raw_text.strip()
+    if not stripped:
+        raise ValueError("Empty model response text.")
+    try:
+        return json.loads(stripped)
+    except ValueError:
+        pass
+
+    for m in _FENCED_JSON_RE.finditer(stripped):
+        inner = m.group(1).strip()
+        if not inner:
+            continue
+        try:
+            return json.loads(inner)
+        except ValueError:
+            for cand in _extract_balanced_json_candidates(inner):
+                try:
+                    return json.loads(cand)
+                except ValueError:
+                    continue
+
+    # Try outer balanced blocks (longest first so nested arrays don't preempt outer object)
+    candidates = sorted(_extract_balanced_json_candidates(stripped), key=len, reverse=True)
+    for cand in candidates:
+        try:
+            return json.loads(cand)
+        except ValueError:
+            continue
+    raise ValueError("Could not extract valid JSON object or array from model output.")
+
+
 def _parse_json_payload(resp: SlotModelResponse) -> Any:
     if resp.parsed is not None:
         return resp.parsed
     if isinstance(resp.content, str) and resp.content.strip():
-        raw = resp.content.strip()
-        if raw.startswith("```"):
-            raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.I | re.S).strip()
-        return json.loads(raw)
+        return _extract_json_value(resp.content)
     raise ValueError("Model response contained neither parsed object nor JSON text.")
 
 
-def _parse_model_output(resp: SlotModelResponse, model_cls: type[BaseModel]) -> Any:
+def _coerce_to_str(val: Any, *, max_len: int | None = None) -> str:
+    if val is None:
+        out = ""
+    elif isinstance(val, str):
+        out = val.strip()
+    elif isinstance(val, (list, tuple)):
+        parts = [_coerce_to_str(item) for item in val]
+        out = "; ".join(p for p in parts if p)
+    elif isinstance(val, Mapping):
+        parts = [f"{k}: {_coerce_to_str(v)}" for k, v in val.items() if _coerce_to_str(v)]
+        out = "; ".join(parts) if parts else json.dumps(dict(val), ensure_ascii=False, default=str)
+    else:
+        out = str(val).strip()
+    if max_len is not None and len(out) > max_len:
+        out = out[:max_len].rstrip()
+    return out
+
+
+def _coerce_to_str_list(val: Any) -> list[str]:
+    if val is None:
+        return []
+    if isinstance(val, str):
+        s = val.strip()
+        return [s] if s else []
+    if isinstance(val, (list, tuple)):
+        out: list[str] = []
+        for item in val:
+            s = _coerce_to_str(item)
+            if s:
+                out.append(s)
+        return out
+    if isinstance(val, Mapping):
+        return [f"{k}: {_coerce_to_str(v)}" for k, v in val.items() if _coerce_to_str(v)]
+    s = str(val).strip()
+    return [s] if s else []
+
+
+def _normalize_worker_role_val(val: Any) -> Any:
+    if not isinstance(val, str):
+        return val
+    key = val.strip().lower().replace("-", "_").replace(" ", "_")
+    mapping = {
+        "worker_segments": "worker_segments",
+        "segments": "worker_segments",
+        "segment": "worker_segments",
+        "segments_kpis": "worker_segments",
+        "segments_and_kpis": "worker_segments",
+        "worker_a": "worker_segments",
+        "a": "worker_segments",
+        "worker_forensics": "worker_forensics",
+        "forensics": "worker_forensics",
+        "quality_forensics": "worker_forensics",
+        "earnings_quality": "worker_forensics",
+        "worker_b": "worker_forensics",
+        "b": "worker_forensics",
+        "worker_guidance": "worker_guidance",
+        "guidance": "worker_guidance",
+        "guidance_transcript": "worker_guidance",
+        "guidance_and_transcript": "worker_guidance",
+        "worker_c": "worker_guidance",
+        "c": "worker_guidance",
+    }
+    return mapping.get(key, val.strip())
+
+
+def _normalize_task_status_val(val: Any) -> Any:
+    if not isinstance(val, str):
+        return val
+    key = val.strip().lower()
+    if key in ("skip", "skipped", "omit", "disabled"):
+        return "skipped"
+    if key in ("planned", "plan", "active", "run", "running", "pending", "ready", "enabled"):
+        return "planned"
+    return key
+
+
+def _normalize_severity_val(val: Any) -> Any:
+    if not isinstance(val, str):
+        return "medium"
+    key = val.strip().lower()
+    if key in ("high", "critical", "severe", "major"):
+        return "high"
+    if key in ("medium", "med", "moderate"):
+        return "medium"
+    if key in ("low", "minor"):
+        return "low"
+    return key
+
+
+def _normalize_anchor_kind_val(val: Any) -> Any:
+    if not isinstance(val, str):
+        return val
+    key = val.strip().lower().replace("-", "_").replace(" ", "_")
+    mapping = {
+        "flag": "flag",
+        "quality_flag": "flag",
+        "diagnostic_flag": "flag",
+        "red_flag": "flag",
+        "yellow_flag": "flag",
+        "earnings_quality": "flag",
+        "redline": "redline",
+        "redline_diff": "redline",
+        "disclosure_diff": "redline",
+        "risk_factor": "redline",
+        "filing_redline": "redline",
+        "guidance_gap": "guidance_gap",
+        "guidance": "guidance_gap",
+        "nongaap": "guidance_gap",
+        "non_gaap": "guidance_gap",
+        "consensus_gap": "guidance_gap",
+        "transcript_gap": "guidance_gap",
+        "valuation_gap": "valuation_gap",
+        "valuation": "valuation_gap",
+        "reverse_dcf": "valuation_gap",
+        "dcf": "valuation_gap",
+        "multiple_gap": "valuation_gap",
+    }
+    return mapping.get(key, key)
+
+
+def _strip_extra_keys(d: dict[str, Any], allowed_fields: Iterable[str], notes: list[str], *, prefix: str) -> dict[str, Any]:
+    allowed = set(allowed_fields)
+    dropped = [k for k in list(d.keys()) if k not in allowed]
+    for k in dropped:
+        d.pop(k, None)
+    if dropped:
+        notes.append(f"stripped {prefix} extra keys: {sorted(dropped)}")
+    return d
+
+
+def _normalize_worker_task_dict(raw: Any, *, default_round: int = 1, notes: list[str] | None = None) -> Any:
+    if isinstance(raw, WorkerTask):
+        return raw.model_copy(update={"round_number": 2}) if default_round == 2 and raw.round_number != 2 else raw
+    if not isinstance(raw, Mapping):
+        return raw
+    log = notes if notes is not None else []
+    d = dict(raw)
+    for alias, target in (
+        ("role", "worker_role"),
+        ("worker", "worker_role"),
+        ("agent", "worker_role"),
+        ("tools", "allowed_tools"),
+        ("tool_names", "allowed_tools"),
+        ("goal", "objective"),
+        ("description", "objective"),
+        ("instruction", "objective"),
+        ("task", "objective"),
+        ("reason", "skip_reason"),
+        ("skipped_reason", "skip_reason"),
+        ("r_files", "target_r_files"),
+        ("flag_ids", "target_flag_ids"),
+        ("section_keys", "target_section_keys"),
+        ("turn_limit", "soft_turn_limit"),
+        ("max_turns", "soft_turn_limit"),
+    ):
+        if alias in d and target not in d:
+            d[target] = d.pop(alias)
+
+    if "worker_role" in d:
+        d["worker_role"] = _normalize_worker_role_val(d["worker_role"])
+    if "status" in d:
+        d["status"] = _normalize_task_status_val(d["status"])
+    if "objective" in d:
+        d["objective"] = _coerce_to_str(d["objective"], max_len=2000)
+    if "skip_reason" in d and d["skip_reason"] is not None:
+        d["skip_reason"] = _coerce_to_str(d["skip_reason"], max_len=500) or None
+    if d.get("status") == "skipped" and (not d.get("skip_reason") or not str(d["skip_reason"]).strip()):
+        d["skip_reason"] = "Required primary source unavailable."
+        log.append("defaulted blank skip_reason")
+    if d.get("status") == "skipped" and (not d.get("objective") or not str(d["objective"]).strip()):
+        d["objective"] = f"Skipped: {d['skip_reason']}"
+        log.append("defaulted objective for skipped task")
+    for list_key in ("focus_items", "target_r_files", "target_flag_ids", "target_section_keys"):
+        if list_key in d:
+            d[list_key] = _coerce_to_str_list(d[list_key])
+    if "allowed_tools" in d:
+        tools_list = _coerce_to_str_list(d["allowed_tools"])
+        role_val = d.get("worker_role")
+        if role_val in WORKER_ALLOWED_TOOLS:
+            pool = WORKER_ALLOWED_TOOLS[role_val]
+            kept = [t for t in tools_list if t in pool and t not in DISALLOWED_WORKER_TOOLS]
+            dropped = [t for t in tools_list if t not in kept]
+            if dropped:
+                log.append(f"dropped unauthorized tools {dropped} on {role_val}")
+            d["allowed_tools"] = list(dict.fromkeys(kept))
+        else:
+            d["allowed_tools"] = tools_list
+    if default_round == 2:
+        d["round_number"] = 2
+    return _strip_extra_keys(d, WorkerTask.model_fields.keys(), log, prefix="WorkerTask")
+
+
+def _normalize_dispatch_plan(data: Any, *, instruction_seq: int = 0, notes: list[str] | None = None) -> Any:
+    if isinstance(data, ResearchDispatchPlan):
+        return data
+    log = notes if notes is not None else []
+    if isinstance(data, list):
+        data = {"tasks": data}
+    if not isinstance(data, Mapping):
+        return data
+    d = dict(data)
+    for wrapper in ("dispatch_plan", "research_dispatch_plan", "result", "output"):
+        if wrapper in d and isinstance(d[wrapper], Mapping) and "tasks" not in d and "worker_tasks" not in d:
+            d = dict(d[wrapper])
+            break
+    if "plan" in d and isinstance(d["plan"], Mapping) and "tasks" not in d and "worker_tasks" not in d:
+        d = dict(d["plan"])
+
+    for alias in ("worker_tasks", "subtasks", "assignments", "workers", "plan"):
+        if alias in d and isinstance(d[alias], list) and "tasks" not in d:
+            d["tasks"] = d.pop(alias)
+    for alias, target in (
+        ("l2_pack_id", "selected_l2_pack_id"),
+        ("l2_pack", "selected_l2_pack_id"),
+        ("selected_pack_id", "selected_l2_pack_id"),
+        ("reason", "selected_l2_pack_reason"),
+        ("l2_pack_reason", "selected_l2_pack_reason"),
+        ("pack_reason", "selected_l2_pack_reason"),
+        ("hypotheses", "cross_worker_hypotheses"),
+    ):
+        if alias in d and target not in d:
+            d[target] = d.pop(alias)
+
+    # Coerce dispatch_rationale / rationale / notes / summary -> planning_notes
+    for rat_alias in ("dispatch_rationale", "rationale", "notes", "summary", "reasoning"):
+        if rat_alias in d:
+            val = d.pop(rat_alias)
+            if "planning_notes" not in d or not _coerce_to_str(d.get("planning_notes")):
+                d["planning_notes"] = _coerce_to_str(val, max_len=1500)
+                log.append(f"mapped {rat_alias} -> planning_notes")
+
+    if "selected_l2_pack_reason" in d:
+        d["selected_l2_pack_reason"] = _coerce_to_str(d["selected_l2_pack_reason"], max_len=600)
+    if "planning_notes" in d:
+        d["planning_notes"] = _coerce_to_str(d["planning_notes"], max_len=1500)
+    if "cross_worker_hypotheses" in d:
+        d["cross_worker_hypotheses"] = _coerce_to_str_list(d["cross_worker_hypotheses"])
+    if "instruction_sequence" not in d:
+        d["instruction_sequence"] = instruction_seq
+
+    raw_tasks = d.get("tasks")
+    if isinstance(raw_tasks, list):
+        norm_tasks: list[Any] = []
+        seen_roles: set[str] = set()
+        for t in raw_tasks:
+            nt = _normalize_worker_task_dict(t, default_round=1, notes=log)
+            if isinstance(nt, Mapping):
+                r = nt.get("worker_role")
+                if isinstance(r, str) and r in seen_roles:
+                    log.append(f"deduplicated duplicate worker_role {r}")
+                    continue
+                if isinstance(r, str):
+                    seen_roles.add(r)
+            norm_tasks.append(nt)
+        d["tasks"] = norm_tasks[:3]
+    return _strip_extra_keys(d, ResearchDispatchPlan.model_fields.keys(), log, prefix="ResearchDispatchPlan")
+
+
+def _normalize_evidence_citation_dict(raw: Any, *, notes: list[str] | None = None) -> Any:
+    if isinstance(raw, EvidenceCitation):
+        return raw
+    if isinstance(raw, str):
+        return {"source_id": "unknown", "quotation": raw[:2500]}
+    if not isinstance(raw, Mapping):
+        return raw
+    log = notes if notes is not None else []
+    d = dict(raw)
+    for alias, target in (
+        ("source", "source_id"),
+        ("quote", "quotation"),
+        ("excerpt", "quotation"),
+        ("text", "quotation"),
+        ("verbatim", "quotation"),
+        ("fact", "fact_id"),
+        ("start", "character_start"),
+        ("char_start", "character_start"),
+        ("end", "character_end"),
+        ("char_end", "character_end"),
+        ("loc", "location"),
+        ("section", "location"),
+        ("page_or_section", "location"),
+    ):
+        if alias in d and target not in d:
+            d[target] = d.pop(alias)
+    if "quotation" in d:
+        d["quotation"] = _coerce_to_str(d["quotation"], max_len=2500)
+    if "location" in d and d["location"] is not None:
+        d["location"] = _coerce_to_str(d["location"], max_len=240) or None
+    cs = d.get("character_start")
+    ce = d.get("character_end")
+    if isinstance(cs, int) and cs < 0:
+        d["character_start"] = None
+    if isinstance(ce, int) and ce < 0:
+        d["character_end"] = None
+    if isinstance(d.get("character_start"), int) and isinstance(d.get("character_end"), int):
+        if d["character_end"] < d["character_start"]:
+            d["character_start"] = None
+            d["character_end"] = None
+            log.append("cleared inverted citation span")
+    return _strip_extra_keys(d, EvidenceCitation.model_fields.keys(), log, prefix="EvidenceCitation")
+
+
+def _normalize_evidence_card_dict(
+    raw: Any,
+    *,
+    role: WorkerRole,
+    round_number: int,
+    idx: int,
+    notes: list[str] | None = None,
+) -> Any:
+    if isinstance(raw, EvidenceCard):
+        return raw
+    if not isinstance(raw, Mapping):
+        return raw
+    log = notes if notes is not None else []
+    d = dict(raw)
+    for alias, target in (
+        ("id", "card_id"),
+        ("role", "worker_role"),
+        ("title", "topic_tag"),
+        ("topic", "topic_tag"),
+        ("category", "topic_tag"),
+        ("tag", "topic_tag"),
+        ("summary", "finding"),
+        ("claim", "finding"),
+        ("findings", "finding"),
+        ("analysis", "finding"),
+        ("content", "finding"),
+        ("fact_ids", "supporting_fact_ids"),
+        ("facts", "supporting_fact_ids"),
+        ("gaps", "unresolved_gaps"),
+        ("metrics", "numeric_claims"),
+        ("claims", "numeric_claims"),
+    ):
+        if alias in d and target not in d:
+            d[target] = d.pop(alias)
+    d.setdefault("card_id", f"{role}_r{round_number}_c{idx + 1}")
+    d["worker_role"] = role
+    d["round_number"] = round_number
+    if "topic_tag" in d:
+        d["topic_tag"] = _coerce_to_str(d["topic_tag"], max_len=120) or "earnings_evidence"
+    if "finding" in d:
+        d["finding"] = _coerce_to_str(d["finding"], max_len=4000)
+    if "caveat" in d and d["caveat"] is not None:
+        d["caveat"] = _coerce_to_str(d["caveat"], max_len=1500) or None
+    if "supporting_fact_ids" in d:
+        d["supporting_fact_ids"] = _coerce_to_str_list(d["supporting_fact_ids"])
+    if "unresolved_gaps" in d:
+        d["unresolved_gaps"] = _coerce_to_str_list(d["unresolved_gaps"])
+    if "citations" in d and isinstance(d["citations"], list):
+        d["citations"] = [_normalize_evidence_citation_dict(c, notes=log) for c in d["citations"]]
+    if "numeric_claims" in d:
+        nc = d["numeric_claims"]
+        if isinstance(nc, Mapping):
+            d["numeric_claims"] = [dict(nc)]
+        elif isinstance(nc, list):
+            d["numeric_claims"] = [
+                dict(item) if isinstance(item, Mapping) else {"value": _coerce_to_str(item)}
+                for item in nc
+            ]
+        elif nc is None:
+            d["numeric_claims"] = []
+    return _strip_extra_keys(d, EvidenceCard.model_fields.keys(), log, prefix="EvidenceCard")
+
+
+def _normalize_worker_batch_payload(
+    data: Any,
+    *,
+    task: WorkerTask,
+    role: WorkerRole,
+    notes: list[str] | None = None,
+) -> Any:
+    if isinstance(data, EvidenceCardBatch):
+        return data
+    log = notes if notes is not None else []
+    if isinstance(data, list):
+        data = {"cards": data}
+    if not isinstance(data, Mapping):
+        return data
+    d = dict(data)
+    for wrapper in ("evidence_card_batch", "batch", "result", "output"):
+        if wrapper in d and isinstance(d[wrapper], Mapping) and "cards" not in d and "evidence_cards" not in d:
+            d = dict(d[wrapper])
+            break
+    for alias, target in (
+        ("evidence_cards", "cards"),
+        ("items", "cards"),
+        ("results", "cards"),
+        ("gaps", "unresolved_gaps"),
+    ):
+        if alias in d and target not in d:
+            d[target] = d.pop(alias)
+
+    d.setdefault("task_id", task.task_id)
+    d["worker_role"] = role
+    d["round_number"] = task.round_number
+    d.setdefault("instruction_sequence", task.steering_instruction_sequence)
+    if isinstance(d.get("status"), str):
+        st = d["status"].strip().lower()
+        d["status"] = {
+            "ok": "completed",
+            "success": "completed",
+            "done": "completed",
+            "complete": "completed",
+        }.get(st, st)
+    if "unresolved_gaps" in d:
+        d["unresolved_gaps"] = _coerce_to_str_list(d["unresolved_gaps"])
+    if isinstance(d.get("cards"), list):
+        d["cards"] = [
+            _normalize_evidence_card_dict(c, role=role, round_number=task.round_number, idx=i, notes=log)
+            for i, c in enumerate(d["cards"])
+        ]
+    return _strip_extra_keys(d, EvidenceCardBatch.model_fields.keys(), log, prefix="EvidenceCardBatch")
+
+
+def _normalize_stage25_decision(data: Any, *, notes: list[str] | None = None) -> Any:
+    if isinstance(data, Stage25ReviewDecision):
+        return data
+    if not isinstance(data, Mapping):
+        return data
+    log = notes if notes is not None else []
+    d = dict(data)
+    for wrapper in ("stage25_decision", "review_decision", "decision", "result"):
+        if wrapper in d and isinstance(d[wrapper], Mapping) and "has_cross_worker_leads" not in d:
+            d = dict(d[wrapper])
+            break
+    for alias, target in (
+        ("needs_followup", "has_cross_worker_leads"),
+        ("followup_required", "has_cross_worker_leads"),
+        ("followup_needed", "has_cross_worker_leads"),
+        ("has_followups", "has_cross_worker_leads"),
+        ("followups", "followup_tasks"),
+        ("follow_up_tasks", "followup_tasks"),
+        ("tasks", "followup_tasks"),
+        ("resolved", "resolved_notes"),
+    ):
+        if alias in d and target not in d:
+            d[target] = d.pop(alias)
+    for rat_alias in ("notes", "summary", "reasoning", "explanation"):
+        if rat_alias in d:
+            val = d.pop(rat_alias)
+            if "rationale" not in d or not _coerce_to_str(d.get("rationale")):
+                d["rationale"] = _coerce_to_str(val, max_len=1500)
+    if "rationale" in d:
+        d["rationale"] = _coerce_to_str(d["rationale"], max_len=1500)
+    if "resolved_notes" in d:
+        d["resolved_notes"] = _coerce_to_str_list(d["resolved_notes"])
+    if isinstance(d.get("followup_tasks"), list):
+        norm_tasks: list[Any] = []
+        seen_roles: set[str] = set()
+        for t in d["followup_tasks"]:
+            nt = _normalize_worker_task_dict(t, default_round=2, notes=log)
+            if isinstance(nt, Mapping):
+                r = nt.get("worker_role")
+                if isinstance(r, str) and r in seen_roles:
+                    continue
+                if isinstance(r, str):
+                    seen_roles.add(r)
+            norm_tasks.append(nt)
+        d["followup_tasks"] = norm_tasks[:3]
+    return _strip_extra_keys(d, Stage25ReviewDecision.model_fields.keys(), log, prefix="Stage25ReviewDecision")
+
+
+def _normalize_bear_item_dict(raw: Any, *, idx: int, notes: list[str] | None = None) -> Any:
+    if isinstance(raw, BearCaseItem):
+        return raw
+    if not isinstance(raw, Mapping):
+        return raw
+    log = notes if notes is not None else []
+    d = dict(raw)
+    for alias, target in (
+        ("id", "bear_id"),
+        ("challenge", "thesis_challenge"),
+        ("thesis", "thesis_challenge"),
+        ("risk", "thesis_challenge"),
+        ("description", "thesis_challenge"),
+        ("bear_case", "thesis_challenge"),
+        ("anchors", "anchored_evidence_ids"),
+        ("evidence_ids", "anchored_evidence_ids"),
+        ("anchor_ids", "anchored_evidence_ids"),
+        ("evidence_anchors", "anchored_evidence_ids"),
+        ("kind", "anchor_kind"),
+        ("anchor_type", "anchor_kind"),
+        ("invalidation_trigger", "next_quarter_invalidation_trigger"),
+        ("trigger", "next_quarter_invalidation_trigger"),
+        ("next_quarter_trigger", "next_quarter_invalidation_trigger"),
+        ("invalidation", "next_quarter_invalidation_trigger"),
+        ("numbers", "supporting_numbers"),
+        ("metrics", "supporting_numbers"),
+        ("evidence_numbers", "supporting_numbers"),
+    ):
+        if alias in d and target not in d:
+            d[target] = d.pop(alias)
+    if not d.get("bear_id") or not str(d.get("bear_id")).strip():
+        d["bear_id"] = f"bear_{idx + 1}"
+    if "thesis_challenge" in d:
+        d["thesis_challenge"] = _coerce_to_str(d["thesis_challenge"], max_len=3000)
+    if "next_quarter_invalidation_trigger" in d:
+        d["next_quarter_invalidation_trigger"] = _coerce_to_str(d["next_quarter_invalidation_trigger"], max_len=1500)
+    if "anchored_evidence_ids" in d:
+        d["anchored_evidence_ids"] = _coerce_to_str_list(d["anchored_evidence_ids"])
+    if "anchor_kind" in d:
+        d["anchor_kind"] = _normalize_anchor_kind_val(d["anchor_kind"])
+    if "severity" in d:
+        d["severity"] = _normalize_severity_val(d["severity"])
+    if "supporting_numbers" in d:
+        d["supporting_numbers"] = _coerce_to_str_list(d["supporting_numbers"])
+    return _strip_extra_keys(d, BearCaseItem.model_fields.keys(), log, prefix="BearCaseItem")
+
+
+def _normalize_bear_batch(data: Any, *, notes: list[str] | None = None) -> Any:
+    if isinstance(data, BearCaseBatch):
+        return data
+    log = notes if notes is not None else []
+    if isinstance(data, list):
+        data = {"items": data}
+    if not isinstance(data, Mapping):
+        return data
+    d = dict(data)
+    for wrapper in ("bear_batch", "bear_case_batch", "result", "output"):
+        if wrapper in d and isinstance(d[wrapper], Mapping) and "items" not in d and "bear_cases" not in d:
+            d = dict(d[wrapper])
+            break
+    for alias in ("bear_cases", "cases", "challenges", "risks"):
+        if alias in d and "items" not in d:
+            d["items"] = d.pop(alias)
+            log.append(f"mapped {alias} -> items")
+    for note_alias in ("notes", "summary", "rationale"):
+        if note_alias in d:
+            val = d.pop(note_alias)
+            if "reviewer_notes" not in d or not _coerce_to_str(d.get("reviewer_notes")):
+                d["reviewer_notes"] = _coerce_to_str(val, max_len=2000)
+    if "reviewer_notes" in d:
+        d["reviewer_notes"] = _coerce_to_str(d["reviewer_notes"], max_len=2000)
+    if isinstance(d.get("items"), list):
+        d["items"] = [_normalize_bear_item_dict(item, idx=i, notes=log) for i, item in enumerate(d["items"])]
+    return _strip_extra_keys(d, BearCaseBatch.model_fields.keys(), log, prefix="BearCaseBatch")
+
+
+def _normalize_steering_decision(
+    data: Any,
+    *,
+    instructions: Sequence[UserSteeringInstruction] = (),
+    notes: list[str] | None = None,
+) -> Any:
+    if isinstance(data, SteeringImpactDecision):
+        return data
+    if not isinstance(data, Mapping):
+        return data
+    log = notes if notes is not None else []
+    d = dict(data)
+    for alias, target in (
+        ("workers", "affected_workers"),
+        ("target_workers", "affected_workers"),
+        ("cancel_workers", "cancel_running_workers"),
+        ("tasks", "updated_tasks"),
+        ("revised_tasks", "updated_tasks"),
+    ):
+        if alias in d and target not in d:
+            d[target] = d.pop(alias)
+    for rat_alias in ("reasoning", "summary", "notes"):
+        if rat_alias in d:
+            val = d.pop(rat_alias)
+            if "rationale" not in d or not _coerce_to_str(d.get("rationale")):
+                d["rationale"] = _coerce_to_str(val, max_len=1500)
+    if "rationale" in d:
+        d["rationale"] = _coerce_to_str(d["rationale"], max_len=1500)
+    if "affected_workers" in d and isinstance(d["affected_workers"], list):
+        d["affected_workers"] = [_normalize_worker_role_val(r) for r in d["affected_workers"]]
+    if "cancel_running_workers" in d and isinstance(d["cancel_running_workers"], list):
+        d["cancel_running_workers"] = [_normalize_worker_role_val(r) for r in d["cancel_running_workers"]]
+    if isinstance(d.get("updated_tasks"), list):
+        d["updated_tasks"] = [_normalize_worker_task_dict(t, default_round=1, notes=log) for t in d["updated_tasks"]]
+        affected = list(d.get("affected_workers") or [])
+        for t in d["updated_tasks"]:
+            if isinstance(t, Mapping) and t.get("worker_role") and t["worker_role"] not in affected:
+                affected.append(t["worker_role"])
+                log.append(f"auto-added {t['worker_role']} to affected_workers")
+        d["affected_workers"] = affected
+    if "instruction_sequences" not in d and instructions:
+        d["instruction_sequences"] = [i.sequence for i in instructions]
+    return _strip_extra_keys(d, SteeringImpactDecision.model_fields.keys(), log, prefix="SteeringImpactDecision")
+
+
+def _normalize_for_model_cls(
+    data: Any,
+    model_cls: type[BaseModel],
+    *,
+    notes: list[str] | None = None,
+    **kwargs: Any,
+) -> Any:
+    if model_cls is ResearchDispatchPlan:
+        return _normalize_dispatch_plan(data, instruction_seq=int(kwargs.get("instruction_seq", 0)), notes=notes)
+    if model_cls is Stage25ReviewDecision:
+        return _normalize_stage25_decision(data, notes=notes)
+    if model_cls is BearCaseBatch:
+        return _normalize_bear_batch(data, notes=notes)
+    if model_cls is SteeringImpactDecision:
+        return _normalize_steering_decision(data, instructions=kwargs.get("instructions", ()), notes=notes)
+    if model_cls is EvidenceCardBatch and "task" in kwargs and "role" in kwargs:
+        return _normalize_worker_batch_payload(data, task=kwargs["task"], role=kwargs["role"], notes=notes)
+    return data
+
+
+def _format_pydantic_repair_prompt(
+    model_cls: type[BaseModel],
+    exc: Exception,
+    *,
+    attempt: int,
+    max_attempts: int,
+) -> str:
+    err_lines: list[str] = []
+    if isinstance(exc, ValidationError):
+        for err in exc.errors()[:12]:
+            loc = ".".join(str(x) for x in err.get("loc", ())) or "<root>"
+            err_lines.append(f"- path `{loc}` ({err.get('type')}): {err.get('msg')}")
+    else:
+        err_lines.append(f"- parse error: {exc}")
+
+    top_keys = sorted(model_cls.model_fields.keys())
+    nested_hint = ""
+    if model_cls is ResearchDispatchPlan:
+        nested_hint = (
+            f"Nested WorkerTask keys: {sorted(WorkerTask.model_fields.keys())}. "
+            f"worker_role enum: {list(WORKER_ROLES)}. status enum: ['planned', 'skipped']. "
+            f"If status='skipped', skip_reason must be non-blank. "
+            f"Allowed tools per role: { {r: sorted(v) for r, v in WORKER_ALLOWED_TOOLS.items()} }."
+        )
+    elif model_cls is EvidenceCardBatch:
+        nested_hint = (
+            f"Nested EvidenceCard keys: {sorted(EvidenceCard.model_fields.keys())}. "
+            f"Nested EvidenceCitation keys: {sorted(EvidenceCitation.model_fields.keys())}. "
+            "Each EvidenceCard must have non-empty citations or supporting_fact_ids."
+        )
+    elif model_cls is Stage25ReviewDecision:
+        nested_hint = (
+            f"Nested WorkerTask keys: {sorted(WorkerTask.model_fields.keys())}. "
+            "In Stage 2.5, followup_tasks must have distinct worker_role values and round_number=2."
+        )
+    elif model_cls is BearCaseBatch:
+        nested_hint = (
+            f"Nested BearCaseItem keys: {sorted(BearCaseItem.model_fields.keys())}. "
+            "anchor_kind enum: ['flag', 'redline', 'guidance_gap', 'valuation_gap']. "
+            "severity enum: ['high', 'medium', 'low']. anchored_evidence_ids must be non-empty list of valid_anchors."
+        )
+    elif model_cls is SteeringImpactDecision:
+        nested_hint = (
+            f"Nested WorkerTask keys: {sorted(WorkerTask.model_fields.keys())}. "
+            "Every worker_role in updated_tasks must also appear in affected_workers."
+        )
+
+    return (
+        f"SCHEMA REPAIR REQUIRED (attempt {attempt}/{max_attempts}) for `{model_cls.__name__}` (extra='forbid').\n"
+        f"Your previous output failed validation with:\n" + "\n".join(err_lines) + "\n\n"
+        f"Allowed top-level keys ONLY: {top_keys}.\n"
+        f"{nested_hint}\n"
+        "Tools are disabled. Reply ONLY with a single valid raw JSON object matching the schema (no markdown commentary)."
+    )
+
+
+def _fallback_dispatch_plan(
+    snapshot: EarningsPrefetchSnapshot,
+    pack_ctx: Mapping[str, Any],
+    *,
+    instruction_seq: int,
+) -> ResearchDispatchPlan:
+    cat = snapshot.filing_table_catalog
+    r_files = (
+        [r.r_file for r in [*cat.statements[:4], *cat.tables[:4]]]
+        if cat is not None
+        else []
+    )
+    flag_ids = [f.flag_id for f in snapshot.flags[:6]]
+    sec_keys = list(snapshot.redline_summary.section_diffs.keys())[:6] if snapshot.redline_summary else []
+
+    has_seg_sources = bool(r_files or snapshot.earnings_release or snapshot.prefetched_sources or snapshot.statements)
+    seg_task = WorkerTask(
+        worker_role="worker_segments",
+        status="planned" if has_seg_sources else "skipped",
+        skip_reason=None if has_seg_sources else "No filing table catalog, 8-K release, or prefetched sources available.",
+        objective="Extract segment revenue, operational KPIs, and Non-GAAP metrics from SEC tables and releases.",
+        target_r_files=r_files,
+        soft_turn_limit=4,
+    )
+
+    has_for_sources = bool(
+        snapshot.statements or snapshot.flags or snapshot.redline_summary or snapshot.filing_accession or snapshot.prefetched_sources
+    )
+    for_task = WorkerTask(
+        worker_role="worker_forensics",
+        status="planned" if has_for_sources else "skipped",
+        skip_reason=None if has_for_sources else "No financial statements, flags, or SEC filings available.",
+        objective="Investigate diagnostic R/Y flags, cash flow quality, and cross-period filing redlines.",
+        target_flag_ids=flag_ids,
+        target_section_keys=sec_keys,
+        soft_turn_limit=4,
+    )
+
+    has_gui_sources = bool(
+        snapshot.consensus_summary.status == "available"
+        or snapshot.transcript_index.status == "available"
+        or snapshot.earnings_release is not None
+        or any(s.kind in ("user_supplied", "market_data") for s in snapshot.prefetched_sources)
+    )
+    gui_task = WorkerTask(
+        worker_role="worker_guidance",
+        status="planned" if has_gui_sources else "skipped",
+        skip_reason=None if has_gui_sources else "Consensus, transcript, 8-K guidance, and user sources unavailable.",
+        objective="Compare reported results against guidance/consensus and inspect call or 8-K outlook commentary.",
+        soft_turn_limit=4,
+    )
+
+    return ResearchDispatchPlan(
+        l1_pack_id=str(pack_ctx.get("l1_pack_id") or "earnings_review"),
+        selected_l2_pack_id=pack_ctx.get("l2_pack_id"),
+        selected_l2_pack_reason=str(pack_ctx.get("reason") or "Deterministic fallback dispatch plan.")[:600],
+        tasks=[seg_task, for_task, gui_task],
+        cross_worker_hypotheses=["Cross-check segment momentum against working-capital diagnostics and outlook commentary."],
+        planning_notes="Deterministic Stage 1 fallback plan derived from Stage 0 snapshot.",
+        instruction_sequence=instruction_seq,
+    )
+
+
+def _fallback_bear_batch(
+    snapshot: EarningsPrefetchSnapshot,
+    cards: Sequence[EvidenceCard],
+    open_gaps: Sequence[SquadGap],
+) -> BearCaseBatch:
+    raw_candidates: list[dict[str, Any]] = []
+    prioritized_flags = sorted(
+        snapshot.flags,
+        key=lambda f: {"red": 0, "yellow": 1, "green": 2}.get(f.severity, 3),
+    )
+    for f in prioritized_flags:
+        if f.severity not in ("red", "yellow"):
+            continue
+        raw_candidates.append({
+            "bear_id": f"bear_fallback_{f.flag_id}",
+            "thesis_challenge": f"{f.metric_name}: {f.summary} (flag={f.flag_id}).",
+            "anchored_evidence_ids": [f.flag_id],
+            "anchor_kind": "flag",
+            "next_quarter_invalidation_trigger": (
+                f.investigation_prompt or f"Diagnostic {f.flag_id} resolves to green next quarter."
+            )[:1500],
+            "supporting_numbers": [f"{f.flag_id} ({f.severity}, observed={f.observed_value} {f.unit})"],
+            "severity": "high" if f.severity == "red" else "medium",
+        })
+        if len(raw_candidates) >= 3:
+            break
+
+    if snapshot.redline_summary is not None and len(raw_candidates) < 4:
+        for sec_key, sec in snapshot.redline_summary.section_diffs.items():
+            if not (sec.has_substantive_changes or sec.added or sec.revised):
+                continue
+            snippet = ""
+            if sec.added and sec.added[0].current_text:
+                snippet = sec.added[0].current_text[:200]
+            elif sec.revised and sec.revised[0].current_text:
+                snippet = sec.revised[0].current_text[:200]
+            raw_candidates.append({
+                "bear_id": f"bear_fallback_redline_{sec_key}",
+                "thesis_challenge": (
+                    f"Redline disclosure change in {sec_key}: +{len(sec.added)} added / "
+                    f"{len(sec.revised)} revised paragraphs. {snippet}".strip()
+                )[:3000],
+                "anchored_evidence_ids": [f"redline:{sec_key}"],
+                "anchor_kind": "redline",
+                "next_quarter_invalidation_trigger": f"Subsequent filing removes or mitigates new risk language in {sec_key}.",
+                "supporting_numbers": [f"added={len(sec.added)}", f"revised={len(sec.revised)}"],
+                "severity": "medium",
+            })
+            if len(raw_candidates) >= 4:
+                break
+
+    if snapshot.guidance_nongaap is not None and not raw_candidates:
+        for w in snapshot.guidance_nongaap.warnings[:2]:
+            raw_candidates.append({
+                "bear_id": f"bear_fallback_{w.flag_id}",
+                "thesis_challenge": f"{w.metric_name}: {w.summary}",
+                "anchored_evidence_ids": [w.flag_id],
+                "anchor_kind": "guidance_gap",
+                "next_quarter_invalidation_trigger": f"Guidance/Non-GAAP warning {w.flag_id} resolves next quarter.",
+                "supporting_numbers": [w.flag_id],
+                "severity": "high" if w.severity == "red" else "medium",
+            })
+
+    if not raw_candidates and cards:
+        c0 = cards[0]
+        raw_candidates.append({
+            "bear_id": f"bear_fallback_{c0.card_id}",
+            "thesis_challenge": f"Adversarial check on {c0.card_id} ({c0.topic_tag}): verify durability of {c0.finding[:300]}",
+            "anchored_evidence_ids": [c0.card_id],
+            "anchor_kind": "flag",
+            "next_quarter_invalidation_trigger": f"Next-quarter disclosure confirms KPI durability for {c0.topic_tag}.",
+            "supporting_numbers": list(c0.supporting_fact_ids[:3]),
+            "severity": "medium",
+        })
+
+    accepted, rejected, _ = gate_bear_cases(raw_candidates, snapshot, cards, open_gaps)
+    return BearCaseBatch(
+        items=accepted,
+        rejected_items=rejected,
+        reviewer_notes="Deterministic Stage 3A fallback bear batch anchored to Stage 0 flags/redlines.",
+    )
+
+
+def _parse_model_output(resp: SlotModelResponse, model_cls: type[BaseModel], **norm_kwargs: Any) -> Any:
     if isinstance(resp.parsed, model_cls):
         return resp.parsed
     data = _parse_json_payload(resp)
-    return model_cls.model_validate(data)
+    normalized = _normalize_for_model_cls(data, model_cls, **norm_kwargs)
+    return model_cls.model_validate(normalized)
 
 
 def _parse_worker_batch(
@@ -4453,19 +7160,11 @@ def _parse_worker_batch(
         batch = resp.parsed
     else:
         data = _parse_json_payload(resp)
-        if isinstance(data, Mapping):
-            copied = dict(data)
-            copied.setdefault("task_id", task.task_id)
-            copied.setdefault("worker_role", role)
-            copied.setdefault("round_number", task.round_number)
-            for idx, card in enumerate(copied.get("cards") or []):
-                if isinstance(card, dict):
-                    card.setdefault("card_id", f"{role}_r{task.round_number}_c{idx + 1}")
-                    card.setdefault("worker_role", role)
-                    card.setdefault("round_number", task.round_number)
-            batch = EvidenceCardBatch.model_validate(copied)
+        if isinstance(data, (Mapping, list)):
+            normalized = _normalize_worker_batch_payload(data, task=task, role=role)
+            batch = EvidenceCardBatch.model_validate(normalized)
         else:
-            raise ValueError("Worker response must be an EvidenceCardBatch object.")
+            raise ValueError("Worker response must be an EvidenceCardBatch object or list of cards.")
 
     return batch.model_copy(update={
         "task_id": task.task_id,
@@ -4483,13 +7182,14 @@ def _extract_raw_bear_items(resp: SlotModelResponse) -> tuple[list[Any], str, st
     if isinstance(resp.parsed, BearCaseBatch):
         return list(resp.parsed.items), resp.parsed.reviewer_notes, resp.parsed.batch_id
     data = _parse_json_payload(resp)
-    if isinstance(data, Mapping):
-        raw_items = list(data.get("items") or [])
-        notes = str(data.get("reviewer_notes") or "")
-        batch_id = str(data.get("batch_id") or _new_id("bearbatch"))
+    normalized = _normalize_bear_batch(data)
+    if isinstance(normalized, Mapping):
+        raw_items = list(normalized.get("items") or [])
+        notes = str(normalized.get("reviewer_notes") or "")
+        batch_id = str(normalized.get("batch_id") or _new_id("bearbatch"))
         return raw_items, notes, batch_id
-    if isinstance(data, list):
-        return list(data), "", _new_id("bearbatch")
+    if isinstance(normalized, list):
+        return list(normalized), "", _new_id("bearbatch")
     raise ValueError("bear_reviewer output must be a BearCaseBatch or list of BearCaseItem.")
 
 

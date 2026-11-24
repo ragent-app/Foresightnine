@@ -210,15 +210,29 @@ const SLOT_LABELS: Readonly<Record<OrgModelSlot, string>> = {
   writer: "writer（底稿撰稿）",
 };
 
-const STAGE_LABELS: Readonly<Record<string, string>> = {
+export const STAGE_LABELS: Readonly<Record<string, string>> = {
+  stage_0: "预热取证",
   stage_0_prefetch: "预热取证",
+  stage_1: "任务派发",
   stage_1_plan: "任务派发",
+  stage_2: "并行深挖",
   stage_2_workers: "并行深挖",
+  stage_2_5: "交叉补证",
+  stage_2_5_review: "交叉补证",
   stage_2_5_followup: "交叉补证",
+  stage_3: "空头对抗",
+  stage_3a: "空头对抗",
   stage_3a_bear: "空头对抗",
+  stage_3b: "底稿生成",
   stage_3b_write: "底稿生成",
+  stage_3b_gate: "底稿生成",
+  stage_3b_gate_memo: "底稿生成",
+  stage_4: "底稿生成",
+  deep_report: "深研报告",
   steer: "中场调度",
+  steering: "中场调度",
   complete: "已完成",
+  resume: "断点恢复",
 };
 
 function orbVisualFor(node: OrgGraphNode): OrbRoleVisual {
@@ -403,9 +417,14 @@ export function OrgGraphPanel({
   }, [graphState.edges, nodeById]);
 
   const completedCount = displayNodes.filter((n) => n.runtimeState === "completed").length;
+  const stageLabel = graphState.currentStage ? (STAGE_LABELS[graphState.currentStage] ?? null) : null;
   const activeStageLabel =
-    (graphState.currentStage && STAGE_LABELS[graphState.currentStage]) ||
-    (isCompleted ? "已完成" : effectiveRunStatus === "running" ? "协同执行中" : "待命");
+    effectiveRunStatus === "failed"
+      ? (stageLabel ? `${stageLabel} · 执行失败` : "执行失败")
+      : effectiveRunStatus === "cancelled"
+        ? (stageLabel ? `${stageLabel} · 已取消` : "已取消")
+        : stageLabel ||
+          (isCompleted ? "已完成" : effectiveRunStatus === "running" ? "协同执行中" : "待命");
 
   const handleOrbKeyDown = (e: KeyboardEvent<SVGGElement>, node: OrgGraphNode) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -439,6 +458,11 @@ export function OrgGraphPanel({
             <span className="org-ragent-summary-title">投研小组执行摘要条</span>
             <span className="org-ragent-summary-meta">
               {completedCount}/{displayNodes.length} 已完成
+              {effectiveRunStatus === "failed"
+                ? " · 执行失败"
+                : effectiveRunStatus === "cancelled"
+                  ? " · 已取消"
+                  : ""}
             </span>
           </div>
           <button

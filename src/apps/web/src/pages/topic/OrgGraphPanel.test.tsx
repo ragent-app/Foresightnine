@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ACTION_KIND_META, OrgGraphPanel } from "./OrgGraphPanel";
+import { ACTION_KIND_META, OrgGraphPanel, STAGE_LABELS } from "./OrgGraphPanel";
 import type { OrgActionKind, OrgGraphEventInput } from "./orgGraphReducer";
 
 afterEach(() => {
@@ -220,5 +220,81 @@ describe("OrgGraphPanel (Ragent_product Morandi orb visual system)", () => {
     render(<OrgGraphPanel events={ACTIVE_SQUAD_EVENTS} />);
     expect(screen.getByTestId("org-graph-panel").getAttribute("data-layout-mode")).toBe("mobile");
     expect(screen.getByTestId("org-graph-svg").getAttribute("viewBox")).toBe("0 0 420 456");
+  });
+
+  it("aligns STAGE_LABELS with every backend stage name and displays Chinese labels and failed status pill", () => {
+    mockViewport({ tablet: true });
+    const expectedStages: Readonly<Record<string, string>> = {
+      stage_0: "预热取证",
+      stage_0_prefetch: "预热取证",
+      stage_1: "任务派发",
+      stage_1_plan: "任务派发",
+      stage_2: "并行深挖",
+      stage_2_workers: "并行深挖",
+      stage_2_5: "交叉补证",
+      stage_2_5_review: "交叉补证",
+      stage_2_5_followup: "交叉补证",
+      stage_3: "空头对抗",
+      stage_3a: "空头对抗",
+      stage_3a_bear: "空头对抗",
+      stage_3b: "底稿生成",
+      stage_3b_write: "底稿生成",
+      stage_3b_gate: "底稿生成",
+      stage_3b_gate_memo: "底稿生成",
+      stage_4: "底稿生成",
+      deep_report: "深研报告",
+      steer: "中场调度",
+      steering: "中场调度",
+      complete: "已完成",
+      resume: "断点恢复",
+    };
+    for (const [stage, label] of Object.entries(expectedStages)) {
+      expect(STAGE_LABELS[stage]).toBe(label);
+    }
+
+    const { rerender, container } = render(
+      <OrgGraphPanel
+        events={[
+          {
+            sequence: 1,
+            stage: "stage_2_5_review",
+            node_id: "lead_coordinator",
+            role: "lead_coordinator",
+            display_name: "Lead Coordinator",
+            runtime_state: "running",
+            action_kind: "INSPECTING",
+            current_activity: "交叉复核 Worker 产出",
+          },
+        ]}
+        runStatus="running"
+      />,
+    );
+    expect(container.querySelector(".org-ragent-stage-pill")?.textContent).toBe("交叉补证");
+
+    rerender(
+      <OrgGraphPanel
+        events={[
+          {
+            sequence: 1,
+            stage: "stage_1_plan",
+            node_id: "lead_coordinator",
+            role: "lead_coordinator",
+            display_name: "Lead Coordinator",
+            runtime_state: "failed",
+            action_kind: "FAILED",
+            current_activity: "Stage 1 规划校验失败",
+            blocker_text: "ResearchDispatchPlan validation failed",
+          },
+        ]}
+        runStatus="failed"
+      />,
+    );
+    expect(screen.getByTestId("org-graph-svg")).toBeTruthy();
+    expect(container.querySelector(".org-ragent-stage-pill")?.textContent).toBe("任务派发 · 执行失败");
+    expect(container.querySelectorAll("[style]").length).toBe(0);
+    expect(container.querySelectorAll("style").length).toBe(0);
+
+    rerender(<OrgGraphPanel events={[]} runStatus="failed" />);
+    expect(container.querySelector(".org-ragent-stage-pill")?.textContent).toBe("执行失败");
   });
 });

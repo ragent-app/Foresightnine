@@ -2,6 +2,7 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 import json
+import math
 from typing import Any
 
 
@@ -75,6 +76,7 @@ class ModelAssistantContinuation:
 class ModelTurnExchange:
     assistant: ModelAssistantContinuation
     results: tuple[ModelToolResult, ...]
+    user_followup: str | None = None
 
 
 @dataclass(frozen=True)
@@ -85,6 +87,114 @@ class ModelTurnInput:
     history: tuple[ModelTurnExchange, ...]
     tail_note: str | None = None
     user_instructions: tuple[dict[str, Any], ...] = ()
+    response_schema: dict[str, Any] | None = None
+    response_schema_name: str | None = None
+    max_output_tokens: int | None = None
+    timeout_seconds: float | None = None
+    cancel_event: Any = None
+
+
+def extract_assistant_text(message: Mapping[str, Any] | None) -> str | None:
+    """Extract joined assistant text from string content, content block lists, or Responses output."""
+    if not isinstance(message, Mapping):
+        return None
+    content = message.get('content')
+    if isinstance(content, str):
+        return content if content else None
+    if isinstance(content, (list, tuple)):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                if block:
+                    parts.append(block)
+                continue
+            if not isinstance(block, Mapping):
+                continue
+            block_type = block.get('type')
+            if block_type in (None, 'text', 'output_text'):
+                text = block.get('text')
+                if isinstance(text, str) and text:
+                    parts.append(text)
+                elif isinstance(text, Mapping):
+                    nested_val = text.get('value')
+                    if isinstance(nested_val, str) and nested_val:
+                        parts.append(nested_val)
+        return '\n'.join(parts) if parts else None
+    output = message.get('output')
+    if isinstance(output, (list, tuple)):
+        parts = []
+        for item in output:
+            if isinstance(item, Mapping) and item.get('type') == 'message' and item.get('role') in (None, 'assistant'):
+                nested = extract_assistant_text(item)
+                if nested:
+                    parts.append(nested)
+        return '\n'.join(parts) if parts else None
+    return None
+
+
+def format_response_schema_instruction(
+    schema: Mapping[str, Any] | None,
+    schema_name: str | None = None,
+    *,
+    has_tools: bool = False,
+) -> str | None:
+    """Render a deterministic JSON contract instruction when native strict schemas are unavailable."""
+    name = schema_name.strip() if isinstance(schema_name, str) and schema_name.strip() else None
+    if schema is None and name is None:
+        return None
+    label = name or 'response'
+    prefix = (
+        f'When returning your final response (without tool calls), return a single valid JSON object matching contract "{label}"'
+        if has_tools
+        else f'Return a single valid JSON object matching contract "{label}". Output raw JSON only with no surrounding commentary'
+    )
+    if schema is None:
+        return f'{prefix}, and include no unrequested keys.'
+    serialized = canonical_json_dumps(canonicalize_json_value(schema))
+    return f'{prefix} and no unrequested keys.\nJSON Schema: {serialized}'
+
+
+class _CompositeCancelEvent:
+    def __init__(self, primary: Any, secondary: Any) -> None:
+        self._primary = primary
+        self._secondary = secondary
+
+    def is_set(self) -> bool:
+        return bool(
+            (self._primary is not None and self._primary.is_set())
+            or (self._secondary is not None and self._secondary.is_set())
+        )
+
+
+def merge_cancel_events(primary: Any, secondary: Any) -> Any:
+    """Combine caller-supplied and turn-level cancel events without duplicating checks."""
+    if primary is None:
+        return secondary
+    if secondary is None or primary is secondary:
+        return primary
+    return _CompositeCancelEvent(primary, secondary)
+
+
+def merge_optional_timeout(primary: float | None, secondary: float | None) -> float | None:
+    """Select the tighter finite timeout while preserving invalid values for provider validation."""
+    candidates = [val for val in (primary, secondary) if val is not None]
+    if not candidates:
+        return None
+    for val in candidates:
+        if isinstance(val, bool) or not isinstance(val, (int, float)) or not math.isfinite(val) or val <= 0:
+            return val
+    return min(float(val) for val in candidates)
+
+
+def merge_optional_max_tokens(primary: int | None, secondary: int | None) -> int | None:
+    """Select the tighter max_output_tokens while preserving invalid values for provider validation."""
+    candidates = [val for val in (primary, secondary) if val is not None]
+    if not candidates:
+        return None
+    for val in candidates:
+        if type(val) is not int or val < 1:
+            return val
+    return min(candidates)
 
 
 def render_user_instructions(turn: ModelTurnInput) -> list[str]:

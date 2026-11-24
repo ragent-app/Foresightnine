@@ -1,13 +1,26 @@
 """Stateless Responses wire protocol for personal research connections."""
+from collections.abc import Mapping
 import json
+import math
 from time import monotonic
 
-from .model_protocol import ModelResponse, ModelToolCall, ModelUsage, canonical_json_dumps, render_user_instructions
+from .model_protocol import (
+    ModelResponse,
+    ModelToolCall,
+    ModelUsage,
+    canonical_json_dumps,
+    extract_assistant_text,
+    format_response_schema_instruction,
+    merge_cancel_events,
+    merge_optional_max_tokens,
+    merge_optional_timeout,
+    render_user_instructions,
+)
 from .openai_compatible import (
     _build_transport_failure, _default_stream_transport, _default_transport, _llm_timeout_from_environment,
 )
 from .phase3 import ProviderFailure, ProviderPolicy
-from .provider_capabilities import research_profile, resolve_output_token_limit
+from .provider_capabilities import _strict_schema, research_profile, resolve_output_token_limit
 from .research_diagnostics import (
     report_diagnostic_write_failure, safe_usage_diagnostics, safe_wire_metadata, set_rejection_details, wire_manifest,
 )
@@ -40,6 +53,8 @@ def _parse_response(data, usage):
         raise ValueError()
     calls, text, output = [], [], []
     for item in data["output"]:
+        if not isinstance(item, dict) or not isinstance(item.get("type"), str):
+            raise ValueError()
         kind = item["type"]
         if item.get("status") not in (None, "completed"):
             raise ValueError()
@@ -54,21 +69,25 @@ def _parse_response(data, usage):
             calls.append(ModelToolCall(call_id, name, args if isinstance(args, dict) else None, raw))
             output.append({k: item[k] for k in ("type", "id", "call_id", "name", "arguments", "status") if k in item})
         elif kind == "reasoning":
-            if not isinstance(item.get("encrypted_content"), str) or not item["encrypted_content"]:
+            enc = item.get("encrypted_content")
+            if enc is not None and not isinstance(enc, str):
                 raise ValueError()
-            output.append({k: item[k] for k in ("type", "id", "summary", "encrypted_content") if k in item})
+            if isinstance(enc, str) and enc:
+                output.append({k: item[k] for k in ("type", "id", "summary", "encrypted_content") if k in item})
         elif kind == "message" and item.get("role") == "assistant":
             if not isinstance(item.get("content"), list):
                 raise ValueError()
             for part in item["content"]:
-                if part["type"] == "refusal":
+                if not isinstance(part, dict):
+                    raise ValueError()
+                if part.get("type") == "refusal":
                     raise ProviderFailure("provider_output_refused", "Provider declined the request.", retryable=False)
-                if part["type"] != "output_text" or not isinstance(part.get("text"), str):
+                if part.get("type") not in ("output_text", "text") or not isinstance(part.get("text"), str):
                     raise ValueError()
                 text.append(part["text"])
             output.append({k: item[k] for k in ("type", "id", "role", "content", "phase", "status") if k in item})
         else:
-            raise ValueError()
+            continue
     if len({call.id for call in calls}) != len(calls):
         raise ValueError()
     stop = "tool_calls" if calls else "end"
@@ -162,14 +181,73 @@ class OpenAIResponsesProvider:
     def _wire(self, turn, cap=None):
         inputs = [{"role": "user", "content": turn.user}]
         for exchange in turn.history:
-            inputs.extend(exchange.assistant.envelope["output"])
+            envelope = exchange.assistant.envelope
+            output_items = envelope.get("output") if isinstance(envelope, Mapping) else None
+            if isinstance(output_items, list):
+                inputs.extend(
+                    item
+                    for item in output_items
+                    if not (isinstance(item, Mapping) and item.get("type") == "reasoning" and not item.get("encrypted_content"))
+                )
+            elif isinstance(envelope, Mapping):
+                text = extract_assistant_text(envelope)
+                if text:
+                    inputs.append({"role": "assistant", "content": text})
             inputs.extend({"type": "function_call_output", "call_id": result.tool_call_id, "output": result.content}
                           for result in exchange.results)
+            followup = getattr(exchange, "user_followup", None)
+            if isinstance(followup, str) and followup.strip():
+                inputs.append({"role": "user", "content": followup})
         if turn.tail_note:
             inputs.append({"role": "user", "content": turn.tail_note})
         inputs.extend({"role": "user", "content": instruction} for instruction in render_user_instructions(turn))
-        wire = {"model": self.settings.model, "instructions": turn.system, "input": inputs,
+
+        response_schema = getattr(turn, "response_schema", None)
+        response_schema_name = getattr(turn, "response_schema_name", None)
+        has_schema_request = response_schema is not None or (
+            isinstance(response_schema_name, str) and bool(response_schema_name.strip())
+        )
+        instructions_text = turn.system
+        text_format = None
+        schema_note = None
+        if has_schema_request:
+            schema_name = (
+                response_schema_name.strip()
+                if isinstance(response_schema_name, str) and response_schema_name.strip()
+                else "response"
+            )
+            if not turn.tools:
+                profile = self.research_capacity()
+                if profile is not None and getattr(profile, "mode", None) == "json_schema" and isinstance(response_schema, Mapping):
+                    try:
+                        strict_schema = _strict_schema(dict(response_schema))
+                        text_format = {
+                            "type": "json_schema",
+                            "name": schema_name,
+                            "strict": True,
+                            "schema": strict_schema,
+                        }
+                    except ProviderFailure:
+                        text_format = {"type": "json_object"}
+                        schema_note = format_response_schema_instruction(
+                            response_schema, schema_name, has_tools=False
+                        )
+                else:
+                    text_format = {"type": "json_object"}
+                    schema_note = format_response_schema_instruction(
+                        response_schema, schema_name, has_tools=False
+                    )
+            else:
+                schema_note = format_response_schema_instruction(
+                    response_schema, schema_name, has_tools=True
+                )
+        if schema_note:
+            instructions_text = f"{instructions_text}\n\n{schema_note}" if instructions_text else schema_note
+
+        wire = {"model": self.settings.model, "instructions": instructions_text, "input": inputs,
                 "store": False, "include": ["reasoning.encrypted_content"]}
+        if text_format is not None:
+            wire["text"] = {"format": text_format}
         if turn.tools:
             wire["tools"] = [{"type": "function", "name": tool.name, "description": tool.description,
                               "parameters": tool.input_schema, "strict": False} for tool in turn.tools]
@@ -192,17 +270,27 @@ class OpenAIResponsesProvider:
         usage = None
         response = None
         wire = body = None
+        effective_cancel = merge_cancel_events(cancel_event, getattr(turn, "cancel_event", None))
+        effective_timeout_arg = merge_optional_timeout(timeout_seconds, getattr(turn, "timeout_seconds", None))
+        effective_max_out_arg = merge_optional_max_tokens(max_output_tokens, getattr(turn, "max_output_tokens", None))
         try:
             if not self.settings.api_key or (turn.tools and not self.settings.tools_verified):
                 raise ProviderFailure("provider_configuration_invalid", "Responses connection is not ready.", retryable=False)
-            if cancel_event is not None and cancel_event.is_set():
+            if effective_cancel is not None and effective_cancel.is_set():
                 raise ProviderFailure("provider_cancelled", "Request cancelled.", retryable=False)
             timeout = self.policy.timeout_seconds
-            if timeout_seconds is not None:
-                timeout = min(timeout, timeout_seconds)
-            if timeout <= 0 or (max_output_tokens is not None and max_output_tokens <= 0):
+            if effective_timeout_arg is not None:
+                if (
+                    isinstance(effective_timeout_arg, bool)
+                    or not isinstance(effective_timeout_arg, (int, float))
+                    or not math.isfinite(effective_timeout_arg)
+                    or effective_timeout_arg <= 0
+                ):
+                    raise ProviderFailure("provider_budget_exhausted", "Model budget exhausted.", retryable=False)
+                timeout = min(timeout, float(effective_timeout_arg))
+            if timeout <= 0 or (effective_max_out_arg is not None and (type(effective_max_out_arg) is not int or effective_max_out_arg <= 0)):
                 raise ProviderFailure("provider_budget_exhausted", "Model budget exhausted.", retryable=False)
-            cap = resolve_output_token_limit(max_output_tokens, self.policy.max_output_tokens)
+            cap = resolve_output_token_limit(effective_max_out_arg, self.policy.max_output_tokens)
             wire = self._wire(turn, cap)
             body = canonical_json_dumps(wire).encode()
             if self.policy.max_input_tokens is not None and len(body) > self.policy.max_input_tokens:
@@ -215,11 +303,11 @@ class OpenAIResponsesProvider:
                 stream_body = canonical_json_dumps({**wire, "stream": True}).encode()
                 response = _default_stream_transport("POST", url, {**auth, "Accept": "text/event-stream"}, stream_body, timeout,
                     on_frame=collector.frame, allow_private_network=self.settings.allow_private_network,
-                    diagnostics=diag, cancel_event=cancel_event, on_submission=on_submission)
+                    diagnostics=diag, cancel_event=effective_cancel, on_submission=on_submission)
                 if response is None:
                     final = collector.result()
                     usage = _usage(final.get("usage"))
-                    if cancel_event is not None and cancel_event.is_set():
+                    if effective_cancel is not None and effective_cancel.is_set():
                         raise ProviderFailure("provider_cancelled", "Request cancelled.", retryable=False)
                     return _parse_response(final, usage)
                 if response.status_code in (400, 422):
@@ -228,7 +316,7 @@ class OpenAIResponsesProvider:
                     response = None
             if response is None:
                 response = _default_transport("POST", url, {**auth, "Accept": "application/json"},
-                    body, timeout, diagnostics=diag, cancel_event=cancel_event, on_submission=on_submission,
+                    body, timeout, diagnostics=diag, cancel_event=effective_cancel, on_submission=on_submission,
                     allow_private_network=self.settings.allow_private_network)
             if not 200 <= response.status_code < 300:
                 failure = ProviderFailure("provider_request_rejected", "Provider rejected the request.",
@@ -237,11 +325,11 @@ class OpenAIResponsesProvider:
                 raise failure
             data = json.loads(response.body)
             usage = _usage(data.get("usage"))
-            if cancel_event is not None and cancel_event.is_set():
+            if effective_cancel is not None and effective_cancel.is_set():
                 raise ProviderFailure("provider_cancelled", "Request cancelled.", retryable=False)
             return _parse_response(data, usage)
         except OSError as error:
-            raise _build_transport_failure(error, diag, cancelled=bool(cancel_event and cancel_event.is_set()),
+            raise _build_transport_failure(error, diag, cancelled=bool(effective_cancel and effective_cancel.is_set()),
                 message="Responses request ended without a usable result.", started_at=started,
                 wire_bytes=len(body) if body else None, streamed_bytes=None) from None
         except (ValueError, KeyError, TypeError, AttributeError, RecursionError):
