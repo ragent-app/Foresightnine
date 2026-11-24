@@ -189,3 +189,50 @@
 | **Step 2：Layer 2 Bounded Event Agent** | `src/apps/api/app/research_event_analyst.py` | 时间簇聚类分批、双模式有界 2 轮本地钻取（native tools + 纯 JSON 两阶段兜底）+ 2–3 MB `EX-10/EX-4` 懒加载、`cluster_reasoning_chain` 前置、按表单拆分的 `prompt_version` 缓存、`bear_reviewer` 优先跨族 Skeptic + 关联事件骨架防误杀、四重 0-LLM 后置门控（含双侧转折词守卫）、Fail-Safe 硬兜底 |
 | **Step 3：异步 API、Toolbox 接入与全量离线单测** | `src/apps/api/app/research_fin_tools.py`（注册 `sec_material_events`）<br>`src/apps/api/app/main.py`（`/scan` + 异步 `202` `/analyze` + 幂等/限流/账本）<br>`src/apps/api/tests/test_sec_events_and_analyst.py` | 离线单测覆盖：全部表单暗坑、`_drop_legacy_null_fields` 往返反序列化、无 native tools 两阶段钻取、非对称 Skeptic 与跨公告防误杀、三段缓存解耦与规则热重载、四重门控与 Fail-Safe、异步 `202` 端点与全量后端回归全绿 |
 | **Step 4：15–20 个真实美股历史案例受控实测** | `src/docs/product/v1-sec-events-eval-report-2026-11-24.md` | 遵循 `AGENTS.md` 实验纪律：<br>1. 划分 **调优集（Dev Set，10–12 例）** 与 **独立留出测试集（Holdout Set，5–8 例，评测前冻结不针对其调参）**，覆盖本土 + FPI `6-K` 及 5 类陷阱（① 关键条款藏在 `EX-10.1`；② `4.01`+`EX-16.1` 有/无分歧；③ 含转折否定句的 `8.01`；④ 完整/部分 `M+S` 无现金行权 vs 首次非计划高管买入；⑤ 连续 `SCHEDULE 13D→13D/A` 含发行人 `submissions` 召回校验）；<br>2. 固定任务集、快照、`as_of` 与参数，增设 **单轮直出基线（Single-Pass Baseline）** 同条件对照，完整记录模型标识、Token（含 thinking tokens）、耗时、费用、召回率与误报抑制率；<br>3. 目标验收线：已知重大事件 **100% 召回**、噪音压降 **>= 80%**、简单公司 `< 10K` Token / 复杂批次 `25K–55K` Token、0 漏扫、0 幻觉引文 |
+
+---
+
+## 十四、v6.1 平台模型实测后的三项针对性加固方案（待实施）
+
+基于 2026-11-24 真实平台思考模型（`glm-5.3-flash`，非 BYOK）与真实 SEC EDGAR 15 案例实测（详见 [v1-sec-events-eval-report-2026-11-24.md](v1-sec-events-eval-report-2026-11-24.md)），除已现场修复并上线的 3 个生产 Bug（`35ae86d` / `0058e8a` / `e7b7fde`）外，针对实测暴露的 3 个系统性局限制定如下分层加固方案：
+
+### 14.1 问题一：冷启动耗时偏长（`115s – 495s`）
+
+- **实测根因**：
+  1. 同一公司多条 `push_alert` 的 Skeptic 复核当前为**串行**执行（如 `SMCI` 3 次 Skeptic 串行耗时 ~195s）；
+  2. 多 Batch 串行执行；
+  3. 平台思考模型 `glm-5.3-flash` 单轮思考即需 50–90s。
+- **P0 解决方案（立即可改，改动小、收益最大）**：
+  1. **批量 Skeptic 审核（`research_event_analyst.py`）**：将同一批次产出的多条 `push_alert`（最多 3–5 条）合并为 **1 次批量 `bear_reviewer` 请求**，共用同一份 `ScaleAnchor` 与单行集群骨架，要求返回按 `signal_id` 索引的 verdict 列表（单条仍走原契约，保持向后兼容）。
+     - 预期收益：多告警案例（`SMCI` / `INTC` / `NVDA` / `META`）冷启动延迟下降 **35%–50%**，重复输入 Token 下降 **30%–45%**。
+  2. **产品交互坚持“L1 秒出 + L2 异步增量”**：日常 Direction B 雷达走 `seen_accessions` 增量轮询（常态仅 0–1 份新申报，耗时收敛至 `0s` 或 `60–110s`）；前端先展示 Layer 1 结果（`2–10s`），Layer 2 深度研判与 Skeptic 结论异步回填。
+- **P1 解决方案（中期演进）**：
+  - **按事件复杂度分级路由槽位**：复杂条款（`1.01/1.02/2.03/4.01/4.02/13D`、需 `drill` 深挖）保留深度思考槽位；纯结构化 Form 4 或简单 8-K 经同条件对照评测确认准确率无回退后，路由至非思考快模型槽位。
+
+### 14.2 问题二：高并发触发平台模型 429 限流
+
+- **实测根因**：5 个公司并发跑 L2 时瞬间打满平台模型网关并发/RPM 上限；`_AccountSlotModelRunner` 当前仅做 2 次短间隔（`0.5s` 起步）瞬时重试，429 冷却窗口尚未结束即失败并落入 `open_gaps`。
+- **P0 解决方案**：
+  1. **平台模型全局并发闸门（`main.py`）**：仅针对**平台模型路径**（`personal_model=False`）施加全局并发信号量（单进程用 `threading.BoundedSemaphore`，多实例复用现有 `foresightnine-redis-1` 分布式信号量），默认 `FORESIGHTNINE_PLATFORM_LLM_MAX_CONCURRENCY=2`（可配置，范围 `1–4`）；用户自带 BYOK 密钥不占用平台配额。
+  2. **429 专属长退避 + `Retry-After` 尊重（`main.py`）**：将 `rate_limited`（HTTP 429）与普通网络抖动拆开处理——优先读取上游 `Retry-After` 响应头休眠；无头时采用带随机抖动的长退避（`5s → 15s → 35s`，最多 3 次），避免 `0.5s` 连续撞墙。
+- **P1 解决方案**：
+  - **Direction B 雷达错峰调度**：定时扫盘先全量跑纯 Layer 1（0 LLM，仅受 SEC 8 RPS 约束，单家 1–3s）；**仅将 `len(target_candidates) > 0` 的公司**送入低并发 L2 队列，且按法定高危优先级（`4.02 / 1.03 / 2.04 / 4.01 / 1.05` 优先于常规 8-K / Form 4）出队。
+
+### 14.3 问题三：FPI 6-K 封面页信息边界（如 TSMC 无正文）
+
+- **实测根因**：部分 FPI（尤其是台股 `TSM`）在 SEC 6-K 上存在两类缺失——① 正文其实位于同一 SEC 目录下，但附件文件名不含 `ex99`（如 `tsm-revenue20261008.htm`）或格式为 `.pdf`；② SEC 确只提交了 1 页英文封面，实质正文仅发布在本地交易所或公司官网 IR。
+- **P0 解决方案（先挖净 SEC 目录内正文，0 外部新依赖）**：
+  1. **6-K 非 `ex99` 命名 HTML 兜底抓取（`form6k.py` + `form8k.py`）**：当 6-K `primary_text` 长度 `< 2000` 字符（疑似纯封面页）且 `ex99_texts` 为空时，自动回退抓取同目录下除 `primary_document` 与 `*-index.htm` 外的其余 `.htm/.html` 附件（上限 3 份，按字节大小降序优先取正文）。
+  2. **6-K 纯 PDF 附件文本提取（`form6k.py`）**：当 6-K 目录下无文本附件但存在 `.pdf` 附件时，直接复用 `Dockerfile.api` 已预装的 `poppler-utils`（`pdftotext`）提取前 20 页纯文本（限制单文件字节上限并统一清除 `\x00`），不引入新依赖。
+- **P1 解决方案（按市场按需补齐本土交易所/官网源）**：
+  - 坚守诚实降级底线：抓不到正文则固定标注 `evidence_completeness="partial"` + `log_only`，绝不编造数字。
+  - 仅对标题命中实质事件（月度营收、董事会决议、重大合同/分红）且 SEC 确无正文的 FPI 6-K，按市场分层接入补充源：港股双上市补 **HKEXnews（披露易）**、台股/欧股 ADR 补 **公司官网 IR / 公开新闻线索**，并在 `provenance` 中严格区分“SEC 一手披露”与“交易所/官网补充源”。
+
+### 14.4 v6.1 P0 验收标准（实施前锁定）
+
+| 验收项 | 目标基线 |
+| --- | --- |
+| 批量 Skeptic 延迟与 Token | `SMCI`（3 告警）冷启动耗时较 v6（`495.9s` / `104.5k` tok）下降 `>= 30%`，且 `EY 4.01` / `Cathay 1.01` / `BofA 1.02` 判定与 100% 引文核验不回退 |
+| 5 并发压测抗 429 | 5 个公司并发调用平台模型 L2 时，`429` 引发的 `open_gaps = 0` |
+| FPI 6-K 封面页兜底 | `TSM` 6-K 同目录非 `ex99` HTML/PDF 附件可被自动抓取；仍仅封面页的 6-K 维持 `partial` + `log_only`、0 幻觉数字 |
+

@@ -95,4 +95,4 @@
     - 单候选案例（SBUX）：`115.1s`（`18,483` tokens）。
     - 中等复杂案例（BABA 3 候选 / JPM 3 候选 / INTC 3 候选 / TSM 11 候选）：`213s – 305s`（`40.8k – 104.1k` tokens，含自主 `drill=1~2` 与 Skeptic 复核）。
     - 热 L2 语义缓存命中（`sec_events_l2_semantic`）：`< 0.1s`（`0` tokens）。
-- **结论**：当前 202 异步后台作业模式（`POST /v2/research/sec-events/analyze` + `GET /v2/research/sec-events/analyze/{operation_id}`）与三段式缓存完全匹配平台思考模型的延迟特征；后续若需进一步压缩冷启动延迟，可在 `analyze_sec_events` 中将同一批次后的多份 `push_alert` Skeptic 审核并行化（当前为串行）。
+- **结论**：当前 202 异步后台作业模式（`POST /v2/research/sec-events/analyze` + `GET /v2/research/sec-events/analyze/{operation_id}`）与三段式缓存完全匹配平台思考模型的延迟特征；针对本次实测暴露的冷启动耗时、高并发 429 限流及 FPI 6-K 封面页信息边界三项局限，对应的 P0/P1 加固方案已沉淀至 [v1-sec-events-insider-ownership-design-2026-11-24.md（第十四节 v6.1 加固方案）](v1-sec-events-insider-ownership-design-2026-11-24.md#十四v61-平台模型实测后的三项针对性加固方案待实施)。
