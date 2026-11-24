@@ -1126,7 +1126,7 @@ describe("TopicPage", () => {
       }
     });
 
-    it("retracts unverified draft immediately on submission_partial before showing partial turn", async () => {
+    it("keeps the submitted draft until the saved partial turn replaces it", async () => {
       const encoder = new TextEncoder();
       let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
       const body = new ReadableStream<Uint8Array>({
@@ -1185,7 +1185,9 @@ describe("TopicPage", () => {
 
       savedPartial = true;
       sendFrame("stream.reset", { operation_id: "op_2", call_seq: 1, reason: "submission_partial" });
-      await waitFor(() => expect(screen.queryByRole("region", { name: "报告草稿" })).toBeNull());
+      // The run is not over yet: the draft stays where the answer will appear.
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(screen.getByRole("region", { name: "报告草稿" })).toBeTruthy();
 
       sendFrame("run.terminal", { operation_id: "op_2", operation_status: "failed", version_id: "v2" }, "done:failed");
       streamController!.close();
@@ -1759,6 +1761,54 @@ describe("TopicPage", () => {
       // The report also leads the page as the current conclusion once there are two turns.
       expect((await screen.findAllByText("已落盘正式报告。")).length).toBeGreaterThan(0);
       await waitFor(() => expect(screen.queryByText("正在研究")).toBeNull());
+      expect(screen.getAllByRole("region", { name: "第 2 轮" })).toHaveLength(1);
+    });
+
+    it("keeps a finished run and its draft on screen until the saved answer replaces it in place", async () => {
+      const encoder = new TextEncoder();
+      let streamCtrl: ReadableStreamDefaultController<Uint8Array> | null = null;
+      const body = new ReadableStream<Uint8Array>({ start(controller) { streamCtrl = controller; } });
+      let saved = false;
+      let finished = false;
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics/t1") {
+          return jsonResponse(topicWith(saved ? [turn(1), turn(2, { operation_ids: ["op_2"], report: "核验后的报告。" })] : [turn(1)]));
+        }
+        if (url.pathname === "/v2/research/topics/t1/runs") {
+          return jsonResponse([operation("op_2", finished ? "completed" : "running"), operation("op_1", "completed")]);
+        }
+        if (url.pathname.endsWith("/op_2/events")) {
+          return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8" } });
+        }
+        return undefined;
+      });
+      const frame = (event: string, data: unknown, id?: string) =>
+        streamCtrl!.enqueue(encoder.encode(`${id ? `id: ${id}\n` : ""}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      const { client } = renderTopic();
+      await waitFor(() => expect(streamCtrl).toBeTruthy());
+      frame("progress.snapshot", {
+        operation_id: "op_2", operation_status: "running", turn: { index: 2, question: "问题 2" },
+        usage: { model_calls: 1, search_calls: 0, total_tokens: 100 }, interim: null,
+        current: { kind: "model", phase: "responding", retry_attempt: null, started_at: NOW },
+        events: [], event_count: 0, started_at: NOW, updated_at: NOW, version_id: null,
+      }, "cp:0");
+      frame("stream.delta", { operation_id: "op_2", call_seq: 1, channel: "draft_report", delta: "正在写的报告。", seq: 0 });
+      expect(await screen.findByText("正在写的报告。")).toBeTruthy();
+
+      frame("stream.reset", { operation_id: "op_2", call_seq: 1, reason: "call_completed" });
+      finished = true;
+      frame("run.terminal", { operation_id: "op_2", operation_status: "completed", version_id: "v2" }, "done:completed");
+      streamCtrl!.close();
+
+      // Finished but not yet saved here: the turn stays, with its draft, and says so.
+      expect(await screen.findByText("正在保存结果")).toBeTruthy();
+      expect(screen.getByText("正在写的报告。")).toBeTruthy();
+
+      saved = true;
+      await client.invalidateQueries({ queryKey: queryKeys.topic("t1") });
+      expect((await screen.findAllByText("核验后的报告。")).length).toBeGreaterThan(0);
+      await waitFor(() => expect(screen.queryByText("正在保存结果")).toBeNull());
+      expect(screen.queryByText("正在写的报告。")).toBeNull();
       expect(screen.getAllByRole("region", { name: "第 2 轮" })).toHaveLength(1);
     });
   });

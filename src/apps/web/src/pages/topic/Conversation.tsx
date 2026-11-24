@@ -667,7 +667,7 @@ export function InterruptedTurn({ number, startedAt, question, status, actions, 
  * The only place a run's state shows while it works: one line (status, what has been found so far,
  * elapsed time) above the live timeline. Stopping lives in the composer's send button.
  */
-export function LiveTurn({ number, startedAt, question, live = null, sectionRef, onDraftGrow, continuing = null, first = false, editedQuestion = null }: {
+export function LiveTurn({ number, startedAt, question, live = null, sectionRef, onDraftGrow, continuing = null, first = false, editedQuestion = null, settling = false }: {
   number: number;
   startedAt: string;
   question: string;
@@ -678,6 +678,8 @@ export function LiveTurn({ number, startedAt, question, live = null, sectionRef,
   first?: boolean;
   /** For edit-and-resend: the edited question, shown since it differs from the answer being replaced. */
   editedQuestion?: string | null;
+  /** The run has finished and its saved answer is loading; it will replace this turn in place. */
+  settling?: boolean;
 }) {
   const view = useTopicView();
   const now = useNow(true);
@@ -693,7 +695,7 @@ export function LiveTurn({ number, startedAt, question, live = null, sectionRef,
   const current = progress?.current ?? null;
   const hasTimeline = events.length > 0 || current !== null;
   const isContinue = continuing === "continue" || continuing === "deliver" || continuing === "regenerate";
-  const statusTitle = continuing === "regenerate"
+  const statusTitle = settling ? "正在保存结果" : continuing === "regenerate"
     ? (isPending ? "排队中 · 重新生成" : "正在重新生成")
     : continuing === "deliver"
     ? (isPending ? "排队中 · 交付已有成果" : "正在交付已有成果")

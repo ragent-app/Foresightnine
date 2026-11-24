@@ -212,6 +212,20 @@ export function TopicPage() {
       ? latestRun
       : null;
   const progressMatches = (operationId: string | undefined) => progress.progress?.operation_id === operationId;
+  // A run that finished stays on screen, with its draft, until its saved answer arrives, so the
+  // answer replaces the draft in place instead of the turn vanishing while the topic reloads.
+  const finishedUnsaved = !activeRun && latestRun && progressMatches(latestRun.operation_id) && progress.progress
+    && (progress.progress.logical_status ? progress.progress.logical_status === "completed" : progress.progress.operation_status === "completed")
+    && topic && !turns.some((turn) => turn.operation_ids.includes(latestRun.operation_id))
+    ? latestRun : null;
+  const [settleExpired, setSettleExpired] = useState<string | null>(null);
+  const settlingRun = finishedUnsaved && settleExpired !== finishedUnsaved.operation_id ? finishedUnsaved : null;
+  useEffect(() => {
+    if (!finishedUnsaved) return undefined;
+    const operationId = finishedUnsaved.operation_id;
+    const timer = window.setTimeout(() => setSettleExpired(operationId), 15000);
+    return () => window.clearTimeout(timer);
+  }, [finishedUnsaved?.operation_id]);
 
   // The first turn names the topic a few seconds after it starts: pick the title up as soon as the
   // progress reports it, and otherwise look again every few seconds while that turn runs.
@@ -613,11 +627,12 @@ export function TopicPage() {
     const snapshot = progress.progress;
     const mergedInstructions = new Map<string, ResearchInstruction>();
     for (const receipt of [...receipts, ...(snapshot?.instructions ?? [])]) if (receipt.turn_id === snapshot?.turn.turn_id) mergedInstructions.set(receipt.instruction_id, receipt);
-    const live: LiveRun | null = activeRun
+    const liveRun = activeRun ?? settlingRun;
+    const live: LiveRun | null = liveRun
       ? {
-          operation: activeRun,
-          progress: progressMatches(activeRun.operation_id) && snapshot ? { ...snapshot, instructions: [...mergedInstructions.values()] } : null,
-          events: progressMatches(activeRun.operation_id) ? progress.events : [],
+          operation: liveRun,
+          progress: progressMatches(liveRun.operation_id) && snapshot ? { ...snapshot, instructions: [...mergedInstructions.values()] } : null,
+          events: progressMatches(liveRun.operation_id) ? progress.events : [],
           stream: { getSnapshot: progress.getStreamSnapshot, subscribe: progress.subscribeStream },
         }
       : null;
@@ -676,7 +691,7 @@ export function TopicPage() {
     };
     // progressMatches reads progress.progress, listed below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topic, version, content, turns, citations, sources, activeRun, progress.progress, progress.events, progress.getStreamSnapshot, progress.subscribeStream, receipts, turnNumbers, topicId, inspector, locked, addToTopic, draft, setDraft, dirty, saveDraft, saveVersion.isPending, notify, evidence, setEvidence, squadDossier]);
+  }, [topic, version, content, turns, citations, sources, activeRun, settlingRun, progress.progress, progress.events, progress.getStreamSnapshot, progress.subscribeStream, receipts, turnNumbers, topicId, inspector, locked, addToTopic, draft, setDraft, dirty, saveDraft, saveVersion.isPending, notify, evidence, setEvidence, squadDossier]);
   const cancelling = cancel.isPending || (cancel.isSuccess && cancel.variables?.operation_id === activeRun?.operation_id);
 
   const send = () => {
@@ -990,7 +1005,8 @@ export function TopicPage() {
     }
   }, [isAutoRoutedSquadRun, squadStatus, squadDossier, topic?.squad_run_id, activeRunMeta?.squad_run_id, activeRun, live?.progress?.squad_run_id, live?.progress?.logical_status]);
 
-  const showLiveTurn = live !== null && !liveCommitted && !liveTerminal && !showSquadWorkspace;
+  const settling = live !== null && settlingRun !== null && live.operation.operation_id === settlingRun.operation_id;
+  const showLiveTurn = live !== null && !liveCommitted && (!liveTerminal || settling) && !showSquadWorkspace;
   const showPendingTurn = showLiveTurn || (!live && pendingAsk !== null && !showSquadWorkspace);
   const isContinuingLastTurn =
     showLiveTurn
@@ -1227,6 +1243,7 @@ export function TopicPage() {
                   live={live}
                   onDraftGrow={onDraftGrow}
                   continuing={continuingMode}
+                  settling={settling}
                   editedQuestion={continuingMode === "regenerate" && pendingContinue && lastTurn && pendingContinue.question !== lastTurn.question ? pendingContinue.question : null}
                   first={turns.length === 0}
                 />

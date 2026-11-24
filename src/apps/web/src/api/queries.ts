@@ -150,6 +150,11 @@ function emptyTransientStream(): TransientStreamState {
   return { ...EMPTY_TRANSIENT_STREAM };
 }
 
+/** A run that completed keeps its submitted draft until the saved answer replaces it on the page. */
+function finishedStream(current: TransientStreamState, completed: boolean): TransientStreamState {
+  return completed && current.draftReport ? { ...EMPTY_TRANSIENT_STREAM, draftReport: current.draftReport } : { ...EMPTY_TRANSIENT_STREAM };
+}
+
 function appendTailCap(existing: string, delta: string, limit: number): string {
   if (!delta) return existing;
   const combined = existing + delta;
@@ -301,13 +306,16 @@ export function useRunProgress(topicId: string, operationId: string | null) {
           : msg.reason === "failed" || msg.reason === "cancelled" || msg.reason === "submission_partial"
             ? null
             : current.retractedNotice;
-      const ended = msg.reason === "failed" || msg.reason === "cancelled" || msg.reason === "submission_partial";
+      const ended = msg.reason === "failed" || msg.reason === "cancelled";
+      // A submitted draft stays on screen until the saved answer replaces it in place.
+      const submitted = msg.reason === "call_completed" || msg.reason === "submission_partial";
       streamRef.current = {
         ...emptyTransientStream(),
         callSeq: Math.max(current.callSeq ?? 0, msg.call_seq),
         lastSeq: msg.call_seq === current.callSeq ? current.lastSeq : -1,
         retractedNotice: keepNotice,
-        heldDraft: ended ? "" : msg.reason === "submission_rejected" ? (current.draftReport || current.heldDraft || "") : (current.heldDraft ?? ""),
+        draftReport: submitted ? current.draftReport : "",
+        heldDraft: ended || submitted ? "" : msg.reason === "submission_rejected" ? (current.draftReport || current.heldDraft || "") : (current.heldDraft ?? ""),
       };
       flushStreamNotify();
     };
@@ -333,7 +341,7 @@ export function useRunProgress(topicId: string, operationId: string | null) {
             : prev,
         );
         if (finished) {
-          streamRef.current = emptyTransientStream();
+          streamRef.current = finishedStream(streamRef.current, progress.logical_status ? progress.logical_status === "completed" : progress.operation_status === "completed");
           flushStreamNotify();
           invalidateTerminal();
           return;
@@ -382,7 +390,7 @@ export function useRunProgress(topicId: string, operationId: string | null) {
                 : prev,
             );
             if (finished) {
-              streamRef.current = emptyTransientStream();
+              streamRef.current = finishedStream(streamRef.current, snap.logical_status ? snap.logical_status === "completed" : snap.operation_status === "completed");
               flushStreamNotify();
               terminalReceived = true;
               invalidateTerminal();
@@ -459,7 +467,7 @@ export function useRunProgress(topicId: string, operationId: string | null) {
           } else if (frame.event === "run.terminal") {
             const msg = frame.data;
             terminalReceived = true;
-            streamRef.current = emptyTransientStream();
+            streamRef.current = finishedStream(streamRef.current, msg.operation_status === "completed");
             flushStreamNotify();
             setState((prev) => {
               if (prev.key !== key) return prev;

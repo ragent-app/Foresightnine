@@ -44,6 +44,17 @@ def test_personal_responses_probe_and_multiturn_research(monkeypatch):
         ], "usage": {"input_tokens": 30, "output_tokens": 10, "total_tokens": 40, "input_tokens_details": {"cached_tokens": 8}}}))
 
     monkeypatch.setattr(openai_responses, "_default_transport", transport)
+    streamed = []
+
+    def stream(method, url, headers, body, timeout, *, on_frame, **kwargs):
+        # Research calls stream; the same answer arrives as the closing event.
+        assert headers["Accept"] == "text/event-stream" and json.loads(body)["stream"] is True
+        final = json.loads(transport(method, url, headers, body, timeout, **kwargs).body)
+        streamed.append(final["output"][-1]["name"])
+        on_frame("response.completed", json.dumps({"type": "response.completed", "response": final}))
+        return None
+
+    monkeypatch.setattr(openai_responses, "_default_stream_transport", stream)
     client = TestClient(main.app)
     auth = client.post("/v1/auth/local/register", json={"email": f"{uuid4().hex}@example.test",
                         "password": "correct horse battery staple!"}).json()
@@ -68,6 +79,7 @@ def test_personal_responses_probe_and_multiturn_research(monkeypatch):
             break
         time.sleep(.01)
     assert op["status"] == "completed" and len(wires) == 3
+    assert streamed == ["read_sources", "submit_research"], "the connection probe is not streamed; research calls are"
     assert main.RESEARCH_RUN_INPUTS[op["operation_id"]]["private_validation_diagnostics"]
 
 

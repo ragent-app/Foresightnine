@@ -14,6 +14,7 @@ import {
 } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { remarkCjkStrong } from "../lib/markdownCjk";
 import { extractTableTsv, isNumericCellText, safeExternalHref } from "../lib/markdownSafety";
 import {
   hasMarkdownSyntax,
@@ -81,7 +82,7 @@ const NOTES_ELEMENTS = [
 
 const INLINE_ELEMENTS = ["p", "strong", "em", "del", "code", "img"] as const;
 
-const REMARK_PLUGINS = [remarkGfm];
+const REMARK_PLUGINS = [remarkGfm, remarkCjkStrong];
 type MarkdownNode = { type: string; value?: string; url?: string; children?: MarkdownNode[] };
 
 function remarkClaimLinks() {
@@ -106,7 +107,7 @@ function remarkClaimLinks() {
   return replaceMarkers;
 }
 
-const REPORT_PLUGINS = [remarkGfm, remarkClaimLinks];
+const REPORT_PLUGINS = [remarkGfm, remarkCjkStrong, remarkClaimLinks];
 const CLAIM_FRAGMENT = /^#claim-[A-Za-z0-9_-]{1,100}$/;
 const CHART_ANCHOR_RE = /^\s*\[\[(chart|table):([A-Za-z0-9_-]{1,64})\]\]\s*$/;
 const FENCE_LINE_RE = /^\s*(`{3,}|~{3,})/;

@@ -3,7 +3,9 @@ import json
 from time import monotonic
 
 from .model_protocol import ModelResponse, ModelToolCall, ModelUsage, canonical_json_dumps, render_user_instructions
-from .openai_compatible import _build_transport_failure, _default_transport, _llm_timeout_from_environment
+from .openai_compatible import (
+    _build_transport_failure, _default_stream_transport, _default_transport, _llm_timeout_from_environment,
+)
 from .phase3 import ProviderFailure, ProviderPolicy
 from .provider_capabilities import research_profile, resolve_output_token_limit
 from .research_diagnostics import (
@@ -74,12 +76,81 @@ def _parse_response(data, usage):
                          tuple(calls), usage, "tool_calls" if calls else "stop", stop)
 
 
+class _StreamCollector:
+    """Turns Responses stream events into live deltas; the final object comes from the closing event."""
+
+    def result(self):
+        """The closing event's response; failing that, the finished output items in order (usage unknown)."""
+        if self.final is not None:
+            return self.final
+        if not self.done_items:
+            raise ValueError()
+        return {"status": "completed", "output": [self.done_items[i] for i in sorted(self.done_items)]}
+
+    def __init__(self, emit):
+        self.emit = emit
+        self.final = None
+        self.calls = {}
+        self.done_items = {}
+
+    def _call(self, payload):
+        key = payload.get("item_id") or payload.get("output_index")
+        return self.calls.get(key) or self.calls.get(payload.get("output_index"))
+
+    def frame(self, event_name, data):
+        from .research_stream_extract import TopLevelReportExtractor
+        text = data.strip()
+        if not text or text == "[DONE]":
+            return
+        payload = json.loads(text)
+        if not isinstance(payload, dict):
+            raise ValueError()
+        kind = payload.get("type") or event_name
+        if kind == "error" or kind == "response.failed":
+            raise ProviderFailure("provider_unavailable", "Provider stream returned an error.", retryable=False)
+        if kind in ("response.completed", "response.incomplete"):
+            if not isinstance(payload.get("response"), dict):
+                raise ValueError()
+            self.final = payload["response"]
+            return
+        if kind == "response.output_item.done":
+            item, index = payload.get("item"), payload.get("output_index")
+            if isinstance(item, dict) and type(index) is int:
+                self.done_items[index] = item
+            return
+        if kind == "response.output_item.added":
+            item = payload.get("item") if isinstance(payload.get("item"), dict) else {}
+            if item.get("type") == "function_call" and isinstance(item.get("name"), str):
+                entry = {"name": item["name"], "extractor": TopLevelReportExtractor() if item["name"] == "submit_research" else None}
+                for key in (item.get("id"), payload.get("output_index")):
+                    if key is not None:
+                        self.calls[key] = entry
+                self.emit({"channel": "tool_status", "delta": "正在起草研究报告并整理引文，完成后将自动核验原文位置…"
+                           if item["name"] == "submit_research" else f"正在准备工具参数：{item['name']}"})
+            return
+        delta = payload.get("delta")
+        if not isinstance(delta, str) or not delta:
+            return
+        if kind == "response.function_call_arguments.delta":
+            entry = self._call(payload)
+            if entry and entry["extractor"] is not None:
+                draft = entry["extractor"].feed(delta)
+                if draft:
+                    self.emit({"channel": "draft_report", "delta": draft})
+        elif kind == "response.output_text.delta":
+            self.emit({"channel": "text", "delta": delta})
+        elif kind in ("response.reasoning_summary_text.delta", "response.reasoning_text.delta"):
+            self.emit({"channel": "thinking", "delta": delta})
+
+
 class OpenAIResponsesProvider:
     name = "openai_responses"
 
     def __init__(self, settings):
         self.settings = settings
         self.policy = ProviderPolicy(timeout_seconds=_llm_timeout_from_environment())
+        # Set once an endpoint refuses streaming; this provider then asks for whole responses.
+        self.stream_refused = False
 
     def research_capacity(self):
         return research_profile(self.settings, responses_endpoint(self.settings.base_url), self.name, "responses-v1")
@@ -115,7 +186,7 @@ class OpenAIResponsesProvider:
         return len(canonical_json_dumps(self._wire(turn)).encode()) + 64
 
     def complete_turn(self, turn, *, cancel_event=None, timeout_seconds=None, diagnostic_callback=None,
-                      max_output_tokens=None, on_submission=None):
+                      max_output_tokens=None, on_submission=None, on_stream_event=None):
         diag = TransportDiagnostics()
         started = monotonic()
         usage = None
@@ -136,10 +207,29 @@ class OpenAIResponsesProvider:
             body = canonical_json_dumps(wire).encode()
             if self.policy.max_input_tokens is not None and len(body) > self.policy.max_input_tokens:
                 raise ProviderFailure("provider_budget_exhausted", "Input exceeds the per-call budget.", retryable=False)
-            response = _default_transport("POST", responses_endpoint(self.settings.base_url),
-                {"Authorization": "Bearer " + self.settings.api_key, "Content-Type": "application/json", "Accept": "application/json"},
-                body, timeout, diagnostics=diag, cancel_event=cancel_event, on_submission=on_submission,
-                allow_private_network=self.settings.allow_private_network)
+            url = responses_endpoint(self.settings.base_url)
+            auth = {"Authorization": "Bearer " + self.settings.api_key, "Content-Type": "application/json"}
+            if on_stream_event is not None and not self.stream_refused:
+                # Live deltas only; the result is the closing event's complete response object.
+                collector = _StreamCollector(on_stream_event)
+                stream_body = canonical_json_dumps({**wire, "stream": True}).encode()
+                response = _default_stream_transport("POST", url, {**auth, "Accept": "text/event-stream"}, stream_body, timeout,
+                    on_frame=collector.frame, allow_private_network=self.settings.allow_private_network,
+                    diagnostics=diag, cancel_event=cancel_event, on_submission=on_submission)
+                if response is None:
+                    final = collector.result()
+                    usage = _usage(final.get("usage"))
+                    if cancel_event is not None and cancel_event.is_set():
+                        raise ProviderFailure("provider_cancelled", "Request cancelled.", retryable=False)
+                    return _parse_response(final, usage)
+                if response.status_code in (400, 422):
+                    # A request refused as invalid was not carried out: ask again for a whole response.
+                    self.stream_refused = True
+                    response = None
+            if response is None:
+                response = _default_transport("POST", url, {**auth, "Accept": "application/json"},
+                    body, timeout, diagnostics=diag, cancel_event=cancel_event, on_submission=on_submission,
+                    allow_private_network=self.settings.allow_private_network)
             if not 200 <= response.status_code < 300:
                 failure = ProviderFailure("provider_request_rejected", "Provider rejected the request.",
                                           retryable=response.status_code == 429 or response.status_code >= 500)
