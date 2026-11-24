@@ -96,3 +96,16 @@
     - 中等复杂案例（BABA 3 候选 / JPM 3 候选 / INTC 3 候选 / TSM 11 候选）：`213s – 305s`（`40.8k – 104.1k` tokens，含自主 `drill=1~2` 与 Skeptic 复核）。
     - 热 L2 语义缓存命中（`sec_events_l2_semantic`）：`< 0.1s`（`0` tokens）。
 - **结论**：当前 202 异步后台作业模式（`POST /v2/research/sec-events/analyze` + `GET /v2/research/sec-events/analyze/{operation_id}`）与三段式缓存完全匹配平台思考模型的延迟特征；针对本次实测暴露的冷启动耗时、高并发 429 限流及 FPI 6-K 封面页信息边界三项局限，对应的 P0/P1 加固方案已沉淀至 [v1-sec-events-insider-ownership-design-2026-11-24.md（第十四节 v6.1 加固方案）](v1-sec-events-insider-ownership-design-2026-11-24.md#十四v61-平台模型实测后的三项针对性加固方案待实施)。
+
+
+---
+
+## 6. v6.1 P0 加固落地与平台模型对照验收（`foresightnine-api:ca29276`）
+
+围绕上述三项局限，已于 `ca29276` 完成全部 P0 改造（批量 Skeptic、平台模型全局并发闸门 + 429 长退避、6-K 封面页非 `ex99` HTML/PDF 兜底），37/37 单元测试通过并上线部署，随后在真实平台模型（`glm-5.3-flash`，非 BYOK）上完成 3 项对照验收：
+
+| 验收项 | v6 基线 | v6.1 P0 实测（`ca29276`） | 结论 |
+| --- | --- | --- | --- |
+| **P0-1 批量 Skeptic（`SMCI` 冷启动 L2）** | `495.90s` / `104,509` tok / `3` 次串行 Skeptic | **`356.76s`（-28.1%）** / **`76,532` tok（-26.8%）** / **`1` 次批量 Skeptic**（审核 3 条 `push_alert`，`gaps=0`） | 提速 **139.1s**、省 **28.0k tokens**（略低于 `-30%` 预期 1.9pp，主因 Primary 2 轮自主深挖耗时固定）；EY 4.01 `critical` 等 5 条信号全覆盖（17/21 引文核验） |
+| **P0-2 5 并发冷启动抗 429 压测** | 5 并发触发 BABA `Provider rate limit reached`（`gaps=5`） | `SBUX` / `CRWD` / `AAPL` / `TSLA` / `BABA` 5 线程并发冷启动：**`total_gaps=0`、`total_rl_gaps=0`**（总耗时 `483.6s`） | **完全达标**：平台并发闸门（`limit=2`）+ 429 长退避彻底消除 5 并发限流缺口 |
+| **P0-3 FPI 6-K 封面页非 `ex99` HTML/PDF 兜底** | 仅匹配 `ex99` 命名附件 | 单测验证同目录非 `ex99` HTML 兜底生效；实测 `TSM` 60 天 6 份 6-K 均为 `1100–1112` 字符（`recovered_gt2k=0`） | **实证确认**：`TSM` 该 6 份 6-K 在 SEC 目录确无正文附件（仅 1 页封面），需由 P1 本土交易所/官网 IR 源补齐；引擎维持 `partial` + `log_only`、0 幻觉数字 |
