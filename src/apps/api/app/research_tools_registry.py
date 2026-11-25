@@ -26,6 +26,7 @@ from .research_fin_tools import (
     SecFilingSectionsRequest,
     SecFilingTablesRequest,
     SecFulltextSearchRequest,
+    CallQaVerificationRequest,
     GovernanceCapitalAuditRequest,
     PeerRelativeValuationRequest,
     SecMaterialEventsRequest,
@@ -1148,6 +1149,17 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             'incentive anchors (*_htm.xml Pay-vs-Performance & MNPI flags), and historical guidance credibility (0-LLM).'
         ),
         input_model=GovernanceCapitalAuditRequest,
+        compaction_role='bulk',
+        is_fin_tool=True,
+        activity_summarizer=_rationale_summarizer(_fin_summary_target('symbol')),
+    ),
+    ToolSpec(
+        name='call_qa_verification',
+        description=(
+            'Query verified earnings call Q&A collision findings (Talk vs. Walk against 10-Q initial-basis ledger), '
+            'Q&A evasion audit, and account-isolated cross-quarter verbal commitments with as_of safety.'
+        ),
+        input_model=CallQaVerificationRequest,
         compaction_role='bulk',
         is_fin_tool=True,
         activity_summarizer=_rationale_summarizer(_fin_summary_target('symbol')),

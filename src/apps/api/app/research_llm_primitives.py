@@ -477,7 +477,26 @@ def invoke_and_parse_with_repair(
     next_reset = False
 
     for attempt_idx in range(total_attempts):
-        resp = _call_invoke_fn(invoke_fn, list(messages), attempt_idx, reset_conversation=next_reset)
+        try:
+            resp = _call_invoke_fn(invoke_fn, list(messages), attempt_idx, reset_conversation=next_reset)
+        except Exception as invoke_exc:
+            if getattr(invoke_exc, "code", None) == "provider_output_truncated" and attempt_idx < total_attempts - 1:
+                last_err = invoke_exc
+                if on_repair_attempt is not None:
+                    on_repair_attempt(attempt_idx + 1, invoke_exc)
+                compact_note = compact_retry_instruction or (
+                    "PREVIOUS RESPONSE WAS TRUNCATED AT MAX OUTPUT TOKENS. "
+                    "Keep internal reasoning minimal and immediately emit a COMPACT, strictly valid single JSON object matching "
+                    f"`{model_cls.__name__}`: keep at most 8 highest-signal items per list, "
+                    "keep verbatim quotations <= 160 characters, and omit redundant prose."
+                )
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"{user_prompt}\n\n{compact_note}"},
+                ]
+                next_reset = True
+                continue
+            raise
         next_reset = False
         try:
             parsed_attr = getattr(resp, "parsed", None)

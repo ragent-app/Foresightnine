@@ -480,6 +480,7 @@ async def lifespan(_app: FastAPI):
     try:
         operations.recover_expired_leases()
         _reconcile_orphaned_earnings_squads()
+        _reconcile_orphaned_call_audits()
     except Exception:
         logging.getLogger(__name__).exception("Startup reconciliation failed")
     stopped = asyncio.Event()
@@ -494,11 +495,36 @@ async def lifespan(_app: FastAPI):
             except TimeoutError:
                 pass
     supervisor = asyncio.create_task(supervise())
+
+    radar_bg_task: asyncio.Task[None] | None = None
+    if _radar_bg_sweep_enabled():
+        radar_interval = _radar_bg_sweep_interval_seconds()
+
+        async def radar_bg_loop() -> None:
+            # Stagger initial wakeup slightly so API readiness is unaffected
+            try:
+                await asyncio.wait_for(stopped.wait(), timeout=min(60.0, radar_interval))
+            except TimeoutError:
+                pass
+            while not stopped.is_set():
+                try:
+                    await asyncio.to_thread(_run_background_radar_sweep_once)
+                except Exception:
+                    logging.getLogger(__name__).exception("Background radar sweep failed")
+                try:
+                    await asyncio.wait_for(stopped.wait(), timeout=radar_interval)
+                except TimeoutError:
+                    pass
+
+        radar_bg_task = asyncio.create_task(radar_bg_loop())
+
     try:
         yield
     finally:
         stopped.set()
         await supervisor
+        if radar_bg_task is not None:
+            await radar_bg_task
 
 
 app = FastAPI(
@@ -665,6 +691,16 @@ DEF14A_FACT_SNAPSHOTS = build_repository(storage_config, "def14a_fact_snapshots"
 GUIDANCE_CREDIBILITY_LEDGER = build_repository(storage_config, "guidance_credibility_ledger")
 GOVERNANCE_L2_CACHE = build_repository(storage_config, "governance_l2_cache")
 RUNTIME_MAINTENANCE_LEASES = build_repository(storage_config, "runtime_maintenance_leases")
+# V3a Call Verification & Collision Collections (all user collections strictly carry top-level owner_id)
+V3A_DOC_PARSED_FACTS = build_repository(storage_config, "v3a_doc_parsed_facts")
+V3A_CALL_L2_EXTRACTIONS = build_repository(storage_config, "v3a_call_l2_extractions")
+V3A_SELLSIDE_EXTRACTIONS = build_repository(storage_config, "v3a_sellside_extractions")
+V3A_VERBAL_COMMITMENT_LEDGER = build_repository(storage_config, "v3a_verbal_commitment_ledger")
+V3A_ACCOUNT_COMPANY_INDEX = build_repository(storage_config, "v3a_account_company_index")
+V3A_ENTITY_ALIASES = build_repository(storage_config, "v3a_entity_aliases")
+V3A_ACCOUNT_MANIFEST = build_repository(storage_config, "v3a_account_manifest")
+V3A_CALL_AUDIT_STATES = build_repository(storage_config, "v3a_call_audit_states")
+SEC_10Q_REDLINE_CACHE = build_repository(storage_config, "sec_10q_redline_cache")
 (
     SESSIONS,
     THESES,
@@ -688,6 +724,9 @@ operations = OperationManager(lifecycle_clock, store=build_operation_store(stora
 research_live_broker = ResearchLiveBroker()
 _ACTIVE_SQUAD_LOCK = RLock()
 _ACTIVE_SQUAD_RUNS: dict[tuple[str, str], dict[str, Any]] = {}
+_ACTIVE_CALL_AUDIT_LOCK = RLock()
+_ACTIVE_CALL_AUDIT_RUNS: dict[str, dict[str, Any]] = {}
+_V3A_SINGLEFLIGHT_MAP: dict[tuple[str, str, str, str], str] = {}
 OPERATION_SESSIONS: dict[str, str] = {}
 CHALLENGE_OPERATION_IDS: dict[str, str] = {}
 billing_ledger = BillingLedger(
@@ -933,6 +972,26 @@ def reset_state() -> None:
     DEF14A_FACT_SNAPSHOTS.clear()
     GUIDANCE_CREDIBILITY_LEDGER.clear()
     GOVERNANCE_L2_CACHE.clear()
+    RUNTIME_MAINTENANCE_LEASES.clear()
+    with _ACTIVE_CALL_AUDIT_LOCK:
+        for entry in _ACTIVE_CALL_AUDIT_RUNS.values():
+            ev = entry.get("cancel_event")
+            if ev is not None and callable(getattr(ev, "set", None)):
+                ev.set()
+        _ACTIVE_CALL_AUDIT_RUNS.clear()
+        _V3A_SINGLEFLIGHT_MAP.clear()
+    for _v3a_repo in (
+        V3A_DOC_PARSED_FACTS,
+        V3A_CALL_L2_EXTRACTIONS,
+        V3A_SELLSIDE_EXTRACTIONS,
+        V3A_VERBAL_COMMITMENT_LEDGER,
+        V3A_ACCOUNT_COMPANY_INDEX,
+        V3A_ENTITY_ALIASES,
+        V3A_ACCOUNT_MANIFEST,
+        V3A_CALL_AUDIT_STATES,
+        SEC_10Q_REDLINE_CACHE,
+    ):
+        _v3a_repo.clear()
     abuse_control.reset()
     telemetry.reset()
     SESSIONS.clear()
@@ -1093,15 +1152,13 @@ def _model_provider_for_request(request: Request, *, research: bool = False) -> 
     return _model_provider_for_account(account, request, research=research)
 
 
-def _model_provider_for_account(account: LocalAccount, request: Request, *, research: bool) -> tuple[LlmProvider, bool]:
-    request.state.model_account = account
+def _model_provider_for_account_id(account_id: str, *, research: bool) -> tuple[LlmProvider, bool, Any]:
+    """Request-less per-account provider resolver (safe for both HTTP routes and background lifespan sweeps)."""
     try:
-        settings, resolved_config = model_settings.runtime_configuration(account.account_id)
-        request.state.resolved_model_config = resolved_config
+        settings, resolved_config = model_settings.runtime_configuration(account_id)
     except ModelCredentialError as error:
         raise ApiProblem(error.status_code, error.code, error.message, retryable=error.status_code == 503, retry_after=30) from error
     if settings is None:
-        request.state.personal_model = False
         if research:
             protocol = os.environ.get('FORESIGHTNINE_RESEARCH_MODEL_PROTOCOL', 'openai_chat_completions')
             if protocol == 'anthropic_messages':
@@ -1115,14 +1172,21 @@ def _model_provider_for_account(account: LocalAccount, request: Request, *, rese
                         allowlist=os.environ.get('FORESIGHTNINE_RESEARCH_LLM_ALLOWED_HOSTS'))
                 except ProviderFailure:
                     raise ApiProblem(503, 'internal_error', 'Research model configuration is unavailable.') from None
-                return _messages_research_provider(settings), False
+                return _messages_research_provider(settings), False, None
             if protocol != 'openai_chat_completions':
                 raise ApiProblem(503, 'internal_error', 'Research model protocol is unsupported.')
-        return challenge_provider, False
-    request.state.personal_model = True
+        return challenge_provider, False, None
     if resolved_config.protocol in ('anthropic_messages', 'openai_responses') and not research:
         raise ApiProblem(422, 'invalid_request', 'This model protocol is available for research only.')
-    return _personal_model_provider(settings, resolved_config, research=research), True
+    return _personal_model_provider(settings, resolved_config, research=research), True, resolved_config
+
+
+def _model_provider_for_account(account: LocalAccount, request: Request, *, research: bool) -> tuple[LlmProvider, bool]:
+    request.state.model_account = account
+    provider, is_personal, resolved_config = _model_provider_for_account_id(account.account_id, research=research)
+    request.state.resolved_model_config = resolved_config
+    request.state.personal_model = is_personal
+    return provider, is_personal
 
 
 def _personal_model_provider(settings: OpenAICompatibleSettings, config: StoredModelConfig, *, research: bool):
@@ -1892,6 +1956,41 @@ def _delete_research_run_inputs(owner_id: str) -> None:
             entry = _ACTIVE_SQUAD_RUNS.pop(key, None)
             if entry and entry.get("orchestrator") is not None:
                 entry["orchestrator"].cancel()
+    # V3a O(K) zero-residue account deletion under advisory lock + cancel active call audits
+    with _ACTIVE_CALL_AUDIT_LOCK:
+        for op_id in [oid for oid, info in _ACTIVE_CALL_AUDIT_RUNS.items() if info.get("account_id") == owner_id]:
+            info = _ACTIVE_CALL_AUDIT_RUNS.pop(op_id, None)
+            ev = info.get("cancel_event") if isinstance(info, Mapping) else None
+            if ev is not None and callable(getattr(ev, "set", None)):
+                ev.set()
+        for sf_key in [k for k in _V3A_SINGLEFLIGHT_MAP if k[0] == owner_id]:
+            _V3A_SINGLEFLIGHT_MAP.pop(sf_key, None)
+    v3a_repo_map = {
+        "v3a_doc_parsed_facts": V3A_DOC_PARSED_FACTS,
+        "v3a_call_l2_extractions": V3A_CALL_L2_EXTRACTIONS,
+        "v3a_sellside_extractions": V3A_SELLSIDE_EXTRACTIONS,
+        "v3a_verbal_commitment_ledger": V3A_VERBAL_COMMITMENT_LEDGER,
+        "v3a_account_company_index": V3A_ACCOUNT_COMPANY_INDEX,
+        "v3a_entity_aliases": V3A_ENTITY_ALIASES,
+        "v3a_call_audit_states": V3A_CALL_AUDIT_STATES,
+    }
+    m_key = f"v3a_man:{owner_id}"
+
+    def _delete_v3a_manifest_keys() -> None:
+        man = V3A_ACCOUNT_MANIFEST.get(m_key)
+        if isinstance(man, Mapping) and isinstance(man.get("keys_by_collection"), Mapping):
+            for coll, keys in man["keys_by_collection"].items():
+                repo_obj = v3a_repo_map.get(str(coll))
+                if repo_obj is not None and isinstance(keys, list):
+                    for k in keys:
+                        repo_obj.delete(str(k))
+        V3A_ACCOUNT_MANIFEST.delete(m_key)
+        V3A_ENTITY_ALIASES.delete(f"v3a_alias:{owner_id}")
+        for repo_obj in v3a_repo_map.values():
+            for k, _v in list(account_items(repo_obj, owner_id)):
+                repo_obj.delete(k)
+
+    V3A_ACCOUNT_MANIFEST.with_advisory_lock(m_key, _delete_v3a_manifest_keys)
 
 
 @app.get(
@@ -3978,7 +4077,13 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
             l1_cache=SEC_EVENTS_L1_RAW,
             peer_snapshot_cache=PEER_COMPANY_SNAPSHOTS,
             def14a_snapshot_cache=DEF14A_FACT_SNAPSHOTS,
-            guidance_ledger_cache=GUIDANCE_CREDIBILITY_LEDGER)
+            guidance_ledger_cache=GUIDANCE_CREDIBILITY_LEDGER,
+            v3a_report_loader=lambda ek, sym, ao: _load_v3a_report_for_tool(
+                account.account_id, entity_key=ek, symbol=sym, as_of=ao or (topic.request.as_of.date() if isinstance(topic.request.as_of, datetime) else topic.request.as_of)
+            ))
+        fin_data._external_source_loader = lambda sids: {
+            s.source_id: s for s in research_sources.get_many(account.account_id, list(sids))
+        }
         capabilities.update(fin_data.capabilities())
         capabilities.update(fin_data.earnings_capabilities())
         def note_fin_result(name: str, result: dict[str, Any]) -> None:
@@ -4103,8 +4208,21 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
                 )
         def _prior_with_failed_sources(version_obj: Any) -> dict | None:
             prior_data = prior_research_input(version_obj)
+            # R2-D5: Inject <=2,500-char verified V3a call digest on Turn 1 AND all follow-up turns
+            v3a_digest = _build_topic_v3a_digest_for_account(
+                account_id=account.account_id,
+                topic_id=topic_id,
+                topic_source_ids={s.source_id for s in sources},
+                as_of=topic.request.as_of,
+            )
             if prior_data is None:
-                return None
+                if v3a_digest is None:
+                    return None
+                prior_data = {}
+            if v3a_digest is not None:
+                prior_data['call_verification_digest'] = v3a_digest
+            if version_obj is None:
+                return prior_data
             failed_records: list[dict[str, Any]] = []
             seen_hosts: set[str] = set()
             for prior_turn in version_obj.content.turns:
@@ -8509,9 +8627,31 @@ def radar_check_now_endpoint(
                     subscription=sub,
                     diff=diff,
                 )
+                if item is not None:
+                    item = item.model_copy(
+                        update={
+                            "fiscal_period_key": prior_dossier.get("period_label") if isinstance(prior_dossier.get("period_label"), str) else None,
+                            "has_confirmed_ledger": ledger is not None,
+                        }
+                    )
                 return [item] if item is not None else []
             except Exception:
                 return []
+
+        def _call_verify_for_sub(
+            sub: FilingWatchSubscription,
+            new_periodic_filings: list[Any],
+            ledger: ThesisLedger | None,
+        ) -> list[ChangeInboxItem]:
+            return _run_v3a_phase2c_for_subscription(
+                account_id=account.account_id,
+                sub=sub,
+                new_periodic_filings=new_periodic_filings,
+                ledger=ledger,
+                model_runner=model_runner,
+                as_of=request.as_of,
+                cfg=cfg,
+            )
 
         summary = run_p1b_radar_sweep(
             subscriptions=target_subs,
@@ -8524,6 +8664,7 @@ def radar_check_now_endpoint(
             earnings_delta_fn=_earnings_delta_for_sub,
             peer_compare_fn=_peer_compare_for_sub,
             governance_audit_fn=_governance_audit_for_sub,
+            call_commitment_verify_fn=_call_verify_for_sub,
             as_of=request.as_of,
         )
         staged_sweeps[operation_id] = summary
@@ -9535,6 +9676,1473 @@ def backfill_governance_guidance(
         open_gaps=gaps,
         guidance_credibility=gc_audit,
     )
+
+
+# --------------------------------------------------------------------------- V3a Call Verification & Collision Engine API
+
+
+class CallAuditPreviewApiRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    source_ids: list[str] = Field(min_length=1, max_length=20)
+    topic_id: str | None = Field(default=None, max_length=120)
+
+
+class CallAuditRunApiRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    source_ids: list[str] = Field(min_length=1, max_length=20)
+    topic_id: str | None = Field(default=None, max_length=120)
+    entity_key: str | None = Field(default=None, max_length=80)
+    symbol: str | None = Field(default=None, max_length=32)
+    cik: str | None = Field(default=None, pattern=r"^\d{1,10}$")
+    fiscal_year: int | None = Field(default=None, ge=2000, le=2050)
+    fiscal_quarter: int | None = Field(default=None, ge=1, le=4)
+    as_of: date | None = None
+    slot_overrides: dict[str, Any] | None = None
+
+
+class CallAuditCommitmentPatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entity_key: str = Field(min_length=1, max_length=80)
+    muted: bool
+
+
+class CallAuditEntityMergeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    source_entity_key: str = Field(min_length=1, max_length=80)
+    target_entity_key: str = Field(min_length=1, max_length=80)
+    aliases: list[str] = Field(default_factory=list, max_length=20)
+
+
+class CallAuditCheckFilingsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    topic_id: str | None = Field(default=None, max_length=120)
+    entity_keys: list[str] | None = Field(default=None, max_length=10)
+    force: bool = False
+
+
+class CallAuditOperationView(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    operation_id: str
+    status: Literal["queued", "running", "completed", "failed", "cancelled"]
+    entity_key: str | None = None
+    topic_id: str | None = None
+    stage: str | None = None
+    stages: list[dict[str, Any]] = Field(default_factory=list)
+    report: dict[str, Any] | None = None
+    ledger: dict[str, Any] | None = None
+    markdown: str | None = None
+    error: str | None = None
+    updated_at: str | None = None
+
+
+_CALL_AUDIT_OP_ENDPOINT = "/v1/research/call-audit/run"
+
+
+def _v3a_account_alias_map(account_id: str) -> dict[str, str]:
+    raw = V3A_ENTITY_ALIASES.get(f"v3a_alias:{account_id}")
+    if isinstance(raw, Mapping) and isinstance(raw.get("aliases"), Mapping):
+        return {str(k): str(v) for k, v in raw["aliases"].items()}
+    return {}
+
+
+def _v3a_resolve_sources_for_account(account_id: str, source_ids: Sequence[str]) -> list[ResearchSource]:
+    out: list[ResearchSource] = []
+    seen: set[str] = set()
+    for sid in source_ids:
+        s = str(sid or "").strip()
+        if not s or s in seen:
+            continue
+        seen.add(s)
+        found = research_sources.get_many(account_id, [s])
+        if found:
+            out.append(found[0])
+    return out
+
+
+def _v3a_sec_loaders(
+    *,
+    cache_only: bool,
+    hook_dict: Mapping[str, Any] | None = None,
+) -> tuple[Any, Any, Any, Any]:
+    """Build SEC snapshot/submissions, 64KB streaming 10-Q redline, capital allocation & V2.5 credibility loaders."""
+    from .fin_data.adapters.sec_events.pacing import fetch_company_submissions
+    from .research_call_collision import compute_streaming_10q_redline
+    from .research_peer_compare import PeerCompanySnapshot, load_or_fetch_company_snapshot
+
+    hooks = hook_dict or {}
+    pol = load_fin_data_policy()
+    ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
+    lim = hooks.get("limiter") or SecPacingLimiter.from_env()
+    transport = hooks.get("transport")
+    stream_transport = hooks.get("stream_transport")
+
+    def _snap_loader(cik_in: str | None, sym_in: str | None) -> tuple[PeerCompanySnapshot | None, Mapping[str, Any] | None]:
+        if callable(hooks.get("snap_loader")):
+            return hooks["snap_loader"](cik_in, sym_in)
+        cik_norm = cik10(cik_in) if (cik_in and str(cik_in).isdigit()) else None
+        if cik_norm is None and sym_in:
+            # First check O(1) sym pointer in cache (zero network on cache_only!)
+            sym_ptr = PEER_COMPANY_SNAPSHOTS.get(f"sym:{sym_in.strip().upper()}")
+            if isinstance(sym_ptr, Mapping) and sym_ptr.get("cik"):
+                cik_norm = cik10(sym_ptr["cik"])
+            elif not cache_only:
+                try:
+                    cik_norm = cik10(
+                        resolve_ticker_to_cik(
+                            sym_in.strip().upper(),
+                            user_agent=ua,
+                            limiter=lim,
+                            policy=pol,
+                            transport=transport,
+                        )[0]
+                    )
+                except Exception:
+                    return None, None
+        if cik_norm is None:
+            return None, None
+        if cache_only:
+            raw_snap = PEER_COMPANY_SNAPSHOTS.get(f"snap:{cik_norm}")
+            if isinstance(raw_snap, Mapping):
+                try:
+                    return PeerCompanySnapshot.model_validate(raw_snap), None
+                except Exception:
+                    return None, None
+            return None, None
+        try:
+            subs = fetch_company_submissions(
+                cik_norm,
+                user_agent=ua,
+                max_pages=0,
+                limiter=lim,
+                policy=pol,
+                transport=transport,
+                use_ttl_cache=True,
+            )
+            snap, _hit = load_or_fetch_company_snapshot(
+                symbol=(sym_in or "").strip().upper() or cik_norm,
+                cik=cik_norm,
+                user_agent=ua,
+                limiter=lim,
+                snapshot_cache=PEER_COMPANY_SNAPSHOTS,
+                min_projection_version=4,
+                submissions=subs,
+                policy=pol,
+                transport=transport,
+                stream_transport=stream_transport,
+            )
+            subs_columnar: dict[str, Any] = {
+                "filings": {
+                    "recent": {
+                        "form": [r.form for r in subs.rows],
+                        "accessionNumber": [r.accession for r in subs.rows],
+                        "filingDate": [r.filed_at.isoformat() for r in subs.rows],
+                        "reportDate": [r.period_of_report.isoformat() if r.period_of_report else "" for r in subs.rows],
+                        "primaryDocument": [r.primary_document or "" for r in subs.rows],
+                    }
+                }
+            }
+            return snap, subs_columnar
+        except Exception:
+            raw_snap = PEER_COMPANY_SNAPSHOTS.get(f"snap:{cik_norm}")
+            if isinstance(raw_snap, Mapping):
+                try:
+                    return PeerCompanySnapshot.model_validate(raw_snap), None
+                except Exception:
+                    pass
+            return None, None
+
+    def _redline_loader(cik_in: str, subs_doc: Mapping[str, Any] | None, call_date_iso: str | None) -> tuple[list[dict[str, Any]], str | None, str | None]:
+        del call_date_iso
+        if callable(hooks.get("redline_loader")):
+            return hooks["redline_loader"](cik_in, subs_doc, call_date_iso)
+        if cache_only or not isinstance(subs_doc, Mapping):
+            return [], None, None
+        recent = (subs_doc.get("filings") or {}).get("recent") if isinstance(subs_doc.get("filings"), Mapping) else None
+        if not isinstance(recent, Mapping):
+            return [], None, None
+        forms = recent.get("form") or []
+        accns = recent.get("accessionNumber") or []
+        docs = recent.get("primaryDocument") or []
+        periodic = [
+            (str(forms[i]).upper(), str(accns[i]), str(docs[i]))
+            for i in range(min(len(forms), len(accns), len(docs)))
+            if str(forms[i]).upper() in ("10-Q", "10-K") and str(docs[i]).strip()
+        ]
+        if len(periodic) < 2:
+            return [], None, None
+        cur_form, cur_accn, cur_doc = periodic[0]
+        pri_form, pri_accn, pri_doc = periodic[1]
+        try:
+            added = compute_streaming_10q_redline(
+                cik=cik_in,
+                current_accession=cur_accn,
+                current_primary_doc=cur_doc,
+                prior_accession=pri_accn,
+                prior_primary_doc=pri_doc,
+                current_form=cur_form,
+                prior_form=pri_form,
+                user_agent=ua,
+                limiter=lim,
+                policy=pol,
+                transport=transport,
+                cache_repo=SEC_10Q_REDLINE_CACHE,
+            )
+            return added, cur_accn, pri_accn
+        except Exception:
+            return [], None, None
+
+    def _cap_alloc_loader(cik_in: str) -> Mapping[str, Any] | None:
+        raw_snap = PEER_COMPANY_SNAPSHOTS.get(f"snap:{cik10(cik_in)}")
+        if not isinstance(raw_snap, Mapping):
+            return None
+        try:
+            snap_obj = PeerCompanySnapshot.model_validate(raw_snap)
+            rules_v25, _sha, _comp = load_v25_governance_rules()
+            ca = compute_capital_allocation_audit(snap_obj, rules=rules_v25)
+            return {
+                "overall_light": ca.light,
+                "headline": (
+                    f"3Y Net Dilution {ca.net_diluted_share_change_3y_pct}% | SBC/FCF {ca.sbc_pct_of_fcf}% | "
+                    f"Buyback/SBC {ca.buyback_to_sbc_ratio}x | FakeBuyback={ca.fake_buyback_flag}"
+                ),
+            }
+        except Exception:
+            return None
+
+    def _v25_cred_loader(cik_in: str) -> list[dict[str, Any]]:
+        raw_gl = GUIDANCE_CREDIBILITY_LEDGER.get(f"gcl:{cik10(cik_in)}")
+        if not isinstance(raw_gl, Mapping):
+            return []
+        recs = raw_gl.get("records")
+        return [dict(r) for r in recs if isinstance(r, Mapping)] if isinstance(recs, list) else []
+
+    return _snap_loader, _redline_loader, _cap_alloc_loader, _v25_cred_loader
+
+
+def _resolve_v3a_runtime_for_account_id(
+    account_id: str,
+    *,
+    slot_overrides: Mapping[str, Any] | None = None,
+    hook_dict: Mapping[str, Any] | None = None,
+    cancel_event: Any = None,
+) -> tuple[Any, Any]:
+    """Request-less per-account Layer 2 runner resolver (safe for HTTP routes & background sweeps)."""
+    hooks = hook_dict or {}
+    if hooks.get("model_runner") is not None:
+        return hooks["model_runner"], hooks.get("slot_binding")
+    try:
+        primary_provider, is_personal, _resolved_cfg = _model_provider_for_account_id(account_id, research=True)
+        settings, config = model_settings.runtime_configuration(account_id)
+    except Exception:
+        return None, None
+    stored_slots = model_settings.model_slots(account_id)
+    primary_profile = model_settings.primary_slot_profile(account_id)
+    if not is_personal and primary_profile is None:
+        primary_profile = _platform_primary_slot_profile(primary_provider)
+    eff_overrides = slot_overrides if slot_overrides is not None else stored_slots
+    resolved_slots = None
+    if primary_profile is not None:
+        try:
+            resolved_slots = resolve_model_slots(primary_profile, eff_overrides, strict=False)
+        except Exception:
+            resolved_slots = None
+    slot_providers, slot_max_tokens = _build_slot_providers_and_caps(
+        account_id=account_id,
+        slot_names=("deep_reasoner",),
+        resolved_slots=resolved_slots,
+        settings=settings,
+        config=config,
+    )
+    runner = _AccountSlotModelRunner(
+        providers_by_slot=slot_providers,
+        default_provider=_with_squad_provider_timeout_floor(primary_provider),
+        cancel_event=cancel_event,
+        slot_max_output_tokens=slot_max_tokens,
+        concurrency_gate=None if is_personal else _platform_llm_concurrency_gate(),
+    )
+    return runner, None
+
+
+def _auto_upsert_call_verify_subscription(
+    *,
+    account_id: str,
+    cik: str | None,
+    symbol: str | None,
+    company_name: str | None,
+    topic_id: str | None,
+) -> None:
+    """D4/D5/D7: Ensure awaiting-10-Q companies have ``call_commitment_verify`` enabled on radar subscription."""
+    if not cik or not str(cik).isdigit():
+        return
+    cik_val = cik10(cik)
+    for existing in _account_subscriptions(account_id):
+        if existing.cik == cik_val:
+            channels = list(existing.watched_channels)
+            changed = False
+            if "call_commitment_verify" not in channels:
+                channels.append("call_commitment_verify")
+                changed = True
+            if not existing.enabled:
+                changed = True
+            if topic_id and not existing.topic_id:
+                changed = True
+            if changed:
+                WATCH_SUBSCRIPTIONS.put(
+                    existing.subscription_id,
+                    existing.model_copy(
+                        update={
+                            "watched_channels": channels,
+                            "enabled": True,
+                            "topic_id": existing.topic_id or topic_id,
+                            "updated_at": lifecycle_clock.now(),
+                        }
+                    ),
+                )
+            return
+    sub = FilingWatchSubscription(
+        account_id=account_id,
+        topic_id=topic_id,
+        cik=cik_val,
+        symbol=symbol,
+        company_name=company_name,
+        enabled=True,
+        watched_channels=["v1_events", "earnings_delta", "governance_audit", "call_commitment_verify"],
+    )
+    WATCH_SUBSCRIPTIONS.put(sub.subscription_id, sub)
+
+
+def _find_latest_v3a_index_for_topic_or_entity(
+    account_id: str,
+    *,
+    topic_id: str | None = None,
+    entity_key: str | None = None,
+    symbol: str | None = None,
+) -> dict[str, Any] | None:
+    if entity_key:
+        hit = V3A_ACCOUNT_COMPANY_INDEX.get(f"v3a_idx:{account_id}:{entity_key}")
+        if isinstance(hit, Mapping) and hit.get("owner_id") == account_id:
+            return dict(hit)
+    sym_u = symbol.strip().upper() if symbol else None
+    cands: list[dict[str, Any]] = []
+    for _k, row in account_items(V3A_ACCOUNT_COMPANY_INDEX, account_id):
+        if not isinstance(row, Mapping) or row.get("owner_id") != account_id:
+            continue
+        if topic_id and row.get("topic_id") == topic_id:
+            cands.append(dict(row))
+        elif sym_u and str(row.get("symbol") or "").upper() == sym_u:
+            cands.append(dict(row))
+    if not cands:
+        return None
+    cands.sort(key=lambda r: str(r.get("updated_at") or ""), reverse=True)
+    return cands[0]
+
+
+def _load_v3a_report_for_tool(
+    account_id: str,
+    *,
+    entity_key: str | None = None,
+    symbol: str | None = None,
+    topic_id: str | None = None,
+    as_of: date | None = None,
+) -> dict[str, Any] | None:
+    """Zero-network (<80ms) Layer 3 re-eval loader for FinDataToolbox.call_qa_verification & Topic digest."""
+    from .research_call_collision import render_call_verification_markdown
+    from .research_call_verification import run_call_verification_pipeline
+
+    idx = _find_latest_v3a_index_for_topic_or_entity(
+        account_id, topic_id=topic_id, entity_key=entity_key, symbol=symbol
+    )
+    if idx is None:
+        return None
+    src_ids = list(dict.fromkeys([*(idx.get("latest_mgmt_source_ids") or []), *(idx.get("latest_sellside_source_ids") or [])]))
+    if not src_ids:
+        return None
+    loaded = _v3a_resolve_sources_for_account(account_id, src_ids)
+    if not loaded:
+        return None
+    # Enforce as_of cutoff on local account call_date
+    if as_of is not None and idx.get("latest_call_date"):
+        try:
+            if date.fromisoformat(str(idx["latest_call_date"])[:10]) > as_of:
+                return None
+        except ValueError:
+            pass
+    snap_loader, redline_loader, cap_loader, v25_loader = _v3a_sec_loaders(cache_only=True)
+    report, ledger, _vcl = run_call_verification_pipeline(
+        account_id=account_id,
+        sources=loaded,
+        entity_key_override=str(idx.get("entity_key") or ""),
+        symbol_override=idx.get("symbol"),
+        cik_override=idx.get("cik"),
+        topic_id=idx.get("topic_id"),
+        as_of=as_of,
+        cache_only=True,
+        snap_loader=snap_loader,
+        redline_loader=redline_loader,
+        capital_allocation_loader=cap_loader,
+        v25_credibility_loader=v25_loader,
+        doc_facts_repo=V3A_DOC_PARSED_FACTS,
+        l2_mgmt_repo=V3A_CALL_L2_EXTRACTIONS,
+        l2_sellside_repo=V3A_SELLSIDE_EXTRACTIONS,
+        commitment_ledger_repo=V3A_VERBAL_COMMITMENT_LEDGER,
+        company_index_repo=V3A_ACCOUNT_COMPANY_INDEX,
+        entity_aliases_repo=V3A_ENTITY_ALIASES,
+        manifest_repo=V3A_ACCOUNT_MANIFEST,
+    )
+    perms_map = {s.source_id: s.permissions.model_dump(mode="json") for s in loaded}
+    return {
+        "entity_key": report.entity_key,
+        "symbol": report.symbol,
+        "fiscal_period_key": report.fiscal_period_key,
+        "headline": report.headline,
+        "overall_light": report.overall_light,
+        "exportable": all(p.get("export") is not False for p in perms_map.values()),
+        "markdown": render_call_verification_markdown(report, source_permissions=perms_map),
+        "report": report.model_dump(mode="json", exclude_none=True),
+        "ledger": ledger.model_dump(mode="json", exclude_none=True),
+    }
+
+
+def _build_topic_v3a_digest_for_account(
+    *,
+    account_id: str,
+    topic_id: str,
+    topic_source_ids: set[str],
+    as_of: datetime | date | None,
+) -> dict[str, Any] | None:
+    """R2-D5: Build <=2,500-char verified V3a call digest for Topic Turn 1 and all subsequent turns."""
+    from .research_call_collision import CallVerificationReport
+    from .research_call_verification import build_topic_call_verification_digest
+
+    as_of_d = as_of.date() if isinstance(as_of, datetime) else as_of
+    loaded = _load_v3a_report_for_tool(account_id, topic_id=topic_id, as_of=as_of_d)
+    if loaded is None or not isinstance(loaded.get("report"), Mapping):
+        return None
+    report = CallVerificationReport.model_validate(loaded["report"])
+    owner_srcs = {s.source_id: s for s in research_sources.get_many(account_id, list(report.source_ids))}
+    return build_topic_call_verification_digest(
+        report,
+        topic_source_ids=topic_source_ids,
+        all_owner_sources_by_id=owner_srcs,
+        as_of=as_of,
+    )
+
+
+def _run_v3a_phase2c_for_subscription(
+    *,
+    account_id: str,
+    sub: FilingWatchSubscription,
+    new_periodic_filings: Sequence[Any],
+    ledger: ThesisLedger | None,
+    model_runner: Any,
+    as_of: date | None,
+    cfg: Mapping[str, Any] | None = None,
+) -> list[ChangeInboxItem]:
+    from .research_call_verification import evaluate_call_commitment_verify_phase2c
+
+    hooks = cfg or {}
+    snap_loader, redline_loader, _cap_loader, _v25_loader = _v3a_sec_loaders(cache_only=False, hook_dict=hooks)
+    snap, subs_doc = snap_loader(sub.cik, sub.symbol)
+    return evaluate_call_commitment_verify_phase2c(
+        account_id=account_id,
+        subscription=sub,
+        new_periodic_filings=new_periodic_filings,
+        confirmed_ledger=ledger,
+        snap=snap,
+        submissions=subs_doc,
+        sources_loader=lambda sids: _v3a_resolve_sources_for_account(account_id, sids),
+        doc_facts_repo=V3A_DOC_PARSED_FACTS,
+        l2_mgmt_repo=V3A_CALL_L2_EXTRACTIONS,
+        l2_sellside_repo=V3A_SELLSIDE_EXTRACTIONS,
+        commitment_ledger_repo=V3A_VERBAL_COMMITMENT_LEDGER,
+        company_index_repo=V3A_ACCOUNT_COMPANY_INDEX,
+        entity_aliases_repo=V3A_ENTITY_ALIASES,
+        manifest_repo=V3A_ACCOUNT_MANIFEST,
+        redline_loader=redline_loader,
+        model_runner=model_runner,
+        as_of=as_of,
+    )
+
+
+def _reconcile_orphaned_call_audits() -> int:
+    """Reconcile orphaned 'running'/'queued' V3a call audit operations after an API restart."""
+    reconciled = 0
+    for op_id, row in list(V3A_CALL_AUDIT_STATES.items()):
+        if not isinstance(row, Mapping) or row.get("status") not in ("queued", "running"):
+            continue
+        with _ACTIVE_CALL_AUDIT_LOCK:
+            active = _ACTIVE_CALL_AUDIT_RUNS.get(op_id)
+            th = active.get("thread") if isinstance(active, Mapping) else None
+            is_live = active is not None and (th is None or (callable(getattr(th, "is_alive", None)) and th.is_alive()))
+        if is_live:
+            continue
+        updated = dict(row)
+        updated["status"] = "failed"
+        updated["error"] = "Call verification job interrupted by API restart. Retry to resume from Layer 0/2 cache."
+        updated["updated_at"] = lifecycle_clock.now().isoformat()
+        V3A_CALL_AUDIT_STATES.put(op_id, updated)
+        reconciled += 1
+        try:
+            research_live_broker.publish_terminal(op_id, operation_status="failed", progress={"stage": "failed"})
+        except Exception:
+            pass
+    return reconciled
+
+
+def _radar_bg_sweep_enabled() -> bool:
+    raw = os.environ.get("FORESIGHTNINE_RADAR_BG_ENABLED", "").strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return False
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("FORESIGHTNINE_ENV", "").strip().lower() == "test":
+        return False
+    return True
+
+
+def _radar_bg_sweep_interval_seconds() -> float:
+    raw = os.environ.get("FORESIGHTNINE_RADAR_BG_INTERVAL_SECONDS", "3600").strip()
+    try:
+        val = float(raw)
+        return max(30.0, min(86400.0, val))
+    except ValueError:
+        return 3600.0
+
+
+def _run_background_radar_sweep_once(*, max_subs_per_sweep: int = 20) -> int:
+    """D4/D5 Insurance 2: Short-tx lease-claimed background radar sweep grouped by account_id (<=20 due subs)."""
+    interval = _radar_bg_sweep_interval_seconds()
+    if not _claim_maintenance_lease("radar_bg_sweep", ttl_seconds=300.0, min_interval_seconds=max(10.0, interval * 0.5)):
+        return 0
+    processed = 0
+    try:
+        now = lifecycle_clock.now()
+        due_subs: list[FilingWatchSubscription] = []
+        for _k, sub in WATCH_SUBSCRIPTIONS.items():
+            if not isinstance(sub, FilingWatchSubscription) or not sub.enabled:
+                continue
+            if sub.next_check_at is None or sub.next_check_at <= now:
+                due_subs.append(sub)
+        due_subs.sort(key=lambda s: s.last_checked_at or datetime.min.replace(tzinfo=timezone.utc))
+        batch = due_subs[:max_subs_per_sweep]
+        if not batch:
+            _release_maintenance_lease("radar_bg_sweep", completed=True)
+            return 0
+
+        by_account: dict[str, list[FilingWatchSubscription]] = {}
+        for sub in batch:
+            by_account.setdefault(sub.account_id, []).append(sub)
+
+        cfg = _sec_events_config_from_hook({})
+        for acct_id, acct_subs in by_account.items():
+            # Strict per-account runtime resolution (zero cross-account credential sharing!)
+            acct_runner, _slot_b = _resolve_v3a_runtime_for_account_id(acct_id)
+
+            def _scan_bg(sub: FilingWatchSubscription, seen_v1: list[str]) -> tuple[SecEventScanResult, dict[str, str]]:
+                seen_map = {acc: {"sec_events": "seen"} for acc in seen_v1} if seen_v1 else None
+                return scan_sec_material_events(
+                    sub.cik,
+                    user_agent=cfg["user_agent"],
+                    lookback_days=sub.lookback_days,
+                    seen_accessions=seen_map,
+                    l1_cache=cfg["l1_cache"],
+                    rules=cfg["rules"],
+                    limiter=cfg["limiter"],
+                    policy=cfg["policy"],
+                    symbol=sub.symbol,
+                )
+
+            def _call_bg(sub: FilingWatchSubscription, new_pf: list[Any], led: ThesisLedger | None) -> list[ChangeInboxItem]:
+                return _run_v3a_phase2c_for_subscription(
+                    account_id=acct_id,
+                    sub=sub,
+                    new_periodic_filings=new_pf,
+                    ledger=led,
+                    model_runner=acct_runner,
+                    as_of=None,
+                    cfg=cfg,
+                )
+
+            run_p1b_radar_sweep(
+                subscriptions=acct_subs,
+                scan_fn=_scan_bg,
+                analyze_v1_fn=lambda s, sr, st, af, tc: analyze_sec_events(
+                    scan_result=sr,
+                    source_texts=st,
+                    runner=acct_runner,
+                    slot_bindings=None,
+                    resolved_slots=None,
+                    lazy_fetcher=lambda ref: fetch_lazy_attachment(
+                        ref, user_agent=cfg["user_agent"], limiter=cfg["limiter"], policy=cfg["policy"]
+                    ).text,
+                    l2_cache=cfg["l2_cache"],
+                    rules=cfg["rules"],
+                    active_red_yellow_flags=af,
+                    thesis_context=tc,
+                ),
+                ledger_loader=lambda s: _latest_confirmed_ledger(acct_id, s.topic_id),
+                existing_inbox_loader=_account_inbox_items,
+                save_subscription=lambda s: WATCH_SUBSCRIPTIONS.put(s.subscription_id, s),
+                save_inbox_item=lambda it: CHANGE_INBOX_ITEMS.put(it.inbox_item_id, it),
+                call_commitment_verify_fn=_call_bg,
+            )
+            processed += len(acct_subs)
+        _release_maintenance_lease("radar_bg_sweep", completed=True)
+        return processed
+    except Exception:
+        _release_maintenance_lease("radar_bg_sweep", completed=False)
+        raise
+
+
+@app.post(
+    "/v2/research/call-audit/preview",
+    response_model=dict[str, Any],
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+)
+def preview_call_audit(
+    request: CallAuditPreviewApiRequest,
+    http_request: Request,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict[str, Any]:
+    """R2-D1: <150ms 0-LLM preview passing ONLY source_ids (respects max_body_bytes + negative archetype filters)."""
+    from .research_call_verification import build_call_audit_preview
+
+    account = _authenticated_account(authorization)
+    loaded = _v3a_resolve_sources_for_account(account.account_id, request.source_ids)
+    if not loaded:
+        raise ApiProblem(404, "not_found", "No accessible sources found for preview.")
+    alias_map = _v3a_account_alias_map(account.account_id)
+
+    def _cache_only_cik(sym: str) -> tuple[str, str] | None:
+        ptr = PEER_COMPANY_SNAPSHOTS.get(f"sym:{sym.strip().upper()}")
+        if isinstance(ptr, Mapping) and ptr.get("cik"):
+            return str(ptr["cik"]), str(ptr.get("company_name") or sym)
+        return None
+
+    preview = build_call_audit_preview(
+        sources=loaded,
+        alias_map=alias_map,
+        cik_resolver=_cache_only_cik,
+    )
+    return preview.model_dump(mode="json", exclude_none=True)
+
+
+@app.post(
+    "/v2/research/call-audit/run",
+    responses=ERROR_RESPONSES,
+)
+def run_call_audit_endpoint(
+    request: CallAuditRunApiRequest,
+    http_request: Request,
+    response: Response,
+    idempotency_key: IdempotencyKey,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> JSONResponse:
+    """Start V3a 4-layer call verification (202 async + 3-stage SSE + account-scoped Singleflight)."""
+    from .research_call_collision import render_call_verification_markdown
+    from .research_call_verification import (
+        L2_PROMPT_VERSION,
+        _register_manifest_key,
+        build_call_audit_preview,
+        run_call_verification_pipeline,
+    )
+    from .research_radar_scheduler import merge_v3a_item_into_inbox, seen_accessions_for_channel
+    from .research_transcript_parser import load_v3a_call_rules, normalize_entity_key
+
+    account = _authenticated_account(authorization)
+    loaded = _v3a_resolve_sources_for_account(account.account_id, request.source_ids)
+    if not loaded:
+        raise ApiProblem(404, "not_found", "No accessible sources found for call audit.")
+
+    hooks = getattr(http_request.app.state, "v3a_call_audit_hooks", None)
+    hook_dict = hooks if isinstance(hooks, Mapping) else {}
+    compiled_rules = load_v3a_call_rules()
+
+    alias_map = _v3a_account_alias_map(account.account_id)
+    preview = build_call_audit_preview(sources=loaded, alias_map=alias_map)
+    eff_symbol = (request.symbol or preview.detected_symbol or "").strip().upper() or None
+    eff_cik = cik10(request.cik) if request.cik else preview.detected_cik
+    eff_entity = request.entity_key or normalize_entity_key(cik=eff_cik, symbol=eff_symbol, alias_map=alias_map)
+    eff_period = (
+        f"FY{request.fiscal_year}-Q{request.fiscal_quarter}"
+        if (request.fiscal_year and request.fiscal_quarter)
+        else (preview.fiscal_period_key or "unspecified")
+    )
+    bundle_seed = "|".join(sorted(f"{s.source_id}:{s.content_sha256}" for s in loaded))
+    bundle_sha = sha256(bundle_seed.encode("utf-8")).hexdigest()
+    sf_key = (account.account_id, eff_entity, eff_period, bundle_sha)
+
+    # Check Singleflight: if identical audit is already running for this account, return existing operation_id!
+    with _ACTIVE_CALL_AUDIT_LOCK:
+        existing_op = _V3A_SINGLEFLIGHT_MAP.get(sf_key)
+        if existing_op and existing_op in _ACTIVE_CALL_AUDIT_RUNS:
+            st = V3A_CALL_AUDIT_STATES.get(existing_op) or {}
+            return JSONResponse(
+                {
+                    "operation_id": existing_op,
+                    "status": st.get("status", "running"),
+                    "entity_key": eff_entity,
+                    "replayed": True,
+                },
+                status_code=202,
+            )
+
+    # Fast cache hit (<80ms): if L2 management cache already warm AND no pending OCR AND all sell-side cached, return 200 immediately!
+    l2_cache_key = (
+        f"v3a_l2:{account.account_id}:{eff_entity}:{bundle_sha}:"
+        f"{L2_PROMPT_VERSION}:{compiled_rules.context_budget_version}"
+    )
+    if (
+        not hook_dict.get("force_async")
+        and preview.total_pending_ocr_pages == 0
+        and not preview.sellside_source_ids
+        and isinstance(V3A_CALL_L2_EXTRACTIONS.get(l2_cache_key), Mapping)
+    ):
+        snap_loader, redline_loader, cap_loader, v25_loader = _v3a_sec_loaders(cache_only=True, hook_dict=hook_dict)
+        thesis_lg = _latest_confirmed_ledger(account.account_id, request.topic_id) if request.topic_id else None
+        pillars = [{"pillar": c.pillar, "keywords": [c.pillar, c.claim_text[:60]]} for c in (thesis_lg.claims if thesis_lg else [])]
+        report, ledger, _vcl = run_call_verification_pipeline(
+            account_id=account.account_id,
+            sources=loaded,
+            entity_key_override=eff_entity,
+            symbol_override=eff_symbol,
+            cik_override=eff_cik,
+            fiscal_year_override=request.fiscal_year,
+            fiscal_quarter_override=request.fiscal_quarter,
+            topic_id=request.topic_id,
+            as_of=request.as_of,
+            cache_only=True,
+            snap_loader=snap_loader,
+            redline_loader=redline_loader,
+            capital_allocation_loader=cap_loader,
+            v25_credibility_loader=v25_loader,
+            thesis_pillars=pillars,
+            doc_facts_repo=V3A_DOC_PARSED_FACTS,
+            l2_mgmt_repo=V3A_CALL_L2_EXTRACTIONS,
+            l2_sellside_repo=V3A_SELLSIDE_EXTRACTIONS,
+            commitment_ledger_repo=V3A_VERBAL_COMMITMENT_LEDGER,
+            company_index_repo=V3A_ACCOUNT_COMPANY_INDEX,
+            entity_aliases_repo=V3A_ENTITY_ALIASES,
+            manifest_repo=V3A_ACCOUNT_MANIFEST,
+            rules=compiled_rules,
+        )
+        perms_map = {s.source_id: s.permissions.model_dump(mode="json") for s in loaded}
+        return JSONResponse(
+            {
+                "operation_id": f"cached_{bundle_sha[:16]}",
+                "status": "completed",
+                "cached": True,
+                "entity_key": report.entity_key,
+                "report": report.model_dump(mode="json", exclude_none=True),
+                "ledger": ledger.model_dump(mode="json", exclude_none=True),
+                "markdown": render_call_verification_markdown(report, source_permissions=perms_map),
+            },
+            status_code=200,
+        )
+
+    # Idempotency replay check for async operation
+    owner_subject = f"account:{account.account_id}"
+    req_payload = request.model_dump(mode="json", exclude_unset=True)
+    replay_existing = operations.replay_async(
+        endpoint=_CALL_AUDIT_OP_ENDPOINT,
+        idempotency_key=idempotency_key,
+        owner_subject=owner_subject,
+        request_payload=req_payload,
+    )
+    if replay_existing is not None:
+        _mark_replay(response, True)
+        return JSONResponse(
+            {
+                "operation_id": replay_existing.operation.operation_id,
+                "status": replay_existing.operation.status,
+                "entity_key": eff_entity,
+                "replayed": True,
+            },
+            status_code=202,
+        )
+
+    model_runner, slot_binding = _resolve_v3a_runtime_for_account_id(
+        account.account_id,
+        slot_overrides=request.slot_overrides,
+        hook_dict=hook_dict,
+    )
+    thesis_lg = _latest_confirmed_ledger(account.account_id, request.topic_id) if request.topic_id else None
+    pillars = [{"pillar": c.pillar, "keywords": [c.pillar, c.claim_text[:60]]} for c in (thesis_lg.claims if thesis_lg else [])]
+
+    def _persist_ocr_ver(old: ResearchSource, new_source_id: str, text: str, provenance: dict[str, Any]) -> ResearchSource:
+        created = research_sources.create(
+            account.account_id,
+            SourceInput(
+                title=old.title,
+                text=text,
+                url=str(old.url) if old.url is not None else None,
+                kind=old.kind,
+                is_simulated=old.is_simulated,
+                published_at=old.published_at,
+                event_at=old.event_at,
+                revised_at=old.revised_at,
+                permissions=old.permissions,
+            ),
+            retrieval_method=old.retrieval_method,
+            response_sha256=old.response_sha256,
+            response_content_type=old.response_content_type,
+            provenance=provenance,
+            source_id=new_source_id,
+        )
+        # Attach new immutable OCR source version to topic if topic is unlocked
+        if request.topic_id:
+            try:
+                research_topics.attach_sources(account.account_id, request.topic_id, [created.source_id])
+            except Exception:
+                pass
+        return created
+
+    def build_call_audit_operation(operation_id: str) -> tuple[BaseModel, str]:
+        op_cancel = operations.cancel_event(operation_id)
+        if callable(getattr(model_runner, "bind_runtime", None)):
+            model_runner.bind_runtime(cancel_event=op_cancel)
+
+        stages_log: list[dict[str, Any]] = []
+        seq_counter = [0]
+
+        def _write_state(status_val: str, *, stage: str | None = None, report_d: dict[str, Any] | None = None, ledger_d: dict[str, Any] | None = None, md: str | None = None, err: str | None = None, ent: str | None = None) -> None:
+            V3A_CALL_AUDIT_STATES.put(
+                operation_id,
+                {
+                    "owner_id": account.account_id,
+                    "operation_id": operation_id,
+                    "status": status_val,
+                    "entity_key": ent or eff_entity,
+                    "topic_id": request.topic_id,
+                    "stage": stage,
+                    "stages": list(stages_log),
+                    "report": report_d,
+                    "ledger": ledger_d,
+                    "markdown": md,
+                    "error": err,
+                    "updated_at": lifecycle_clock.now().isoformat(),
+                },
+            )
+            _register_manifest_key(V3A_ACCOUNT_MANIFEST, account.account_id, "v3a_call_audit_states", operation_id)
+
+        def _on_stage(stage_name: str, payload: dict[str, Any]) -> None:
+            seq_counter[0] += 1
+            ev_obj = {
+                "sequence": seq_counter[0],
+                "stage": stage_name,
+                "payload": payload,
+                "timestamp": lifecycle_clock.now().isoformat(),
+            }
+            stages_log.append(ev_obj)
+            _write_state("running", stage=stage_name, ent=payload.get("entity_key") or eff_entity)
+            try:
+                operations.renew_lease(operation_id)
+            except Exception:
+                pass
+            try:
+                research_live_broker.publish_progress(operation_id, ev_obj)
+            except Exception:
+                pass
+
+        with _ACTIVE_CALL_AUDIT_LOCK:
+            _ACTIVE_CALL_AUDIT_RUNS[operation_id] = {
+                "account_id": account.account_id,
+                "cancel_event": op_cancel,
+                "sf_key": sf_key,
+            }
+            _V3A_SINGLEFLIGHT_MAP[sf_key] = operation_id
+        _write_state("running", stage="starting")
+
+        try:
+            snap_loader, redline_loader, cap_loader, v25_loader = _v3a_sec_loaders(cache_only=False, hook_dict=hook_dict)
+            report, ledger, _vcl = run_call_verification_pipeline(
+                account_id=account.account_id,
+                sources=loaded,
+                entity_key_override=request.entity_key,
+                symbol_override=eff_symbol,
+                cik_override=eff_cik,
+                fiscal_year_override=request.fiscal_year,
+                fiscal_quarter_override=request.fiscal_quarter,
+                topic_id=request.topic_id,
+                as_of=request.as_of,
+                cache_only=False,
+                model_runner=model_runner,
+                slot_binding=slot_binding,
+                snap_loader=snap_loader,
+                redline_loader=redline_loader,
+                capital_allocation_loader=cap_loader,
+                v25_credibility_loader=v25_loader,
+                thesis_pillars=pillars,
+                doc_facts_repo=V3A_DOC_PARSED_FACTS,
+                l2_mgmt_repo=V3A_CALL_L2_EXTRACTIONS,
+                l2_sellside_repo=V3A_SELLSIDE_EXTRACTIONS,
+                commitment_ledger_repo=V3A_VERBAL_COMMITMENT_LEDGER,
+                company_index_repo=V3A_ACCOUNT_COMPANY_INDEX,
+                entity_aliases_repo=V3A_ENTITY_ALIASES,
+                manifest_repo=V3A_ACCOUNT_MANIFEST,
+                operation_id=operation_id,
+                persist_ocr_version=_persist_ocr_ver if hook_dict.get("enable_layer0b_ocr", True) else None,
+                cancel_event=op_cancel,
+                on_stage=_on_stage,
+                rules=compiled_rules,
+            )
+            perms_map = {s.source_id: s.permissions.model_dump(mode="json") for s in loaded}
+            rep_d = report.model_dump(mode="json", exclude_none=True)
+            led_d = ledger.model_dump(mode="json", exclude_none=True)
+            md = render_call_verification_markdown(report, source_permissions=perms_map)
+            _write_state("completed", stage="completed", report_d=rep_d, ledger_d=led_d, md=md, ent=report.entity_key)
+            # D4/D5/D7: Auto-activate call_commitment_verify subscription when awaiting current 10-Q
+            if report.awaiting_current_10q and report.cik:
+                _auto_upsert_call_verify_subscription(
+                    account_id=account.account_id,
+                    cik=report.cik,
+                    symbol=report.symbol,
+                    company_name=report.company_name,
+                    topic_id=request.topic_id,
+                )
+            try:
+                research_live_broker.publish_terminal(
+                    operation_id,
+                    operation_status="completed",
+                    progress={"stage": "completed", "entity_key": report.entity_key, "overall_light": report.overall_light},
+                )
+            except Exception:
+                pass
+            return CallAuditOperationView(
+                operation_id=operation_id,
+                status="completed",
+                entity_key=report.entity_key,
+                topic_id=request.topic_id,
+                stage="completed",
+                stages=stages_log,
+                report=rep_d,
+                ledger=led_d,
+                markdown=md,
+            ), f"call_audit:{operation_id}"
+        except Exception as exc:
+            is_cancel = "cancel" in str(exc).lower() or op_cancel.is_set()
+            term_st: Literal["cancelled", "failed"] = "cancelled" if is_cancel else "failed"
+            _write_state(term_st, stage=term_st, err=str(exc)[:500])
+            try:
+                research_live_broker.publish_terminal(operation_id, operation_status=term_st, progress={"stage": term_st, "error": str(exc)[:300]})
+            except Exception:
+                pass
+            raise
+        finally:
+            with _ACTIVE_CALL_AUDIT_LOCK:
+                _ACTIVE_CALL_AUDIT_RUNS.pop(operation_id, None)
+                if _V3A_SINGLEFLIGHT_MAP.get(sf_key) == operation_id:
+                    _V3A_SINGLEFLIGHT_MAP.pop(sf_key, None)
+
+    def admit_call_audit_operation(operation_id: str) -> None:
+        V3A_CALL_AUDIT_STATES.put(
+            operation_id,
+            {
+                "owner_id": account.account_id,
+                "operation_id": operation_id,
+                "status": "queued",
+                "entity_key": eff_entity,
+                "topic_id": request.topic_id,
+                "stage": "queued",
+                "stages": [],
+                "updated_at": lifecycle_clock.now().isoformat(),
+            },
+        )
+        _register_manifest_key(V3A_ACCOUNT_MANIFEST, account.account_id, "v3a_call_audit_states", operation_id)
+
+    op_resp, replayed = operations.submit_async(
+        endpoint=_CALL_AUDIT_OP_ENDPOINT,
+        idempotency_key=idempotency_key,
+        owner_subject=owner_subject,
+        request_payload=req_payload,
+        result_field="research",
+        build_result=build_call_audit_operation,
+        before_accept=admit_call_audit_operation,
+        commit_result=lambda _op_id, _res: None,
+        rollback_result=lambda _op_id, _res: None,
+    )
+    _mark_replay(response, replayed)
+    return JSONResponse(
+        {
+            "operation_id": op_resp.operation.operation_id,
+            "status": op_resp.operation.status,
+            "entity_key": eff_entity,
+            "replayed": replayed,
+        },
+        status_code=202,
+    )
+
+
+@app.get(
+    "/v2/research/call-audit/operations/{operation_id}",
+    response_model=CallAuditOperationView,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+)
+def get_call_audit_operation(
+    operation_id: str,
+    http_request: Request,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> CallAuditOperationView:
+    account = _authenticated_account(authorization)
+    row = V3A_CALL_AUDIT_STATES.get(operation_id)
+    if not isinstance(row, Mapping) or row.get("owner_id") != account.account_id:
+        raise ApiProblem(404, "not_found", "Call audit operation not found.")
+    return CallAuditOperationView(
+        operation_id=operation_id,
+        status=row.get("status", "running"),
+        entity_key=row.get("entity_key"),
+        topic_id=row.get("topic_id"),
+        stage=row.get("stage"),
+        stages=list(row.get("stages") or []),
+        report=row.get("report"),
+        ledger=row.get("ledger"),
+        markdown=row.get("markdown"),
+        error=row.get("error"),
+        updated_at=row.get("updated_at"),
+    )
+
+
+@app.post(
+    "/v2/research/call-audit/operations/{operation_id}/cancel",
+    responses=ERROR_RESPONSES,
+)
+def cancel_call_audit_operation(
+    operation_id: str,
+    http_request: Request,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict[str, Any]:
+    account = _authenticated_account(authorization)
+    row = V3A_CALL_AUDIT_STATES.get(operation_id)
+    if not isinstance(row, Mapping) or row.get("owner_id") != account.account_id:
+        raise ApiProblem(404, "not_found", "Call audit operation not found.")
+    with _ACTIVE_CALL_AUDIT_LOCK:
+        active = _ACTIVE_CALL_AUDIT_RUNS.get(operation_id)
+        if active and active.get("cancel_event") is not None:
+            active["cancel_event"].set()
+    try:
+        operations.cancel(operation_id)
+    except Exception:
+        pass
+    if row.get("status") in ("queued", "running"):
+        updated = dict(row)
+        updated["status"] = "cancelled"
+        updated["stage"] = "cancelled"
+        updated["updated_at"] = lifecycle_clock.now().isoformat()
+        V3A_CALL_AUDIT_STATES.put(operation_id, updated)
+    return {"operation_id": operation_id, "status": "cancelled"}
+
+
+@app.get(
+    "/v2/research/call-audit/operations/{operation_id}/events",
+    response_class=StreamingResponse,
+    include_in_schema=False,
+)
+async def stream_call_audit_events(
+    operation_id: str,
+    http_request: Request,
+    after: Annotated[int, Query(ge=0)] = 0,
+    last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
+) -> StreamingResponse:
+    """3-stage progressive SSE stream (layer0_ready -> layer0b_ocr -> layer1_ready -> layer2_extracting -> completed) + 15s heartbeat."""
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    row = V3A_CALL_AUDIT_STATES.get(operation_id)
+    if not isinstance(row, Mapping) or row.get("owner_id") != account.account_id:
+        raise ApiProblem(404, "not_found", "Call audit operation not found.")
+
+    cursor_after = after
+    if last_event_id and last_event_id.strip().isdigit():
+        cursor_after = max(cursor_after, int(last_event_id.strip()))
+
+    sse_headers = {
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+
+    def _snapshot(seq_floor: int) -> tuple[str, list[dict[str, Any]]]:
+        cur = V3A_CALL_AUDIT_STATES.get(operation_id) or row
+        st_now = str(cur.get("status") or "completed")
+        evs = [e for e in (cur.get("stages") or []) if isinstance(e, Mapping) and int(e.get("sequence") or 0) > seq_floor]
+        evs.sort(key=lambda e: int(e.get("sequence") or 0))
+        return st_now, evs
+
+    loop = asyncio.get_running_loop()
+    subscriber = research_live_broker.subscribe(operation_id, account_id=account.account_id, loop=loop)
+    try:
+        st_init, replay_init = _snapshot(cursor_after)
+    except BaseException:
+        research_live_broker.unsubscribe(subscriber)
+        raise
+
+    if st_init in ("completed", "failed", "cancelled"):
+        research_live_broker.unsubscribe(subscriber)
+
+        async def _term_gen():
+            for ev in replay_init:
+                yield format_sse_frame(str(ev.get("stage") or "progress"), dict(ev), event_id=str(ev.get("sequence") or ""))
+            yield format_sse_frame("run.terminal", {"operation_id": operation_id, "status": st_init})
+
+        return StreamingResponse(_term_gen(), media_type="text/event-stream", headers=sse_headers)
+
+    async def _live_gen():
+        last_seq = cursor_after
+        try:
+            for ev in replay_init:
+                last_seq = max(last_seq, int(ev.get("sequence") or 0))
+                yield format_sse_frame(str(ev.get("stage") or "progress"), dict(ev), event_id=str(ev.get("sequence") or ""))
+            while True:
+                st_now, missed = _snapshot(last_seq)
+                for ev in missed:
+                    last_seq = max(last_seq, int(ev.get("sequence") or 0))
+                    yield format_sse_frame(str(ev.get("stage") or "progress"), dict(ev), event_id=str(ev.get("sequence") or ""))
+                if st_now in ("completed", "failed", "cancelled"):
+                    yield format_sse_frame("run.terminal", {"operation_id": operation_id, "status": st_now})
+                    return
+                try:
+                    frame = await asyncio.wait_for(subscriber.queue.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    if await http_request.is_disconnected():
+                        return
+                    yield ": heartbeat\n\n"
+                    continue
+                ev_name = str(frame.get("event") or "progress")
+                data = frame.get("data") or {}
+                if ev_name == "run.terminal":
+                    _, tail = _snapshot(last_seq)
+                    for ev in tail:
+                        last_seq = max(last_seq, int(ev.get("sequence") or 0))
+                        yield format_sse_frame(str(ev.get("stage") or "progress"), dict(ev), event_id=str(ev.get("sequence") or ""))
+                    yield format_sse_frame("run.terminal", data, event_id=frame.get("id"))
+                    return
+                seq_v = data.get("sequence") if isinstance(data, Mapping) else None
+                if isinstance(seq_v, int):
+                    if seq_v <= last_seq:
+                        continue
+                    last_seq = seq_v
+                stage_ev = str(data.get("stage") or ev_name) if isinstance(data, Mapping) else ev_name
+                yield format_sse_frame(stage_ev, data if isinstance(data, Mapping) else {"data": data}, event_id=str(seq_v or frame.get("id") or ""))
+        finally:
+            research_live_broker.unsubscribe(subscriber)
+
+    return StreamingResponse(_live_gen(), media_type="text/event-stream", headers=sse_headers)
+
+
+@app.get(
+    "/v2/research/call-audit/report",
+    responses=ERROR_RESPONSES,
+)
+def get_call_audit_report(
+    http_request: Request,
+    topic_id: str | None = Query(default=None),
+    entity_key: str | None = Query(default=None),
+    symbol: str | None = Query(default=None),
+    cache_only: bool = Query(default=True),
+    as_of: date | None = Query(default=None),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict[str, Any]:
+    """<80ms zero-outbound (``cache_only=true``) live Layer 3 report using latest evaluation_rules_version."""
+    del cache_only  # GET /report is strictly read-only zero-outbound; live fetches go via POST /run or /check-filings
+    account = _authenticated_account(authorization)
+    idx = _find_latest_v3a_index_for_topic_or_entity(
+        account.account_id, topic_id=topic_id, entity_key=entity_key, symbol=symbol
+    )
+    if idx is None:
+        return {
+            "available": False,
+            "awaiting_current_10q": False,
+            "report": None,
+            "ledger": None,
+            "markdown": None,
+            "last_filing_fingerprint_check_at": None,
+        }
+    loaded = _load_v3a_report_for_tool(
+        account.account_id,
+        entity_key=str(idx.get("entity_key") or ""),
+        symbol=idx.get("symbol"),
+        topic_id=topic_id,
+        as_of=as_of,
+    )
+    if loaded is None:
+        return {
+            "available": False,
+            "awaiting_current_10q": bool(idx.get("awaiting_current_10q", False)),
+            "report": None,
+            "ledger": None,
+            "markdown": None,
+            "last_filing_fingerprint_check_at": idx.get("last_filing_fingerprint_check_at"),
+        }
+    return {
+        "available": True,
+        "awaiting_current_10q": bool((loaded.get("report") or {}).get("awaiting_current_10q", False)),
+        "last_filing_fingerprint_check_at": idx.get("last_filing_fingerprint_check_at"),
+        **loaded,
+    }
+
+
+@app.post(
+    "/v2/research/call-audit/check-filings",
+    responses=ERROR_RESPONSES,
+)
+def check_call_audit_filings(
+    request: CallAuditCheckFilingsRequest,
+    http_request: Request,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict[str, Any]:
+    """D4/D5 Insurance 1: 30m-cooldown 0-LLM SEC submissions fingerprint check for awaiting-10-Q companies (<=5 CIKs)."""
+    from .research_radar_scheduler import merge_v3a_item_into_inbox, seen_accessions_for_channel
+    from .research_transcript_parser import load_v3a_call_rules, normalize_entity_key
+
+    account = _authenticated_account(authorization)
+    compiled = load_v3a_call_rules()
+    cooldown_min = compiled.rules.radar_alert_thresholds.check_filings_cooldown_minutes
+    max_ciks = compiled.rules.radar_alert_thresholds.check_filings_max_ciks_per_call
+    now = lifecycle_clock.now()
+
+    hooks = getattr(http_request.app.state, "v3a_call_audit_hooks", None)
+    hook_dict = hooks if isinstance(hooks, Mapping) else {}
+    cfg = _sec_events_config_from_hook(hook_dict)
+
+    awaiting_entries: list[tuple[str, dict[str, Any]]] = []
+    wanted_eks = set(request.entity_keys or [])
+    for k, row in account_items(V3A_ACCOUNT_COMPANY_INDEX, account.account_id):
+        if not isinstance(row, Mapping) or row.get("owner_id") != account.account_id:
+            continue
+        if not row.get("cik") or not row.get("awaiting_current_10q"):
+            continue
+        if request.topic_id and row.get("topic_id") != request.topic_id:
+            continue
+        if wanted_eks and row.get("entity_key") not in wanted_eks:
+            continue
+        # Enforce 30m cooldown per company index entry
+        last_chk = row.get("last_filing_fingerprint_check_at")
+        if not request.force and isinstance(last_chk, str) and last_chk:
+            try:
+                last_dt = datetime.fromisoformat(last_chk)
+                if (now - last_dt).total_seconds() < cooldown_min * 60:
+                    continue
+            except ValueError:
+                pass
+        awaiting_entries.append((k, dict(row)))
+
+    checked_ciks: list[str] = []
+    triggered_ciks: list[str] = []
+    created_inbox_ids: list[str] = []
+    runner_cache: list[Any] = []
+
+    for idx_key, row in awaiting_entries[:max_ciks]:
+        cik_val = cik10(str(row["cik"]))
+        checked_ciks.append(cik_val)
+        row["last_filing_fingerprint_check_at"] = now.isoformat()
+        V3A_ACCOUNT_COMPANY_INDEX.put(idx_key, row)
+
+        # Find or synthesize subscription for this CIK
+        sub = next((s for s in _account_subscriptions(account.account_id) if s.cik == cik_val), None)
+        if sub is None:
+            sub = FilingWatchSubscription(
+                account_id=account.account_id,
+                topic_id=row.get("topic_id"),
+                cik=cik_val,
+                symbol=row.get("symbol"),
+                company_name=row.get("company_name"),
+                watched_channels=["call_commitment_verify"],
+            )
+        seen_call = set(seen_accessions_for_channel(sub, "call_verify"))
+        try:
+            scan_res, _ = scan_sec_material_events(
+                cik_val,
+                user_agent=cfg["user_agent"],
+                lookback_days=max(sub.lookback_days, 120),
+                l1_cache=cfg["l1_cache"],
+                rules=cfg["rules"],
+                transport=cfg["transport"],
+                stream_transport=cfg["stream_transport"],
+                limiter=cfg["limiter"],
+                policy=cfg["policy"],
+                symbol=sub.symbol,
+                submissions_override=cfg["submissions_override"],
+                facts_override=cfg["facts_override"],
+            )
+        except Exception:
+            continue
+
+        new_pf = [pf for pf in scan_res.periodic_filings if pf.accession not in seen_call]
+        if not new_pf:
+            continue
+
+        triggered_ciks.append(cik_val)
+        if not runner_cache:
+            r_obj, _sb = _resolve_v3a_runtime_for_account_id(account.account_id, hook_dict=hook_dict)
+            runner_cache.append(r_obj)
+        ledger = _latest_confirmed_ledger(account.account_id, sub.topic_id)
+        items = _run_v3a_phase2c_for_subscription(
+            account_id=account.account_id,
+            sub=sub,
+            new_periodic_filings=new_pf,
+            ledger=ledger,
+            model_runner=runner_cache[0],
+            as_of=None,
+            cfg=cfg,
+        )
+        existing_inbox = _account_inbox_items(account.account_id)
+        latest_pf_date = max((pf.filed_at for pf in new_pf), default=None)
+        for v_it in items:
+            persisted, is_new, is_mod = merge_v3a_item_into_inbox(v_it, existing_inbox, filing_date=latest_pf_date)
+            if is_new or is_mod:
+                CHANGE_INBOX_ITEMS.put(persisted.inbox_item_id, persisted)
+                created_inbox_ids.append(persisted.inbox_item_id)
+        # Mark periodic accessions as seen for call_verify
+        new_seen = {k_s: dict(v_s) for k_s, v_s in sub.seen_accessions.items()}
+        for pf in new_pf:
+            new_seen.setdefault(pf.accession, {})["call_verify"] = "checked"
+        WATCH_SUBSCRIPTIONS.put(sub.subscription_id, sub.model_copy(update={"seen_accessions": new_seen, "updated_at": now}))
+
+    return {
+        "checked_ciks": checked_ciks,
+        "triggered_ciks": triggered_ciks,
+        "inbox_item_ids": created_inbox_ids,
+        "cooldown_minutes": cooldown_min,
+    }
+
+
+@app.patch(
+    "/v2/research/call-audit/commitments/{commitment_id}",
+    responses=ERROR_RESPONSES,
+)
+def patch_call_audit_commitment(
+    commitment_id: str,
+    request: CallAuditCommitmentPatchRequest,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict[str, Any]:
+    """D7 opt-out: mute or unmute a specific verbal commitment in the account-isolated V3a ledger."""
+    from .research_call_collision import AccountVerbalCommitmentLedger
+
+    account = _authenticated_account(authorization)
+    vcl_key = f"v3a_vcl:{account.account_id}:{request.entity_key}"
+    raw = V3A_VERBAL_COMMITMENT_LEDGER.get(vcl_key)
+    if not isinstance(raw, Mapping) or raw.get("owner_id") != account.account_id:
+        raise ApiProblem(404, "not_found", "Verbal commitment ledger not found.")
+    ledger_obj = AccountVerbalCommitmentLedger.model_validate(raw)
+    found = False
+    new_cmts = []
+    for c in ledger_obj.commitments:
+        if c.commitment_id == commitment_id:
+            found = True
+            new_cmts.append(c.model_copy(update={"muted": request.muted, "status": "muted" if request.muted else ("pending_10q" if c.status == "muted" else c.status)}))
+        else:
+            new_cmts.append(c)
+    if not found:
+        raise ApiProblem(404, "not_found", "Commitment not found.")
+    updated = ledger_obj.model_copy(update={"commitments": new_cmts, "updated_at": lifecycle_clock.now()})
+    V3A_VERBAL_COMMITMENT_LEDGER.put(vcl_key, updated.model_dump(mode="json", exclude_none=True))
+    return {"commitment_id": commitment_id, "entity_key": request.entity_key, "muted": request.muted}
+
+
+@app.post(
+    "/v2/research/call-audit/entities/merge",
+    responses=ERROR_RESPONSES,
+)
+def merge_call_audit_entities(
+    request: CallAuditEntityMergeRequest,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict[str, Any]:
+    """D1: Atomically merge a non-SEC alias entity_key into a canonical target_entity_key (advisory locked)."""
+    from .research_call_collision import AccountVerbalCommitmentLedger
+    from .research_call_verification import _register_manifest_key
+
+    account = _authenticated_account(authorization)
+    src_ek = request.source_entity_key.strip()
+    tgt_ek = request.target_entity_key.strip()
+    if src_ek == tgt_ek:
+        raise ApiProblem(422, "invalid_request", "source_entity_key and target_entity_key must differ.")
+
+    m_key = f"v3a_man:{account.account_id}"
+    merged_commitments = [0]
+
+    def _do_merge() -> None:
+        # 1. Update v3a_entity_aliases
+        alias_key = f"v3a_alias:{account.account_id}"
+        raw_al = V3A_ENTITY_ALIASES.get(alias_key)
+        al_doc = dict(raw_al) if isinstance(raw_al, Mapping) else {"owner_id": account.account_id, "aliases": {}}
+        al_map = dict(al_doc.get("aliases") or {})
+        al_map[src_ek.casefold()] = tgt_ek
+        for a in request.aliases:
+            if a.strip():
+                al_map[a.strip().casefold()] = tgt_ek
+        # Re-point any existing aliases that pointed to src_ek -> tgt_ek
+        for k_a, v_a in list(al_map.items()):
+            if v_a == src_ek:
+                al_map[k_a] = tgt_ek
+        al_doc["owner_id"] = account.account_id
+        al_doc["aliases"] = al_map
+        al_doc["updated_at"] = lifecycle_clock.now().isoformat()
+        V3A_ENTITY_ALIASES.put(alias_key, al_doc)
+
+        # 2. Merge v3a_verbal_commitment_ledger
+        src_vcl_key = f"v3a_vcl:{account.account_id}:{src_ek}"
+        tgt_vcl_key = f"v3a_vcl:{account.account_id}:{tgt_ek}"
+        raw_src_v = V3A_VERBAL_COMMITMENT_LEDGER.get(src_vcl_key)
+        raw_tgt_v = V3A_VERBAL_COMMITMENT_LEDGER.get(tgt_vcl_key)
+        if isinstance(raw_src_v, Mapping) and raw_src_v.get("owner_id") == account.account_id:
+            src_v = AccountVerbalCommitmentLedger.model_validate(raw_src_v)
+            tgt_v = (
+                AccountVerbalCommitmentLedger.model_validate(raw_tgt_v)
+                if isinstance(raw_tgt_v, Mapping) and raw_tgt_v.get("owner_id") == account.account_id
+                else AccountVerbalCommitmentLedger(owner_id=account.account_id, entity_key=tgt_ek)
+            )
+            by_cid = {c.commitment_id: c for c in tgt_v.commitments}
+            for c in src_v.commitments:
+                if c.commitment_id not in by_cid:
+                    by_cid[c.commitment_id] = c.model_copy(update={"entity_key": tgt_ek})
+                    merged_commitments[0] += 1
+            by_bl = {(b.executive_name.casefold(), b.fiscal_period_key): b for b in tgt_v.executive_baselines}
+            for b in src_v.executive_baselines:
+                by_bl.setdefault((b.executive_name.casefold(), b.fiscal_period_key), b)
+            new_tgt = tgt_v.model_copy(
+                update={
+                    "commitments": list(by_cid.values()),
+                    "executive_baselines": list(by_bl.values()),
+                    "updated_at": lifecycle_clock.now(),
+                }
+            )
+            V3A_VERBAL_COMMITMENT_LEDGER.put(tgt_vcl_key, new_tgt.model_dump(mode="json", exclude_none=True))
+            V3A_VERBAL_COMMITMENT_LEDGER.delete(src_vcl_key)
+            _register_manifest_key(V3A_ACCOUNT_MANIFEST, account.account_id, "v3a_verbal_commitment_ledger", tgt_vcl_key)
+
+        # 3. Merge v3a_account_company_index
+        src_idx_key = f"v3a_idx:{account.account_id}:{src_ek}"
+        tgt_idx_key = f"v3a_idx:{account.account_id}:{tgt_ek}"
+        raw_si = V3A_ACCOUNT_COMPANY_INDEX.get(src_idx_key)
+        raw_ti = V3A_ACCOUNT_COMPANY_INDEX.get(tgt_idx_key)
+        if isinstance(raw_si, Mapping) and raw_si.get("owner_id") == account.account_id:
+            if isinstance(raw_ti, Mapping) and raw_ti.get("owner_id") == account.account_id:
+                merged_runs = list(raw_ti.get("recent_runs") or []) + list(raw_si.get("recent_runs") or [])
+                merged_ti = dict(raw_ti)
+                merged_ti["recent_runs"] = merged_runs[:20]
+                merged_ti["updated_at"] = lifecycle_clock.now().isoformat()
+                V3A_ACCOUNT_COMPANY_INDEX.put(tgt_idx_key, merged_ti)
+            else:
+                moved = dict(raw_si)
+                moved["entity_key"] = tgt_ek
+                moved["updated_at"] = lifecycle_clock.now().isoformat()
+                V3A_ACCOUNT_COMPANY_INDEX.put(tgt_idx_key, moved)
+                _register_manifest_key(V3A_ACCOUNT_MANIFEST, account.account_id, "v3a_account_company_index", tgt_idx_key)
+            V3A_ACCOUNT_COMPANY_INDEX.delete(src_idx_key)
+
+    V3A_ACCOUNT_MANIFEST.with_advisory_lock(m_key, _do_merge)
+    return {
+        "merged": True,
+        "source_entity_key": src_ek,
+        "target_entity_key": tgt_ek,
+        "merged_commitments": merged_commitments[0],
+    }
 
 
 def _operation_owner_subject(request: Request) -> str:

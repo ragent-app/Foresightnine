@@ -425,6 +425,20 @@ class GovernanceCapitalAuditRequest(BaseModel):
     rationale: str = Field(default='', max_length=500, description='Why governance & capital allocation audit is needed.')
 
 
+class CallQaVerificationRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    entity_key: str | None = Field(default=None, max_length=80, description='Canonical CIK10 or nonsec entity key.')
+    symbol: str | None = Field(default=None, max_length=32, description='Ticker symbol or company code.')
+    as_of: date | None = Field(default=None, description='Optional point-in-time cutoff date (safe for local account V3a data).')
+    rationale: str = Field(default='', max_length=500, description='Why verified call Q&A collision & commitment data is needed.')
+
+    @model_validator(mode='after')
+    def has_target(self) -> 'CallQaVerificationRequest':
+        if not (self.entity_key or self.symbol):
+            raise ValueError('Give entity_key or symbol.')
+        return self
+
+
 # --------------------------------------------------------------------------- outcome
 @dataclass
 class FinToolOutcome:
@@ -516,7 +530,8 @@ class FinDataToolbox:
                  fmp_key: str | None = None, fmp_owner: str = 'user_byok', fmp_transport=None,
                  l1_cache: Any = None, sec_events_limiter: SecPacingLimiter | None = None,
                  peer_snapshot_cache: Any = None, def14a_snapshot_cache: Any = None,
-                 guidance_ledger_cache: Any = None) -> None:
+                 guidance_ledger_cache: Any = None,
+                 v3a_report_loader: Callable[[str | None, str | None, date | None], dict[str, Any] | None] | None = None) -> None:
         self.account_id, self._market_key = account_id, market_key or None
         self._owner = credential_owner if credential_owner in ('platform', 'user_byok') else 'user_byok'
         try:
@@ -546,6 +561,7 @@ class FinDataToolbox:
         self._def14a_snapshot_cache = def14a_snapshot_cache
         self._guidance_ledger_cache = guidance_ledger_cache
         self._sec_events_limiter = sec_events_limiter
+        self._v3a_report_loader = v3a_report_loader
 
     # -- capability flags (first user message; tools stay static)
     @property
@@ -1953,6 +1969,62 @@ class FinDataToolbox:
                 'source_id': source.source_id,
                 'title': source.title,
                 'report': report.model_dump(mode='json', exclude_none=True),
+            },
+            source=source,
+        )
+
+    def call_qa_verification_key(self, req: CallQaVerificationRequest) -> str:
+        return '|'.join([
+            'call_qa_verification',
+            (req.entity_key or req.symbol or '').strip().upper(),
+            req.as_of.isoformat() if req.as_of else '',
+        ])
+
+    def call_qa_verification(
+        self,
+        req: CallQaVerificationRequest,
+        entities: Mapping[str, Mapping[str, Any]] | None = None,
+    ) -> FinToolOutcome:
+        """Read-only local account V3a call verification lookup (R2-D5: allowed even under ``historical_cutoff`` with ``as_of`` filter)."""
+        del entities
+        # R2-D5: Allow local account-scoped V3a lookup even when disabled_reason == 'historical_cutoff'
+        # because the loader enforces strict as_of filtering on local account data without external lookahead.
+        if self.disabled_reason not in (None, 'historical_cutoff'):
+            return FinToolOutcome({'status': 'denied', 'reason': self.disabled_reason})
+        if self._v3a_report_loader is None:
+            return FinToolOutcome({'status': 'empty', 'reason': 'no_call_verification_available',
+                                   'message': 'No verified call Q&A audit found for this account/company.'})
+        payload = self._v3a_report_loader(req.entity_key, req.symbol, req.as_of)
+        if not isinstance(payload, Mapping):
+            return FinToolOutcome({'status': 'empty', 'reason': 'no_call_verification_available',
+                                   'message': 'No verified call Q&A audit found matching the company and as_of cutoff.'})
+        summary_text = str(payload.get('markdown') or payload.get('headline') or '')[:8000]
+        digest_sha = sha256(summary_text.encode('utf-8')).hexdigest()
+        ref_d = req.as_of or self._now().date()
+        pub_dt = datetime(ref_d.year, ref_d.month, ref_d.day, tzinfo=timezone.utc)
+        try:
+            source = self._persist(
+                SourceInput(
+                    title=f"{payload.get('symbol') or payload.get('entity_key') or 'Company'} Call Q&A Verification",
+                    text=summary_text or 'Verified call audit summary.',
+                    url=None,
+                    kind='user_supplied',
+                    published_at=pub_dt,
+                    permissions=SourcePermissions(store=True, model_input=True, display=True, export=bool(payload.get('exportable', True))),
+                ),
+                retrieval_method='call_qa_verification',
+                response_sha256=digest_sha,
+                response_content_type='text/markdown',
+                provenance={'provider': 'v3a_call_verification', 'entity_key': payload.get('entity_key'), 'owner_scoped': True},
+            )
+        except (ValueError, ValidationError):
+            return FinToolOutcome({'status': 'denied', 'reason': 'source_not_storable'})
+        return FinToolOutcome(
+            {
+                'status': 'ok',
+                'source_id': source.source_id,
+                'title': source.title,
+                'report': dict(payload),
             },
             source=source,
         )

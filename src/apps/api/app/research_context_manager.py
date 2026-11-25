@@ -1631,6 +1631,7 @@ def build_model_turn_input(
     tools: Sequence[ModelToolDefinition] = TOOLS,
     library: ResearchLibrary | None = None,
     has_fin_data: bool = False,
+    external_source_by_id: Mapping[str, ResearchSource] | None = None,
 ) -> ModelTurnInput:
     """Assemble the immutable prompt prefix and transient tail_note for a native turn."""
     # Recovery can reopen an old checkpoint after source permissions or contents
@@ -1672,10 +1673,36 @@ def build_model_turn_input(
             used_ids.update(row.get('source_id') for row in snapshots if isinstance(row, Mapping)
                             and row.get('eligibility') == 'eligible' and isinstance(row.get('source_id'), str))
         prior_view = original.get('prior_research')
+        strip_call_digest_only = False
         if isinstance(prior_view, Mapping):
             used_ids.update(row.get('source_id') for key in ('facts', 'claims', 'read_ranges')
                             for row in (prior_view.get(key) or []) if isinstance(row, Mapping)
                             and isinstance(row.get('source_id'), str))
+            # R2-D5 split revocation check: current-Topic V3a sources enter used_ids;
+            # cross-Topic / Layer 0b OCR external sources are verified independently at owner level
+            # so they never falsely trigger revoked=True and wipe unrelated conversation history.
+            call_digest = prior_view.get('call_verification_digest')
+            if isinstance(call_digest, Mapping):
+                dig_hashes = call_digest.get('source_hashes') if isinstance(call_digest.get('source_hashes'), Mapping) else {}
+                for sid, sha_val in dig_hashes.items():
+                    if isinstance(sid, str) and isinstance(sha_val, str) and sid not in hashes:
+                        hashes[sid] = sha_val
+                for sid in (call_digest.get('topic_source_ids') or []):
+                    if isinstance(sid, str) and sid:
+                        used_ids.add(sid)
+                ext_ids = [sid for sid in (call_digest.get('external_source_ids') or []) if isinstance(sid, str) and sid]
+                if ext_ids and external_source_by_id is not None:
+                    ext_eligible = {
+                        src.source_id: src
+                        for src, code in source_eligibility(list(external_source_by_id.values()), as_of)
+                        if code == 'eligible'
+                    }
+                    if any(
+                        sid not in ext_eligible
+                        or (dig_hashes.get(sid) and dig_hashes[sid] != ext_eligible[sid].content_sha256)
+                        for sid in ext_ids
+                    ):
+                        strip_call_digest_only = True
         revoked = invalid_as_of or any(sid not in eligible or not hashes.get(sid) or hashes[sid] != eligible[sid].content_sha256
                       for sid in used_ids)
         if revoked:
@@ -1690,6 +1717,12 @@ def build_model_turn_input(
                 safe_user['prior_research'] = {'note': 'Some prior evidence is unavailable or changed; recheck before reuse.',
                     'user_review': {'review': review.get('review'), 'note': review.get('note', ''), 'summary': ''}}
             state = {**state, 'user': json.dumps(safe_user, ensure_ascii=False), 'history': []}
+        elif strip_call_digest_only and isinstance(original.get('prior_research'), Mapping):
+            safe_user = dict(original)
+            pv_clean = dict(original['prior_research'])
+            pv_clean.pop('call_verification_digest', None)
+            safe_user['prior_research'] = pv_clean
+            state = {**state, 'user': json.dumps(safe_user, ensure_ascii=False)}
     failure_payload = _failure_awareness_payload(state)
     lib_cov = None
     if library is not None:

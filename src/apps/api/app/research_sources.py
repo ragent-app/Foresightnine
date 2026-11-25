@@ -275,6 +275,18 @@ class ResearchSources:
             raise SourceNotFound()
         return source.model_copy(deep=True)
 
+    def get_many(self, owner: str, source_ids: list[str] | tuple[str, ...] | set[str]) -> list[ResearchSource]:
+        out: list[ResearchSource] = []
+        seen: set[str] = set()
+        for sid in source_ids:
+            if not sid or sid in seen:
+                continue
+            seen.add(sid)
+            source = self.repository.get(sid)
+            if source is not None and source.owner_id == owner:
+                out.append(source.model_copy(deep=True))
+        return out
+
     def delete_owner(self, owner: str) -> None:
         for source_id, source in list(owner_items(self.repository, owner)):
             if source.owner_id == owner:

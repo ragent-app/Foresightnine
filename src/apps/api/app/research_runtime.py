@@ -667,6 +667,17 @@ def _invoke_model_turn(
         ),
         force=False,
     )
+    ext_src_by_id = None
+    ext_loader = getattr(fin_data, '_external_source_loader', None) if fin_data is not None else None
+    if callable(ext_loader) and isinstance(state.get('user'), str) and 'call_verification_digest' in state['user']:
+        try:
+            u_obj = json.loads(state['user'])
+            cd = (u_obj.get('prior_research') or {}).get('call_verification_digest') if isinstance(u_obj, Mapping) else None
+            ext_ids = [s for s in (cd.get('external_source_ids') or []) if isinstance(s, str) and s] if isinstance(cd, Mapping) else []
+            if ext_ids:
+                ext_src_by_id = ext_loader(ext_ids)
+        except Exception:
+            ext_src_by_id = None
     turn = build_model_turn_input(
         state=state,
         source_by_id=source_by_id,
@@ -674,6 +685,7 @@ def _invoke_model_turn(
         tools=offered,
         library=library_box[0] if library_box else None,
         has_fin_data=fin_data is not None,
+        external_source_by_id=ext_src_by_id,
     )
     tail_note = getattr(turn, 'tail_note', None)
     wire = json.dumps({'user': turn.user, 'user_instructions': getattr(turn, 'user_instructions', ()),

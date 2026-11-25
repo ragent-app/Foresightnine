@@ -2231,6 +2231,8 @@ def _exec_fin_tool(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallR
         key = ctx.fin_data.peer_relative_valuation_key(inv.req)
     elif name == 'governance_capital_audit':
         key = ctx.fin_data.governance_capital_audit_key(inv.req)
+    elif name == 'call_qa_verification':
+        key = ctx.fin_data.call_qa_verification_key(inv.req)
     elif name == 'earnings_consensus':
         key = ctx.fin_data.earnings_consensus_key(inv.req)
     elif name == 'earnings_transcript':
@@ -2277,6 +2279,8 @@ def _exec_fin_tool(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallR
         produced = ctx.fin_data.peer_relative_valuation(inv.req, entities)
     elif name == 'governance_capital_audit':
         produced = ctx.fin_data.governance_capital_audit(inv.req, entities)
+    elif name == 'call_qa_verification':
+        produced = ctx.fin_data.call_qa_verification(inv.req, entities)
     elif name == 'earnings_consensus':
         produced = ctx.fin_data.earnings_consensus(inv.req, entities)
     elif name == 'earnings_transcript':
@@ -3671,6 +3675,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     'sec_material_events': _exec_fin_tool,
     'peer_relative_valuation': _exec_fin_tool,
     'governance_capital_audit': _exec_fin_tool,
+    'call_qa_verification': _exec_fin_tool,
     'earnings_consensus': _exec_fin_tool,
     'earnings_transcript': _exec_fin_tool,
     'earnings_quality_diagnostics': _exec_earnings_diagnostic,
