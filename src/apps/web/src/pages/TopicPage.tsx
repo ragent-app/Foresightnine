@@ -32,6 +32,7 @@ import { DEFAULT_OPTIONS, optionsValid, runRequestFields, type RunOptions } from
 import { optionTokens } from "./research/optionTokens";
 import { ResearchSettingsPanel } from "./research/ResearchSettingsPanel";
 import { CitationSheet } from "./topic/Citation";
+import { ThesisLedgerBar } from "./topic/ThesisLedgerBar";
 import { TopicContext, type FocusCitation, type LiveRun, type PanelState, type TopicView } from "./topic/context";
 import { InterruptedTurn, LiveTurn, TopicConclusion, TurnView, type AnswerTools, type TurnActions } from "./topic/Conversation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1541,7 +1542,15 @@ export function TopicPage() {
                     }}
                   />
                   {squadDossier ? (
-                    <EarningsDossierView
+                    <>
+                      <ThesisLedgerBar
+                        topicId={topicId}
+                        symbol={squadDossier.symbol}
+                        cik={squadDossier.cik}
+                        companyName={squadDossier.company_name}
+                        hasLockedDossier={Boolean(squadDossier.locked)}
+                      />
+                      <EarningsDossierView
                       dossier={squadDossier}
                       topicId={topicId}
                       reportMode={reportMode}
@@ -1552,6 +1561,7 @@ export function TopicPage() {
                       onInspectSource={handleInspectSource}
                       slotRoutingSummary={squadSlotRouting}
                     />
+                    </>
                   ) : null}
                 </div>
               ) : null}

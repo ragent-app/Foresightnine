@@ -2,6 +2,7 @@ import type { ResearchV2 } from "@foresightnine/contracts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useMatch, useNavigate } from "react-router-dom";
 import { useTopicActions, useTopics, useTurnStatuses } from "../api/queries";
+import { useRadarHealth } from "../api/radar";
 import { ApiError } from "../api/http";
 import { exportFull, latestVersion } from "../api/research";
 import { signOut } from "../auth/account";
@@ -128,6 +129,9 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
   const navigate = useNavigate();
   const topics = useTopics();
   const match = useMatch("/research/:topicId");
+  const inboxActive = Boolean(useMatch("/inbox"));
+  const radarHealth = useRadarHealth();
+  const unreadInbox = radarHealth.data?.unread_inbox_count ?? 0;
   const currentId = match?.params.topicId ?? null;
   const [filter, setFilter] = useState("");
   const asideRef = useRef<HTMLElement>(null);
@@ -245,6 +249,14 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
         <Icon name="search" size={16} />
         <input value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="搜索研究" placeholder="搜索" type="search" />
       </label>
+      <Link
+        className="side-inbox-link"
+        to="/inbox"
+        aria-current={inboxActive ? "page" : undefined}
+      >
+        <span>变化收件箱</span>
+        {unreadInbox > 0 ? <span className="side-inbox-badge">{unreadInbox}</span> : null}
+      </Link>
       {topics.isLoading ? <div className="empty">正在加载…</div> : null}
       {topics.isError ? <div className="empty">研究列表暂时无法加载。</div> : null}
       {topics.data && groups.length === 0 ? <div className="empty">{filter.trim() ? "没有匹配的研究。" : "还没有研究。"}</div> : null}

@@ -1,6 +1,7 @@
 import { Navigate, Outlet, createBrowserRouter, type RouteObject } from "react-router-dom";
 import { AdminKeysPage } from "../pages/AdminKeysPage";
 import { HomePage } from "../pages/HomePage";
+import { InboxPage } from "../pages/InboxPage";
 import { LoginPage } from "../pages/LoginPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { SettingsPage } from "../pages/SettingsPage";
@@ -19,6 +20,7 @@ export const routes: RouteObject[] = [
     children: [
       // The research home doubles as the new-research entry (design spec §4.2).
       { path: "/research", element: <HomePage /> },
+      { path: "/inbox", element: <InboxPage /> },
       { path: "/research/new", element: <Navigate to="/research" replace /> },
       { path: "/research/:topicId", element: <TopicPage /> },
       { path: "/settings", element: <SettingsPage /> },
