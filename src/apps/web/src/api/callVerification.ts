@@ -297,6 +297,7 @@ export interface CheckFilingsResponse {
   checked_ciks: string[];
   triggered_ciks: string[];
   inbox_item_ids: string[];
+  triggered_operation_ids?: string[];
   cooldown_minutes: number;
 }
 

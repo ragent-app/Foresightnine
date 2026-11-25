@@ -1208,3 +1208,261 @@ def test_batch1_p0_xbrl_lag_anti_poisoning_and_export_fail_closed():
     assert "SECRET OCR TABLE FIGURE" not in md
     assert "受版权/导出权限限制，原话已脱敏" in md
 
+
+def test_batch2_p1_ocf_capex_fcf_bridge_billings_and_operating_kpi():
+    # Rich SaaS/Tech snapshot with GAAP OI, SBC, D&A, OCF, CapEx, and contiguous QoQ Deferred Revenue
+    saas_snap = PeerCompanySnapshot(
+        cik="0001234567",
+        symbol="SAAS",
+        company_name="CLOUD SAAS CORP",
+        sic="7372",
+        sic_description="PREPACKAGED SOFTWARE",
+        latest_periodic_accession="0001-25-003",
+        latest_periodic_filed_at="2025-11-21",
+        taxonomy="us-gaap",
+        currency="USD",
+        projection_version=4,
+        facts_by_line={
+            "revenue": {
+                "Revenues": {
+                    "USD": [
+                        {"start": "2024-07-01", "end": "2024-09-30", "val": 8_000_000_000, "filed": "2024-11-15", "form": "10-Q", "accn": "0001-24-003", "fy": 2025, "fp": "Q3"},
+                        {"start": "2025-07-01", "end": "2025-09-30", "val": 10_000_000_000, "filed": "2025-11-21", "form": "10-Q", "accn": "0001-25-003", "fy": 2026, "fp": "Q3"},
+                    ]
+                }
+            },
+            "operating_income": {
+                "OperatingIncomeLoss": {
+                    "USD": [
+                        # GAAP OI = $2.0B (20.0% OM)
+                        {"start": "2025-07-01", "end": "2025-09-30", "val": 2_000_000_000, "filed": "2025-11-21", "form": "10-Q", "accn": "0001-25-003", "fy": 2026, "fp": "Q3"},
+                    ]
+                }
+            },
+            "stock_based_compensation": {
+                "ShareBasedCompensation": {
+                    "USD": [
+                        # SBC = $0.8B (8.0% of rev)
+                        {"start": "2025-07-01", "end": "2025-09-30", "val": 800_000_000, "filed": "2025-11-21", "form": "10-Q", "accn": "0001-25-003", "fy": 2026, "fp": "Q3"},
+                    ]
+                }
+            },
+            "depreciation_amortization": {
+                "DepreciationDepletionAndAmortization": {
+                    "USD": [
+                        # D&A = $0.2B (2.0% of rev) -> Bridge OM = 20% + 8% + 2% = 30.0%!
+                        {"start": "2025-07-01", "end": "2025-09-30", "val": 200_000_000, "filed": "2025-11-21", "form": "10-Q", "accn": "0001-25-003", "fy": 2026, "fp": "Q3"},
+                    ]
+                }
+            },
+            "operating_cash_flow": {
+                "NetCashProvidedByUsedInOperatingActivities": {
+                    "USD": [
+                        {"start": "2025-07-01", "end": "2025-09-30", "val": 3_000_000_000, "filed": "2025-11-21", "form": "10-Q", "accn": "0001-25-003", "fy": 2026, "fp": "Q3"},
+                    ]
+                }
+            },
+            "capex": {
+                "PaymentsToAcquirePropertyPlantAndEquipment": {
+                    "USD": [
+                        {"start": "2025-07-01", "end": "2025-09-30", "val": 500_000_000, "filed": "2025-11-21", "form": "10-Q", "accn": "0001-25-003", "fy": 2026, "fp": "Q3"},
+                    ]
+                }
+            },
+            "deferred_revenue_current": {
+                "ContractWithCustomerLiabilityCurrent": {
+                    "USD": [
+                        {"start": None, "end": "2024-06-30", "val": 3_000_000_000, "filed": "2024-08-15", "form": "10-Q", "accn": "0001-24-002", "fy": 2025, "fp": "Q2"},
+                        {"start": None, "end": "2024-09-30", "val": 3_500_000_000, "filed": "2024-11-15", "form": "10-Q", "accn": "0001-24-003", "fy": 2025, "fp": "Q3"},
+                        {"start": None, "end": "2025-06-30", "val": 4_000_000_000, "filed": "2025-08-15", "form": "10-Q", "accn": "0001-25-002", "fy": 2026, "fp": "Q2"},
+                        {"start": None, "end": "2025-09-30", "val": 4_600_000_000, "filed": "2025-11-21", "form": "10-Q", "accn": "0001-25-003", "fy": 2026, "fp": "Q3"},
+                    ]
+                }
+            },
+        },
+    )
+    subs = {
+        "filings": {
+            "recent": {
+                "form": ["10-Q", "10-Q"],
+                "accessionNumber": ["0001-25-003", "0001-24-003"],
+                "filingDate": ["2025-11-21", "2024-11-15"],
+                "reportDate": ["2025-09-30", "2024-09-30"],
+            }
+        }
+    }
+    ledger = build_sec_10q_collision_ledger(
+        entity_key="0001234567",
+        snap=saas_snap,
+        submissions=subs,
+        call_fy=2026,
+        call_fq=3,
+        call_date_iso="2025-11-10",
+        as_of=date(2025, 11, 25),
+    )
+    assert ledger.status == "same_period_10q_matched"
+    assert ledger.stock_based_compensation == "800000000.00"
+    assert ledger.depreciation_amortization == "200000000.00"
+    # Billings Q3 FY26 = 10B + (4.6B - 4.0B) = 10.6B; Q3 FY25 = 8B + (3.5B - 3.0B) = 8.5B; YoY = +24.71%
+    assert ledger.calculated_billings == "10600000000.00"
+    assert ledger.calculated_billings_yoy_pct == "24.71"
+
+    call_txt = (
+        "SAAS Q3 FY26 Earnings Call\nNovember 10, 2025\n"
+        "Operator: Unless otherwise stated, all margins and profit metrics are Non-GAAP.\n"
+        "CFO: Operating cash flow was $3.0 billion. Adjusted free cash flow reached $3.2 billion. "
+        "Operating margin expanded to 34.0%. ARR grew 45% year over year. PaidSeats reached 850 thousand.\n"
+    )
+    parsed = parse_transcript_v2(call_txt, source_id="src_saas", title="SAAS Q3 Call")
+    assert parsed.call_default_basis == "non_gaap"
+
+    prior_vcl = AccountVerbalCommitmentLedger(
+        owner_id="acct_1",
+        entity_key="0001234567",
+        commitments=[
+            VerbalCommitmentRecord(
+                commitment_id="cmt_seats_q3",
+                owner_id="acct_1",
+                entity_key="0001234567",
+                source_id="src_q2",
+                source_fiscal_period="FY2026-Q2",
+                call_date="2025-08-10",
+                metric_canonical="other",
+                kpi_key="PaidSeats",
+                target_fy=2026,
+                target_fq=3,
+                target_period_key="FY2026-Q3",
+                operator="ge",
+                value_low="1000",
+                scale="thousands",
+                verification_tier="operating_kpi_next_call",
+                status="pending_next_call",
+                commitment_text="PaidSeats will reach at least 1,000 thousand in Q3 FY26.",
+            )
+        ],
+    )
+
+    l2 = Layer2ManagementExtraction(
+        owner_id="acct_1",
+        entity_key="0001234567",
+        fiscal_period_key="FY2026-Q3",
+        mgmt_bundle_sha256="d" * 64,
+        factual_claims=[
+            # 1) Implicit OCF ($3.0B) -> exempt from implicit Non-GAAP lock, corroborated green!
+            ManagementFactualClaim(
+                metric_canonical="operating_cash_flow",
+                basis="unknown",
+                period_scope="single_quarter",
+                target_fy=2026,
+                target_fq=3,
+                operator="approx",
+                value_low="3.0",
+                scale="billions",
+                evidence_sufficiency="explicit",
+                track_hint="earnings_cash",
+                source_id="src_saas",
+                verbatim_quote="Operating cash flow was $3.0 billion.",
+                claim_summary="Q3 OCF was $3.0B",
+            ),
+            # 2) Explicit Non-GAAP FCF ($3.2B vs OCF-CapEx $2.5B) -> yellow FCF definition gap (NEVER red!)
+            ManagementFactualClaim(
+                metric_canonical="free_cash_flow",
+                basis="non_gaap",
+                period_scope="single_quarter",
+                target_fy=2026,
+                target_fq=3,
+                operator="approx",
+                value_low="3.2",
+                scale="billions",
+                evidence_sufficiency="explicit",
+                track_hint="earnings_cash",
+                source_id="src_saas",
+                verbatim_quote="Adjusted free cash flow reached $3.2 billion.",
+                claim_summary="Q3 Adjusted FCF was $3.2B",
+            ),
+            # 3) Non-GAAP OM 34.0% vs Bridge OM 30.0% (400 bps unexplained > 200 bps) -> yellow bridge warning!
+            ManagementFactualClaim(
+                metric_canonical="operating_margin",
+                basis="inherited_call_default",
+                period_scope="single_quarter",
+                target_fy=2026,
+                target_fq=3,
+                operator="approx",
+                value_low="34.0",
+                unit="%",
+                evidence_sufficiency="explicit",
+                track_hint="earnings_cash",
+                source_id="src_saas",
+                verbatim_quote="Operating margin expanded to 34.0%.",
+                claim_summary="Q3 Non-GAAP operating margin was 34.0%",
+            ),
+            # 4) ARR YoY 45% vs Calculated Billings YoY 24.71% (+20.3pp >= 15pp) -> yellow SaaS Billings divergence!
+            ManagementFactualClaim(
+                metric_canonical="other",
+                kpi_key="ARR",
+                basis="operating_kpi",
+                operator="growth_yoy_ge",
+                value_low="45",
+                unit="%",
+                evidence_sufficiency="explicit",
+                track_hint="demand_channel",
+                source_id="src_saas",
+                verbatim_quote="ARR grew 45% year over year.",
+                claim_summary="ARR grew 45% YoY",
+            ),
+            # 5) Operating KPI PaidSeats 850k -> surfaced in Tab 1 AND grades prior Q2 commitment (>=1000k) as MISSED!
+            ManagementFactualClaim(
+                metric_canonical="other",
+                kpi_key="PaidSeats",
+                basis="operating_kpi",
+                target_fy=2026,
+                target_fq=3,
+                operator="approx",
+                value_low="850",
+                scale="thousands",
+                evidence_sufficiency="explicit",
+                track_hint="demand_channel",
+                source_id="src_saas",
+                verbatim_quote="PaidSeats reached 850 thousand.",
+                claim_summary="PaidSeats reached 850 thousand",
+            ),
+        ],
+    )
+
+    rep, updated_vcl = run_layer3_call_collision(
+        entity_key="0001234567",
+        parsed_docs=[parsed],
+        ledger=ledger,
+        snap=saas_snap,
+        mgmt_extraction=l2,
+        source_texts={"src_saas": call_txt},
+        existing_commitment_ledger=prior_vcl,
+        as_of=date(2025, 11, 25),
+        owner_id="acct_1",
+    )
+
+    # Check 1: OCF corroborated green
+    ocf_f = next(f for f in rep.collision_findings if "operating_cash_flow" in f.title)
+    assert ocf_f.severity == "green" and ocf_f.collision_kind == "corroborated"
+
+    # Check 2: FCF definition gap yellow (NOT red!)
+    fcf_f = next(f for f in rep.collision_findings if "FCF 定义差异提示" in f.title)
+    assert fcf_f.severity == "yellow"
+
+    # Check 3: SBC + D&A Non-GAAP OM bridge flags 400 bps unexplained > 200 bps as yellow
+    om_f = next(f for f in rep.collision_findings if "operating_margin" in f.title)
+    assert om_f.severity == "yellow"
+    assert "桥接 OM 30.00%" in (om_f.formula_note or "")
+
+    # Check 4: ARR 45% vs Billings YoY 24.71% flagged yellow with Skeptic note
+    bill_f = next(f for f in rep.collision_findings if "Calculated Billings" in f.title)
+    assert bill_f.severity == "yellow"
+    assert "并购" in (bill_f.skeptic_note or "")
+
+    # Check 5: PaidSeats surfaced in Tab 1 AND prior Q2 PaidSeats >= 1000k commitment graded MISSED!
+    assert any("运营 KPI 登记与跟踪 · PaidSeats" in f.title for f in rep.collision_findings)
+    seats_cmt = next(c for c in updated_vcl.commitments if c.commitment_id == "cmt_seats_q3")
+    assert seats_cmt.status == "missed"
+    assert "算术比对" in (seats_cmt.delta_note or "")
+
+

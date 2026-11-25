@@ -96,6 +96,9 @@ services:
       FORESIGHTNINE_TRUSTED_PROXY_CIDRS: ""
       # Local supervisor/Prometheus scrape only; the Tunnel ingress denies this path.
       FORESIGHTNINE_METRICS_ENABLED: "true"
+      # Background P1-B / V3a Phase 2c radar sweep (single-leader Postgres lease protected).
+      FORESIGHTNINE_RADAR_BG_ENABLED: "true"
+      FORESIGHTNINE_RADAR_BG_INTERVAL_SECONDS: "3600"
       # Development-only Redis wiring; production requires TLS/authenticated
       # Redis and deployment-owned configuration.
       FORESIGHTNINE_ABUSE_MODE: redis

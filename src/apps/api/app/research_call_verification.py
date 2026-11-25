@@ -1087,6 +1087,8 @@ def run_call_verification_pipeline(
     redline_loader: Callable[[str, Mapping[str, Any] | None, str | None], tuple[list[dict[str, Any]], str | None, str | None]] | None = None,
     capital_allocation_loader: Callable[[str], Mapping[str, Any] | None] | None = None,
     v25_credibility_loader: Callable[[str], Sequence[Mapping[str, Any]]] | None = None,
+    eight_k_loader: Callable[[str, Mapping[str, Any] | None, str | None], tuple[str | None, list[str]]] | None = None,
+    footnote_fallback_loader: Callable[[str, str], list[dict[str, Any]]] | None = None,
     thesis_pillars: Sequence[Mapping[str, Any]] = (),
     eight_k_text: str | None = None,
     extra_benchmark_providers: Sequence[ExpectationBenchmarkProvider] = (),
@@ -1243,6 +1245,14 @@ def run_call_verification_pipeline(
             redline_paras = []
 
     cap_alloc = capital_allocation_loader(cik) if (capital_allocation_loader is not None and cik) else None
+    resolved_eight_k_text = eight_k_text
+    reg_g_excerpts: list[str] = []
+    if resolved_eight_k_text is None and eight_k_loader is not None and cik and not cache_only:
+        try:
+            resolved_eight_k_text, reg_g_excerpts = eight_k_loader(cik, submissions, call_date_iso)
+        except Exception:
+            resolved_eight_k_text, reg_g_excerpts = None, []
+
     ledger = build_sec_10q_collision_ledger(
         entity_key=entity_key,
         snap=snap,
@@ -1257,6 +1267,31 @@ def run_call_verification_pipeline(
         redline_prior_accession=red_pri_accn,
         rules=compiled,
     )
+    extra_ledger_updates: dict[str, Any] = {}
+    if reg_g_excerpts:
+        extra_ledger_updates["reg_g_reconciliation_excerpts"] = reg_g_excerpts[:4]
+    if (
+        footnote_fallback_loader is not None
+        and cik
+        and not cache_only
+        and ledger.initial_10q_accession
+        and (
+            "rpo:footnote_unstructured_manual" in ledger.open_gaps
+            or "purchase_commitments:footnote_unstructured_manual" in ledger.open_gaps
+        )
+    ):
+        try:
+            fb_tables = footnote_fallback_loader(cik, ledger.initial_10q_accession)
+            if fb_tables:
+                extra_ledger_updates["footnote_fallbacks"] = [
+                    f"{t.get('r_file')}: {t.get('title')} ({t.get('row_count', 0)} rows)"
+                    for t in fb_tables[:4]
+                    if isinstance(t, Mapping)
+                ]
+        except Exception:
+            pass
+    if extra_ledger_updates:
+        ledger = ledger.model_copy(update=extra_ledger_updates)
 
     _emit(
         "layer1_ready",
@@ -1305,7 +1340,7 @@ def run_call_verification_pipeline(
                 source_texts=source_texts,
                 existing_ledger=existing_vcl,
                 thesis_pillars=thesis_pillars,
-                eight_k_text=eight_k_text,
+                eight_k_text=resolved_eight_k_text,
                 rules=compiled,
             )
             allowed_sids = {d.source_id for d in mgmt_docs}
@@ -1368,7 +1403,7 @@ def run_call_verification_pipeline(
             )
             parsed_ss, s_stats = _invoke_slot_json(
                 runner=model_runner,
-                slot="deep_reasoner",
+                slot="fast_extractor",
                 stage="v3a_sellside_extract",
                 role="v3a_sellside_extractor",
                 conversation_id=f"v3a_ss:{operation_id}:{ss_doc.source_id}",
@@ -1682,7 +1717,7 @@ def evaluate_call_commitment_verify_phase2c(
             )[: compiled.rules.context_budget.omission_phase2_max_chars]
             verdict_res, _ = _invoke_slot_json(
                 runner=model_runner,
-                slot="deep_reasoner",
+                slot="fast_extractor",
                 stage="v3a_omission_verify",
                 role="v3a_omission_verifier",
                 conversation_id=f"v3a_om:{cik}:{new_periodic_filings[0].accession}",

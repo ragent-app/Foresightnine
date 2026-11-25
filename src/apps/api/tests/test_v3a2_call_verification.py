@@ -919,3 +919,156 @@ def test_batch1_p0_sse_broker_cors_patch_context_truncation_ocr_and_leases(monke
         finally:
             api_main.app.state.v3a_call_audit_hooks = None
 
+
+def test_batch2_p1_fast_extractor_routing_regg_html_radar_health_lease_and_async_check_filings(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    monkeypatch.setenv("FORESIGHTNINE_ENV", "test")
+    api_main.reset_state()
+
+    # 1. Stdlib HTMLParser Reg-G table extractor parses GAAP-to-Non-GAAP table cleanly
+    sample_8k_html = """<html><body>
+      <h2>Reconciliation of GAAP to Non-GAAP Operating Income</h2>
+      <table>
+        <tr><th>Line Item ($M)</th><th>Q3 FY26</th></tr>
+        <tr><td>GAAP Operating Income</td><td>2000</td></tr>
+        <tr><td>Stock-based compensation</td><td>800</td></tr>
+        <tr><td>Non-GAAP Operating Income</td><td>2800</td></tr>
+      </table>
+    </body></html>"""
+    tables = api_main._extract_reg_g_tables_markdown(sample_8k_html)
+    assert len(tables) == 1
+    assert "Non-GAAP Operating Income | 2800" in tables[0]
+
+    # 2. Sell-side extraction routes to slot="fast_extractor" and eight_k_loader attaches reg_g excerpts to ledger
+    slots_seen: list[tuple[str, str]] = []
+
+    class _SlotSpyRunner(_FakeSlotRunner):
+        def invoke(self, req: Any) -> SlotModelResponse:
+            slots_seen.append((req.stage, req.slot))
+            return super().invoke(req)
+
+    src_call = ResearchSource(
+        source_id="src_b2_call",
+        owner_id="acct_b2",
+        title="NVDA Call",
+        text=_SAMPLE_CALL,
+        kind="user_supplied",
+        retrieval_method="user_text",
+        is_simulated=False,
+        obtained_at=datetime.now(timezone.utc),
+        content_sha256="7" * 64,
+        permissions=SourcePermissions(store=True, model_input=True, display=True, export=True),
+    )
+    src_ss = ResearchSource(
+        source_id="src_b2_ss",
+        owner_id="acct_b2",
+        title="Bernstein Preview",
+        text=_SAMPLE_SELLSIDE,
+        kind="user_supplied",
+        retrieval_method="user_text",
+        is_simulated=False,
+        obtained_at=datetime.now(timezone.utc),
+        content_sha256="8" * 64,
+        permissions=SourcePermissions(store=True, model_input=True, display=True, export=False),
+    )
+    snap = _nvda_snap(include_q3=True, include_q4=False)
+    subs = {"filings": {"recent": {"form": ["10-Q"], "accessionNumber": ["0001-25-003"], "filingDate": ["2025-11-21"], "reportDate": ["2025-10-26"]}}}
+    _rep, led, _vcl = run_call_verification_pipeline(
+        account_id="acct_b2",
+        sources=[src_call, src_ss],
+        symbol_override="NVDA",
+        cik_override="0001045810",
+        model_runner=_SlotSpyRunner(),
+        snap_loader=lambda _c, _s: (snap, subs),
+        eight_k_loader=lambda _c, _sub, _cd: ("8-K release duplicate text", tables),
+        doc_facts_repo=InMemoryDocumentRepository(),
+        l2_mgmt_repo=InMemoryDocumentRepository(),
+        l2_sellside_repo=InMemoryDocumentRepository(),
+        commitment_ledger_repo=InMemoryDocumentRepository(),
+        company_index_repo=InMemoryDocumentRepository(),
+        manifest_repo=InMemoryDocumentRepository(),
+    )
+    assert ("v3a_call_extract", "deep_reasoner") in slots_seen
+    assert ("v3a_sellside_extract", "fast_extractor") in slots_seen
+    assert len(led.reg_g_reconciliation_excerpts) == 1
+
+    # 3. /v2/research/radar/health exposes read-only maintenance_lease (no cross-account data)
+    #    & /v2/research/call-audit/check-filings async_dispatch=True returns 202 + triggered_operation_ids
+    from app.fin_data.adapters.sec_events.pacing import RawSubmissionRow, RawSubmissionsResult
+
+    h_lease = api_main._claim_maintenance_lease("radar_bg_sweep", ttl_seconds=60)
+    api_main._release_maintenance_lease(
+        "radar_bg_sweep",
+        holder_id=h_lease,
+        completed=True,
+        stats={"last_processed_count": 2, "last_duration_ms": 123, "last_error": None},
+    )
+
+    recent_filed = date.today()
+    subs_override_obj = RawSubmissionsResult(
+        cik="0001045810",
+        company_name="NVIDIA CORP",
+        tickers=["NVDA"],
+        exchanges=["Nasdaq"],
+        sic="3674",
+        is_fpi=False,
+        rows=[
+            RawSubmissionRow(
+                cik="0001045810",
+                accession="0001-26-001",
+                nodash="000126001",
+                form="10-K",
+                filed_at=recent_filed,
+                period_of_report=date(2026, 1, 25),
+                primary_document="nvda-q4.htm",
+            )
+        ],
+        pages_fetched=1,
+        earliest_loaded_date=recent_filed,
+    )
+    api_main.app.state.v3a_call_audit_hooks = {
+        "model_runner": _FakeSlotRunner(),
+        "snap_loader": lambda _c, _s: (_nvda_snap(include_q3=True, include_q4=True), subs),
+        "redline_loader": lambda _c, _sub, _cd: ([], None, None),
+        "enable_layer0b_ocr": False,
+        "submissions_override": subs_override_obj,
+        "facts_override": {},
+    }
+    try:
+        with TestClient(api_main.app) as client:
+            hdr, acct_id = _auth_headers(client, "v3a_b2_ops@example.com")
+            r_health = client.get("/v2/research/radar/health", headers=hdr)
+            assert r_health.status_code == 200
+            ml = r_health.json().get("maintenance_lease")
+            assert isinstance(ml, dict)
+            assert ml["last_duration_ms"] == 123
+            assert ml["last_error_present"] is False
+            assert "last_processed_count" not in ml  # Zero cross-account count leak!
+
+            # Seed awaiting_current_10q company index + commitment ledger for async_dispatch test
+            api_main.V3A_ACCOUNT_COMPANY_INDEX.put(
+                f"v3a_idx:{acct_id}:0001045810",
+                {
+                    "owner_id": acct_id,
+                    "entity_key": "0001045810",
+                    "cik": "0001045810",
+                    "symbol": "NVDA",
+                    "awaiting_current_10q": True,
+                    "latest_call_date": "2025-11-20",
+                    "latest_mgmt_source_ids": [],
+                },
+            )
+            r_async = client.post(
+                "/v2/research/call-audit/check-filings",
+                headers=hdr,
+                json={"force": True, "async_dispatch": True},
+            )
+            assert r_async.status_code == 202, r_async.text
+            body = r_async.json()
+            assert body["status"] == "accepted"
+            assert "0001045810" in body["triggered_ciks"]
+            assert len(body["triggered_operation_ids"]) == 1
+    finally:
+        api_main.app.state.v3a_call_audit_hooks = None
+
+

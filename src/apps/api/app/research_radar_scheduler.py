@@ -152,6 +152,7 @@ class RadarHealthSummary(_FrozenRadarModel):
     unread_inbox_count: int = 0
     last_checked_at: datetime | None = None
     subscriptions: list[SubscriptionHealthView] = Field(default_factory=list)
+    maintenance_lease: dict[str, Any] | None = None
 
 
 class SubscriptionCheckOutcome(_FrozenRadarModel):

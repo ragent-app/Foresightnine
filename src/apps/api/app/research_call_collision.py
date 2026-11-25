@@ -117,6 +117,9 @@ TWELVE_XBRL_METRICS: tuple[str, ...] = (
 
 _MARGIN_METRICS = frozenset({"gross_margin", "operating_margin"})
 _REVENUE_METRICS = frozenset({"revenue", "rpo_or_deferred_revenue"})
+# GAAP-invariant cash-flow & top-line lines: exempt from IMPLICIT opening-statement Non-GAAP lock,
+# while still honoring EXPLICIT basis="non_gaap" declarations (D2).
+_GAAP_INVARIANT_METRICS = frozenset({"revenue", "rpo_or_deferred_revenue", "operating_cash_flow", "capex"})
 _PER_SHARE_METRICS = frozenset({"eps_diluted"})
 
 _SCALE_MULTIPLIERS: dict[str, Decimal] = {
@@ -355,6 +358,8 @@ class Sec10QCollisionLedger(_StrictV3aModel):
     dio_yoy_days: str | None = None
     rpo_or_defrev_yoy_pct: str | None = None
     rpo_minus_rev_pp: str | None = None
+    calculated_billings: str | None = None
+    calculated_billings_yoy_pct: str | None = None
     # Track 2: Earnings & cash quality
     gross_margin_pct: str | None = None
     gross_margin_yoy_bps: str | None = None
@@ -362,9 +367,12 @@ class Sec10QCollisionLedger(_StrictV3aModel):
     operating_margin_yoy_bps: str | None = None
     ocf_to_ni_ratio: str | None = None
     fcf_to_ni_ratio: str | None = None
+    stock_based_compensation: str | None = None
+    depreciation_amortization: str | None = None
     restructuring_charges: str | None = None
     impairment_charges: str | None = None
     consecutive_restructuring_quarters: int = 0
+    reg_g_reconciliation_excerpts: list[str] = Field(default_factory=list)
     # Track 3: CapEx & ASC 440 supply commitments
     capex_yoy_pct: str | None = None
     ppe_net_yoy_pct: str | None = None
@@ -1065,10 +1073,13 @@ def xbrl_actuals_lookup(
         )
 
     # 1. Resolve effective basis (D2: opening-statement implicit Non-GAAP lock)
+    # OCF and CapEx are GAAP-invariant under implicit call default (still locked if explicitly declared non_gaap).
     eff_basis: str = basis_lock
     if basis_lock in ("unknown", "inherited_call_default") and call_default_basis == "non_gaap":
-        if metric_canonical not in _REVENUE_METRICS:
+        if metric_canonical not in _GAAP_INVARIANT_METRICS:
             eff_basis = "non_gaap"
+        else:
+            eff_basis = "gaap"
     elif basis_lock in ("unknown", "inherited_call_default") and call_default_basis == "gaap":
         eff_basis = "gaap"
 
@@ -1500,6 +1511,8 @@ def build_sec_10q_collision_ledger(
         "rpo",
         "deferred_revenue_current",
         "deferred_revenue_noncurrent",
+        "stock_based_compensation",
+        "depreciation_amortization",
         "restructuring_charges",
         "impairment_charges",
         "purchase_commitments",
@@ -1538,6 +1551,8 @@ def build_sec_10q_collision_ledger(
     rpo_cur, rpo_py = picked["rpo"]
     dc_cur, dc_py = picked["deferred_revenue_current"]
     dnc_cur, dnc_py = picked["deferred_revenue_noncurrent"]
+    sbc_cur, _sbc_py = picked["stock_based_compensation"]
+    da_cur, _da_py = picked["depreciation_amortization"]
     restruct_cur, _ = picked["restructuring_charges"]
     impair_cur, _ = picked["impairment_charges"]
     pcomm_cur, pcomm_py = picked["purchase_commitments"]
@@ -1566,7 +1581,7 @@ def build_sec_10q_collision_ledger(
     dio_py = (inv_py.value / cogs_py.value * Decimal("91.25")) if (not is_fin and inv_py and cogs_py and cogs_py.value > 0) else None
     dio_yoy = (dio_cur - dio_py) if (dio_cur is not None and dio_py is not None) else None
 
-    # RPO or Deferred Revenue YoY
+    # RPO or Deferred Revenue YoY + Strict QoQ Calculated Billings (Rev_t + TotalDR_t - TotalDR_{t-1})
     rpo_yoy = _yoy(rpo_cur, rpo_py)
     if rpo_yoy is None and (dc_cur is not None or dnc_cur is not None):
         cur_dr = (dc_cur.value if dc_cur else Decimal(0)) + (dnc_cur.value if dnc_cur else Decimal(0))
@@ -1576,6 +1591,32 @@ def build_sec_10q_collision_ledger(
     rpo_minus_rev = (rpo_yoy - rev_yoy) if (rpo_yoy is not None and rev_yoy is not None) else None
     if rpo_cur is None and dc_cur is None and dnc_cur is None:
         open_gaps.append("rpo:footnote_unstructured_manual")
+
+    calc_billings_cur: Decimal | None = None
+    calc_billings_yoy: Decimal | None = None
+    if not is_fin and rev_cur is not None:
+        dc_series = _select_line_from_facts(facts_init, "deferred_revenue_current", "quarter", 16, taxonomy=snap.taxonomy, as_of=basis_cutoff)
+        dnc_series = _select_line_from_facts(facts_init, "deferred_revenue_noncurrent", "quarter", 16, taxonomy=snap.taxonomy, as_of=basis_cutoff)
+        dr_by_end: dict[date, Decimal] = {}
+        for p_dc in dc_series:
+            dr_by_end[p_dc.end] = dr_by_end.get(p_dc.end, Decimal(0)) + p_dc.value
+        for p_dnc in dnc_series:
+            dr_by_end[p_dnc.end] = dr_by_end.get(p_dnc.end, Decimal(0)) + p_dnc.value
+
+        def _billings_for(rev_p: Period | None) -> Decimal | None:
+            if rev_p is None or rev_p.end not in dr_by_end:
+                return None
+            # Strict contiguous prior quarter Q_{t-1}: 65..115 days before rev_p.end
+            prev_ends = [d for d in dr_by_end if 65 <= (rev_p.end - d).days <= 115]
+            if not prev_ends:
+                return None
+            prev_end = max(prev_ends)
+            return rev_p.value + (dr_by_end[rev_p.end] - dr_by_end[prev_end])
+
+        calc_billings_cur = _billings_for(rev_cur)
+        calc_billings_py = _billings_for(rev_py)
+        if calc_billings_cur is not None and calc_billings_py is not None and calc_billings_py > 0:
+            calc_billings_yoy = ((calc_billings_cur - calc_billings_py) / abs(calc_billings_py)) * Decimal(100)
 
     # Track 2 margins & cash quality
     gp_val = gp_cur.value if gp_cur else ((rev_cur.value - cogs_cur.value) if (rev_cur and cogs_cur) else None)
@@ -1658,12 +1699,16 @@ def build_sec_10q_collision_ledger(
         dio_yoy_days=_fmt_dec(dio_yoy, 1),
         rpo_or_defrev_yoy_pct=_fmt_dec(rpo_yoy, 2),
         rpo_minus_rev_pp=_fmt_dec(rpo_minus_rev, 2),
+        calculated_billings=_fmt_dec(calc_billings_cur, 2),
+        calculated_billings_yoy_pct=_fmt_dec(calc_billings_yoy, 2),
         gross_margin_pct=_fmt_dec(gm_cur, 2),
         gross_margin_yoy_bps=_fmt_dec(gm_yoy_bps, 0),
         operating_margin_pct=_fmt_dec(om_cur, 2),
         operating_margin_yoy_bps=_fmt_dec(om_yoy_bps, 0),
         ocf_to_ni_ratio=_fmt_dec(ocf_to_ni, 2),
         fcf_to_ni_ratio=_fmt_dec(fcf_to_ni, 2),
+        stock_based_compensation=_fmt_dec(sbc_cur.value, 2) if sbc_cur else None,
+        depreciation_amortization=_fmt_dec(da_cur.value, 2) if da_cur else None,
         restructuring_charges=_fmt_dec(restruct_cur.value, 2) if restruct_cur else None,
         impairment_charges=_fmt_dec(impair_cur.value, 2) if impair_cur else None,
         consecutive_restructuring_quarters=consec_restruct,
@@ -2051,7 +2096,7 @@ def _resolve_effective_basis(raw_basis: BasisType, call_default_basis: CallDefau
         return "gaap"
     if raw_basis == "non_gaap":
         return "non_gaap"
-    if metric_canonical in _REVENUE_METRICS:
+    if metric_canonical in _GAAP_INVARIANT_METRICS:
         return "gaap"
     if call_default_basis == "non_gaap":
         return "non_gaap"
@@ -2432,9 +2477,48 @@ def run_layer3_call_collision(
                     continue
 
                 if xres.status == "nongaap_locked":
-                    # D2: NEVER hard-collide Non-GAAP against GAAP; show reconciliation gap bps when margin!
+                    # D2: NEVER hard-collide Non-GAAP against GAAP; provide deterministic FCF baseline or SBC/D&A bridge!
                     gaap_val = _dec(xres.value)
                     claim_lo = _scale_claim_value(_dec(claim.value_low), claim.unit, claim.scale, claim.metric_canonical)
+                    claim_hi = _scale_claim_value(_dec(claim.value_high), claim.unit, claim.scale, claim.metric_canonical)
+
+                    # Special FCF baseline (OCF - CapEx): never red contradiction; green match or yellow definition-gap note
+                    if claim.metric_canonical == "free_cash_flow" and gaap_val is not None and claim_lo is not None:
+                        passed_fcf, fcf_detail = _evaluate_operator(
+                            operator=claim.operator,
+                            actual=gaap_val,
+                            prior_year=_dec(xres.prior_year_value),
+                            low=claim_lo,
+                            high=claim_hi,
+                            rel_tol_pct=rel_tol,
+                            abs_tol=Decimal("0"),
+                        )
+                        findings.append(
+                            CollisionFinding(
+                                finding_id=_fid("fcf", f"{idx}:{claim.metric_canonical}"),
+                                track="track_2_earnings_cash",
+                                collision_kind="corroborated" if passed_fcf else "basis_divergence_nongaap_gap",
+                                severity="green" if passed_fcf else "yellow",
+                                title=(
+                                    "FCF 标准口径印证 (10-Q OCF - CapEx)"
+                                    if passed_fcf
+                                    else "FCF 定义差异提示 (管理层口径 vs 10-Q OCF - CapEx)"
+                                ),
+                                management_statement=claim.claim_summary,
+                                ledger_evidence=f"10-Q 标准基线 (OCF - CapEx) = {xres.value} {xres.unit or ''}（{xres.fiscal_period_key or ''}）",
+                                formula_note=f"标准 FCF = OCF - CapEx ({fcf_detail})",
+                                basis_badge="FCF 标准基线对照",
+                                period_badge=xres.fiscal_period_key,
+                                restated_later=xres.restated_later,
+                                restatement_note=rest_note,
+                                linked_pillar="cash_quality",
+                                skeptic_note="自由现金流属非 GAAP 指标，管理层口径可能额外调整资本化软件、租赁或并购款项；仅作定义差异提示，不作硬冲突。",
+                                quotes=[qref],
+                                priority_rank=76 if passed_fcf else 35,
+                            )
+                        )
+                        continue
+
                     gap_sev: CollisionSeverity = "info"
                     gap_title = f"Non-GAAP 口径锁（不误撞 GAAP）· {claim.metric_canonical}"
                     formula_str = f"管理层 Non-GAAP={claim.value_low}{claim.unit or ''} vs 10-Q GAAP={xres.value}{xres.unit or ''}"
@@ -2447,6 +2531,60 @@ def run_layer3_call_collision(
                             gap_sev = "yellow"
                             gap_title = f"Non-GAAP vs GAAP 调节差提示 ({_fmt_dec(gap_bps, 0)} bps) · {claim.metric_canonical}"
                         formula_str = f"Non-GAAP {_fmt_dec(claim_lo, 2)}% vs GAAP {_fmt_dec(gaap_val, 2)}% (差值 {_fmt_dec(gap_bps, 0)} bps)"
+
+                    # Deterministic GAAP -> Non-GAAP Bridge (GAAP OI + SBC + D&A + Restructuring + Impairment)
+                    rev_pt = ledger.lines.get("revenue")
+                    oi_pt = ledger.lines.get("operating_income")
+                    rev_d = _dec(rev_pt.value) if rev_pt else None
+                    oi_d = _dec(oi_pt.value) if oi_pt else None
+                    sbc_d = abs(_dec(ledger.stock_based_compensation) or Decimal(0))
+                    da_d = abs(_dec(ledger.depreciation_amortization) or Decimal(0))
+                    rest_d = abs(_dec(ledger.restructuring_charges) or Decimal(0))
+                    imp_d = abs(_dec(ledger.impairment_charges) or Decimal(0))
+                    has_bridge_items = any(
+                        v is not None
+                        for v in (
+                            ledger.stock_based_compensation,
+                            ledger.depreciation_amortization,
+                            ledger.restructuring_charges,
+                            ledger.impairment_charges,
+                        )
+                    )
+                    if (
+                        claim.metric_canonical in ("operating_income", "operating_margin")
+                        and has_bridge_items
+                        and rev_d is not None
+                        and rev_d > 0
+                        and oi_d is not None
+                        and claim_lo is not None
+                    ):
+                        known_addbacks = sbc_d + da_d + rest_d + imp_d
+                        bridge_oi = oi_d + known_addbacks
+                        bridge_om = (bridge_oi / rev_d) * Decimal(100)
+                        if claim.metric_canonical == "operating_income":
+                            unexpl = claim_lo - bridge_oi
+                            unexpl_pct_rev = abs(unexpl) / rev_d * Decimal(100)
+                            formula_str = (
+                                f"确定性调节桥: GAAP OI ({_fmt_dec(oi_d, 0)}) + SBC ({_fmt_dec(sbc_d, 0)}) + D&A ({_fmt_dec(da_d, 0)})"
+                                + (f" + 重组/减值 ({_fmt_dec(rest_d + imp_d, 0)})" if (rest_d + imp_d) > 0 else "")
+                                + f" = {_fmt_dec(bridge_oi, 0)} vs 管理层 {_fmt_dec(claim_lo, 0)}（未解释调节差占营收 {_fmt_dec(unexpl_pct_rev, 2)}%）"
+                            )
+                            if unexpl_pct_rev > Decimal("3.0"):
+                                gap_sev = "yellow"
+                                gap_title = f"Non-GAAP 调节桥未解释项偏高 ({_fmt_dec(unexpl_pct_rev, 1)}% 营收) · operating_income"
+                        else:
+                            unexpl_bps = abs(claim_lo - bridge_om) * Decimal(100)
+                            formula_str = (
+                                f"确定性调节桥: GAAP OM {_fmt_dec(gaap_val, 2)}% + SBC/D&A/重组加回 → 桥接 OM {_fmt_dec(bridge_om, 2)}% "
+                                f"vs 管理层 {_fmt_dec(claim_lo, 2)}%（未解释差 {_fmt_dec(unexpl_bps, 0)} bps）"
+                            )
+                            if unexpl_bps > Decimal("200"):
+                                gap_sev = "yellow"
+                                gap_title = f"Non-GAAP 利润率调节桥未解释项偏高 ({_fmt_dec(unexpl_bps, 0)} bps) · operating_margin"
+
+                    if ledger.reg_g_reconciliation_excerpts:
+                        formula_str = f"{formula_str} | 参考 8-K Ex-99.1 Reg-G 表已提取（不作自动红灯）"
+
                     findings.append(
                         CollisionFinding(
                             finding_id=_fid("ng", f"{idx}:{claim.metric_canonical}"),
@@ -2462,7 +2600,7 @@ def run_layer3_call_collision(
                             restated_later=xres.restated_later,
                             restatement_note=rest_note,
                             linked_pillar=pillar,
-                            skeptic_note="Non-GAAP 通常剔除 SBC、无形资产摊销或一次性重组，调节差本身不等于财务造假。",
+                            skeptic_note="Non-GAAP 通常剔除 SBC、无形资产摊销或一次性重组，调节差本身不等于财务造假；请核对 8-K Ex-99.1 Reg-G 调节表。",
                             quotes=[qref],
                             priority_rank=36 if gap_sev == "yellow" else 65,
                         )
@@ -2528,6 +2666,65 @@ def run_layer3_call_collision(
                                     priority_rank=8 if sev_m == "red" else 26,
                                 )
                             )
+                continue
+
+            # Verified Operating KPI / ARR / NRR claims (metric_canonical == "other"):
+            # 1) Cross-check ARR/NRR/Billings against strict QoQ Calculated Billings YoY if available
+            # 2) Surface verified Operating KPIs explicitly in Tab 1 rather than silently dropping them
+            kpi_text_blob = f"{claim.kpi_key or ''} {claim.claim_summary}".casefold()
+            is_arr_nrr = bool(re.search(r"\b(?:arr|nrr|net\s+retention|net\s+dollar\s+retention|billings)\b", kpi_text_blob))
+            bill_yoy_d = _dec(ledger.calculated_billings_yoy_pct)
+            if is_arr_nrr and bill_yoy_d is not None:
+                claim_growth = _dec(claim.value_low) if (claim.unit == "%" or claim.operator in ("growth_yoy_ge", "growth_yoy_le")) else None
+                divergent = claim_growth is not None and (claim_growth - bill_yoy_d) >= Decimal("15")
+                findings.append(
+                    CollisionFinding(
+                        finding_id=_fid("bill", f"{idx}:{claim.kpi_key or 'arr'}"),
+                        track="track_1_demand_channel",
+                        collision_kind="basis_divergence_nongaap_gap" if divergent else "observation_only_insufficient_evidence",
+                        severity="yellow" if divergent else "info",
+                        title=(
+                            f"ARR/NRR 增速与 Calculated Billings YoY 背离 ({_fmt_dec(claim_growth, 1)}% vs {ledger.calculated_billings_yoy_pct}%)"
+                            if divergent
+                            else f"SaaS Calculated Billings 交叉核验参考 · {claim.kpi_key or 'ARR/Billings'}"
+                        ),
+                        management_statement=claim.claim_summary,
+                        ledger_evidence=(
+                            f"10-Q 严格环比 Calculated Billings = {ledger.calculated_billings} {ledger.currency}，"
+                            f"YoY {ledger.calculated_billings_yoy_pct}%（公式：Revenue_t + [TotalDR_t - TotalDR_{{t-1}}]）"
+                        ),
+                        formula_note="Calculated Billings = Revenue(Q_t) + [DeferredRev(Q_t) - DeferredRev(Q_{t-1})]",
+                        basis_badge="SaaS 账本交叉校验",
+                        period_badge=fiscal_period_key,
+                        linked_pillar="growth",
+                        skeptic_note="Calculated Billings 受多年度合同预付周期、并购递延收入重估及汇率波动影响，与 ARR/NRR 的差值需结合合同期限解读。",
+                        quotes=[qref],
+                        priority_rank=33 if divergent else 79,
+                    )
+                )
+            elif claim.kpi_key:
+                val_disp = (
+                    f"{claim.value_low}{('–' + claim.value_high) if claim.value_high else ''}"
+                    f"{' ' + claim.scale if claim.scale else ''}{claim.unit or ''}"
+                    if claim.value_low is not None
+                    else "定性/里程碑"
+                )
+                findings.append(
+                    CollisionFinding(
+                        finding_id=_fid("kpi", f"{idx}:{claim.kpi_key}"),
+                        track=track_name,
+                        collision_kind="observation_only_insufficient_evidence",
+                        severity="info",
+                        title=f"运营 KPI 登记与跟踪 · {claim.kpi_key} ({val_disp})",
+                        management_statement=claim.claim_summary,
+                        ledger_evidence="属管理层自报运营 KPI（无对应 XBRL 强制披露项），已入账用于跨季一致性与 Silent Drop 追踪。",
+                        basis_badge="operating_kpi",
+                        period_badge=_fiscal_key(claim.target_fy, claim.target_fq) or fiscal_period_key,
+                        linked_pillar=pillar,
+                        quotes=[qref],
+                        priority_rank=82,
+                    )
+                )
 
     # Standalone Layer 1 deterministic red/yellow diagnostics (even when Layer 2 is absent or didn't pick a claim)
     if ledger.status in ("same_period_10q_matched",):
@@ -2845,13 +3042,71 @@ def run_layer3_call_collision(
                 quote=qref,
             )
 
-    # Evaluate all active (non-muted) commitments against Period P AND P+1 (four-timestamp hindsight grading) + Silent Drop
+    # Index current-call verified explicit Operating KPI claims for cross-quarter Track 6 arithmetic grading
+    def _norm_kpi(raw: str | None) -> str:
+        return re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "", (raw or "").casefold())
+
+    cur_verified_kpi_claims: dict[str, list[ManagementFactualClaim]] = {}
+    if mgmt_extraction is not None:
+        for cl in mgmt_extraction.factual_claims:
+            if cl.kpi_key and cl.evidence_sufficiency == "explicit" and cl.value_low is not None:
+                nk = _norm_kpi(cl.kpi_key)
+                if nk:
+                    cur_verified_kpi_claims.setdefault(nk, []).append(cl)
+
+    # Evaluate all active (non-muted) commitments against Period P AND P+1 (four-timestamp hindsight grading) + Operating KPI + Silent Drop
     mgmt_corpus_low = mgmt_corpus.casefold()
     updated_commitments: list[VerbalCommitmentRecord] = []
     for cmt in by_id.values():
         if cmt.muted:
             updated_commitments.append(cmt)
             continue
+
+        # 1b) Cross-quarter Operating KPI arithmetic grading against current call's verified self-reported KPI actual
+        if (
+            cmt.verification_tier == "operating_kpi_next_call"
+            and cmt.status == "pending_next_call"
+            and cmt.kpi_key
+            and cmt.source_fiscal_period
+            and fiscal_period_key
+            and cmt.source_fiscal_period != fiscal_period_key
+            and (cmt.value_low is not None or cmt.value_high is not None)
+        ):
+            nk = _norm_kpi(cmt.kpi_key)
+            matching_kpis = cur_verified_kpi_claims.get(nk) or []
+            for mcl in matching_kpis:
+                # Require compatible unit family (% vs non-%) and matching target period if both specify one
+                same_pct = (cmt.unit == "%") == (mcl.unit == "%")
+                period_ok = (
+                    cmt.target_period_key is None
+                    or cmt.target_period_key == fiscal_period_key
+                    or (mcl.target_fy == cmt.target_fy and mcl.target_fq == cmt.target_fq)
+                )
+                if not same_pct or not period_ok:
+                    continue
+                act_kpi = _scale_claim_value(_dec(mcl.value_low), mcl.unit, mcl.scale, "other")
+                lo_kpi = _scale_claim_value(_dec(cmt.value_low), cmt.unit, cmt.scale, "other")
+                hi_kpi = _scale_claim_value(_dec(cmt.value_high), cmt.unit, cmt.scale, "other")
+                if act_kpi is not None and (lo_kpi is not None or hi_kpi is not None):
+                    passed_kpi, detail_kpi = _evaluate_operator(
+                        operator=cmt.operator,
+                        actual=act_kpi,
+                        prior_year=None,
+                        low=lo_kpi,
+                        high=hi_kpi,
+                        rel_tol_pct=rel_tol,
+                        abs_tol=Decimal("0"),
+                    )
+                    cmt = cmt.model_copy(
+                        update={
+                            "status": "met" if passed_kpi else "missed",
+                            "actual_value": f"{mcl.value_low}{mcl.unit or ''}",
+                            "verified_against_accession": f"call_kpi:{mcl.source_id}",
+                            "verified_at_filed_date": call_date_iso,
+                            "delta_note": f"跨季管理层自报运营 KPI 算术比对 ({detail_kpi})",
+                        }
+                    )
+                    break
 
         # 1) XBRL Auto Grading (including immediate P+1 hindsight when p1_10q_filed <= as_of and > call_date)
         if cmt.verification_tier == "xbrl_auto" and snap is not None and cmt.target_fy is not None:

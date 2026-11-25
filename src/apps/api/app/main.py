@@ -8482,10 +8482,33 @@ def delete_radar_subscription(subscription_id: str, http_request: Request) -> Re
 )
 def get_radar_health(http_request: Request) -> RadarHealthSummary:
     account = _authenticated_account(http_request.headers.get("Authorization"))
-    return summarize_radar_health(
+    summary = summarize_radar_health(
         _account_subscriptions(account.account_id),
         _account_inbox_items(account.account_id),
     )
+    # Read-only global operational lease telemetry (strictly zero cross-account PII/counts)
+    lease_raw = RUNTIME_MAINTENANCE_LEASES.get("lease:radar_bg_sweep")
+    now_ts = lifecycle_clock.now().timestamp()
+    radar_bg_enabled = os.getenv("FORESIGHTNINE_RADAR_BG_ENABLED", "false").strip().lower() in ("1", "true", "yes")
+    try:
+        interval_sec = int(float(os.getenv("FORESIGHTNINE_RADAR_BG_INTERVAL_SECONDS", "3600")))
+    except ValueError:
+        interval_sec = 3600
+    lease_view: dict[str, Any] = {
+        "radar_bg_enabled": radar_bg_enabled,
+        "interval_seconds": interval_sec,
+        "lease_active": False,
+        "last_completed_at": None,
+        "last_duration_ms": None,
+        "last_error_present": False,
+    }
+    if isinstance(lease_raw, Mapping):
+        exp_ts = float(lease_raw.get("lease_expires_ts") or 0.0)
+        lease_view["lease_active"] = exp_ts > now_ts
+        lease_view["last_completed_at"] = lease_raw.get("last_completed_at")
+        lease_view["last_duration_ms"] = lease_raw.get("last_duration_ms")
+        lease_view["last_error_present"] = bool(lease_raw.get("last_error"))
+    return summary.model_copy(update={"maintenance_lease": lease_view})
 
 
 _RADAR_CHECK_NOW_OP_ENDPOINT = "/v2/research/radar/check-now"
@@ -9833,6 +9856,7 @@ class CallAuditCheckFilingsRequest(BaseModel):
     topic_id: str | None = Field(default=None, max_length=120)
     entity_keys: list[str] | None = Field(default=None, max_length=10)
     force: bool = False
+    async_dispatch: bool = False
 
 
 class CallAuditOperationView(BaseModel):
@@ -10048,6 +10072,195 @@ def _v3a_sec_loaders(
         return [dict(r) for r in recs if isinstance(r, Mapping)] if isinstance(recs, list) else []
 
     return _snap_loader, _redline_loader, _cap_alloc_loader, _v25_cred_loader
+
+
+def _extract_reg_g_tables_markdown(raw_html: str, *, max_tables: int = 2, max_chars: int = 1200) -> list[str]:
+    """Stdlib HTMLParser extraction of Reg-G GAAP-to-Non-GAAP reconciliation tables (reference only, never auto-red!)."""
+    from html.parser import HTMLParser
+
+    class _RegGTableParser(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__()
+            self.tables: list[list[list[str]]] = []
+            self._in_table = False
+            self._in_row = False
+            self._in_cell = False
+            self._cur_table: list[list[str]] = []
+            self._cur_row: list[str] = []
+            self._cell_parts: list[str] = []
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            t = tag.lower()
+            if t == "table" and not self._in_table:
+                self._in_table = True
+                self._cur_table = []
+            elif t == "tr" and self._in_table:
+                self._in_row = True
+                self._cur_row = []
+            elif t in ("td", "th") and self._in_row:
+                self._in_cell = True
+                self._cell_parts = []
+
+        def handle_data(self, data: str) -> None:
+            if self._in_cell:
+                self._cell_parts.append(data)
+
+        def handle_endtag(self, tag: str) -> None:
+            t = tag.lower()
+            if t in ("td", "th") and self._in_cell:
+                self._in_cell = False
+                cell = re.sub(r"\s+", " ", "".join(self._cell_parts)).strip()
+                self._cur_row.append(cell[:120])
+            elif t == "tr" and self._in_row:
+                self._in_row = False
+                if any(c for c in self._cur_row):
+                    self._cur_table.append(self._cur_row[:10])
+            elif t == "table" and self._in_table:
+                self._in_table = False
+                if 2 <= len(self._cur_table) <= 40:
+                    self.tables.append(self._cur_table)
+
+    if not raw_html:
+        return []
+    parser = _RegGTableParser()
+    try:
+        parser.feed(raw_html[:512_000])
+    except Exception:
+        pass
+    out: list[str] = []
+    for tbl in parser.tables:
+        flat = " ".join(" ".join(r) for r in tbl).casefold()
+        if not ("non-gaap" in flat or "reconciliation" in flat):
+            continue
+        if not ("gaap" in flat and re.search(r"\d", flat)):
+            continue
+        md_rows = [" | ".join(c for c in r if c) for r in tbl[:18]]
+        md_str = "\n".join(r for r in md_rows if r)[:max_chars]
+        if md_str:
+            out.append(md_str)
+        if len(out) >= max_tables:
+            break
+    return out
+
+
+def _v3a_aux_loaders(
+    *,
+    cache_only: bool,
+    hook_dict: Mapping[str, Any] | None = None,
+) -> tuple[Any, Any]:
+    """Build optional 8-K Ex-99.1 (Zone C dedup + Reg-G reference) & R*.htm footnote fallback loaders."""
+    hooks = hook_dict or {}
+    pol = load_fin_data_policy()
+    ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
+    lim = hooks.get("limiter") or SecPacingLimiter.from_env()
+    transport = hooks.get("transport")
+
+    def _eight_k_loader(cik_in: str, subs_doc: Mapping[str, Any] | None, call_date_iso: str | None) -> tuple[str | None, list[str]]:
+        if callable(hooks.get("eight_k_loader")):
+            return hooks["eight_k_loader"](cik_in, subs_doc, call_date_iso)
+        if cache_only or not isinstance(subs_doc, Mapping):
+            return None, []
+        recent = (subs_doc.get("filings") or {}).get("recent") if isinstance(subs_doc.get("filings"), Mapping) else None
+        if not isinstance(recent, Mapping):
+            return None, []
+        forms = recent.get("form") or []
+        accns = recent.get("accessionNumber") or []
+        fdates = recent.get("filingDate") or []
+        pdocs = recent.get("primaryDocument") or []
+        target_dt: date | None = None
+        if isinstance(call_date_iso, str) and len(call_date_iso.strip()) >= 10:
+            try:
+                target_dt = date.fromisoformat(call_date_iso.strip()[:10])
+            except ValueError:
+                target_dt = None
+        chosen: tuple[str, str] | None = None
+        for i in range(min(len(forms), len(accns), len(fdates))):
+            if str(forms[i]).upper() not in ("8-K", "8-K/A"):
+                continue
+            f_str = str(fdates[i])[:10]
+            if target_dt is not None and f_str:
+                try:
+                    fd = date.fromisoformat(f_str)
+                    if abs((fd - target_dt).days) > 7:
+                        continue
+                except ValueError:
+                    continue
+            chosen = (str(accns[i]), str(pdocs[i]) if i < len(pdocs) else "")
+            break
+        if chosen is None:
+            return None, []
+        accn_val, prim_doc = chosen
+        try:
+            from .fin_data.adapters.sec_events.pacing import sec_get_json, sec_get_text
+            from .research_governance_audit import _MAX_8K_EX991_BYTES, _strip_html_to_text
+
+            cik_int = str(int(cik10(cik_in)))
+            acc_nodash = accn_val.replace("-", "")
+            base_dir = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{acc_nodash}"
+            ex_url = f"{base_dir}/{prim_doc}" if prim_doc else None
+            try:
+                idx_doc, _ = sec_get_json(f"{base_dir}/index.json", category="filings", user_agent=ua, limiter=lim, policy=pol, transport=transport)
+                items = ((idx_doc or {}).get("directory") or {}).get("item") or []
+                cand_html: list[tuple[int, int, str]] = []
+                prim_low = prim_doc.lower()
+                for it in items:
+                    nm = str(it.get("name") or "")
+                    nl = nm.lower()
+                    if not nl.endswith((".htm", ".html")):
+                        continue
+                    if "index" in nl or "header" in nl or nl == prim_low or re.fullmatch(r"r\d+\.htm", nl):
+                        continue
+                    sz = int(it.get("size") or 0) if str(it.get("size") or "").isdigit() else 0
+                    if re.search(r"(?:ex|exhibit)[-_.]?99[-_.]?1|99[-_.]?1|ex99", nl):
+                        prio = 0
+                    elif re.search(r"(?:q[1-4]fy\d+pr|pr\.htm|press|earningsrelease|release)", nl):
+                        prio = 1
+                    elif "cfo" in nl or "supplement" in nl:
+                        prio = 3
+                    else:
+                        prio = 2
+                    cand_html.append((prio, -sz, nm))
+                if cand_html:
+                    cand_html.sort()
+                    ex_url = f"{base_dir}/{cand_html[0][2]}"
+            except Exception:
+                pass
+            if not ex_url:
+                return None, []
+            raw_html, _sha, _ct = sec_get_text(
+                ex_url,
+                category="filings",
+                user_agent=ua,
+                limiter=lim,
+                policy=pol,
+                transport=transport,
+                max_bytes=_MAX_8K_EX991_BYTES,
+            )
+            reg_g = _extract_reg_g_tables_markdown(raw_html)
+            plain = _strip_html_to_text(raw_html)
+            del raw_html
+            return (plain or None), reg_g
+        except Exception:
+            return None, []
+
+    def _footnote_fallback_loader(cik_in: str, accn_in: str) -> list[dict[str, Any]]:
+        if callable(hooks.get("footnote_fallback_loader")):
+            return hooks["footnote_fallback_loader"](cik_in, accn_in)
+        if cache_only:
+            return []
+        try:
+            from .research_call_collision import fetch_footnote_fallback_tables
+
+            return fetch_footnote_fallback_tables(
+                cik=cik10(cik_in),
+                accession=accn_in,
+                user_agent=ua,
+                max_tables=2,
+            )
+        except Exception:
+            return []
+
+    return _eight_k_loader, _footnote_fallback_loader
 
 
 def _resolve_v3a_runtime_for_account_id(
@@ -10868,6 +11081,7 @@ def run_call_audit_endpoint(
 
         try:
             snap_loader, redline_loader, cap_loader, v25_loader = _v3a_sec_loaders(cache_only=False, hook_dict=hook_dict)
+            eight_k_loader, footnote_loader = _v3a_aux_loaders(cache_only=False, hook_dict=hook_dict)
             report, ledger, _vcl = run_call_verification_pipeline(
                 account_id=account.account_id,
                 sources=loaded,
@@ -10885,6 +11099,8 @@ def run_call_audit_endpoint(
                 redline_loader=redline_loader,
                 capital_allocation_loader=cap_loader,
                 v25_credibility_loader=v25_loader,
+                eight_k_loader=eight_k_loader,
+                footnote_fallback_loader=footnote_loader,
                 thesis_pillars=pillars,
                 doc_facts_repo=V3A_DOC_PARSED_FACTS,
                 l2_mgmt_repo=V3A_CALL_L2_EXTRACTIONS,
@@ -11205,7 +11421,7 @@ def check_call_audit_filings(
     request: CallAuditCheckFilingsRequest,
     http_request: Request,
     authorization: str | None = Header(default=None, alias="Authorization"),
-) -> dict[str, Any]:
+) -> Any:
     """D4/D5 Insurance 1: 30m-cooldown 0-LLM SEC submissions fingerprint check for awaiting-10-Q companies (<=5 CIKs)."""
     from .research_radar_scheduler import merge_v3a_item_into_inbox, seen_accessions_for_channel
     from .research_transcript_parser import load_v3a_call_rules, normalize_entity_key
@@ -11245,7 +11461,9 @@ def check_call_audit_filings(
     checked_ciks: list[str] = []
     triggered_ciks: list[str] = []
     created_inbox_ids: list[str] = []
+    triggered_op_ids: list[str] = []
     runner_cache: list[Any] = []
+    pending_async_jobs: list[tuple[FilingWatchSubscription, list[Any], ThesisLedger | None]] = []
 
     for idx_key, row in awaiting_entries[:max_ciks]:
         cik_val = cik10(str(row["cik"]))
@@ -11300,10 +11518,14 @@ def check_call_audit_filings(
             continue
 
         triggered_ciks.append(cik_val)
+        ledger = _latest_confirmed_ledger(account.account_id, sub.topic_id)
+        if request.async_dispatch:
+            pending_async_jobs.append((sub, new_pf, ledger))
+            continue
+
         if not runner_cache:
             r_obj, _sb = _resolve_v3a_runtime_for_account_id(account.account_id, hook_dict=hook_dict)
             runner_cache.append(r_obj)
-        ledger = _latest_confirmed_ledger(account.account_id, sub.topic_id)
         try:
             items = _run_v3a_phase2c_for_subscription(
                 account_id=account.account_id,
@@ -11334,10 +11556,65 @@ def check_call_audit_filings(
             new_seen.setdefault(pf.accession, {})["call_verify"] = "checked"
         WATCH_SUBSCRIPTIONS.put(sub.subscription_id, sub.model_copy(update={"seen_accessions": new_seen, "updated_at": now}))
 
+    if request.async_dispatch and pending_async_jobs:
+        acct_id = account.account_id
+        for job_sub, job_pf, job_ledger in pending_async_jobs:
+            op_id_p2c = f"op_p2c_{uuid4().hex[:12]}"
+            triggered_op_ids.append(op_id_p2c)
+
+            def _bg_p2c(
+                _sub: FilingWatchSubscription = job_sub,
+                _pf: list[Any] = job_pf,
+                _led: ThesisLedger | None = job_ledger,
+            ) -> None:
+                try:
+                    r_bg, _sb_bg = _resolve_v3a_runtime_for_account_id(acct_id, hook_dict=hook_dict)
+                    items_bg = _run_v3a_phase2c_for_subscription(
+                        account_id=acct_id,
+                        sub=_sub,
+                        new_periodic_filings=_pf,
+                        ledger=_led,
+                        model_runner=r_bg,
+                        as_of=None,
+                        cfg=cfg,
+                    )
+                    now_bg = lifecycle_clock.now()
+                    ex_inb = _account_inbox_items(acct_id)
+                    lat_d = max((pf.filed_at for pf in _pf), default=None)
+                    for v_it in items_bg:
+                        pers, is_n, is_m = merge_v3a_item_into_inbox(v_it, ex_inb, filing_date=lat_d)
+                        if is_n or is_m:
+                            CHANGE_INBOX_ITEMS.put(pers.inbox_item_id, pers)
+                    ns = {k_s: dict(v_s) for k_s, v_s in _sub.seen_accessions.items()}
+                    for pf in _pf:
+                        ns.setdefault(pf.accession, {})["call_verify"] = "checked"
+                    WATCH_SUBSCRIPTIONS.put(_sub.subscription_id, _sub.model_copy(update={"seen_accessions": ns, "updated_at": now_bg}))
+                except Exception as exc_bg:
+                    if "xbrl_indexing_lag" in str(exc_bg):
+                        nf = {k_f: dict(v_f) for k_f, v_f in _sub.failed_accessions.items()}
+                        for pf in _pf:
+                            nf.setdefault(pf.accession, {})["call_verify"] = "xbrl_indexing_lag"
+                        WATCH_SUBSCRIPTIONS.put(_sub.subscription_id, _sub.model_copy(update={"failed_accessions": nf, "updated_at": lifecycle_clock.now()}))
+
+            Thread(target=_bg_p2c, daemon=True, name=f"v3a-p2c-{op_id_p2c}").start()
+
+        return JSONResponse(
+            {
+                "status": "accepted",
+                "checked_ciks": checked_ciks,
+                "triggered_ciks": triggered_ciks,
+                "inbox_item_ids": [],
+                "triggered_operation_ids": triggered_op_ids,
+                "cooldown_minutes": cooldown_min,
+            },
+            status_code=202,
+        )
+
     return {
         "checked_ciks": checked_ciks,
         "triggered_ciks": triggered_ciks,
         "inbox_item_ids": created_inbox_ids,
+        "triggered_operation_ids": triggered_op_ids,
         "cooldown_minutes": cooldown_min,
     }
 
