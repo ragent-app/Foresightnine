@@ -189,6 +189,28 @@ STANDARD_LINES: dict[str, LineSpec] = {s.line: s for s in (
           ["CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect",
            "CashAndCashEquivalentsPeriodIncreaseDecrease"],
           ["IncreaseDecreaseInCashAndCashEquivalents"]),
+    # ---- V3a 10-Q collision & footnote lines (55 STANDARD_LINES total) ----
+    _spec("rpo", "footnote", False, "money",
+          ["RevenueRemainingPerformanceObligation", "UnsatisfiedPerformanceObligation"],
+          ["TransactionPriceAllocatedToRemainingPerformanceObligations"]),
+    _spec("deferred_revenue_current", "balance", False, "money",
+          ["ContractWithCustomerLiabilityCurrent", "DeferredRevenueCurrent", "ContractWithCustomerLiability"],
+          ["ContractLiabilitiesCurrent", "DeferredIncomeCurrent"]),
+    _spec("deferred_revenue_noncurrent", "balance", False, "money",
+          ["ContractWithCustomerLiabilityNoncurrent", "DeferredRevenueNoncurrent"],
+          ["ContractLiabilitiesNoncurrent", "DeferredIncomeNoncurrent"]),
+    _spec("restructuring_charges", "income", True, "money",
+          ["RestructuringCharges", "RestructuringSettlementAndImpairmentProvisions",
+           "RestructuringAndRelatedCostIncurredCost"],
+          ["RestructuringProvision", "ExpenseOfRestructuringActivities"]),
+    _spec("impairment_charges", "income", True, "money",
+          ["GoodwillImpairmentLoss", "AssetImpairmentCharges", "ImpairmentOfLongLivedAssetsHeldForUse",
+           "ImpairmentOfIntangibleAssetsExcludingGoodwill"],
+          ["ImpairmentLossRecognisedInProfitOrLoss", "ImpairmentLossRecognisedInProfitOrLossGoodwill"]),
+    _spec("purchase_commitments", "footnote", False, "money",
+          ["UnrecordedUnconditionalPurchaseObligationBalanceSheetAmount",
+           "PurchaseObligation", "LongTermPurchaseCommitmentAmount"],
+          ["ContractualCommitmentsForAcquisitionOfPropertyPlantAndEquipment"]),
 )}
 
 

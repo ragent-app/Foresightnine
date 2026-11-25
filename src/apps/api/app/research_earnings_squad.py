@@ -3834,9 +3834,12 @@ class EarningsSquadOrchestrator:
                 valid_url = ref.url
             rm_val = ref.retrieval_method if ref.retrieval_method in (
                 "user_supplied", "official_html", "sec_companyconcept", "user_pdf", "user_html",
+                "user_pptx", "user_docx", "user_text",
                 "sec_filing_html", "sec_earnings_release", "sec_filing_table", "sec_filing_sections",
-                "historical_prices", "market_data", "sec_companyfacts", "structured_financials",
-                "fmp_consensus", "fmp_transcript", "web_html", "web_pdf",
+                "sec_material_events", "historical_prices", "market_data", "sec_companyfacts",
+                "structured_financials", "fmp_consensus", "fmp_transcript",
+                "peer_relative_valuation", "governance_capital_audit", "call_qa_verification",
+                "web_html", "web_pdf",
             ) else "official_html"
             try:
                 src = ResearchSource(

@@ -23,6 +23,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from pathlib import Path
+import re
 import json
 from pathlib import Path
 from threading import BoundedSemaphore, Lock, RLock
@@ -108,7 +110,7 @@ def resolve_ticker_to_cik(
         raise SecPacingError("ticker_not_found", f"Ticker {symbol!r} not found in SEC company_tickers.json.", retryable=False)
     return hit
 
-_CURRENT_PROJECTION_VERSION = 3
+_CURRENT_PROJECTION_VERSION = 4
 
 _V2_PROJECTION_LINES: tuple[str, ...] = (
     "revenue",
@@ -121,14 +123,26 @@ _V2_PROJECTION_LINES: tuple[str, ...] = (
     "profit_before_tax",
     "shares_diluted",
     "shares_basic",
+    "eps_diluted",
+    "eps_basic",
     "cash",
     "short_term_investments",
+    "accounts_receivable",
+    "inventory",
+    "accounts_payable",
     "short_term_debt",
     "long_term_debt",
+    "ppe_net",
     "total_assets",
     "total_liabilities",
     "equity",
     "non_controlling_interests",
+    "rd_expense",
+    "sga_expense",
+    "selling_expense",
+    "admin_expense",
+    "total_operating_costs",
+    "depreciation_amortization",
     "operating_cash_flow",
     "capex",
     "stock_based_compensation",
@@ -138,7 +152,16 @@ _V2_PROJECTION_LINES: tuple[str, ...] = (
     "unrecognized_sbc",
     "repurchased_shares",
     "rsu_grants_shares",
+    # V3a 10-Q collision & footnote lines (45 lines total)
+    "rpo",
+    "deferred_revenue_current",
+    "deferred_revenue_noncurrent",
+    "restructuring_charges",
+    "impairment_charges",
+    "purchase_commitments",
 )
+
+_ISO_CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
 
 _REVERSE_DCF_WACC = Decimal("0.10")
 _REVERSE_DCF_TERMINAL_G = Decimal("0.03")
@@ -440,14 +463,24 @@ def project_companyfacts_to_snapshot(
             for unit_key, rows in units.items():
                 if not isinstance(rows, list) or not rows:
                     continue
-                if spec.unit_kind == "money" and unit_key in ("USD", "TWD", "EUR", "CNY", "JPY", "GBP", "DKK", "CHF", "CAD"):
+                if spec.unit_kind == "money":
+                    if not _ISO_CURRENCY_RE.match(unit_key):
+                        continue
                     if not currency_found and line_name == "revenue":
                         detected_currency = unit_key
                         currency_found = True
-                elif spec.unit_kind == "shares" and unit_key != "shares":
-                    continue
-                elif spec.unit_kind == "money" and len(unit_key) != 3:
-                    continue
+                elif spec.unit_kind == "shares":
+                    if unit_key != "shares":
+                        continue
+                elif spec.unit_kind == "per_share":
+                    uk_low = unit_key.lower()
+                    if "/" not in uk_low and "per" not in uk_low:
+                        continue
+                    if not currency_found and "/" in unit_key:
+                        c_part = unit_key.split("/", 1)[0].strip()
+                        if _ISO_CURRENCY_RE.match(c_part):
+                            detected_currency = c_part
+                            currency_found = True
                 compact_rows: list[dict[str, Any]] = []
                 for r in rows:
                     if not isinstance(r, Mapping) or r.get("val") is None or not r.get("end"):
@@ -498,6 +531,135 @@ def project_companyfacts_to_snapshot(
     )
 
 
+def _projection_target_tags_by_taxonomy() -> dict[str, set[str]]:
+    """Dynamically derive all unique XBRL tags needed for ``_V2_PROJECTION_LINES`` plus DEI shares."""
+    by_tax: dict[str, set[str]] = {
+        "us-gaap": set(),
+        "ifrs-full": set(),
+        "dei": {"EntityCommonStockSharesOutstanding"},
+    }
+    for line_name in _V2_PROJECTION_LINES:
+        spec = STANDARD_LINES.get(line_name)
+        if spec is None:
+            continue
+        for tax, tags in spec.tags.items():
+            by_tax.setdefault(tax, set()).update(tags)
+    return by_tax
+
+
+def extract_sliced_companyfacts_from_file(path: Any) -> dict[str, Any]:
+    """Extract only the target XBRL tags from a 10-60MB SEC ``companyfacts.json`` file on disk.
+
+    Avoids deserializing 500+ unneeded XBRL concepts (cutting peak RSS from ~250MB to ~25-35MB
+    on 512M containers) using pure stdlib byte-index scanning + ``json.JSONDecoder.raw_decode``.
+    """
+    import mmap
+    from pathlib import Path
+
+    target_by_tax = _projection_target_tags_by_taxonomy()
+    facts_out: dict[str, dict[str, Any]] = {}
+    decoder = json.JSONDecoder()
+    file_path = Path(path)
+    file_size = file_path.stat().st_size
+    if file_size == 0:
+        return {"facts": facts_out}
+
+    def _find_matching_brace(mm: mmap.mmap, open_pos: int) -> int:
+        depth = 0
+        in_str = False
+        esc = False
+        pos = open_pos
+        n = len(mm)
+        while pos < n:
+            b = mm[pos]
+            if in_str:
+                if esc:
+                    esc = False
+                elif b == 92:  # '\\'
+                    esc = True
+                elif b == 34:  # '"'
+                    in_str = False
+            else:
+                if b == 34:  # '"'
+                    in_str = True
+                elif b == 123:  # '{'
+                    depth += 1
+                elif b == 125:  # '}'
+                    depth -= 1
+                    if depth == 0:
+                        return pos
+            pos += 1
+        return -1
+
+    with file_path.open("rb") as fh:
+        with mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+            facts_key = mm.find(b'"facts"')
+            if facts_key == -1:
+                return json.loads(mm[:].decode("utf-8"))
+            facts_open = mm.find(b"{", facts_key + 7)
+            if facts_open == -1:
+                return {"facts": facts_out}
+
+            for tax_name, wanted_tags in target_by_tax.items():
+                if not wanted_tags:
+                    continue
+                tax_token = f'"{tax_name}"'.encode("ascii")
+                search_pos = facts_open + 1
+                tax_open = -1
+                while True:
+                    hit = mm.find(tax_token, search_pos)
+                    if hit == -1:
+                        break
+                    p = hit + len(tax_token)
+                    while p < file_size and mm[p] in (32, 9, 10, 13):
+                        p += 1
+                    if p < file_size and mm[p] == 58:
+                        p += 1
+                        while p < file_size and mm[p] in (32, 9, 10, 13):
+                            p += 1
+                        if p < file_size and mm[p] == 123:
+                            tax_open = p
+                            break
+                    search_pos = hit + len(tax_token)
+                if tax_open == -1:
+                    continue
+                tax_close = _find_matching_brace(mm, tax_open)
+                if tax_close == -1:
+                    continue
+
+                tax_bucket: dict[str, Any] = {}
+                for tag in wanted_tags:
+                    tag_token = f'"{tag}"'.encode("ascii")
+                    t_search = tax_open + 1
+                    while t_search < tax_close:
+                        t_hit = mm.find(tag_token, t_search, tax_close)
+                        if t_hit == -1:
+                            break
+                        p = t_hit + len(tag_token)
+                        while p < tax_close and mm[p] in (32, 9, 10, 13):
+                            p += 1
+                        if p < tax_close and mm[p] == 58:
+                            p += 1
+                            while p < tax_close and mm[p] in (32, 9, 10, 13):
+                                p += 1
+                            if p < tax_close and mm[p] == 123:
+                                obj_end = _find_matching_brace(mm, p)
+                                if obj_end != -1 and obj_end <= tax_close:
+                                    try:
+                                        snippet = mm[p : obj_end + 1].decode("utf-8")
+                                        parsed, _ = decoder.raw_decode(snippet)
+                                        if isinstance(parsed, dict) and isinstance(parsed.get("units"), dict):
+                                            tax_bucket[tag] = parsed
+                                            break
+                                    except (UnicodeDecodeError, ValueError):
+                                        pass
+                        t_search = t_hit + len(tag_token)
+                if tax_bucket:
+                    facts_out[tax_name] = tax_bucket
+
+    return {"facts": facts_out}
+
+
 def load_or_fetch_company_snapshot(
     *,
     symbol: str,
@@ -537,11 +699,23 @@ def load_or_fetch_company_snapshot(
                     if snap.projection_version >= min_projection_version:
                         return snap, True
                 return None, False
-        for _k, val in snapshot_cache.items():
-            if isinstance(val, Mapping) and str(val.get("symbol") or "").upper() == sym_u:
-                snap = PeerCompanySnapshot.model_validate(val)
+        # O(1) symbol -> cik pointer written on snapshot save
+        sym_alias = snapshot_cache.get(f"sym:{sym_u}")
+        if isinstance(sym_alias, Mapping) and isinstance(sym_alias.get("cik"), str):
+            hit = snapshot_cache.get(f"snap:{cik10(sym_alias['cik'])}")
+            if isinstance(hit, Mapping):
+                snap = PeerCompanySnapshot.model_validate(hit)
                 if snap.projection_version >= min_projection_version:
                     return snap, True
+            return None, False
+        # Never full-table scan Postgres in cache_only mode; allow lightweight scan only on small InMemory test repos
+        from .storage import InMemoryDocumentRepository
+        if isinstance(snapshot_cache, InMemoryDocumentRepository):
+            for _k, val in snapshot_cache.items():
+                if isinstance(val, Mapping) and str(val.get("symbol") or "").upper() == sym_u:
+                    snap = PeerCompanySnapshot.model_validate(val)
+                    if snap.projection_version >= min_projection_version:
+                        return snap, True
         return None, False
 
     if cik is None:
@@ -598,18 +772,28 @@ def load_or_fetch_company_snapshot(
                     return cached_snap, True
 
         url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik_norm}.json"
-        with _PARSE_SEMAPHORE:
-            cf_doc, _sha = sec_get_json(
-                url,
-                category="financials",
-                user_agent=user_agent,
-                limiter=limiter,
-                policy=policy,
-                transport=transport,
-                stream_transport=stream_transport,
-                max_bytes=60_000_000,
-                large=True,
-            )
+        from .fin_data.adapters.sec_events.pacing import sec_get_to_tempfile
+        from .research_memory_gate import heavy_memory_section
+
+        with heavy_memory_section(), _PARSE_SEMAPHORE:
+            tmp_path: Path | None = None
+            try:
+                tmp_path, _ct, _sha = sec_get_to_tempfile(
+                    url,
+                    accept="application/json",
+                    category="financials",
+                    user_agent=user_agent,
+                    limiter=limiter,
+                    policy=policy,
+                    transport=transport,
+                    stream_transport=stream_transport,
+                    max_bytes=60_000_000,
+                    suffix=".json",
+                )
+                cf_doc = extract_sliced_companyfacts_from_file(tmp_path)
+            finally:
+                if tmp_path is not None:
+                    tmp_path.unlink(missing_ok=True)
             snap = project_companyfacts_to_snapshot(
                 cik=cik_norm,
                 symbol=sym_u,
@@ -625,6 +809,7 @@ def load_or_fetch_company_snapshot(
 
         if snapshot_cache is not None:
             snapshot_cache.put(cache_key, snap.model_dump(mode="json"))
+            snapshot_cache.put(f"sym:{sym_u}", {"cik": cik_norm, "symbol": sym_u})
         return snap, False
 
 

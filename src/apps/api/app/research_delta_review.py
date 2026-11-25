@@ -546,4 +546,7 @@ def build_inbox_item_from_delta_review(
         scorecard_diff=diff.model_dump(mode="json"),
         review_state="unread",
         disclosed_at=disclosed,
+        report_date=disclosed,
+        fiscal_period_key=period,
+        has_confirmed_ledger=True,
     )

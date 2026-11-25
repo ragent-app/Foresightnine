@@ -253,6 +253,7 @@ export interface AvailableVersionSource {
   url?: string;
   original_pdf_available?: boolean;
   original_html_available?: boolean;
+  original_document_available?: boolean;
   pdf_text_spacing_warning?: boolean;
   verification: string;
   extraction_disclosure?: string;

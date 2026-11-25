@@ -99,7 +99,7 @@ def test_pillar1_chained_non_integer_split_and_fake_buyback_and_sign_norm() -> N
         cik="0001234567", symbol="SPLITCO", company_name="SplitCo", sic="7372", sic_description="Software",
         latest_periodic_accession="new-10k", latest_periodic_filed_at="2026-02-15", companyfacts_doc=cf,
     )
-    assert snap.projection_version == 3
+    assert snap.projection_version == 4
     rules, _sha, _comp = load_v25_governance_rules()
     ca = compute_capital_allocation_audit(snap, rules=rules, price_usd=Decimal("100.00"))
     assert any("1.5000x" in n for n in ca.split_adjustments_applied)

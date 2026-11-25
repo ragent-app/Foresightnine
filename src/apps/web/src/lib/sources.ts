@@ -265,20 +265,49 @@ export function isFetchableUrl(raw: string, secAvailable = true, options?: Fetch
   return fetchUrlProblem(raw, secAvailable, options) === null;
 }
 
-export type UploadKind = "pdf" | "html" | "text";
+export type UploadKind = "pdf" | "html" | "text" | "pptx" | "docx";
 
-export const UPLOAD_KIND_LABEL: Readonly<Record<UploadKind, string>> = { pdf: "PDF", html: "HTML", text: "文本" };
+export const UPLOAD_KIND_LABEL: Readonly<Record<UploadKind, string>> = {
+  pdf: "PDF",
+  html: "HTML",
+  text: "文本",
+  pptx: "PPTX",
+  docx: "DOCX",
+};
 
-/** Files above the JSON limit, and plain text, go through the streaming multipart endpoint. */
+/** PDF, PPTX, DOCX and plain text always stream via multipart /upload (OCR + page map + BlobStore); HTML above JSON limit streams too. */
 export function usesStreamingUpload(file: { size: number }, kind: UploadKind): boolean {
-  return kind === "text" || file.size > MAX_UPLOAD_BYTES;
+  return kind === "pdf" || kind === "text" || kind === "pptx" || kind === "docx" || file.size > MAX_UPLOAD_BYTES;
 }
 
 export function uploadKind(file: { name: string; type: string }): UploadKind | null {
   const name = file.name.toLowerCase();
   if (file.type === "application/pdf" || name.endsWith(".pdf")) return "pdf";
+  if (
+    file.type === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+    name.endsWith(".pptx")
+  ) {
+    return "pptx";
+  }
+  if (
+    file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    name.endsWith(".docx")
+  ) {
+    return "docx";
+  }
   if (file.type === "text/html" || name.endsWith(".html") || name.endsWith(".htm")) return "html";
-  if (file.type === "text/plain" || name.endsWith(".txt")) return "text";
+  if (
+    file.type === "text/plain" ||
+    file.type === "text/markdown" ||
+    file.type === "text/vtt" ||
+    name.endsWith(".txt") ||
+    name.endsWith(".md") ||
+    name.endsWith(".markdown") ||
+    name.endsWith(".vtt") ||
+    name.endsWith(".srt")
+  ) {
+    return "text";
+  }
   return null;
 }
 

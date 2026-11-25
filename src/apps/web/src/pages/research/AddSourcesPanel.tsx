@@ -136,7 +136,7 @@ export function AddSourcesPanel({ asOfIso, onAdded, onClose, initial, locked = f
     setError(null);
     if (!next) return;
     const nextKind = uploadKind(next);
-    if (!nextKind) { setFileProblem("只支持 PDF、HTML 或纯文本文件。其他格式可以复制文字后在“文本”中添加。"); return; }
+    if (!nextKind) { setFileProblem("仅支持 PDF、PPTX、DOCX、HTML、Markdown、字幕（VTT/SRT）或纯文本文件。"); return; }
     if (next.size > MAX_LARGE_UPLOAD_BYTES) { setFileProblem(`文件为 ${formatBytes(next.size)}，超过 200 MB 的上限。`); return; }
     setFileProblem(null);
     setFile(next);
@@ -287,12 +287,12 @@ export function AddSourcesPanel({ asOfIso, onAdded, onClose, initial, locked = f
                 onDrop={onDrop}
               >
                 <Icon name="upload" size={22} />
-                <span>拖入 PDF、HTML 或文本文件</span>
+                <span>拖入 PDF、PPTX、DOCX、HTML、字幕或文本文件</span>
                 <button type="button" className="btn" onClick={() => fileInput.current?.click()}>选择文件</button>
-                <span className="meta">单个文件不超过 200 MB；年报等大文件按页读取，扫描页会自动识别文字</span>
+                <span className="meta">单个文件不超过 200 MB（PPTX/DOCX 限 25 MB）；PDF 自动按页读取与智能 OCR</span>
               </div>
             )}
-            <input ref={fileInput} type="file" accept=".pdf,.html,.htm,.txt,application/pdf,text/html,text/plain" hidden onChange={(event) => pickFile(event.target.files?.[0])} />
+            <input ref={fileInput} type="file" accept=".pdf,.pptx,.docx,.html,.htm,.txt,.md,.markdown,.vtt,.srt,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/html,text/plain,text/markdown,text/vtt" hidden onChange={(event) => pickFile(event.target.files?.[0])} />
             {fileProblem ? <span className="inline-error" role="alert">{fileProblem}</span> : null}
             <TitleField id={`${ids}-title`} value={title} onChange={setTitle} disabled={disabled} />
             {kind === "pdf" ? (

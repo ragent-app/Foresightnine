@@ -1841,7 +1841,7 @@ def generate_cda_attribution_brief(
     for cq in parsed.cited_quotes:
         match = find_quotation_span(cq.quotation, sliced_cda) if sliced_cda else None
         if match is not None:
-            neg_warn = check_negation_context(match)
+            neg_warn, _surr = check_negation_context(match)
             ok_q += 1
             v_quotes.append(cq.model_copy(update={"verified": True, "negation_warning": neg_warn}))
         else:

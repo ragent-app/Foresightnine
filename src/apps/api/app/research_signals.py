@@ -236,6 +236,18 @@ class EventRunMetrics(_FrozenSignalModel):
     protocol_used: str | None = None
 
 
+class PeriodicFilingRef(_FrozenSignalModel):
+    """Lightweight metadata for a periodic filing (10-Q/10-K/20-F or NT late-filing notice)."""
+
+    cik: str
+    accession: str
+    form: str
+    filed_at: date
+    period_of_report: date | None = None
+    primary_document_url: str | None = None
+    is_late_notice: bool = False
+
+
 class SecEventScanResult(_FrozenSignalModel):
     """Output of Layer 1 deterministic scan (0 LLM)."""
 
@@ -255,6 +267,7 @@ class SecEventScanResult(_FrozenSignalModel):
     target_candidates: list[RawEventCandidate] = Field(default_factory=list)
     recent_context_candidates: list[RawEventCandidate] = Field(default_factory=list)
     suppressed_events: list[SuppressedEventRecord] = Field(default_factory=list)
+    periodic_filings: list[PeriodicFilingRef] = Field(default_factory=list)
     failed_accessions: list[FailedAccession] = Field(default_factory=list)
     processed_accessions: dict[str, str] = Field(default_factory=dict)
     open_gaps: list[str] = Field(default_factory=list)

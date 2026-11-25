@@ -103,7 +103,11 @@ def _env_number(name: str, default: float, *, minimum: float = 0.0) -> float:
 
 
 def ocr_workers() -> int:
-    return int(_env_number("FORESIGHTNINE_OCR_WORKERS", 2, minimum=1))
+    return int(_env_number("FORESIGHTNINE_OCR_WORKERS", 1, minimum=1))
+
+
+def ocr_render_dpi() -> int:
+    return int(_env_number("FORESIGHTNINE_OCR_DPI", 150, minimum=72))
 
 
 def vision_input_token_estimate() -> int:
@@ -677,27 +681,30 @@ def _run_vision(engine: OcrEngine, png: bytes, png_hash: str, langs: str, timeou
 
 def _ocr_one(pdf_path: Path, page: int, langs: str, deadline: float, engines: list[OcrEngine],
              cache: OcrCache, usage: OcrUsageHooks | None = None) -> OcrPageResult | None:
+    from .research_memory_gate import heavy_memory_section
+
     budget = min(PAGE_TIMEOUT_SECONDS, deadline - monotonic())
     if budget <= 0 or not engines:
         return None
-    try:
-        png = render_page_png(pdf_path, page, timeout=budget)
-    except OcrRenderError as error:
-        return OcrPageResult("", None, 0, "render", "", langs, error=str(error))
-    png_hash = sha256(png).hexdigest()
-    local = [e for e in engines if e.name != VisionModelEngine.name]
-    vision = [e for e in engines if e.name == VisionModelEngine.name] if usage is not None else []
-    best: OcrPageResult | None = None
-    tried: list[str] = []
-    vision_calls: list[dict] = []
-    for engine in local:
-        remaining = min(PAGE_TIMEOUT_SECONDS, deadline - monotonic())
-        if remaining <= 0:
-            break
-        best = _run_engine(engine, png, png_hash, langs, remaining, cache)
-        tried.append(engine.name)
-        if best.error is None:
-            break
+    with heavy_memory_section():
+        try:
+            png = render_page_png(pdf_path, page, dpi=ocr_render_dpi(), timeout=budget)
+        except OcrRenderError as error:
+            return OcrPageResult("", None, 0, "render", "", langs, error=str(error))
+        png_hash = sha256(png).hexdigest()
+        local = [e for e in engines if e.name != VisionModelEngine.name]
+        vision = [e for e in engines if e.name == VisionModelEngine.name] if usage is not None else []
+        best: OcrPageResult | None = None
+        tried: list[str] = []
+        vision_calls: list[dict] = []
+        for engine in local:
+            remaining = min(PAGE_TIMEOUT_SECONDS, deadline - monotonic())
+            if remaining <= 0:
+                break
+            best = _run_engine(engine, png, png_hash, langs, remaining, cache)
+            tried.append(engine.name)
+            if best.error is None:
+                break
     if vision and usage is not None and (best is None or _needs_fallback(best)):
         remaining = min(PAGE_TIMEOUT_SECONDS, deadline - monotonic())
         if remaining > 0:
@@ -798,7 +805,7 @@ def run_source_ocr(source, pages: list[int], *, usage: OcrUsageHooks | None = No
 
     Nothing is persisted here; the caller stores the result as a new source version.
     """
-    from .research_documents import merge_ocr_into_document
+    from .research_documents import OCR_CANDIDATE_STATUSES, merge_ocr_into_document
 
     document_pages = (source.provenance or {}).get("document_pages")
     page_list = document_pages.get("pages") if isinstance(document_pages, dict) else None
@@ -812,7 +819,7 @@ def run_source_ocr(source, pages: list[int], *, usage: OcrUsageHooks | None = No
             report.append({"page": number, "status": "out_of_range"})
             continue
         status = page_list[number - 1][2]
-        if status == "needs_ocr":
+        if status in OCR_CANDIDATE_STATUSES:
             targets.append(number)
         else:
             report.append({"page": number, "status": status,

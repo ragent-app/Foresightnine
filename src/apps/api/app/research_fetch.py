@@ -31,6 +31,8 @@ from .openai_compatible import (
 from .research_blob_store import configured_blob_store, is_valid_sha256
 from .research_documents import (
     DEFAULT_MAX_TEXT_CHARS,
+    OCR_CANDIDATE_STATUSES,
+    TEXT_STATUSES,
     TextPager,
     PdfPagesError,
     merge_ocr_into_document,
@@ -38,6 +40,7 @@ from .research_documents import (
     pdf_extract_budget_seconds,
     pdf_page_count,
     page_map_from_text,
+    prioritize_ocr_pages,
 )
 from .phase3 import ClientSearchEvidenceProvider, ProviderFailure
 from .research_source_policy import is_fred_source
@@ -1217,13 +1220,13 @@ def _extract_pdf_document(request: FetchSourceRequest, raw: bytes, *, final_url:
         else:
             raise FetchFailure("source_invalid", "PDF extraction failed.") from error
     statuses = [entry[2] for entry in document_pages["pages"]]
-    if "needs_ocr" in statuses:
+    if any(s in OCR_CANDIDATE_STATUSES for s in statuses):
         with tempfile.TemporaryDirectory(prefix="foresight-ocr-") as directory:
             path = Path(directory) / "source.pdf"
             path.write_bytes(raw)
             text, document_pages = _ingest_ocr(path, text, document_pages, title=request.title, url=final_url,
                                                usage=ocr_usage)
-    if not any(entry[2] in {"text", "ocr"} for entry in document_pages["pages"]):
+    if not any(entry[2] in TEXT_STATUSES for entry in document_pages["pages"]):
         raise FetchFailure("ocr_required", _ocr_detail(scanned_pages or document_pages["page_count"]))
     return FetchedDocument(
         text=text,
@@ -1237,22 +1240,23 @@ def _extract_pdf_document(request: FetchSourceRequest, raw: bytes, *, final_url:
 
 
 def _ingest_ocr(path: Path, text: str, document_pages: dict, *, title: str | None, url: str | None,
-                usage=None) -> tuple[str, dict]:
-    """OCR the earliest needs_ocr pages within the ingestion budget; unchanged when no engine is available.
+                usage=None, max_pages_override: int | None = None,
+                seconds_override: float | None = None) -> tuple[str, dict]:
+    """OCR prioritized OCR-candidate pages within the ingestion budget; unchanged when no engine is available.
 
     The vision engine runs only through ``usage`` hooks (reserve/settle of the research run); without them
     only local engines are used.
     """
     from .research_ocr import choose_ocr_languages, default_engines, ocr_pdf_pages
 
-    pending = [number for number, entry in enumerate(document_pages["pages"], 1)
-               if entry[2] == "needs_ocr" and entry[0] is not None]
-    pending = pending[:int(_env_int("FORESIGHTNINE_OCR_INGEST_MAX_PAGES", 30))]
+    max_pages = max_pages_override if max_pages_override is not None else int(_env_int("FORESIGHTNINE_OCR_INGEST_MAX_PAGES", 4))
+    pending = prioritize_ocr_pages(text, document_pages, max_pages=max_pages)
     engines = default_engines()
     if not pending or not engines:
         return text, document_pages
     langs = choose_ocr_languages(title=title, url=url, sample_text=text[:4000])
-    deadline = monotonic() + _env_int("FORESIGHTNINE_OCR_INGEST_SECONDS", 90)
+    budget_sec = seconds_override if seconds_override is not None else float(_env_int("FORESIGHTNINE_OCR_INGEST_SECONDS", 25))
+    deadline = monotonic() + budget_sec
     results = ocr_pdf_pages(path, pending, langs=langs, deadline=deadline, engines=engines, usage=usage)
     if not results:
         return text, document_pages
@@ -1284,12 +1288,12 @@ def _small_pdf_page_count(raw: bytes) -> int | None:
 
 def _extract_large_pdf(path: Path, *, response_sha256: str, final_url: str,
                        redirect_count: int, request: FetchSourceRequest | None = None,
-                       ocr_usage=None) -> FetchedDocument:
+                       ocr_usage=None, text_order: str = "layout") -> FetchedDocument:
     with path.open("rb") as handle:
         if handle.read(5) != b"%PDF-":
             raise FetchFailure("source_invalid", "Invalid PDF header.")
     try:
-        result = extract_pdf_pages(path, deadline=monotonic() + pdf_extract_budget_seconds())
+        result = extract_pdf_pages(path, deadline=monotonic() + pdf_extract_budget_seconds(), text_order=text_order)
     except PdfPagesError as error:
         if error.code == "pdf_extractor_unavailable":
             raise FetchFailure("source_unavailable", "pdf_extractor_unavailable") from error
@@ -1298,12 +1302,12 @@ def _extract_large_pdf(path: Path, *, response_sha256: str, final_url: str,
         raise FetchFailure("source_invalid", "PDF extraction failed.") from error
     text, document_pages = result.text, result.document_pages
     statuses = [entry[2] for entry in document_pages["pages"]]
-    if "failed" in statuses and "text" not in statuses:
+    if "failed" in statuses and not any(s in TEXT_STATUSES for s in statuses):
         raise FetchFailure("source_invalid", "PDF page extraction did not complete (local timeout or failure).")
-    if "needs_ocr" in statuses:
+    if any(s in OCR_CANDIDATE_STATUSES for s in statuses):
         text, document_pages = _ingest_ocr(path, text, document_pages,
                                            title=getattr(request, "title", None), url=final_url, usage=ocr_usage)
-    if not any(entry[2] in {"text", "ocr"} for entry in document_pages["pages"]):
+    if not any(entry[2] in TEXT_STATUSES for entry in document_pages["pages"]):
         raise FetchFailure("ocr_required", _ocr_detail(document_pages["page_count"]))
     store = configured_blob_store()
     if store is not None and (request is None or request.permissions.store):

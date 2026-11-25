@@ -199,10 +199,14 @@ function CoverageBar({ ranges, total }: { ranges: readonly (readonly [number, nu
 }
 
 export function canDownloadOriginal(source: AvailableVersionSource): boolean {
-  return Boolean(source.original_pdf_available || source.original_html_available) && source.permissions.display && source.permissions.export;
+  return (
+    Boolean(source.original_pdf_available || source.original_html_available || source.original_document_available) &&
+    source.permissions.display &&
+    source.permissions.export
+  );
 }
 
-/** Downloads the retained PDF or HTML (needs display and export permission). */
+/** Downloads the retained PDF, PPTX, DOCX or HTML (needs display and export permission). */
 export function DownloadOriginalButton({ source }: { source: AvailableVersionSource }) {
   const [state, setState] = useState<"idle" | "busy" | "error">("idle");
   if (!canDownloadOriginal(source)) return null;
@@ -216,7 +220,15 @@ export function DownloadOriginalButton({ source }: { source: AvailableVersionSou
       setState("error");
     }
   };
-  const label = source.original_pdf_available ? "下载原始 PDF" : "下载原始网页";
+  const label = source.original_pdf_available
+    ? "下载原始 PDF"
+    : source.retrieval_method === "user_pptx"
+      ? "下载原始 PPTX"
+      : source.retrieval_method === "user_docx"
+        ? "下载原始 DOCX"
+        : source.original_html_available
+          ? "下载原始网页"
+          : "下载原始文件";
   return (
     <>
       <button type="button" className="btn" onClick={() => void download()} disabled={state === "busy"}>{state === "busy" ? "正在下载…" : label}</button>

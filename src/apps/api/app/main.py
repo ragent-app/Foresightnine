@@ -86,7 +86,8 @@ from .models import (
     WorldlineRequest,
 )
 from .operations import ApiProblem, OperationManager, format_sse
-from .retention import RetentionPolicy, cleanup_research_state
+from .retention import RetentionPolicy, cleanup_research_state, prune_document_blob_store
+from .research_blob_store import configured_blob_store
 from .security import BodyTooLarge, SecurityBoundaryMiddleware, TrustedProxyResolver, build_captcha_verifier, build_security_config
 from .telemetry import record_provider_failure, record_stale_data_denial, telemetry
 from .phase4_live import LivePhase4Adapter
@@ -113,7 +114,7 @@ from .services import (
     validate_probability_semantics,
     validate_worldline_bundle_semantics,
 )
-from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, _drop_legacy_null_fields, build_repository, owner_items
+from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, _drop_legacy_null_fields, account_items, build_repository, owner_items
 from .research_topics import (AttachSourcesInput, ResearchCalculation, ResearchFact, ResearchFullExport, ResearchInput, ResearchMetadataExport,
     ResearchTopic, ResearchTopics, ResearchTurn, TopicDeletion, TopicForkInput, TopicMeta, TopicNotFound, TopicUpdate, TopicVersionConflict,
     VersionInput, VersionRestoreInput)
@@ -131,7 +132,7 @@ from .research_answer_evidence import AnswerEvidence, invalidate_edited_answers,
 from .research_turns import merge_turn, prior_research_input
 from .research_turn_persister import ResearchTurnPersister, record_failed_checkpoint_version
 from .research_calculations import BINARY_FORMULAS, CalculationError, CalculationRequest, PublicCalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, MULTI_FACT_FORMULAS, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, verified_direction_proof, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
-from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
+from .research_sources import PAGED_RETRIEVAL_METHODS, ResearchSource, ResearchSources, RetrievalMethod, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
 from .research_table_provenance import bounded_table_trace
 from .research_analysis import SELECTION_METHOD as RESEARCH_SELECTION_METHOD, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
 from .research_runs import DOCUMENT_OVERVIEW_QUESTION, ResearchRunRequest, ResearchRunResult, resolve_automatic_research_request
@@ -276,6 +277,48 @@ _DEFAULT_FETCH_OFFICIAL_TEXT = fetch_official_text
 _DEFAULT_RESERVE_SEC_REQUEST = reserve_sec_request
 _HTML_RETRIEVAL_METHODS = frozenset({"official_html", "user_html", "sec_filing_html", "web_html"})
 _PDF_RETRIEVAL_METHODS = frozenset({"user_pdf", "web_pdf"})
+_BINARY_DOC_RETRIEVAL_METHODS = frozenset({"user_pptx", "user_docx", "user_text"})
+
+
+def _original_blob_sha256(source: ResearchSource) -> str | None:
+    prov = source.provenance if isinstance(source.provenance, Mapping) else {}
+    dp = prov.get("document_pages") if isinstance(prov.get("document_pages"), Mapping) else {}
+    raw = dp.get("original_blob_sha256") or prov.get("original_blob_sha256")
+    return str(raw).strip().lower() if isinstance(raw, str) and raw.strip() else None
+
+
+def _has_retained_original(source: ResearchSource) -> bool:
+    if source.original_pdf_base64 or source.original_html_base64:
+        return True
+    digest = _original_blob_sha256(source)
+    if not digest:
+        return False
+    store = configured_blob_store()
+    return store is not None and store.path_for(digest) is not None
+
+
+def _read_retained_original_bytes(source: ResearchSource) -> bytes | None:
+    import base64
+
+    raw_b64 = source.original_pdf_base64 or source.original_html_base64
+    if raw_b64:
+        try:
+            return base64.b64decode(raw_b64)
+        except Exception:
+            return None
+    digest = _original_blob_sha256(source)
+    if not digest:
+        return None
+    store = configured_blob_store()
+    if store is None:
+        return None
+    blob_path = store.path_for(digest)
+    if blob_path is None:
+        return None
+    try:
+        return blob_path.read_bytes()
+    except OSError:
+        return None
 
 
 def _configured_sec_user_agent() -> tuple[str | None, bool]:
@@ -621,6 +664,7 @@ PEER_QUOTE_CACHE = build_repository(storage_config, "peer_quote_cache")
 DEF14A_FACT_SNAPSHOTS = build_repository(storage_config, "def14a_fact_snapshots")
 GUIDANCE_CREDIBILITY_LEDGER = build_repository(storage_config, "guidance_credibility_ledger")
 GOVERNANCE_L2_CACHE = build_repository(storage_config, "governance_l2_cache")
+RUNTIME_MAINTENANCE_LEASES = build_repository(storage_config, "runtime_maintenance_leases")
 (
     SESSIONS,
     THESES,
@@ -916,6 +960,78 @@ def reset_state() -> None:
     CHALLENGE_OPERATION_IDS.clear()
 
 
+def _claim_maintenance_lease(task_name: str, *, ttl_seconds: float = 300.0, min_interval_seconds: float = 0.0) -> bool:
+    """Atomically claim a short-lived maintenance lease via ``RUNTIME_MAINTENANCE_LEASES``."""
+    lease_key = f"lease:{task_name}"
+    holder_id = f"pid:{os.getpid()}:{uuid4().hex[:8]}"
+
+    def _try_claim() -> bool:
+        now_dt = lifecycle_clock.now()
+        now_ts = now_dt.timestamp()
+        existing = RUNTIME_MAINTENANCE_LEASES.get(lease_key)
+        if isinstance(existing, Mapping):
+            exp = float(existing.get("lease_expires_ts") or 0.0)
+            last_done = float(existing.get("last_completed_ts") or 0.0)
+            if exp > now_ts:
+                return False
+            if min_interval_seconds > 0 and last_done > 0 and (now_ts - last_done) < min_interval_seconds:
+                return False
+        RUNTIME_MAINTENANCE_LEASES.put(
+            lease_key,
+            {
+                "task_name": task_name,
+                "holder_id": holder_id,
+                "claimed_at": now_dt.isoformat(),
+                "lease_expires_ts": now_ts + max(30.0, float(ttl_seconds)),
+                "last_completed_ts": existing.get("last_completed_ts") if isinstance(existing, Mapping) else None,
+            },
+        )
+        return True
+
+    return bool(RUNTIME_MAINTENANCE_LEASES.with_advisory_lock(f"maint:{task_name}", _try_claim))
+
+
+def _release_maintenance_lease(task_name: str, *, completed: bool = True) -> None:
+    lease_key = f"lease:{task_name}"
+
+    def _release() -> None:
+        now_dt = lifecycle_clock.now()
+        existing = RUNTIME_MAINTENANCE_LEASES.get(lease_key)
+        base = dict(existing) if isinstance(existing, Mapping) else {"task_name": task_name}
+        base["lease_expires_ts"] = 0.0
+        if completed:
+            base["last_completed_ts"] = now_dt.timestamp()
+            base["last_completed_at"] = now_dt.isoformat()
+        RUNTIME_MAINTENANCE_LEASES.put(lease_key, base)
+
+    try:
+        RUNTIME_MAINTENANCE_LEASES.with_advisory_lock(f"maint:{task_name}", _release)
+    except Exception:
+        pass
+
+
+def _maybe_prune_document_blob_store() -> None:
+    store = configured_blob_store()
+    if store is None:
+        return
+    interval = float(os.environ.get("FORESIGHTNINE_DOCUMENT_STORE_PRUNE_INTERVAL_SECONDS", "21600") or "21600")
+    if not _claim_maintenance_lease("blob_store_prune", ttl_seconds=300.0, min_interval_seconds=max(0.0, interval)):
+        return
+    try:
+        max_bytes = int(os.environ.get("FORESIGHTNINE_DOCUMENT_STORE_MAX_BYTES", str(512 * 1024 * 1024)))
+        max_age_days = float(os.environ.get("FORESIGHTNINE_DOCUMENT_STORE_MAX_AGE_DAYS", "30"))
+        prune_document_blob_store(
+            store,
+            live_sha256s_fn=research_sources.live_blob_sha256s,
+            max_age_seconds=max_age_days * 86400.0,
+            max_total_bytes=max_bytes,
+            min_orphan_age_seconds=3600.0,
+        )
+        _release_maintenance_lease("blob_store_prune", completed=True)
+    except Exception:
+        _release_maintenance_lease("blob_store_prune", completed=False)
+
+
 def cleanup_expired_state() -> object:
     purge_expired_sessions(AUTH_SESSIONS, now=lifecycle_clock.now())
     durable_operation_sessions = operations.session_ids()
@@ -945,6 +1061,7 @@ def cleanup_expired_state() -> object:
         if operations.store.get_operation(operation_id) is None:
             SEC_EVENTS_ANALYSIS_RESULTS.delete(operation_id)
     research_live_broker.prune_expired()
+    _maybe_prune_document_blob_store()
     return report
 
 
@@ -1764,17 +1881,12 @@ def delete_authenticated_account(authorization: str | None = Header(default=None
 def _delete_research_run_inputs(owner_id: str) -> None:
     for key, _ in owner_items(TURN_STATUS, owner_id):
         TURN_STATUS.delete(key)
-    for repo in (RESEARCH_WORK, TURN_RECORDS):
-        for key, record in list(repo.items()):
-            if record.get("account_id") == owner_id:
-                repo.delete(key)
-    for key, record in list(RESEARCH_RUN_INPUTS.items()):
-        if record.get("owner_id") == owner_id:
-            RESEARCH_RUN_INPUTS.delete(key)
-    for repo in (EARNINGS_SQUAD_STATES, EARNINGS_SQUAD_CHECKPOINTS):
-        for key, record in list(repo.items()):
-            if isinstance(record, Mapping) and record.get("account_id") == owner_id:
-                repo.delete(key)
+    for repo in (RESEARCH_WORK, TURN_RECORDS, EARNINGS_SQUAD_STATES, EARNINGS_SQUAD_CHECKPOINTS,
+                 THESIS_LEDGERS, WATCH_SUBSCRIPTIONS, CHANGE_INBOX_ITEMS):
+        for key, _record in list(account_items(repo, owner_id)):
+            repo.delete(key)
+    for key, _record in list(owner_items(RESEARCH_RUN_INPUTS, owner_id)):
+        RESEARCH_RUN_INPUTS.delete(key)
     with _ACTIVE_SQUAD_LOCK:
         for key in [k for k in _ACTIVE_SQUAD_RUNS if k[0] == owner_id]:
             entry = _ACTIVE_SQUAD_RUNS.pop(key, None)
@@ -2232,10 +2344,13 @@ def list_research_version_sources(topic_id: str, version_id: str, authorization:
             continue
         metadata = source.model_dump(mode="json", exclude={"text", "owner_id", "url", "original_pdf_base64", "original_html_base64"})
         is_html = source.retrieval_method in _HTML_RETRIEVAL_METHODS
+        has_orig = _has_retained_original(source)
         if source.retrieval_method in _PDF_RETRIEVAL_METHODS:
-            metadata["original_pdf_available"] = bool(source.original_pdf_base64)
+            metadata["original_pdf_available"] = has_orig
         if is_html:
-            metadata["original_html_available"] = bool(source.original_html_base64)
+            metadata["original_html_available"] = has_orig
+        if source.retrieval_method in _BINARY_DOC_RETRIEVAL_METHODS:
+            metadata["original_document_available"] = has_orig
         if pdf_text_spacing_suspect(source):
             metadata["pdf_text_spacing_warning"] = True
         if source.url:
@@ -2270,6 +2385,42 @@ def get_research_version_source_text(topic_id: str, version_id: str, source_id: 
     if not _can_read_version_source(source, topic.request.as_of, _version_source_hashes(version).get(source_id)):
         raise ApiProblem(403, "invalid_request", "Source text is not available for this research version.")
     return {"source_id": source.source_id, "text": source.text, "content_sha256": source.content_sha256}
+
+
+@app.get("/v2/research/sources/{source_id}/text", include_in_schema=False)
+def get_research_source_text_owner_scoped(
+    source_id: str,
+    topic_id: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Owner-scoped source text fallback for locked Topics, cross-Topic/cross-quarter ReaderPanel inspection."""
+    account = _authenticated_account(authorization)
+    try:
+        source = research_sources.get(account.account_id, source_id)
+    except SourceNotFound as error:
+        raise ApiProblem(404, "not_found", "Research source not found.") from error
+    if not source.permissions.display:
+        raise ApiProblem(403, "invalid_request", "Source text is not permitted for display.")
+    if topic_id:
+        try:
+            topic = research_topics.get(account.account_id, topic_id)
+        except TopicNotFound as error:
+            raise ApiProblem(404, "not_found", "Research topic not found.") from error
+        if not _can_read_version_source(source, topic.request.as_of, None):
+            raise ApiProblem(403, "invalid_request", "Source text is outside this topic's as-of cutoff or display rules.")
+    prov = source.provenance if isinstance(source.provenance, Mapping) else {}
+    doc_pages = prov.get("document_pages") if isinstance(prov.get("document_pages"), Mapping) else None
+    return {
+        "source_id": source.source_id,
+        "title": source.title,
+        "retrieval_method": source.retrieval_method,
+        "permissions": source.permissions.model_dump(mode="json"),
+        "obtained_at": source.obtained_at.isoformat(),
+        "original_available": _has_retained_original(source),
+        "text": source.text,
+        "content_sha256": source.content_sha256,
+        "document_pages": doc_pages,
+    }
 
 
 @app.get("/v2/research/topics/{topic_id}/versions/{version_id}/export", response_model=ResearchFullExport, include_in_schema=False)
@@ -2722,10 +2873,13 @@ def calculate_research(request: PublicCalculationRequest, authorization: str | N
 def _visible_research_source(source: ResearchSource) -> dict:
     result = source.model_dump(mode="json", exclude={"original_pdf_base64", "original_html_base64"})
     is_html = source.retrieval_method in _HTML_RETRIEVAL_METHODS
+    has_orig = _has_retained_original(source)
     if source.retrieval_method in _PDF_RETRIEVAL_METHODS:
-        result["original_pdf_available"] = bool(source.original_pdf_base64)
+        result["original_pdf_available"] = has_orig
     if is_html:
-        result["original_html_available"] = bool(source.original_html_base64)
+        result["original_html_available"] = has_orig
+    if source.retrieval_method in _BINARY_DOC_RETRIEVAL_METHODS:
+        result["original_document_available"] = has_orig
     if pdf_text_spacing_suspect(source):
         result["pdf_text_spacing_warning"] = True
     if not source.permissions.display:
@@ -2855,7 +3009,8 @@ async def upload_research_document_stream(request: Request, authorization: str |
                 # Vision OCR needs a research run to reserve and settle usage; an upload outside a run has
                 # no billing hooks to bind, so only local OCR engines run here.
                 ingested = ingest_uploaded_file(path, kind=kind, title=fields.title, permissions=fields.permissions,
-                                                sha256_hex=digest, size=size, ocr_usage=None)
+                                                sha256_hex=digest, size=size, ocr_usage=None,
+                                                text_order=fields.text_order)
                 doc = ingested.document
                 provenance = {"document_pages": doc.pages} if doc.pages else {}
                 if kind == "pdf":
@@ -2865,6 +3020,19 @@ async def upload_research_document_stream(request: Request, authorization: str |
                         response_sha256=digest, response_content_type="application/pdf",
                         original_pdf_base64=ingested.original_base64, pdf_text_order=fields.text_order,
                         provenance=provenance)
+                elif kind in ("pptx", "docx"):
+                    rm_bin: RetrievalMethod = "user_pptx" if kind == "pptx" else "user_docx"
+                    created = research_sources.create(account.account_id, SourceInput(title=fields.title, text=doc.text,
+                        published_at=fields.published_at, event_at=fields.event_at, revised_at=fields.revised_at,
+                        is_simulated=fields.is_simulated, permissions=fields.permissions), retrieval_method=rm_bin,
+                        response_sha256=digest, response_content_type=doc.content_type,
+                        provenance=provenance)
+                elif kind == "text":
+                    created = research_sources.create(account.account_id, SourceInput(title=fields.title, text=doc.text,
+                        published_at=fields.published_at, event_at=fields.event_at, revised_at=fields.revised_at,
+                        is_simulated=fields.is_simulated, permissions=fields.permissions), retrieval_method="user_text",
+                        response_sha256=digest, response_content_type=doc.content_type,
+                        original_html_base64=ingested.original_base64, provenance=provenance)
                 else:
                     created = research_sources.create(account.account_id, SourceInput(title=fields.title, text=doc.text,
                         published_at=fields.published_at, event_at=fields.event_at, revised_at=fields.revised_at,
@@ -2907,8 +3075,11 @@ def reextract_research_pdf(source_id: str, request: PdfReextractRequest, respons
         original = research_sources.get(account.account_id, source_id)
     except SourceNotFound as error:
         raise ApiProblem(404, "not_found", "Research source not found.") from error
-    if original.retrieval_method != "user_pdf" or not original.original_pdf_base64:
+    raw_pdf_bytes = _read_retained_original_bytes(original) if original.retrieval_method == "user_pdf" else None
+    if original.retrieval_method != "user_pdf" or not raw_pdf_bytes:
         raise ApiProblem(422, "invalid_request", "The retained original PDF is unavailable.")
+    import base64 as _b64
+    raw_pdf_b64 = original.original_pdf_base64 or _b64.b64encode(raw_pdf_bytes).decode("ascii")
     title = original.title[:470] + (" — layout" if request.text_order == "layout" else " — reading")
     stable_id = ("source_" + sha256(f"pdf-reextract-v1\0{account.account_id}\0{idempotency_key}".encode()).hexdigest()[:32]
                  if idempotency_key is not None else None)
@@ -2923,16 +3094,20 @@ def reextract_research_pdf(source_id: str, request: PdfReextractRequest, respons
                     return "replayed", existing
                 return "conflict", None
         try:
-            document = extract_pdf(PdfUploadRequest(title=title, pdf_base64=original.original_pdf_base64,
+            document = extract_pdf(PdfUploadRequest(title=title, pdf_base64=raw_pdf_b64,
                 text_order=request.text_order, permissions=original.permissions))
             if original.response_sha256 and original.response_sha256 != document.original_sha256:
                 return "invalid_hash", None
+            orig_blob_sha = _original_blob_sha256(original)
+            re_prov = {"document_pages": {"original_retained": True, "original_blob_sha256": orig_blob_sha}} if orig_blob_sha else {}
+            keep_b64 = None if (orig_blob_sha and configured_blob_store() is not None) else document.original_base64
             source = research_sources.create(account.account_id, SourceInput(title=title, text=document.text,
                 url=original.url, kind=original.kind, is_simulated=original.is_simulated,
                 published_at=original.published_at, event_at=original.event_at, revised_at=original.revised_at,
                 permissions=original.permissions), retrieval_method="user_pdf", response_sha256=document.original_sha256,
-                response_content_type="application/pdf", original_pdf_base64=document.original_base64,
-                pdf_text_order=request.text_order, derived_from_source_id=original.source_id, source_id=stable_id)
+                response_content_type="application/pdf", original_pdf_base64=keep_b64,
+                pdf_text_order=request.text_order, derived_from_source_id=original.source_id, source_id=stable_id,
+                provenance=re_prov)
             return "created", source
         except (PdfFailure, SourcePermissionError, ValidationError) as error:
             # Return expected failures through the storage lock so PostgreSQL
@@ -2962,14 +3137,26 @@ def get_research_source_original(source_id: str, authorization: str | None = Hea
         source = research_sources.get(account.account_id, source_id)
     except SourceNotFound as error:
         raise ApiProblem(404, "not_found", "Research source not found.") from error
-    raw = source.original_pdf_base64 or source.original_html_base64
+    raw_bytes = _read_retained_original_bytes(source)
     is_html = source.retrieval_method in _HTML_RETRIEVAL_METHODS
     is_pdf = source.retrieval_method in _PDF_RETRIEVAL_METHODS
-    if not raw or not source.permissions.display or not source.permissions.export or (not is_html and not is_pdf):
+    is_pptx = source.retrieval_method == "user_pptx"
+    is_docx = source.retrieval_method == "user_docx"
+    is_text = source.retrieval_method == "user_text"
+    if not raw_bytes or not source.permissions.display or not source.permissions.export or not (is_html or is_pdf or is_pptx or is_docx or is_text):
         raise ApiProblem(403, "invalid_request", "The original document is not available for download.")
-    import base64
-    return Response(content=base64.b64decode(raw), media_type="application/octet-stream" if is_html else "application/pdf",
-                    headers={"Content-Disposition": 'attachment; filename="source.html"' if is_html else 'attachment; filename="source.pdf"',
+    if is_pdf:
+        media, fname = "application/pdf", "source.pdf"
+    elif is_pptx:
+        media, fname = "application/vnd.openxmlformats-officedocument.presentationml.presentation", "source.pptx"
+    elif is_docx:
+        media, fname = "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "source.docx"
+    elif is_text:
+        media, fname = "text/plain; charset=utf-8", "source.txt"
+    else:
+        media, fname = "application/octet-stream", "source.html"
+    return Response(content=raw_bytes, media_type=media,
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"',
                              "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
 
@@ -2987,8 +3174,8 @@ def get_research_source_context(source_id: str, start: Annotated[int, Query(ge=0
     if end <= start or end > len(source.text) or end - start > 1000:
         raise ApiProblem(422, "invalid_request", "Source text location is invalid.")
     left, right = max(0, start - 300), min(len(source.text), end + 300)
-    is_pdf = source.retrieval_method in _PDF_RETRIEVAL_METHODS
-    if is_pdf:
+    is_paged = source.retrieval_method in PAGED_RETRIEVAL_METHODS
+    if is_paged:
         # Context stays on the relevant page(s), while retaining an exact
         # quote that itself crosses a page boundary.
         left = max(left, source.text.rfind("\f", 0, start) + 1)
@@ -3000,8 +3187,8 @@ def get_research_source_context(source_id: str, start: Annotated[int, Query(ge=0
             "start": start, "end": end, "context_start": left, "context_end": right,
             "before": source.text[left:start], "selected": source.text[start:end], "after": source.text[end:right],
             **({"table_context": table_context} if table_context else {}),
-            "page_start": source.text[:start].count("\f") + 1 if is_pdf else None,
-            "page_end": source.text[:end].count("\f") + 1 if is_pdf else None}
+            "page_start": source.text[:start].count("\f") + 1 if is_paged else None,
+            "page_end": source.text[:end].count("\f") + 1 if is_paged else None}
 
 
 @app.get("/v2/research/sources/{source_id}/table-structure", include_in_schema=False)
@@ -5227,6 +5414,10 @@ _SQUAD_STAGE_TIMEOUT_FLOORS: dict[str, float] = {
     "peer_attribution_brief": 240.0,
     "v25_governance_cda_audit": 240.0,
     "v25_guidance_backfill": 240.0,
+    "v3a_call_extract": 240.0,
+    "v3a_call_map_doc": 180.0,
+    "v3a_sellside_extract": 180.0,
+    "v3a_omission_verify": 180.0,
 }
 _SQUAD_SLOT_MAX_OUTPUT_TOKENS: dict[str, int] = {
     "fast_extractor": 8192,
@@ -5250,6 +5441,10 @@ _SQUAD_STAGE_MAX_OUTPUT_TOKENS: dict[str, int] = {
     "peer_attribution_brief": 16384,
     "v25_governance_cda_audit": 16384,
     "v25_guidance_backfill": 16384,
+    "v3a_call_extract": 16384,
+    "v3a_call_map_doc": 8192,
+    "v3a_sellside_extract": 8192,
+    "v3a_omission_verify": 8192,
 }
 
 
@@ -7751,7 +7946,9 @@ class WatchSubscriptionCreateRequest(BaseModel):
     symbol: str | None = None
     company_name: str | None = None
     topic_id: str | None = None
-    watched_channels: list[WatchChannel] = Field(default_factory=lambda: ["v1_events", "earnings_delta"])
+    watched_channels: list[WatchChannel] = Field(
+        default_factory=lambda: ["v1_events", "earnings_delta", "governance_audit", "call_commitment_verify"]
+    )
     lookback_days: int = Field(default=30, ge=1, le=365)
     check_interval_minutes: int = Field(default=60, ge=5, le=1440)
     enabled: bool = True
@@ -7807,7 +8004,7 @@ class ChangeInboxDecisionResponse(BaseModel):
 
 def _account_ledgers_for_topic(account_id: str, topic_id: str) -> list[ThesisLedger]:
     found: list[ThesisLedger] = []
-    for _k, val in THESIS_LEDGERS.items():
+    for _k, val in account_items(THESIS_LEDGERS, account_id):
         if isinstance(val, ThesisLedger) and val.account_id == account_id and val.topic_id == topic_id:
             found.append(val)
     found.sort(key=lambda lg: (lg.version, lg.created_at))
@@ -7822,9 +8019,12 @@ def _latest_confirmed_ledger(account_id: str, topic_id: str | None) -> ThesisLed
 
 
 def _latest_locked_dossier_for_topic(account_id: str, topic_id: str) -> Any | None:
+    direct = EARNINGS_SQUAD_STATES.get(_squad_state_key(account_id, topic_id))
+    if isinstance(direct, Mapping) and isinstance(direct.get("dossier"), Mapping):
+        return direct.get("dossier")
     latest: Any | None = None
     latest_ts = ""
-    for _k, raw in EARNINGS_SQUAD_STATES.items():
+    for _k, raw in account_items(EARNINGS_SQUAD_STATES, account_id):
         if not isinstance(raw, Mapping):
             continue
         if raw.get("account_id") != account_id or raw.get("topic_id") != topic_id:
@@ -7841,7 +8041,7 @@ def _latest_locked_dossier_for_topic(account_id: str, topic_id: str) -> Any | No
 def _account_subscriptions(account_id: str) -> list[FilingWatchSubscription]:
     subs = [
         val
-        for _k, val in WATCH_SUBSCRIPTIONS.items()
+        for _k, val in account_items(WATCH_SUBSCRIPTIONS, account_id)
         if isinstance(val, FilingWatchSubscription) and val.account_id == account_id
     ]
     subs.sort(key=lambda s: (s.symbol or s.cik, s.created_at))
@@ -7851,7 +8051,7 @@ def _account_subscriptions(account_id: str) -> list[FilingWatchSubscription]:
 def _account_inbox_items(account_id: str) -> list[ChangeInboxItem]:
     items = [
         val
-        for _k, val in CHANGE_INBOX_ITEMS.items()
+        for _k, val in account_items(CHANGE_INBOX_ITEMS, account_id)
         if isinstance(val, ChangeInboxItem) and val.account_id == account_id
     ]
     items.sort(key=lambda it: (it.updated_at, it.created_at), reverse=True)
@@ -8116,12 +8316,13 @@ def radar_check_now_endpoint(
             model_runner.bind_runtime(cancel_event=op_cancel, budget=hook_dict.get("budget"))
 
         def _scan_sub(sub: FilingWatchSubscription, seen_v1: list[str]) -> tuple[SecEventScanResult, dict[str, str]]:
+            seen_map = {acc: {"sec_events": "seen"} for acc in seen_v1} if seen_v1 else None
             return scan_sec_material_events(
                 sub.cik,
                 user_agent=cfg["user_agent"],
                 as_of=request.as_of,
                 lookback_days=sub.lookback_days,
-                seen_accessions=seen_v1 or None,
+                seen_accessions=seen_map,
                 l1_cache=cfg["l1_cache"],
                 rules=cfg["rules"],
                 transport=cfg["transport"],
@@ -8278,20 +8479,35 @@ def radar_check_now_endpoint(
                 upsert_guidance_ledger_records(
                     GUIDANCE_CREDIBILITY_LEDGER, cik=sub.cik, symbol=sub.symbol, new_records=recs
                 )
-            from .research_delta_review import run_earnings_delta_review
+            from .research_delta_review import (
+                build_delta_stage0_package,
+                build_inbox_item_from_delta_diff,
+                run_earnings_delta_review,
+            )
             try:
-                _diff, item = run_earnings_delta_review(
+                stage0 = build_delta_stage0_package(
+                    cik=sub.cik,
+                    symbol=sub.symbol,
+                    accession=new_accs[0],
+                    form="8-K",
+                    period_label=f"SEC {new_accs[0]}",
+                    disclosed_at=lifecycle_clock.now().date().isoformat(),
+                    prior_dossier=prior_dossier,
+                    ledger=ledger,
+                    new_observed_metrics={},
+                )
+                diff = run_earnings_delta_review(
+                    stage0=stage0,
+                    filing_text="",
+                    source_id=f"sec_{new_accs[0]}",
+                    ledger=ledger,
+                    runner=model_runner,
+                    slot="deep_reasoner",
+                )
+                item = build_inbox_item_from_delta_diff(
                     account_id=account.account_id,
                     subscription=sub,
-                    confirmed_ledger=ledger,
-                    prior_dossier=prior_dossier,
-                    new_accession=new_accs[0],
-                    new_period_label=f"SEC {new_accs[0]}",
-                    new_observed_metrics={},
-                    new_source_texts={},
-                    runner=model_runner,
-                    slot_bindings=filtered_bindings,
-                    resolved_slots=effective_resolved_slots,
+                    diff=diff,
                 )
                 return [item] if item is not None else []
             except Exception:
@@ -8848,20 +9064,14 @@ def upsert_peer_relative_watch(
     if len(syms) < 2:
         raise ApiProblem(422, "invalid_request", "At least 2 unique symbols are required.")
 
-    # Resolve CIK from cached snapshot first, then SEC ticker map
+    # Resolve CIK via in-memory ticker map or SEC ticker resolver (zero full-table .items() scans)
     cik_val: str | None = None
     company_name: str | None = None
-    for _k, val in PEER_COMPANY_SNAPSHOTS.items():
-        if isinstance(val, Mapping) and str(val.get("symbol") or "").upper() == prim:
-            cik_val = str(val.get("cik") or "")
-            company_name = val.get("company_name")
-            break
-    if not cik_val:
-        ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
-        try:
-            cik_val, company_name = resolve_ticker_to_cik(prim, user_agent=ua, limiter=SecPacingLimiter.from_env(), policy=load_fin_data_policy())
-        except SecPacingError as err:
-            raise ApiProblem(422, err.reason, err.message) from err
+    ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
+    try:
+        cik_val, company_name = resolve_ticker_to_cik(prim, user_agent=ua, limiter=SecPacingLimiter.from_env(), policy=load_fin_data_policy())
+    except SecPacingError as err:
+        raise ApiProblem(422, err.reason, err.message) from err
     cik_norm = cik10(cik_val)
 
     desc = request.description or f"{prim} 相对估值监控（健康边界 {request.metric_key} {request.operator} {request.threshold_decimal}）"
@@ -8874,7 +9084,7 @@ def upsert_peer_relative_watch(
     )
 
     existing_sub: FilingWatchSubscription | None = None
-    for _k, s in WATCH_SUBSCRIPTIONS.items():
+    for _k, s in account_items(WATCH_SUBSCRIPTIONS, account.account_id):
         if isinstance(s, FilingWatchSubscription) and s.account_id == account.account_id and s.cik == cik_norm:
             existing_sub = s
             break

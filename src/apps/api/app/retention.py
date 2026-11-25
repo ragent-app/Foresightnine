@@ -150,3 +150,111 @@ def cleanup_research_state(
             counts["failures"] += 1
             record_cleanup_failure(kind="operation_state")
     return CleanupReport(**counts, **operation_counts)
+
+
+@dataclass(frozen=True)
+class BlobStorePruneSummary:
+    blobs_scanned: int = 0
+    blobs_deleted: int = 0
+    blobs_freed_bytes: int = 0
+    ocr_cache_scanned: int = 0
+    ocr_cache_deleted: int = 0
+    ocr_cache_freed_bytes: int = 0
+
+
+def _prune_ocr_cache_dir(
+    ocr_dir: Any,
+    *,
+    max_age_seconds: float | None,
+    max_total_bytes: int | None,
+    now: float,
+) -> tuple[int, int, int]:
+    """Bounded mtime-LRU / TTL cleanup for rebuildable ``<blob_store.root>/ocr-cache/*.json``."""
+    from pathlib import Path
+
+    root = Path(ocr_dir)
+    if not root.is_dir():
+        return 0, 0, 0
+    entries: list[tuple[float, int, str, Path]] = []
+    try:
+        children = list(root.iterdir())
+    except OSError:
+        return 0, 0, 0
+    for child in children:
+        if not child.name.endswith(".json") or child.name.startswith(".") or child.is_symlink():
+            continue
+        try:
+            st = child.stat(follow_symlinks=False)
+        except OSError:
+            continue
+        if child.is_file():
+            entries.append((st.st_mtime, st.st_size, child.name, child))
+    if not entries:
+        return 0, 0, 0
+
+    candidates: list[tuple[float, int, str, Path]] = []
+    remaining: list[tuple[float, int, str, Path]] = []
+    for entry in entries:
+        if max_age_seconds is not None and (now - entry[0]) >= max_age_seconds:
+            candidates.append(entry)
+        else:
+            remaining.append(entry)
+    if max_total_bytes is not None:
+        total = sum(e[1] for e in remaining)
+        if total > max_total_bytes:
+            for entry in sorted(remaining, key=lambda e: (e[0], e[2])):
+                if total <= max_total_bytes:
+                    break
+                candidates.append(entry)
+                total -= entry[1]
+    deleted = 0
+    freed = 0
+    for _, size, _, path in candidates:
+        try:
+            path.unlink()
+            deleted += 1
+            freed += size
+        except OSError:
+            continue
+    return len(entries), deleted, freed
+
+
+def prune_document_blob_store(
+    blob_store: Any,
+    *,
+    live_sha256s_fn: Any,
+    max_age_seconds: float | None = 30 * 86400,
+    max_total_bytes: int | None = 512 * 1024 * 1024,
+    min_orphan_age_seconds: float = 3600.0,
+    ocr_cache_max_age_seconds: float | None = 14 * 86400,
+    ocr_cache_max_bytes: int | None = 64 * 1024 * 1024,
+    now: float | None = None,
+) -> BlobStorePruneSummary:
+    """Safely prune orphaned DocumentBlobStore files and rebuildable ``ocr-cache/*.json`` entries."""
+    import time
+
+    if blob_store is None:
+        return BlobStorePruneSummary()
+    current_time = float(now) if now is not None else time.time()
+    protected = set(live_sha256s_fn() or ()) if callable(live_sha256s_fn) else set()
+    report = blob_store.prune(
+        max_age_seconds=max_age_seconds,
+        max_total_bytes=max_total_bytes,
+        protected_sha256s=protected,
+        min_orphan_age_seconds=min_orphan_age_seconds,
+        now=current_time,
+    )
+    ocr_scanned, ocr_deleted, ocr_freed = _prune_ocr_cache_dir(
+        blob_store.root / "ocr-cache",
+        max_age_seconds=ocr_cache_max_age_seconds,
+        max_total_bytes=ocr_cache_max_bytes,
+        now=current_time,
+    )
+    return BlobStorePruneSummary(
+        blobs_scanned=report.scanned,
+        blobs_deleted=report.deleted_count,
+        blobs_freed_bytes=report.freed_bytes,
+        ocr_cache_scanned=ocr_scanned,
+        ocr_cache_deleted=ocr_deleted,
+        ocr_cache_freed_bytes=ocr_freed,
+    )

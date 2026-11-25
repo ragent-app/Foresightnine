@@ -627,8 +627,10 @@ def classify_source(source: Any, *, issuer_hosts: Iterable[str] = ()) -> str:
     if kind is None and method is None and not host and re.search(r"daily close|\bbars\b", title, re.I):
         return "market_data"
     # A genuine upload remains an upload even when the user supplied an attribution URL.
-    if method in ("user_supplied", "user_pdf", "user_html") or (kind == "user_supplied" and not method):
+    if method in ("user_supplied", "user_pdf", "user_html", "user_pptx", "user_docx", "user_text") or (kind == "user_supplied" and not method):
         return "user_upload"
+    if method in ("peer_relative_valuation", "governance_capital_audit", "call_qa_verification"):
+        return "filing"
     if method in ("sec_companyconcept", "sec_companyfacts", "sec_filing_html") or _host_matches(host, PRIMARY_HOSTS) \
             or (host and (host.endswith(".gov") or ".gov." in host)):
         return "filing"

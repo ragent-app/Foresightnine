@@ -39,12 +39,25 @@ import unicodedata
 
 PAGES_FORMAT_VERSION = 2
 HTML_PAGE_CHARS = 8_000
-TEXT_STATUSES = frozenset({"text", "ocr"})
+TEXT_STATUSES = frozenset({"text", "ocr", "text_partial"})
+OCR_CANDIDATE_STATUSES = frozenset({"needs_ocr", "text_partial"})
+DEFAULT_PARTIAL_TEXT_THRESHOLD = 120
 CHUNK_PAGES = 20
 CHUNK_TIMEOUT_SECONDS = 60.0
 DEFAULT_MAX_TEXT_CHARS = 2_000_000
 _GARBLED_FRACTION = 0.30
 _PRLIMIT_ARGS = ("--as=402653184", "--cpu=60")
+_HIGH_VALUE_OCR_RE = re.compile(
+    r"\b(guidance|outlook|financial|margin|reconciliation|non-?gaap|gaap|capital|capex|"
+    r"revenue|gross\s+profit|operating\s+income|cash\s+flow|backlog|rpo|segment|summary|highlight|"
+    r"指引|展望|毛利率|营业利润|现金流|资本开支|财务摘要)\b",
+    re.IGNORECASE,
+)
+_LOW_VALUE_OCR_RE = re.compile(
+    r"\b(forward-?looking\s+statements?|safe\s+harbor|table\s+of\s+contents|agenda|thank\s+you|"
+    r"q\s*&\s*a|questions?\s+and\s+answers?|disclaimer|legal\s+notice|前瞻性声明|免责声明)\b",
+    re.IGNORECASE,
+)
 
 
 class PdfPagesError(Exception):
@@ -77,8 +90,8 @@ def pdf_extract_workers() -> int:
     return int(_env_number("FORESIGHTNINE_PDF_EXTRACT_WORKERS", 2, minimum=1))
 
 
-def classify_page_text(piece: str) -> str:
-    """Return ``text`` or ``needs_ocr`` for one page's extracted text."""
+def classify_page_text(piece: str, *, partial_threshold: int = 0) -> str:
+    """Return ``text``, ``text_partial``, or ``needs_ocr`` for one page's extracted text."""
     chars = [c for c in piece if not c.isspace()]
     if not chars:
         return "needs_ocr"
@@ -88,10 +101,114 @@ def classify_page_text(piece: str) -> str:
             bad += 1
     if bad / len(chars) > _GARBLED_FRACTION:
         return "needs_ocr"
+    if partial_threshold > 0 and len(chars) < partial_threshold:
+        return "text_partial"
     return "text"
 
 
-def page_map_from_text(text: str, *, original_retained: bool) -> dict:
+def _pdf_image_pages(path: Path, *, timeout_seconds: float = 15.0) -> set[int]:
+    """Return 1-based page numbers containing substantial embedded raster images via ``pdfimages -list``."""
+    pdfimages = shutil.which("pdfimages")
+    limiter = shutil.which("prlimit")
+    if not pdfimages or not limiter:
+        return set()
+    try:
+        result = subprocess.run(
+            [limiter, *_PRLIMIT_ARGS, "--", pdfimages, "-list", str(path)],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return set()
+    if result.returncode != 0:
+        return set()
+    pages: set[int] = set()
+    for line in result.stdout.decode("utf-8", errors="replace").splitlines():
+        parts = line.strip().split()
+        if len(parts) >= 3 and parts[0].isdigit() and parts[1].isdigit():
+            w = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 999
+            h = int(parts[4]) if len(parts) > 4 and parts[4].isdigit() else 999
+            if w >= 120 or h >= 120:
+                pages.add(int(parts[0]))
+    return pages
+
+
+def prioritize_ocr_pages(text: str, document_pages: dict, *, max_pages: int) -> list[int]:
+    """Select up to ``max_pages`` OCR candidate pages ordered by financial/table information value (R2-D3)."""
+    if max_pages <= 0:
+        return []
+    pages = _valid_pages(document_pages)
+    if not pages:
+        return []
+    total = len(pages)
+    candidates: list[int] = [
+        number
+        for number, entry in enumerate(pages, 1)
+        if len(entry) >= 3 and entry[2] in OCR_CANDIDATE_STATUSES and entry[0] is not None
+    ]
+    if len(candidates) <= max_pages:
+        return candidates
+
+    def _slice_for(page_num: int) -> str:
+        entry = pages[page_num - 1]
+        if entry[0] is None or entry[1] is None:
+            return ""
+        return text[entry[0] : entry[1]]
+
+    all_blank = all(not _slice_for(n).strip() for n in candidates)
+    if all_blank:
+        ordered = [n for n in candidates if total < 6 or n > 2]
+        if not ordered:
+            ordered = list(candidates)
+        if len(ordered) <= max_pages:
+            return ordered
+        chosen: list[int] = []
+        head_take = min(2, max_pages)
+        chosen.extend(ordered[:head_take])
+        tail_take = min(1, max_pages - len(chosen))
+        rem = ordered[head_take : (len(ordered) - tail_take if tail_take else len(ordered))]
+        need_mid = max_pages - len(chosen) - tail_take
+        if need_mid > 0 and rem:
+            step = max(1.0, len(rem) / float(need_mid))
+            for i in range(need_mid):
+                idx = min(len(rem) - 1, int(i * step))
+                if rem[idx] not in chosen:
+                    chosen.append(rem[idx])
+        if tail_take and ordered[-1] not in chosen:
+            chosen.append(ordered[-1])
+        for n in ordered:
+            if len(chosen) >= max_pages:
+                break
+            if n not in chosen:
+                chosen.append(n)
+        return sorted(chosen[:max_pages])
+
+    scored: list[tuple[float, int]] = []
+    for n in candidates:
+        own = _slice_for(n)
+        prev_txt = _slice_for(n - 1) if n > 1 else ""
+        next_txt = _slice_for(n + 1) if n < total else ""
+        score = 0.0
+        if _HIGH_VALUE_OCR_RE.search(own):
+            score += 4.0
+        if _HIGH_VALUE_OCR_RE.search(prev_txt) or _HIGH_VALUE_OCR_RE.search(next_txt):
+            score += 1.2
+        digits = sum(1 for ch in own if ch.isdigit())
+        if digits >= 4 or any(sym in own for sym in ("%", "$", "€", "£", "¥")):
+            score += 1.5
+        if _LOW_VALUE_OCR_RE.search(own):
+            score -= 4.0
+        if total >= 6 and n <= 2 and score <= 0:
+            score -= 2.5
+        scored.append((score, -n))
+
+    scored.sort(reverse=True)
+    return sorted(-neg_n for _s, neg_n in scored[:max_pages])
+
+
+def page_map_from_text(text: str, *, original_retained: bool, partial_threshold: int = 0) -> dict:
     """Page map for an already-extracted document whose pages are separated by form feeds."""
     pieces = text.split("\f")
     if pieces and pieces[-1] == "":
@@ -100,8 +217,8 @@ def page_map_from_text(text: str, *, original_retained: bool) -> dict:
     offset = 0
     for piece in pieces:
         end = offset + len(piece)
-        status = classify_page_text(piece)
-        pages.append([offset, end, status] if status == "text" else [end, end, status])
+        status = classify_page_text(piece, partial_threshold=partial_threshold)
+        pages.append([offset, end, status] if status in TEXT_STATUSES else [end, end, status])
         offset = end + 1
     return {"page_count": len(pages), "pages": pages, "text_limit_reached": False,
             "original_retained": bool(original_retained), "method": "pdftotext_layout",
@@ -205,7 +322,7 @@ def page_range_to_chars(document_pages: dict, first_page: int, last_page: int) -
     ends: list[int] = []
     for number in range(max(1, first_page), min(last_page, len(pages)) + 1):
         start, end, status = pages[number - 1]
-        if start is None or end is None or status not in {"text", "ocr", "needs_ocr"}:
+        if start is None or end is None or status not in (TEXT_STATUSES | OCR_CANDIDATE_STATUSES):
             continue
         starts.append(start)
         ends.append(end)
@@ -238,14 +355,17 @@ def pdf_page_count(path: Path, *, timeout_seconds: float = 30.0) -> int:
 
 
 def _extract_chunk(extractor: str, limiter: str, path: Path, first: int, last: int,
-                   timeout: float) -> list[str] | None:
+                   timeout: float, *, text_order: str = "layout") -> list[str] | None:
     """Return per-page text for pages first..last, or None on failure/timeout."""
     if timeout <= 0:
         return None
+    cmd = [limiter, *_PRLIMIT_ARGS, "--", extractor]
+    if text_order != "reading":
+        cmd.append("-layout")
+    cmd.extend(["-enc", "UTF-8", "-f", str(first), "-l", str(last), str(path), "-"])
     try:
         result = subprocess.run(
-            [limiter, *_PRLIMIT_ARGS, "--", extractor, "-layout", "-enc", "UTF-8",
-             "-f", str(first), "-l", str(last), str(path), "-"],
+            cmd,
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             timeout=timeout, check=False)
     except (subprocess.TimeoutExpired, OSError):
@@ -263,17 +383,21 @@ def _extract_chunk(extractor: str, limiter: str, path: Path, first: int, last: i
 
 
 def extract_pdf_pages(path: Path, *, deadline: float, workers: int | None = None,
-                      max_text_chars: int = DEFAULT_MAX_TEXT_CHARS) -> PdfPagesResult:
+                      max_text_chars: int = DEFAULT_MAX_TEXT_CHARS,
+                      text_order: str = "layout",
+                      partial_threshold: int | None = None) -> PdfPagesResult:
     """Extract text page by page in parallel chunks and build the page map."""
     _, extractor, limiter = _tools()
     budget_end = min(deadline, monotonic() + pdf_extract_budget_seconds())
     page_count = pdf_page_count(path, timeout_seconds=max(1.0, min(30.0, budget_end - monotonic())))
+    image_pages = _pdf_image_pages(path, timeout_seconds=max(1.0, min(15.0, budget_end - monotonic()))) if partial_threshold is None else set()
     workers = max(1, workers if workers is not None else pdf_extract_workers())
     chunks = [(first, min(first + CHUNK_PAGES - 1, page_count)) for first in range(1, page_count + 1, CHUNK_PAGES)]
 
     def run(chunk: tuple[int, int]) -> list[str] | None:
         return _extract_chunk(extractor, limiter, path, chunk[0], chunk[1],
-                              min(CHUNK_TIMEOUT_SECONDS, budget_end - monotonic()))
+                              min(CHUNK_TIMEOUT_SECONDS, budget_end - monotonic()),
+                              text_order=text_order)
 
     parts: list[str] = []
     length = 0
@@ -295,8 +419,14 @@ def extract_pdf_pages(path: Path, *, deadline: float, workers: int | None = None
                     pages.append([None, None, "failed"])
                     continue
                 piece = pieces[index]
-                status = classify_page_text(piece)
-                contribution = piece if status == "text" else ""
+                page_num = first + index
+                eff_threshold = (
+                    partial_threshold
+                    if partial_threshold is not None
+                    else (DEFAULT_PARTIAL_TEXT_THRESHOLD if page_num in image_pages else 0)
+                )
+                status = classify_page_text(piece, partial_threshold=eff_threshold)
+                contribution = piece if status in TEXT_STATUSES else ""
                 if length + len(contribution) + 1 > max_text_chars:
                     limit_reached = True
                     pages.append([None, None, "not_included"])
@@ -307,10 +437,11 @@ def extract_pdf_pages(path: Path, *, deadline: float, workers: int | None = None
                 parts.append("\f")
                 length = end + 1
                 pages.append([start, end, status])
+    method = "pdftotext_reading_paged" if text_order == "reading" else "pdftotext_layout_paged"
     return PdfPagesResult(
         text="".join(parts),
         document_pages={"page_count": page_count, "pages": pages, "text_limit_reached": limit_reached,
-                        "original_retained": False, "method": "pdftotext_layout_paged",
+                        "original_retained": False, "method": method,
                         "version": PAGES_FORMAT_VERSION})
 
 
@@ -340,7 +471,7 @@ def merge_ocr_into_document(text: str, document_pages: dict, results: dict, *,
             continue
         piece = pieces[piece_index] if piece_index < len(pieces) else ""
         piece_index += 1
-        result = results.get(number) if status == "needs_ocr" else None
+        result = results.get(number) if status in OCR_CANDIDATE_STATUSES else None
         new_status = status
         if result is not None and result.error is None and result.text.strip():
             candidate = result.text.strip("\f")

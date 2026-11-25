@@ -21,7 +21,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from .research_sources import ResearchSource, partial_ascii_token, pdf_text_spacing_suspect
+from .research_sources import PAGED_RETRIEVAL_METHODS, ResearchSource, partial_ascii_token, pdf_text_spacing_suspect
 from .research_calculations import derive_direction_proof, verified_direction_proof, CalculationError, CalculationRequest, NumericFact, calculate, calculation_input_status, direction_confirmation_fingerprint, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
 from .research_planning import RequirementDimensions
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
@@ -2707,7 +2707,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         def record(offset: int, passage: str, left: int, right: int) -> None:
             start = offset + left
             positions.append({"character_start": start, "character_end": offset + right,
-                **({"page": source.text[:start].count("\f") + 1} if source.retrieval_method == "user_pdf" else {})})
+                **({"page": source.text[:start].count("\f") + 1} if source.retrieval_method in PAGED_RETRIEVAL_METHODS else {})})
             originals.append(passage[left:right])
 
         pattern = pattern_for(quotation)

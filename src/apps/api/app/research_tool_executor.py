@@ -756,7 +756,7 @@ def _extract_source_outline(source: ResearchSource, *, max_entries: int) -> dict
         for number, entry in enumerate(pages, 1):
             status = entry[2] if isinstance(entry, (list, tuple)) and len(entry) >= 3 else 'failed'
             counts[status] = counts.get(status, 0) + 1
-            if status == 'needs_ocr' and len(needs_ocr) < 20:
+            if status in ('needs_ocr', 'text_partial') and len(needs_ocr) < 20:
                 needs_ocr.append(number)
         result['page_count'] = document_pages.get('page_count') if type(document_pages.get('page_count')) is int else len(pages)
         result['page_status_summary'] = {'counts': counts, 'needs_ocr_pages': needs_ocr}

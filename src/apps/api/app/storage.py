@@ -305,6 +305,31 @@ class InMemoryDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
             if owner == owner_id:
                 yield key, value
 
+    def items_for_account(self, account_id: str) -> Iterator[tuple[str, ValueT]]:
+        """Enumerate non-expired documents belonging to ``account_id`` (top-level ``owner_id`` or ``account_id``)."""
+        _validate_key(account_id)
+        for key, value in list(self.items()):
+            owner = (
+                (value.get("owner_id") or value.get("account_id"))
+                if isinstance(value, Mapping)
+                else (getattr(value, "owner_id", None) or getattr(value, "account_id", None))
+            )
+            if owner == account_id:
+                yield key, value
+
+    def live_blob_sha256s(self) -> set[str]:
+        """Return live ``original_blob_sha256`` digests referenced by non-expired documents."""
+        digests: set[str] = set()
+        for _key, value in list(self.items()):
+            prov = value.get("provenance") if isinstance(value, Mapping) else getattr(value, "provenance", None)
+            if not isinstance(prov, Mapping):
+                continue
+            dp = prov.get("document_pages")
+            digest = (dp.get("original_blob_sha256") if isinstance(dp, Mapping) else None) or prov.get("original_blob_sha256")
+            if isinstance(digest, str) and digest.strip():
+                digests.add(digest.strip().lower())
+        return digests
+
     def get_many(self, keys: Sequence[str]) -> dict[str, ValueT]:
         """Fetch multiple non-expired documents in one batch."""
         now = self._current_time()
@@ -354,6 +379,29 @@ WHERE collection = %s
   AND document->>'owner_id' = %s
   AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
 ORDER BY document_key
+""".strip()
+
+_ACCOUNT_ITEMS_SQL = f"""
+SELECT document_key, document, version
+FROM {DOCUMENT_TABLE}
+WHERE collection = %s
+  AND COALESCE(document->>'owner_id', document->>'account_id') = %s
+  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+ORDER BY document_key
+""".strip()
+
+_LIVE_BLOB_SHA256S_SQL = f"""
+SELECT DISTINCT COALESCE(
+    document->'provenance'->'document_pages'->>'original_blob_sha256',
+    document->'provenance'->>'original_blob_sha256'
+)
+FROM {DOCUMENT_TABLE}
+WHERE collection = %s
+  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+  AND COALESCE(
+      document->'provenance'->'document_pages'->>'original_blob_sha256',
+      document->'provenance'->>'original_blob_sha256'
+  ) IS NOT NULL
 """.strip()
 
 _RETENTION_ITEMS_SQL = f"""
@@ -535,6 +583,32 @@ class PostgresDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
             (key, value)
             for key, value, _version in self._items_with_versions(_OWNER_ITEMS_SQL, (self.collection, owner_id))
         )
+
+    def items_for_account(self, account_id: str) -> Iterator[tuple[str, ValueT]]:
+        """Enumerate non-expired documents belonging to one account (``owner_id`` or ``account_id``)."""
+        _validate_key(account_id)
+        return (
+            (key, value)
+            for key, value, _version in self._items_with_versions(_ACCOUNT_ITEMS_SQL, (self.collection, account_id))
+        )
+
+    def live_blob_sha256s(self) -> set[str]:
+        """Fetch only 64-byte blob SHA-256 strings without deserializing full source text."""
+        try:
+            with self._connection() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(_LIVE_BLOB_SHA256S_SQL, (self.collection,))
+                    rows = cursor.fetchall()
+        except StorageRuntimeError:
+            raise
+        except Exception as error:
+            raise StorageRuntimeError("PostgreSQL storage operation failed.") from error
+        out: set[str] = set()
+        for row in rows:
+            val = row[0] if not isinstance(row, Mapping) else next(iter(row.values()), None)
+            if isinstance(val, str) and val.strip():
+                out.add(val.strip().lower())
+        return out
 
     def items_for_retention(self) -> Iterator[tuple[str, ValueT]]:
         """Enumerate non-deleted documents, including expired documents, for cleanup only."""
@@ -721,6 +795,23 @@ def owner_items(repository: JsonDocumentRepository[ValueT], owner_id: str) -> It
     return repository.items()
 
 
+def account_items(repository: JsonDocumentRepository[ValueT], account_id: str) -> Iterator[tuple[str, ValueT]]:
+    """Iterate documents belonging to ``account_id`` (matching top-level ``owner_id`` or ``account_id``)."""
+    scoped = getattr(repository, "items_for_account", None)
+    if callable(scoped):
+        return scoped(account_id)
+    return (
+        (key, value)
+        for key, value in repository.items()
+        if (
+            (value.get("owner_id") or value.get("account_id"))
+            if isinstance(value, Mapping)
+            else (getattr(value, "owner_id", None) or getattr(value, "account_id", None))
+        )
+        == account_id
+    )
+
+
 def build_repository(
     config_or_mode: StorageConfig | StorageMode | str,
     collection: str,
@@ -763,6 +854,7 @@ __all__ = [
     "StorageConflictError",
     "StorageMode",
     "StorageRuntimeError",
+    "account_items",
     "build_repository",
     "owner_items",
     "postgres_unit_of_work",

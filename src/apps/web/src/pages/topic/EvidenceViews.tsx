@@ -96,7 +96,7 @@ function docPagesNote(doc: CoverageDocument): string[] {
   const parts: string[] = [];
   const pages = doc.pages;
   if (!pages) return parts;
-  const needsOcr = pages.by_status["needs_ocr"] ?? 0;
+  const needsOcr = (pages.by_status["needs_ocr"] ?? 0) + (pages.by_status["text_partial"] ?? 0);
   if (needsOcr > 0) parts.push(`${formatInteger(needsOcr)} 页待 OCR`);
   if (pages.unread_text_pages > 0) parts.push(`${formatInteger(pages.unread_text_pages)} 页文字未读`);
   if (pages.ocr_low_confidence_pages.length > 0) parts.push(`OCR 低置信度页：${pages.ocr_low_confidence_pages.slice(0, 8).join("、")}`);
@@ -105,7 +105,32 @@ function docPagesNote(doc: CoverageDocument): string[] {
 
 const SOURCE_ORIGINS: Record<string, string> = { regulatory_filing: "监管披露", verified_issuer: "已确认发行人", issuer_candidate_unverified: "可能为发行人网站（未确认）", website_unverified: "网站来源（身份未确认）", data_provider: "数据服务", user_upload: "用户上传", unknown: "来源身份未知" };
 const INGESTION: Record<string, string> = { user_supplied: "用户提供", official: "官方来源", market_data: "行情数据" };
-const METHODS: Record<string, string> = { web_html: "网页", web_pdf: "网页 PDF", user_pdf: "上传 PDF", user_html: "上传网页", user_supplied: "用户输入", official_html: "官方网页", sec_filing_html: "监管文件", market_data: "行情接口", historical_prices: "历史价格", sec_companyfacts: "监管结构化财务数据", sec_companyconcept: "监管结构化财务数据", structured_financials: "结构化财务数据" };
+const METHODS: Record<string, string> = {
+  web_html: "网页",
+  web_pdf: "网页 PDF",
+  user_pdf: "上传 PDF",
+  user_html: "上传网页",
+  user_pptx: "上传 PPTX",
+  user_docx: "上传 DOCX",
+  user_text: "上传文本/字幕",
+  user_supplied: "用户输入",
+  official_html: "官方网页",
+  sec_filing_html: "监管文件",
+  sec_earnings_release: "SEC 业绩新闻稿",
+  sec_filing_table: "SEC 财报表格",
+  sec_filing_sections: "SEC 章节拆解",
+  sec_material_events: "SEC 重大事件",
+  market_data: "行情接口",
+  historical_prices: "历史价格",
+  sec_companyfacts: "监管结构化财务数据",
+  sec_companyconcept: "监管结构化财务数据",
+  structured_financials: "结构化财务数据",
+  fmp_consensus: "一致预期（BYOK）",
+  fmp_transcript: "电话会纪要（BYOK）",
+  peer_relative_valuation: "同业相对估值",
+  governance_capital_audit: "治理与资本审计",
+  call_qa_verification: "电话会 Q&A 核验",
+};
 const PERMISSIONS: Record<string, string> = { store: "保存", model_input: "模型使用", display: "展示", export: "导出" };
 
 export function CoverageMapBlock({ coverage }: { coverage: CoverageMapView }) {

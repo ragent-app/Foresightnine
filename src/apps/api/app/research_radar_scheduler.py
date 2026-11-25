@@ -19,7 +19,13 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .research_signals import CompanySignalEnvelope, RawEventCandidate, SecEventAnalysisResult, SecEventScanResult
+from .research_signals import (
+    CompanySignalEnvelope,
+    PeriodicFilingRef,
+    RawEventCandidate,
+    SecEventAnalysisResult,
+    SecEventScanResult,
+)
 from .research_thesis_ledger import (
     ThesisClaim,
     ThesisLedger,
@@ -30,9 +36,9 @@ from .research_thesis_ledger import (
     evaluate_metric_trigger,
 )
 
-WatchChannel = Literal["v1_events", "earnings_delta", "peer_relative", "governance_audit"]
+WatchChannel = Literal["v1_events", "earnings_delta", "peer_relative", "governance_audit", "call_commitment_verify"]
 WatchHealthStatus = Literal["healthy", "degraded", "error"]
-InboxSourceChannel = Literal["v1_events", "earnings_delta", "peer_relative", "governance_audit"]
+InboxSourceChannel = Literal["v1_events", "earnings_delta", "peer_relative", "governance_audit", "call_commitment_verify"]
 InboxImpactLevel = Literal["critical", "high", "medium", "low"]
 InboxDirection = Literal["positive", "negative", "mixed", "neutral"]
 InboxReviewState = Literal["unread", "read", "accepted", "dismissed_with_note"]
@@ -72,7 +78,7 @@ class FilingWatchSubscription(_FrozenRadarModel):
     company_name: str | None = None
     enabled: bool = True
     watched_channels: list[WatchChannel] = Field(
-        default_factory=lambda: ["v1_events", "earnings_delta", "governance_audit"]
+        default_factory=lambda: ["v1_events", "earnings_delta", "governance_audit", "call_commitment_verify"]
     )
     peer_watch_config: PeerWatchConfig | None = None
     # Per-channel idempotency & failure isolation: accession -> {"v1"?: status, "earnings"?: status}
@@ -116,6 +122,9 @@ class ChangeInboxItem(_FrozenRadarModel):
     user_decision_note: str | None = None
     resulting_ledger_version: int | None = None
     disclosed_at: str | None = None
+    report_date: str | None = None
+    fiscal_period_key: str | None = None
+    has_confirmed_ledger: bool | None = None
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
 
@@ -172,7 +181,10 @@ class RadarSweepSummary(_FrozenRadarModel):
 
 # --------------------------------------------------------------------------- Priority & Routing Helpers
 
-def seen_accessions_for_channel(sub: FilingWatchSubscription, channel: Literal["v1", "earnings"]) -> list[str]:
+def seen_accessions_for_channel(
+    sub: FilingWatchSubscription,
+    channel: Literal["v1", "earnings", "call_verify"],
+) -> list[str]:
     """Return accessions already completed for ``channel`` (excluding any still in ``failed_accessions``)."""
     failed_for_ch = {
         acc for acc, ch_map in sub.failed_accessions.items() if channel in ch_map
@@ -261,13 +273,20 @@ def build_inbox_item_from_v1_signal(
     )
 
 
-def upsert_inbox_item_with_folding(
+_IMPACT_RANK: dict[str, int] = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+
+
+def _max_impact(a: InboxImpactLevel, b: InboxImpactLevel) -> InboxImpactLevel:
+    return a if _IMPACT_RANK.get(a, 1) >= _IMPACT_RANK.get(b, 1) else b
+
+
+def upsert_inbox_item_with_status(
     new_item: ChangeInboxItem,
     existing_items: Sequence[ChangeInboxItem],
-) -> tuple[ChangeInboxItem, bool]:
-    """Fold amendments sharing ``(account_id, cik, event_thread_key)`` instead of spamming duplicates.
+) -> tuple[ChangeInboxItem, bool, bool]:
+    """Fold amendments sharing ``(account_id, cik, event_thread_key)`` without spurious rewrites.
 
-    Returns ``(item_to_persist, is_new)``.
+    Returns ``(item_to_persist, is_new, is_modified)``.
     """
     for old in existing_items:
         if (
@@ -276,30 +295,137 @@ def upsert_inbox_item_with_folding(
             and old.source_channel == new_item.source_channel
             and old.event_thread_key == new_item.event_thread_key
         ):
-            if old.accession == new_item.accession:
-                # Exact same accession already in inbox -> idempotent no-op refresh
-                return old, False
-            # Amendment / newer filing on same event thread -> fold in place and re-mark unread
+            if old.accession == new_item.accession and old.summary == new_item.summary and old.scorecard_diff == new_item.scorecard_diff:
+                return old, False, False
             updated = old.model_copy(
                 update={
                     "accession": new_item.accession,
-                    "superseded_by_accession": new_item.accession,
+                    "superseded_by_accession": new_item.accession if new_item.accession != old.accession else old.superseded_by_accession,
                     "headline": new_item.headline,
                     "summary": new_item.summary,
-                    "impact_level": new_item.impact_level,
+                    "impact_level": _max_impact(old.impact_level, new_item.impact_level),
                     "direction": new_item.direction,
-                    "affected_pillars": new_item.affected_pillars,
-                    "linked_claim_ids": new_item.linked_claim_ids,
-                    "skeptic_dissent": new_item.skeptic_dissent,
-                    "signal_envelope": new_item.signal_envelope,
-                    "scorecard_diff": new_item.scorecard_diff,
+                    "affected_pillars": list(dict.fromkeys([*old.affected_pillars, *new_item.affected_pillars])),
+                    "linked_claim_ids": list(dict.fromkeys([*old.linked_claim_ids, *new_item.linked_claim_ids])),
+                    "skeptic_dissent": new_item.skeptic_dissent or old.skeptic_dissent,
+                    "signal_envelope": new_item.signal_envelope or old.signal_envelope,
+                    "scorecard_diff": new_item.scorecard_diff or old.scorecard_diff,
+                    "report_date": new_item.report_date or old.report_date,
+                    "fiscal_period_key": new_item.fiscal_period_key or old.fiscal_period_key,
+                    "has_confirmed_ledger": (
+                        new_item.has_confirmed_ledger
+                        if new_item.has_confirmed_ledger is not None
+                        else old.has_confirmed_ledger
+                    ),
                     "review_state": "unread",
-                    "disclosed_at": new_item.disclosed_at,
+                    "disclosed_at": new_item.disclosed_at or old.disclosed_at,
                     "updated_at": _utcnow(),
                 }
             )
-            return updated, False
-    return new_item, True
+            return updated, False, True
+    return new_item, True, True
+
+
+def upsert_inbox_item_with_folding(
+    new_item: ChangeInboxItem,
+    existing_items: Sequence[ChangeInboxItem],
+) -> tuple[ChangeInboxItem, bool]:
+    """Fold amendments sharing ``(account_id, cik, event_thread_key)`` instead of spamming duplicates.
+
+    Returns ``(item_to_persist, is_new)`` (2-tuple compatibility wrapper).
+    """
+    item, is_new, _is_mod = upsert_inbox_item_with_status(new_item, existing_items)
+    return item, is_new
+
+
+def _parse_iso_date(val: str | None) -> date | None:
+    if not val or not isinstance(val, str):
+        return None
+    try:
+        return date.fromisoformat(val.strip()[:10])
+    except ValueError:
+        return None
+
+
+def merge_v3a_item_into_inbox(
+    v3a_item: ChangeInboxItem,
+    existing_items: Sequence[ChangeInboxItem],
+    *,
+    filing_date: date | None = None,
+) -> tuple[ChangeInboxItem, bool, bool]:
+    """R2-D4 two-level merge for V3a ``call_commitment_verify`` alerts.
+
+    1. Matches an UNREAD ``earnings_delta`` card for the same ``(account_id, cik)`` via:
+       - Level 1: exact ``accession``;
+       - Level 2: same reporting period (``report_date`` or ``fiscal_period_key``), or fallback
+         date window ``[10q_filed - 45d, 10q_filed + 7d]`` when ``earnings_delta`` came from Day-0 8-K.
+    2. When merged, attaches ``scorecard_diff["v3a_call_collision"]``, raises
+       ``impact_level = max(old, v3a)``, unions ``affected_pillars``, and appends a visible badge to
+       the summary.
+    3. If the ``earnings_delta`` card is already closed (``accepted`` / ``dismissed_with_note``) or
+       absent, falls back to standalone ``call_commitment_verify`` upsert with thread folding.
+    """
+    v3a_filed = filing_date or _parse_iso_date(v3a_item.disclosed_at)
+    v3a_payload = {
+        "headline": v3a_item.headline,
+        "summary": v3a_item.summary,
+        "impact_level": v3a_item.impact_level,
+        "accession": v3a_item.accession,
+        "disclosed_at": v3a_item.disclosed_at,
+        "report_date": v3a_item.report_date,
+        "fiscal_period_key": v3a_item.fiscal_period_key,
+        "affected_pillars": list(v3a_item.affected_pillars),
+        "skeptic_dissent": v3a_item.skeptic_dissent,
+        **(v3a_item.scorecard_diff or {}),
+    }
+
+    target_delta: ChangeInboxItem | None = None
+    for old in existing_items:
+        if (
+            old.account_id != v3a_item.account_id
+            or old.cik != v3a_item.cik
+            or old.source_channel != "earnings_delta"
+            or old.review_state != "unread"
+        ):
+            continue
+        exact_acc = bool(v3a_item.accession and old.accession and old.accession == v3a_item.accession)
+        same_report = bool(v3a_item.report_date and old.report_date and old.report_date == v3a_item.report_date)
+        same_fp = bool(v3a_item.fiscal_period_key and old.fiscal_period_key and old.fiscal_period_key == v3a_item.fiscal_period_key)
+        in_window = False
+        if not (exact_acc or same_report or same_fp) and v3a_filed is not None:
+            old_d = _parse_iso_date(old.disclosed_at) or old.created_at.date()
+            delta_days = (v3a_filed - old_d).days
+            if -7 <= delta_days <= 45:
+                in_window = True
+        if exact_acc or same_report or same_fp or in_window:
+            target_delta = old
+            break
+
+    if target_delta is not None:
+        merged_diff = dict(target_delta.scorecard_diff or {})
+        if merged_diff.get("v3a_call_collision") == v3a_payload:
+            return target_delta, False, False
+        merged_diff["v3a_call_collision"] = v3a_payload
+        if isinstance(v3a_payload.get("call_audit_url"), str):
+            merged_diff["call_audit_url"] = v3a_payload["call_audit_url"]
+        badge = f"【含电话会核验：{v3a_item.headline}】"
+        new_summary = target_delta.summary
+        if badge not in new_summary:
+            new_summary = f"{target_delta.summary}\n{badge}"[:4000]
+        merged = target_delta.model_copy(
+            update={
+                "summary": new_summary,
+                "impact_level": _max_impact(target_delta.impact_level, v3a_item.impact_level),
+                "affected_pillars": list(dict.fromkeys([*target_delta.affected_pillars, *v3a_item.affected_pillars])),
+                "scorecard_diff": merged_diff,
+                "report_date": target_delta.report_date or v3a_item.report_date,
+                "fiscal_period_key": target_delta.fiscal_period_key or v3a_item.fiscal_period_key,
+                "updated_at": _utcnow(),
+            }
+        )
+        return merged, False, True
+
+    return upsert_inbox_item_with_status(v3a_item, existing_items)
 
 
 def apply_inbox_decision(
@@ -656,6 +782,10 @@ def run_p1b_radar_sweep(
     earnings_delta_fn: Callable[[FilingWatchSubscription, list[str], ThesisLedger | None], list[ChangeInboxItem]] | None = None,
     peer_compare_fn: Callable[[FilingWatchSubscription, list[str]], Any] | None = None,
     governance_audit_fn: Callable[[FilingWatchSubscription], Any] | None = None,
+    call_commitment_verify_fn: Callable[
+        [FilingWatchSubscription, list[PeriodicFilingRef], ThesisLedger | None],
+        list[ChangeInboxItem],
+    ] | None = None,
     as_of: date | None = None,
 ) -> RadarSweepSummary:
     """Execute P1-B staggered radar sweep:
@@ -663,7 +793,7 @@ def run_p1b_radar_sweep(
     1. Phase 1: Fast 0-LLM L1 scan across all enabled subscriptions. Zero-change companies
        immediately update ``last_checked_at`` and exit with 0 LLM tokens.
     2. Phase 2: Priority-sort queued subscriptions (P0 statutory > P1 earnings > P2 governance/M&A/13D > P3 routine)
-       and run Layer 2 analysis & unified inbox routing in priority order.
+       and run Phase 2a (V1), Phase 2b (Earnings Delta), and Phase 2c (V3a Call Commitment Verify with R2-D4 merge).
     """
     now = _utcnow()
     outcomes_by_id: dict[str, SubscriptionCheckOutcome] = {}
@@ -675,6 +805,7 @@ def run_p1b_radar_sweep(
             SecEventScanResult,
             dict[str, str],
             list[str],
+            list[PeriodicFilingRef],
         ]
     ] = []
 
@@ -684,7 +815,7 @@ def run_p1b_radar_sweep(
     total_created = 0
     total_updated = 0
 
-    # --- Phase 1: Fast 0-LLM L1 scan (+ 0-LLM peer_relative channel) ---
+    # --- Phase 1: Fast 0-LLM L1 scan (+ 0-LLM peer_relative & governance_audit channels) ---
     for sub in subscriptions:
         if not sub.enabled:
             continue
@@ -719,6 +850,14 @@ def run_p1b_radar_sweep(
             for sup in scan_res.suppressed_events:
                 if sup.suppression_reason == "routed_to_earnings_engine" and sup.accession not in seen_earn:
                     new_earnings_accs.append(sup.accession)
+
+        # Detect new periodic filings (10-Q/10-K/20-F & NT late-filing notices) for Phase 2c
+        seen_call = set(seen_accessions_for_channel(sub, "call_verify"))
+        new_periodic_filings: list[PeriodicFilingRef] = []
+        if "call_commitment_verify" in sub.watched_channels:
+            for pf in scan_res.periodic_filings:
+                if pf.accession not in seen_call:
+                    new_periodic_filings.append(pf)
 
         v1_cands = list(scan_res.target_candidates) if "v1_events" in sub.watched_channels else []
 
@@ -758,13 +897,13 @@ def run_p1b_radar_sweep(
                     peer_compare_fn=peer_compare_fn,
                 )
                 for p_it in peer_items:
-                    persisted_p, is_new_p = upsert_inbox_item_with_folding(p_it, p_existing)
+                    persisted_p, is_new_p, is_mod_p = upsert_inbox_item_with_status(p_it, p_existing)
                     if is_new_p:
                         p_existing.append(persisted_p)
                         save_inbox_item(persisted_p)
                         peer_created += 1
                         peer_last_sig = _utcnow()
-                    else:
+                    elif is_mod_p:
                         save_inbox_item(persisted_p)
                         peer_updated += 1
                         peer_last_sig = _utcnow()
@@ -786,13 +925,13 @@ def run_p1b_radar_sweep(
                     governance_audit_fn=governance_audit_fn,
                 )
                 for g_it in gov_items:
-                    persisted_g, is_new_g = upsert_inbox_item_with_folding(g_it, g_existing)
+                    persisted_g, is_new_g, is_mod_g = upsert_inbox_item_with_status(g_it, g_existing)
                     if is_new_g:
                         g_existing.append(persisted_g)
                         save_inbox_item(persisted_g)
                         gov_created += 1
                         peer_last_sig = _utcnow()
-                    else:
+                    elif is_mod_g:
                         save_inbox_item(persisted_g)
                         gov_updated += 1
                         peer_last_sig = _utcnow()
@@ -802,7 +941,7 @@ def run_p1b_radar_sweep(
         total_created += gov_created
         total_updated += gov_updated
 
-        if not v1_cands and not new_earnings_accs:
+        if not v1_cands and not new_earnings_accs and not new_periodic_filings:
             if peer_created == 0 and peer_updated == 0 and gov_created == 0 and gov_updated == 0:
                 zero_change_count += 1
             if l1_health == "degraded":
@@ -834,7 +973,10 @@ def run_p1b_radar_sweep(
             )
             continue
 
-        prio = compute_candidate_priority_tier(v1_cands, has_new_earnings=bool(new_earnings_accs))
+        prio = compute_candidate_priority_tier(
+            v1_cands,
+            has_new_earnings=bool(new_earnings_accs or new_periodic_filings),
+        )
         staged_sub = sub.model_copy(
             update={
                 "seen_accessions": new_seen,
@@ -842,12 +984,22 @@ def run_p1b_radar_sweep(
                 "last_signal_at": peer_last_sig,
             }
         )
-        l2_queue.append((prio, sub.last_checked_at or datetime.min.replace(tzinfo=timezone.utc), staged_sub, scan_res, source_texts, new_earnings_accs))
+        l2_queue.append(
+            (
+                prio,
+                sub.last_checked_at or datetime.min.replace(tzinfo=timezone.utc),
+                staged_sub,
+                scan_res,
+                source_texts,
+                new_earnings_accs,
+                new_periodic_filings,
+            )
+        )
 
     # --- Phase 2: Priority-ordered L2 execution ---
     l2_queue.sort(key=lambda entry: (entry[0], entry[1]))
 
-    for prio, _last_chk, sub, scan_res, source_texts, new_earnings_accs in l2_queue:
+    for prio, _last_chk, sub, scan_res, source_texts, new_earnings_accs, new_periodic_filings in l2_queue:
         ledger = ledger_loader(sub)
         active_flags, thesis_ctx = build_v1_thesis_context(ledger)
         existing_inbox = list(existing_inbox_loader(sub.account_id))
@@ -879,18 +1031,17 @@ def run_p1b_radar_sweep(
                             signal=sig,
                             ledger=ledger,
                         )
-                        persisted_item, is_new = upsert_inbox_item_with_folding(candidate_item, existing_inbox)
+                        persisted_item, is_new, is_mod = upsert_inbox_item_with_status(candidate_item, existing_inbox)
                         if is_new:
                             existing_inbox.append(persisted_item)
                             save_inbox_item(persisted_item)
                             created_here += 1
                             last_sig_at = _utcnow()
-                        elif persisted_item.accession != candidate_item.accession or persisted_item.updated_at != candidate_item.updated_at:
+                        elif is_mod:
                             save_inbox_item(persisted_item)
                             updated_here += 1
                             last_sig_at = _utcnow()
 
-                # Mark covered accessions seen; any candidate NOT covered stays failed for retry
                 for cand in scan_res.target_candidates:
                     if cand.accession in covered_accs:
                         new_seen.setdefault(cand.accession, {})["v1"] = covered_accs[cand.accession]
@@ -912,18 +1063,19 @@ def run_p1b_radar_sweep(
                 for cand in scan_res.target_candidates:
                     new_failed.setdefault(cand.accession, {})["v1"] = type(exc).__name__
 
-        # 2b. Earnings Delta Channel (wired in Step B2 when earnings_delta_fn is provided)
+        # 2b. Earnings Delta Channel
         if earnings_delta_fn is not None and new_earnings_accs and "earnings_delta" in sub.watched_channels:
             try:
                 delta_items = earnings_delta_fn(sub, new_earnings_accs, ledger)
                 for d_item in delta_items:
-                    persisted_item, is_new = upsert_inbox_item_with_folding(d_item, existing_inbox)
+                    persisted_item, is_new, is_mod = upsert_inbox_item_with_status(d_item, existing_inbox)
                     if is_new:
                         existing_inbox.append(persisted_item)
                         save_inbox_item(persisted_item)
                         created_here += 1
                         last_sig_at = _utcnow()
-                    else:
+                    elif is_mod:
+                        existing_inbox = [persisted_item if x.inbox_item_id == persisted_item.inbox_item_id else x for x in existing_inbox]
                         save_inbox_item(persisted_item)
                         updated_here += 1
                         last_sig_at = _utcnow()
@@ -938,6 +1090,68 @@ def run_p1b_radar_sweep(
                 sub_err = f"Earnings delta failed: {type(exc).__name__}: {exc}"[:500]
                 for acc in new_earnings_accs:
                     new_failed.setdefault(acc, {})["earnings"] = type(exc).__name__
+
+        # 2c. V3a Call Commitment Verify Channel (runs strictly AFTER Phase 2b for R2-D4 merge)
+        if new_periodic_filings and "call_commitment_verify" in sub.watched_channels:
+            try:
+                v3a_items: list[ChangeInboxItem] = []
+                # Emit automatic high-priority alert for NT 10-Q/10-K late-filing notices at 0 extra SEC cost
+                late_notices = [pf for pf in new_periodic_filings if pf.is_late_notice]
+                regular_periodic = [pf for pf in new_periodic_filings if not pf.is_late_notice]
+                for ln in late_notices:
+                    v3a_items.append(
+                        ChangeInboxItem(
+                            account_id=sub.account_id,
+                            subscription_id=sub.subscription_id,
+                            topic_id=sub.topic_id,
+                            cik=sub.cik,
+                            symbol=sub.symbol,
+                            company_name=sub.company_name,
+                            source_channel="call_commitment_verify",
+                            event_thread_key=f"v3a:{sub.cik}:{ln.form}:{ln.period_of_report or ln.filed_at}",
+                            accession=ln.accession,
+                            headline=f"{sub.symbol or sub.cik} 提交延期归档通知 {ln.form}",
+                            summary=f"公司于 {ln.filed_at.isoformat()} 向 SEC 提交 {ln.form} 延期申报通知，提示财报编制或审计可能存在重大延迟风险，建议复核既有电话会承诺与财务内控。",
+                            impact_level="high",
+                            direction="negative",
+                            affected_pillars=["risk", "cash_quality"],
+                            disclosed_at=ln.filed_at.isoformat(),
+                            report_date=ln.period_of_report.isoformat() if ln.period_of_report else None,
+                            has_confirmed_ledger=ledger is not None,
+                        )
+                    )
+                if call_commitment_verify_fn is not None and regular_periodic:
+                    v3a_items.extend(call_commitment_verify_fn(sub, regular_periodic, ledger))
+
+                latest_pf_date = max((pf.filed_at for pf in new_periodic_filings), default=None)
+                for v_item in v3a_items:
+                    persisted_v, is_new_v, is_mod_v = merge_v3a_item_into_inbox(
+                        v_item,
+                        existing_inbox,
+                        filing_date=latest_pf_date,
+                    )
+                    if is_new_v:
+                        existing_inbox.append(persisted_v)
+                        save_inbox_item(persisted_v)
+                        created_here += 1
+                        last_sig_at = _utcnow()
+                    elif is_mod_v:
+                        existing_inbox = [persisted_v if x.inbox_item_id == persisted_v.inbox_item_id else x for x in existing_inbox]
+                        save_inbox_item(persisted_v)
+                        updated_here += 1
+                        last_sig_at = _utcnow()
+
+                for pf in new_periodic_filings:
+                    new_seen.setdefault(pf.accession, {})["call_verify"] = "checked"
+                    if pf.accession in new_failed:
+                        new_failed[pf.accession].pop("call_verify", None)
+                        if not new_failed[pf.accession]:
+                            new_failed.pop(pf.accession, None)
+            except Exception as exc:
+                sub_health = "degraded" if sub_health == "healthy" else sub_health
+                sub_err = f"Call commitment verify failed: {type(exc).__name__}: {exc}"[:500]
+                for pf in new_periodic_filings:
+                    new_failed.setdefault(pf.accession, {})["call_verify"] = type(exc).__name__
 
         if sub_health == "degraded":
             degraded_count += 1

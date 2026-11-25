@@ -456,6 +456,146 @@ def sec_get_bytes(
     raise SecPacingError("provider_rate_limited", "SEC HTTP 429 retry budget exhausted.", status_code=429, retryable=True)
 
 
+def sec_get_to_tempfile(
+    url: str,
+    *,
+    accept: str = "application/json",
+    category: str = "filings",
+    user_agent: str,
+    limiter: SecPacingLimiter | None = None,
+    policy: Any = None,
+    transport: Any = None,
+    stream_transport: Any = None,
+    max_bytes: int = 60_000_000,
+    timeout: float = 60.0,
+    cancel_event: Any = None,
+    deadline: float | None = None,
+    telemetry: PacingTelemetry | None = None,
+    max_429_retries: int = 3,
+    clock: Callable[[], float] = monotonic,
+    sleep_fn: Callable[[float], None] = sleep,
+    suffix: str = ".dat",
+) -> tuple[Path, str, str]:
+    """Stream an SEC response directly to a temporary file on disk using waitable pacing.
+
+    Avoids holding 60MB ``bytes`` + decoded ``str`` simultaneously in RAM on 512M containers.
+    Caller is responsible for unlinking the returned ``Path``.
+    Returns ``(temp_path, content_type, sha256_hex)``.
+    """
+    from pathlib import Path
+
+    active_policy = policy or load_policy()
+    decision = active_policy.decide(PROVIDER, category)
+    if isinstance(decision, Denied):
+        raise SecPacingError(decision.reason, decision.message or f"Denied by policy for {category}", retryable=False)
+    try:
+        agent = validate_user_agent(user_agent)
+    except SecFailure as err:
+        raise SecPacingError(err.code, "SEC requires a valid declared User-Agent with contact email.", retryable=False) from None
+
+    active_limiter = limiter or SecPacingLimiter()
+    send_plain = transport or default_transport(max_response_bytes=min(max_bytes, 5_000_000))
+    send_stream = stream_transport if stream_transport is not None else (
+        default_stream_transport(max_response_bytes=max_bytes, cancel_event=cancel_event) if transport is None else None
+    )
+    headers = {"User-Agent": agent, "Accept": accept}
+    attempts = max(0, int(max_429_retries)) + 1
+
+    for attempt in range(attempts):
+        if cancel_event is not None and cancel_event.is_set():
+            raise SecPacingError("cancelled", "SEC request cancelled.", retryable=False)
+        if deadline is not None:
+            rem = deadline - clock()
+            if rem <= 0:
+                raise SecPacingError("deadline_exceeded", "SEC request exceeded deadline.", retryable=True)
+            req_timeout = min(timeout, max(0.1, rem))
+        else:
+            req_timeout = timeout
+
+        active_limiter.acquire(cancel_event=cancel_event, deadline=deadline, telemetry=telemetry)
+        if telemetry is not None:
+            telemetry.requests_sent += 1
+
+        fd, tmp_name = tempfile.mkstemp(prefix="foresight-sec-", suffix=suffix)
+        tmp_path = Path(tmp_name)
+        try:
+            with os.fdopen(fd, "wb") as sink:
+                if send_stream is not None:
+                    capped = _CappedSink(sink, max_bytes)
+                    reply = send_stream("GET", url, headers, b"", req_timeout, capped)
+                else:
+                    reply = send_plain("GET", url, headers, b"", req_timeout)
+                    raw_raw = reply.body
+                    raw_body = raw_raw.encode("utf-8") if isinstance(raw_raw, str) else bytes(raw_raw or b"")
+                    if len(raw_body) > max_bytes:
+                        raise _TransportFailure("response too large")
+                    sink.write(raw_body)
+                sink.flush()
+        except _TransportTimeout:
+            tmp_path.unlink(missing_ok=True)
+            raise SecPacingError("source_timeout", f"SEC request timed out for {url}", retryable=True) from None
+        except (_TransportFailure, OSError) as err:
+            tmp_path.unlink(missing_ok=True)
+            if str(err) == "response too large":
+                raise SecPacingError(
+                    "source_too_large",
+                    f"SEC response exceeded {max_bytes} byte cap for {url}",
+                    retryable=False,
+                ) from None
+            raise SecPacingError("source_unavailable", f"SEC transport failed for {url}", retryable=True) from None
+
+        code = int(reply.status_code)
+        if code == 429:
+            tmp_path.unlink(missing_ok=True)
+            wait_s = _parse_retry_after_seconds(reply.headers)
+            active_limiter.notify_rate_limited(wait_s)
+            if telemetry is not None:
+                telemetry.http_429_count += 1
+            if attempt >= attempts - 1:
+                raise SecPacingError(
+                    "provider_rate_limited",
+                    f"SEC returned HTTP 429 after {attempts} attempts.",
+                    status_code=429,
+                    retryable=True,
+                    retry_after_seconds=wait_s,
+                )
+            if deadline is not None and (clock() + wait_s) > deadline:
+                raise SecPacingError(
+                    "deadline_exceeded",
+                    f"SEC 429 Retry-After ({wait_s:.2f}s) exceeds deadline.",
+                    status_code=429,
+                    retryable=True,
+                    retry_after_seconds=wait_s,
+                )
+            if telemetry is not None:
+                telemetry.http_429_wait_ms += int(round(wait_s * 1000))
+            if not _wait_with_cancel(wait_s, cancel_event, sleep_fn):
+                raise SecPacingError("cancelled", "SEC request cancelled during 429 Retry-After backoff.", retryable=False)
+            continue
+
+        if code == 404:
+            tmp_path.unlink(missing_ok=True)
+            raise SecPacingError("not_found", f"SEC returned HTTP 404 for {url}", status_code=404, retryable=False)
+        if code in (401, 403):
+            tmp_path.unlink(missing_ok=True)
+            raise SecPacingError("forbidden", f"SEC refused request (HTTP {code}) for {url}", status_code=code, retryable=False)
+        if not 200 <= code < 300:
+            tmp_path.unlink(missing_ok=True)
+            raise SecPacingError("source_unavailable", f"SEC returned HTTP {code} for {url}", status_code=code, retryable=code >= 500)
+
+        content_type = http_header(reply.headers, "content-type")
+        hasher = sha256()
+        with tmp_path.open("rb") as fh:
+            while True:
+                blk = fh.read(65_536)
+                if not blk:
+                    break
+                hasher.update(blk)
+        return tmp_path, content_type, hasher.hexdigest()
+
+    raise SecPacingError("provider_rate_limited", "SEC HTTP 429 retry budget exhausted.", status_code=429, retryable=True)
+
+
 def sec_get_json(
     url: str,
     *,

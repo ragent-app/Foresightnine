@@ -137,8 +137,14 @@ class DocumentBlobStore:
         dry_run: bool = False,
         *,
         now: float | None = None,
+        min_orphan_age_seconds: float | None = None,
     ) -> PruneReport:
-        """Prune expired and over-quota blobs using mtime-LRU ordering, never deleting protected hashes."""
+        """Prune expired and over-quota blobs using mtime-LRU ordering, never deleting protected hashes.
+
+        When ``min_orphan_age_seconds`` is set, blobs younger than that age are also protected
+        in both TTL and over-quota LRU passes to prevent racing against concurrent uploads that
+        have written the blob before committing their ``ResearchSource`` row.
+        """
         import math
 
         if max_age_seconds is not None:
@@ -147,6 +153,9 @@ class DocumentBlobStore:
         if max_total_bytes is not None:
             if type(max_total_bytes) is not int or max_total_bytes < 0:
                 raise ValueError("max_total_bytes must be a non-negative integer")
+        if min_orphan_age_seconds is not None:
+            if isinstance(min_orphan_age_seconds, bool) or not isinstance(min_orphan_age_seconds, (int, float)) or not math.isfinite(min_orphan_age_seconds) or min_orphan_age_seconds < 0:
+                raise ValueError("min_orphan_age_seconds must be a finite non-negative number")
 
         protected: set[str] = set()
         if protected_sha256s is not None:
@@ -165,9 +174,17 @@ class DocumentBlobStore:
         candidates: list[tuple[float, int, str, Path]] = []
         remaining: list[tuple[float, int, str, Path]] = []
 
+        def _is_too_young(mtime: float) -> bool:
+            return min_orphan_age_seconds is not None and (current_time - mtime) < min_orphan_age_seconds
+
         for entry in blobs:
             mtime, size, digest, _ = entry
-            if digest not in protected and max_age_seconds is not None and (current_time - mtime) >= max_age_seconds:
+            if (
+                digest not in protected
+                and not _is_too_young(mtime)
+                and max_age_seconds is not None
+                and (current_time - mtime) >= max_age_seconds
+            ):
                 candidates.append(entry)
             else:
                 remaining.append(entry)
@@ -175,7 +192,10 @@ class DocumentBlobStore:
         if max_total_bytes is not None:
             total_bytes = sum(entry[1] for entry in remaining)
             if total_bytes > max_total_bytes:
-                evictable = sorted((entry for entry in remaining if entry[2] not in protected), key=lambda item: (item[0], item[2]))
+                evictable = sorted(
+                    (entry for entry in remaining if entry[2] not in protected and not _is_too_young(entry[0])),
+                    key=lambda item: (item[0], item[2]),
+                )
                 for entry in evictable:
                     if total_bytes <= max_total_bytes:
                         break

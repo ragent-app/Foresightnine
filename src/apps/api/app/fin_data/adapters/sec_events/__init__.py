@@ -141,21 +141,29 @@ def _batch_put_l1(repo: JsonDocumentRepository[Any] | None, items: Mapping[str, 
         repo.put(k, v)
 
 
+_PERIODIC_FORMS = frozenset({"10-Q", "10-Q/A", "10-K", "10-K/A", "20-F", "20-F/A"})
+_LATE_NOTICE_FORMS = frozenset({"NT 10-Q", "NT 10-K", "NT 20-F", "NT 10-Q/A", "NT 10-K/A"})
+
+
 def _is_seen_for_channel(
-    seen_accessions: Mapping[str, Any] | None,
+    seen_accessions: Mapping[str, Any] | Sequence[str] | set[str] | frozenset[str] | None,
     accession: str,
     channel: str = SEC_EVENTS_CHANNEL,
 ) -> bool:
     if not seen_accessions:
         return False
-    entry = seen_accessions.get(accession)
-    if entry is None:
-        return False
-    if isinstance(entry, Mapping):
-        return bool(entry.get(channel))
-    if isinstance(entry, str):
-        return bool(entry.strip())
-    return bool(entry)
+    if isinstance(seen_accessions, Mapping):
+        entry = seen_accessions.get(accession)
+        if entry is None:
+            return False
+        if isinstance(entry, Mapping):
+            return bool(entry.get(channel))
+        if isinstance(entry, str):
+            return bool(entry.strip())
+        return bool(entry)
+    if isinstance(seen_accessions, (list, tuple, set, frozenset)):
+        return accession in seen_accessions
+    return False
 
 
 def _classify_row_category(row: RawSubmissionRow, rules: SecEventsRules) -> EventCategory | None:
@@ -829,6 +837,26 @@ def scan_sec_material_events(
         }
     )
 
+    # Collect periodic filings (10-Q/10-K/20-F + NT late-filing notices) at zero extra SEC cost
+    from ....research_signals import PeriodicFilingRef
+
+    periodic_filings: list[PeriodicFilingRef] = []
+    for row in sub_rows:
+        form_u = row.form.upper()
+        if form_u in _PERIODIC_FORMS or form_u in _LATE_NOTICE_FORMS:
+            if row.filed_at >= target_start:
+                periodic_filings.append(
+                    PeriodicFilingRef(
+                        cik=target_cik,
+                        accession=row.accession,
+                        form=form_u,
+                        filed_at=row.filed_at,
+                        period_of_report=row.period_of_report,
+                        primary_document_url=row.primary_document_url,
+                        is_late_notice=form_u in _LATE_NOTICE_FORMS,
+                    )
+                )
+
     final_result = rescreened.model_copy(
         update={
             "entity_id": eid,
@@ -838,6 +866,7 @@ def scan_sec_material_events(
             "fpi_exempt_from_form4": fpi_exempt,
             "timing_context": timing_ctx,
             "historical_precedent": {**precedent, **{k: v for k, v in rescreened.historical_precedent.items() if k not in precedent}},
+            "periodic_filings": periodic_filings,
             "failed_accessions": failed_accessions,
             "processed_accessions": processed,
             "open_gaps": combined_gaps,

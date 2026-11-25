@@ -116,17 +116,26 @@ describe("fetchUrlProblem (mirrors FetchSourceRequest.validate_public_https_url)
 });
 
 describe("file helpers", () => {
-  it("detects PDF and HTML by type or extension", () => {
+  it("detects PDF, PPTX, DOCX, HTML, Markdown, subtitles and plain text by type or extension", () => {
     expect(uploadKind({ name: "a.PDF", type: "" })).toBe("pdf");
     expect(uploadKind({ name: "x", type: "application/pdf" })).toBe("pdf");
+    expect(uploadKind({ name: "deck.pptx", type: "" })).toBe("pptx");
+    expect(uploadKind({ name: "notes.docx", type: "" })).toBe("docx");
     expect(uploadKind({ name: "page.htm", type: "" })).toBe("html");
-    expect(uploadKind({ name: "notes.docx", type: "" })).toBeNull();
     expect(uploadKind({ name: "report.TXT", type: "" })).toBe("text");
+    expect(uploadKind({ name: "call.md", type: "" })).toBe("text");
+    expect(uploadKind({ name: "webcast.vtt", type: "" })).toBe("text");
+    expect(uploadKind({ name: "caption.srt", type: "" })).toBe("text");
+    expect(uploadKind({ name: "archive.zip", type: "" })).toBeNull();
   });
 
-  it("streams plain text and files above the JSON limit, and keeps small PDF/HTML on the base64 route", () => {
-    expect(usesStreamingUpload({ size: MAX_UPLOAD_BYTES }, "pdf")).toBe(false);
+  it("streams PDF, PPTX, DOCX, text and large HTML through /upload, keeping only small HTML on base64", () => {
+    expect(usesStreamingUpload({ size: 1024 }, "pdf")).toBe(true);
+    expect(usesStreamingUpload({ size: MAX_UPLOAD_BYTES }, "pdf")).toBe(true);
     expect(usesStreamingUpload({ size: MAX_UPLOAD_BYTES + 1 }, "pdf")).toBe(true);
+    expect(usesStreamingUpload({ size: 1024 }, "pptx")).toBe(true);
+    expect(usesStreamingUpload({ size: 1024 }, "docx")).toBe(true);
+    expect(usesStreamingUpload({ size: MAX_UPLOAD_BYTES }, "html")).toBe(false);
     expect(usesStreamingUpload({ size: MAX_UPLOAD_BYTES + 1 }, "html")).toBe(true);
     expect(usesStreamingUpload({ size: 10 }, "text")).toBe(true);
   });

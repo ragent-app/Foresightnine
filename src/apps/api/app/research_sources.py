@@ -68,6 +68,9 @@ RetrievalMethod = Literal[
     "sec_companyconcept",
     "user_pdf",
     "user_html",
+    "user_pptx",
+    "user_docx",
+    "user_text",
     "sec_filing_html",
     "sec_earnings_release",
     "sec_filing_table",
@@ -79,9 +82,14 @@ RetrievalMethod = Literal[
     "structured_financials",
     "fmp_consensus",
     "fmp_transcript",
+    "peer_relative_valuation",
+    "governance_capital_audit",
+    "call_qa_verification",
     "web_html",
     "web_pdf",
 ]
+
+PAGED_RETRIEVAL_METHODS: frozenset[str] = frozenset({"user_pdf", "web_pdf", "user_pptx"})
 
 
 class ResearchSource(BaseModel):
@@ -229,7 +237,7 @@ def locate_user_quotation(source: ResearchSource, quotation: str) -> dict:
         if start < 0:
             break
         position = {"character_start": start, "character_end": start + len(quotation)}
-        if source.retrieval_method == "user_pdf":
+        if source.retrieval_method in PAGED_RETRIEVAL_METHODS:
             position["page"] = source.text[:start].count("\f") + 1
         matches.append(position)
         offset = start + 1  # Include overlapping matches, so uniqueness is not overstated.
@@ -271,3 +279,19 @@ class ResearchSources:
         for source_id, source in list(owner_items(self.repository, owner)):
             if source.owner_id == owner:
                 self.repository.delete(source_id)
+
+    def live_blob_sha256s(self) -> set[str]:
+        """Return live DocumentBlobStore SHA-256 hashes referenced by non-expired sources."""
+        repo_fn = getattr(self.repository, "live_blob_sha256s", None)
+        if callable(repo_fn):
+            return set(repo_fn())
+        digests: set[str] = set()
+        for _key, src in self.repository.items():
+            prov = getattr(src, "provenance", None)
+            if not isinstance(prov, dict):
+                continue
+            dp = prov.get("document_pages")
+            digest = (dp.get("original_blob_sha256") if isinstance(dp, dict) else None) or prov.get("original_blob_sha256")
+            if isinstance(digest, str) and digest.strip():
+                digests.add(digest.strip().lower())
+        return digests

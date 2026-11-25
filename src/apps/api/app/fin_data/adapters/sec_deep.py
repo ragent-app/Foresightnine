@@ -2476,6 +2476,8 @@ def fetch_filing_table(
     cik: str | int,
     accession: str,
     r_file: str,
+    *,
+    max_bytes: int | None = None,
 ) -> ToolResult:
     """Fetch ``R*.htm`` on demand and deterministically parse structured table data & metadata."""
     try:
@@ -2486,6 +2488,7 @@ def fetch_filing_table(
         return ToolResult.failure("failed", "invalid_request", str(err))
 
     url = f"https://www.sec.gov/Archives/edgar/data/{int(target_cik)}/{nodash}/{clean_r}"
+    eff_max_bytes = min(MAX_EXHIBIT_BYTES, int(max_bytes)) if max_bytes is not None and max_bytes > 0 else MAX_EXHIBIT_BYTES
     try:
         raw_bytes, ct, prov, cost, gate = _fetch_bytes(
             adapter,
@@ -2493,7 +2496,7 @@ def fetch_filing_table(
             "filings",
             accept="text/html",
             not_found_reason="filing_table_not_found",
-            max_bytes=MAX_EXHIBIT_BYTES,
+            max_bytes=eff_max_bytes,
         )
     except StopWith as stop:
         return stop.result
@@ -2696,6 +2699,105 @@ def _extract_mda_subsections(mda_section: FilingSection) -> list[FilingSection]:
             )
         )
     return extracted
+
+
+def stream_strip_sec_html_file(
+    html_path: Any,
+    *,
+    chunk_bytes: int = 65_536,
+    max_output_chars: int = 2_500_000,
+) -> str:
+    """Stream-strip a large 10-K/10-Q iXBRL HTML file in 64KB chunks (<5MB peak RAM).
+
+    Skips ``<ix:header>``, ``<ix:hidden>``, ``<style>``, ``<script>``, ``<head>``, and
+    ``<noscript>`` subtrees on the fly so 25-45MB mega-cap 10-K/10-Q filings never load
+    multi-tens-of-MB DOMs or raw HTML strings into RAM on 512M containers.
+    """
+    import codecs
+    from html.parser import HTMLParser
+    from pathlib import Path
+
+    skip_tags = frozenset({"ix:header", "ix:hidden", "style", "script", "head", "noscript", "svg"})
+    block_tags = frozenset({"p", "div", "tr", "li", "h1", "h2", "h3", "h4", "h5", "h6", "br", "hr", "table", "section", "article"})
+    cell_tags = frozenset({"td", "th"})
+
+    class _StreamingSecHtmlStripper(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=True)
+            self.skip_depth = 0
+            self.skip_stack: list[str] = []
+            self.parts: list[str] = []
+            self.total_chars = 0
+            self.in_row = False
+            self.cell_count = 0
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            t = tag.lower()
+            if t in skip_tags:
+                self.skip_depth += 1
+                self.skip_stack.append(t)
+                return
+            if self.skip_depth > 0:
+                return
+            if t == "tr":
+                self.in_row = True
+                self.cell_count = 0
+                self._emit("\n")
+            elif t in cell_tags:
+                if self.cell_count > 0:
+                    self._emit(" | ")
+                self.cell_count += 1
+            elif t in block_tags:
+                self._emit("\n")
+
+        def handle_endtag(self, tag: str) -> None:
+            t = tag.lower()
+            if self.skip_depth > 0 and self.skip_stack and t == self.skip_stack[-1]:
+                self.skip_stack.pop()
+                self.skip_depth -= 1
+                return
+            if self.skip_depth > 0:
+                return
+            if t == "tr":
+                self.in_row = False
+                self._emit("\n")
+            elif t in block_tags:
+                self._emit("\n")
+
+        def handle_data(self, data: str) -> None:
+            if self.skip_depth > 0 or self.total_chars >= max_output_chars or not data:
+                return
+            cleaned = data.replace("\x00", "").replace("\u00a0", " ")
+            if not cleaned.strip():
+                if self.parts and not self.parts[-1].endswith((" ", "\n")):
+                    self._emit(" ")
+                return
+            self._emit(cleaned)
+
+        def _emit(self, piece: str) -> None:
+            if self.total_chars >= max_output_chars:
+                return
+            rem = max_output_chars - self.total_chars
+            if len(piece) > rem:
+                piece = piece[:rem]
+            self.parts.append(piece)
+            self.total_chars += len(piece)
+
+    parser = _StreamingSecHtmlStripper()
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    path = Path(html_path)
+    with path.open("rb") as fh:
+        while parser.total_chars < max_output_chars:
+            raw = fh.read(chunk_bytes)
+            if not raw:
+                break
+            parser.feed(decoder.decode(raw, final=False))
+        parser.feed(decoder.decode(b"", final=True))
+    parser.close()
+    text = "".join(parser.parts)
+    parser.parts.clear()
+    lines = [re.sub(r"[ \t]+", " ", ln).strip() for ln in text.splitlines()]
+    return "\n".join(ln for ln in lines if ln)
 
 
 def split_filing_sections(
