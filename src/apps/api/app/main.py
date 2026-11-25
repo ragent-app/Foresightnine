@@ -9167,7 +9167,7 @@ def generate_governance_cda_brief(
             from .fin_data.adapters.sec_events.pacing import sec_get_text
             from .research_governance_audit import _MAX_DEF14A_HTML_BYTES, _strip_html_to_text
             ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
-            raw_html, _sha = sec_get_text(
+            raw_html, _sha, _ct = sec_get_text(
                 d_latest.primary_doc_url,
                 category="filings",
                 user_agent=ua,
@@ -9269,7 +9269,7 @@ def backfill_governance_guidance(
             if not ex_url:
                 continue
             try:
-                raw_txt, _ = sec_get_text(ex_url, category="filings", user_agent=ua, limiter=limiter, policy=policy, max_bytes=_MAX_8K_EX991_BYTES)
+                raw_txt, _sha, _ct = sec_get_text(ex_url, category="filings", user_agent=ua, limiter=limiter, policy=policy, max_bytes=_MAX_8K_EX991_BYTES)
                 plain = _strip_html_to_text(raw_txt)
                 del raw_txt
                 if plain:
