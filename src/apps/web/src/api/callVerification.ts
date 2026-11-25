@@ -48,13 +48,15 @@ export interface PreviewSourceSummary {
 
 export interface CallAuditPreviewResponse {
   auto_trigger_eligible: boolean;
+  entity_key?: string | null;
   detected_entity_key?: string | null;
   detected_symbol?: string | null;
   detected_cik?: string | null;
   fiscal_period_key?: string | null;
   call_date_iso?: string | null;
   call_default_basis: CallDefaultBasis;
-  mgmt_source_ids: string[];
+  management_source_ids: string[];
+  mgmt_source_ids?: string[];
   sellside_source_ids: string[];
   total_pending_ocr_pages: number;
   sources: PreviewSourceSummary[];
@@ -227,6 +229,8 @@ export interface CallVerificationReport {
   text_only_evasion_disclaimer: string;
   model_id?: string | null;
   total_tokens: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
   llm_call_count: number;
   generated_at: string;
 }

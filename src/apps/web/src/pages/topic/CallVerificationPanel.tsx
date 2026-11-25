@@ -457,7 +457,7 @@ export function CallVerificationPanel({
                   className="inbox-input"
                   value={mergeTargetKey}
                   onChange={(e) => setMergeTargetKey(e.target.value)}
-                  placeholder="例如 nonsec:hk:00700 或 10位CIK"
+                  placeholder="例如 nonsec:HKEX:0700 或 10位CIK"
                 />
               </label>
               <button

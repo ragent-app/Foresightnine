@@ -86,9 +86,19 @@ export function CallVerificationBar({
   const safeSourceIds = Array.isArray(sourceIds) ? sourceIds : [];
   const [report, setReport] = useState<CallVerificationReport | null>(null);
   const [markdown, setMarkdown] = useState<string | null>(null);
+  const [loadingCached, setLoadingCached] = useState<boolean>(false);
   const [expanded, setExpanded] = useState<boolean>(initialExpanded);
   const [runningOpId, setRunningOpId] = useState<string | null>(null);
   const [stageText, setStageText] = useState<string | null>(null);
+  const [liveStage, setLiveStage] = useState<{
+    stage: string;
+    entityKey?: string | null;
+    fiscalPeriod?: string | null;
+    callDefaultBasis?: string | null;
+    qaCount?: number | null;
+    ledgerStatus?: string | null;
+    awaiting10q?: boolean;
+  } | null>(null);
   const [autoBanner, setAutoBanner] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -96,6 +106,8 @@ export function CallVerificationBar({
   const streamAbortRef = useRef<AbortController | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSniffSeqRef = useRef<number>(0);
+  const sourceIdsRef = useRef<readonly string[]>(safeSourceIds);
+  sourceIdsRef.current = safeSourceIds;
 
   const stopLiveTracking = useCallback(() => {
     if (streamAbortRef.current) {
@@ -140,6 +152,7 @@ export function CallVerificationBar({
     if (!topicId) return undefined;
     const ctrl = new AbortController();
     let checkTimer: ReturnType<typeof setTimeout> | null = null;
+    setLoadingCached(true);
     void loadCachedReport(ctrl.signal)
       .then((env) => {
         if (ctrl.signal.aborted || !env) return;
@@ -158,7 +171,10 @@ export function CallVerificationBar({
           }, 0);
         }
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (!ctrl.signal.aborted) setLoadingCached(false);
+      });
     return () => {
       ctrl.abort();
       if (checkTimer) clearTimeout(checkTimer);
@@ -173,6 +189,7 @@ export function CallVerificationBar({
         setMarkdown(op.markdown ?? null);
         setRunningOpId(null);
         setStageText(null);
+        setLiveStage(null);
         setAutoBanner(null);
         setErrorMsg(null);
         return true;
@@ -180,11 +197,15 @@ export function CallVerificationBar({
       if (op.status === "failed" || op.status === "cancelled") {
         setRunningOpId(null);
         setStageText(null);
+        setLiveStage(null);
         setAutoBanner(null);
         if (op.status === "failed") setErrorMsg(op.error || "电话会核验未能完成，请稍后重试。");
         return true;
       }
-      if (op.stage) setStageText(STAGE_LABEL[op.stage] ?? op.stage);
+      if (op.stage) {
+        setStageText(STAGE_LABEL[op.stage] ?? op.stage);
+        setLiveStage((prev) => ({ ...(prev ?? {}), stage: op.stage ?? prev?.stage ?? "running" }));
+      }
       return false;
     } catch {
       return false;
@@ -198,6 +219,7 @@ export function CallVerificationBar({
       streamAbortRef.current = ctrl;
       setRunningOpId(opId);
       setStageText(STAGE_LABEL.queued ?? "排队中");
+      setLiveStage({ stage: "queued" });
       setErrorMsg(null);
 
       const startPollingFallback = () => {
@@ -224,7 +246,21 @@ export function CallVerificationBar({
               return;
             }
             const stageName = typeof frame.data.stage === "string" ? frame.data.stage : frame.event;
+            const payload =
+              frame.data.payload && typeof frame.data.payload === "object" && !Array.isArray(frame.data.payload)
+                ? (frame.data.payload as Record<string, unknown>)
+                : frame.data;
             setStageText(STAGE_LABEL[stageName] ?? stageName);
+            setLiveStage((prev) => ({
+              ...(prev ?? {}),
+              stage: stageName,
+              ...(typeof payload.entity_key === "string" ? { entityKey: payload.entity_key } : {}),
+              ...(typeof payload.fiscal_period_key === "string" ? { fiscalPeriod: payload.fiscal_period_key } : {}),
+              ...(typeof payload.call_default_basis === "string" ? { callDefaultBasis: payload.call_default_basis } : {}),
+              ...(typeof payload.qa_exchange_count === "number" ? { qaCount: payload.qa_exchange_count } : {}),
+              ...(typeof payload.ledger_status === "string" ? { ledgerStatus: payload.ledger_status } : {}),
+              ...(typeof payload.awaiting_current_10q === "boolean" ? { awaiting10q: payload.awaiting_current_10q } : {}),
+            }));
           }
         } catch {
           // SSE unavailable or dropped; fall through to 3s polling
@@ -246,7 +282,7 @@ export function CallVerificationBar({
       autoTriggered?: boolean;
       expandOnComplete?: boolean;
     }) => {
-      const ids = opts?.targetSourceIds && opts.targetSourceIds.length > 0 ? opts.targetSourceIds : safeSourceIds;
+      const ids = opts?.targetSourceIds && opts.targetSourceIds.length > 0 ? opts.targetSourceIds : Array.from(sourceIdsRef.current);
       if (ids.length === 0) {
         onAddSources();
         return;
@@ -271,6 +307,7 @@ export function CallVerificationBar({
           setAutoBanner(null);
           setRunningOpId(null);
           setStageText(null);
+          setLiveStage(null);
           if (opts?.expandOnComplete) setExpanded(true);
           return;
         }
@@ -281,26 +318,35 @@ export function CallVerificationBar({
       } catch (err) {
         setAutoBanner(null);
         setRunningOpId(null);
+        setLiveStage(null);
         const msg = err instanceof Error ? err.message : "启动电话会核验失败";
         setErrorMsg(msg);
         showToast(`电话会核验失败：${msg}`, { tone: "error" });
       }
     },
-    [safeSourceIds, topicId, symbol, cik, asOfIso, onAddSources, trackOperation],
+    [topicId, symbol, cik, asOfIso, onAddSources, trackOperation],
   );
 
-  // R2-D1: Automatic 0-LLM <150ms sniff whenever user attaches new source(s) to this Topic
+  const startVerificationRef = useRef(startVerification);
+  startVerificationRef.current = startVerification;
+  const attachedTriggerRef = useRef(attachedTrigger);
+  attachedTriggerRef.current = attachedTrigger;
+
+  // R2-D1: Automatic 0-LLM <150ms sniff whenever user attaches new source(s) to this Topic.
+  // Depend ONLY on attachedTrigger?.seq so Topic re-renders (new sourceIds array ref) NEVER abort in-flight /preview!
+  const attachedSeq = attachedTrigger?.seq ?? 0;
   useEffect(() => {
-    if (!attachedTrigger || attachedTrigger.seq <= lastSniffSeqRef.current) return;
-    if (attachedTrigger.sourceIds.length === 0) return;
-    lastSniffSeqRef.current = attachedTrigger.seq;
+    const trig = attachedTriggerRef.current;
+    if (!trig || trig.seq <= lastSniffSeqRef.current) return;
+    if (trig.sourceIds.length === 0) return;
+    lastSniffSeqRef.current = trig.seq;
     const ctrl = new AbortController();
-    const combinedIds = Array.from(new Set([...safeSourceIds, ...attachedTrigger.sourceIds]));
+    const combinedIds = Array.from(new Set([...sourceIdsRef.current, ...trig.sourceIds]));
     void previewCallAudit(combinedIds, ctrl.signal)
       .then((preview) => {
         if (ctrl.signal.aborted) return;
         if (preview.auto_trigger_eligible) {
-          void startVerification({
+          void startVerificationRef.current({
             targetSourceIds: combinedIds,
             autoTriggered: true,
             expandOnComplete: false,
@@ -309,7 +355,7 @@ export function CallVerificationBar({
       })
       .catch(() => undefined);
     return () => ctrl.abort();
-  }, [attachedTrigger, safeSourceIds, startVerification]);
+  }, [attachedSeq]);
 
   const handleCancel = async () => {
     if (!runningOpId || cancelling) return;
@@ -319,6 +365,7 @@ export function CallVerificationBar({
       stopLiveTracking();
       setRunningOpId(null);
       setStageText(null);
+      setLiveStage(null);
       setAutoBanner(null);
       showToast("已取消电话会核验");
     } catch (err) {
@@ -463,6 +510,47 @@ export function CallVerificationBar({
       {errorMsg ? (
         <div className="v3a-error-banner" role="alert">
           {errorMsg}
+        </div>
+      ) : null}
+
+      {isBusy && !report ? (
+        <div className="v3a-live-skeleton" role="status" data-testid="call-audit-live-skeleton">
+          <div className="v3a-live-steps">
+            {(() => {
+              const order = ["queued", "starting", "layer0_ready", "layer0b_ocr", "layer1_ready", "layer2_extracting", "completed"];
+              const curIdx = Math.max(0, order.indexOf(liveStage?.stage ?? "queued"));
+              const pills = [
+                { key: "layer0_ready", label: "Layer 0 文档与 Q&A 解析" },
+                { key: "layer1_ready", label: "Layer 1 SEC 10-Q 账本对齐" },
+                { key: "layer2_extracting", label: "Layer 2 语义提取与 7 轨碰撞" },
+              ];
+              return pills.map((p) => {
+                const idx = order.indexOf(p.key);
+                const cls = curIdx > idx ? "v3a-live-step is-done" : curIdx === idx ? "v3a-live-step is-active" : "v3a-live-step";
+                return (
+                  <span key={p.key} className={cls}>
+                    {curIdx > idx ? "✓ " : curIdx === idx ? "● " : ""}
+                    {p.label}
+                  </span>
+                );
+              });
+            })()}
+          </div>
+          {liveStage?.entityKey || liveStage?.fiscalPeriod || liveStage?.ledgerStatus || typeof liveStage?.qaCount === "number" ? (
+            <div className="v3a-status-chips">
+              {liveStage.entityKey ? <span className="v3a-meta-pill">实体 {liveStage.entityKey}</span> : null}
+              {liveStage.fiscalPeriod ? <span className="v3a-meta-pill">{liveStage.fiscalPeriod}</span> : null}
+              {typeof liveStage.qaCount === "number" ? <span className="v3a-meta-pill">已识别 Q&amp;A {liveStage.qaCount} 轮</span> : null}
+              {liveStage.ledgerStatus ? <span className="v3a-meta-pill">账本 {liveStage.ledgerStatus}</span> : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {expanded && !report && !isBusy && loadingCached ? (
+        <div className="v3a-live-skeleton" role="status">
+          <div className="skeleton line" />
+          <div className="skeleton line short" />
         </div>
       ) : null}
 

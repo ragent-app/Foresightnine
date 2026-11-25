@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { checkCallAuditFilings } from "../api/callVerification";
 import {
   pollRadarSweepOperation,
   useChangeInbox,
   useRadarHealth,
-  useRadarMutations,
   useRadarSubscriptions,
+  useRadarMutations,
   type ChangeInboxItem,
 } from "../api/radar";
 import { describeError } from "./research/errors";
@@ -254,11 +255,13 @@ function InboxCard({
 }
 
 export function InboxPage() {
+  const navigate = useNavigate();
   const [stateFilter, setStateFilter] = useState("all");
   const [impactFilter, setImpactFilter] = useState("all");
   const [symbolFilter, setSymbolFilter] = useState("");
   const [newSymbol, setNewSymbol] = useState("");
   const [activeSweepOp, setActiveSweepOp] = useState<string | null>(null);
+  const v3aCheckedRef = useRef(false);
 
   const health = useRadarHealth();
   const subs = useRadarSubscriptions();
@@ -268,6 +271,33 @@ export function InboxPage() {
     symbol: symbolFilter,
   });
   const mutations = useRadarMutations();
+
+  // Opportunistic 30m-cooldown V3a delayed-10-Q check when visiting /inbox with active call_commitment_verify subscriptions
+  useEffect(() => {
+    if (v3aCheckedRef.current || !subs.data || subs.data.length === 0) return;
+    const hasCallSub = subs.data.some(
+      (s) => s.enabled && Array.isArray(s.watched_channels) && s.watched_channels.includes("call_commitment_verify"),
+    );
+    if (!hasCallSub) return;
+    v3aCheckedRef.current = true;
+    const storageKey = "v3a_inbox_check_filings_at";
+    try {
+      const prev = Number(window.sessionStorage.getItem(storageKey) || "0");
+      if (Number.isFinite(prev) && Date.now() - prev < 30 * 60 * 1000) return;
+      window.sessionStorage.setItem(storageKey, String(Date.now()));
+    } catch {
+      // sessionStorage unavailable
+    }
+    void checkCallAuditFilings({})
+      .then((res) => {
+        if (res.triggered_ciks.length > 0) {
+          showToast(`检测到 ${res.triggered_ciks.length} 家关注公司的新 10-Q/10-K，已更新电话会承诺核验。`);
+          void inbox.refetch();
+          void health.refetch();
+        }
+      })
+      .catch(() => undefined);
+  }, [subs.data, inbox, health]);
 
   useEffect(() => {
     if (!activeSweepOp) return;
@@ -460,9 +490,18 @@ export function InboxPage() {
             key={item.inbox_item_id}
             item={item}
             busy={mutations.decideInboxItem.isPending}
-            onDecide={(action, user_note) =>
+            onDecide={(action, user_note) => {
+              const v3aObj =
+                item.scorecard_diff && typeof item.scorecard_diff.v3a_call_collision === "object" && item.scorecard_diff.v3a_call_collision !== null
+                  ? (item.scorecard_diff.v3a_call_collision as { call_audit_url?: string | null })
+                  : null;
+              const targetAuditUrl =
+                v3aObj?.call_audit_url ||
+                (item.topic_id && item.source_channel === "call_commitment_verify"
+                  ? `/research/${encodeURIComponent(item.topic_id)}?panel=call-audit`
+                  : null);
               mutations.decideInboxItem.mutate(
-                { inboxItemId: item.inbox_item_id, action, user_note },
+                { inboxItemId: item.inbox_item_id, action, ...(user_note !== undefined ? { user_note } : {}) },
                 {
                   onSuccess: (res) => {
                     showToast(
@@ -470,11 +509,19 @@ export function InboxPage() {
                         ? `已确认并将假设台账升级至 v${res.new_ledger.version}`
                         : "已更新复核状态",
                     );
+                    if (
+                      action === "accept" &&
+                      !item.has_confirmed_ledger &&
+                      item.source_channel === "call_commitment_verify" &&
+                      targetAuditUrl
+                    ) {
+                      navigate(targetAuditUrl);
+                    }
                   },
                   onError: (err) => showToast(describeError(err), { tone: "error" }),
                 },
-              )
-            }
+              );
+            }}
           />
         ))}
       </section>

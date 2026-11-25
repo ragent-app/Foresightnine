@@ -24,6 +24,13 @@
   --float-sm: 0 6px 20px rgba(20, 24, 33, 0.06), 0 1px 2px rgba(20, 24, 33, 0.04);
   --success: #2f7a42; --counter: #2b5aa8; --warning: #9a6200; --warning-t: rgba(217, 119, 6, 0.09); --mark: rgba(255, 196, 0, 0.32);
   --error: #c0262d; --error-t: rgba(192, 38, 45, 0.09);
+  /* High-contrast semantic badge pairs (WCAG AA >= 5.5:1 on both --surface and --s-low). */
+  --badge-green-fg: #1b5e2e; --badge-green-bg: rgba(27, 94, 46, 0.11);
+  --badge-yellow-fg: #854d0e; --badge-yellow-bg: rgba(202, 138, 4, 0.13);
+  --badge-red-fg: #a61c22; --badge-red-bg: rgba(192, 38, 45, 0.10);
+  --badge-na-fg: #454b54; --badge-na-bg: rgba(107, 114, 128, 0.13);
+  --badge-blue-fg: #1e4b8f; --badge-blue-bg: rgba(43, 90, 168, 0.11);
+  --badge-purple-fg: #553c9a; --badge-purple-bg: rgba(109, 89, 168, 0.12);
   /* Status dots reuse the semantic colors: one green, one red, one amber, one blue. */
   --running: var(--counter); --done: var(--success); --failed: var(--error); --waiting: var(--warning);
   --chart-1: #2b5aa8; --chart-2: #2f7a5b; --chart-3: #b86b1b; --chart-4: #6d59a8; --chart-5: #2c7a7b; --chart-6: #9e4b5b;
@@ -44,6 +51,12 @@
   --float: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4); --float-sm: 0 6px 20px rgba(0, 0, 0, 0.45);
   --success: #8fd19a; --counter: #9dbdf5; --warning: #f5bd4f; --warning-t: rgba(245, 189, 79, 0.12); --mark: rgba(245, 189, 79, 0.30);
   --error: #ffb4ab; --error-t: rgba(255, 180, 171, 0.13);
+  --badge-green-fg: #8fd19a; --badge-green-bg: rgba(143, 209, 154, 0.16);
+  --badge-yellow-fg: #f5bd4f; --badge-yellow-bg: rgba(245, 189, 79, 0.16);
+  --badge-red-fg: #ffb4ab; --badge-red-bg: rgba(255, 180, 171, 0.16);
+  --badge-na-fg: #cfd2d8; --badge-na-bg: rgba(180, 184, 192, 0.16);
+  --badge-blue-fg: #9dbdf5; --badge-blue-bg: rgba(157, 189, 245, 0.16);
+  --badge-purple-fg: #c8b6ff; --badge-purple-bg: rgba(168, 150, 224, 0.18);
   --hover: rgba(255, 255, 255, 0.06); --scrim: rgba(0, 0, 0, 0.35);
   --chart-1: #7ca7f2; --chart-2: #6ec49c; --chart-3: #e3a754; --chart-4: #a896e0; --chart-5: #65b8b8; --chart-6: #df8594;
   --chart-pos: #8fd19a; --chart-neg: #ffb4ab; --chart-total: #7ca7f2; --chart-grid: rgba(255, 255, 255, 0.09);
@@ -57,6 +70,12 @@
   --float: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4); --float-sm: 0 6px 20px rgba(0, 0, 0, 0.45);
   --success: #8fd19a; --counter: #9dbdf5; --warning: #f5bd4f; --warning-t: rgba(245, 189, 79, 0.12); --mark: rgba(245, 189, 79, 0.30);
   --error: #ffb4ab; --error-t: rgba(255, 180, 171, 0.13);
+  --badge-green-fg: #8fd19a; --badge-green-bg: rgba(143, 209, 154, 0.16);
+  --badge-yellow-fg: #f5bd4f; --badge-yellow-bg: rgba(245, 189, 79, 0.16);
+  --badge-red-fg: #ffb4ab; --badge-red-bg: rgba(255, 180, 171, 0.16);
+  --badge-na-fg: #cfd2d8; --badge-na-bg: rgba(180, 184, 192, 0.16);
+  --badge-blue-fg: #9dbdf5; --badge-blue-bg: rgba(157, 189, 245, 0.16);
+  --badge-purple-fg: #c8b6ff; --badge-purple-bg: rgba(168, 150, 224, 0.18);
   --hover: rgba(255, 255, 255, 0.06); --scrim: rgba(0, 0, 0, 0.35);
   --chart-1: #7ca7f2; --chart-2: #6ec49c; --chart-3: #e3a754; --chart-4: #a896e0; --chart-5: #65b8b8; --chart-6: #df8594;
   --chart-pos: #8fd19a; --chart-neg: #ffb4ab; --chart-total: #7ca7f2; --chart-grid: rgba(255, 255, 255, 0.09);
@@ -1730,18 +1749,18 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   margin: 0;
   font-size: 22px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--on-surface);
 }
 
 .peer-subtitle {
   margin: 6px 0 0;
   font-size: 13px;
-  color: var(--muted);
+  color: var(--on-variant);
 }
 
 .peer-controls-card {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--separator);
   border-radius: 12px;
   padding: 14px 16px;
   display: flex;
@@ -1760,13 +1779,13 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 
 .peer-options-row {
   justify-content: space-between;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--separator);
   padding-top: 10px;
 }
 
 .peer-label {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--on-variant);
   font-weight: 500;
 }
 
@@ -1776,13 +1795,13 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   gap: 4px;
   padding: 3px 8px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--bg);
+  border: 1px solid var(--separator);
+  background: var(--s-low);
   font-size: 12px;
 }
 
 .peer-chip-primary {
-  border-color: var(--accent, #2563eb);
+  border-color: var(--counter);
   font-weight: 600;
 }
 
@@ -1797,7 +1816,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 }
 
 .peer-chip-remove {
-  color: var(--muted);
+  color: var(--on-variant);
 }
 
 .peer-add-form,
@@ -1811,9 +1830,9 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   height: 30px;
   padding: 0 10px;
   border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
+  border: 1px solid var(--separator);
+  background: var(--s-low);
+  color: var(--on-surface);
   font-size: 12px;
   min-width: 140px;
 }
@@ -1821,15 +1840,15 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 .peer-preset-btn {
   padding: 4px 10px;
   border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
+  border: 1px solid var(--separator);
+  background: var(--s-low);
+  color: var(--on-surface);
   font-size: 12px;
   cursor: pointer;
 }
 
 .peer-preset-btn:hover {
-  border-color: var(--accent, #2563eb);
+  border-color: var(--counter);
 }
 
 .peer-user-group {
@@ -1843,7 +1862,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--text);
+  color: var(--on-surface);
   cursor: pointer;
 }
 
@@ -1855,7 +1874,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   gap: 12px;
   padding: 12px 16px;
   border-radius: 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--separator);
   background: var(--surface);
   font-size: 13px;
 }
@@ -1865,7 +1884,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   align-items: center;
   gap: 12px;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--on-variant);
 }
 
 .peer-warnings-box {
@@ -1878,27 +1897,30 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   padding: 8px 12px;
   border-radius: 8px;
   font-size: 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--separator);
 }
 
 .peer-warning-error {
-  border-color: #dc2626;
-  background: rgba(220, 38, 38, 0.08);
+  border-color: var(--error);
+  background: var(--error-t);
+  color: var(--badge-red-fg);
 }
 
 .peer-warning-warning {
-  border-color: #d97706;
-  background: rgba(217, 119, 6, 0.08);
+  border-color: var(--warning);
+  background: var(--warning-t);
+  color: var(--badge-yellow-fg);
 }
 
 .peer-warning-info {
-  border-color: #2563eb;
-  background: rgba(37, 99, 235, 0.08);
+  border-color: var(--counter);
+  background: var(--badge-blue-bg);
+  color: var(--badge-blue-fg);
 }
 
 .peer-brief-card {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--separator);
   border-radius: 12px;
   padding: 14px 16px;
   display: flex;
@@ -1921,7 +1943,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 
 .peer-brief-badge {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--on-variant);
 }
 
 .peer-brief-text {
@@ -1939,7 +1961,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 
 .peer-table-wrap {
   overflow-x: auto;
-  border: 1px solid var(--border);
+  border: 1px solid var(--separator);
   border-radius: 12px;
   background: var(--surface);
 }
@@ -1953,7 +1975,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 .peer-table th,
 .peer-table td {
   padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--separator);
   text-align: right;
   vertical-align: top;
 }
@@ -1966,11 +1988,11 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 }
 
 .peer-col-primary {
-  background: rgba(37, 99, 235, 0.05);
+  background: var(--badge-blue-bg);
 }
 
 .peer-col-median {
-  background: rgba(128, 128, 128, 0.05);
+  background: var(--fill-3);
   font-weight: 600;
 }
 
@@ -1984,7 +2006,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 .peer-th-sub {
   font-size: 11px;
   font-weight: 400;
-  color: var(--muted);
+  color: var(--on-variant);
   margin-top: 2px;
 }
 
@@ -1994,8 +2016,8 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--muted);
-  background: var(--bg);
+  color: var(--on-variant);
+  background: var(--s-low);
   padding: 6px 12px;
 }
 
@@ -2005,7 +2027,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 
 .peer-cell-meta {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--on-variant);
   margin-top: 2px;
 }
 
@@ -2018,37 +2040,37 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 }
 
 .peer-light-green {
-  background: rgba(22, 163, 74, 0.14);
-  color: #15803d;
+  background: var(--badge-green-bg);
+  color: var(--badge-green-fg);
 }
 
 .peer-light-yellow {
-  background: rgba(217, 119, 6, 0.14);
-  color: #b45309;
+  background: var(--badge-yellow-bg);
+  color: var(--badge-yellow-fg);
 }
 
 .peer-light-red {
-  background: rgba(220, 38, 38, 0.14);
-  color: #b91c1c;
+  background: var(--badge-red-bg);
+  color: var(--badge-red-fg);
 }
 
 .peer-light-na {
-  background: rgba(107, 114, 128, 0.16);
-  color: #4b5563;
+  background: var(--badge-na-bg);
+  color: var(--badge-na-fg);
 }
 
 .peer-footnote {
   margin: 0;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--on-variant);
 }
 
 .peer-empty {
   padding: 36px 20px;
   text-align: center;
-  border: 1px dashed var(--border);
+  border: 1px dashed var(--separator);
   border-radius: 12px;
-  color: var(--muted);
+  color: var(--on-variant);
   font-size: 13px;
 }
 
@@ -2061,7 +2083,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   padding: 10px 14px;
   margin-bottom: 12px;
   border-radius: 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--separator);
   background: var(--surface);
   font-size: 12px;
 }
@@ -2077,19 +2099,19 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 .peer-coord-tag {
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(37, 99, 235, 0.12);
-  color: var(--accent, #2563eb);
+  background: var(--badge-blue-bg);
+  color: var(--badge-blue-fg);
   font-weight: 600;
   font-size: 11px;
 }
 
 .peer-coord-summary {
-  color: var(--text);
+  color: var(--on-surface);
   font-weight: 500;
 }
 
 .peer-coord-muted {
-  color: var(--muted);
+  color: var(--on-variant);
 }
 
 .peer-coord-btn {
@@ -2098,7 +2120,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 }
 
 .peer-coord-link {
-  color: var(--accent, #2563eb);
+  color: var(--counter);
   text-decoration: none;
   font-weight: 500;
 }
@@ -2126,7 +2148,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   gap: 12px;
   padding: 14px;
   border-radius: 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--separator);
   background: var(--surface);
 }
 
@@ -2137,9 +2159,9 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 }
 
 .gov-card {
-  border: 1px solid var(--border);
+  border: 1px solid var(--separator);
   border-radius: 10px;
-  background: var(--bg);
+  background: var(--s-low);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -2174,7 +2196,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 }
 
 .gov-kv dt {
-  color: var(--muted);
+  color: var(--on-variant);
 }
 
 .gov-kv dd {
@@ -2187,7 +2209,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 .gov-note {
   margin: 2px 0 0;
   font-size: 11px;
-  color: var(--muted);
+  color: var(--on-variant);
   line-height: 1.45;
 }
 
@@ -2203,7 +2225,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   flex-wrap: wrap;
   gap: 10px;
   padding-top: 8px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--separator);
   font-size: 12px;
 }
 
@@ -2227,9 +2249,9 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   border-radius: 999px;
   font-size: 11px;
   font-weight: 500;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
+  background: var(--s-low);
+  border: 1px solid var(--separator);
+  color: var(--on-surface);
 }
 
 .v3a-auto-banner {
@@ -2239,7 +2261,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   gap: 8px;
   padding: 8px 12px;
   border-radius: 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--separator);
   background: var(--surface);
   font-size: 12px;
 }
@@ -2247,10 +2269,53 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 .v3a-error-banner {
   padding: 8px 12px;
   border-radius: 10px;
-  border: 1px solid #dc2626;
-  background: rgba(220, 38, 38, 0.08);
-  color: #b91c1c;
+  border: 1px solid var(--error);
+  background: var(--error-t);
+  color: var(--badge-red-fg);
   font-size: 12px;
+}
+
+.v3a-live-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--separator);
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.v3a-live-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.v3a-live-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--separator);
+  background: var(--s-low);
+  color: var(--on-variant);
+  font-size: 11px;
+}
+
+.v3a-live-step.is-done {
+  background: var(--badge-green-bg);
+  border-color: var(--success);
+  color: var(--badge-green-fg);
+  font-weight: 500;
+}
+
+.v3a-live-step.is-active {
+  background: var(--badge-blue-bg);
+  border-color: var(--counter);
+  color: var(--badge-blue-fg);
+  font-weight: 600;
 }
 
 .v3a-panel {
@@ -2259,7 +2324,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   gap: 12px;
   padding: 14px;
   border-radius: 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--separator);
   background: var(--surface);
 }
 
@@ -2287,24 +2352,27 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   padding: 2px 7px;
   border-radius: 6px;
   font-size: 11px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--muted);
+  border: 1px solid var(--separator);
+  background: var(--s-low);
+  color: var(--on-variant);
 }
 
 .v3a-kind-pill {
   font-weight: 600;
-  color: var(--text);
+  color: var(--on-surface);
 }
 
 .v3a-loc-pill {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--accent, #2563eb);
+  font-family: var(--mono);
+  color: var(--badge-blue-fg);
+  background: var(--badge-blue-bg);
+  border-color: var(--separator);
 }
 
 .v3a-warn-pill {
-  border-color: #d97706;
-  color: #b45309;
+  border-color: var(--warning);
+  background: var(--badge-yellow-bg);
+  color: var(--badge-yellow-fg);
 }
 
 .v3a-correction-box {
@@ -2313,8 +2381,8 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   gap: 8px;
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px dashed var(--border);
-  background: var(--bg);
+  border: 1px dashed var(--separator);
+  background: var(--s-low);
 }
 
 .v3a-correction-row {
@@ -2329,7 +2397,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   flex-direction: column;
   gap: 3px;
   font-size: 11px;
-  color: var(--muted);
+  color: var(--on-variant);
 }
 
 .v3a-field-grow {
@@ -2348,14 +2416,14 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--separator);
   padding-bottom: 8px;
 }
 
 .v3a-tab {
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--muted);
+  border: 1px solid var(--separator);
+  background: var(--s-low);
+  color: var(--on-variant);
   border-radius: 8px;
   padding: 5px 10px;
   font-size: 12px;
@@ -2364,9 +2432,9 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 }
 
 .v3a-tab.is-active {
-  background: var(--accent, #2563eb);
-  border-color: var(--accent, #2563eb);
-  color: #fff;
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
 }
 
 .v3a-tab-body {
@@ -2385,9 +2453,9 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 .v3a-evasion-card,
 .v3a-commitment-card,
 .v3a-expectation-card {
-  border: 1px solid var(--border);
+  border: 1px solid var(--separator);
   border-radius: 10px;
-  background: var(--bg);
+  background: var(--s-low);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -2395,15 +2463,15 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 }
 
 .v3a-sev-red {
-  border-left: 3px solid #dc2626;
+  border-left: 3px solid var(--error);
 }
 
 .v3a-sev-yellow {
-  border-left: 3px solid #d97706;
+  border-left: 3px solid var(--warning);
 }
 
 .v3a-sev-green {
-  border-left: 3px solid #16a34a;
+  border-left: 3px solid var(--success);
 }
 
 .v3a-commitment-card.is-muted {
@@ -2421,11 +2489,13 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   margin: 0;
   font-size: 13px;
   font-weight: 600;
+  color: var(--on-surface);
 }
 
 .v3a-metric-key {
   font-size: 13px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono);
+  color: var(--on-surface);
 }
 
 .v3a-split-grid {
@@ -2444,7 +2514,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 .v3a-col-label {
   font-size: 11px;
   font-weight: 600;
-  color: var(--muted);
+  color: var(--on-variant);
   text-transform: uppercase;
 }
 
@@ -2452,11 +2522,12 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   margin: 0;
   font-size: 12.5px;
   line-height: 1.5;
+  color: var(--on-surface);
 }
 
 .v3a-formula-note {
   font-size: 11.5px;
-  color: var(--muted);
+  color: var(--on-variant);
   padding: 5px 8px;
   border-radius: 6px;
   background: var(--surface);
@@ -2465,11 +2536,11 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 
 .v3a-restatement-note {
   font-size: 11.5px;
-  color: #b45309;
+  color: var(--badge-yellow-fg);
   padding: 5px 8px;
   border-radius: 6px;
-  border: 1px solid rgba(217, 119, 6, 0.35);
-  background: rgba(217, 119, 6, 0.08);
+  border: 1px solid var(--warning);
+  background: var(--badge-yellow-bg);
 }
 
 .v3a-compact-skeptic {
@@ -2499,13 +2570,13 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   text-align: left;
   padding: 7px 9px;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--separator);
   background: var(--surface);
   cursor: pointer;
 }
 
 .v3a-quote-btn:hover {
-  border-color: var(--accent, #2563eb);
+  border-color: var(--counter);
 }
 
 .v3a-quote-head {
@@ -2518,13 +2589,13 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 
 .v3a-quote-role {
   font-weight: 600;
-  color: var(--text);
+  color: var(--on-surface);
 }
 
 .v3a-quote-text {
   font-size: 12px;
   line-height: 1.45;
-  color: var(--text);
+  color: var(--on-surface);
 }
 
 .v3a-dist-card {
@@ -2533,8 +2604,8 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   gap: 6px;
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--bg);
+  border: 1px solid var(--separator);
+  background: var(--s-low);
 }
 
 .v3a-dist-head {
@@ -2555,23 +2626,23 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 }
 
 .v3a-dist-direct {
-  fill: #16a34a;
+  fill: var(--success);
 }
 
 .v3a-dist-inter {
-  fill: #d97706;
+  fill: var(--warning);
 }
 
 .v3a-dist-evasive {
-  fill: #dc2626;
+  fill: var(--error);
 }
 
 .v3a-shift-box,
 .v3a-gaps-box {
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--bg);
+  border: 1px solid var(--separator);
+  background: var(--s-low);
   font-size: 12px;
   display: flex;
   flex-direction: column;
@@ -2595,15 +2666,15 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   font-size: 11px;
   padding: 2px 7px;
   border-radius: 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--separator);
   background: var(--surface);
-  color: var(--muted);
+  color: var(--on-variant);
 }
 
 .v3a-subq-chip.is-missed {
-  border-color: #dc2626;
-  background: rgba(220, 38, 38, 0.08);
-  color: #b91c1c;
+  border-color: var(--error);
+  background: var(--badge-red-bg);
+  color: var(--badge-red-fg);
   font-weight: 500;
 }
 
@@ -2623,7 +2694,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   margin: 0;
   font-size: 12px;
   font-weight: 600;
-  color: var(--muted);
+  color: var(--on-variant);
 }
 
 .v3a-tier-badge {
@@ -2636,23 +2707,23 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 }
 
 .v3a-tier-sec {
-  background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
+  background: var(--badge-blue-bg);
+  color: var(--badge-blue-fg);
 }
 
 .v3a-tier-qa {
-  background: rgba(124, 58, 237, 0.12);
-  color: #6d28d9;
+  background: var(--badge-purple-bg);
+  color: var(--badge-purple-fg);
 }
 
 .v3a-tier-sellside {
-  background: rgba(217, 119, 6, 0.14);
-  color: #b45309;
+  background: var(--badge-yellow-bg);
+  color: var(--badge-yellow-fg);
 }
 
 .v3a-tier-byok {
-  background: rgba(22, 163, 74, 0.14);
-  color: #15803d;
+  background: var(--badge-green-bg);
+  color: var(--badge-green-fg);
 }
 
 .v3a-bullet-list {
@@ -2666,7 +2737,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 .v3a-empty {
   margin: 4px 0;
   font-size: 12.5px;
-  color: var(--muted);
+  color: var(--on-variant);
 }
 
 .v3a-footer {
@@ -2676,12 +2747,12 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
   flex-wrap: wrap;
   gap: 8px;
   padding-top: 8px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--separator);
   font-size: 11px;
 }
 
 .v3a-disclaimer {
-  color: var(--muted);
+  color: var(--on-variant);
 }
 
 .v3a-inbox-strip {

@@ -1,10 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CallAuditReportEnvelope, CallVerificationReport } from "../../api/callVerification";
 import { jsonResponse, storeSession } from "../../test/fixtures";
 import { CallVerificationBar } from "./CallVerificationBar";
+import { TopicContext, type TopicView } from "./context";
+import { ReaderPanel } from "./ReaderPanel";
 
 function buildSampleReport(overrides: Partial<CallVerificationReport> = {}): CallVerificationReport {
   return {
@@ -481,5 +484,162 @@ describe("CallVerificationBar & CallVerificationPanel (V3a-3)", () => {
     await waitFor(() => {
       expect(cancelSpy).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("defines EVERY CSS custom property referenced in index.css (0 undefined vars) and survives sourceIds churn during auto-sniff", async () => {
+    // 1. Static CSS token integrity audit across styles/index.css
+    const cssPath = path.resolve(__dirname, "../../styles/index.css");
+    const cssText = fs.readFileSync(cssPath, "utf8");
+    const defined = new Set<string>();
+    for (const m of cssText.matchAll(/(--[a-zA-Z0-9_-]+)\s*:/g)) {
+      if (m[1]) defined.add(m[1]);
+    }
+    const undefinedVars = new Set<string>();
+    for (const m of cssText.matchAll(/var\(\s*(--[a-zA-Z0-9_-]+)/g)) {
+      const name = m[1];
+      if (!name || name.startsWith("--radix-")) continue;
+      if (!defined.has(name)) undefinedVars.add(name);
+    }
+    expect([...undefinedVars]).toEqual([]);
+
+    // 2. Auto-sniff MUST NOT abort /preview when Topic re-renders with a new sourceIds array reference
+    let previewAborted = false;
+    let resolvePreview!: (resp: Response) => void;
+    const previewPending = new Promise<Response>((res) => {
+      resolvePreview = res;
+    });
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes("/call-audit/report")) {
+        return jsonResponse({ available: false, awaiting_current_10q: false, report: null });
+      }
+      if (url.includes("/call-audit/preview")) {
+        init?.signal?.addEventListener("abort", () => {
+          previewAborted = true;
+        });
+        return previewPending;
+      }
+      if (url.includes("/call-audit/run")) {
+        return jsonResponse({ operation_id: "op_live_skel", status: "running", entity_key: "0001045810" }, { status: 202 });
+      }
+      if (url.includes("/call-audit/operations/op_live_skel/events")) {
+        return sseResponse([
+          'id: 1\nevent: layer0_ready\ndata: {"sequence":1,"stage":"layer0_ready","payload":{"entity_key":"0001045810","fiscal_period_key":"FY2026-Q3","qa_exchange_count":6}}\n\n',
+          'id: 2\nevent: layer1_ready\ndata: {"sequence":2,"stage":"layer1_ready","payload":{"ledger_status":"same_period_10q_matched"}}\n\n',
+        ]);
+      }
+      if (url.includes("/call-audit/operations/op_live_skel")) {
+        return jsonResponse({
+          operation_id: "op_live_skel",
+          status: "running",
+          stage: "layer2_extracting",
+          stages: [],
+        });
+      }
+      return jsonResponse({});
+    });
+
+    const trig = { sourceIds: ["src_new_1"], seq: 1 };
+    const { rerender } = render(
+      <CallVerificationBar
+        topicId="topic_churn"
+        sourceIds={["src_old_1"]}
+        attachedTrigger={trig}
+        onAddSources={vi.fn()}
+        onInspectQuote={vi.fn()}
+      />,
+    );
+    // Simulate Topic re-render with brand-new sourceIds array reference while /preview is still in flight!
+    rerender(
+      <CallVerificationBar
+        topicId="topic_churn"
+        sourceIds={["src_old_1", "src_new_1"]}
+        attachedTrigger={trig}
+        onAddSources={vi.fn()}
+        onInspectQuote={vi.fn()}
+      />,
+    );
+    expect(previewAborted).toBe(false);
+
+    // Resolve preview -> triggers SSE -> renders progressive Layer 0/1 live skeleton card!
+    resolvePreview(
+      jsonResponse({
+        auto_trigger_eligible: true,
+        entity_key: "0001045810",
+        detected_symbol: "NVDA",
+        management_source_ids: ["src_new_1"],
+        sellside_source_ids: [],
+        total_pending_ocr_pages: 0,
+        call_default_basis: "non_gaap",
+        sources: [],
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("call-audit-live-skeleton")).toBeTruthy();
+      expect(screen.getByText(/实体 0001045810/)).toBeTruthy();
+      expect(screen.getByText(/已识别 Q&A 6 轮/)).toBeTruthy();
+    });
+  });
+
+  it("renders ReaderPanel <mark class='on'> with strict priority over overlapping cited spans and shows Slide N for pptx_slides_v1", async () => {
+    const rawText =
+      "Intro paragraph before slide. Gross margin reached 75.0% in Q3 while Data Center revenue grew 94% YoY. Closing remarks.";
+    const quoteTarget = "Gross margin reached 75.0% in Q3";
+    const qStart = rawText.indexOf(quoteTarget);
+    const qEnd = qStart + quoteTarget.length;
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({
+        source_id: "src_deck_pptx",
+        title: "NVDA Q3 Deck.pptx",
+        text: rawText,
+        content_sha256: "a".repeat(64),
+        retrieval_method: "user_pptx",
+        permissions: { store: true, model_input: true, display: true, export: true },
+        document_pages: {
+          method: "pptx_slides_v1",
+          pages: [
+            [0, 20, "slide_ok"],
+            [20, rawText.length, "slide_ok"],
+          ],
+        },
+      }),
+    );
+
+    const mockView = {
+      topicId: "topic_overlap",
+      version: { version_id: "ver_1" },
+      content: {
+        claims: [
+          {
+            claim_id: "c_outer",
+            // Enclosing broader citation [10..110] that previously swallowed inner V3a quote [30..62]!
+            citations: [{ source_id: "src_deck_pptx", location: { character_start: 10, character_end: 110 } }],
+          },
+        ],
+        facts: [],
+      },
+      sources: new Map(),
+      sourceTitle: () => "NVDA Q3 Deck.pptx",
+    } as unknown as TopicView;
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(
+      <QueryClientProvider client={qc}>
+        <TopicContext.Provider value={mockView}>
+          <ReaderPanel sourceId="src_deck_pptx" range={[qStart, qEnd]} onClose={vi.fn()} />
+        </TopicContext.Provider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      const activeMark = document.querySelector("mark.on");
+      expect(activeMark).toBeTruthy();
+      expect(activeMark?.textContent).toBe(quoteTarget);
+    });
+    expect(screen.getByText("Slide 2")).toBeTruthy();
+    expect(document.querySelectorAll("mark.cited").length).toBe(2);
   });
 });

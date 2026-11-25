@@ -14,13 +14,14 @@ const STEP = 4000;
 const DEFAULT_CHECK = VERIFICATION_LABEL.numeric_and_location_match_semantics_not_verified ?? "";
 
 function inferPageLabel(
-  documentPages: { pages?: [number, number, string][] } | null | undefined,
+  documentPages: { method?: string; pages?: [number, number, string][] } | null | undefined,
   offset: number | null,
 ): string | null {
   if (offset === null || !documentPages?.pages) return null;
+  const isPptx = documentPages.method === "pptx_slides_v1";
   for (let i = 0; i < documentPages.pages.length; i += 1) {
     const entry = documentPages.pages[i];
-    if (entry && offset >= entry[0] && offset < entry[1]) return `第 ${i + 1} 页`;
+    if (entry && offset >= entry[0] && offset < entry[1]) return isPptx ? `Slide ${i + 1}` : `第 ${i + 1} 页`;
   }
   return null;
 }
@@ -67,11 +68,16 @@ export function ReaderPanel({
 
   const body = text.data?.text ?? "";
   const length = body.length;
+  const currentOutOfBounds = Boolean(current && length > 0 && (current[0] >= length || current[1] <= 0));
   const [windowRange, setWindowRange] = useState<Range>([0, 0]);
   useEffect(() => {
     if (!length) return;
-    setWindowRange(current ? [Math.max(0, current[0] - CONTEXT), Math.min(length, current[1] + CONTEXT)] : [0, Math.min(length, STEP)]);
-  }, [current, length]);
+    if (current && !currentOutOfBounds) {
+      setWindowRange([Math.max(0, current[0] - CONTEXT), Math.min(length, current[1] + CONTEXT)]);
+    } else {
+      setWindowRange([0, Math.min(length, STEP)]);
+    }
+  }, [current, currentOutOfBounds, length]);
 
   // Scroll once per citation change, after the text window containing it has rendered.
   const markRef = useRef<HTMLElement>(null);
@@ -89,17 +95,47 @@ export function ReaderPanel({
   const [start, end] = windowRange;
   const content: ReactNode[] = [];
   if (length) {
-    let position = start;
+    // Priority-ordered render segments: `current` highlight ALWAYS wins over overlapping background `cited` spans.
+    type RenderSeg = { s: number; e: number; isCurrent: boolean; key: string };
+    const segments: RenderSeg[] = [];
+    const curStart = current && !currentOutOfBounds ? Math.max(start, Math.min(end, current[0])) : null;
+    const curEnd = current && !currentOutOfBounds ? Math.max(start, Math.min(end, current[1])) : null;
+    const hasActiveCur = curStart !== null && curEnd !== null && curEnd > curStart;
+    if (hasActiveCur) {
+      segments.push({ s: curStart, e: curEnd, isCurrent: true, key: `on:${current![0]}:${current![1]}` });
+    }
     for (const span of cited) {
-      if (span[1] <= start || span[0] >= end || span[0] < position) continue;
-      if (span[0] > position) content.push(body.slice(position, span[0]));
-      const isCurrent = current !== null && span[0] === current[0] && span[1] === current[1];
+      if (current && span[0] === current[0] && span[1] === current[1]) continue;
+      const s = Math.max(start, span[0]);
+      const e = Math.min(end, span[1]);
+      if (e <= s) continue;
+      if (hasActiveCur) {
+        if (s < curStart && e > curStart) {
+          segments.push({ s, e: curStart, isCurrent: false, key: `c:${s}:${curStart}` });
+          if (e > curEnd) segments.push({ s: curEnd, e, isCurrent: false, key: `c:${curEnd}:${e}` });
+        } else if (s >= curStart && e <= curEnd) {
+          continue; // Fully enclosed inside active current mark
+        } else if (s < curEnd && e > curEnd) {
+          segments.push({ s: curEnd, e, isCurrent: false, key: `c:${curEnd}:${e}` });
+        } else {
+          segments.push({ s, e, isCurrent: false, key: `c:${s}:${e}` });
+        }
+      } else {
+        segments.push({ s, e, isCurrent: false, key: `c:${s}:${e}` });
+      }
+    }
+    segments.sort((a, b) => a.s - b.s || (a.isCurrent ? -1 : 1));
+    let position = start;
+    for (const seg of segments) {
+      if (seg.e <= position) continue;
+      const segStart = Math.max(position, seg.s);
+      if (segStart > position) content.push(body.slice(position, segStart));
       content.push(
-        <mark key={span.join(":")} className={isCurrent ? "on" : "cited"} ref={isCurrent ? markRef : undefined}>
-          {body.slice(span[0], Math.min(span[1], end))}
+        <mark key={seg.key} className={seg.isCurrent ? "on" : "cited"} ref={seg.isCurrent ? markRef : undefined}>
+          {body.slice(segStart, seg.e)}
         </mark>,
       );
-      position = Math.min(span[1], end);
+      position = seg.e;
     }
     if (position < end) content.push(body.slice(position, end));
   }
@@ -134,7 +170,11 @@ export function ReaderPanel({
           ) : null}
           <span className="meta">
             {effectiveLocBadge ? <><span className="v3a-loc-pill">{effectiveLocBadge}</span>{" "}</> : null}
-            {current ? `当前引文：字符 ${current[0]}–${current[1]} · ${DEFAULT_CHECK}` : `已标出 ${cited.length} 处引用`}
+            {currentOutOfBounds
+              ? "引文字符偏移超出当前原文长度，已定位到文档起始处"
+              : current
+                ? `当前引文：字符 ${current[0]}–${current[1]} · ${DEFAULT_CHECK}`
+                : `已标出 ${cited.length} 处引用`}
             {sha ? <> · <span className="mono">sha256 {sha.slice(0, 8)} {sha.slice(8, 16)}…</span></> : null}
           </span>
         </div>
