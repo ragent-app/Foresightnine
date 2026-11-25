@@ -405,6 +405,18 @@ class SecMaterialEventsRequest(BaseModel):
         return self
 
 
+class PeerRelativeValuationRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    primary_symbol: str = Field(min_length=1, max_length=16, description='Primary US ticker symbol to benchmark.')
+    peer_symbols: list[str] | None = Field(
+        default=None,
+        max_length=5,
+        description='Optional 1-5 peer US tickers; omit to use the curated industry peer group.',
+    )
+    as_of: date | None = Field(default=None, description='Optional point-in-time cutoff date (inclusive on filed_at).')
+    rationale: str = Field(default='', max_length=500, description='Why peer relative valuation is needed.')
+
+
 # --------------------------------------------------------------------------- outcome
 @dataclass
 class FinToolOutcome:
@@ -1601,6 +1613,173 @@ class FinDataToolbox:
                     'identifiers': {'cik': scan_result.cik},
                 }
             },
+        )
+
+    def peer_relative_valuation_key(self, req: PeerRelativeValuationRequest) -> str:
+        peers = ','.join(sorted(s.strip().upper() for s in (req.peer_symbols or []) if s.strip()))
+        return '|'.join([
+            'peer_relative_valuation',
+            req.primary_symbol.strip().upper(),
+            peers,
+            req.as_of.isoformat() if req.as_of else '',
+        ])
+
+    def peer_relative_valuation(
+        self,
+        req: PeerRelativeValuationRequest,
+        entities: Mapping[str, Mapping[str, Any]] | None = None,
+    ) -> FinToolOutcome:
+        """Pure Layer 1 (0-LLM) peer alignment & relative valuation tool for Agent/Squad."""
+        from .research_peer_compare import (
+            assemble_peer_matrix,
+            compute_company_metrics_from_snapshot,
+            load_or_fetch_company_snapshot,
+            load_peer_groups_config,
+            suggest_peers_for_symbol,
+        )
+
+        blocked = self._sec_blocked()
+        if blocked:
+            return FinToolOutcome(blocked)
+        try:
+            self._reserve_call()
+        except Exception as err:
+            wait = getattr(err, 'retry_after', None)
+            return FinToolOutcome({
+                'status': 'rate_limited',
+                'reason': 'rate_limit',
+                'message': str(err),
+                'retryable': True,
+                **({'retry_after_seconds': float(wait)} if isinstance(wait, (int, float)) and wait > 0 else {}),
+            })
+
+        prim = req.primary_symbol.strip().upper()
+        peers = [s.strip().upper() for s in (req.peer_symbols or []) if s.strip()]
+        if not peers:
+            sugg = suggest_peers_for_symbol(prim)
+            peers = list(sugg.recommended_peers)[:4]
+        symbols = list(dict.fromkeys([prim, *peers]))[:6]
+        if len(symbols) < 2:
+            return FinToolOutcome({'status': 'failed', 'reason': 'invalid_request', 'message': 'Need at least 2 unique tickers.'})
+
+        pol_perm = self._policy.decide('sec_edgar', 'financials')
+        if isinstance(pol_perm, Denied):
+            return FinToolOutcome({'status': 'denied', 'reason': pol_perm.reason, 'message': pol_perm.message})
+
+        events_limiter = self._sec_events_limiter or SecPacingLimiter.from_env()
+        _curated, fpi_meta_map = load_peer_groups_config()
+        ref_date = req.as_of or self._now().date()
+        start_d = ref_date - timedelta(days=10)
+
+        rows = []
+        for sym in symbols:
+            try:
+                snap, _hit = load_or_fetch_company_snapshot(
+                    symbol=sym,
+                    user_agent=self._sec_ua,
+                    limiter=events_limiter,
+                    snapshot_cache=self._l1_cache,
+                    transport=self._sec_transport,
+                    stream_transport=self._sec_stream,
+                    policy=self._policy,
+                )
+            except SecPacingError:
+                continue
+            if snap is None:
+                continue
+            p_dec = None
+            p_date = None
+            p_src = None
+            if self._market_key and self._owner:
+                try:
+                    res = self._td(8.0).bars(sym, interval='1day', start=start_d, end=ref_date)
+                    bars = [b for b in (res.records or ()) if getattr(b, 'close', None) is not None]
+                    if bars:
+                        latest = max(bars, key=lambda b: getattr(b, 'date', start_d))
+                        p_dec = Decimal(str(latest.close))
+                        p_date = latest.date.isoformat() if isinstance(getattr(latest, 'date', None), date) else ref_date.isoformat()
+                        p_src = 'twelve_data'
+                except Exception:
+                    p_dec = None
+            rows.append(
+                compute_company_metrics_from_snapshot(
+                    snap,
+                    price_usd=p_dec,
+                    price_as_of_date=p_date,
+                    price_source=p_src,
+                    as_of=req.as_of,
+                    fpi_meta=fpi_meta_map.get(sym),
+                )
+            )
+
+        if not rows:
+            return FinToolOutcome({'status': 'unavailable', 'reason': 'sec_snapshots_unavailable', 'message': 'Could not load SEC snapshots for requested peers.'})
+
+        matrix = assemble_peer_matrix(primary_symbol=prim, rows=rows, as_of=req.as_of)
+        lines_txt = [
+            f"# Peer Relative Valuation Matrix ({prim} vs {', '.join(s for s in symbols if s != prim)})",
+            f"Summary: {matrix.primary_coordinate_summary}",
+            f"Reverse-DCF Basis: {matrix.reverse_dcf_assumptions}",
+            "",
+        ]
+        if matrix.comparability_warnings:
+            lines_txt.append("## Comparability Warnings")
+            for w in matrix.comparability_warnings:
+                lines_txt.append(f"- [{w.severity.upper()}] {w.code} ({', '.join(w.symbols)}): {w.message}")
+            lines_txt.append("")
+        lines_txt.append("## Company Metrics")
+        for c in matrix.companies:
+            lines_txt.append(
+                f"- {c.symbol} ({c.fiscal_period_label or c.period_basis}, {c.accounting_standard}/{c.currency}, quality={c.quality_light}): "
+                f"RevYoY={c.ttm_revenue_yoy_pct}% | GM={c.ttm_gross_margin_pct}% | OM={c.ttm_operating_margin_pct}% | "
+                f"FCFM={c.ttm_fcf_margin_pct}% | ROIC={c.ttm_roic_pct}% | PE={c.pe_ttm}x | EV/FCF={c.ev_to_fcf_ttm}x | "
+                f"EV/FCF_ex_SBC={c.ev_to_fcf_ex_sbc_ttm}x | RevDCF_5Y_CAGR={c.reverse_dcf_implied_5y_fcf_cagr_pct}%"
+            )
+        lines_txt.append("")
+        lines_txt.append(f"## Peer Medians: {json.dumps(matrix.peer_medians, ensure_ascii=False)}")
+        digest_text = "\n".join(lines_txt)
+        digest_sha = sha256(digest_text.encode('utf-8')).hexdigest()
+        pub_dt = datetime(ref_date.year, ref_date.month, ref_date.day, tzinfo=timezone.utc)
+        sub_url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{rows[0].cik}.json"
+        prov_meta: dict[str, Any] = {
+            'provider': 'sec_edgar',
+            'endpoint': sub_url,
+            'credential_owner': 'platform_public_data',
+            'provider_response_sha256': digest_sha,
+            'retrieved_at': self._now().isoformat(),
+            'permissions': pol_perm.model_dump(mode='json'),
+        }
+        try:
+            source = self._persist(
+                SourceInput(
+                    title=f"{prim} Peer Relative Valuation ({', '.join(symbols)})",
+                    text=digest_text,
+                    url=sub_url,
+                    kind='official',
+                    published_at=pub_dt,
+                    permissions=self._source_permissions(pol_perm),
+                ),
+                retrieval_method='peer_relative_valuation',
+                response_sha256=digest_sha,
+                response_content_type='text/plain',
+                provenance=prov_meta,
+            )
+        except (ValueError, ValidationError):
+            return FinToolOutcome({'status': 'denied', 'reason': 'source_not_storable'})
+
+        return FinToolOutcome(
+            {
+                'status': 'ok',
+                'source_id': source.source_id,
+                'title': source.title,
+                'primary_symbol': matrix.primary_symbol,
+                'primary_coordinate_summary': matrix.primary_coordinate_summary,
+                'primary_watch_trigger_metrics': matrix.primary_watch_trigger_metrics,
+                'peer_medians': matrix.peer_medians,
+                'comparability_warnings': [w.model_dump(mode='json') for w in matrix.comparability_warnings],
+                'companies': [c.model_dump(mode='json', exclude_none=True) for c in matrix.companies],
+            },
+            source=source,
         )
 
     def earnings_release_key(self, req: SecEarningsReleaseRequest) -> str:

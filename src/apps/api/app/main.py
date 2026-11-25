@@ -182,6 +182,18 @@ from .fin_data.adapters.sec_events import (
 )
 from .fin_data.adapters.sec_events.form8k import fetch_lazy_attachment
 from .research_earnings_diagnostics import GuidanceMetricInput, NonGaapBridgeInput, PeriodFinancials
+from .research_peer_compare import (
+    PeerAttributionBrief,
+    PeerComparisonMatrix,
+    PeerSuggestResponse,
+    UserPeerGroup,
+    assemble_peer_matrix,
+    compute_company_metrics_from_snapshot,
+    generate_peer_attribution_brief,
+    load_or_fetch_company_snapshot,
+    load_peer_groups_config,
+    suggest_peers_for_symbol,
+)
 from .research_earnings_export import ExportUnavailableError, MarkdownReportMode, export_earnings_dossier
 from .research_earnings_routing import (
     EarningsSquadRouteDecision,
@@ -580,6 +592,14 @@ RADAR_SWEEP_RESULTS = build_repository(
     "radar_sweep_results",
     value_loader=RadarSweepSummary.model_validate,
 )
+PEER_GROUPS = build_repository(
+    storage_config,
+    "peer_groups",
+    value_loader=UserPeerGroup.model_validate,
+)
+PEER_COMPANY_SNAPSHOTS = build_repository(storage_config, "peer_company_snapshots")
+PEER_COMPARE_CACHE = build_repository(storage_config, "peer_compare_cache")
+PEER_QUOTE_CACHE = build_repository(storage_config, "peer_quote_cache")
 (
     SESSIONS,
     THESES,
@@ -841,6 +861,10 @@ def reset_state() -> None:
     DELTA_REVIEW_RUNS.clear()
     CHANGE_INBOX_ITEMS.clear()
     RADAR_SWEEP_RESULTS.clear()
+    PEER_GROUPS.clear()
+    PEER_COMPANY_SNAPSHOTS.clear()
+    PEER_COMPARE_CACHE.clear()
+    PEER_QUOTE_CACHE.clear()
     abuse_control.reset()
     telemetry.reset()
     SESSIONS.clear()
@@ -5173,6 +5197,7 @@ _SQUAD_STAGE_TIMEOUT_FLOORS: dict[str, float] = {
     "sec_event_analysis_mode_b_round2": 240.0,
     "sec_event_omission_repair": 240.0,
     "sec_event_skeptic": 240.0,
+    "peer_attribution_brief": 240.0,
 }
 _SQUAD_SLOT_MAX_OUTPUT_TOKENS: dict[str, int] = {
     "fast_extractor": 8192,
@@ -5193,6 +5218,7 @@ _SQUAD_STAGE_MAX_OUTPUT_TOKENS: dict[str, int] = {
     "sec_event_analysis_mode_b_round2": 16384,
     "sec_event_omission_repair": 16384,
     "sec_event_skeptic": 16384,
+    "peer_attribution_brief": 16384,
 }
 
 
@@ -8226,6 +8252,379 @@ def decide_change_inbox_item(
     if new_ledger is not None:
         THESIS_LEDGERS.put(f"{account.account_id}:{new_ledger.topic_id}:v{new_ledger.version}", new_ledger)
     return ChangeInboxDecisionResponse(item=updated_item, new_ledger=new_ledger)
+
+
+# --------------------------------------------------------------------------- V2 Peer Alignment & Relative Valuation API
+
+
+class PeerGroupCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=120)
+    symbols: list[str] = Field(min_length=2, max_length=6)
+
+
+class PeerCompareApiRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    primary_symbol: str = Field(min_length=1, max_length=16)
+    symbols: list[str] | None = Field(default=None, max_length=6)
+    as_of: date | None = None
+    cache_only: bool = False
+    exclude_non_comparable_from_median: bool = True
+    manual_prices: dict[str, str] | None = None
+    fx_rates_to_usd: dict[str, str] | None = None
+
+
+class PeerCompareBriefApiRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    comparison_id: str | None = Field(default=None, max_length=80)
+    matrix: PeerComparisonMatrix | None = None
+    slot_overrides: dict[str, str] | None = None
+
+
+def _resolve_peer_quote_usd(
+    symbol: str,
+    *,
+    account_id: str,
+    as_of: date | None,
+    cache_only: bool,
+    manual_prices: Mapping[str, str] | None,
+    policy: Any,
+) -> tuple[Decimal | None, str | None, str | None]:
+    """Fetch or cache closing price in USD (compact 10-day window, never 5000 bars)."""
+    sym_u = symbol.strip().upper()
+    if manual_prices:
+        mp = manual_prices.get(sym_u) or manual_prices.get(symbol)
+        if mp is not None:
+            try:
+                d = Decimal(str(mp).strip())
+                if d.is_finite() and d > 0:
+                    ref_s = (as_of or lifecycle_clock.now().date()).isoformat()
+                    return d, ref_s, "manual"
+            except Exception:
+                pass
+
+    today = lifecycle_clock.now().date()
+    ref_date = as_of or today
+    q_key = f"q:{sym_u}:{ref_date.isoformat()}"
+    cached = PEER_QUOTE_CACHE.get(q_key)
+    if isinstance(cached, Mapping):
+        cached_at_raw = cached.get("cached_at")
+        stale = False
+        if as_of is None and isinstance(cached_at_raw, str):
+            try:
+                age = (lifecycle_clock.now() - datetime.fromisoformat(cached_at_raw)).total_seconds()
+                stale = age > 900  # 15m TTL for live quotes; historical as_of is immutable
+            except Exception:
+                stale = True
+        if not stale and cached.get("price"):
+            try:
+                return Decimal(str(cached["price"])), str(cached.get("as_of_date") or ref_date.isoformat()), str(cached.get("source") or "cache")
+            except Exception:
+                pass
+
+    if cache_only:
+        return None, None, None
+
+    start_d = ref_date - timedelta(days=10)
+    price_dec: Decimal | None = None
+    as_of_str: str | None = None
+    src_name: str | None = None
+
+    td_key, td_owner = _resolve_twelve_data_key(account_id, policy=policy)
+    if td_key and td_owner:
+        try:
+            from .fin_data.adapters.twelve_data import TwelveDataAdapter
+            td = TwelveDataAdapter(
+                api_key=td_key,
+                credential_owner=td_owner,
+                account_id=account_id,
+                policy=policy,
+                timeout=8.0,
+                now_fn=lifecycle_clock.now,
+            )
+            res = td.bars(sym_u, interval="1day", start=start_d, end=ref_date)
+            bars = [b for b in (res.records or ()) if getattr(b, "close", None) is not None]
+            if bars:
+                latest = max(bars, key=lambda b: getattr(b, "date", start_d))
+                price_dec = Decimal(str(latest.close))
+                d_attr = getattr(latest, "date", None)
+                as_of_str = d_attr.isoformat() if isinstance(d_attr, date) else ref_date.isoformat()
+                src_name = "twelve_data"
+        except Exception:
+            price_dec = None
+
+    if price_dec is None:
+        try:
+            from .fin_data.adapters.yahoo import YahooAdapter
+            yh = YahooAdapter(policy=policy, now_fn=lifecycle_clock.now)
+            res = yh.bars(sym_u, interval="1day", start=start_d, end=ref_date)
+            bars = [b for b in (res.records or ()) if getattr(b, "close", None) is not None]
+            if bars:
+                latest = max(bars, key=lambda b: getattr(b, "date", start_d))
+                price_dec = Decimal(str(latest.close))
+                d_attr = getattr(latest, "date", None)
+                as_of_str = d_attr.isoformat() if isinstance(d_attr, date) else ref_date.isoformat()
+                src_name = "yahoo"
+        except Exception:
+            price_dec = None
+
+    if price_dec is not None and price_dec > 0:
+        PEER_QUOTE_CACHE.put(
+            q_key,
+            {
+                "symbol": sym_u,
+                "price": str(price_dec),
+                "as_of_date": as_of_str or ref_date.isoformat(),
+                "source": src_name or "market",
+                "cached_at": lifecycle_clock.now().isoformat(),
+            },
+        )
+        return price_dec, as_of_str, src_name
+    return None, None, None
+
+
+@app.get(
+    "/v2/research/peers/suggest",
+    response_model=PeerSuggestResponse,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+    include_in_schema=False,
+)
+def suggest_research_peers(
+    symbol: str = "",
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> PeerSuggestResponse:
+    account = _authenticated_account(authorization)
+    user_groups = [
+        g for _k, g in PEER_GROUPS.items()
+        if isinstance(g, UserPeerGroup) and g.account_id == account.account_id
+    ]
+    user_groups.sort(key=lambda g: g.updated_at, reverse=True)
+    return suggest_peers_for_symbol(symbol or "NVDA", user_groups=user_groups)
+
+
+@app.get(
+    "/v2/research/peers/groups",
+    response_model=list[UserPeerGroup],
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+    include_in_schema=False,
+)
+def list_user_peer_groups(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> list[UserPeerGroup]:
+    account = _authenticated_account(authorization)
+    out = [
+        g for _k, g in PEER_GROUPS.items()
+        if isinstance(g, UserPeerGroup) and g.account_id == account.account_id
+    ]
+    out.sort(key=lambda g: g.updated_at, reverse=True)
+    return out
+
+
+@app.post(
+    "/v2/research/peers/groups",
+    response_model=UserPeerGroup,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+    include_in_schema=False,
+)
+def create_user_peer_group(
+    request: PeerGroupCreateRequest,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> UserPeerGroup:
+    account = _authenticated_account(authorization)
+    deduped = list(dict.fromkeys(s.strip().upper() for s in request.symbols if s.strip()))
+    if len(deduped) < 2 or len(deduped) > 6:
+        raise ApiProblem(422, "invalid_request", "Peer group must contain between 2 and 6 unique symbols.")
+    grp = UserPeerGroup(account_id=account.account_id, name=request.name.strip(), symbols=deduped)
+    PEER_GROUPS.put(grp.group_id, grp)
+    return grp
+
+
+@app.delete(
+    "/v2/research/peers/groups/{group_id}",
+    responses=ERROR_RESPONSES,
+    include_in_schema=False,
+)
+def delete_user_peer_group(
+    group_id: str,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict[str, Any]:
+    account = _authenticated_account(authorization)
+    grp = PEER_GROUPS.get(group_id)
+    if not isinstance(grp, UserPeerGroup) or grp.account_id != account.account_id:
+        raise ApiProblem(404, "not_found", "Peer group not found.")
+    PEER_GROUPS.delete(group_id)
+    return {"deleted": True, "group_id": group_id}
+
+
+@app.post(
+    "/v2/research/peers/compare",
+    response_model=PeerComparisonMatrix,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+    include_in_schema=False,
+)
+def compare_research_peers(
+    request: PeerCompareApiRequest,
+    http_request: Request,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> PeerComparisonMatrix:
+    """Layer 1 0-LLM deterministic peer alignment & relative valuation matrix."""
+    t0 = monotonic()
+    account = _authenticated_account(authorization)
+    prim = request.primary_symbol.strip().upper()
+    raw_syms = [s.strip().upper() for s in (request.symbols or []) if s.strip()]
+    if not raw_syms:
+        sugg = suggest_peers_for_symbol(prim)
+        raw_syms = [prim, *sugg.recommended_peers][:5]
+    if prim not in raw_syms:
+        raw_syms = [prim, *raw_syms]
+    symbols = list(dict.fromkeys(raw_syms))[:6]
+    if len(symbols) < 2:
+        raise ApiProblem(422, "invalid_request", "At least 2 unique symbols are required for peer comparison.")
+
+    hooks = getattr(http_request.app.state, "peer_compare_hooks", None)
+    hook_dict = hooks if isinstance(hooks, Mapping) else {}
+    policy = load_fin_data_policy()
+    user_agent = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
+    limiter = hook_dict.get("limiter") or SecPacingLimiter.from_env()
+    transport = hook_dict.get("transport")
+    stream_transport = hook_dict.get("stream_transport")
+    _curated, fpi_meta_map = load_peer_groups_config()
+
+    cache_hits = 0
+    cache_misses = 0
+    rows_by_sym: dict[str, Any] = {}
+
+    def _load_one(sym: str) -> tuple[str, Any, bool]:
+        snap, hit = load_or_fetch_company_snapshot(
+            symbol=sym,
+            user_agent=user_agent,
+            limiter=limiter,
+            snapshot_cache=PEER_COMPANY_SNAPSHOTS,
+            cache_only=request.cache_only,
+            transport=transport,
+            stream_transport=stream_transport,
+            policy=policy,
+        )
+        if snap is None:
+            return sym, None, False
+        if "quote_resolver" in hook_dict and callable(hook_dict["quote_resolver"]):
+            p_dec, p_date, p_src = hook_dict["quote_resolver"](sym, request.as_of)
+        else:
+            p_dec, p_date, p_src = _resolve_peer_quote_usd(
+                sym,
+                account_id=account.account_id,
+                as_of=request.as_of,
+                cache_only=request.cache_only,
+                manual_prices=request.manual_prices,
+                policy=policy,
+            )
+        fx_val: Decimal | None = None
+        if request.fx_rates_to_usd:
+            raw_fx = request.fx_rates_to_usd.get(snap.currency.upper()) or request.fx_rates_to_usd.get(sym)
+            if raw_fx is not None:
+                try:
+                    fx_val = Decimal(str(raw_fx).strip())
+                except Exception:
+                    fx_val = None
+        metrics = compute_company_metrics_from_snapshot(
+            snap,
+            price_usd=p_dec,
+            price_as_of_date=p_date,
+            price_source=p_src,
+            as_of=request.as_of,
+            fpi_meta=fpi_meta_map.get(sym),
+            fx_to_usd=fx_val,
+        )
+        return sym, metrics, hit
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=min(4, len(symbols))) as pool:
+        futs = [pool.submit(_load_one, s) for s in symbols]
+        for fut in futs:
+            try:
+                sym_k, m_row, is_hit = fut.result()
+                if m_row is not None:
+                    rows_by_sym[sym_k] = m_row
+                    if is_hit:
+                        cache_hits += 1
+                    else:
+                        cache_misses += 1
+            except SecPacingError as err:
+                if err.reason == "ticker_not_found":
+                    continue
+                raise ApiProblem(503 if err.retryable else 422, err.reason, err.message, retryable=err.retryable) from err
+
+    ordered_rows = [rows_by_sym[s] for s in symbols if s in rows_by_sym]
+    elapsed_ms = int((monotonic() - t0) * 1000)
+    matrix = assemble_peer_matrix(
+        primary_symbol=prim,
+        rows=ordered_rows,
+        as_of=request.as_of,
+        exclude_non_comparable_from_median=request.exclude_non_comparable_from_median,
+        cache_hits=cache_hits,
+        cache_misses=cache_misses,
+        elapsed_ms=elapsed_ms,
+    )
+    if ordered_rows:
+        PEER_COMPARE_CACHE.put(
+            matrix.comparison_id,
+            {"account_id": account.account_id, "matrix": matrix.model_dump(mode="json")},
+        )
+    return matrix
+
+
+@app.post(
+    "/v2/research/peers/compare/brief",
+    response_model=PeerAttributionBrief,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+    include_in_schema=False,
+)
+def generate_research_peer_brief(
+    request: PeerCompareBriefApiRequest,
+    http_request: Request,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> PeerAttributionBrief:
+    """Layer 2 on-demand single-turn LLM attribution grounded strictly in Layer 1 matrix."""
+    account = _authenticated_account(authorization)
+    matrix = request.matrix
+    if matrix is None and request.comparison_id:
+        cached = PEER_COMPARE_CACHE.get(request.comparison_id)
+        if isinstance(cached, Mapping) and cached.get("account_id") == account.account_id:
+            matrix = PeerComparisonMatrix.model_validate(cached["matrix"])
+    if matrix is None:
+        raise ApiProblem(404, "not_found", "Provide a valid comparison_id or PeerComparisonMatrix.")
+
+    hooks = getattr(http_request.app.state, "peer_compare_hooks", None)
+    hook_dict = hooks if isinstance(hooks, Mapping) else {}
+    from types import SimpleNamespace
+    pseudo_req = SimpleNamespace(slot_overrides=request.slot_overrides)
+    model_runner, _bindings, resolved_slots = _resolve_sec_events_runtime(
+        account=account,
+        request=pseudo_req,  # type: ignore[arg-type]
+        http_request=http_request,
+        hook_dict=hook_dict,
+        budget=None,
+    )
+    model_name: str | None = None
+    if resolved_slots is not None and hasattr(resolved_slots, "for_slot"):
+        try:
+            model_name = resolved_slots.for_slot("deep_reasoner").model
+        except Exception:
+            model_name = None
+    return generate_peer_attribution_brief(
+        matrix,
+        runner=model_runner,
+        slot="deep_reasoner",
+        model_name=model_name,
+    )
 
 
 def _operation_owner_subject(request: Request) -> str:

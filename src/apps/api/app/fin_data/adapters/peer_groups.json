@@ -1,0 +1,75 @@
+{
+  "version": "v2.0",
+  "groups": [
+    {
+      "group_id": "semis_ai_compute",
+      "name": "半导体与 AI 算力",
+      "symbols": ["NVDA", "AMD", "AVGO", "INTC", "TSM"]
+    },
+    {
+      "group_id": "semis_equipment",
+      "name": "半导体设备",
+      "symbols": ["ASML", "AMAT", "LRCX", "KLAC"]
+    },
+    {
+      "group_id": "hyperscalers_cloud",
+      "name": "云计算与超大规模平台",
+      "symbols": ["MSFT", "GOOGL", "AMZN", "META"]
+    },
+    {
+      "group_id": "consumer_tech",
+      "name": "消费电子与生态",
+      "symbols": ["AAPL", "MSFT", "GOOGL", "AMZN"]
+    },
+    {
+      "group_id": "enterprise_saas",
+      "name": "企业级软件与安全",
+      "symbols": ["CRM", "NOW", "ORCL", "CRWD", "PANW"]
+    },
+    {
+      "group_id": "pharma_biotech",
+      "name": "大型医药与生物科技",
+      "symbols": ["JNJ", "LLY", "MRK", "PFE", "ABBV"]
+    },
+    {
+      "group_id": "managed_care",
+      "name": "美国医疗保险与健康服务",
+      "symbols": ["UNH", "ELV", "CVS", "CI"]
+    },
+    {
+      "group_id": "big_retail",
+      "name": "大型零售与必需消费",
+      "symbols": ["WMT", "COST", "TGT", "AMZN"]
+    },
+    {
+      "group_id": "consumer_dining",
+      "name": "连锁餐饮与消费品牌",
+      "symbols": ["SBUX", "MCD", "CMG", "YUM"]
+    },
+    {
+      "group_id": "autos_ev",
+      "name": "电动车与智能出行",
+      "symbols": ["TSLA", "GM", "F", "RIVN"]
+    },
+    {
+      "group_id": "china_internet_adr",
+      "name": "中概互联网 ADR",
+      "symbols": ["BABA", "JD", "PDD", "BIDU"]
+    },
+    {
+      "group_id": "us_large_banks",
+      "name": "美股大型银行与投行（金融 SIC 门控）",
+      "symbols": ["JPM", "BAC", "WFC", "GS", "MS"]
+    }
+  ],
+  "fpi_adr_metadata": {
+    "TSM": {"adr_ratio": "5", "reporting_currency": "TWD", "notes": "1 ADS = 5 ordinary shares (TWSE: 2330)"},
+    "ASML": {"adr_ratio": "1", "reporting_currency": "EUR", "notes": "1 NY Registry Share = 1 ordinary share"},
+    "BABA": {"adr_ratio": "8", "reporting_currency": "CNY", "notes": "1 ADS = 8 ordinary shares (HKEX: 9988)"},
+    "JD": {"adr_ratio": "2", "reporting_currency": "CNY", "notes": "1 ADS = 2 Class A ordinary shares"},
+    "PDD": {"adr_ratio": "4", "reporting_currency": "CNY", "notes": "1 ADS = 4 Class A ordinary shares"},
+    "BIDU": {"adr_ratio": "8", "reporting_currency": "CNY", "notes": "1 ADS = 8 Class A ordinary shares"},
+    "NVO": {"adr_ratio": "1", "reporting_currency": "DKK", "notes": "1 ADS = 1 B share"},
+    "SAP": {"adr_ratio": "1", "reporting_currency": "EUR", "notes": "1 ADS = 1 ordinary share"}
+  }
+}

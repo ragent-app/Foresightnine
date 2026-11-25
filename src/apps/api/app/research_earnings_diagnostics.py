@@ -578,7 +578,7 @@ def evaluate_sec_sic_gate(
         raise DiagnosticsError(f"SEC SIC code out of range (0001-9999): {sic!r}.")
     sic_code = f"{sic_num:04d}"
 
-    if 6000 <= sic_num <= 6199:
+    if 6000 <= sic_num <= 6299:
         return SectorApplicability(
             sic_code=sic_code,
             sic_description=sic_description,
@@ -594,7 +594,7 @@ def evaluate_sec_sic_gate(
                 "ROTCE & P/TBV",
             ],
             explanation=(
-                f"SEC SIC {sic_code} falls in Banking/Credit Institutions (6000-6199). "
+                f"SEC SIC {sic_code} falls in Banking/Credit/Broker-Dealer/Asset Management (6000-6299). "
                 "Disabled non-financial metrics (gross margin, inventory turnover/working capital days, "
                 "standard EV/EBITDA, standard FCF, interest coverage, and Reverse-DCF) because funding "
                 "interest and regulatory balance sheet flows make industrial cash flow and EV multiples invalid."
@@ -3736,6 +3736,10 @@ def valuation_and_implied_expectations(request: ValuationRequest) -> ValuationAn
         if st_v is not None or lt_v is not None:
             total_debt_v = (st_v if st_v is not None else Decimal(0)) + (lt_v if lt_v is not None else Decimal(0))
             debt_expr = "short_term_debt + long_term_debt"
+        elif mval.get("total_assets") is not None and mval.get("total_liabilities") is not None:
+            # Balance sheet is demonstrably present with no reported short/long-term debt tags -> debt-free issuer
+            total_debt_v = Decimal(0)
+            debt_expr = "0 (no debt tags on complete balance sheet)"
         else:
             total_debt_v = None
             debt_expr = "total_debt"

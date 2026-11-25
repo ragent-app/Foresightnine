@@ -2227,6 +2227,8 @@ def _exec_fin_tool(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallR
         key = ctx.fin_data.filing_tables_key(inv.req)
     elif name == 'sec_material_events':
         key = ctx.fin_data.sec_material_events_key(inv.req)
+    elif name == 'peer_relative_valuation':
+        key = ctx.fin_data.peer_relative_valuation_key(inv.req)
     elif name == 'earnings_consensus':
         key = ctx.fin_data.earnings_consensus_key(inv.req)
     elif name == 'earnings_transcript':
@@ -2269,6 +2271,8 @@ def _exec_fin_tool(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallR
         produced = ctx.fin_data.sec_fulltext_search(inv.req, entities)
     elif name == 'sec_material_events':
         produced = ctx.fin_data.sec_material_events(inv.req, entities)
+    elif name == 'peer_relative_valuation':
+        produced = ctx.fin_data.peer_relative_valuation(inv.req, entities)
     elif name == 'earnings_consensus':
         produced = ctx.fin_data.earnings_consensus(inv.req, entities)
     elif name == 'earnings_transcript':
@@ -3661,6 +3665,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     'sec_redline_diff': _exec_fin_tool,
     'sec_fulltext_search': _exec_fin_tool,
     'sec_material_events': _exec_fin_tool,
+    'peer_relative_valuation': _exec_fin_tool,
     'earnings_consensus': _exec_fin_tool,
     'earnings_transcript': _exec_fin_tool,
     'earnings_quality_diagnostics': _exec_earnings_diagnostic,

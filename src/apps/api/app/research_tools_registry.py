@@ -26,6 +26,7 @@ from .research_fin_tools import (
     SecFilingSectionsRequest,
     SecFilingTablesRequest,
     SecFulltextSearchRequest,
+    PeerRelativeValuationRequest,
     SecMaterialEventsRequest,
     SecRedlineDiffRequest,
     ValuationToolRequest,
@@ -1126,6 +1127,18 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         compaction_role='bulk',
         is_fin_tool=True,
         activity_summarizer=_rationale_summarizer(_fin_summary_target('as_of')),
+    ),
+    ToolSpec(
+        name='peer_relative_valuation',
+        description=(
+            'Deterministically benchmark a US company against 1-5 industry peers (0-LLM Layer 1 SEC XBRL + Reverse-DCF): '
+            'returns TTM/latest-Q growth, gross/operating/FCF margins, ROIC, SBC/FCF, EV/FCF, EV/FCF_ex_SBC, '
+            'uniform Reverse-DCF implied 5Y FCF CAGR, peer medians, ranks, spreads, and comparability warnings.'
+        ),
+        input_model=PeerRelativeValuationRequest,
+        compaction_role='bulk',
+        is_fin_tool=True,
+        activity_summarizer=_rationale_summarizer(_fin_summary_target('primary_symbol')),
     ),
     ToolSpec(
         name='earnings_consensus',

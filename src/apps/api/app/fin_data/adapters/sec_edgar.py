@@ -153,6 +153,9 @@ STANDARD_LINES: dict[str, LineSpec] = {s.line: s for s in (
     _spec("depreciation_amortization", "cashflow", True, "money",
           ["DepreciationDepletionAndAmortization", "DepreciationAndAmortization", "Depreciation"],
           ["DepreciationAndAmortisationExpense", "AdjustmentsForDepreciationAndAmortisationExpense"]),
+    _spec("stock_based_compensation", "cashflow", True, "money",
+          ["ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"],
+          ["ExpenseFromSharebasedPaymentTransactionsWithEmployees", "AdjustmentsForSharebasedPayments"]),
     _spec("operating_cash_flow", "cashflow", True, "money",
           ["NetCashProvidedByUsedInOperatingActivities",
            "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"], ["CashFlowsFromUsedInOperatingActivities"]),
@@ -727,8 +730,21 @@ def derive_period_metrics(lines: Iterable[StatementLine], *, decimal_places: int
     return out
 
 
-def select_line(facts: dict, spec: LineSpec, kind: str, n: int, *, derive_q4: bool, taxonomy: str) -> list[Period]:
-    """Per period choose the first tag in priority order that reported it (handles tag switches)."""
+def select_line(
+    facts: dict,
+    spec: LineSpec,
+    kind: str,
+    n: int,
+    *,
+    derive_q4: bool,
+    taxonomy: str,
+    as_of: date | None = None,
+) -> list[Period]:
+    """Per period choose the first tag in priority order that reported it (handles tag switches).
+
+    When ``as_of`` is provided, strictly filters out facts with ``filed > as_of`` (or
+    ``filed is None and end > as_of``) before period selection to guarantee zero lookahead leakage.
+    """
     chosen: dict[date, Period] = {}
     for tag in spec.tags.get(taxonomy, ()):
         node = facts.get(taxonomy, {}).get(tag)
@@ -738,8 +754,25 @@ def select_line(facts: dict, spec: LineSpec, kind: str, n: int, *, derive_q4: bo
         unit = _pick_unit(units, spec.unit_kind)
         if unit is None:
             continue
-        for p in _collect(units[unit], kind, flow=spec.flow, derive_q4=derive_q4 and spec.unit_kind == "money",
+        raw_rows = units[unit]
+        if as_of is not None:
+            filtered_rows = []
+            for row in raw_rows:
+                if not isinstance(row, dict):
+                    continue
+                f_d = _d(row.get("filed"))
+                e_d = _d(row.get("end"))
+                if f_d is not None:
+                    if f_d > as_of:
+                        continue
+                elif e_d is not None and e_d > as_of:
+                    continue
+                filtered_rows.append(row)
+            raw_rows = filtered_rows
+        for p in _collect(raw_rows, kind, flow=spec.flow, derive_q4=derive_q4 and spec.unit_kind == "money",
                           tag=tag, unit=unit):
+            if as_of is not None and p.filed is not None and p.filed > as_of:
+                continue
             cur = chosen.get(p.end)
             # Same period under several tags: the latest filing wins; ties keep tag priority.
             if cur is None or (p.filed or date.min) > (cur.filed or date.min):

@@ -130,6 +130,7 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
   const topics = useTopics();
   const match = useMatch("/research/:topicId");
   const inboxActive = Boolean(useMatch("/inbox"));
+  const compareActive = Boolean(useMatch("/compare"));
   const radarHealth = useRadarHealth();
   const unreadInbox = radarHealth.data?.unread_inbox_count ?? 0;
   const currentId = match?.params.topicId ?? null;
@@ -256,6 +257,13 @@ export function Sidebar({ drawer, open, onClose, onToggle }: { drawer: boolean; 
       >
         <span>变化收件箱</span>
         {unreadInbox > 0 ? <span className="side-inbox-badge">{unreadInbox}</span> : null}
+      </Link>
+      <Link
+        className="side-inbox-link"
+        to="/compare"
+        aria-current={compareActive ? "page" : undefined}
+      >
+        <span>同业横评</span>
       </Link>
       {topics.isLoading ? <div className="empty">正在加载…</div> : null}
       {topics.isError ? <div className="empty">研究列表暂时无法加载。</div> : null}
