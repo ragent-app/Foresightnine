@@ -1251,13 +1251,207 @@ def upsert_guidance_ledger_records(
     return updated
 
 
+_Q_LABEL_RE_1 = re.compile(r"Q([1-4])\s*(?:FY|CY)?\s*'?(\d{2,4})", re.IGNORECASE)
+_Q_LABEL_RE_2 = re.compile(r"(?:FY|CY)?\s*(\d{4})[-\s]*Q([1-4])", re.IGNORECASE)
+_FY_LABEL_RE = re.compile(r"^(?:FY\s*'?(\d{2,4})|(\d{4})[-\s]*FY)$", re.IGNORECASE)
+_EXPENSE_METRIC_RE = re.compile(r"(?:opex|operating_expense|tax_rate|expense|cost)", re.IGNORECASE)
+
+
+def _normalize_year4(raw_y: str) -> int:
+    y = int(raw_y)
+    return (2000 + y) if y < 100 else y
+
+
+def _parse_fiscal_period_key(label: str | None) -> tuple[int, str] | None:
+    """Normalize labels like ``Q2 FY27``, ``2027-Q2``, ``FY27`` to ``(year4, 'Q1'|'Q2'|'Q3'|'Q4'|'FY')``."""
+    s = (label or "").strip()
+    if not s:
+        return None
+    m1 = _Q_LABEL_RE_1.search(s)
+    if m1:
+        return _normalize_year4(m1.group(2)), f"Q{m1.group(1)}"
+    m2 = _Q_LABEL_RE_2.search(s)
+    if m2:
+        return _normalize_year4(m2.group(1)), f"Q{m2.group(2)}"
+    m3 = _FY_LABEL_RE.match(s)
+    if m3:
+        y_raw = m3.group(1) or m3.group(2)
+        return _normalize_year4(y_raw), "FY"
+    return None
+
+
+def _scale_money_to_metric_unit(xbrl_val: Decimal, metric_key: str, guidance_mid: Decimal | None) -> Decimal | None:
+    mk = metric_key.lower()
+    if mk.endswith(("_b", "usd_b", "_bn")):
+        return xbrl_val / Decimal("1000000000")
+    if mk.endswith(("_m", "usd_m", "_mn")):
+        return xbrl_val / Decimal("1000000")
+    if mk.endswith(("_k", "usd_k")):
+        return xbrl_val / Decimal("1000")
+    if guidance_mid is not None and guidance_mid > 0:
+        ratio = abs(xbrl_val / guidance_mid)
+        if Decimal("0.3") <= ratio <= Decimal("3.5"):
+            return xbrl_val
+        if Decimal("3e5") <= ratio <= Decimal("3.5e6"):
+            return xbrl_val / Decimal("1000000")
+        if Decimal("3e8") <= ratio <= Decimal("3.5e9"):
+            return xbrl_val / Decimal("1000000000")
+    return None
+
+
+def enrich_guidance_records_with_xbrl_actuals(
+    records: Sequence[GuidanceCredibilityRecord],
+    snap: PeerCompanySnapshot | None,
+    *,
+    as_of: date | None = None,
+) -> list[GuidanceCredibilityRecord]:
+    """0-LLM live enrichment: pair pending GAAP guidance records against SEC 10-Q/10-K XBRL actuals.
+
+    Enforces:
+    1. Strict GAAP basis lock (never matches Non-GAAP guidance against GAAP XBRL).
+    2. Exact fiscal period key match + temporal sanity window (``end`` within ``[disclosed-15d, disclosed+150d]``
+       for quarters, and ``filed > disclosed_at``).
+    3. Zero lookahead leakage via ``as_of`` cutoff on ``select_line(..., as_of=as_of)``.
+    """
+    if snap is None or not records:
+        return list(records)
+
+    facts_dict = _rebuild_facts_dict(snap)
+    tax = snap.taxonomy
+
+    def _sel(line_name: str, kind: str, n: int) -> list[Period]:
+        spec = STANDARD_LINES.get(line_name)
+        if spec is None:
+            return []
+        return select_line(facts_dict, spec, kind, n, derive_q4=True, taxonomy=tax, as_of=as_of)
+
+    rev_q = _sel("revenue", "quarter", 12)
+    rev_y = _sel("revenue", "year", 5)
+    gp_q = _sel("gross_profit", "quarter", 12)
+    gp_y = _sel("gross_profit", "year", 5)
+    cogs_q = _sel("cost_of_revenue", "quarter", 12)
+    cogs_y = _sel("cost_of_revenue", "year", 5)
+    oi_q = _sel("operating_income", "quarter", 12)
+    oi_y = _sel("operating_income", "year", 5)
+
+    # Index XBRL periods by normalized fiscal key AND by end date for derived margins/opex
+    def _index_periods(
+        revs: Sequence[Period],
+        gps: Sequence[Period],
+        cogss: Sequence[Period],
+        ois: Sequence[Period],
+        is_annual: bool,
+    ) -> dict[tuple[int, str], dict[str, Any]]:
+        gp_by_end = {p.end: p.value for p in gps}
+        cogs_by_end = {p.end: p.value for p in cogss}
+        oi_by_end = {p.end: p.value for p in ois}
+        out: dict[tuple[int, str], dict[str, Any]] = {}
+        for p in revs:
+            pk = _parse_fiscal_period_key(p.label)
+            if pk is None:
+                pk = (p.end.year, "FY") if is_annual else None
+            if pk is None:
+                continue
+            gp_v = gp_by_end.get(p.end)
+            if gp_v is None and p.end in cogs_by_end:
+                gp_v = p.value - cogs_by_end[p.end]
+            oi_v = oi_by_end.get(p.end)
+            gm_pct = (gp_v / p.value * Decimal(100)) if (gp_v is not None and p.value > 0) else None
+            om_pct = (oi_v / p.value * Decimal(100)) if (oi_v is not None and p.value > 0) else None
+            opex_v = (gp_v - oi_v) if (gp_v is not None and oi_v is not None) else None
+            out[pk] = {
+                "end": p.end,
+                "filed": p.filed,
+                "revenue": p.value,
+                "gross_margin_pct": gm_pct,
+                "operating_margin_pct": om_pct,
+                "operating_income": oi_v,
+                "opex": opex_v,
+            }
+        return out
+
+    xbrl_idx = {
+        **_index_periods(rev_q, gp_q, cogs_q, oi_q, is_annual=False),
+        **_index_periods(rev_y, gp_y, cogs_y, oi_y, is_annual=True),
+    }
+    if not xbrl_idx:
+        return list(records)
+
+    enriched: list[GuidanceCredibilityRecord] = []
+    for r in records:
+        if r.actual_value is not None or r.guidance_mid is None:
+            enriched.append(r)
+            continue
+        mk = r.metric_key.lower()
+        is_rev = "revenue" in mk or "sales" in mk
+        # Strict GAAP basis lock: non-revenue metrics require explicit gaap basis; revenue allows gaap or unknown
+        if r.basis == "non_gaap":
+            enriched.append(r)
+            continue
+        if r.basis != "gaap" and not is_rev:
+            enriched.append(r)
+            continue
+
+        pk = _parse_fiscal_period_key(r.period_label)
+        if pk is None or pk not in xbrl_idx:
+            enriched.append(r)
+            continue
+        xrow = xbrl_idx[pk]
+
+        # Temporal sanity guard (prevents cross-year FY mismatch and ensures actual was filed after guidance)
+        if r.disclosed_at:
+            try:
+                disc_d = date.fromisoformat(r.disclosed_at[:10])
+                end_d: date = xrow["end"]
+                filed_d: date | None = xrow["filed"]
+                if pk[1] != "FY":
+                    delta_end = (end_d - disc_d).days
+                    if delta_end < -15 or delta_end > 165:
+                        enriched.append(r)
+                        continue
+                if filed_d is not None and filed_d <= disc_d:
+                    enriched.append(r)
+                    continue
+            except ValueError:
+                pass
+
+        g_mid = _dec(r.guidance_mid)
+        matched_val: Decimal | None = None
+        if is_rev and xrow["revenue"] is not None:
+            matched_val = _scale_money_to_metric_unit(xrow["revenue"], mk, g_mid)
+        elif "gross_margin" in mk and xrow["gross_margin_pct"] is not None:
+            matched_val = xrow["gross_margin_pct"]
+        elif "operating_margin" in mk and xrow["operating_margin_pct"] is not None:
+            matched_val = xrow["operating_margin_pct"]
+        elif ("opex" in mk or "operating_expense" in mk) and xrow["opex"] is not None:
+            matched_val = _scale_money_to_metric_unit(xrow["opex"], mk, g_mid)
+        elif "operating_income" in mk and xrow["operating_income"] is not None:
+            matched_val = _scale_money_to_metric_unit(xrow["operating_income"], mk, g_mid)
+
+        if matched_val is None:
+            enriched.append(r)
+            continue
+
+        places = 2 if ("margin" in mk or "pct" in mk or "eps" in mk) else 1
+        enriched.append(
+            r.model_copy(
+                update={
+                    "actual_value": _fmt_dec(matched_val, places),
+                    "actual_basis": "gaap",
+                }
+            )
+        )
+    return enriched
+
+
 def evaluate_guidance_credibility(
     ledger: GuidanceCredibilityLedger | None,
     *,
     rules: V25GovernanceRules,
+    snap: PeerCompanySnapshot | None = None,
     as_of: date | None = None,
 ) -> GuidanceCredibilityAudit:
-    """Pure in-memory (<1ms) basis-locked scoring of guidance credibility."""
+    """Pure in-memory (<2ms) basis-locked scoring of guidance credibility with 0-LLM XBRL actuals pairing."""
     gc_rules = rules.guidance_credibility
     if ledger is None or not ledger.records:
         return GuidanceCredibilityAudit(
@@ -1271,10 +1465,24 @@ def evaluate_guidance_credibility(
         cutoff = as_of.isoformat()
         rows_src = [r for r in rows_src if not r.disclosed_at or r.disclosed_at <= cutoff]
 
+    rows_src = enrich_guidance_records_with_xbrl_actuals(rows_src, snap, as_of=as_of)
+
     scored: list[ScoredGuidanceRow] = []
-    surprises: list[Decimal] = []
-    beats = inlines = misses = 0
+    # Track one primary headline outcome per distinct fiscal period (prefer revenue > eps > gross_margin > operating_income)
+    primary_by_period: dict[str, tuple[int, GuidanceVerdict, Decimal]] = {}
     band = Decimal(str(gc_rules.inline_band_pct))
+
+    def _metric_priority(mk: str) -> int:
+        ml = mk.lower()
+        if "revenue" in ml or "sales" in ml:
+            return 4
+        if "eps" in ml:
+            return 3
+        if "gross_margin" in ml:
+            return 2
+        if "operating_income" in ml or "operating_margin" in ml:
+            return 1
+        return 0  # opex / tax_rate scored per row but not double-counted as headline revenue/profit beat
 
     for r in rows_src:
         g_mid = _dec(r.guidance_mid)
@@ -1310,17 +1518,24 @@ def evaluate_guidance_credibility(
             )
             continue
 
-        pct = (act - g_mid) / abs(g_mid) * Decimal(100)
-        surprises.append(pct)
-        if pct > band:
+        raw_pct = (act - g_mid) / abs(g_mid) * Decimal(100)
+        is_expense = bool(_EXPENSE_METRIC_RE.search(r.metric_key))
+        # For expense metrics (OpEx / tax rate), coming in BELOW guidance is favorable ("beat")
+        eff_pct = -raw_pct if is_expense else raw_pct
+        if eff_pct > band:
             verdict: GuidanceVerdict = "beat"
-            beats += 1
-        elif pct < -band:
+        elif eff_pct < -band:
             verdict = "miss"
-            misses += 1
         else:
             verdict = "inline"
-            inlines += 1
+
+        prio = _metric_priority(r.metric_key)
+        if prio > 0:
+            p_key = r.period_label.strip().upper()
+            prev_p = primary_by_period.get(p_key)
+            if prev_p is None or prio > prev_p[0]:
+                primary_by_period[p_key] = (prio, verdict, eff_pct)
+
         scored.append(
             ScoredGuidanceRow(
                 period_label=r.period_label,
@@ -1328,13 +1543,18 @@ def evaluate_guidance_credibility(
                 basis=r.basis,
                 guidance_mid=r.guidance_mid,
                 actual_value=r.actual_value,
-                surprise_pct=_fmt_dec(pct, 2),
+                surprise_pct=_fmt_dec(raw_pct, 2),
                 verdict=verdict,
                 source_kind=r.source_kind,
                 source_accession=r.source_accession,
                 disclosed_at=r.disclosed_at,
             )
         )
+
+    beats = sum(1 for _pr, v, _s in primary_by_period.values() if v == "beat")
+    inlines = sum(1 for _pr, v, _s in primary_by_period.values() if v == "inline")
+    misses = sum(1 for _pr, v, _s in primary_by_period.values() if v == "miss")
+    surprises = [s for _pr, _v, s in primary_by_period.values()]
 
     n_scored = beats + inlines + misses
     notes: list[str] = []
@@ -1348,7 +1568,7 @@ def evaluate_guidance_credibility(
             beat_count=beats,
             inline_count=inlines,
             miss_count=misses,
-            rows=scored[:12],
+            rows=scored[:16],
             notes=notes,
         )
 
@@ -1385,7 +1605,7 @@ def evaluate_guidance_credibility(
         inline_rate_pct=_fmt_dec(inline_rate, 1),
         miss_rate_pct=_fmt_dec(miss_rate, 1),
         avg_surprise_vs_mid_pct=_fmt_dec(avg_surp, 2),
-        rows=scored[:12],
+        rows=scored[:16],
         notes=notes,
     )
 
@@ -1412,7 +1632,7 @@ def assemble_governance_audit_report(
     inc_audit = evaluate_incentive_governance(
         def14a_latest, def14a_prior, rules=rules, compiled_anchors=compiled
     )
-    gui_audit = evaluate_guidance_credibility(guidance_ledger, rules=rules, as_of=as_of)
+    gui_audit = evaluate_guidance_credibility(guidance_ledger, rules=rules, snap=snap, as_of=as_of)
 
     lights = [cap_audit.quality_light, inc_audit.quality_light, gui_audit.quality_light]
     if "red" in lights:

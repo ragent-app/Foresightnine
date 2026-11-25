@@ -332,3 +332,79 @@ def test_layer2_cda_brief_and_8k_backfill_verification() -> None:
     )
     assert len(recs) == 1 and recs[0].quote_verified is True
     assert toks == 444 and len(gaps) == 1
+
+
+def test_pillar3_0llm_xbrl_actuals_auto_matching_basis_lock_and_as_of() -> None:
+    """Verify 0-LLM XBRL pairing matches GAAP revenue/GM/OpEx, isolates Non-GAAP, counts distinct quarters, and obeys as_of."""
+    cf_q = {
+        "facts": {
+            "us-gaap": {
+                "Revenues": {
+                    "units": {
+                        "USD": [
+                            {"start": "2025-07-28", "end": "2025-10-26", "val": 57_006_000_000, "filed": "2025-11-19", "form": "10-Q", "fy": 2026, "fp": "Q3"},
+                            {"start": "2025-10-27", "end": "2026-01-25", "val": 68_127_000_000, "filed": "2026-02-25", "form": "10-K", "fy": 2026, "fp": "Q4"},
+                            {"start": "2026-01-26", "end": "2026-04-26", "val": 81_615_000_000, "filed": "2026-05-20", "form": "10-Q", "fy": 2027, "fp": "Q1"},
+                            {"start": "2026-04-27", "end": "2026-07-26", "val": 96_221_000_000, "filed": "2026-08-26", "form": "10-Q", "fy": 2027, "fp": "Q2"},
+                        ]
+                    }
+                },
+                "GrossProfit": {
+                    "units": {
+                        "USD": [
+                            {"start": "2025-07-28", "end": "2025-10-26", "val": 41_848_000_000, "filed": "2025-11-19", "form": "10-Q", "fy": 2026, "fp": "Q3"},
+                            {"start": "2025-10-27", "end": "2026-01-25", "val": 51_095_000_000, "filed": "2026-02-25", "form": "10-K", "fy": 2026, "fp": "Q4"},
+                            {"start": "2026-01-26", "end": "2026-04-26", "val": 61_154_000_000, "filed": "2026-05-20", "form": "10-Q", "fy": 2027, "fp": "Q1"},
+                            {"start": "2026-04-27", "end": "2026-07-26", "val": 72_147_000_000, "filed": "2026-08-26", "form": "10-Q", "fy": 2027, "fp": "Q2"},
+                        ]
+                    }
+                },
+                "OperatingIncomeLoss": {
+                    "units": {
+                        "USD": [
+                            {"start": "2026-04-27", "end": "2026-07-26", "val": 63_147_000_000, "filed": "2026-08-26", "form": "10-Q", "fy": 2027, "fp": "Q2"},
+                        ]
+                    }
+                },
+            }
+        }
+    }
+    snap = project_companyfacts_to_snapshot(
+        cik="0001045810", symbol="NVDA", company_name="NVIDIA", sic="3674", sic_description="Semis",
+        latest_periodic_accession="acc-q2", latest_periodic_filed_at="2026-08-26", companyfacts_doc=cf_q,
+    )
+    ledger = GuidanceCredibilityLedger(
+        cik="0001045810",
+        symbol="NVDA",
+        records=[
+            # 3 past quarters with GAAP guidance (all beats +4.6% to +5.7%) + 1 Non-GAAP GM (must NOT be paired with GAAP XBRL!)
+            GuidanceCredibilityRecord(period_label="Q4 FY26", metric_key="revenue_usd_m", basis="gaap", guidance_mid="65000", disclosed_at="2025-11-19"),
+            GuidanceCredibilityRecord(period_label="Q1 FY27", metric_key="revenue_usd_m", basis="gaap", guidance_mid="78000", disclosed_at="2026-02-25"),
+            GuidanceCredibilityRecord(period_label="Q2 FY27", metric_key="revenue_usd_m", basis="gaap", guidance_mid="91000", disclosed_at="2026-05-20"),
+            GuidanceCredibilityRecord(period_label="Q2 FY27", metric_key="gross_margin_pct", basis="gaap", guidance_mid="74.9", disclosed_at="2026-05-20"),
+            GuidanceCredibilityRecord(period_label="Q2 FY27", metric_key="gross_margin_pct", basis="non_gaap", guidance_mid="75.0", disclosed_at="2026-05-20"),
+            # Q2 FY27 GAAP OpEx actual = 72147 - 63147 = 9000 vs guided 8500 -> higher expense = miss!
+            GuidanceCredibilityRecord(period_label="Q2 FY27", metric_key="opex_usd_m", basis="gaap", guidance_mid="8500", disclosed_at="2026-05-20"),
+        ],
+    )
+    rules, _sha, _comp = load_v25_governance_rules()
+    gc = evaluate_guidance_credibility(ledger, rules=rules, snap=snap)
+    # 3 distinct quarters scored (Q4 FY26, Q1 FY27, Q2 FY27) — NOT inflated by multiple metrics in Q2 FY27!
+    assert gc.scored_quarters == 3
+    assert gc.beat_count == 3
+    assert gc.profile == "chronic_sandbagger"
+
+    by_key = {(r.period_label, r.metric_key, r.basis): r for r in gc.rows}
+    assert by_key[("Q2 FY27", "revenue_usd_m", "gaap")].actual_value == "96221.0"
+    assert by_key[("Q2 FY27", "revenue_usd_m", "gaap")].verdict == "beat"
+    assert by_key[("Q2 FY27", "gross_margin_pct", "gaap")].verdict == "inline"
+    # Non-GAAP guidance must remain pending_actual (strict GAAP basis lock!)
+    assert by_key[("Q2 FY27", "gross_margin_pct", "non_gaap")].verdict == "pending_actual"
+    # Expense metric: actual 9000 > guided 8500 -> miss (inverted polarity!)
+    assert by_key[("Q2 FY27", "opex_usd_m", "gaap")].verdict == "miss"
+
+    # Zero lookahead leakage: as_of=2026-06-01 must NOT see Q2 FY27 10-Q filed 2026-08-26!
+    gc_past = evaluate_guidance_credibility(ledger, rules=rules, snap=snap, as_of=date(2026, 6, 1))
+    assert gc_past.scored_quarters == 2
+    assert gc_past.profile == "insufficient_history"
+

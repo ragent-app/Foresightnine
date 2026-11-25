@@ -9312,8 +9312,11 @@ def backfill_governance_guidance(
     )
     raw_gl = GUIDANCE_CREDIBILITY_LEDGER.get(f"gcl:{cik_norm}")
     g_ledger = GuidanceCredibilityLedger.model_validate(raw_gl) if isinstance(raw_gl, Mapping) else None
+    raw_snap = PEER_COMPANY_SNAPSHOTS.get(f"snap:{cik_norm}")
+    from .research_peer_compare import PeerCompanySnapshot
+    snap_obj = PeerCompanySnapshot.model_validate(raw_snap) if isinstance(raw_snap, Mapping) else None
     rules, _sha, _comp = load_v25_governance_rules()
-    gc_audit = evaluate_guidance_credibility(g_ledger, rules=rules)
+    gc_audit = evaluate_guidance_credibility(g_ledger, rules=rules, snap=snap_obj)
     return GuidanceBackfillApiResponse(
         cik=cik_norm,
         symbol=sym_u,
