@@ -8333,7 +8333,7 @@ def _resolve_peer_quote_usd(
     as_of_str: str | None = None
     src_name: str | None = None
 
-    td_key, td_owner = _resolve_twelve_data_key(account_id, policy=policy)
+    td_key, td_owner = _resolve_market_key(account_id, policy=policy)
     if td_key and td_owner:
         try:
             from .fin_data.adapters.twelve_data import TwelveDataAdapter
