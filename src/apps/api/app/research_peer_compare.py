@@ -110,6 +110,7 @@ def resolve_ticker_to_cik(
 
 _V2_PROJECTION_LINES: tuple[str, ...] = (
     "revenue",
+    "cost_of_revenue",
     "gross_profit",
     "operating_income",
     "net_income",
@@ -696,6 +697,8 @@ def compute_company_metrics_from_snapshot(
 
     rev_q = _sel("revenue", "quarter", 10)
     rev_y = _sel("revenue", "year", 4)
+    cogs_q = _sel("cost_of_revenue", "quarter", 10)
+    cogs_y = _sel("cost_of_revenue", "year", 4)
     gp_q = _sel("gross_profit", "quarter", 10)
     gp_y = _sel("gross_profit", "year", 4)
     oi_q = _sel("operating_income", "quarter", 10)
@@ -721,6 +724,10 @@ def compute_company_metrics_from_snapshot(
         period_end = rev_end
         fiscal_label = f"TTM {rev_end.isoformat()}"
         ttm_gp, _ = _compute_ttm_from_quarters(gp_q)
+        if ttm_gp is None:
+            ttm_cogs, _ = _compute_ttm_from_quarters(cogs_q)
+            if ttm_cogs is not None:
+                ttm_gp = ttm_rev - ttm_cogs
         ttm_oi, _ = _compute_ttm_from_quarters(oi_q)
         ttm_ni, _ = _compute_ttm_from_quarters(ni_q)
         ttm_tax, _ = _compute_ttm_from_quarters(tax_q)
@@ -740,6 +747,8 @@ def compute_company_metrics_from_snapshot(
         fiscal_label = rev_y[0].label or f"FY {period_end.isoformat()}"
         ttm_rev = rev_y[0].value
         ttm_gp = gp_y[0].value if gp_y else None
+        if ttm_gp is None and cogs_y:
+            ttm_gp = ttm_rev - cogs_y[0].value
         ttm_oi = oi_y[0].value if oi_y else None
         ttm_ni = ni_y[0].value if ni_y else None
         ttm_tax = tax_y[0].value if tax_y else None

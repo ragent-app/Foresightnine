@@ -8346,12 +8346,12 @@ def _resolve_peer_quote_usd(
                 now_fn=lifecycle_clock.now,
             )
             res = td.bars(sym_u, interval="1day", start=start_d, end=ref_date)
-            bars = [b for b in (res.records or ()) if getattr(b, "close", None) is not None]
+            bars = [b for b in (res.data or ()) if getattr(b, "close", None) is not None]
             if bars:
-                latest = max(bars, key=lambda b: getattr(b, "date", start_d))
+                latest = max(bars, key=lambda b: getattr(b, "ts_start", None) or datetime.min.replace(tzinfo=timezone.utc))
                 price_dec = Decimal(str(latest.close))
-                d_attr = getattr(latest, "date", None)
-                as_of_str = d_attr.isoformat() if isinstance(d_attr, date) else ref_date.isoformat()
+                ts_attr = getattr(latest, "ts_start", None)
+                as_of_str = ts_attr.date().isoformat() if isinstance(ts_attr, datetime) else ref_date.isoformat()
                 src_name = "twelve_data"
         except Exception:
             price_dec = None
@@ -8361,12 +8361,12 @@ def _resolve_peer_quote_usd(
             from .fin_data.adapters.yahoo import YahooAdapter
             yh = YahooAdapter(policy=policy, now_fn=lifecycle_clock.now)
             res = yh.bars(sym_u, interval="1day", start=start_d, end=ref_date)
-            bars = [b for b in (res.records or ()) if getattr(b, "close", None) is not None]
+            bars = [b for b in (res.data or ()) if getattr(b, "close", None) is not None]
             if bars:
-                latest = max(bars, key=lambda b: getattr(b, "date", start_d))
+                latest = max(bars, key=lambda b: getattr(b, "ts_start", None) or datetime.min.replace(tzinfo=timezone.utc))
                 price_dec = Decimal(str(latest.close))
-                d_attr = getattr(latest, "date", None)
-                as_of_str = d_attr.isoformat() if isinstance(d_attr, date) else ref_date.isoformat()
+                ts_attr = getattr(latest, "ts_start", None)
+                as_of_str = ts_attr.date().isoformat() if isinstance(ts_attr, datetime) else ref_date.isoformat()
                 src_name = "yahoo"
         except Exception:
             price_dec = None
