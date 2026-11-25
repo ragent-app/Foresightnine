@@ -220,9 +220,20 @@ def compute_delta_stage0(
                 )
             )
 
-    # 3. Promise vs Delivery (prior guidance_nongaap.new_guidance vs observed_metrics)
+    # 3. Promise vs Delivery (supports both legacy new_guidance dict and GuidanceAndNonGaapResult.guidance_evaluations)
     promise_rows: list[PromiseDeliveryRow] = []
-    prior_guid = _to_map(_to_map(prior_m.get("guidance_nongaap")).get("new_guidance"))
+    gn_block = _to_map(prior_m.get("guidance_nongaap"))
+    prior_guid: dict[str, Any] = dict(_to_map(gn_block.get("new_guidance")))
+    raw_evals = gn_block.get("guidance_evaluations")
+    if isinstance(raw_evals, list):
+        for ev in raw_evals:
+            if not isinstance(ev, Mapping):
+                continue
+            m_name = str(ev.get("metric_name") or "").strip()
+            ng_dir = _to_map(ev.get("new_guidance_direction"))
+            mid_v = ng_dir.get("new_mid") or ng_dir.get("new_high") or ng_dir.get("new_low")
+            if m_name and mid_v is not None and m_name not in prior_guid:
+                prior_guid[m_name] = mid_v
     for metric_key, g_val in prior_guid.items():
         if g_val is None or isinstance(g_val, (dict, list)):
             continue

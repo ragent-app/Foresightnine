@@ -32,6 +32,7 @@ import { DEFAULT_OPTIONS, optionsValid, runRequestFields, type RunOptions } from
 import { optionTokens } from "./research/optionTokens";
 import { ResearchSettingsPanel } from "./research/ResearchSettingsPanel";
 import { CitationSheet } from "./topic/Citation";
+import { GovernanceAuditBar } from "./topic/GovernanceAuditBar";
 import { PeerCoordinateBar } from "./topic/PeerCoordinateBar";
 import { ThesisLedgerBar } from "./topic/ThesisLedgerBar";
 import { TopicContext, type FocusCitation, type LiveRun, type PanelState, type TopicView } from "./topic/context";
@@ -1552,6 +1553,7 @@ export function TopicPage() {
                         hasLockedDossier={Boolean(squadDossier.locked)}
                       />
                       <PeerCoordinateBar symbol={squadDossier.symbol} />
+                      <GovernanceAuditBar symbol={squadDossier.symbol} cik={squadDossier.cik} />
                       <EarningsDossierView
                       dossier={squadDossier}
                       topicId={topicId}

@@ -108,7 +108,7 @@ def resolve_ticker_to_cik(
         raise SecPacingError("ticker_not_found", f"Ticker {symbol!r} not found in SEC company_tickers.json.", retryable=False)
     return hit
 
-_CURRENT_PROJECTION_VERSION = 2
+_CURRENT_PROJECTION_VERSION = 3
 
 _V2_PROJECTION_LINES: tuple[str, ...] = (
     "revenue",
@@ -132,6 +132,12 @@ _V2_PROJECTION_LINES: tuple[str, ...] = (
     "operating_cash_flow",
     "capex",
     "stock_based_compensation",
+    "share_repurchases",
+    "dividends_paid",
+    "sbc_tax_withholding",
+    "unrecognized_sbc",
+    "repurchased_shares",
+    "rsu_grants_shares",
 )
 
 _REVERSE_DCF_WACC = Decimal("0.10")
@@ -500,6 +506,8 @@ def load_or_fetch_company_snapshot(
     limiter: SecPacingLimiter | None,
     snapshot_cache: JsonDocumentRepository[Any] | None = None,
     cache_only: bool = False,
+    min_projection_version: int = 2,
+    submissions: Any = None,
     transport: Any = None,
     stream_transport: Any = None,
     policy: Any = None,
@@ -510,14 +518,30 @@ def load_or_fetch_company_snapshot(
     """
     sym_u = symbol.strip().upper()
     if cache_only and snapshot_cache is not None:
-        # Fast scan of cached snapshot by symbol/cik without hitting SEC
         if cik:
             hit = snapshot_cache.get(f"snap:{cik10(cik)}")
             if isinstance(hit, Mapping):
-                return PeerCompanySnapshot.model_validate(hit), True
+                snap = PeerCompanySnapshot.model_validate(hit)
+                if snap.projection_version >= min_projection_version:
+                    return snap, True
+            return None, False
+        # Avoid full-table scan when ticker map already has CIK in memory
+        with _TICKER_MAP_LOCK:
+            cached_map = _TICKER_MAP_CACHE[1] if _TICKER_MAP_CACHE is not None else None
+        if cached_map:
+            t_hit = cached_map.get(sym_u.replace(".", "-")) or cached_map.get(sym_u)
+            if t_hit is not None:
+                hit = snapshot_cache.get(f"snap:{cik10(t_hit[0])}")
+                if isinstance(hit, Mapping):
+                    snap = PeerCompanySnapshot.model_validate(hit)
+                    if snap.projection_version >= min_projection_version:
+                        return snap, True
+                return None, False
         for _k, val in snapshot_cache.items():
             if isinstance(val, Mapping) and str(val.get("symbol") or "").upper() == sym_u:
-                return PeerCompanySnapshot.model_validate(val), True
+                snap = PeerCompanySnapshot.model_validate(val)
+                if snap.projection_version >= min_projection_version:
+                    return snap, True
         return None, False
 
     if cik is None:
@@ -534,8 +558,8 @@ def load_or_fetch_company_snapshot(
 
     cache_key = f"snap:{cik_norm}"
 
-    # Gate 1: Lightweight submissions fingerprint check
-    subs = fetch_company_submissions(
+    # Gate 1: Lightweight submissions fingerprint check (reuse injected submissions or 20m TTL cache)
+    subs = submissions if submissions is not None else fetch_company_submissions(
         cik_norm,
         user_agent=user_agent,
         max_pages=0,
@@ -543,6 +567,7 @@ def load_or_fetch_company_snapshot(
         policy=policy,
         transport=transport,
         stream_transport=stream_transport,
+        use_ttl_cache=True,
     )
     periodic_rows = [
         r for r in subs.rows if r.form.upper() in ("10-Q", "10-K", "20-F", "10-Q/A", "10-K/A", "20-F/A")

@@ -182,6 +182,21 @@ from .fin_data.adapters.sec_events import (
 )
 from .fin_data.adapters.sec_events.form8k import fetch_lazy_attachment
 from .research_earnings_diagnostics import GuidanceMetricInput, NonGaapBridgeInput, PeriodFinancials
+from .research_governance_audit import (
+    CdaAttributionBrief,
+    Def14aFactSnapshot,
+    GovernanceAuditReport,
+    GuidanceCredibilityAudit,
+    GuidanceCredibilityLedger,
+    assemble_governance_audit_report,
+    backfill_guidance_from_8k_releases,
+    evaluate_guidance_credibility,
+    extract_guidance_records_from_dossier,
+    generate_cda_attribution_brief,
+    load_or_fetch_def14a_snapshots,
+    load_v25_governance_rules,
+    upsert_guidance_ledger_records,
+)
 from .research_peer_compare import (
     PeerAttributionBrief,
     PeerComparisonMatrix,
@@ -603,6 +618,9 @@ PEER_GROUPS = build_repository(
 PEER_COMPANY_SNAPSHOTS = build_repository(storage_config, "peer_company_snapshots")
 PEER_COMPARE_CACHE = build_repository(storage_config, "peer_compare_cache")
 PEER_QUOTE_CACHE = build_repository(storage_config, "peer_quote_cache")
+DEF14A_FACT_SNAPSHOTS = build_repository(storage_config, "def14a_fact_snapshots")
+GUIDANCE_CREDIBILITY_LEDGER = build_repository(storage_config, "guidance_credibility_ledger")
+GOVERNANCE_L2_CACHE = build_repository(storage_config, "governance_l2_cache")
 (
     SESSIONS,
     THESES,
@@ -868,6 +886,9 @@ def reset_state() -> None:
     PEER_COMPANY_SNAPSHOTS.clear()
     PEER_COMPARE_CACHE.clear()
     PEER_QUOTE_CACHE.clear()
+    DEF14A_FACT_SNAPSHOTS.clear()
+    GUIDANCE_CREDIBILITY_LEDGER.clear()
+    GOVERNANCE_L2_CACHE.clear()
     abuse_control.reset()
     telemetry.reset()
     SESSIONS.clear()
@@ -3767,7 +3788,10 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
             reserve_call=context.reserve_search, reserve_sec=reserve_sec_for_run,
             remaining_seconds=lambda: context.budget.deadline - context.now(), ensure_running=context.ensure_running,
             now=lifecycle_clock.now, disabled_reason=fin_disabled_reason, cancel_event=context.cancel_event(),
-            l1_cache=SEC_EVENTS_L1_RAW)
+            l1_cache=SEC_EVENTS_L1_RAW,
+            peer_snapshot_cache=PEER_COMPANY_SNAPSHOTS,
+            def14a_snapshot_cache=DEF14A_FACT_SNAPSHOTS,
+            guidance_ledger_cache=GUIDANCE_CREDIBILITY_LEDGER)
         capabilities.update(fin_data.capabilities())
         capabilities.update(fin_data.earnings_capabilities())
         def note_fin_result(name: str, result: dict[str, Any]) -> None:
@@ -5201,6 +5225,8 @@ _SQUAD_STAGE_TIMEOUT_FLOORS: dict[str, float] = {
     "sec_event_omission_repair": 240.0,
     "sec_event_skeptic": 240.0,
     "peer_attribution_brief": 240.0,
+    "v25_governance_cda_audit": 240.0,
+    "v25_guidance_backfill": 240.0,
 }
 _SQUAD_SLOT_MAX_OUTPUT_TOKENS: dict[str, int] = {
     "fast_extractor": 8192,
@@ -5222,6 +5248,8 @@ _SQUAD_STAGE_MAX_OUTPUT_TOKENS: dict[str, int] = {
     "sec_event_omission_repair": 16384,
     "sec_event_skeptic": 16384,
     "peer_attribution_brief": 16384,
+    "v25_governance_cda_audit": 16384,
+    "v25_guidance_backfill": 16384,
 }
 
 
@@ -6450,6 +6478,8 @@ def _prepare_earnings_squad_execution(
                 EARNINGS_SQUAD_STATES.put(state_key, updated)
 
             EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", finalize_state)
+            if dossier_out is not None and getattr(dossier_out, "locked", False):
+                _prewarm_v25_layer1_async(dossier_out.model_dump(mode="json"))
             with _ACTIVE_SQUAD_LOCK:
                 active = _ACTIVE_SQUAD_RUNS.get((account.account_id, topic_id))
                 if active and active.get("operation_id") == operation_id:
@@ -8188,6 +8218,85 @@ def radar_check_now_endpoint(
                 return None
             return assemble_peer_matrix(primary_symbol=prim, rows=rows_out, as_of=request.as_of)
 
+        def _governance_audit_for_sub(sub: FilingWatchSubscription) -> GovernanceAuditReport | None:
+            sym_i = (sub.symbol or "").strip().upper()
+            if not sym_i:
+                return None
+            pol = load_fin_data_policy()
+            ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
+            lim = SecPacingLimiter.from_env()
+            from .fin_data.adapters.sec_events.pacing import fetch_company_submissions
+            subs = fetch_company_submissions(
+                sub.cik, user_agent=ua, max_pages=0, limiter=lim, policy=pol, use_ttl_cache=True
+            )
+            snap, _h = load_or_fetch_company_snapshot(
+                symbol=sym_i,
+                cik=sub.cik,
+                user_agent=ua,
+                limiter=lim,
+                snapshot_cache=PEER_COMPANY_SNAPSHOTS,
+                min_projection_version=3,
+                submissions=subs,
+                policy=pol,
+            )
+            if snap is None:
+                return None
+            d_latest, d_prior = load_or_fetch_def14a_snapshots(
+                cik=sub.cik,
+                symbol=sym_i,
+                user_agent=ua,
+                limiter=lim,
+                def14a_cache=DEF14A_FACT_SNAPSHOTS,
+                submissions=subs,
+                as_of=request.as_of,
+                policy=pol,
+            )
+            raw_gl = GUIDANCE_CREDIBILITY_LEDGER.get(f"gcl:{cik10(sub.cik)}")
+            g_ledger = GuidanceCredibilityLedger.model_validate(raw_gl) if isinstance(raw_gl, Mapping) else None
+            return assemble_governance_audit_report(
+                snap=snap,
+                def14a_latest=d_latest,
+                def14a_prior=d_prior,
+                guidance_ledger=g_ledger,
+                as_of=request.as_of,
+            )
+
+        def _earnings_delta_for_sub(
+            sub: FilingWatchSubscription,
+            new_accs: list[str],
+            ledger: ThesisLedger | None,
+        ) -> list[ChangeInboxItem]:
+            if ledger is None or not sub.topic_id or not new_accs:
+                return []
+            prior_state = EARNINGS_SQUAD_STATES.get(_squad_state_key(account.account_id, sub.topic_id))
+            prior_dossier = prior_state.get("dossier") if isinstance(prior_state, Mapping) else None
+            if not isinstance(prior_dossier, Mapping):
+                return []
+            # Also ensure Track A guidance records from prior dossier are persisted
+            recs = extract_guidance_records_from_dossier(prior_dossier, source_accession=new_accs[0])
+            if recs and sub.symbol:
+                upsert_guidance_ledger_records(
+                    GUIDANCE_CREDIBILITY_LEDGER, cik=sub.cik, symbol=sub.symbol, new_records=recs
+                )
+            from .research_delta_review import run_earnings_delta_review
+            try:
+                _diff, item = run_earnings_delta_review(
+                    account_id=account.account_id,
+                    subscription=sub,
+                    confirmed_ledger=ledger,
+                    prior_dossier=prior_dossier,
+                    new_accession=new_accs[0],
+                    new_period_label=f"SEC {new_accs[0]}",
+                    new_observed_metrics={},
+                    new_source_texts={},
+                    runner=model_runner,
+                    slot_bindings=filtered_bindings,
+                    resolved_slots=effective_resolved_slots,
+                )
+                return [item] if item is not None else []
+            except Exception:
+                return []
+
         summary = run_p1b_radar_sweep(
             subscriptions=target_subs,
             scan_fn=_scan_sub,
@@ -8196,7 +8305,9 @@ def radar_check_now_endpoint(
             existing_inbox_loader=_account_inbox_items,
             save_subscription=lambda s: WATCH_SUBSCRIPTIONS.put(s.subscription_id, s),
             save_inbox_item=lambda it: CHANGE_INBOX_ITEMS.put(it.inbox_item_id, it),
+            earnings_delta_fn=_earnings_delta_for_sub,
             peer_compare_fn=_peer_compare_for_sub,
+            governance_audit_fn=_governance_audit_for_sub,
             as_of=request.as_of,
         )
         staged_sweeps[operation_id] = summary
@@ -8796,11 +8907,404 @@ def upsert_peer_relative_watch(
         symbol=prim,
         company_name=company_name,
         enabled=True,
-        watched_channels=["v1_events", "earnings_delta", "peer_relative"],
+        watched_channels=["v1_events", "earnings_delta", "governance_audit", "peer_relative"],
         peer_watch_config=PeerWatchConfig(symbols=syms, triggers=[new_trg]),
     )
     WATCH_SUBSCRIPTIONS.put(sub.subscription_id, sub)
     return sub
+
+
+# --------------------------------------------------------------------------- V2.5 Governance, Capital Allocation & Credibility API
+
+
+def _prewarm_v25_layer1_async(dossier_dict: Mapping[str, Any]) -> None:
+    """Silently extract Track A guidance + prewarm 0-LLM Layer 1 snapshots when Direction A locks a dossier."""
+    sym = str(dossier_dict.get("symbol") or "").strip().upper()
+    cik_raw = str(dossier_dict.get("cik") or "").strip()
+    if not sym or not cik_raw:
+        return
+    try:
+        cik_norm = cik10(cik_raw)
+        recs = extract_guidance_records_from_dossier(dossier_dict)
+        if recs:
+            upsert_guidance_ledger_records(GUIDANCE_CREDIBILITY_LEDGER, cik=cik_norm, symbol=sym, new_records=recs)
+    except Exception:
+        pass
+
+    def _bg_prewarm() -> None:
+        try:
+            pol = load_fin_data_policy()
+            ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
+            lim = SecPacingLimiter.from_env()
+            from .fin_data.adapters.sec_events.pacing import fetch_company_submissions
+            subs = fetch_company_submissions(cik_norm, user_agent=ua, max_pages=0, limiter=lim, policy=pol, use_ttl_cache=True)
+            load_or_fetch_company_snapshot(
+                symbol=sym,
+                cik=cik_norm,
+                user_agent=ua,
+                limiter=lim,
+                snapshot_cache=PEER_COMPANY_SNAPSHOTS,
+                min_projection_version=3,
+                submissions=subs,
+                policy=pol,
+            )
+            load_or_fetch_def14a_snapshots(
+                cik=cik_norm,
+                symbol=sym,
+                user_agent=ua,
+                limiter=lim,
+                def14a_cache=DEF14A_FACT_SNAPSHOTS,
+                submissions=subs,
+                policy=pol,
+            )
+        except Exception:
+            return
+
+    Thread(target=_bg_prewarm, name=f"v25-prewarm-{sym}", daemon=True).start()
+
+
+class GovernanceAuditApiRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    symbol: str = Field(min_length=1, max_length=16)
+    cik: str | None = Field(default=None, max_length=20)
+    as_of: date | None = None
+    cache_only: bool = False
+
+
+class GovernanceCdaBriefApiRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    symbol: str = Field(min_length=1, max_length=16)
+    cik: str | None = Field(default=None, max_length=20)
+    as_of: date | None = None
+    force_refresh: bool = False
+    slot_overrides: dict[str, str] | None = None
+
+
+class GuidanceBackfillApiRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    symbol: str = Field(min_length=1, max_length=16)
+    cik: str | None = Field(default=None, max_length=20)
+    max_quarters: int = Field(default=6, ge=1, le=8)
+    slot_overrides: dict[str, str] | None = None
+
+
+class GuidanceBackfillApiResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cik: str
+    symbol: str
+    extracted_records: int
+    tokens_used: int
+    open_gaps: list[str] = Field(default_factory=list)
+    guidance_credibility: GuidanceCredibilityAudit
+
+
+def _run_v25_layer1_audit(
+    *,
+    account_id: str,
+    symbol: str,
+    cik: str | None,
+    as_of: date | None,
+    cache_only: bool,
+    hook_dict: Mapping[str, Any],
+) -> tuple[GovernanceAuditReport | None, Def14aFactSnapshot | None]:
+    t0 = monotonic()
+    sym_u = symbol.strip().upper()
+    policy = load_fin_data_policy()
+    ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
+    limiter = hook_dict.get("limiter") or SecPacingLimiter.from_env()
+    transport = hook_dict.get("transport")
+    stream_transport = hook_dict.get("stream_transport")
+
+    cik_norm: str | None = cik10(cik) if cik else None
+    if cik_norm is None and not cache_only:
+        resolved, _name = resolve_ticker_to_cik(sym_u, user_agent=ua, limiter=limiter, policy=policy, transport=transport)
+        cik_norm = cik10(resolved)
+
+    subs = None
+    if not cache_only and cik_norm is not None:
+        from .fin_data.adapters.sec_events.pacing import fetch_company_submissions
+        subs = fetch_company_submissions(
+            cik_norm,
+            user_agent=ua,
+            max_pages=0,
+            limiter=limiter,
+            policy=policy,
+            transport=transport,
+            stream_transport=stream_transport,
+            use_ttl_cache=True,
+        )
+
+    snap, _hit = load_or_fetch_company_snapshot(
+        symbol=sym_u,
+        cik=cik_norm,
+        user_agent=ua,
+        limiter=limiter,
+        snapshot_cache=PEER_COMPANY_SNAPSHOTS,
+        cache_only=cache_only,
+        min_projection_version=3,
+        submissions=subs,
+        transport=transport,
+        stream_transport=stream_transport,
+        policy=policy,
+    )
+    if snap is None:
+        return None, None
+
+    d_latest, d_prior = load_or_fetch_def14a_snapshots(
+        cik=snap.cik,
+        symbol=sym_u,
+        user_agent=ua,
+        limiter=limiter,
+        def14a_cache=DEF14A_FACT_SNAPSHOTS,
+        submissions=subs,
+        as_of=as_of,
+        cache_only=cache_only,
+        policy=policy,
+        transport=transport,
+        stream_transport=stream_transport,
+    )
+    raw_gl = GUIDANCE_CREDIBILITY_LEDGER.get(f"gcl:{snap.cik}")
+    g_ledger = GuidanceCredibilityLedger.model_validate(raw_gl) if isinstance(raw_gl, Mapping) else None
+
+    if "quote_resolver" in hook_dict and callable(hook_dict["quote_resolver"]):
+        p_dec, _p_date, _p_src = hook_dict["quote_resolver"](sym_u, as_of)
+    else:
+        p_dec, _p_date, _p_src = _resolve_peer_quote_usd(
+            sym_u,
+            account_id=account_id,
+            as_of=as_of,
+            cache_only=cache_only,
+            manual_prices=None,
+            policy=policy,
+        )
+
+    report = assemble_governance_audit_report(
+        snap=snap,
+        def14a_latest=d_latest,
+        def14a_prior=d_prior,
+        guidance_ledger=g_ledger,
+        price_usd=p_dec,
+        as_of=as_of,
+        elapsed_ms=int((monotonic() - t0) * 1000),
+    )
+    return report, d_latest
+
+
+@app.post(
+    "/v2/research/governance/audit",
+    response_model=GovernanceAuditReport | None,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+    include_in_schema=False,
+)
+def run_governance_audit(
+    request: GovernanceAuditApiRequest,
+    http_request: Request,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> GovernanceAuditReport | None:
+    """Layer 1 (0-LLM) V2.5 Governance, Capital Allocation & Guidance Credibility audit."""
+    account = _authenticated_account(authorization)
+    hooks = getattr(http_request.app.state, "governance_audit_hooks", None)
+    hook_dict = hooks if isinstance(hooks, Mapping) else {}
+    try:
+        report, _d_latest = _run_v25_layer1_audit(
+            account_id=account.account_id,
+            symbol=request.symbol,
+            cik=request.cik,
+            as_of=request.as_of,
+            cache_only=request.cache_only,
+            hook_dict=hook_dict,
+        )
+    except SecPacingError as err:
+        raise ApiProblem(503 if err.retryable else 422, err.reason, err.message, retryable=err.retryable) from err
+    if report is None and not request.cache_only:
+        raise ApiProblem(404, "not_found", f"Could not load SEC governance facts for {request.symbol}.")
+    return report
+
+
+@app.post(
+    "/v2/research/governance/audit/cda-brief",
+    response_model=CdaAttributionBrief,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+    include_in_schema=False,
+)
+def generate_governance_cda_brief(
+    request: GovernanceCdaBriefApiRequest,
+    http_request: Request,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> CdaAttributionBrief:
+    """Layer 2 on-demand DEF 14A CD&A attribution brief with built-in Skeptic & dual server verification."""
+    account = _authenticated_account(authorization)
+    hooks = getattr(http_request.app.state, "governance_audit_hooks", None)
+    hook_dict = hooks if isinstance(hooks, Mapping) else {}
+    report, d_latest = _run_v25_layer1_audit(
+        account_id=account.account_id,
+        symbol=request.symbol,
+        cik=request.cik,
+        as_of=request.as_of,
+        cache_only=False,
+        hook_dict=hook_dict,
+    )
+    if report is None:
+        raise ApiProblem(404, "not_found", f"Could not load Layer 1 governance audit for {request.symbol}.")
+
+    accn = report.incentive_governance.latest_accession or "none"
+    cache_key = f"cda:{report.cik}:{accn}:{report.rules_sha256}:v2.5.1"
+    if not request.force_refresh:
+        cached = GOVERNANCE_L2_CACHE.get(cache_key)
+        if isinstance(cached, Mapping):
+            return CdaAttributionBrief.model_validate(cached)
+
+    # Fetch DEF 14A primary HTML (<= 8MB) and stream-strip to plain text immediately
+    cda_text = str(hook_dict.get("cda_excerpt") or "")
+    if not cda_text and d_latest is not None and d_latest.primary_doc_url:
+        try:
+            from .fin_data.adapters.sec_events.pacing import sec_get_text
+            from .research_governance_audit import _MAX_DEF14A_HTML_BYTES, _strip_html_to_text
+            ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
+            raw_html, _sha = sec_get_text(
+                d_latest.primary_doc_url,
+                category="filings",
+                user_agent=ua,
+                limiter=hook_dict.get("limiter") or SecPacingLimiter.from_env(),
+                policy=load_fin_data_policy(),
+                max_bytes=_MAX_DEF14A_HTML_BYTES,
+                transport=hook_dict.get("transport"),
+                stream_transport=hook_dict.get("stream_transport"),
+            )
+            cda_text = _strip_html_to_text(raw_html)
+            del raw_html
+        except Exception:
+            cda_text = ""
+
+    from types import SimpleNamespace
+    pseudo_req = SimpleNamespace(slot_overrides=request.slot_overrides)
+    model_runner, _bindings, resolved_slots = _resolve_sec_events_runtime(
+        account=account,
+        request=pseudo_req,  # type: ignore[arg-type]
+        http_request=http_request,
+        hook_dict=hook_dict,
+        budget=None,
+    )
+    model_name: str | None = None
+    if resolved_slots is not None and hasattr(resolved_slots, "for_slot"):
+        try:
+            model_name = resolved_slots.for_slot("deep_reasoner").model
+        except Exception:
+            model_name = None
+    if not model_name:
+        def_prov = getattr(model_runner, "_default_provider", None)
+        model_name = (
+            getattr(def_prov, "model", None)
+            or getattr(getattr(def_prov, "config", None), "model", None)
+            or os.getenv("FORESIGHTNINE_RESEARCH_LLM_MODEL")
+            or os.getenv("FORESIGHTNINE_LLM_MODEL")
+            or getattr(def_prov, "name", None)
+        )
+
+    brief = generate_cda_attribution_brief(
+        report,
+        cda_excerpt=cda_text,
+        runner=model_runner,
+        model_name=str(model_name) if model_name else None,
+    )
+    GOVERNANCE_L2_CACHE.put(cache_key, brief.model_dump(mode="json"))
+    return brief
+
+
+@app.post(
+    "/v2/research/governance/guidance/backfill",
+    response_model=GuidanceBackfillApiResponse,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+    include_in_schema=False,
+)
+def backfill_governance_guidance(
+    request: GuidanceBackfillApiRequest,
+    http_request: Request,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> GuidanceBackfillApiResponse:
+    """Track B on-demand 6-quarter 8-K Item 2.02 Exhibit 99.1 guidance backfill (1 LLM call + quote gate)."""
+    account = _authenticated_account(authorization)
+    hooks = getattr(http_request.app.state, "governance_audit_hooks", None)
+    hook_dict = hooks if isinstance(hooks, Mapping) else {}
+    sym_u = request.symbol.strip().upper()
+    policy = load_fin_data_policy()
+    ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
+    limiter = hook_dict.get("limiter") or SecPacingLimiter.from_env()
+
+    cik_norm = cik10(request.cik) if request.cik else cik10(
+        resolve_ticker_to_cik(sym_u, user_agent=ua, limiter=limiter, policy=policy, transport=hook_dict.get("transport"))[0]
+    )
+
+    releases: list[tuple[str, str, str]] = list(hook_dict.get("releases") or [])
+    if not releases:
+        from .fin_data.adapters.sec_events.pacing import fetch_company_submissions, sec_get_json, sec_get_text
+        from .research_governance_audit import _MAX_8K_EX991_BYTES, _strip_html_to_text
+        subs = fetch_company_submissions(cik_norm, user_agent=ua, max_pages=0, limiter=limiter, policy=policy, use_ttl_cache=True)
+        rows_8k = [
+            r for r in subs.rows
+            if r.form.upper() in ("8-K", "8-K/A") and any("2.02" in str(it) for it in (r.items or ()))
+        ][: request.max_quarters]
+        cik_int = str(int(cik_norm))
+        for r in rows_8k:
+            acc_nodash = r.accession.replace("-", "")
+            base_dir = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{acc_nodash}"
+            ex_url = f"{base_dir}/{r.primary_document}" if r.primary_document else None
+            try:
+                idx_doc, _ = sec_get_json(f"{base_dir}/index.json", category="filings", user_agent=ua, limiter=limiter, policy=policy)
+                items = ((idx_doc or {}).get("directory") or {}).get("item") or []
+                for it in items:
+                    nm = str(it.get("name") or "")
+                    if ("99" in nm.lower() or "ex99" in nm.lower() or "er" in nm.lower()) and nm.lower().endswith((".htm", ".html", ".txt")):
+                        ex_url = f"{base_dir}/{nm}"
+                        break
+            except Exception:
+                pass
+            if not ex_url:
+                continue
+            try:
+                raw_txt, _ = sec_get_text(ex_url, category="filings", user_agent=ua, limiter=limiter, policy=policy, max_bytes=_MAX_8K_EX991_BYTES)
+                plain = _strip_html_to_text(raw_txt)
+                del raw_txt
+                if plain:
+                    releases.append((r.accession, r.filed_at.isoformat(), plain))
+            except Exception:
+                continue
+
+    from types import SimpleNamespace
+    pseudo_req = SimpleNamespace(slot_overrides=request.slot_overrides)
+    model_runner, _bindings, _resolved_slots = _resolve_sec_events_runtime(
+        account=account,
+        request=pseudo_req,  # type: ignore[arg-type]
+        http_request=http_request,
+        hook_dict=hook_dict,
+        budget=None,
+    )
+    recs, tokens, gaps = backfill_guidance_from_8k_releases(
+        cik=cik_norm,
+        symbol=sym_u,
+        releases=releases,
+        runner=model_runner,
+        ledger_repo=GUIDANCE_CREDIBILITY_LEDGER,
+    )
+    raw_gl = GUIDANCE_CREDIBILITY_LEDGER.get(f"gcl:{cik_norm}")
+    g_ledger = GuidanceCredibilityLedger.model_validate(raw_gl) if isinstance(raw_gl, Mapping) else None
+    rules, _sha, _comp = load_v25_governance_rules()
+    gc_audit = evaluate_guidance_credibility(g_ledger, rules=rules)
+    return GuidanceBackfillApiResponse(
+        cik=cik_norm,
+        symbol=sym_u,
+        extracted_records=len(recs),
+        tokens_used=tokens,
+        open_gaps=gaps,
+        guidance_credibility=gc_audit,
+    )
 
 
 def _operation_owner_subject(request: Request) -> str:

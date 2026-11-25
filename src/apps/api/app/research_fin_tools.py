@@ -417,6 +417,14 @@ class PeerRelativeValuationRequest(BaseModel):
     rationale: str = Field(default='', max_length=500, description='Why peer relative valuation is needed.')
 
 
+class GovernanceCapitalAuditRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    symbol: str = Field(min_length=1, max_length=16, description='US ticker symbol to audit.')
+    cik: str | None = Field(default=None, pattern=r'^\d{1,10}$')
+    as_of: date | None = Field(default=None, description='Optional point-in-time cutoff date.')
+    rationale: str = Field(default='', max_length=500, description='Why governance & capital allocation audit is needed.')
+
+
 # --------------------------------------------------------------------------- outcome
 @dataclass
 class FinToolOutcome:
@@ -506,7 +514,9 @@ class FinDataToolbox:
                  baostock_runner: Any = _AUTO, cn_probe: ReachabilityProbe | None = None, yahoo_transport=None,
                  on_result: Callable[[str, dict[str, Any]], None] | None = None,
                  fmp_key: str | None = None, fmp_owner: str = 'user_byok', fmp_transport=None,
-                 l1_cache: Any = None, sec_events_limiter: SecPacingLimiter | None = None) -> None:
+                 l1_cache: Any = None, sec_events_limiter: SecPacingLimiter | None = None,
+                 peer_snapshot_cache: Any = None, def14a_snapshot_cache: Any = None,
+                 guidance_ledger_cache: Any = None) -> None:
         self.account_id, self._market_key = account_id, market_key or None
         self._owner = credential_owner if credential_owner in ('platform', 'user_byok') else 'user_byok'
         try:
@@ -532,6 +542,9 @@ class FinDataToolbox:
         self._fmp_owner = fmp_owner if fmp_owner in ('platform', 'user_byok') else 'user_byok'
         self._fmp_transport = fmp_transport
         self._l1_cache = l1_cache
+        self._peer_snapshot_cache = peer_snapshot_cache if peer_snapshot_cache is not None else l1_cache
+        self._def14a_snapshot_cache = def14a_snapshot_cache
+        self._guidance_ledger_cache = guidance_ledger_cache
         self._sec_events_limiter = sec_events_limiter
 
     # -- capability flags (first user message; tools stay static)
@@ -1678,7 +1691,7 @@ class FinDataToolbox:
                     symbol=sym,
                     user_agent=self._sec_ua,
                     limiter=events_limiter,
-                    snapshot_cache=self._l1_cache,
+                    snapshot_cache=self._peer_snapshot_cache,
                     transport=self._sec_transport,
                     stream_transport=self._sec_stream,
                     policy=self._policy,
@@ -1791,6 +1804,155 @@ class FinDataToolbox:
                 'peer_medians': matrix.peer_medians,
                 'comparability_warnings': [w.model_dump(mode='json') for w in matrix.comparability_warnings],
                 'companies': [c.model_dump(mode='json', exclude_none=True) for c in matrix.companies],
+            },
+            source=source,
+        )
+
+    def governance_capital_audit_key(self, req: GovernanceCapitalAuditRequest) -> str:
+        return '|'.join([
+            'governance_capital_audit',
+            req.symbol.strip().upper(),
+            cik10(req.cik) if req.cik else '',
+            req.as_of.isoformat() if req.as_of else '',
+        ])
+
+    def governance_capital_audit(
+        self,
+        req: GovernanceCapitalAuditRequest,
+        entities: Mapping[str, Mapping[str, Any]] | None = None,
+    ) -> FinToolOutcome:
+        """Pure Layer 1 (0-LLM) V2.5 governance, SBC net dilution & guidance credibility tool."""
+        from .fin_data.adapters.sec_events.pacing import fetch_company_submissions
+        from .research_governance_audit import (
+            GuidanceCredibilityLedger,
+            assemble_governance_audit_report,
+            load_or_fetch_def14a_snapshots,
+        )
+        from .research_peer_compare import load_or_fetch_company_snapshot, resolve_ticker_to_cik
+
+        blocked = self._sec_blocked()
+        if blocked:
+            return FinToolOutcome(blocked)
+        try:
+            self._reserve_call()
+        except Exception as err:
+            wait = getattr(err, 'retry_after', None)
+            return FinToolOutcome({
+                'status': 'rate_limited',
+                'reason': 'rate_limit',
+                'message': str(err),
+                'retryable': True,
+                **({'retry_after_seconds': float(wait)} if isinstance(wait, (int, float)) and wait > 0 else {}),
+            })
+
+        pol_perm = self._policy.decide('sec_edgar', 'filings')
+        if isinstance(pol_perm, Denied):
+            return FinToolOutcome({'status': 'denied', 'reason': pol_perm.reason, 'message': pol_perm.message})
+
+        sym = req.symbol.strip().upper()
+        events_limiter = self._sec_events_limiter or SecPacingLimiter.from_env()
+        try:
+            cik_norm = cik10(req.cik) if req.cik else cik10(
+                resolve_ticker_to_cik(sym, user_agent=self._sec_ua, limiter=events_limiter, policy=self._policy, transport=self._sec_transport)[0]
+            )
+            subs = fetch_company_submissions(
+                cik_norm,
+                user_agent=self._sec_ua,
+                max_pages=0,
+                limiter=events_limiter,
+                policy=self._policy,
+                transport=self._sec_transport,
+                stream_transport=self._sec_stream,
+                use_ttl_cache=True,
+            )
+            snap, _hit = load_or_fetch_company_snapshot(
+                symbol=sym,
+                cik=cik_norm,
+                user_agent=self._sec_ua,
+                limiter=events_limiter,
+                snapshot_cache=self._peer_snapshot_cache,
+                min_projection_version=3,
+                submissions=subs,
+                transport=self._sec_transport,
+                stream_transport=self._sec_stream,
+                policy=self._policy,
+            )
+            d_latest, d_prior = load_or_fetch_def14a_snapshots(
+                cik=cik_norm,
+                symbol=sym,
+                user_agent=self._sec_ua,
+                limiter=events_limiter,
+                def14a_cache=self._def14a_snapshot_cache,
+                submissions=subs,
+                as_of=req.as_of,
+                policy=self._policy,
+                transport=self._sec_transport,
+                stream_transport=self._sec_stream,
+            )
+        except SecPacingError as err:
+            return FinToolOutcome({'status': 'unavailable' if err.retryable else 'failed', 'reason': err.reason, 'message': err.message})
+
+        if snap is None:
+            return FinToolOutcome({'status': 'unavailable', 'reason': 'snapshot_unavailable', 'message': f'Could not load SEC snapshot for {sym}.'})
+
+        g_ledger = None
+        if self._guidance_ledger_cache is not None:
+            raw_gl = self._guidance_ledger_cache.get(f"gcl:{cik_norm}")
+            if isinstance(raw_gl, Mapping):
+                g_ledger = GuidanceCredibilityLedger.model_validate(raw_gl)
+
+        report = assemble_governance_audit_report(
+            snap=snap,
+            def14a_latest=d_latest,
+            def14a_prior=d_prior,
+            guidance_ledger=g_ledger,
+            as_of=req.as_of,
+        )
+        digest_lines = [
+            f"# {sym} Governance, Capital Allocation & Guidance Credibility Audit (V2.5 0-LLM)",
+            f"Summary: {report.headline_anchor_summary}",
+            f"Overall Light: {report.overall_light} | Rules: {report.rules_version} ({report.rules_sha256})",
+            f"Capital Allocation: 3Y Net Dilution={report.capital_allocation.net_diluted_share_change_3y_pct}% | SBC/FCF={report.capital_allocation.sbc_pct_of_fcf}% | Buyback/SBC={report.capital_allocation.buyback_to_sbc_ratio}x | FakeBuyback={report.capital_allocation.fake_buyback_flag}",
+            f"Incentives ({report.incentive_governance.disclosure_regime}): CSM={report.incentive_governance.company_selected_measure} | Tier={report.incentive_governance.highest_anchor_label} | DowngradedYoY={report.incentive_governance.anchor_downgraded_yoy} | MNPI={report.incentive_governance.mnpi_red_flag}",
+            f"Guidance Credibility: Profile={report.guidance_credibility.profile} | ScoredQ={report.guidance_credibility.scored_quarters} | BeatRate={report.guidance_credibility.beat_rate_pct}%",
+        ]
+        digest_text = "\n".join(digest_lines)
+        digest_sha = sha256(digest_text.encode('utf-8')).hexdigest()
+        ref_d = req.as_of or self._now().date()
+        pub_dt = datetime(ref_d.year, ref_d.month, ref_d.day, tzinfo=timezone.utc)
+        sub_url = f"https://data.sec.gov/submissions/CIK{cik_norm}.json"
+        prov_meta: dict[str, Any] = {
+            'provider': 'sec_edgar',
+            'endpoint': sub_url,
+            'credential_owner': 'platform_public_data',
+            'provider_response_sha256': digest_sha,
+            'retrieved_at': self._now().isoformat(),
+            'permissions': pol_perm.model_dump(mode='json'),
+        }
+        try:
+            source = self._persist(
+                SourceInput(
+                    title=f"{sym} Governance & Capital Allocation Audit",
+                    text=digest_text,
+                    url=sub_url,
+                    kind='official',
+                    published_at=pub_dt,
+                    permissions=self._source_permissions(pol_perm),
+                ),
+                retrieval_method='governance_capital_audit',
+                response_sha256=digest_sha,
+                response_content_type='text/plain',
+                provenance=prov_meta,
+            )
+        except (ValueError, ValidationError):
+            return FinToolOutcome({'status': 'denied', 'reason': 'source_not_storable'})
+
+        return FinToolOutcome(
+            {
+                'status': 'ok',
+                'source_id': source.source_id,
+                'title': source.title,
+                'report': report.model_dump(mode='json', exclude_none=True),
             },
             source=source,
         )

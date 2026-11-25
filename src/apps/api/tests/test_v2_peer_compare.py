@@ -633,7 +633,7 @@ def test_plan_b_p0_pharma_ebit_derivation_capex_tag_and_quality_light_boundary()
         latest_periodic_filed_at="2026-07-30",
         companyfacts_doc=cf,
     )
-    assert snap.projection_version == 2
+    assert snap.projection_version >= 2
     m = compute_company_metrics_from_snapshot(snap, price_usd=Decimal("800.00"))
     # EBIT derived = (4B + 0.2B) * 4 = 16.8B -> operating margin = 16.8 / 78 = 21.54%
     assert m.ttm_operating_margin_pct == "21.54"

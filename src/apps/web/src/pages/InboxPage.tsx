@@ -59,7 +59,9 @@ function InboxCard({
             ? "SEC 重大事件"
             : item.source_channel === "peer_relative"
               ? "同业估值偏离"
-              : "财报增量复核"}
+              : item.source_channel === "governance_audit"
+                ? "治理与资本配置"
+                : "财报增量复核"}
         </span>
         {item.disclosed_at ? <span className="inbox-date">{item.disclosed_at}</span> : null}
         <span className="grow" />

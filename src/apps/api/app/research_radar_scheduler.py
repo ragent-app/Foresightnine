@@ -30,9 +30,9 @@ from .research_thesis_ledger import (
     evaluate_metric_trigger,
 )
 
-WatchChannel = Literal["v1_events", "earnings_delta", "peer_relative"]
+WatchChannel = Literal["v1_events", "earnings_delta", "peer_relative", "governance_audit"]
 WatchHealthStatus = Literal["healthy", "degraded", "error"]
-InboxSourceChannel = Literal["v1_events", "earnings_delta", "peer_relative"]
+InboxSourceChannel = Literal["v1_events", "earnings_delta", "peer_relative", "governance_audit"]
 InboxImpactLevel = Literal["critical", "high", "medium", "low"]
 InboxDirection = Literal["positive", "negative", "mixed", "neutral"]
 InboxReviewState = Literal["unread", "read", "accepted", "dismissed_with_note"]
@@ -71,7 +71,9 @@ class FilingWatchSubscription(_FrozenRadarModel):
     symbol: str | None = None
     company_name: str | None = None
     enabled: bool = True
-    watched_channels: list[WatchChannel] = Field(default_factory=lambda: ["v1_events", "earnings_delta"])
+    watched_channels: list[WatchChannel] = Field(
+        default_factory=lambda: ["v1_events", "earnings_delta", "governance_audit"]
+    )
     peer_watch_config: PeerWatchConfig | None = None
     # Per-channel idempotency & failure isolation: accession -> {"v1"?: status, "earnings"?: status}
     seen_accessions: dict[str, dict[str, str]] = Field(default_factory=dict)
@@ -548,6 +550,95 @@ def evaluate_peer_relative_watch(
     return out
 
 
+def evaluate_governance_audit_watch(
+    *,
+    sub: FilingWatchSubscription,
+    existing_inbox: Sequence[ChangeInboxItem],
+    governance_audit_fn: Callable[[FilingWatchSubscription], Any],
+) -> list[ChangeInboxItem]:
+    """Pure 0-LLM V2.5 governance radar channel: fires only on high-value governance/capital-allocation alerts."""
+    from decimal import Decimal, InvalidOperation
+    from .research_governance_audit import load_v25_governance_rules
+
+    report = governance_audit_fn(sub)
+    if report is None:
+        return []
+    rules, _sha, _comp = load_v25_governance_rules()
+    cap = report.capital_allocation
+    inc = report.incentive_governance
+    prim = report.symbol
+    fy = (inc.latest_filed_at or _utcnow().date().isoformat())[:4]
+    by_thread = {it.event_thread_key: it for it in existing_inbox}
+
+    alerts: list[tuple[str, str, str, InboxImpactLevel]] = []
+    if inc.anchor_downgraded_yoy:
+        alerts.append((
+            "anchor_downgrade",
+            f"{prim} 高管激励考核锚降级（DEF 14A {inc.latest_filed_at or ''}）",
+            f"最新 DEF 14A 移除或降级了原有资本回报/现金流考核锚，当前最高考核档位为 {inc.highest_anchor_label}。",
+            "critical",
+        ))
+    if inc.mnpi_red_flag:
+        alerts.append((
+            "mnpi_flag",
+            f"{prim} 披露高管股权激励与 MNPI 时点重叠红灯",
+            "最新 DEF 14A 勾选了 MnpiDiscTimedForCompValFlag=true，提示存在重大未公开信息窗口期授予股权激励风险。",
+            "high",
+        ))
+    if cap.fake_buyback_flag:
+        alerts.append((
+            "fake_buyback",
+            f"{prim} 触发「假回购真稀释」红灯（3Y净股本 {cap.net_diluted_share_change_3y_pct}%）",
+            f"近财年回购支出 ${cap.buybacks_ttm_usd}，但 3 年复权稀释股本仍扩张 {cap.net_diluted_share_change_3y_pct}%，SBC/FCF 为 {cap.sbc_pct_of_fcf}%。",
+            "high",
+        ))
+    if cap.net_diluted_share_change_1y_pct and not cap.possible_ma_equity_issuance:
+        try:
+            sh1y = Decimal(cap.net_diluted_share_change_1y_pct)
+            if sh1y >= Decimal(str(rules.radar_alerts.net_dilution_yoy_worsen_pp)):
+                alerts.append((
+                    "net_dilution_worsen",
+                    f"{prim} 年度净稀释恶化 +{cap.net_diluted_share_change_1y_pct}%",
+                    f"单年复权稀释股本净增长 {cap.net_diluted_share_change_1y_pct}%（超过阈值 {rules.radar_alerts.net_dilution_yoy_worsen_pp}pp），SBC/FCF={cap.sbc_pct_of_fcf}%。",
+                    "medium",
+                ))
+        except (InvalidOperation, ValueError):
+            pass
+
+    out: list[ChangeInboxItem] = []
+    for kind, headline, summary, impact in alerts:
+        tkey = f"v25:{sub.cik}:{fy}:{kind}"
+        prev = by_thread.get(tkey)
+        if prev is not None and prev.review_state in ("accepted", "dismissed_with_note"):
+            continue
+        out.append(
+            ChangeInboxItem(
+                account_id=sub.account_id,
+                subscription_id=sub.subscription_id,
+                topic_id=sub.topic_id,
+                cik=sub.cik,
+                symbol=prim,
+                company_name=sub.company_name or report.company_name,
+                source_channel="governance_audit",
+                event_thread_key=tkey,
+                accession=inc.latest_accession,
+                headline=headline[:400],
+                summary=summary[:4000],
+                impact_level=impact,
+                direction="negative",
+                affected_pillars=["capital_allocation", "risk"],
+                scorecard_diff={
+                    "kind": kind,
+                    "headline_anchor_summary": report.headline_anchor_summary,
+                    "rules_version": report.rules_version,
+                    "def14a_accession": inc.latest_accession,
+                },
+                disclosed_at=inc.latest_filed_at or _utcnow().date().isoformat(),
+            )
+        )
+    return out
+
+
 # --------------------------------------------------------------------------- P1-B Staggered Two-Phase Sweep
 
 def run_p1b_radar_sweep(
@@ -564,6 +655,7 @@ def run_p1b_radar_sweep(
     save_inbox_item: Callable[[ChangeInboxItem], None],
     earnings_delta_fn: Callable[[FilingWatchSubscription, list[str], ThesisLedger | None], list[ChangeInboxItem]] | None = None,
     peer_compare_fn: Callable[[FilingWatchSubscription, list[str]], Any] | None = None,
+    governance_audit_fn: Callable[[FilingWatchSubscription], Any] | None = None,
     as_of: date | None = None,
 ) -> RadarSweepSummary:
     """Execute P1-B staggered radar sweep:
@@ -682,8 +774,36 @@ def run_p1b_radar_sweep(
         total_created += peer_created
         total_updated += peer_updated
 
+        # 1c. Default-on 0-LLM governance_audit channel (fires only on high-value DEF 14A / 10-K governance alerts)
+        gov_created = 0
+        gov_updated = 0
+        if governance_audit_fn is not None and "governance_audit" in sub.watched_channels:
+            try:
+                g_existing = list(existing_inbox_loader(sub.account_id))
+                gov_items = evaluate_governance_audit_watch(
+                    sub=sub,
+                    existing_inbox=g_existing,
+                    governance_audit_fn=governance_audit_fn,
+                )
+                for g_it in gov_items:
+                    persisted_g, is_new_g = upsert_inbox_item_with_folding(g_it, g_existing)
+                    if is_new_g:
+                        g_existing.append(persisted_g)
+                        save_inbox_item(persisted_g)
+                        gov_created += 1
+                        peer_last_sig = _utcnow()
+                    else:
+                        save_inbox_item(persisted_g)
+                        gov_updated += 1
+                        peer_last_sig = _utcnow()
+            except Exception as exc:
+                l1_health = "degraded" if l1_health == "healthy" else l1_health
+                l1_err = f"Governance audit watch failed: {type(exc).__name__}: {exc}"[:500]
+        total_created += gov_created
+        total_updated += gov_updated
+
         if not v1_cands and not new_earnings_accs:
-            if peer_created == 0 and peer_updated == 0:
+            if peer_created == 0 and peer_updated == 0 and gov_created == 0 and gov_updated == 0:
                 zero_change_count += 1
             if l1_health == "degraded":
                 degraded_count += 1
@@ -707,8 +827,8 @@ def run_p1b_radar_sweep(
                 l1_candidates_found=0,
                 earnings_candidates_found=0,
                 l2_executed=False,
-                inbox_items_created=peer_created,
-                inbox_items_updated=peer_updated,
+                inbox_items_created=peer_created + gov_created,
+                inbox_items_updated=peer_updated + gov_updated,
                 health_status=l1_health,
                 error=l1_err,
             )

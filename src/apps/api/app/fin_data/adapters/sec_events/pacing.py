@@ -574,6 +574,11 @@ def _page_overlaps_range(file_meta: Mapping[str, Any], min_date: date, max_date:
 _SAFE_SUBMISSIONS_FILE_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}\.json$")
 
 
+_SUBMISSIONS_TTL_LOCK = Lock()
+_SUBMISSIONS_TTL_CACHE: dict[str, tuple[float, RawSubmissionsResult]] = {}
+_SUBMISSIONS_TTL_SECONDS = 1200.0  # 20 minutes for lightweight fingerprint lookups
+
+
 def fetch_company_submissions(
     cik: str | int,
     *,
@@ -589,9 +594,23 @@ def fetch_company_submissions(
     cancel_event: Event | None = None,
     deadline: float | None = None,
     telemetry: PacingTelemetry | None = None,
+    use_ttl_cache: bool = False,
 ) -> RawSubmissionsResult:
     """Fetch raw SEC ``submissions`` JSON preserving ``items`` and paginating ``filings.files`` on demand."""
     target_cik = cik10(cik)
+    if (
+        use_ttl_cache
+        and max_pages == 0
+        and fetch_since_date is None
+        and as_of is None
+        and transport is None
+        and stream_transport is None
+    ):
+        now_m = monotonic()
+        with _SUBMISSIONS_TTL_LOCK:
+            cached = _SUBMISSIONS_TTL_CACHE.get(target_cik)
+            if cached is not None and (now_m - cached[0]) < _SUBMISSIONS_TTL_SECONDS:
+                return cached[1]
     root_url = f"https://data.sec.gov/submissions/CIK{target_cik}.json"
     doc, _sha = sec_get_json(
         root_url,
@@ -689,7 +708,7 @@ def fetch_company_submissions(
     raw_sic = doc.get("sic")
     sic = str(raw_sic).strip() if raw_sic is not None and str(raw_sic).strip() else None
 
-    return RawSubmissionsResult(
+    result = RawSubmissionsResult(
         cik=target_cik,
         company_name=company_name,
         tickers=tickers,
@@ -701,6 +720,19 @@ def fetch_company_submissions(
         earliest_loaded_date=earliest,
         gaps=gaps,
     )
+    if (
+        use_ttl_cache
+        and max_pages == 0
+        and fetch_since_date is None
+        and as_of is None
+        and transport is None
+        and stream_transport is None
+    ):
+        with _SUBMISSIONS_TTL_LOCK:
+            if len(_SUBMISSIONS_TTL_CACHE) > 512:
+                _SUBMISSIONS_TTL_CACHE.clear()
+            _SUBMISSIONS_TTL_CACHE[target_cik] = (monotonic(), result)
+    return result
 
 
 __all__ = [

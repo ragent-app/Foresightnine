@@ -26,6 +26,7 @@ from .research_fin_tools import (
     SecFilingSectionsRequest,
     SecFilingTablesRequest,
     SecFulltextSearchRequest,
+    GovernanceCapitalAuditRequest,
     PeerRelativeValuationRequest,
     SecMaterialEventsRequest,
     SecRedlineDiffRequest,
@@ -1139,6 +1140,17 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         compaction_role='bulk',
         is_fin_tool=True,
         activity_summarizer=_rationale_summarizer(_fin_summary_target('primary_symbol')),
+    ),
+    ToolSpec(
+        name='governance_capital_audit',
+        description=(
+            'Deterministically audit 3-5Y SBC net dilution (split-adjusted), buyback vs SBC quality, DEF 14A executive '
+            'incentive anchors (*_htm.xml Pay-vs-Performance & MNPI flags), and historical guidance credibility (0-LLM).'
+        ),
+        input_model=GovernanceCapitalAuditRequest,
+        compaction_role='bulk',
+        is_fin_tool=True,
+        activity_summarizer=_rationale_summarizer(_fin_summary_target('symbol')),
     ),
     ToolSpec(
         name='earnings_consensus',

@@ -1,0 +1,99 @@
+{
+  "rules_version": "v2.5.1",
+  "capital_allocation": {
+    "sbc_fcf_yellow_pct": 20.0,
+    "sbc_fcf_red_pct": 40.0,
+    "net_dilution_3y_yellow_pct": 2.0,
+    "net_dilution_3y_red_pct": 5.0,
+    "fake_buyback_min_buyback_usd": 100000000,
+    "fake_buyback_net_dilution_floor_pct": 0.0,
+    "ma_single_year_share_jump_pct": 10.0,
+    "split_ratio_tolerance_pct": 2.0
+  },
+  "incentive_governance": {
+    "founder_ceo_comp_exemption_usd": 2000000,
+    "pay_tsr_divergence_cap_jump_pct": 30.0,
+    "pay_tsr_divergence_tsr_drop_pct": -15.0,
+    "anchor_tiers": {
+      "capital_efficiency": {
+        "rank": 5,
+        "label": "资本回报锚（ROIC / ROCE / Economic Profit）",
+        "patterns": [
+          "\\broic\\b",
+          "\\broce\\b",
+          "\\broe\\b",
+          "\\brotce\\b",
+          "return on invested capital",
+          "return on capital",
+          "return on equity",
+          "economic profit",
+          "eva\\b"
+        ]
+      },
+      "per_share_cash_gaap": {
+        "rank": 4,
+        "label": "每股/自由现金流锚（FCF / GAAP EPS / OCF）",
+        "patterns": [
+          "free cash flow",
+          "\\bfcf\\b",
+          "operating cash flow",
+          "cash flow from operations",
+          "gaap eps",
+          "diluted eps",
+          "earnings per share",
+          "net income",
+          "operating income",
+          "operating margin",
+          "gross margin"
+        ]
+      },
+      "relative_tsr": {
+        "rank": 3,
+        "label": "相对股东回报锚（rTSR / TSR）",
+        "patterns": [
+          "relative tsr",
+          "\\brtsr\\b",
+          "total shareholder return",
+          "\\btsr\\b",
+          "stock price"
+        ]
+      },
+      "revenue_or_nongaap": {
+        "rank": 2,
+        "label": "规模/非GAAP利润锚（Revenue / Non-GAAP）",
+        "patterns": [
+          "non-gaap",
+          "revenue",
+          "net sales",
+          "\\bsales\\b",
+          "\\barr\\b",
+          "operating profit"
+        ]
+      },
+      "weak_adjusted": {
+        "rank": 1,
+        "label": "易注水口径锚（Adj. EBITDA / Billings / Bookings）",
+        "patterns": [
+          "adjusted ebitda",
+          "adj\\.?\\s*ebitda",
+          "\\bebitda\\b",
+          "billings",
+          "bookings",
+          "adjusted oibda",
+          "segment profit"
+        ]
+      }
+    }
+  },
+  "guidance_credibility": {
+    "min_quarters_for_rating": 3,
+    "inline_band_pct": 0.5,
+    "sandbagger_min_beat_rate_pct": 75.0,
+    "sandbagger_min_avg_surprise_pct": 3.0,
+    "high_credibility_min_beat_or_inline_pct": 75.0,
+    "miss_prone_min_miss_rate_pct": 40.0
+  },
+  "radar_alerts": {
+    "net_dilution_yoy_worsen_pp": 1.5
+  }
+}
