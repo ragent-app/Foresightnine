@@ -24,13 +24,15 @@ from .research_thesis_ledger import (
     ThesisClaim,
     ThesisLedger,
     ThesisPillar,
+    WatchTrigger,
     build_v1_thesis_context,
     confirm_thesis_ledger_version,
+    evaluate_metric_trigger,
 )
 
-WatchChannel = Literal["v1_events", "earnings_delta"]
+WatchChannel = Literal["v1_events", "earnings_delta", "peer_relative"]
 WatchHealthStatus = Literal["healthy", "degraded", "error"]
-InboxSourceChannel = Literal["v1_events", "earnings_delta"]
+InboxSourceChannel = Literal["v1_events", "earnings_delta", "peer_relative"]
 InboxImpactLevel = Literal["critical", "high", "medium", "low"]
 InboxDirection = Literal["positive", "negative", "mixed", "neutral"]
 InboxReviewState = Literal["unread", "read", "accepted", "dismissed_with_note"]
@@ -52,8 +54,15 @@ class _FrozenRadarModel(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
+class PeerWatchConfig(_FrozenRadarModel):
+    """Optional V2 relative-valuation watch configuration stored on a subscription."""
+
+    symbols: list[str] = Field(min_length=2, max_length=6)
+    triggers: list[WatchTrigger] = Field(default_factory=list)
+
+
 class FilingWatchSubscription(_FrozenRadarModel):
-    """Per-company SEC radar subscription shared across V1 events and earnings delta channels."""
+    """Per-company SEC radar subscription shared across V1 events, earnings delta, and peer relative channels."""
 
     subscription_id: str = Field(default_factory=lambda: _new_id("sub"), min_length=1, max_length=120)
     account_id: str = Field(min_length=1, max_length=120)
@@ -63,6 +72,7 @@ class FilingWatchSubscription(_FrozenRadarModel):
     company_name: str | None = None
     enabled: bool = True
     watched_channels: list[WatchChannel] = Field(default_factory=lambda: ["v1_events", "earnings_delta"])
+    peer_watch_config: PeerWatchConfig | None = None
     # Per-channel idempotency & failure isolation: accession -> {"v1"?: status, "earnings"?: status}
     seen_accessions: dict[str, dict[str, str]] = Field(default_factory=dict)
     failed_accessions: dict[str, dict[str, str]] = Field(default_factory=dict)
@@ -422,6 +432,122 @@ def summarize_radar_health(
     )
 
 
+def _peer_trigger_worsened_enough(
+    metric_key: str,
+    old_obs_str: str | None,
+    new_obs_str: str | None,
+    operator: str | None,
+) -> bool:
+    """Hysteresis gate: after a user reviews a peer alert in the same period, only re-alert on material worsening."""
+    from decimal import Decimal, InvalidOperation
+    if not old_obs_str or not new_obs_str:
+        return True
+    try:
+        old_v = Decimal(str(old_obs_str).strip())
+        new_v = Decimal(str(new_obs_str).strip())
+    except (InvalidOperation, ValueError):
+        return False
+    delta = new_v - old_v
+    if metric_key.endswith("_bps"):
+        # <= ceiling breached when obs > thr -> worsening means delta >= +250 bps; >= floor means delta <= -250 bps
+        return (delta >= Decimal("250")) if operator in ("<=", "<") else (delta <= Decimal("-250"))
+    if metric_key.endswith("_rank"):
+        return (delta >= Decimal("1")) if operator in ("<=", "<") else (delta <= Decimal("-1"))
+    return abs(delta) >= Decimal("2.0")
+
+
+def evaluate_peer_relative_watch(
+    *,
+    sub: FilingWatchSubscription,
+    ledger: ThesisLedger | None,
+    existing_inbox: Sequence[ChangeInboxItem],
+    peer_compare_fn: Callable[[FilingWatchSubscription, list[str]], Any],
+) -> list[ChangeInboxItem]:
+    """Pure 0-LLM evaluation of ``peer_*`` WatchTriggers with period-bucket folding & hysteresis."""
+    triggers: list[WatchTrigger] = []
+    seen_sig: set[tuple[str, str, str]] = set()
+
+    def _collect(trgs: Sequence[WatchTrigger]) -> None:
+        for t in trgs:
+            if t.kind != "metric_rule" or not t.metric_key or not t.metric_key.startswith("peer_"):
+                continue
+            sig = (t.metric_key, str(t.operator or ""), str(t.threshold_decimal or ""))
+            if sig not in seen_sig:
+                seen_sig.add(sig)
+                triggers.append(t)
+
+    if ledger is not None:
+        for c in ledger.claims:
+            _collect(c.watch_triggers)
+    if sub.peer_watch_config is not None:
+        _collect(sub.peer_watch_config.triggers)
+    if not triggers:
+        return []
+
+    sym = (sub.symbol or "").strip().upper()
+    peer_syms = list(sub.peer_watch_config.symbols) if sub.peer_watch_config else ([sym] if sym else [])
+    if not peer_syms:
+        return []
+
+    matrix = peer_compare_fn(sub, peer_syms)
+    if matrix is None or not getattr(matrix, "companies", None):
+        return []
+
+    observed = getattr(matrix, "primary_watch_trigger_metrics", None) or {}
+    period_fp = "|".join(f"{c.symbol}:{c.period_end_date or 'na'}" for c in matrix.companies)
+    prim = getattr(matrix, "primary_symbol", sym)
+    peers_only = [c.symbol for c in matrix.companies if c.symbol != prim]
+    compare_url = f"/compare?primary={prim}&peers={','.join(peers_only)}"
+    by_thread = {it.event_thread_key: it for it in existing_inbox}
+
+    out: list[ChangeInboxItem] = []
+    for trg in triggers:
+        ev = evaluate_metric_trigger(trg, observed)
+        if ev.last_eval_status != "triggered" or ev.last_observed_value is None:
+            continue
+        thread_key = f"peer_rel:{sub.cik}:{trg.metric_key}:{period_fp}"
+        prev = by_thread.get(thread_key)
+        if prev is not None and prev.review_state in ("accepted", "dismissed_with_note"):
+            prev_obs = (prev.scorecard_diff or {}).get("observed") if isinstance(prev.scorecard_diff, Mapping) else None
+            if not _peer_trigger_worsened_enough(str(trg.metric_key), prev_obs, ev.last_observed_value, trg.operator):
+                continue
+
+        headline = f"{prim} 同业相对坐标越界：{trg.metric_key} = {ev.last_observed_value}（健康边界 {trg.operator} {trg.threshold_decimal}）"
+        summary = (
+            f"{trg.description} 当前观测值 {ev.last_observed_value} 已突破设定边界（{trg.operator} {trg.threshold_decimal}）。"
+            f" 同业坐标：{getattr(matrix, 'primary_coordinate_summary', '')}"
+        )
+        out.append(
+            ChangeInboxItem(
+                account_id=sub.account_id,
+                subscription_id=sub.subscription_id,
+                topic_id=sub.topic_id,
+                cik=sub.cik,
+                symbol=prim,
+                company_name=sub.company_name,
+                source_channel="peer_relative",
+                event_thread_key=thread_key,
+                accession=None,
+                headline=headline[:400],
+                summary=summary[:4000],
+                impact_level="high",
+                direction="mixed",
+                affected_pillars=["valuation"],
+                scorecard_diff={
+                    "metric_key": trg.metric_key,
+                    "operator": trg.operator,
+                    "threshold": trg.threshold_decimal,
+                    "observed": ev.last_observed_value,
+                    "primary_coordinate_summary": getattr(matrix, "primary_coordinate_summary", ""),
+                    "compare_url": compare_url,
+                    "period_fingerprint": period_fp,
+                },
+                disclosed_at=_utcnow().date().isoformat(),
+            )
+        )
+    return out
+
+
 # --------------------------------------------------------------------------- P1-B Staggered Two-Phase Sweep
 
 def run_p1b_radar_sweep(
@@ -437,6 +563,7 @@ def run_p1b_radar_sweep(
     save_subscription: Callable[[FilingWatchSubscription], None],
     save_inbox_item: Callable[[ChangeInboxItem], None],
     earnings_delta_fn: Callable[[FilingWatchSubscription, list[str], ThesisLedger | None], list[ChangeInboxItem]] | None = None,
+    peer_compare_fn: Callable[[FilingWatchSubscription, list[str]], Any] | None = None,
     as_of: date | None = None,
 ) -> RadarSweepSummary:
     """Execute P1-B staggered radar sweep:
@@ -462,8 +589,10 @@ def run_p1b_radar_sweep(
     zero_change_count = 0
     degraded_count = 0
     error_count = 0
+    total_created = 0
+    total_updated = 0
 
-    # --- Phase 1: Fast 0-LLM L1 scan ---
+    # --- Phase 1: Fast 0-LLM L1 scan (+ 0-LLM peer_relative channel) ---
     for sub in subscriptions:
         if not sub.enabled:
             continue
@@ -522,8 +651,40 @@ def run_p1b_radar_sweep(
             else None
         )
 
+        # 1b. Optional 0-LLM peer_relative channel (runs even when V1/earnings have 0 new SEC filings)
+        peer_created = 0
+        peer_updated = 0
+        peer_last_sig = sub.last_signal_at
+        if peer_compare_fn is not None and "peer_relative" in sub.watched_channels:
+            try:
+                p_ledger = ledger_loader(sub)
+                p_existing = list(existing_inbox_loader(sub.account_id))
+                peer_items = evaluate_peer_relative_watch(
+                    sub=sub,
+                    ledger=p_ledger,
+                    existing_inbox=p_existing,
+                    peer_compare_fn=peer_compare_fn,
+                )
+                for p_it in peer_items:
+                    persisted_p, is_new_p = upsert_inbox_item_with_folding(p_it, p_existing)
+                    if is_new_p:
+                        p_existing.append(persisted_p)
+                        save_inbox_item(persisted_p)
+                        peer_created += 1
+                        peer_last_sig = _utcnow()
+                    else:
+                        save_inbox_item(persisted_p)
+                        peer_updated += 1
+                        peer_last_sig = _utcnow()
+            except Exception as exc:
+                l1_health = "degraded" if l1_health == "healthy" else l1_health
+                l1_err = f"Peer relative watch failed: {type(exc).__name__}: {exc}"[:500]
+        total_created += peer_created
+        total_updated += peer_updated
+
         if not v1_cands and not new_earnings_accs:
-            zero_change_count += 1
+            if peer_created == 0 and peer_updated == 0:
+                zero_change_count += 1
             if l1_health == "degraded":
                 degraded_count += 1
             updated_sub = sub.model_copy(
@@ -534,6 +695,7 @@ def run_p1b_radar_sweep(
                     "last_error": l1_err,
                     "last_checked_at": now,
                     "next_check_at": now + timedelta(minutes=sub.check_interval_minutes),
+                    "last_signal_at": peer_last_sig,
                     "updated_at": now,
                 }
             )
@@ -545,6 +707,8 @@ def run_p1b_radar_sweep(
                 l1_candidates_found=0,
                 earnings_candidates_found=0,
                 l2_executed=False,
+                inbox_items_created=peer_created,
+                inbox_items_updated=peer_updated,
                 health_status=l1_health,
                 error=l1_err,
             )
@@ -555,14 +719,13 @@ def run_p1b_radar_sweep(
             update={
                 "seen_accessions": new_seen,
                 "failed_accessions": new_failed,
+                "last_signal_at": peer_last_sig,
             }
         )
         l2_queue.append((prio, sub.last_checked_at or datetime.min.replace(tzinfo=timezone.utc), staged_sub, scan_res, source_texts, new_earnings_accs))
 
     # --- Phase 2: Priority-ordered L2 execution ---
     l2_queue.sort(key=lambda entry: (entry[0], entry[1]))
-    total_created = 0
-    total_updated = 0
 
     for prio, _last_chk, sub, scan_res, source_texts, new_earnings_accs in l2_queue:
         ledger = ledger_loader(sub)

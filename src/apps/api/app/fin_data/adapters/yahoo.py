@@ -42,7 +42,20 @@ USER_AGENT = "ForesightNine-research/1.0 (personal development use; daily bars)"
 PRICE_QUANT = Decimal("0.0001")
 ADJ_QUANT = Decimal("0.000001")
 MAX_EVENT_NOTES = 8
-EXCHANGE_CURRENCY = {"SSE": "CNY", "SZSE": "CNY", "BJSE": "CNY", "HKEX": "HKD"}
+EXCHANGE_CURRENCY = {"SSE": "CNY", "SZSE": "CNY", "BJSE": "CNY", "HKEX": "HKD", "NASDAQ": "USD", "NYSE": "USD"}
+
+
+class _UsCode:
+    """Lightweight US equity ticker adapter for ``YahooAdapter.bars()``."""
+
+    __slots__ = ("symbol", "exchange", "entity_id", "yahoo_symbol")
+
+    def __init__(self, symbol: str, exchange: str = "NASDAQ") -> None:
+        sym = symbol.strip().upper()
+        self.symbol = sym
+        self.exchange = exchange
+        self.entity_id = f"{exchange}:{sym}"
+        self.yahoo_symbol = sym.replace(".", "-")
 YAHOO_NOTE = ("Yahoo Finance daily bars (unofficial keyless endpoint, personal development use only; not exportable). "
               "Intraday bars are not provided. Trading holidays are not modelled, so a holiday simply has no bar.")
 
@@ -239,7 +252,9 @@ class YahooAdapter:
 
     def bars(self, code, *, interval: str = "1day", start: date | None = None, end: date | None = None,
              entity_id: str | None = None, include_partial: bool = False) -> ToolResult:
-        """``code``: a ``cn.CnCode`` or ``cn.HkCode`` (needs ``exchange``, ``entity_id``, ``yahoo_symbol``)."""
+        """``code``: a ``cn.CnCode``, ``cn.HkCode``, or US ticker string (auto-wrapped as ``_UsCode``)."""
+        if isinstance(code, str):
+            code = _UsCode(code)
         if interval not in ("1day", "1week", "1month"):
             return ToolResult.failure("failed", "intraday_not_supported",
                                       "Yahoo daily source provides daily, weekly and monthly bars only.")

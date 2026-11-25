@@ -190,3 +190,25 @@ export function usePeerAttributionBrief() {
       }),
   });
 }
+
+export interface PeerWatchRequest {
+  primary_symbol: string;
+  symbols: string[];
+  metric_key?: "peer_reverse_dcf_spread_bps" | "peer_revenue_yoy_rank" | "peer_fcf_margin_vs_median_pp";
+  operator?: "<=" | ">=" | "<" | ">";
+  threshold_decimal?: string;
+}
+
+export function usePeerRelativeWatch() {
+  const qc = useQueryClient();
+  return useMutation<{ subscription_id: string; symbol?: string | null }, Error, PeerWatchRequest>({
+    mutationFn: (body) =>
+      apiRequest<{ subscription_id: string; symbol?: string | null }>("/v2/research/peers/watch", {
+        method: "POST",
+        body,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["radar"] });
+    },
+  });
+}

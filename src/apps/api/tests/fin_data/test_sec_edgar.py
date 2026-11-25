@@ -201,7 +201,7 @@ def test_concept_path_all_tags_missing_is_empty_no_matching_lines_for_ifrs_fallb
     t = ConceptTransport("sec_companyfacts.json")
     r = adapter(t).statement_lines(320193, lines=["capex"], period="year", n=2)
     assert r.status == "empty" and r.reason == "no_matching_lines"
-    assert len(t.concept_urls) == 2  # both us-gaap capex tags tried
+    assert len(t.concept_urls) == 3  # all three us-gaap capex tags tried
 
 
 def test_concept_failure_other_than_404_is_returned_not_swallowed():

@@ -192,6 +192,7 @@ from .research_peer_compare import (
     generate_peer_attribution_brief,
     load_or_fetch_company_snapshot,
     load_peer_groups_config,
+    resolve_ticker_to_cik,
     suggest_peers_for_symbol,
 )
 from .research_earnings_export import ExportUnavailableError, MarkdownReportMode, export_earnings_dossier
@@ -235,6 +236,7 @@ from .research_thesis_ledger import (
     ThesisClaim,
     ThesisLedger,
     ThesisLedgerHistoryView,
+    WatchTrigger,
     build_thesis_draft_from_dossier,
     confirm_thesis_ledger_version,
     diff_thesis_ledgers,
@@ -250,6 +252,7 @@ from .research_radar_scheduler import (
     RadarSweepSummary,
     WatchChannel,
     apply_inbox_decision,
+    PeerWatchConfig,
     run_p1b_radar_sweep,
     summarize_radar_health,
 )
@@ -8137,6 +8140,54 @@ def radar_check_now_endpoint(
                 cancel_event=op_cancel,
             )
 
+        def _peer_compare_for_sub(sub: FilingWatchSubscription, peer_syms: list[str]) -> PeerComparisonMatrix | None:
+            prim = (sub.symbol or (peer_syms[0] if peer_syms else "")).strip().upper()
+            if not prim:
+                return None
+            pol = load_fin_data_policy()
+            ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
+            lim = SecPacingLimiter.from_env()
+            _cur, fpi_map = load_peer_groups_config()
+            syms = list(dict.fromkeys([prim, *(s.strip().upper() for s in peer_syms if s.strip())]))[:6]
+            if len(syms) < 2:
+                sugg = suggest_peers_for_symbol(prim)
+                syms = list(dict.fromkeys([prim, *sugg.recommended_peers]))[:5]
+            rows_out = []
+            for sym_i in syms:
+                try:
+                    snap, _h = load_or_fetch_company_snapshot(
+                        symbol=sym_i,
+                        user_agent=ua,
+                        limiter=lim,
+                        snapshot_cache=PEER_COMPANY_SNAPSHOTS,
+                        policy=pol,
+                    )
+                except Exception:
+                    continue
+                if snap is None:
+                    continue
+                p_dec, p_date, p_src = _resolve_peer_quote_usd(
+                    sym_i,
+                    account_id=account.account_id,
+                    as_of=request.as_of,
+                    cache_only=False,
+                    manual_prices=None,
+                    policy=pol,
+                )
+                rows_out.append(
+                    compute_company_metrics_from_snapshot(
+                        snap,
+                        price_usd=p_dec,
+                        price_as_of_date=p_date,
+                        price_source=p_src,
+                        as_of=request.as_of,
+                        fpi_meta=fpi_map.get(sym_i),
+                    )
+                )
+            if len(rows_out) < 2:
+                return None
+            return assemble_peer_matrix(primary_symbol=prim, rows=rows_out, as_of=request.as_of)
+
         summary = run_p1b_radar_sweep(
             subscriptions=target_subs,
             scan_fn=_scan_sub,
@@ -8145,6 +8196,7 @@ def radar_check_now_endpoint(
             existing_inbox_loader=_account_inbox_items,
             save_subscription=lambda s: WATCH_SUBSCRIPTIONS.put(s.subscription_id, s),
             save_inbox_item=lambda it: CHANGE_INBOX_ITEMS.put(it.inbox_item_id, it),
+            peer_compare_fn=_peer_compare_for_sub,
             as_of=request.as_of,
         )
         staged_sweeps[operation_id] = summary
@@ -8284,6 +8336,20 @@ class PeerCompareBriefApiRequest(BaseModel):
     slot_overrides: dict[str, str] | None = None
 
 
+_TD_RATE_LIMITED_UNTIL: float = 0.0
+
+
+def _peer_quote_ttl_seconds(now: datetime) -> int:
+    """15m during US trading hours (Mon-Fri 09:30-16:15 ET); 12h after-hours & weekends."""
+    from zoneinfo import ZoneInfo
+    et = now.astimezone(ZoneInfo("America/New_York"))
+    if et.weekday() < 5:
+        mins = et.hour * 60 + et.minute
+        if 9 * 60 + 30 <= mins <= 16 * 60 + 15:
+            return 900
+    return 43200
+
+
 def _resolve_peer_quote_usd(
     symbol: str,
     *,
@@ -8293,7 +8359,8 @@ def _resolve_peer_quote_usd(
     manual_prices: Mapping[str, str] | None,
     policy: Any,
 ) -> tuple[Decimal | None, str | None, str | None]:
-    """Fetch or cache closing price in USD (compact 10-day window, never 5000 bars)."""
+    """Fetch or cache closing price in USD (compact 10-day window, TD circuit breaker + Yahoo US fallback)."""
+    global _TD_RATE_LIMITED_UNTIL
     sym_u = symbol.strip().upper()
     if manual_prices:
         mp = manual_prices.get(sym_u) or manual_prices.get(symbol)
@@ -8306,7 +8373,8 @@ def _resolve_peer_quote_usd(
             except Exception:
                 pass
 
-    today = lifecycle_clock.now().date()
+    now_dt = lifecycle_clock.now()
+    today = now_dt.date()
     ref_date = as_of or today
     q_key = f"q:{sym_u}:{ref_date.isoformat()}"
     cached = PEER_QUOTE_CACHE.get(q_key)
@@ -8315,8 +8383,8 @@ def _resolve_peer_quote_usd(
         stale = False
         if as_of is None and isinstance(cached_at_raw, str):
             try:
-                age = (lifecycle_clock.now() - datetime.fromisoformat(cached_at_raw)).total_seconds()
-                stale = age > 900  # 15m TTL for live quotes; historical as_of is immutable
+                age = (now_dt - datetime.fromisoformat(cached_at_raw)).total_seconds()
+                stale = age > _peer_quote_ttl_seconds(now_dt)
             except Exception:
                 stale = True
         if not stale and cached.get("price"):
@@ -8334,7 +8402,7 @@ def _resolve_peer_quote_usd(
     src_name: str | None = None
 
     td_key, td_owner = _resolve_market_key(account_id, policy=policy)
-    if td_key and td_owner:
+    if td_key and td_owner and monotonic() >= _TD_RATE_LIMITED_UNTIL:
         try:
             from .fin_data.adapters.twelve_data import TwelveDataAdapter
             td = TwelveDataAdapter(
@@ -8346,6 +8414,8 @@ def _resolve_peer_quote_usd(
                 now_fn=lifecycle_clock.now,
             )
             res = td.bars(sym_u, interval="1day", start=start_d, end=ref_date)
+            if res.status == "rate_limited" or "rate" in str(res.reason or "").lower():
+                _TD_RATE_LIMITED_UNTIL = monotonic() + 60.0
             bars = [b for b in (res.data or ()) if getattr(b, "close", None) is not None]
             if bars:
                 latest = max(bars, key=lambda b: getattr(b, "ts_start", None) or datetime.min.replace(tzinfo=timezone.utc))
@@ -8619,12 +8689,118 @@ def generate_research_peer_brief(
             model_name = resolved_slots.for_slot("deep_reasoner").model
         except Exception:
             model_name = None
+    if not model_name:
+        def_prov = getattr(model_runner, "_default_provider", None)
+        model_name = (
+            getattr(def_prov, "model", None)
+            or getattr(getattr(def_prov, "config", None), "model", None)
+            or getattr(getattr(def_prov, "settings", None), "model", None)
+            or os.getenv("FORESIGHTNINE_RESEARCH_LLM_MODEL")
+            or os.getenv("FORESIGHTNINE_LLM_MODEL")
+            or getattr(def_prov, "name", None)
+        )
     return generate_peer_attribution_brief(
         matrix,
         runner=model_runner,
         slot="deep_reasoner",
-        model_name=model_name,
+        model_name=str(model_name) if model_name else None,
     )
+
+
+class PeerWatchCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    primary_symbol: str = Field(min_length=1, max_length=16)
+    symbols: list[str] = Field(min_length=2, max_length=6)
+    topic_id: str | None = None
+    metric_key: Literal["peer_reverse_dcf_spread_bps", "peer_revenue_yoy_rank", "peer_fcf_margin_vs_median_pp"] = "peer_reverse_dcf_spread_bps"
+    operator: Literal["<=", ">=", "<", ">"] = "<="
+    threshold_decimal: str = "1500"
+    description: str | None = Field(default=None, max_length=300)
+
+
+@app.post(
+    "/v2/research/peers/watch",
+    response_model=FilingWatchSubscription,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+    include_in_schema=False,
+)
+def upsert_peer_relative_watch(
+    request: PeerWatchCreateRequest,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> FilingWatchSubscription:
+    """Create or update a radar WatchSubscription with the 0-LLM ``peer_relative`` channel enabled."""
+    account = _authenticated_account(authorization)
+    prim = request.primary_symbol.strip().upper()
+    syms = list(dict.fromkeys([prim, *(s.strip().upper() for s in request.symbols if s.strip())]))[:6]
+    if len(syms) < 2:
+        raise ApiProblem(422, "invalid_request", "At least 2 unique symbols are required.")
+
+    # Resolve CIK from cached snapshot first, then SEC ticker map
+    cik_val: str | None = None
+    company_name: str | None = None
+    for _k, val in PEER_COMPANY_SNAPSHOTS.items():
+        if isinstance(val, Mapping) and str(val.get("symbol") or "").upper() == prim:
+            cik_val = str(val.get("cik") or "")
+            company_name = val.get("company_name")
+            break
+    if not cik_val:
+        ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
+        try:
+            cik_val, company_name = resolve_ticker_to_cik(prim, user_agent=ua, limiter=SecPacingLimiter.from_env(), policy=load_fin_data_policy())
+        except SecPacingError as err:
+            raise ApiProblem(422, err.reason, err.message) from err
+    cik_norm = cik10(cik_val)
+
+    desc = request.description or f"{prim} 相对估值监控（健康边界 {request.metric_key} {request.operator} {request.threshold_decimal}）"
+    new_trg = WatchTrigger(
+        kind="metric_rule",
+        description=desc,
+        metric_key=request.metric_key,
+        operator=request.operator,
+        threshold_decimal=request.threshold_decimal,
+    )
+
+    existing_sub: FilingWatchSubscription | None = None
+    for _k, s in WATCH_SUBSCRIPTIONS.items():
+        if isinstance(s, FilingWatchSubscription) and s.account_id == account.account_id and s.cik == cik_norm:
+            existing_sub = s
+            break
+
+    if existing_sub is not None:
+        channels = list(existing_sub.watched_channels)
+        if "peer_relative" not in channels:
+            channels.append("peer_relative")
+        prev_trgs = list(existing_sub.peer_watch_config.triggers) if existing_sub.peer_watch_config else []
+        prev_trgs = [t for t in prev_trgs if t.metric_key != new_trg.metric_key]
+        prev_trgs.append(new_trg)
+        updated = existing_sub.model_copy(
+            update={
+                "enabled": True,
+                "symbol": existing_sub.symbol or prim,
+                "company_name": existing_sub.company_name or company_name,
+                "topic_id": existing_sub.topic_id or request.topic_id,
+                "watched_channels": channels,
+                "peer_watch_config": PeerWatchConfig(symbols=syms, triggers=prev_trgs),
+                "updated_at": lifecycle_clock.now(),
+            }
+        )
+        WATCH_SUBSCRIPTIONS.put(updated.subscription_id, updated)
+        return updated
+
+    sub = FilingWatchSubscription(
+        account_id=account.account_id,
+        topic_id=request.topic_id,
+        cik=cik_norm,
+        symbol=prim,
+        company_name=company_name,
+        enabled=True,
+        watched_channels=["v1_events", "earnings_delta", "peer_relative"],
+        peer_watch_config=PeerWatchConfig(symbols=syms, triggers=[new_trg]),
+    )
+    WATCH_SUBSCRIPTIONS.put(sub.subscription_id, sub)
+    return sub
 
 
 def _operation_owner_subject(request: Request) -> str:

@@ -91,7 +91,7 @@ export interface FilingWatchSubscription {
   symbol?: string | null;
   company_name?: string | null;
   enabled: boolean;
-  watched_channels: ("v1_events" | "earnings_delta")[];
+  watched_channels: ("v1_events" | "earnings_delta" | "peer_relative")[];
   lookback_days: number;
   check_interval_minutes: number;
   last_checked_at?: string | null;
@@ -142,7 +142,7 @@ export interface ChangeInboxItem {
   cik: string;
   symbol?: string | null;
   company_name?: string | null;
-  source_channel: "v1_events" | "earnings_delta";
+  source_channel: "v1_events" | "earnings_delta" | "peer_relative";
   event_thread_key: string;
   accession?: string | null;
   superseded_by_accession?: string | null;

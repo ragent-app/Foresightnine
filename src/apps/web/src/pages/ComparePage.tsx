@@ -5,6 +5,7 @@ import {
   useDeletePeerGroup,
   usePeerAttributionBrief,
   usePeerCompare,
+  usePeerRelativeWatch,
   usePeerSuggest,
   type PeerCompanyMetrics,
   type PeerComparisonMatrix,
@@ -95,6 +96,7 @@ export function ComparePage() {
   const suggest = usePeerSuggest(primary);
   const compareMutation = usePeerCompare();
   const briefMutation = usePeerAttributionBrief();
+  const watchMutation = usePeerRelativeWatch();
   const createGroupMutation = useCreatePeerGroup();
   const deleteGroupMutation = useDeletePeerGroup();
 
@@ -324,6 +326,28 @@ export function ComparePage() {
             <div className="peer-summary-meta">
               <span>耗时 {matrix.elapsed_ms}ms</span>
               <span>缓存命中 {matrix.cache_hits}/{matrix.cache_hits + matrix.cache_misses}</span>
+              <button
+                type="button"
+                className="btn"
+                disabled={watchMutation.isPending}
+                onClick={() =>
+                  watchMutation.mutate(
+                    {
+                      primary_symbol: matrix.primary_symbol,
+                      symbols: matrix.companies.map((c) => c.symbol),
+                      metric_key: "peer_reverse_dcf_spread_bps",
+                      operator: "<=",
+                      threshold_decimal: "1500",
+                    },
+                    {
+                      onSuccess: () => showToast(`已为 ${matrix.primary_symbol} 开启同业估值偏离雷达监控（0 LLM）`),
+                      onError: (err) => showToast(`监控订阅失败：${err.message}`, { tone: "error" }),
+                    },
+                  )
+                }
+              >
+                {watchMutation.isPending ? "订阅中…" : "监控相对估值偏离"}
+              </button>
               <button
                 type="button"
                 className="btn primary"

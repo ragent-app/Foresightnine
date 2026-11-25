@@ -108,14 +108,17 @@ def resolve_ticker_to_cik(
         raise SecPacingError("ticker_not_found", f"Ticker {symbol!r} not found in SEC company_tickers.json.", retryable=False)
     return hit
 
+_CURRENT_PROJECTION_VERSION = 2
+
 _V2_PROJECTION_LINES: tuple[str, ...] = (
     "revenue",
     "cost_of_revenue",
     "gross_profit",
     "operating_income",
+    "interest_expense",
     "net_income",
     "income_tax",
-    "pretax_income",
+    "profit_before_tax",
     "shares_diluted",
     "shares_basic",
     "cash",
@@ -229,6 +232,7 @@ class PeerCompanySnapshot(_FrozenPeerModel):
     latest_periodic_filed_at: str | None = None
     taxonomy: str = "us-gaap"
     currency: str = "USD"
+    projection_version: int = 1
     # line_name -> tag -> unit -> list[ProjectedFactRow]
     facts_by_line: dict[str, dict[str, dict[str, list[dict[str, Any]]]]] = Field(default_factory=dict)
     dei_shares_outstanding: list[dict[str, Any]] = Field(default_factory=list)
@@ -482,6 +486,7 @@ def project_companyfacts_to_snapshot(
         latest_periodic_filed_at=latest_periodic_filed_at,
         taxonomy=taxonomy,
         currency=detected_currency,
+        projection_version=_CURRENT_PROJECTION_VERSION,
         facts_by_line=facts_by_line,
         dei_shares_outstanding=dei_rows,
     )
@@ -550,7 +555,9 @@ def load_or_fetch_company_snapshot(
         cached_raw = snapshot_cache.get(cache_key)
         if isinstance(cached_raw, Mapping):
             cached_snap = PeerCompanySnapshot.model_validate(cached_raw)
-            if latest_acc is None or cached_snap.latest_periodic_accession == latest_acc:
+            if cached_snap.projection_version >= _CURRENT_PROJECTION_VERSION and (
+                latest_acc is None or cached_snap.latest_periodic_accession == latest_acc
+            ):
                 return cached_snap, True
 
     # Gate 2: per-CIK Singleflight + BoundedSemaphore(2) streaming companyfacts parse
@@ -560,7 +567,9 @@ def load_or_fetch_company_snapshot(
             cached_raw = snapshot_cache.get(cache_key)
             if isinstance(cached_raw, Mapping):
                 cached_snap = PeerCompanySnapshot.model_validate(cached_raw)
-                if latest_acc is None or cached_snap.latest_periodic_accession == latest_acc:
+                if cached_snap.projection_version >= _CURRENT_PROJECTION_VERSION and (
+                    latest_acc is None or cached_snap.latest_periodic_accession == latest_acc
+                ):
                     return cached_snap, True
 
         url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik_norm}.json"
@@ -703,12 +712,14 @@ def compute_company_metrics_from_snapshot(
     gp_y = _sel("gross_profit", "year", 4)
     oi_q = _sel("operating_income", "quarter", 10)
     oi_y = _sel("operating_income", "year", 4)
+    int_q = _sel("interest_expense", "quarter", 10)
+    int_y = _sel("interest_expense", "year", 4)
     ni_q = _sel("net_income", "quarter", 10)
     ni_y = _sel("net_income", "year", 4)
     tax_q = _sel("income_tax", "quarter", 10)
     tax_y = _sel("income_tax", "year", 4)
-    pt_q = _sel("pretax_income", "quarter", 10)
-    pt_y = _sel("pretax_income", "year", 4)
+    pt_q = _sel("profit_before_tax", "quarter", 10)
+    pt_y = _sel("profit_before_tax", "year", 4)
     ocf_q = _sel("operating_cash_flow", "quarter", 10)
     ocf_y = _sel("operating_cash_flow", "year", 4)
     capex_q = _sel("capex", "quarter", 10)
@@ -729,6 +740,7 @@ def compute_company_metrics_from_snapshot(
             if ttm_cogs is not None:
                 ttm_gp = ttm_rev - ttm_cogs
         ttm_oi, _ = _compute_ttm_from_quarters(oi_q)
+        ttm_int, _ = _compute_ttm_from_quarters(int_q)
         ttm_ni, _ = _compute_ttm_from_quarters(ni_q)
         ttm_tax, _ = _compute_ttm_from_quarters(tax_q)
         ttm_pt, _ = _compute_ttm_from_quarters(pt_q)
@@ -750,6 +762,7 @@ def compute_company_metrics_from_snapshot(
         if ttm_gp is None and cogs_y:
             ttm_gp = ttm_rev - cogs_y[0].value
         ttm_oi = oi_y[0].value if oi_y else None
+        ttm_int = int_y[0].value if int_y else None
         ttm_ni = ni_y[0].value if ni_y else None
         ttm_tax = tax_y[0].value if tax_y else None
         ttm_pt = pt_y[0].value if pt_y else None
@@ -763,7 +776,7 @@ def compute_company_metrics_from_snapshot(
     else:
         period_basis = "partial"
         period_end = None
-        ttm_gp = ttm_oi = ttm_ni = ttm_tax = ttm_pt = ttm_ocf = ttm_capex = ttm_sbc = None
+        ttm_gp = ttm_oi = ttm_int = ttm_ni = ttm_tax = ttm_pt = ttm_ocf = ttm_capex = ttm_sbc = None
         ttm_rev_yoy = latest_q_rev_yoy = None
         non_comp_reasons.append("missing_revenue_xbrl")
 
@@ -821,6 +834,20 @@ def compute_company_metrics_from_snapshot(
     equity_v = eq_rows[0].value if eq_rows else None
     nci_v = nci_rows[0].value if nci_rows else Decimal(0)
 
+    # Derive EBIT = profit_before_tax + interest_expense when OperatingIncomeLoss is omitted (common in US pharma)
+    if not sic_gate.is_gated and ttm_oi is None and ttm_pt is not None:
+        if ttm_int is not None:
+            ttm_oi = ttm_pt + abs(ttm_int)
+            notes.append("operating_income derived from profit_before_tax + interest_expense.")
+        elif total_debt is not None and total_debt == 0:
+            ttm_oi = ttm_pt
+            notes.append("operating_income derived from profit_before_tax (debt-free).")
+        else:
+            ttm_oi = ttm_pt
+            notes.append("EBIT approximated by profit_before_tax (interest_expense unavailable).")
+        if op_margin is None and ttm_oi is not None and ttm_rev and ttm_rev > 0:
+            op_margin = ttm_oi / ttm_rev * Decimal(100)
+
     # Pure ROIC with [0%, 35%] tax clamp and Invested Capital <= 0 guard
     ttm_roic: Decimal | None = None
     if not sic_gate.is_gated and ttm_oi is not None and total_debt is not None and equity_v is not None and total_cash is not None:
@@ -848,12 +875,21 @@ def compute_company_metrics_from_snapshot(
         if ttm_fcf is not None and ttm_fcf <= 0:
             red_flags += 1
             quality_notes.append("TTM Free Cash Flow is negative.")
-        if ocf_to_ni is not None and ocf_to_ni < Decimal("0.70"):
+        if ocf_to_ni is not None and ocf_to_ni < Decimal("0.50"):
             red_flags += 1
-            quality_notes.append(f"OCF/NI weak at {ocf_to_ni:.2f}x (< 0.70x).")
+            quality_notes.append(f"OCF/NI severely weak at {ocf_to_ni:.3f}x (< 0.50x).")
+        elif ocf_to_ni is not None and ocf_to_ni < Decimal("0.70"):
+            if fcf_margin is not None and fcf_margin >= Decimal("15"):
+                yellow_flags += 1
+                quality_notes.append(
+                    f"OCF/NI {ocf_to_ni:.3f}x (< 0.70x), cushioned by strong {fcf_margin:.1f}% FCF margin."
+                )
+            else:
+                red_flags += 1
+                quality_notes.append(f"OCF/NI weak at {ocf_to_ni:.3f}x (< 0.70x).")
         elif ocf_to_ni is not None and ocf_to_ni < Decimal("0.90"):
             yellow_flags += 1
-            quality_notes.append(f"OCF/NI moderate at {ocf_to_ni:.2f}x (< 0.90x).")
+            quality_notes.append(f"OCF/NI moderate at {ocf_to_ni:.3f}x (< 0.90x).")
         if sbc_pct_fcf is not None and sbc_pct_fcf > Decimal("35"):
             yellow_flags += 1
             quality_notes.append(f"SBC consumes {sbc_pct_fcf:.1f}% of TTM FCF.")

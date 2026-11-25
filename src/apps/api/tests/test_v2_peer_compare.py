@@ -586,6 +586,136 @@ def test_v2_api_suggest_groups_compare_and_brief_end_to_end(monkeypatch: Any) ->
         # 5. Delete group
         deleted = client.delete(f"/v2/research/peers/groups/{gid}", headers=headers)
         assert deleted.status_code == 200 and deleted.json()["deleted"] is True
+
+        # 6. Peer relative watch subscription
+        watch_res = client.post(
+            "/v2/research/peers/watch",
+            headers=headers,
+            json={
+                "primary_symbol": "NVDA",
+                "symbols": ["NVDA", "AMD"],
+                "metric_key": "peer_reverse_dcf_spread_bps",
+                "operator": "<=",
+                "threshold_decimal": "1500",
+            },
+        )
+        assert watch_res.status_code == 200, watch_res.text
+        wbody = watch_res.json()
+        assert "peer_relative" in wbody["watched_channels"]
+        assert wbody["peer_watch_config"]["symbols"] == ["NVDA", "AMD"]
     finally:
         api_main.app.state.peer_compare_hooks = None
+
+
+def test_plan_b_p0_pharma_ebit_derivation_capex_tag_and_quality_light_boundary() -> None:
+    """Verify profit_before_tax + interest_expense EBIT derivation, LLY CapEx tag, and 0.697x OCF/NI yellow tier."""
+    rev = _standard_8q(15_000_000_000, growth=1.30)
+    # No OperatingIncomeLoss; only profit_before_tax (4B/q) + interest_expense (0.2B/q) + tax (0.6B/q -> 15% eff tax)
+    pt = [(s, e, 4_000_000_000, f) for s, e, _, f in rev]
+    int_exp = [(s, e, 200_000_000, f) for s, e, _, f in rev]
+    tax = [(s, e, 600_000_000, f) for s, e, _, f in rev]
+    ni = [(s, e, 3_400_000_000, f) for s, e, _, f in rev]
+    # OCF/NI = 2.37B / 3.4B = 0.697x (< 0.70x), CapEx = 0.2B/q -> FCF = 2.17B/q (~11.1% or >15% if rev lower)
+    ocf = [(s, e, 2_370_000_000, f) for s, e, _, f in rev]
+    capex_other = [(s, e, 100_000_000, f) for s, e, _, f in rev]
+
+    cf = _make_us_companyfacts(rev_q=rev, oi_q=None, ni_q=ni, tax_q=tax, pt_q=pt, ocf_q=ocf, capex_q=None)
+    cf["facts"]["us-gaap"]["InterestExpense"] = {"units": {"USD": _q_rows(int_exp)}}
+    cf["facts"]["us-gaap"]["PaymentsToAcquireOtherPropertyPlantAndEquipment"] = {"units": {"USD": _q_rows(capex_other)}}
+
+    snap = project_companyfacts_to_snapshot(
+        cik="0000059478",
+        symbol="LLY",
+        company_name="Eli Lilly",
+        sic="2834",
+        sic_description="Pharmaceuticals",
+        latest_periodic_accession="acc-lly",
+        latest_periodic_filed_at="2026-07-30",
+        companyfacts_doc=cf,
+    )
+    assert snap.projection_version == 2
+    m = compute_company_metrics_from_snapshot(snap, price_usd=Decimal("800.00"))
+    # EBIT derived = (4B + 0.2B) * 4 = 16.8B -> operating margin = 16.8 / 78 = 21.54%
+    assert m.ttm_operating_margin_pct == "21.54"
+    assert any("profit_before_tax + interest_expense" in n for n in m.notes)
+    # ROIC uses 15% real eff tax (NOT 21% default!)
+    assert m.ttm_roic_pct is not None
+    assert not any("21% statutory" in n for n in m.notes)
+    # LLY CapEx tag picked up -> FCF computed
+    assert m.ttm_fcf_margin_pct is not None
+
+    # High-FCF-margin (40%) + 0.697x OCF/NI -> yellow (NOT red) with 3-decimal display
+    rev_nv = _standard_8q(10_000_000_000, growth=1.50)  # 60B TTM
+    ni_nv = [(s, e, 10_000_000_000, f) for s, e, _, f in rev_nv]  # 40B TTM
+    ocf_nv = [(s, e, 6_970_000_000, f) for s, e, _, f in rev_nv]  # 27.88B -> 0.697x NI
+    cap_nv = [(s, e, 500_000_000, f) for s, e, _, f in rev_nv]    # 2B -> FCF 25.88B (43.1% margin)
+    cf_nv = _make_us_companyfacts(rev_q=rev_nv, oi_q=ni_nv, ni_q=ni_nv, ocf_q=ocf_nv, capex_q=cap_nv)
+    snap_nv = project_companyfacts_to_snapshot(
+        cik="0001045810", symbol="NVDA", company_name="NVIDIA", sic="3674", sic_description="Semis",
+        latest_periodic_accession="acc-nv", latest_periodic_filed_at="2026-07-30", companyfacts_doc=cf_nv,
+    )
+    m_nv = compute_company_metrics_from_snapshot(snap_nv, price_usd=Decimal("150.00"))
+    assert m_nv.quality_light == "yellow"
+    assert any("0.697x" in n for n in m_nv.quality_notes)
+
+
+def test_plan_b_p2_peer_relative_radar_trigger_and_hysteresis() -> None:
+    """Verify 0-LLM peer_relative watch trigger fires on breach and respects hysteresis after user review."""
+    from app.fin_data.adapters.yahoo import _UsCode
+    from app.research_radar_scheduler import (
+        FilingWatchSubscription,
+        PeerWatchConfig,
+        evaluate_peer_relative_watch,
+    )
+    from app.research_thesis_ledger import WatchTrigger
+
+    assert _UsCode("brk.b").yahoo_symbol == "BRK-B"
+
+    sub = FilingWatchSubscription(
+        account_id="acc_1",
+        cik="0001045810",
+        symbol="NVDA",
+        watched_channels=["peer_relative"],
+        peer_watch_config=PeerWatchConfig(
+            symbols=["NVDA", "AMD"],
+            triggers=[
+                WatchTrigger(
+                    kind="metric_rule",
+                    description="Reverse-DCF spread ceiling",
+                    metric_key="peer_reverse_dcf_spread_bps",
+                    operator="<=",
+                    threshold_decimal="1500",
+                )
+            ],
+        ),
+    )
+
+    def _fake_matrix(spread_bps: str) -> Any:
+        return SimpleNamespace(
+            primary_symbol="NVDA",
+            primary_coordinate_summary=f"Reverse-DCF +{spread_bps} bps",
+            primary_watch_trigger_metrics={"peer_reverse_dcf_spread_bps": spread_bps},
+            companies=[
+                SimpleNamespace(symbol="NVDA", period_end_date="2026-07-26"),
+                SimpleNamespace(symbol="AMD", period_end_date="2026-09-26"),
+            ],
+        )
+
+    # 1. Within healthy bound (1200 <= 1500) -> no alert
+    assert evaluate_peer_relative_watch(sub=sub, ledger=None, existing_inbox=[], peer_compare_fn=lambda _s, _p: _fake_matrix("1200")) == []
+
+    # 2. Breaches bound (1800 > 1500) -> fires 1 peer_relative inbox item
+    items = evaluate_peer_relative_watch(sub=sub, ledger=None, existing_inbox=[], peer_compare_fn=lambda _s, _p: _fake_matrix("1800"))
+    assert len(items) == 1
+    assert items[0].source_channel == "peer_relative"
+    assert items[0].scorecard_diff["compare_url"] == "/compare?primary=NVDA&peers=AMD"
+
+    # 3. After user dismisses, small wiggle (+100 bps to 1900) stays quiet (hysteresis < 250 bps)
+    reviewed = items[0].model_copy(update={"review_state": "dismissed_with_note"})
+    assert evaluate_peer_relative_watch(sub=sub, ledger=None, existing_inbox=[reviewed], peer_compare_fn=lambda _s, _p: _fake_matrix("1900")) == []
+
+    # 4. Material worsening (+300 bps to 2100 >= 1800 + 250) re-alerts
+    re_items = evaluate_peer_relative_watch(sub=sub, ledger=None, existing_inbox=[reviewed], peer_compare_fn=lambda _s, _p: _fake_matrix("2100"))
+    assert len(re_items) == 1
+
 

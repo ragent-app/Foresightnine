@@ -55,7 +55,11 @@ function InboxCard({
           {IMPACT_LABELS[item.impact_level] ?? item.impact_level}
         </span>
         <span className="inbox-channel">
-          {item.source_channel === "v1_events" ? "SEC 重大事件" : "财报增量复核"}
+          {item.source_channel === "v1_events"
+            ? "SEC 重大事件"
+            : item.source_channel === "peer_relative"
+              ? "同业估值偏离"
+              : "财报增量复核"}
         </span>
         {item.disclosed_at ? <span className="inbox-date">{item.disclosed_at}</span> : null}
         <span className="grow" />
@@ -67,6 +71,13 @@ function InboxCard({
 
       <h3 className="inbox-headline">{item.headline}</h3>
       <p className="inbox-summary">{item.summary}</p>
+      {item.source_channel === "peer_relative" && typeof item.scorecard_diff?.compare_url === "string" ? (
+        <div className="inbox-quotes-wrap">
+          <Link className="peer-coord-link" to={String(item.scorecard_diff.compare_url)}>
+            打开同业估值矩阵 →
+          </Link>
+        </div>
+      ) : null}
 
       {item.affected_pillars.length > 0 ? (
         <div className="inbox-pillars">

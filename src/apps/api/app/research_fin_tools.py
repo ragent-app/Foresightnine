@@ -1702,6 +1702,18 @@ class FinDataToolbox:
                         p_src = 'twelve_data'
                 except Exception:
                     p_dec = None
+            if p_dec is None:
+                try:
+                    res = self._yahoo().bars(sym, interval='1day', start=start_d, end=ref_date)
+                    bars = [b for b in (res.data or ()) if getattr(b, 'close', None) is not None]
+                    if bars:
+                        latest = max(bars, key=lambda b: getattr(b, 'ts_start', None) or datetime.min.replace(tzinfo=timezone.utc))
+                        p_dec = Decimal(str(latest.close))
+                        ts_attr = getattr(latest, 'ts_start', None)
+                        p_date = ts_attr.date().isoformat() if isinstance(ts_attr, datetime) else ref_date.isoformat()
+                        p_src = 'yahoo'
+                except Exception:
+                    p_dec = None
             rows.append(
                 compute_company_metrics_from_snapshot(
                     snap,
