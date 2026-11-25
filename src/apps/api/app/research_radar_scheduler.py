@@ -1148,10 +1148,12 @@ def run_p1b_radar_sweep(
                         if not new_failed[pf.accession]:
                             new_failed.pop(pf.accession, None)
             except Exception as exc:
-                sub_health = "degraded" if sub_health == "healthy" else sub_health
-                sub_err = f"Call commitment verify failed: {type(exc).__name__}: {exc}"[:500]
+                reason_code = "xbrl_indexing_lag" if "xbrl_indexing_lag" in str(exc) else type(exc).__name__
+                if reason_code != "xbrl_indexing_lag":
+                    sub_health = "degraded" if sub_health == "healthy" else sub_health
+                    sub_err = f"Call commitment verify failed: {type(exc).__name__}: {exc}"[:500]
                 for pf in new_periodic_filings:
-                    new_failed.setdefault(pf.accession, {})["call_verify"] = type(exc).__name__
+                    new_failed.setdefault(pf.accession, {})["call_verify"] = reason_code
 
         if sub_health == "degraded":
             degraded_count += 1

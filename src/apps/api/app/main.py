@@ -499,8 +499,10 @@ async def lifespan(_app: FastAPI):
     radar_bg_task: asyncio.Task[None] | None = None
     if _radar_bg_sweep_enabled():
         radar_interval = _radar_bg_sweep_interval_seconds()
+        _radar_logger = logging.getLogger(__name__)
 
         async def radar_bg_loop() -> None:
+            _radar_logger.info("radar_bg_loop_started interval_s=%.0f", radar_interval)
             # Stagger initial wakeup slightly so API readiness is unaffected
             try:
                 await asyncio.wait_for(stopped.wait(), timeout=min(60.0, radar_interval))
@@ -508,15 +510,45 @@ async def lifespan(_app: FastAPI):
                 pass
             while not stopped.is_set():
                 try:
-                    await asyncio.to_thread(_run_background_radar_sweep_once)
+                    t0 = monotonic()
+                    cnt = await asyncio.to_thread(_run_background_radar_sweep_once)
+                    _radar_logger.info(
+                        "radar_bg_sweep_tick processed=%d elapsed_ms=%d",
+                        cnt,
+                        int((monotonic() - t0) * 1000),
+                    )
                 except Exception:
-                    logging.getLogger(__name__).exception("Background radar sweep failed")
+                    _radar_logger.exception("Background radar sweep failed")
                 try:
                     await asyncio.wait_for(stopped.wait(), timeout=radar_interval)
                 except TimeoutError:
                     pass
 
         radar_bg_task = asyncio.create_task(radar_bg_loop())
+
+    blob_prune_task: asyncio.Task[None] | None = None
+    if not (os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("FORESIGHTNINE_ENV", "").strip().lower() == "test"):
+        prune_interval = max(
+            300.0,
+            float(os.environ.get("FORESIGHTNINE_DOCUMENT_STORE_PRUNE_INTERVAL_SECONDS", "21600") or "21600"),
+        )
+
+        async def blob_prune_loop() -> None:
+            try:
+                await asyncio.wait_for(stopped.wait(), timeout=120.0)
+            except TimeoutError:
+                pass
+            while not stopped.is_set():
+                try:
+                    await asyncio.to_thread(_maybe_prune_document_blob_store)
+                except Exception:
+                    logging.getLogger(__name__).exception("Background blob store prune failed")
+                try:
+                    await asyncio.wait_for(stopped.wait(), timeout=prune_interval)
+                except TimeoutError:
+                    pass
+
+        blob_prune_task = asyncio.create_task(blob_prune_loop())
 
     try:
         yield
@@ -525,6 +557,8 @@ async def lifespan(_app: FastAPI):
         await supervisor
         if radar_bg_task is not None:
             await radar_bg_task
+        if blob_prune_task is not None:
+            await blob_prune_task
 
 
 app = FastAPI(
@@ -1019,12 +1053,12 @@ def reset_state() -> None:
     CHALLENGE_OPERATION_IDS.clear()
 
 
-def _claim_maintenance_lease(task_name: str, *, ttl_seconds: float = 300.0, min_interval_seconds: float = 0.0) -> bool:
-    """Atomically claim a short-lived maintenance lease via ``RUNTIME_MAINTENANCE_LEASES``."""
+def _claim_maintenance_lease(task_name: str, *, ttl_seconds: float = 300.0, min_interval_seconds: float = 0.0) -> str | None:
+    """Atomically claim a short-lived maintenance lease via ``RUNTIME_MAINTENANCE_LEASES``; returns ``holder_id`` or ``None``."""
     lease_key = f"lease:{task_name}"
     holder_id = f"pid:{os.getpid()}:{uuid4().hex[:8]}"
 
-    def _try_claim() -> bool:
+    def _try_claim() -> str | None:
         now_dt = lifecycle_clock.now()
         now_ts = now_dt.timestamp()
         existing = RUNTIME_MAINTENANCE_LEASES.get(lease_key)
@@ -1032,9 +1066,9 @@ def _claim_maintenance_lease(task_name: str, *, ttl_seconds: float = 300.0, min_
             exp = float(existing.get("lease_expires_ts") or 0.0)
             last_done = float(existing.get("last_completed_ts") or 0.0)
             if exp > now_ts:
-                return False
+                return None
             if min_interval_seconds > 0 and last_done > 0 and (now_ts - last_done) < min_interval_seconds:
-                return False
+                return None
         RUNTIME_MAINTENANCE_LEASES.put(
             lease_key,
             {
@@ -1043,24 +1077,65 @@ def _claim_maintenance_lease(task_name: str, *, ttl_seconds: float = 300.0, min_
                 "claimed_at": now_dt.isoformat(),
                 "lease_expires_ts": now_ts + max(30.0, float(ttl_seconds)),
                 "last_completed_ts": existing.get("last_completed_ts") if isinstance(existing, Mapping) else None,
+                "last_completed_at": existing.get("last_completed_at") if isinstance(existing, Mapping) else None,
+                "last_processed_count": existing.get("last_processed_count") if isinstance(existing, Mapping) else None,
+                "last_inbox_created": existing.get("last_inbox_created") if isinstance(existing, Mapping) else None,
+                "last_duration_ms": existing.get("last_duration_ms") if isinstance(existing, Mapping) else None,
+                "last_error": existing.get("last_error") if isinstance(existing, Mapping) else None,
             },
         )
+        return holder_id
+
+    claimed = RUNTIME_MAINTENANCE_LEASES.with_advisory_lock(f"maint:{task_name}", _try_claim)
+    return str(claimed) if claimed else None
+
+
+def _renew_maintenance_lease(task_name: str, holder_id: str, *, ttl_seconds: float = 300.0) -> bool:
+    """Renew an active maintenance lease only if ``holder_id`` still owns it."""
+    lease_key = f"lease:{task_name}"
+
+    def _renew() -> bool:
+        now_dt = lifecycle_clock.now()
+        existing = RUNTIME_MAINTENANCE_LEASES.get(lease_key)
+        if not isinstance(existing, Mapping) or existing.get("holder_id") != holder_id:
+            return False
+        updated = dict(existing)
+        updated["lease_expires_ts"] = now_dt.timestamp() + max(30.0, float(ttl_seconds))
+        updated["renewed_at"] = now_dt.isoformat()
+        RUNTIME_MAINTENANCE_LEASES.put(lease_key, updated)
         return True
 
-    return bool(RUNTIME_MAINTENANCE_LEASES.with_advisory_lock(f"maint:{task_name}", _try_claim))
+    try:
+        return bool(RUNTIME_MAINTENANCE_LEASES.with_advisory_lock(f"maint:{task_name}", _renew))
+    except Exception:
+        return False
 
 
-def _release_maintenance_lease(task_name: str, *, completed: bool = True) -> None:
+def _release_maintenance_lease(
+    task_name: str,
+    *,
+    holder_id: str | None = None,
+    completed: bool = True,
+    stats: Mapping[str, Any] | None = None,
+) -> None:
     lease_key = f"lease:{task_name}"
 
     def _release() -> None:
         now_dt = lifecycle_clock.now()
         existing = RUNTIME_MAINTENANCE_LEASES.get(lease_key)
+        if holder_id is not None and isinstance(existing, Mapping):
+            cur_holder = existing.get("holder_id")
+            if cur_holder and cur_holder != holder_id:
+                return  # Lease already taken over by a newer holder; never clobber!
         base = dict(existing) if isinstance(existing, Mapping) else {"task_name": task_name}
         base["lease_expires_ts"] = 0.0
         if completed:
             base["last_completed_ts"] = now_dt.timestamp()
             base["last_completed_at"] = now_dt.isoformat()
+        if isinstance(stats, Mapping):
+            for k_st in ("last_processed_count", "last_inbox_created", "last_duration_ms", "last_error"):
+                if k_st in stats:
+                    base[k_st] = stats[k_st]
         RUNTIME_MAINTENANCE_LEASES.put(lease_key, base)
 
     try:
@@ -1074,8 +1149,10 @@ def _maybe_prune_document_blob_store() -> None:
     if store is None:
         return
     interval = float(os.environ.get("FORESIGHTNINE_DOCUMENT_STORE_PRUNE_INTERVAL_SECONDS", "21600") or "21600")
-    if not _claim_maintenance_lease("blob_store_prune", ttl_seconds=300.0, min_interval_seconds=max(0.0, interval)):
+    holder_id = _claim_maintenance_lease("blob_store_prune", ttl_seconds=300.0, min_interval_seconds=max(0.0, interval))
+    if not holder_id:
         return
+    t0 = monotonic()
     try:
         max_bytes = int(os.environ.get("FORESIGHTNINE_DOCUMENT_STORE_MAX_BYTES", str(512 * 1024 * 1024)))
         max_age_days = float(os.environ.get("FORESIGHTNINE_DOCUMENT_STORE_MAX_AGE_DAYS", "30"))
@@ -1086,9 +1163,23 @@ def _maybe_prune_document_blob_store() -> None:
             max_total_bytes=max_bytes,
             min_orphan_age_seconds=3600.0,
         )
-        _release_maintenance_lease("blob_store_prune", completed=True)
-    except Exception:
-        _release_maintenance_lease("blob_store_prune", completed=False)
+        _release_maintenance_lease(
+            "blob_store_prune",
+            holder_id=holder_id,
+            completed=True,
+            stats={"last_duration_ms": int((monotonic() - t0) * 1000), "last_error": None},
+        )
+    except Exception as exc:
+        _release_maintenance_lease(
+            "blob_store_prune",
+            holder_id=holder_id,
+            completed=False,
+            stats={"last_duration_ms": int((monotonic() - t0) * 1000), "last_error": str(exc)[:300]},
+        )
+
+
+_CLEANUP_THROTTLE_LOCK = RLock()
+_LAST_MIDDLEWARE_CLEANUP_TS = 0.0
 
 
 def cleanup_expired_state() -> object:
@@ -1120,8 +1211,20 @@ def cleanup_expired_state() -> object:
         if operations.store.get_operation(operation_id) is None:
             SEC_EVENTS_ANALYSIS_RESULTS.delete(operation_id)
     research_live_broker.prune_expired()
-    _maybe_prune_document_blob_store()
     return report
+
+
+def _cleanup_expired_state_throttled() -> object | None:
+    """In-memory throttled cleanup at middleware boundary so steady-state HTTP traffic never blocks on DB maintenance."""
+    global _LAST_MIDDLEWARE_CLEANUP_TS
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return cleanup_expired_state()
+    now_m = monotonic()
+    with _CLEANUP_THROTTLE_LOCK:
+        if now_m - _LAST_MIDDLEWARE_CLEANUP_TS < 60.0:
+            return None
+        _LAST_MIDDLEWARE_CLEANUP_TS = now_m
+    return cleanup_expired_state()
 
 
 def _model_subjects(request: Request, session_id: str | None = None) -> tuple[str, ...]:
@@ -1403,7 +1506,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=list(security_config.allowed_origins),
     allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "Last-Event-ID", "X-Captcha-Token", "X-Session-ID", ELEVATION_HEADER],
     max_age=600,
 )
@@ -1413,7 +1516,7 @@ app.add_middleware(
     abuse=abuse_control,
     captcha=lambda: captcha_verifier,
     resolver=trusted_proxy_resolver,
-    cleanup=cleanup_expired_state,
+    cleanup=_cleanup_expired_state_throttled,
 )
 
 
@@ -5955,6 +6058,7 @@ class _AccountSlotModelRunner:
                 max_output_tokens=max_output_tokens,
                 timeout_seconds=turn_timeout,
                 cancel_event=cancel_signal,
+                cache_user_prefix=bool(getattr(mreq, "cache_user_prefix", True)),
             )
             gate = self._concurrency_gate
             gate_acquired = False
@@ -6033,11 +6137,17 @@ class _AccountSlotModelRunner:
             if cur is not None and cur[0] == call_gen:
                 self._turns[key] = (call_gen, init_user, history, model_resp.message)
         text_out = extract_assistant_text(model_resp.message)
+        resolved_model_name = (
+            getattr(getattr(adapter, "settings", None), "model", None)
+            or getattr(model_resp, "model", None)
+            or getattr(mreq.binding, "model", None)
+        )
         return SlotModelResponse(
             content=text_out,
             tool_calls=tuple(model_resp.tool_calls or ()),
             usage=model_resp.usage,
             finish_reason=str(model_resp.finish_reason or "stop"),
+            model=str(resolved_model_name) if resolved_model_name else None,
         )
 
 
@@ -9858,7 +9968,6 @@ def _v3a_sec_loaders(
             return None, None
 
     def _redline_loader(cik_in: str, subs_doc: Mapping[str, Any] | None, call_date_iso: str | None) -> tuple[list[dict[str, Any]], str | None, str | None]:
-        del call_date_iso
         if callable(hooks.get("redline_loader")):
             return hooks["redline_loader"](cik_in, subs_doc, call_date_iso)
         if cache_only or not isinstance(subs_doc, Mapping):
@@ -9869,15 +9978,31 @@ def _v3a_sec_loaders(
         forms = recent.get("form") or []
         accns = recent.get("accessionNumber") or []
         docs = recent.get("primaryDocument") or []
+        filed_dates = recent.get("filingDate") or []
+        cutoff_iso: str | None = None
+        if isinstance(call_date_iso, str) and len(call_date_iso.strip()) >= 10:
+            try:
+                cutoff_iso = (date.fromisoformat(call_date_iso.strip()[:10]) + timedelta(days=45)).isoformat()
+            except ValueError:
+                cutoff_iso = None
         periodic = [
-            (str(forms[i]).upper(), str(accns[i]), str(docs[i]))
+            (
+                str(forms[i]).upper(),
+                str(accns[i]),
+                str(docs[i]),
+                str(filed_dates[i])[:10] if i < len(filed_dates) and filed_dates[i] else "",
+            )
             for i in range(min(len(forms), len(accns), len(docs)))
             if str(forms[i]).upper() in ("10-Q", "10-K") and str(docs[i]).strip()
         ]
+        if cutoff_iso:
+            anchored = [p for p in periodic if not p[3] or p[3] <= cutoff_iso]
+            if len(anchored) >= 2:
+                periodic = anchored
         if len(periodic) < 2:
             return [], None, None
-        cur_form, cur_accn, cur_doc = periodic[0]
-        pri_form, pri_accn, pri_doc = periodic[1]
+        cur_form, cur_accn, cur_doc, _cur_f = periodic[0]
+        pri_form, pri_accn, pri_doc, _pri_f = periodic[1]
         try:
             added = compute_streaming_10q_redline(
                 cik=cik_in,
@@ -9954,7 +10079,7 @@ def _resolve_v3a_runtime_for_account_id(
             resolved_slots = None
     slot_providers, slot_max_tokens = _build_slot_providers_and_caps(
         account_id=account_id,
-        slot_names=("deep_reasoner",),
+        slot_names=("deep_reasoner", "fast_extractor"),
         resolved_slots=resolved_slots,
         settings=settings,
         config=config,
@@ -9976,11 +10101,22 @@ def _auto_upsert_call_verify_subscription(
     symbol: str | None,
     company_name: str | None,
     topic_id: str | None,
+    baseline_accessions: Sequence[str] = (),
 ) -> None:
     """D4/D5/D7: Ensure awaiting-10-Q companies have ``call_commitment_verify`` enabled on radar subscription."""
     if not cik or not str(cik).isdigit():
         return
     cik_val = cik10(cik)
+    pre_seen: dict[str, dict[str, str]] = {}
+    for acc in baseline_accessions:
+        if isinstance(acc, str) and acc.strip():
+            pre_seen.setdefault(acc.strip(), {})["call_verify"] = "pre_call_baseline"
+    # Also seed cached snapshot's latest_periodic_accession so brand-new subscriptions never re-alert on pre-call 10-Q!
+    raw_snap = PEER_COMPANY_SNAPSHOTS.get(f"snap:{cik_val}")
+    if isinstance(raw_snap, Mapping):
+        l_acc = raw_snap.get("latest_periodic_accession")
+        if isinstance(l_acc, str) and l_acc.strip():
+            pre_seen.setdefault(l_acc.strip(), {})["call_verify"] = "pre_call_baseline"
     for existing in _account_subscriptions(account_id):
         if existing.cik == cik_val:
             channels = list(existing.watched_channels)
@@ -9992,6 +10128,11 @@ def _auto_upsert_call_verify_subscription(
                 changed = True
             if topic_id and not existing.topic_id:
                 changed = True
+            merged_seen = {k: dict(v) for k, v in existing.seen_accessions.items()}
+            for acc, ch_map in pre_seen.items():
+                if "call_verify" not in merged_seen.get(acc, {}):
+                    merged_seen.setdefault(acc, {}).update(ch_map)
+                    changed = True
             if changed:
                 WATCH_SUBSCRIPTIONS.put(
                     existing.subscription_id,
@@ -10000,6 +10141,7 @@ def _auto_upsert_call_verify_subscription(
                             "watched_channels": channels,
                             "enabled": True,
                             "topic_id": existing.topic_id or topic_id,
+                            "seen_accessions": merged_seen,
                             "updated_at": lifecycle_clock.now(),
                         }
                     ),
@@ -10013,6 +10155,7 @@ def _auto_upsert_call_verify_subscription(
         company_name=company_name,
         enabled=True,
         watched_channels=["v1_events", "earnings_delta", "governance_audit", "call_commitment_verify"],
+        seen_accessions=pre_seen,
     )
     WATCH_SUBSCRIPTIONS.put(sub.subscription_id, sub)
 
@@ -10218,9 +10361,13 @@ def _radar_bg_sweep_interval_seconds() -> float:
 def _run_background_radar_sweep_once(*, max_subs_per_sweep: int = 20) -> int:
     """D4/D5 Insurance 2: Short-tx lease-claimed background radar sweep grouped by account_id (<=20 due subs)."""
     interval = _radar_bg_sweep_interval_seconds()
-    if not _claim_maintenance_lease("radar_bg_sweep", ttl_seconds=300.0, min_interval_seconds=max(10.0, interval * 0.5)):
+    holder_id = _claim_maintenance_lease("radar_bg_sweep", ttl_seconds=300.0, min_interval_seconds=max(10.0, interval * 0.5))
+    if not holder_id:
         return 0
+    t0 = monotonic()
     processed = 0
+    inbox_created_total = 0
+    last_err: str | None = None
     try:
         now = lifecycle_clock.now()
         due_subs: list[FilingWatchSubscription] = []
@@ -10232,7 +10379,12 @@ def _run_background_radar_sweep_once(*, max_subs_per_sweep: int = 20) -> int:
         due_subs.sort(key=lambda s: s.last_checked_at or datetime.min.replace(tzinfo=timezone.utc))
         batch = due_subs[:max_subs_per_sweep]
         if not batch:
-            _release_maintenance_lease("radar_bg_sweep", completed=True)
+            _release_maintenance_lease(
+                "radar_bg_sweep",
+                holder_id=holder_id,
+                completed=True,
+                stats={"last_processed_count": 0, "last_inbox_created": 0, "last_duration_ms": int((monotonic() - t0) * 1000), "last_error": None},
+            )
             return 0
 
         by_account: dict[str, list[FilingWatchSubscription]] = {}
@@ -10240,63 +10392,197 @@ def _run_background_radar_sweep_once(*, max_subs_per_sweep: int = 20) -> int:
             by_account.setdefault(sub.account_id, []).append(sub)
 
         cfg = _sec_events_config_from_hook({})
+        ua = cfg["user_agent"]
+        lim = cfg["limiter"]
+        pol = cfg["policy"]
         for acct_id, acct_subs in by_account.items():
-            # Strict per-account runtime resolution (zero cross-account credential sharing!)
-            acct_runner, _slot_b = _resolve_v3a_runtime_for_account_id(acct_id)
+            _renew_maintenance_lease("radar_bg_sweep", holder_id, ttl_seconds=300.0)
+            try:
+                # Strict per-account runtime resolution (zero cross-account credential sharing!)
+                acct_runner, _slot_b = _resolve_v3a_runtime_for_account_id(acct_id)
 
-            def _scan_bg(sub: FilingWatchSubscription, seen_v1: list[str]) -> tuple[SecEventScanResult, dict[str, str]]:
-                seen_map = {acc: {"sec_events": "seen"} for acc in seen_v1} if seen_v1 else None
-                return scan_sec_material_events(
-                    sub.cik,
-                    user_agent=cfg["user_agent"],
-                    lookback_days=sub.lookback_days,
-                    seen_accessions=seen_map,
-                    l1_cache=cfg["l1_cache"],
-                    rules=cfg["rules"],
-                    limiter=cfg["limiter"],
-                    policy=cfg["policy"],
-                    symbol=sub.symbol,
+                def _scan_bg(sub: FilingWatchSubscription, seen_v1: list[str]) -> tuple[SecEventScanResult, dict[str, str]]:
+                    seen_map = {acc: {"sec_events": "seen"} for acc in seen_v1} if seen_v1 else None
+                    return scan_sec_material_events(
+                        sub.cik,
+                        user_agent=ua,
+                        lookback_days=sub.lookback_days,
+                        seen_accessions=seen_map,
+                        l1_cache=cfg["l1_cache"],
+                        rules=cfg["rules"],
+                        limiter=lim,
+                        policy=pol,
+                        symbol=sub.symbol,
+                    )
+
+                def _peer_bg(sub: FilingWatchSubscription) -> Any:
+                    if not sub.symbol:
+                        return None
+                    try:
+                        group_syms = _resolve_default_peers_for_symbol(sub.symbol, acct_id)
+                        if len(group_syms) < 2:
+                            return None
+                        return _execute_peer_compare_for_account(
+                            account_id=acct_id,
+                            primary_symbol=sub.symbol,
+                            peer_symbols=group_syms[1:],
+                            as_of=None,
+                            cache_only=True,
+                        )
+                    except Exception:
+                        return None
+
+                def _gov_bg(sub: FilingWatchSubscription) -> Any:
+                    sym_i = sub.symbol or sub.cik
+                    try:
+                        subs_g = fetch_company_submissions(sub.cik, user_agent=ua, max_pages=0, limiter=lim, policy=pol)
+                        snap_g, _ = load_or_fetch_company_snapshot(
+                            symbol=sym_i,
+                            cik=sub.cik,
+                            user_agent=ua,
+                            limiter=lim,
+                            snapshot_cache=PEER_COMPANY_SNAPSHOTS,
+                            submissions=subs_g,
+                            policy=pol,
+                            cache_only=False,
+                        )
+                        if snap_g is None:
+                            return None
+                        d_lat, d_pri = load_or_fetch_def14a_snapshots(
+                            cik=sub.cik,
+                            symbol=sym_i,
+                            user_agent=ua,
+                            limiter=lim,
+                            def14a_cache=DEF14A_FACT_SNAPSHOTS,
+                            submissions=subs_g,
+                            as_of=None,
+                            policy=pol,
+                        )
+                        raw_gl = GUIDANCE_CREDIBILITY_LEDGER.get(f"gcl:{cik10(sub.cik)}")
+                        g_lg = GuidanceCredibilityLedger.model_validate(raw_gl) if isinstance(raw_gl, Mapping) else None
+                        return assemble_governance_audit_report(
+                            snap=snap_g,
+                            def14a_latest=d_lat,
+                            def14a_prior=d_pri,
+                            guidance_ledger=g_lg,
+                            as_of=None,
+                        )
+                    except Exception:
+                        return None
+
+                def _delta_bg(sub: FilingWatchSubscription, new_accs: list[str], led: ThesisLedger | None) -> list[ChangeInboxItem]:
+                    if led is None or not sub.topic_id or not new_accs:
+                        return []
+                    prior_state = EARNINGS_SQUAD_STATES.get(_squad_state_key(acct_id, sub.topic_id))
+                    prior_dossier = prior_state.get("dossier") if isinstance(prior_state, Mapping) else None
+                    if not isinstance(prior_dossier, Mapping):
+                        return []
+                    from .research_delta_review import (
+                        build_delta_stage0_package,
+                        build_inbox_item_from_delta_diff,
+                        run_earnings_delta_review,
+                    )
+                    try:
+                        stage0 = build_delta_stage0_package(
+                            cik=sub.cik,
+                            symbol=sub.symbol,
+                            accession=new_accs[0],
+                            form="8-K",
+                            period_label=f"SEC {new_accs[0]}",
+                            disclosed_at=lifecycle_clock.now().date().isoformat(),
+                            prior_dossier=prior_dossier,
+                            ledger=led,
+                            new_observed_metrics={},
+                        )
+                        diff = run_earnings_delta_review(
+                            stage0=stage0,
+                            filing_text="",
+                            source_id=f"sec_{new_accs[0]}",
+                            ledger=led,
+                            runner=acct_runner,
+                            slot="deep_reasoner",
+                        )
+                        it = build_inbox_item_from_delta_diff(account_id=acct_id, subscription=sub, diff=diff)
+                        if it is not None:
+                            it = it.model_copy(
+                                update={
+                                    "report_date": lifecycle_clock.now().date().isoformat(),
+                                    "fiscal_period_key": prior_dossier.get("period_label") if isinstance(prior_dossier.get("period_label"), str) else None,
+                                    "has_confirmed_ledger": True,
+                                }
+                            )
+                        return [it] if it is not None else []
+                    except Exception:
+                        return []
+
+                def _call_bg(sub: FilingWatchSubscription, new_pf: list[Any], led: ThesisLedger | None) -> list[ChangeInboxItem]:
+                    return _run_v3a_phase2c_for_subscription(
+                        account_id=acct_id,
+                        sub=sub,
+                        new_periodic_filings=new_pf,
+                        ledger=led,
+                        model_runner=acct_runner,
+                        as_of=None,
+                        cfg=cfg,
+                    )
+
+                sw_res = run_p1b_radar_sweep(
+                    subscriptions=acct_subs,
+                    scan_fn=_scan_bg,
+                    analyze_v1_fn=lambda s, sr, st, af, tc: analyze_sec_events(
+                        scan_result=sr,
+                        source_texts=st,
+                        runner=acct_runner,
+                        slot_bindings=None,
+                        resolved_slots=None,
+                        lazy_fetcher=lambda ref: fetch_lazy_attachment(
+                            ref, user_agent=ua, limiter=lim, policy=pol
+                        ).text,
+                        l2_cache=cfg["l2_cache"],
+                        rules=cfg["rules"],
+                        active_red_yellow_flags=af,
+                        thesis_context=tc,
+                    ),
+                    ledger_loader=lambda s: _latest_confirmed_ledger(acct_id, s.topic_id),
+                    existing_inbox_loader=_account_inbox_items,
+                    save_subscription=lambda s: WATCH_SUBSCRIPTIONS.put(s.subscription_id, s),
+                    save_inbox_item=lambda it: CHANGE_INBOX_ITEMS.put(it.inbox_item_id, it),
+                    earnings_delta_fn=_delta_bg,
+                    peer_compare_fn=_peer_bg,
+                    governance_audit_fn=_gov_bg,
+                    call_commitment_verify_fn=_call_bg,
                 )
-
-            def _call_bg(sub: FilingWatchSubscription, new_pf: list[Any], led: ThesisLedger | None) -> list[ChangeInboxItem]:
-                return _run_v3a_phase2c_for_subscription(
-                    account_id=acct_id,
-                    sub=sub,
-                    new_periodic_filings=new_pf,
-                    ledger=led,
-                    model_runner=acct_runner,
-                    as_of=None,
-                    cfg=cfg,
+                processed += len(acct_subs)
+                inbox_created_total += int(getattr(sw_res, "inbox_items_created", 0) or 0)
+            except Exception as acct_exc:
+                last_err = f"{type(acct_exc).__name__}: {acct_exc}"[:300]
+                logging.getLogger(__name__).warning(
+                    "radar_bg_sweep_account_failed account=%s error=%s", acct_id, last_err
                 )
-
-            run_p1b_radar_sweep(
-                subscriptions=acct_subs,
-                scan_fn=_scan_bg,
-                analyze_v1_fn=lambda s, sr, st, af, tc: analyze_sec_events(
-                    scan_result=sr,
-                    source_texts=st,
-                    runner=acct_runner,
-                    slot_bindings=None,
-                    resolved_slots=None,
-                    lazy_fetcher=lambda ref: fetch_lazy_attachment(
-                        ref, user_agent=cfg["user_agent"], limiter=cfg["limiter"], policy=cfg["policy"]
-                    ).text,
-                    l2_cache=cfg["l2_cache"],
-                    rules=cfg["rules"],
-                    active_red_yellow_flags=af,
-                    thesis_context=tc,
-                ),
-                ledger_loader=lambda s: _latest_confirmed_ledger(acct_id, s.topic_id),
-                existing_inbox_loader=_account_inbox_items,
-                save_subscription=lambda s: WATCH_SUBSCRIPTIONS.put(s.subscription_id, s),
-                save_inbox_item=lambda it: CHANGE_INBOX_ITEMS.put(it.inbox_item_id, it),
-                call_commitment_verify_fn=_call_bg,
-            )
-            processed += len(acct_subs)
-        _release_maintenance_lease("radar_bg_sweep", completed=True)
+        _release_maintenance_lease(
+            "radar_bg_sweep",
+            holder_id=holder_id,
+            completed=True,
+            stats={
+                "last_processed_count": processed,
+                "last_inbox_created": inbox_created_total,
+                "last_duration_ms": int((monotonic() - t0) * 1000),
+                "last_error": last_err,
+            },
+        )
         return processed
-    except Exception:
-        _release_maintenance_lease("radar_bg_sweep", completed=False)
+    except Exception as exc:
+        _release_maintenance_lease(
+            "radar_bg_sweep",
+            holder_id=holder_id,
+            completed=False,
+            stats={
+                "last_processed_count": processed,
+                "last_inbox_created": inbox_created_total,
+                "last_duration_ms": int((monotonic() - t0) * 1000),
+                "last_error": f"{type(exc).__name__}: {exc}"[:300],
+            },
+        )
         raise
 
 
@@ -10366,9 +10652,20 @@ def run_call_audit_endpoint(
     compiled_rules = load_v3a_call_rules()
 
     alias_map = _v3a_account_alias_map(account.account_id)
-    preview = build_call_audit_preview(sources=loaded, alias_map=alias_map)
+
+    def _cache_only_cik_run(sym: str) -> tuple[str, str] | None:
+        ptr = PEER_COMPANY_SNAPSHOTS.get(f"sym:{sym.strip().upper()}")
+        if isinstance(ptr, Mapping) and ptr.get("cik"):
+            return str(ptr["cik"]), str(ptr.get("company_name") or sym)
+        return None
+
+    preview = build_call_audit_preview(sources=loaded, alias_map=alias_map, cik_resolver=_cache_only_cik_run)
     eff_symbol = (request.symbol or preview.detected_symbol or "").strip().upper() or None
     eff_cik = cik10(request.cik) if request.cik else preview.detected_cik
+    if eff_cik is None and eff_symbol:
+        hit_c = _cache_only_cik_run(eff_symbol)
+        if hit_c is not None:
+            eff_cik = cik10(hit_c[0])
     eff_entity = request.entity_key or normalize_entity_key(cik=eff_cik, symbol=eff_symbol, alias_map=alias_map)
     eff_period = (
         f"FY{request.fiscal_year}-Q{request.fiscal_quarter}"
@@ -10377,6 +10674,10 @@ def run_call_audit_endpoint(
     )
     bundle_seed = "|".join(sorted(f"{s.source_id}:{s.content_sha256}" for s in loaded))
     bundle_sha = sha256(bundle_seed.encode("utf-8")).hexdigest()
+    mgmt_id_set = set(preview.management_source_ids)
+    mgmt_loaded = [s for s in loaded if s.source_id in mgmt_id_set]
+    mgmt_bundle_seed = "|".join(sorted(f"{s.source_id}:{s.content_sha256}" for s in mgmt_loaded))
+    mgmt_bundle_sha = sha256(mgmt_bundle_seed.encode("utf-8")).hexdigest() if mgmt_loaded else sha256(b"empty").hexdigest()
     sf_key = (account.account_id, eff_entity, eff_period, bundle_sha)
 
     # Check Singleflight: if identical audit is already running for this account, return existing operation_id!
@@ -10396,7 +10697,7 @@ def run_call_audit_endpoint(
 
     # Fast cache hit (<80ms): if L2 management cache already warm AND no pending OCR AND all sell-side cached, return 200 immediately!
     l2_cache_key = (
-        f"v3a_l2:{account.account_id}:{eff_entity}:{bundle_sha}:"
+        f"v3a_l2:{account.account_id}:{eff_entity}:{mgmt_bundle_sha}:"
         f"{L2_PROMPT_VERSION}:{compiled_rules.context_budget_version}"
     )
     if (
@@ -10547,7 +10848,12 @@ def run_call_audit_endpoint(
             except Exception:
                 pass
             try:
-                research_live_broker.publish_progress(operation_id, ev_obj)
+                research_live_broker.publish_stage_event(
+                    operation_id,
+                    event_name=stage_name,
+                    payload=ev_obj,
+                    event_id=str(seq_counter[0]),
+                )
             except Exception:
                 pass
 
@@ -10593,19 +10899,23 @@ def run_call_audit_endpoint(
                 on_stage=_on_stage,
                 rules=compiled_rules,
             )
-            perms_map = {s.source_id: s.permissions.model_dump(mode="json") for s in loaded}
+            # Resolve permissions across report.source_ids (including newly created Layer 0b OCR immutable source versions!)
+            final_srcs = _v3a_resolve_sources_for_account(account.account_id, list(dict.fromkeys([*(s.source_id for s in loaded), *report.source_ids])))
+            perms_map = {s.source_id: s.permissions.model_dump(mode="json") for s in final_srcs}
             rep_d = report.model_dump(mode="json", exclude_none=True)
             led_d = ledger.model_dump(mode="json", exclude_none=True)
             md = render_call_verification_markdown(report, source_permissions=perms_map)
             _write_state("completed", stage="completed", report_d=rep_d, ledger_d=led_d, md=md, ent=report.entity_key)
             # D4/D5/D7: Auto-activate call_commitment_verify subscription when awaiting current 10-Q
             if report.awaiting_current_10q and report.cik:
+                baseline_accs = [a for a in (ledger.latest_10q_accession, ledger.initial_10q_accession) if a]
                 _auto_upsert_call_verify_subscription(
                     account_id=account.account_id,
                     cik=report.cik,
                     symbol=report.symbol,
                     company_name=report.company_name,
                     topic_id=request.topic_id,
+                    baseline_accessions=baseline_accs,
                 )
             try:
                 research_live_broker.publish_terminal(
@@ -10974,6 +11284,18 @@ def check_call_audit_filings(
             continue
 
         new_pf = [pf for pf in scan_res.periodic_filings if pf.accession not in seen_call]
+        # Never fire Phase 2c on pre-call prior-quarter 10-Qs!
+        call_dt_str = row.get("latest_call_date")
+        if isinstance(call_dt_str, str) and len(call_dt_str.strip()) >= 10:
+            try:
+                call_dt = date.fromisoformat(call_dt_str.strip()[:10])
+                new_pf = [
+                    pf
+                    for pf in new_pf
+                    if (pf.filed_at.date() if isinstance(pf.filed_at, datetime) else pf.filed_at) >= call_dt
+                ]
+            except ValueError:
+                pass
         if not new_pf:
             continue
 
@@ -10982,15 +11304,23 @@ def check_call_audit_filings(
             r_obj, _sb = _resolve_v3a_runtime_for_account_id(account.account_id, hook_dict=hook_dict)
             runner_cache.append(r_obj)
         ledger = _latest_confirmed_ledger(account.account_id, sub.topic_id)
-        items = _run_v3a_phase2c_for_subscription(
-            account_id=account.account_id,
-            sub=sub,
-            new_periodic_filings=new_pf,
-            ledger=ledger,
-            model_runner=runner_cache[0],
-            as_of=None,
-            cfg=cfg,
-        )
+        try:
+            items = _run_v3a_phase2c_for_subscription(
+                account_id=account.account_id,
+                sub=sub,
+                new_periodic_filings=new_pf,
+                ledger=ledger,
+                model_runner=runner_cache[0],
+                as_of=None,
+                cfg=cfg,
+            )
+        except Exception as p2c_exc:
+            if "xbrl_indexing_lag" in str(p2c_exc):
+                new_failed_c = {k_f: dict(v_f) for k_f, v_f in sub.failed_accessions.items()}
+                for pf in new_pf:
+                    new_failed_c.setdefault(pf.accession, {})["call_verify"] = "xbrl_indexing_lag"
+                WATCH_SUBSCRIPTIONS.put(sub.subscription_id, sub.model_copy(update={"failed_accessions": new_failed_c, "updated_at": now}))
+            continue
         existing_inbox = _account_inbox_items(account.account_id)
         latest_pf_date = max((pf.filed_at for pf in new_pf), default=None)
         for v_it in items:

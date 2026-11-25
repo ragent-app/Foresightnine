@@ -458,6 +458,36 @@ class ResearchLiveBroker:
         if frames and subs:
             self._dispatch(subs, frames)
 
+    def publish_stage_event(
+        self,
+        operation_id: str,
+        *,
+        event_name: str,
+        payload: dict[str, Any],
+        event_id: str | None = None,
+    ) -> None:
+        """Directly dispatch a structured stage SSE frame (e.g., V3a layer0_ready -> layer2_extracting)."""
+        with self._lock:
+            self._prune_expired_locked()
+            channel = self._channels.setdefault(operation_id, _OperationChannel(operation_id))
+            if channel.terminal_at is not None:
+                return
+            subs = list(channel.subscribers.values())
+        if subs:
+            self._dispatch(
+                subs,
+                [
+                    {
+                        'event': event_name,
+                        'id': event_id,
+                        'data': {
+                            'operation_id': operation_id,
+                            **payload,
+                        },
+                    }
+                ],
+            )
+
     def publish_delta(
         self,
         operation_id: str,

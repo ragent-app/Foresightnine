@@ -661,3 +661,261 @@ def test_reconcile_orphaned_call_audits():
     assert count == 1
     row = api_main.V3A_CALL_AUDIT_STATES.get("op_orphan_1")
     assert row["status"] == "failed" and "restart" in row["error"].lower()
+
+
+def test_batch1_p0_sse_broker_cors_patch_context_truncation_ocr_and_leases(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    monkeypatch.setenv("FORESIGHTNINE_ENV", "test")
+    api_main.reset_state()
+
+    # 1. ResearchLiveBroker.publish_stage_event pushes real-time named stage frames (zero step.current)
+    import asyncio
+    from app.research_live_stream import ResearchLiveBroker
+
+    async def _exercise_broker() -> list[tuple[str, dict[str, Any]]]:
+        broker = ResearchLiveBroker()
+        got: list[tuple[str, dict[str, Any]]] = []
+        sub = broker.subscribe("op_live_1", account_id="acct_1", loop=asyncio.get_running_loop())
+        try:
+            broker.publish_stage_event("op_live_1", event_name="layer0_ready", payload={"stage": "layer0_ready", "entity_key": "0001045810"})
+            broker.publish_stage_event("op_live_1", event_name="layer1_ready", payload={"stage": "layer1_ready", "status": "same_period_10q_matched"})
+            broker.publish_stage_event("op_live_1", event_name="run.terminal", payload={"status": "completed"})
+            for _ in range(3):
+                frame = await asyncio.wait_for(sub.queue.get(), timeout=1.0)
+                got.append((frame["event"], frame["data"]))
+        finally:
+            broker.unsubscribe(sub)
+        return got
+
+    frames = asyncio.run(_exercise_broker())
+    assert [f[0] for f in frames] == ["layer0_ready", "layer1_ready", "run.terminal"]
+    assert all(f[0] != "step.current" for f in frames)
+
+    # 2. Context builder closing-tag guard + deck-only [Slide N Chart:] matching
+    huge_deck = "\f".join(
+        [f"[Slide {i}]\n[Slide {i} Chart: Margin]\n" + ("Filler slide notes revenue margin guidance " * 45) for i in range(1, 35)]
+    )
+    parsed_deck = parse_transcript_v2(huge_deck, source_id="src_deck", title="Q3 Deck.pptx", retrieval_method="user_pptx")
+    prompt, nonce, _stats = build_v3a_management_context(
+        entity_key="0001045810",
+        symbol="NVDA",
+        fiscal_period_key="FY2026-Q3",
+        parsed_docs=[parsed_deck],
+        source_texts={"src_deck": huge_deck},
+        existing_ledger=None,
+        thesis_pillars=[],
+    )
+    assert len(prompt) <= 32000
+    assert prompt.endswith(f"</CALL_DOC_{nonce}>")
+    assert "[Slide 1 Chart:" in prompt
+
+    # 3. Layer 0b run_layer0b_async_ocr calls real prioritize_ocr_pages signature, records skipped_pages, preserves export=False
+    from app.research_call_verification import run_layer0b_async_ocr
+
+    pages_text = "\f".join([f"Page {i} Guidance margin" if i in (2, 5, 8) else f"Page {i} blank" for i in range(1, 11)])
+    offsets: list[list[Any]] = []
+    cur_o = 0
+    for idx_p, seg in enumerate(pages_text.split("\f")):
+        offsets.append([cur_o, cur_o + len(seg), "needs_ocr" if idx_p < 7 else "text_ok"])
+        cur_o += len(seg) + 1
+    parent_pdf = ResearchSource(
+        source_id="src_pdf_1",
+        owner_id="acct_ocr",
+        title="NVDA Slides.pdf",
+        text=pages_text,
+        kind="user_supplied",
+        retrieval_method="user_pdf",
+        is_simulated=False,
+        obtained_at=datetime.now(timezone.utc),
+        content_sha256="f" * 64,
+        permissions=SourcePermissions(store=True, model_input=True, display=True, export=False),
+        provenance={
+            "document_pages": {
+                "method": "pypdf_v1",
+                "page_count": 10,
+                "original_blob_sha256": "a" * 64,
+                "pages": offsets,
+            }
+        },
+    )
+    ocr_progress_events: list[dict[str, Any]] = []
+
+    class _FakeOutcome:
+        def __init__(self, source: ResearchSource) -> None:
+            self.source = source
+            self.status = "ok"
+            self.reason = None
+
+    def _fake_cb_factory(**_kw: Any):
+        def _cb(src: ResearchSource, target_pages: list[int]) -> _FakeOutcome:
+            child = src.model_copy(update={"source_id": "src_pdf_1_ocr", "text": src.text + "\nOCR Revenue $35.1B"})
+            return _FakeOutcome(child)
+
+        return _cb
+
+    monkeypatch.setattr("app.research_call_verification.build_ocr_pages_callback", _fake_cb_factory)
+    ocr_sources, ocr_gaps = run_layer0b_async_ocr(
+        sources=[parent_pdf],
+        operation_id="op_ocr_test",
+        persist_version=lambda s: s,
+        max_pages_per_source=3,
+        on_progress=lambda info: ocr_progress_events.append(info),
+    )
+    assert len(ocr_sources) == 1
+    assert ocr_sources[0].source_id == "src_pdf_1_ocr"
+    assert ocr_sources[0].permissions.export is False  # Inherited export=False!
+    assert len(ocr_progress_events) == 1
+    assert len(ocr_progress_events[0]["target_pages"]) == 3
+    assert ocr_progress_events[0]["remaining_skipped"] == 4
+    assert any("unocred_pages:src_pdf_1:" in g for g in ocr_gaps)
+
+    # 4. _redline_loader does not raise UnboundLocalError when called with call_date_iso
+    _snap_l, redline_l, _cap_l, _v25_l = api_main._v3a_sec_loaders(cache_only=True, hook_dict={})
+    added, cur_acc, prev_acc = redline_l("0001045810", {"filings": {"recent": {}}}, "2025-11-20")
+    assert added == [] and cur_acc is None and prev_acc is None
+
+    # 5. Maintenance lease holder_id mutual exclusion + renewal + stats persistence
+    h1 = api_main._claim_maintenance_lease("radar_bg_sweep", ttl_seconds=60)
+    assert h1 is not None
+    assert api_main._claim_maintenance_lease("radar_bg_sweep", ttl_seconds=60) is None
+    assert api_main._renew_maintenance_lease("radar_bg_sweep", holder_id=h1, ttl_seconds=60) is True
+    assert api_main._renew_maintenance_lease("radar_bg_sweep", holder_id="wrong_holder", ttl_seconds=60) is False
+    api_main._release_maintenance_lease(
+        "radar_bg_sweep",
+        holder_id=h1,
+        completed=True,
+        stats={"last_processed_count": 3, "last_inbox_created": 1, "last_duration_ms": 42, "last_error": None},
+    )
+    lease_row = api_main.RUNTIME_MAINTENANCE_LEASES.get("lease:radar_bg_sweep")
+    assert lease_row["last_processed_count"] == 3 and lease_row["last_duration_ms"] == 42
+    # Next claim succeeds immediately after release
+    h2 = api_main._claim_maintenance_lease("radar_bg_sweep", ttl_seconds=60)
+    assert h2 is not None and h2 != h1
+
+    # 6. Pre-call old 10-Q MUST NOT fire Phase 2c alert; XBRL lag raises xbrl_indexing_lag cleanly
+    from types import SimpleNamespace
+    from app.fin_data.adapters.sec_events.pacing import RawSubmissionRow
+    from app.research_call_verification import evaluate_call_commitment_verify_phase2c
+
+    idx_repo_p2c = InMemoryDocumentRepository()
+    idx_repo_p2c.put(
+        "v3a_idx:acct_x:0001045810",
+        {"owner_id": "acct_x", "entity_key": "0001045810", "latest_call_date": "2025-11-20", "latest_mgmt_source_ids": []},
+    )
+    vcl_repo_p2c = InMemoryDocumentRepository()
+    vcl_repo_p2c.put(
+        "v3a_vcl:acct_x:0001045810",
+        AccountVerbalCommitmentLedger(
+            owner_id="acct_x",
+            entity_key="0001045810",
+            commitments=[
+                VerbalCommitmentRecord(
+                    commitment_id="cmt_q4",
+                    owner_id="acct_x",
+                    entity_key="0001045810",
+                    source_id="src_q3",
+                    source_fiscal_period="FY2026-Q3",
+                    call_date="2025-11-20",
+                    metric_canonical="gross_margin",
+                    basis="gaap",
+                    target_fy=2026,
+                    target_fq=4,
+                    operator="ge",
+                    value_low="73.0",
+                    unit="%",
+                    commitment_text="Q4 GAAP GM >= 73%",
+                )
+            ],
+        ).model_dump(mode="json", exclude_none=True),
+    )
+    sub_obj = SimpleNamespace(
+        subscription_id="sub_p2c_1",
+        account_id="acct_x",
+        cik="0001045810",
+        symbol="NVDA",
+        topic_id=None,
+        watched_channels=["call_commitment_verify"],
+    )
+    old_pf = RawSubmissionRow(
+        cik="0001045810",
+        accession="0001-25-002",
+        nodash="000125002",
+        form="10-Q",
+        filed_at=date(2025, 8, 25),
+        period_of_report=date(2025, 7, 27),
+        primary_document="nvda-q2.htm",
+    )
+    # Old 10-Q filed 2025-08-25 (BEFORE call_date 2025-11-20) -> MUST return []!
+    old_res = evaluate_call_commitment_verify_phase2c(
+        account_id="acct_x",
+        subscription=sub_obj,
+        new_periodic_filings=[old_pf],
+        confirmed_ledger=None,
+        snap=_nvda_snap(include_q3=True, include_q4=False),
+        submissions={"filings": {"recent": {}}},
+        sources_loader=lambda _ids: [],
+        doc_facts_repo=InMemoryDocumentRepository(),
+        l2_mgmt_repo=InMemoryDocumentRepository(),
+        l2_sellside_repo=InMemoryDocumentRepository(),
+        commitment_ledger_repo=vcl_repo_p2c,
+        company_index_repo=idx_repo_p2c,
+        entity_aliases_repo=InMemoryDocumentRepository(),
+        manifest_repo=InMemoryDocumentRepository(),
+    )
+    assert old_res == []
+
+    # CORS middleware explicitly allows PATCH + normal Topic (call + non-call note) hits fast cache on run 2!
+    from starlette.middleware.cors import CORSMiddleware
+
+    cors_mws = [mw for mw in api_main.app.user_middleware if mw.cls is CORSMiddleware]
+    assert len(cors_mws) == 1
+    assert "PATCH" in cors_mws[0].kwargs.get("allow_methods", [])
+
+    with TestClient(api_main.app) as client:
+        hdr, _acct = _auth_headers(client, "v3a_fastcache@example.com")
+        r_call = client.post(
+            "/v2/research/sources",
+            headers=hdr,
+            json={"title": "NVDA Call", "text": _SAMPLE_CALL, "kind": "user_supplied", "permissions": {"store": True, "model_input": True, "display": True, "export": True}},
+        )
+        r_10k = client.post(
+            "/v2/research/sources",
+            headers=hdr,
+            json={"title": "NVDA 10-K", "text": "UNITED STATES SECURITIES AND EXCHANGE COMMISSION\nFORM 10-K\nIndicate by check mark whether the registrant...", "kind": "user_supplied", "permissions": {"store": True, "model_input": True, "display": True, "export": True}},
+        )
+        call_id = r_call.json()["source_id"]
+        tenk_id = r_10k.json()["source_id"]
+
+        snap = _nvda_snap(include_q3=True, include_q4=False)
+        subs = {"filings": {"recent": {"form": ["10-Q"], "accessionNumber": ["0001-25-003"], "filingDate": ["2025-11-21"], "reportDate": ["2025-10-26"]}}}
+        api_main.app.state.v3a_call_audit_hooks = {
+            "model_runner": _FakeSlotRunner(),
+            "snap_loader": lambda _c, _s: (snap, subs),
+            "redline_loader": lambda _c, _sub, _cd: ([], None, None),
+            "enable_layer0b_ocr": False,
+        }
+        try:
+            r1 = client.post(
+                "/v2/research/call-audit/run",
+                headers={**hdr, "Idempotency-Key": "v3a-fastcache-1"},
+                json={"source_ids": [call_id, tenk_id], "symbol": "NVDA", "cik": "0001045810"},
+            )
+            assert r1.status_code == 202, r1.text
+            op_id = r1.json()["operation_id"]
+            for _ in range(50):
+                st = client.get(f"/v2/research/call-audit/operations/{op_id}", headers=hdr).json()
+                if st["status"] in ("completed", "failed"):
+                    break
+                time.sleep(0.05)
+            assert st["status"] == "completed"
+
+            # Second run with same Topic bundle (call + 10-K) MUST hit fast cache (200 cached=True)!
+            r2 = client.post(
+                "/v2/research/call-audit/run",
+                headers={**hdr, "Idempotency-Key": "v3a-fastcache-2"},
+                json={"source_ids": [call_id, tenk_id], "symbol": "NVDA", "cik": "0001045810"},
+            )
+            assert r2.status_code == 200 and r2.json()["cached"] is True
+        finally:
+            api_main.app.state.v3a_call_audit_hooks = None
+

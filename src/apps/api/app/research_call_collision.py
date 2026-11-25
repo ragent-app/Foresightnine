@@ -517,6 +517,8 @@ class Layer2ManagementExtraction(_StrictV3aModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    cache_read_input_tokens: int = 0
+    cache_creation_input_tokens: int = 0
     call_count: int = 0
     latency_ms: int = 0
     truncated_retried: bool = False
@@ -538,6 +540,9 @@ class Layer2SellsideExtraction(_StrictV3aModel):
     key_challenges: list[str] = Field(default_factory=list)
     model_id: str | None = None
     total_tokens: int = 0
+    cache_read_input_tokens: int = 0
+    cache_creation_input_tokens: int = 0
+    call_count: int = 1
     latency_ms: int = 0
     created_at: datetime = Field(default_factory=_utcnow)
 
@@ -765,6 +770,8 @@ class CallVerificationReport(_StrictV3aModel):
     )
     model_id: str | None = None
     total_tokens: int = 0
+    cache_read_input_tokens: int = 0
+    cache_creation_input_tokens: int = 0
     llm_call_count: int = 0
     generated_at: datetime = Field(default_factory=_utcnow)
 
@@ -1503,6 +1510,20 @@ def build_sec_10q_collision_ledger(
         picked[ln] = (cur_p, py_p)
         if pt is not None:
             lines[ln] = pt
+
+    # Guard against SEC submissions-vs-companyfacts indexing lag:
+    # Require revenue OR >=2 core financial lines actually populated for period_end before declaring same_period_10q_matched!
+    if status == "same_period_10q_matched" and period_end is not None:
+        matched_target_lines = [
+            ln
+            for ln, (cp, _pp) in picked.items()
+            if cp is not None and abs((cp.end - period_end).days) <= 20
+        ]
+        if ("revenue" not in matched_target_lines and len(matched_target_lines) < 2) or (
+            snap.xbrl_indexing_pending_accession is not None and init_accn == snap.xbrl_indexing_pending_accession
+        ):
+            status = "awaiting_current_10q_using_8k_and_prior_10q"
+            open_gaps.append("xbrl_indexing_lag:submissions_ahead_of_companyfacts")
 
     rev_cur, rev_py = picked["revenue"]
     cogs_cur, cogs_py = picked["cost_of_revenue"]
@@ -3195,9 +3216,17 @@ def run_layer3_call_collision(
         rules_sha256=compiled.rules_sha256,
         evaluation_rules_version=compiled.evaluation_rules_version,
         context_budget_version=compiled.context_budget_version,
-        model_id=mgmt_extraction.model_id if mgmt_extraction else None,
+        model_id=(
+            (mgmt_extraction.model_id if mgmt_extraction else None)
+            or next((s.model_id for s in sellside_extractions if s.model_id), None)
+        ),
         total_tokens=(mgmt_extraction.total_tokens if mgmt_extraction else 0) + sum(s.total_tokens for s in sellside_extractions),
-        llm_call_count=(mgmt_extraction.call_count if mgmt_extraction else 0) + len(sellside_extractions),
+        cache_read_input_tokens=(mgmt_extraction.cache_read_input_tokens if mgmt_extraction else 0)
+        + sum(s.cache_read_input_tokens for s in sellside_extractions),
+        cache_creation_input_tokens=(mgmt_extraction.cache_creation_input_tokens if mgmt_extraction else 0)
+        + sum(s.cache_creation_input_tokens for s in sellside_extractions),
+        llm_call_count=(mgmt_extraction.call_count if mgmt_extraction else 0)
+        + sum(max(1, int(s.call_count)) for s in sellside_extractions),
     )
     return report, updated_ledger
 
@@ -3211,13 +3240,15 @@ def render_call_verification_markdown(
 ) -> str:
     """Render a compact 1-click Markdown audit brief strictly honoring ``permissions.export``."""
     perms = source_permissions or {}
+    has_perms_table = bool(perms)
 
     def _can_export(src_id: str | None) -> bool:
         if not src_id:
             return True
         p = perms.get(src_id)
         if not isinstance(p, Mapping):
-            return True
+            # Fail-closed when caller provided a permissions map but source_id is missing (e.g. unmapped OCR version)
+            return not has_perms_table
         return p.get("export") is not False
 
     def _quote_md(q: GroundedQuoteRef | None) -> str:

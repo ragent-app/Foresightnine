@@ -993,3 +993,218 @@ def test_financial_sic_exempts_track1():
         source_texts={},
     )
     assert any(f.track == "track_1_demand_channel" and f.severity == "not_applicable" for f in report.collision_findings)
+
+
+def test_batch1_p0_parser_sellside_zh_vtt_twocol_and_pptx_dual_axis(tmp_path: Path):
+    # 1. Sell-side note with many key: value metadata headers MUST NOT be misclassified as a transcript
+    sellside_note = (
+        "Morgan Stanley Equity Research\n"
+        "Ticker: NVDA\n"
+        "Rating: Overweight\n"
+        "Price Target: $175.00\n"
+        "Revenue: $35.1B\n"
+        "EPS: $0.81\n"
+        "Margin: 75.0%\n"
+        "Catalyst: Blackwell rack ramp in Q4.\n"
+        "Conclusion: We reiterate Overweight ahead of Q3 results.\n"
+    )
+    c_ss = classify_document_archetype(sellside_note, title="MS NVDA Preview")
+    assert c_ss.archetype == "sellside_note"
+    assert c_ss.authority_tier == "third_party_opinion"
+    assert c_ss.auto_trigger_eligible is False
+
+    # 2. Chinese Format 5 unnumbered 3-round 问：/答： + CFO: role detection MUST NOT collapse into 1 Q&A
+    zh_3round = (
+        "腾讯控股 2025年第三季度业绩交流会\n"
+        "2025年11月13日\n"
+        "管理层发言\n"
+        "CFO: 本季度毛利率达到53.1%，资本开支保持稳健。\n"
+        "问答环节\n"
+        "问：视频号广告加载率目前是多少？\n"
+        "答：仍有较大提升空间，目前显著低于行业头部水平。\n"
+        "问：AI基础设施资本开支全年指引有无变化？\n"
+        "答：全年资本开支将围绕算力需求动态调整，保持纪律。\n"
+        "问：游戏业务递延收入增速如何展望？\n"
+        "答：本土与海外长青游戏流水保持健康增长。\n"
+    )
+    zh_parsed = parse_transcript_v2(zh_3round, source_id="src_zh3", title="腾讯 Q3")
+    assert any(t.speaker_role == "cfo" for t in zh_parsed.turns)
+    assert len(zh_parsed.qa_exchanges) == 3
+    assert [ex.analyst_name for ex in zh_parsed.qa_exchanges] == ["Analyst #1", "Analyst #2", "Analyst #3"]
+
+    # 3. VTT subtitle raw_char_start/end MUST align directly to untouched raw VTT text (0 offset drift)
+    vtt_raw = (
+        "WEBVTT\nKind: captions\nLanguage: en\n\n"
+        "00:00:01.000 --> 00:00:05.000\n"
+        "Operator: Welcome to NVIDIA Q3 FY26 earnings call.\n\n"
+        "00:00:05.000 --> 00:00:11.000\n"
+        "Colette Kress: Data Center revenue reached $30.8 billion.\n\n"
+        "00:00:11.000 --> 00:00:16.000\n"
+        "Questions and Answers\n\n"
+        "00:00:16.000 --> 00:00:22.000\n"
+        "Stacy Rasgon (Bernstein): What is Q4 gross margin?\n\n"
+        "00:00:22.000 --> 00:00:28.000\n"
+        "Colette Kress: Gross margin will be roughly 73%.\n"
+    )
+    vtt_parsed = parse_transcript_v2(vtt_raw, source_id="src_vtt", title="NVDA Call.vtt")
+    assert len(vtt_parsed.turns) >= 3
+    for t in vtt_parsed.turns:
+        sliced = vtt_raw[t.raw_char_start : t.raw_char_end]
+        assert t.text[:18] in sliced, f"VTT offset drift: {t.text!r} not in {sliced!r}"
+
+    # 4. Two-column PDF gutter detection
+    twocol = "\n".join(
+        [f"Left column financial commentary line {i}      Right column analyst note line {i}" for i in range(25)]
+    )
+    twocol_parsed = parse_transcript_v2(twocol, source_id="src_2col", title="TwoCol PDF", retrieval_method="user_pdf")
+    assert any("two_column_layout_detected" in g for g in twocol_parsed.open_gaps)
+
+    # 5. PPTX: native gridSpan+hMerge keeps 2 columns; non-native gridSpan pads; dual-axis chart maps units per axis
+    dual_axis_chart = """<?xml version="1.0" encoding="UTF-8"?>
+<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+  <c:chart><c:plotArea>
+    <c:barChart>
+      <c:ser>
+        <c:tx><c:v>Revenue</c:v></c:tx>
+        <c:cat><c:strRef><c:strCache><c:pt idx="0"><c:v>Q3</c:v></c:pt></c:strCache></c:strRef></c:cat>
+        <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>35.1</c:v></c:pt></c:numCache></c:numRef></c:val>
+      </c:ser>
+      <c:axId val="10"/>
+      <c:axId val="20"/>
+    </c:barChart>
+    <c:lineChart>
+      <c:ser>
+        <c:tx><c:v>Gross Margin</c:v></c:tx>
+        <c:cat><c:strRef><c:strCache><c:pt idx="0"><c:v>Q3</c:v></c:pt></c:strCache></c:strRef></c:cat>
+        <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>0.752</c:v></c:pt></c:numCache></c:numRef></c:val>
+      </c:ser>
+      <c:axId val="10"/>
+      <c:axId val="30"/>
+    </c:lineChart>
+    <c:catAx><c:axId val="10"/></c:catAx>
+    <c:valAx><c:axId val="20"/><c:dispUnits><c:builtInUnit val="billions"/></c:dispUnits></c:valAx>
+    <c:valAx><c:axId val="30"/><c:numFmt formatCode="0.0%"/></c:valAx>
+  </c:plotArea></c:chart>
+</c:chartSpace>"""
+    slide_dual = """<?xml version="1.0" encoding="UTF-8"?>
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld><p:spTree>
+    <p:graphicFrame><a:graphic><a:graphicData><a:tbl>
+      <a:tr>
+        <a:tc gridSpan="2"><a:txBody><a:p><a:r><a:t>Merged Header</a:t></a:r></a:p></a:txBody></a:tc>
+        <a:tc hMerge="1"><a:txBody><a:p/></a:txBody></a:tc>
+      </a:tr>
+      <a:tr>
+        <a:tc><a:txBody><a:p><a:r><a:t>A</a:t></a:r></a:p></a:txBody></a:tc>
+        <a:tc><a:txBody><a:p><a:r><a:t>B</a:t></a:r></a:p></a:txBody></a:tc>
+      </a:tr>
+    </a:tbl></a:graphicData></a:graphic></p:graphicFrame>
+  </p:spTree></p:cSld>
+</p:sld>"""
+    pptx_dual = _make_zip_bytes(
+        {
+            "[Content_Types].xml": "<Types/>",
+            "ppt/presentation.xml": '<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldIdLst><p:sldId id="1" r:id="rId1"/></p:sldIdLst></p:presentation>',
+            "ppt/_rels/presentation.xml.rels": '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/></Relationships>',
+            "ppt/slides/slide1.xml": slide_dual,
+            "ppt/slides/_rels/slide1.xml.rels": '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdC" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/></Relationships>',
+            "ppt/charts/chart1.xml": dual_axis_chart,
+        }
+    )
+    dp = tmp_path / "dual.pptx"
+    dp.write_bytes(pptx_dual)
+    res_dual = extract_pptx(dp)
+    assert "| Merged Header | Merged Header |" in res_dual.text
+    assert "| Merged Header | Merged Header | " not in res_dual.text
+    assert "Revenue (billions)" in res_dual.text
+    assert "75.2%" in res_dual.text
+    assert "Gross Margin (billions)" not in res_dual.text
+
+
+def test_batch1_p0_xbrl_lag_anti_poisoning_and_export_fail_closed():
+    # Submissions lists Q3 FY26 10-Q (0001-25-003), but companyfacts only has Q3 FY25 -> XBRL indexing lag!
+    lag_snap = PeerCompanySnapshot(
+        cik="0001045810",
+        symbol="NVDA",
+        company_name="NVIDIA CORP",
+        sic="3674",
+        sic_description="SEMICONDUCTORS",
+        latest_periodic_accession="0001-24-001",
+        latest_periodic_filed_at="2024-11-20",
+        taxonomy="us-gaap",
+        currency="USD",
+        projection_version=4,
+        facts_by_line={
+            "revenue": {
+                "Revenues": {
+                    "USD": [
+                        {"start": "2024-07-29", "end": "2024-10-27", "val": 20_000_000_000, "filed": "2024-11-20", "form": "10-Q", "accn": "0001-24-001", "fy": 2025, "fp": "Q3"},
+                    ]
+                }
+            }
+        },
+    )
+    subs_ahead = {
+        "filings": {
+            "recent": {
+                "form": ["10-Q", "10-Q"],
+                "accessionNumber": ["0001-25-003", "0001-24-001"],
+                "filingDate": ["2025-11-21", "2024-11-20"],
+                "reportDate": ["2025-10-26", "2024-10-27"],
+            }
+        }
+    }
+    ledger = build_sec_10q_collision_ledger(
+        entity_key="0001045810",
+        snap=lag_snap,
+        submissions=subs_ahead,
+        call_fy=2026,
+        call_fq=3,
+        call_date_iso="2025-11-20",
+        as_of=date(2025, 11, 22),
+    )
+    assert ledger.status == "awaiting_current_10q_using_8k_and_prior_10q"
+    assert any("xbrl_indexing_lag" in w for w in ledger.open_gaps)
+
+    # Export fail-closed: unlisted source_id (e.g., Layer 0b OCR child source) MUST be redacted when source_permissions is supplied!
+    from app.research_call_collision import CallVerificationReport, CollisionFinding, GroundedQuoteRef
+
+    rep = CallVerificationReport(
+        owner_id="acct_1",
+        entity_key="0001045810",
+        symbol="NVDA",
+        fiscal_period_key="FY2026-Q3",
+        headline="test",
+        source_ids=["src_parent", "src_ocr_child"],
+        rules_sha256="abcdef0123456789",
+        evaluation_rules_version="v1",
+        context_budget_version="v1",
+        collision_findings=[
+            CollisionFinding(
+                finding_id="f1",
+                track="track_2_earnings_cash",
+                collision_kind="direct_contradiction",
+                severity="red",
+                title="Margin mismatch",
+                management_statement="Margin 75%",
+                ledger_evidence="10-Q 70%",
+                quotes=[
+                    GroundedQuoteRef(
+                        source_id="src_ocr_child",
+                        quotation="SECRET OCR TABLE FIGURE $99.9B",
+                        raw_char_start=0,
+                        raw_char_end=30,
+                        verified=True,
+                    )
+                ],
+            )
+        ],
+    )
+    md = render_call_verification_markdown(
+        rep,
+        source_permissions={"src_parent": {"export": True}},  # src_ocr_child intentionally omitted!
+    )
+    assert "SECRET OCR TABLE FIGURE" not in md
+    assert "受版权/导出权限限制，原话已脱敏" in md
+

@@ -297,7 +297,7 @@ class AnthropicMessagesProvider:
             if tail_note is not None:
                 self._append_user_text_block(messages, tail_note)
         else:
-            if explicit_cache:
+            if explicit_cache and getattr(turn, 'cache_user_prefix', True):
                 user_blocks: list[dict[str, Any]] = [
                     {'type': 'text', 'text': turn.user, 'cache_control': {'type': 'ephemeral'}}
                 ]

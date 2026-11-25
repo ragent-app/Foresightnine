@@ -1469,6 +1469,7 @@ class SlotModelRequest(_FrozenContract):
     binding: SlotBinding
     turn_index: int = 0
     conversation_id: str | None = None
+    cache_user_prefix: bool = True
 
 
 @dataclass(frozen=True)
@@ -1480,6 +1481,7 @@ class SlotModelResponse:
     tool_calls: tuple[ModelToolCall, ...] = ()
     usage: ModelUsage | None = None
     finish_reason: str = "stop"
+    model: str | None = None
 
 
 @runtime_checkable

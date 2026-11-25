@@ -258,6 +258,7 @@ class PeerCompanySnapshot(_FrozenPeerModel):
     sic: str | None = None
     sic_description: str | None = None
     latest_periodic_accession: str | None = None
+    xbrl_indexing_pending_accession: str | None = None
     latest_periodic_filed_at: str | None = None
     taxonomy: str = "us-gaap"
     currency: str = "USD"
@@ -794,16 +795,61 @@ def load_or_fetch_company_snapshot(
             finally:
                 if tmp_path is not None:
                     tmp_path.unlink(missing_ok=True)
+            # Guard against SEC submissions-vs-companyfacts 15-120m indexing lag:
+            # Verify latest_acc (or latest_row.period_of_report) actually appears in cf_doc before advancing latest_periodic_accession!
+            eff_latest_acc = latest_acc
+            eff_latest_filed = latest_filed
+            pending_xbrl_acc: str | None = None
+            if latest_acc is not None and isinstance(cf_doc, Mapping):
+                latest_report_end = (
+                    latest_row.period_of_report.isoformat()
+                    if (latest_row is not None and getattr(latest_row, "period_of_report", None) is not None)
+                    else None
+                )
+                found_acc = False
+                newest_fact_acc: str | None = None
+                newest_fact_filed: str = ""
+                for _tax, tag_dict in (cf_doc.get("facts") or {}).items():
+                    if not isinstance(tag_dict, Mapping):
+                        continue
+                    for _tag, tag_obj in tag_dict.items():
+                        units = tag_obj.get("units") if isinstance(tag_obj, Mapping) else None
+                        if not isinstance(units, Mapping):
+                            continue
+                        for _u, rows_u in units.items():
+                            if not isinstance(rows_u, list):
+                                continue
+                            for r_u in rows_u:
+                                if not isinstance(r_u, Mapping):
+                                    continue
+                                r_acc = str(r_u.get("accn") or "").strip()
+                                r_end = str(r_u.get("end") or "").strip()
+                                r_filed = str(r_u.get("filed") or "").strip()
+                                if r_acc == latest_acc or (latest_report_end and r_end == latest_report_end and r_filed >= (latest_filed or "")):
+                                    found_acc = True
+                                if r_acc and r_filed > newest_fact_filed:
+                                    newest_fact_filed = r_filed
+                                    newest_fact_acc = r_acc
+                if not found_acc and newest_fact_acc:
+                    pending_xbrl_acc = latest_acc
+                    eff_latest_acc = newest_fact_acc
+                    eff_latest_filed = newest_fact_filed or latest_filed
+                elif not found_acc and not newest_fact_acc:
+                    pending_xbrl_acc = latest_acc
+                    eff_latest_acc = None
+
             snap = project_companyfacts_to_snapshot(
                 cik=cik_norm,
                 symbol=sym_u,
                 company_name=subs.company_name,
                 sic=subs.sic,
                 sic_description=getattr(subs, "sic_description", None),
-                latest_periodic_accession=latest_acc,
-                latest_periodic_filed_at=latest_filed,
+                latest_periodic_accession=eff_latest_acc,
+                latest_periodic_filed_at=eff_latest_filed,
                 companyfacts_doc=cf_doc if isinstance(cf_doc, Mapping) else {},
             )
+            if pending_xbrl_acc is not None:
+                snap = snap.model_copy(update={"xbrl_indexing_pending_accession": pending_xbrl_acc})
             # Release cf_doc reference immediately upon leaving scope
             del cf_doc
 

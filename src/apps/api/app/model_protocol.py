@@ -150,6 +150,7 @@ class ModelTurnInput:
     max_output_tokens: int | None = None
     timeout_seconds: float | None = None
     cancel_event: Any = None
+    cache_user_prefix: bool = True
 
 
 def extract_assistant_text(message: Mapping[str, Any] | None) -> str | None:

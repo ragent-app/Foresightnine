@@ -29,7 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .research_documents import page_for_offset
 from .research_retrieval import tokenize_query
 
-PARSER_VERSION = "v1"
+PARSER_VERSION = "v2"
 DEFAULT_V3A_RULES_PATH = Path(__file__).resolve().parent / "fin_data" / "adapters" / "v3a_call_verification_rules.json"
 
 DocumentArchetype = Literal[
@@ -324,15 +324,29 @@ def is_subtitle_text(text: str) -> bool:
 
 def clean_subtitle_text_with_timestamps(raw_text: str) -> tuple[str, list[tuple[int, str]]]:
     """Strip VTT/SRT headers & cue numbers with rolling-line dedup, returning ``(clean_text, [(char_offset, HH:MM:SS)])``."""
-    lines = (raw_text or "").replace("\r\n", "\n").splitlines()
+    clean_text, ts_anchors, _raw_spans = _clean_subtitle_with_raw_map(raw_text)
+    return clean_text, ts_anchors
+
+
+def _clean_subtitle_with_raw_map(raw_text: str) -> tuple[str, list[tuple[int, str]], list[tuple[int, int]]]:
+    """Subtitle cleaner also returning per-output-line ``(raw_start, raw_end)`` spans in ``raw_text``."""
+    src = raw_text or ""
+    raw_lines = src.splitlines(keepends=True)
     out_lines: list[str] = []
+    out_raw_spans: list[tuple[int, int]] = []
     ts_anchors: list[tuple[int, str]] = []
     current_ts: str | None = None
     prev_norm_lines: list[str] = []
     char_pos = 0
+    raw_cursor = 0
 
-    for ln in lines:
-        s = ln.strip()
+    for raw_ln in raw_lines:
+        ln_len = len(raw_ln)
+        ln_start = raw_cursor
+        ln_end = raw_cursor + len(raw_ln.rstrip("\r\n"))
+        raw_cursor += ln_len
+
+        s = raw_ln.strip()
         if not s or s.upper() == "WEBVTT" or s.startswith(("Kind:", "Language:", "NOTE ")):
             continue
         if s.isdigit():
@@ -344,7 +358,6 @@ def clean_subtitle_text_with_timestamps(raw_text: str) -> tuple[str, list[tuple[
             ss = m_ts.group(3)
             current_ts = f"{hh}:{mm}:{ss}"
             continue
-        # Convert <v Speaker Name>Text</v> into "Speaker Name: Text"
         voice = _VTT_VOICE_TAG_RE.search(s)
         speaker_prefix = ""
         if voice:
@@ -356,10 +369,8 @@ def clean_subtitle_text_with_timestamps(raw_text: str) -> tuple[str, list[tuple[
             cleaned = speaker_prefix + cleaned
 
         norm_key = re.sub(r"\s+", " ", cleaned).casefold()
-        # Rolling-line dedup (YouTube/Zoom live captions repeat previous line as top line of next cue)
         if prev_norm_lines and norm_key in prev_norm_lines[-3:]:
             continue
-        # Strip overlap prefix if new cue repeats the entire tail of the previous line
         if out_lines:
             last_low = out_lines[-1].casefold()
             if norm_key.startswith(last_low) and len(norm_key) > len(last_low) + 2:
@@ -373,10 +384,11 @@ def clean_subtitle_text_with_timestamps(raw_text: str) -> tuple[str, list[tuple[
             ts_anchors.append((char_pos, current_ts))
             current_ts = None
         out_lines.append(cleaned)
+        out_raw_spans.append((ln_start, ln_end))
         prev_norm_lines.append(norm_key)
         char_pos += len(cleaned) + 1
 
-    return "\n".join(out_lines), ts_anchors
+    return "\n".join(out_lines), ts_anchors, out_raw_spans
 
 
 # --------------------------------------------------------------------------- Non-SEC Entity Normalization (D1)
@@ -420,6 +432,31 @@ def normalize_entity_key(
 
 
 # --------------------------------------------------------------------------- Archetype & Authority Classification
+
+_NON_SPEAKER_COLON_PREFIXES = frozenset({
+    "note", "notes", "summary", "highlights", "guidance", "outlook", "revenue",
+    "margin", "ebitda", "gaap", "non-gaap", "disclaimer", "source", "date", "time",
+    "total", "subtotal", "fiscal", "quarter", "slide", "chart", "table", "remarks",
+    "rating", "price target", "pt", "thesis", "investment thesis", "valuation",
+    "catalysts", "catalyst", "risks", "risk", "bull case", "bear case", "base case",
+    "company", "ticker", "symbol", "event", "sector", "industry", "recommendation",
+    "upside", "downside", "target", "key takeaways", "takeaways", "conclusion",
+    "overview", "background", "estimate", "estimates", "consensus", "preview", "review",
+})
+
+
+def _count_valid_speaker_colon_lines(sample_text: str) -> int:
+    count = 0
+    for m in re.finditer(
+        r"(?m)^\s*([A-Z][A-Za-z.\-']+(?:\s+[A-Z][A-Za-z.\-']+){0,3})(?:\s*\([^)]{2,40}\))?\s*:\s+\S",
+        sample_text,
+    ):
+        cand = m.group(1).strip().casefold()
+        if cand in _NON_SPEAKER_COLON_PREFIXES:
+            continue
+        count += 1
+    return count
+
 
 def classify_document_archetype(
     text: str,
@@ -468,9 +505,30 @@ def classify_document_archetype(
     has_operator = bool(re.search(r"(?m)^\s*(?:\[\d{2}:\d{2}(?::\d{2})?\]\s*)?(?:\*\*)?Operator(?:\*\*)?\s*[:\-–—]?\s*$", text or "", re.IGNORECASE)) or bool(
         re.search(r"\bnext\s+question\s+comes\s+from\b|\bour\s+first\s+question\s+comes\s+from\b", text or "", re.IGNORECASE)
     )
-    speaker_colon_lines = len(re.findall(r"(?m)^\s*[A-Z][A-Za-z.\-']+(?:\s+[A-Z][A-Za-z.\-']+){0,3}(?:\s*\([^)]{2,40}\))?\s*:\s+\S", (text or "")[:40_000]))
-    zh_speaker_lines = len(re.findall(r"(?m)^\s*(?:【(?:提问|回答)】|Q\d+[:：]|A\d+[:：]|[\u4e00-\u9fff]{2,8}(?:（[^）]{1,20}）)?[：:])", (text or "")[:40_000]))
+    speaker_colon_lines = _count_valid_speaker_colon_lines((text or "")[:40_000])
+    zh_speaker_lines = len(re.findall(r"(?m)^\s*(?:【(?:提问|回答|追问)】|(?:Q\d*|A\d*|问|答|提问|回答|追问|投资者|管理层)[:：]|[\u4e00-\u9fff]{2,8}(?:（[^）]{1,20}）)?[：:])", (text or "")[:40_000]))
     speaker_density = speaker_colon_lines + zh_speaker_lines
+    has_rating_and_pt = bool(re.search(r"(?im)^\s*rating\s*:", combined_head)) and bool(
+        re.search(r"(?im)^\s*(?:price\s+target|pt)\s*:", combined_head)
+    )
+
+    # Hard guard: sell-side research notes with Rating/PT or >=2 sell-side cues and NO Operator/Q&A header
+    # MUST NOT be misclassified as management_first_party transcripts!
+    if (has_rating_and_pt or sellside_hits >= 2) and not has_operator and not has_qa_header and speaker_density < 6:
+        timing: Literal["pre_earnings_preview", "post_earnings_review", "unspecified"] = "unspecified"
+        if any(p.search(combined_head) for p in compiled.sellside_preview_re):
+            timing = "pre_earnings_preview"
+        elif any(p.search(combined_head) for p in compiled.sellside_review_re):
+            timing = "post_earnings_review"
+        return ArchetypeClassification(
+            archetype="sellside_note",
+            authority_tier="third_party_opinion",
+            confidence=0.88,
+            strong_feature_count=max(2, sellside_hits),
+            auto_trigger_eligible=False,
+            sellside_timing=timing,
+            reasons=["sellside_research_cues", "no_operator_or_qa_header"],
+        )
 
     # Strong transcript signal wins over incidental mention of analyst firm names (e.g., "Morgan Stanley" in Q&A!)
     transcript_strong = (
@@ -496,18 +554,18 @@ def classify_document_archetype(
         )
 
     if sellside_hits >= 1 and speaker_density < 4:
-        timing: Literal["pre_earnings_preview", "post_earnings_review", "unspecified"] = "unspecified"
+        timing_s: Literal["pre_earnings_preview", "post_earnings_review", "unspecified"] = "unspecified"
         if any(p.search(combined_head) for p in compiled.sellside_preview_re):
-            timing = "pre_earnings_preview"
+            timing_s = "pre_earnings_preview"
         elif any(p.search(combined_head) for p in compiled.sellside_review_re):
-            timing = "post_earnings_review"
+            timing_s = "post_earnings_review"
         return ArchetypeClassification(
             archetype="sellside_note",
             authority_tier="third_party_opinion",
             confidence=0.84,
             strong_feature_count=sellside_hits,
             auto_trigger_eligible=False,  # sell-side notes alone never falsely trigger management audit
-            sellside_timing=timing,
+            sellside_timing=timing_s,
             reasons=["sellside_research_cues"],
         )
 
@@ -627,16 +685,16 @@ def _classify_speaker_role(name: str, title: str | None, firm: str | None, compi
     low_name = name.strip().casefold()
     if low_name in ("operator", "moderator", "主持人", "接线员"):
         return "operator"
-    meta_str = f"{title or ''} {firm or ''}"
+    meta_str = f"{name or ''} {title or ''} {firm or ''}"
     if any(p.search(meta_str) for p in compiled.cfo_title_re):
         return "cfo"
     if any(p.search(meta_str) for p in compiled.ceo_title_re):
         return "ceo"
-    if any(p.search(meta_str) for p in compiled.exec_title_re):
+    if any(p.search(meta_str) for p in compiled.exec_title_re) or re.search(r"管理层|高管|董秘|财务总监|首席", name or ""):
         return "executive"
     if firm and any(p.search(firm) for p in compiled.sellside_pos_re):
         return "analyst"
-    if title and re.search(r"\b(?:analyst|research|managing\s+director|equity)\b|分析师|研究员", title, re.IGNORECASE):
+    if re.search(r"\b(?:analyst|research|managing\s+director|equity)\b|分析师|研究员|投资者|提问", f"{name or ''} {title or ''}", re.IGNORECASE):
         return "analyst"
     return "unknown"
 
@@ -683,19 +741,22 @@ def _extract_speaker_directory(text: str, compiled: CompiledV3aRules) -> dict[st
     return directory
 
 
-# Line-level speaker patterns (6 formats)
+# Line-level speaker patterns (6 formats, supporting mixed CJK+ASCII speaker headers & unnumbered ZH Q&A)
 _FMT1_COLON_RE = re.compile(
     r"^\s*(?:\[(\d{2}:\d{2}(?::\d{2})?)\]\s*)?"
     r"(?:\*\*|#{1,4}\s*)?"
-    r"([A-Z][A-Za-z.\-']+(?:\s+[A-Z][A-Za-z.\-']+){0,3}|Operator|Moderator|[\u4e00-\u9fff]{2,8})"
+    r"([A-Z][A-Za-z.\-']+(?:\s+[A-Z][A-Za-z.\-']+){0,3}|Operator|Moderator|[\u4e00-\u9fff][\u4e00-\u9fffA-Za-z0-9·\- ]{1,15})"
     r"(?:\*\*)?"
-    r"(?:\s*[（(]([^)）]{2,60})[)）])?"
+    r"(?:\s*[（(]([^)）]{1,60})[)）])?"
     r"\s*[:：]\s*(.*)$"
 )
 _FMT4_MD_ROLE_RE = re.compile(
     r"^\s*(?:\*\*|#{1,4}\s*)([A-Z][A-Za-z.\-']+(?:\s+[A-Z][A-Za-z.\-']+){0,3}|Operator)(?:\*\*)?\s*[-–—]{1,2}\s*\*?([^*\n]{2,80})\*?\s*$"
 )
-_FMT5_ZH_QA_RE = re.compile(r"^\s*(?:【(提问|回答|追问)】|(Q\d+|A\d+)\s*[:：])\s*(.*)$")
+_FMT5_ZH_QA_RE = re.compile(
+    r"^\s*(?:【(提问|回答|追问|投资者|管理层)】|(Q\d*|A\d*|问|答|提问|回答|追问|投资者|管理层)\s*[:：])\s*(.*)$",
+    re.IGNORECASE,
+)
 _FMT2_STANDALONE_NAME_RE = re.compile(
     r"^\s*(?:\[(\d{2}:\d{2}(?::\d{2})?)\]\s*)?"
     r"([A-Z][A-Za-z.\-']+(?:\s+[A-Z][A-Za-z.\-']+){1,3}|Operator|Moderator)\s*$"
@@ -766,9 +827,10 @@ def parse_transcript_v2(
 
     subtitle_flag = is_subtitle_text(text)
     ts_anchors: list[tuple[int, str]] = []
+    sub_raw_spans: list[tuple[int, int]] = []
     work_text = text
     if subtitle_flag:
-        work_text, ts_anchors = clean_subtitle_text_with_timestamps(text)
+        work_text, ts_anchors, sub_raw_spans = _clean_subtitle_with_raw_map(text)
 
     classification = classify_document_archetype(work_text, title=title, retrieval_method=retrieval_method, rules=compiled)
     det_sym, fy, fq, call_date_iso = extract_call_metadata(work_text, title=title)
@@ -828,17 +890,32 @@ def parse_transcript_v2(
             qa_start_offset = m_qa.start()
             break
 
-    # Line-by-line scan preserving exact raw character offsets
+    # Line-by-line scan preserving exact raw character offsets (mapped back to raw_text for subtitles!)
     line_spans: list[tuple[int, int, str]] = []
+    clean_line_starts: list[int] = []
     pos = 0
-    for raw_ln in work_text.splitlines(keepends=True):
+    for idx_ln, raw_ln in enumerate(work_text.splitlines(keepends=True)):
         ln_clean = raw_ln.rstrip("\r\n")
-        line_spans.append((pos, pos + len(ln_clean), ln_clean))
+        clean_line_starts.append(pos)
+        if subtitle_flag and idx_ln < len(sub_raw_spans):
+            r_s, r_e = sub_raw_spans[idx_ln]
+            line_spans.append((r_s, r_e, ln_clean))
+        else:
+            line_spans.append((pos, pos + len(ln_clean), ln_clean))
         pos += len(raw_ln)
 
-    def _lookup_ts(char_off: int) -> str | None:
+    # Detect two-column PDF gutter artifact (non-table lines with >=6 consecutive internal spaces >25%)
+    if retrieval_method == "user_pdf" and len(line_spans) >= 20:
+        sample_lns = [ln for _, _, ln in line_spans[:200] if len(ln.strip()) >= 40 and "|" not in ln]
+        if len(sample_lns) >= 12:
+            gutter_hits = sum(1 for ln in sample_lns if re.search(r"\S {6,}\S", ln))
+            if (gutter_hits / len(sample_lns)) > 0.25:
+                open_gaps.append("two_column_layout_detected:recommend_reading_order_reextract")
+
+    def _lookup_ts(line_idx: int) -> str | None:
         if not ts_anchors:
             return None
+        char_off = clean_line_starts[line_idx] if 0 <= line_idx < len(clean_line_starts) else 0
         chosen: str | None = None
         for off, ts in ts_anchors:
             if off <= char_off:
@@ -977,22 +1054,35 @@ def parse_transcript_v2(
             i += 1
             continue
 
-        # Format 5: Chinese 【提问】 / 【回答】 / Q1: / A1:
+        # Format 5: Chinese 【提问】 / 【回答】 / 【追问】 / Q: / A: / Q1: / A1: / 问： / 答：
         m5 = _FMT5_ZH_QA_RE.match(stripped)
         if m5:
             _flush_turn()
             in_qa = True
-            tag = m5.group(1) or m5.group(2) or ""
+            tag = (m5.group(1) or m5.group(2) or "").strip()
+            tag_u = tag.upper()
             rest = m5.group(3) or ""
-            is_q = tag in ("提问", "追问") or tag.upper().startswith("Q")
-            cur_speaker = (pending_analyst_callout[0] if (is_q and pending_analyst_callout) else ("Analyst" if is_q else "Management"))
+            is_followup = tag in ("追问",)
+            is_q = tag in ("提问", "追问", "问", "投资者") or tag_u.startswith("Q")
+            if is_q:
+                if is_followup and turns:
+                    prev_a_name = next((t.speaker_name for t in reversed(turns) if t.speaker_role == "analyst"), "Analyst")
+                    cur_speaker = prev_a_name
+                elif pending_analyst_callout:
+                    cur_speaker = pending_analyst_callout[0]
+                else:
+                    # Distinct label per generic Q&A round so independent questions never collapse into 1 exchange!
+                    q_seq = sum(1 for t in turns if t.section == "qa" and t.speaker_role == "analyst") + 1
+                    cur_speaker = f"Analyst #{q_seq}"
+            else:
+                cur_speaker = "Management"
             cur_role = "analyst" if is_q else "executive"
             cur_firm = pending_analyst_callout[1] if (is_q and pending_analyst_callout) else None
             if is_q:
                 pending_analyst_callout = None
             cur_start = l_start
             cur_end = l_end
-            cur_ts = _lookup_ts(l_start)
+            cur_ts = _lookup_ts(i)
             cur_lines = [rest] if rest else []
             i += 1
             continue
@@ -1006,23 +1096,18 @@ def parse_transcript_v2(
                 in_qa = True
             cur_start = l_start
             cur_end = l_end
-            cur_ts = _lookup_ts(l_start)
+            cur_ts = _lookup_ts(i)
             cur_lines = []
             i += 1
             continue
 
-        # Format 1 & 3: [00:14:22] Name (Firm): text / 黄仁勋：text
+        # Format 1 & 3: [00:14:22] Name (Firm): text / 黄仁勋：text / 张总(CFO)：text
         m1 = _FMT1_COLON_RE.match(stripped)
         if m1 and len(m1.group(2).strip()) <= 44:
             cand_name = m1.group(2).strip()
-            # Guard against false positives like "Note: ..." or "Summary: ..."
-            if cand_name.casefold() not in {
-                "note", "notes", "summary", "highlights", "guidance", "outlook", "revenue",
-                "margin", "ebitda", "gaap", "non-gaap", "disclaimer", "source", "date", "time",
-                "total", "subtotal", "fiscal", "quarter", "slide", "chart", "table", "remarks",
-            }:
+            if cand_name.casefold() not in _NON_SPEAKER_COLON_PREFIXES:
                 _flush_turn()
-                cur_ts = m1.group(1) or _lookup_ts(l_start)
+                cur_ts = m1.group(1) or _lookup_ts(i)
                 cur_speaker, cur_role, cur_firm = _resolve_speaker(cand_name, m1.group(3))
                 if cur_role == "analyst":
                     in_qa = True
@@ -1048,7 +1133,7 @@ def parse_transcript_v2(
             )
             if is_known or next_looks_role:
                 _flush_turn()
-                cur_ts = m2.group(1) or _lookup_ts(l_start)
+                cur_ts = m2.group(1) or _lookup_ts(i)
                 meta_hint = next_ln if next_looks_role else None
                 cur_speaker, cur_role, cur_firm = _resolve_speaker(cand_name, meta_hint)
                 if cur_role == "analyst":
@@ -1156,7 +1241,12 @@ def _pair_and_score_qa_exchanges(
 
     for t in qa_turns:
         if t.speaker_role == "analyst":
-            same_analyst = cur_analyst is not None and t.speaker_name.casefold() == cur_analyst.casefold()
+            is_generic_analyst = t.speaker_name.strip().casefold() in ("analyst", "提问", "投资者", "问")
+            same_analyst = (
+                not is_generic_analyst
+                and cur_analyst is not None
+                and t.speaker_name.casefold() == cur_analyst.casefold()
+            )
             if cur_q and cur_a and not same_analyst:
                 raw_groups.append((cur_q, cur_a))
                 cur_q = [t]

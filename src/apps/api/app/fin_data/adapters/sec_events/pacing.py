@@ -170,7 +170,7 @@ class SecPacingLimiter:
                     )
                 except Exception:
                     client = None
-        dsn = (env.get("FORESIGHTNINE_POSTGRES_DSN") or "").strip() or None
+        dsn = (env.get("FORESIGHTNINE_POSTGRES_DSN") or env.get("FORESIGHTNINE_POSTGRES_URL") or "").strip() or None
         mode = (env.get("FORESIGHTNINE_STORAGE_MODE") or "").strip().lower()
         pg_dsn = dsn if (mode == "postgres" or postgres_connection_factory is not None) and dsn else None
         return cls(

@@ -198,10 +198,31 @@ def _extract_table_markdown(tbl: ET.Element) -> list[str]:
     if not raw_rows:
         return []
 
-    ncols = max(len(r) for r in raw_rows)
-    grid: list[list[str]] = [["" for _ in range(ncols)] for _ in range(len(raw_rows))]
-    for r_idx, row_cells in enumerate(raw_rows):
-        for c_idx, (txt, _gs, _rs, h_merge, v_merge) in enumerate(row_cells):
+    expanded_rows: list[list[tuple[str, bool, bool]]] = []
+    for row_cells in raw_rows:
+        exp: list[tuple[str, bool, bool]] = []
+        idx_c = 0
+        while idx_c < len(row_cells):
+            txt, gs, _rs, h_merge, v_merge = row_cells[idx_c]
+            exp.append((txt, h_merge, v_merge))
+            # Native PowerPoint emits (gs - 1) explicit <a:tc hMerge="1"/> placeholders right after a gridSpan cell.
+            # Only insert synthetic continuation cells when those placeholders are missing (e.g., LibreOffice/Slides exports).
+            if gs > 1:
+                actual_hmerge = 0
+                for look in range(1, gs):
+                    if idx_c + look < len(row_cells) and row_cells[idx_c + look][3]:
+                        actual_hmerge += 1
+                    else:
+                        break
+                for _pad in range(gs - 1 - actual_hmerge):
+                    exp.append(("", True, v_merge))
+            idx_c += 1
+        expanded_rows.append(exp)
+
+    ncols = max(len(r) for r in expanded_rows)
+    grid: list[list[str]] = [["" for _ in range(ncols)] for _ in range(len(expanded_rows))]
+    for r_idx, row_cells in enumerate(expanded_rows):
+        for c_idx, (txt, h_merge, v_merge) in enumerate(row_cells):
             if c_idx >= ncols:
                 break
             if v_merge and r_idx > 0 and not txt:
@@ -247,30 +268,64 @@ def _parse_chart_xml(raw: bytes, slide_num: int) -> list[str]:
     title_parts = [t.text.strip() for t in root.findall(f".//{{{_NS['c']}}}title//{{{_NS['a']}}}t") if t.text and t.text.strip()]
     chart_title = " ".join(title_parts) or "Chart"
 
-    # Extract value axis display units (thousands / millions / billions)
-    disp_unit: str | None = None
-    for bu in root.findall(f".//{{{_NS['c']}}}valAx//{{{_NS['c']}}}dispUnits/{{{_NS['c']}}}builtInUnit"):
-        val = bu.attrib.get("val", "").strip()
-        if val in _DISP_UNIT_SUFFIX:
-            disp_unit = _DISP_UNIT_SUFFIX[val]
-            break
-    if disp_unit is None:
-        custom_lbl = [
-            t.text.strip()
-            for t in root.findall(f".//{{{_NS['c']}}}valAx//{{{_NS['c']}}}dispUnits//{{{_NS['a']}}}t")
-            if t.text and t.text.strip()
-        ]
-        if custom_lbl:
-            disp_unit = " ".join(custom_lbl)
+    # Map each value axis axId -> (disp_unit, axis_num_fmt) to support dual-axis charts cleanly
+    val_axes: dict[str, tuple[str | None, str | None]] = {}
+    first_disp_unit: str | None = None
+    first_axis_fmt: str | None = None
+    for vax in root.findall(f".//{{{_NS['c']}}}valAx"):
+        ax_id_el = vax.find(f"./{{{_NS['c']}}}axId")
+        ax_id = ax_id_el.attrib.get("val", "").strip() if ax_id_el is not None else ""
+        ax_disp: str | None = None
+        for bu in vax.findall(f".//{{{_NS['c']}}}dispUnits/{{{_NS['c']}}}builtInUnit"):
+            val = bu.attrib.get("val", "").strip()
+            if val in _DISP_UNIT_SUFFIX:
+                ax_disp = _DISP_UNIT_SUFFIX[val]
+                break
+        if ax_disp is None:
+            custom_lbl = [
+                t.text.strip()
+                for t in vax.findall(f".//{{{_NS['c']}}}dispUnits//{{{_NS['a']}}}t")
+                if t.text and t.text.strip()
+            ]
+            if custom_lbl:
+                ax_disp = " ".join(custom_lbl)
+        ax_nf = vax.find(f"./{{{_NS['c']}}}numFmt")
+        ax_fmt = ax_nf.attrib.get("formatCode") if ax_nf is not None else None
+        if ax_id:
+            val_axes[ax_id] = (ax_disp, ax_fmt)
+        if first_disp_unit is None and ax_disp is not None:
+            first_disp_unit = ax_disp
+        if first_axis_fmt is None and ax_fmt is not None:
+            first_axis_fmt = ax_fmt
 
+    # Build ser -> (disp_unit, axis_fmt) via parent plot element's <c:axId> references
+    ser_axis_meta: dict[int, tuple[str | None, str | None]] = {}
+    plot_area = root.find(f".//{{{_NS['c']}}}plotArea")
+    if plot_area is not None:
+        for plot_el in plot_area:
+            plot_ax_ids = [
+                el.attrib.get("val", "").strip()
+                for el in plot_el.findall(f"./{{{_NS['c']}}}axId")
+                if el.attrib.get("val")
+            ]
+            matched_ax = next((val_axes[aid] for aid in plot_ax_ids if aid in val_axes), None)
+            if matched_ax is not None:
+                for ser_el in plot_el.findall(f"./{{{_NS['c']}}}ser"):
+                    ser_axis_meta[id(ser_el)] = matched_ax
+
+    unique_units = list(dict.fromkeys(u for u, _ in val_axes.values() if u))
+    disp_unit = " / ".join(unique_units) if unique_units else first_disp_unit
     header = f"[Slide {slide_num} Chart: {chart_title}" + (f" (Units: {disp_unit})]" if disp_unit else "]")
 
     series_rows: list[tuple[str, list[str], list[str]]] = []
     categories_master: list[str] = []
     for ser in root.findall(f".//{{{_NS['c']}}}ser"):
+        s_disp, s_axis_fmt = ser_axis_meta.get(id(ser), (first_disp_unit, first_axis_fmt))
         # Series name
         s_name_parts = [v.text.strip() for v in ser.findall(f"./{{{_NS['c']}}}tx//{{{_NS['c']}}}v") if v.text and v.text.strip()]
         s_name = " ".join(s_name_parts) or "Series"
+        if len(val_axes) > 1 and s_disp and not (s_axis_fmt and "%" in s_axis_fmt):
+            s_name = f"{s_name} ({s_disp})"
 
         # Categories (single or multi-level)
         cats: list[str] = []
@@ -296,7 +351,7 @@ def _parse_chart_xml(raw: bytes, slide_num: int) -> list[str]:
         if cats and not categories_master:
             categories_master = cats
 
-        # Values + numFmt
+        # Values + numFmt (fallback to axis-level numFmt)
         val_node = ser.find(f"./{{{_NS['c']}}}val")
         if val_node is None:
             val_node = ser.find(f"./{{{_NS['c']}}}yVal")
@@ -309,6 +364,9 @@ def _parse_chart_xml(raw: bytes, slide_num: int) -> list[str]:
                 nf_node = ser.find(f".//{{{_NS['c']}}}numFmt")
                 if nf_node is not None:
                     fmt_code = nf_node.attrib.get("formatCode")
+            if fmt_code is None or fmt_code.lower() == "general":
+                if s_axis_fmt and s_axis_fmt.lower() != "general":
+                    fmt_code = s_axis_fmt
             v_map: dict[int, str] = {}
             for pt in (nc.findall(f"./{{{_NS['c']}}}pt") if nc is not None else val_node.findall(f".//{{{_NS['c']}}}pt")):
                 idx = int(pt.attrib.get("idx", "0") or "0")
