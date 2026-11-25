@@ -1674,16 +1674,25 @@ class _LlmBackfillPayload(BaseModel):
     records: list[_LlmBackfillRow] = Field(default_factory=list)
 
 
+_OUTLOOK_HEADING_RE = re.compile(
+    r"\b(?:outlook|financial\s+guidance|business\s+outlook|guidance\s+for)\b.{0,180}?(?:expected|revenue|billion|million|gross\s+margin|eps)",
+    re.IGNORECASE | re.DOTALL,
+)
 _OUTLOOK_RE = re.compile(r"\b(outlook|guidance|expects?|project(?:s|ed)|next quarter|full[- ]year)\b", re.IGNORECASE)
 
 
 def slice_8k_outlook_excerpt(plain_text: str, *, max_chars: int = _MAX_8K_SLICE_CHARS) -> str:
+    """Slice the quantitative Outlook/Guidance window from an 8-K Exhibit 99.1 release."""
     if len(plain_text) <= max_chars:
         return plain_text
-    m = _OUTLOOK_RE.search(plain_text)
-    if not m:
+    m = _OUTLOOK_HEADING_RE.search(plain_text)
+    if m:
+        start = max(0, m.start() - 150)
+        return plain_text[start : start + max_chars].strip()
+    m2 = _OUTLOOK_RE.search(plain_text)
+    if not m2:
         return plain_text[:max_chars]
-    start = max(0, m.start() - 350)
+    start = max(0, m2.start() - 350)
     return plain_text[start : start + max_chars].strip()
 
 

@@ -9259,11 +9259,28 @@ def backfill_governance_guidance(
             try:
                 idx_doc, _ = sec_get_json(f"{base_dir}/index.json", category="filings", user_agent=ua, limiter=limiter, policy=policy)
                 items = ((idx_doc or {}).get("directory") or {}).get("item") or []
+                cand_html: list[tuple[int, int, str]] = []
+                prim_low = str(r.primary_document or "").lower()
                 for it in items:
                     nm = str(it.get("name") or "")
-                    if ("99" in nm.lower() or "ex99" in nm.lower() or "er" in nm.lower()) and nm.lower().endswith((".htm", ".html", ".txt")):
-                        ex_url = f"{base_dir}/{nm}"
-                        break
+                    nl = nm.lower()
+                    if not nl.endswith((".htm", ".html")):
+                        continue
+                    if "index" in nl or "header" in nl or nl == prim_low or re.fullmatch(r"r\d+\.htm", nl):
+                        continue
+                    sz = int(it.get("size") or 0) if str(it.get("size") or "").isdigit() else 0
+                    if re.search(r"(?:ex|exhibit)[-_.]?99[-_.]?1|99[-_.]?1|ex99", nl):
+                        prio = 0
+                    elif re.search(r"(?:q[1-4]fy\d+pr|pr\.htm|press|earningsrelease|release)", nl):
+                        prio = 1
+                    elif "cfo" in nl or "supplement" in nl:
+                        prio = 3
+                    else:
+                        prio = 2
+                    cand_html.append((prio, -sz, nm))
+                if cand_html:
+                    cand_html.sort()
+                    ex_url = f"{base_dir}/{cand_html[0][2]}"
             except Exception:
                 pass
             if not ex_url:
