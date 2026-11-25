@@ -121,6 +121,30 @@ def ingest_uploaded_file(path: Path, *, kind: str, title: str, permissions: Sour
             original = base64.b64encode(path.read_bytes()).decode("ascii")
             document = replace(document, pages={**(document.pages or {}), "original_retained": True})
         return IngestedUpload(document, kind, original)
+    if kind in ("pptx", "docx"):
+        from .research_docx import extract_docx
+        from .research_pptx import OoxmlSecurityError, extract_pptx
+
+        try:
+            if kind == "pptx":
+                res_p = extract_pptx(path)
+                text, pages = res_p.text, dict(res_p.document_pages)
+                ctype = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            else:
+                res_d = extract_docx(path)
+                text, pages = res_d.text, dict(res_d.document_pages)
+                ctype = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        except OoxmlSecurityError as err:
+            if "too_large" in err.code:
+                raise FetchFailure("source_too_large", str(err)) from err
+            raise FetchFailure("source_invalid", str(err)) from err
+        if not text.strip():
+            raise FetchFailure("source_invalid", f"No extractable text found in uploaded {kind.upper()} file.")
+        if blob_configured:
+            pages = _retain_original_blob(pages, path, None)
+        document = FetchedDocument(text=text, response_sha256=sha256_hex, content_type=ctype,
+                                   final_url="", redirect_count=0, pages=pages)
+        return IngestedUpload(document, kind, None)
     text, pages = extract_text_pages(path, "", is_html=kind == "html")
     original = None
     if blob_configured or size > MAX_FETCH_BYTES:

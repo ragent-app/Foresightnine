@@ -1,0 +1,198 @@
+{
+  "schema_version": "1",
+  "context_budget_version": "v1",
+  "evaluation_rules_version": "v1",
+  "parsing_rules": {
+    "negative_archetype_patterns": {
+      "form_10k_10q": [
+        "UNITED STATES SECURITIES AND EXCHANGE COMMISSION[\\s\\S]{0,400}FORM\\s+10-[KQ]",
+        "Indicate by check mark whether the registrant\\s*\\(1\\)\\s*has filed all reports",
+        "COMMISSION FILE NUMBER[\\s\\S]{0,200}FORM\\s+(?:10-K|10-Q|20-F)"
+      ],
+      "legal_contract": [
+        "THIS\\s+(?:AGREEMENT|INDENTURE|CONTRACT)\\s+IS\\s+MADE\\s+AND\\s+ENTERED\\s+INTO",
+        "WHEREAS,[\\s\\S]{0,600}NOW,\\s+THEREFORE,\\s+in\\s+consideration\\s+of\\s+the\\s+mutual\\s+covenants"
+      ],
+      "macro_report": [
+        "Federal\\s+Open\\s+Market\\s+Committee|Bureau\\s+of\\s+Economic\\s+Analysis|Consumer\\s+Price\\s+Index\\s+Summary"
+      ]
+    },
+    "transcript_positive_patterns": [
+      "\\b(?:earnings\\s+(?:conference\\s+)?call|prepared\\s+remarks|question-and-answer|questions\\s+and\\s+answers|operator)\\b",
+      "(?:业绩说明会|财报电话会|电话会议纪要|管理层陈述|问答环节|提问环节)"
+    ],
+    "sellside_positive_patterns": [
+      "\\b(?:price\\s+target|overweight|underweight|outperform|underperform|equal-?weight|buy\\s+rating|neutral\\s+rating|equity\\s+research|morgan\\s+stanley|goldman\\s+sachs|j\\.?p\\.?\\s*morgan|bank\\s+of\\s+america|citigroup|barclays|ubs|jefferies|bernstein|evercore|wedbush|oppenheimer|needham|piper\\s+sandler|keybanc|rbc\\s+capital)\\b",
+      "(?:目标价|维持买入|首次覆盖|买入评级|增持评级|中性评级|卖方研报|证券研究报告|业绩点评|业绩前瞻)"
+    ],
+    "sellside_preview_patterns": [
+      "\\b(?:earnings\\s+preview|pre-?earnings|ahead\\s+of\\s+(?:q[1-4]|fy\\d{2,4})\\s+results|preview\\s+note)\\b",
+      "(?:业绩前瞻|季报前瞻|财报前瞻)"
+    ],
+    "sellside_review_patterns": [
+      "\\b(?:earnings\\s+review|post-?earnings|first\\s+take|results\\s+recap|beat\\s+and\\s+raise|quarter\\s+recap)\\b",
+      "(?:业绩点评|季报点评|财报点评)"
+    ],
+    "qa_section_headers": [
+      "^\\s*(?:questions?[-\\s]+and[-\\s]+answers?|q\\s*&\\s*a(?:\\s+session)?|question\\s+and\\s+answer\\s+session)\\s*$",
+      "^\\s*(?:问答环节|提问环节|分析师提问|Q&A环节)\\s*$"
+    ],
+    "safe_harbor_patterns": [
+      "forward-?looking\\s+statements?[\\s\\S]{0,900}(?:private\\s+securities\\s+litigation\\s+reform\\s+act|actual\\s+results\\s+(?:may|could)\\s+differ\\s+materially|risk\\s+factors\\s+in\\s+our\\s+form\\s+10-[kq])",
+      "(?:前瞻性声明|安全港声明)[\\s\\S]{0,400}(?:实际结果可能|风险因素)"
+    ],
+    "call_default_nongaap_patterns": [
+      "(?:unless\\s+(?:otherwise\\s+)?(?:stated|noted|specified)|all\\s+references\\s+to|throughout\\s+this\\s+call)[\\s\\S]{0,160}non-?gaap",
+      "non-?gaap[\\s\\S]{0,120}(?:unless\\s+(?:otherwise\\s+)?(?:stated|noted|specified)|except\\s+where\\s+noted)",
+      "(?:除另有说明外|除非特别说明)[\\s\\S]{0,80}(?:非\\s*GAAP|Non-?GAAP)"
+    ],
+    "call_default_gaap_patterns": [
+      "(?:unless\\s+(?:otherwise\\s+)?(?:stated|noted|specified))[\\s\\S]{0,120}\\bgaap\\b(?!\\s+and\\s+non-?gaap)"
+    ],
+    "executive_title_patterns": [
+      "\\b(?:chief\\s+executive\\s+officer|ceo|chief\\s+financial\\s+officer|cfo|chief\\s+operating\\s+officer|coo|chief\\s+technology\\s+officer|cto|president|founder|co-?founder|chair(?:man|person)?|evp|svp|vp\\s+of\\s+investor\\s+relations|investor\\s+relations|ir\\b|controller|treasurer)\\b",
+      "(?:首席执行官|首席财务官|董事长|总裁|副总裁|财务总监|董事会秘书|投资者关系)"
+    ],
+    "cfo_title_patterns": [
+      "\\b(?:chief\\s+financial\\s+officer|cfo|finance\\s+chief|principal\\s+financial\\s+officer)\\b",
+      "(?:首席财务官|财务总监|CFO)"
+    ],
+    "ceo_title_patterns": [
+      "\\b(?:chief\\s+executive\\s+officer|ceo|founder|co-?founder|president\\s+and\\s+ceo)\\b",
+      "(?:首席执行官|CEO|董事长兼首席执行官)"
+    ],
+    "slide_reference_patterns": [
+      "(?:turning\\s+to|on|see|refer(?:ring)?\\s+to|shown\\s+on|look(?:ing)?\\s+at)\\s+slide\\s+(\\d{1,3})\\b",
+      "\\bslide\\s+(\\d{1,3})\\b",
+      "(?:第\\s*(\\d{1,3})\\s*页|幻灯片\\s*(\\d{1,3}))"
+    ]
+  },
+  "evasion_scoring": {
+    "prior_weights": {
+      "asked_quant_unanswered": 0.30,
+      "low_entity_overlap": 0.25,
+      "hedge_and_verbosity": 0.20,
+      "multi_analyst_cluster": 0.15,
+      "thesis_or_flag_hit": 0.10
+    },
+    "quantitative_question_patterns": [
+      "\\b(?:how\\s+much|how\\s+many|what\\s+percent|percentage|bps|basis\\s+points|gross\\s+margin|operating\\s+margin|timeline|when\\s+will|break\\s+down|breakdown|quantify|magnitude|run[-\\s]?rate|capex|backlog|rpo|capacity|utilization|pricing|asp|mix|exit\\s+rate|headwind|tailwind|dollar\\s+amount)\\b",
+      "(?:具体多少|占比|毛利率|净利率|节奏|时间表|量化|拆分|资本开支|产能|单价|订单)"
+    ],
+    "hedge_lexicon": [
+      "broadly",
+      "roughly",
+      "directionally",
+      "generally",
+      "somewhat",
+      "encouraged",
+      "pleased with",
+      "excited about",
+      "early innings",
+      "too early to tell",
+      "not breaking that out",
+      "don't break out",
+      "we don't disclose",
+      "as we've said",
+      "long-term opportunity",
+      "well positioned",
+      "fluid environment",
+      "dynamic environment",
+      "various factors",
+      "moving pieces",
+      "暂时不便透露",
+      "整体符合预期",
+      "长期看好",
+      "动态变化",
+      "不便拆分"
+    ],
+    "confidentiality_whitelist_patterns": [
+      "\\b(?:specific\\s+customer|single\\s+customer|individual\\s+customer|customer[-\\s]level\\s+pricing|contract\\s+terms\\s+with|nda|non-?disclosure)\\b",
+      "\\b(?:unannounced\\s+(?:m&a|acquisition|product|deal)|pending\\s+litigation|ongoing\\s+litigation|active\\s+lawsuit|regulatory\\s+investigation\\s+details|legal\\s+matter)\\b",
+      "\\b(?:multi-?year\\s+(?:exact|specific)\\s+eps|2029\\s+eps|2030\\s+eps|five-?year\\s+quarterly)\\b",
+      "(?:单一客户定价|具体客户份额|未公开并购|在审诉讼细节|保密协议)"
+    ],
+    "red_evasion_count_threshold": 2,
+    "yellow_evasion_count_threshold": 1
+  },
+  "ledger_collision_thresholds": {
+    "ar_minus_rev_pp_yellow": 8.0,
+    "ar_minus_rev_pp_red": 15.0,
+    "inv_minus_cogs_pp_yellow": 10.0,
+    "inv_minus_cogs_pp_red": 20.0,
+    "rpo_vs_rev_pp_yellow": -10.0,
+    "rpo_vs_rev_pp_red": -20.0,
+    "ocf_to_ni_yellow": 0.80,
+    "ocf_to_ni_red": 0.60,
+    "nongaap_margin_gap_bps_yellow": 200.0,
+    "nongaap_margin_gap_bps_red": 500.0,
+    "capex_yoy_pct_yellow": 30.0,
+    "capex_yoy_pct_red": 60.0,
+    "purchase_commitment_yoy_pct_yellow": 25.0,
+    "purchase_commitment_yoy_pct_red": 50.0,
+    "numeric_tolerance_rel_pct": 2.0,
+    "margin_tolerance_bps": 25.0,
+    "restatement_notice_pct": 1.0,
+    "omission_entity_coverage_floor": 0.15,
+    "speaker_baseline_shift_min_quarters": 2,
+    "speaker_hedge_shift_yellow": 0.015,
+    "speaker_evasion_rate_shift_yellow": 15.0
+  },
+  "item1a_risk_buckets": {
+    "regulatory": ["regulation", "regulatory", "antitrust", "ftc", "doj", "eu dma", "sec inquiry", "compliance", "监管", "反垄断"],
+    "export_control": ["export control", "tariff", "tariffs", "customs", "duties", "sanction", "sanctions", "bis", "china restrictions", "license requirement", "出口管制", "关税", "制裁"],
+    "customer_concentration": ["customer concentration", "single customer", "top customer", "key customer", "hyperscaler", "10% of revenue", "大客户集中", "单一客户"],
+    "supply_chain": ["supply constraint", "foundry", "packaging", "cowos", "hbm", "single source", "supplier", "yield", "shortage", "供应链", "良率", "产能瓶颈"],
+    "litigation": ["litigation", "lawsuit", "class action", "patent infringement", "settlement", "judgment", "subpoena", "诉讼", "专利纠纷"],
+    "liquidity_debt": ["covenant", "refinancing", "liquidity", "credit facility", "going concern", "default", "downgrade", "流动性", "债务违约"],
+    "cybersecurity": ["cybersecurity", "ransomware", "data breach", "unauthorized access", "security incident", "网络安全", "数据泄露"],
+    "going_concern_controls": ["material weakness", "internal control", "restatement", "going concern", "auditor", "内控缺陷", "重述"]
+  },
+  "negation_context_markers": [
+    "non-gaap",
+    "non gaap",
+    "excluding",
+    "excludes",
+    "constant currency",
+    "illustrative",
+    "aspirational",
+    "not guiding",
+    "not official guidance",
+    "subject to supply",
+    "if macro stabilizes",
+    "assuming no",
+    "roughly",
+    "approximately",
+    "target model",
+    "long-term target",
+    "非GAAP",
+    "剔除",
+    "不构成正式指引",
+    "假设宏观"
+  ],
+  "context_budget": {
+    "max_total_chars": 32000,
+    "dynamic_user_prefix_chars": 2500,
+    "zone_b_qa_chars": 16000,
+    "zone_b_evasion_bucket_ratio": 0.65,
+    "zone_b_quant_bucket_ratio": 0.35,
+    "zone_c_remarks_chars": 10000,
+    "zone_d_aux_summary_chars": 2000,
+    "map_doc_max_chars": 18000,
+    "sellside_max_chars": 8000,
+    "omission_phase2_max_chars": 8000,
+    "map_reduce_qa_trigger_chars": 28000,
+    "max_llm_calls_per_audit": 3,
+    "remarks_8k_jaccard_dedup_threshold": 0.75,
+    "opening_basis_protect_chars": 1000
+  },
+  "radar_alert_thresholds": {
+    "min_contradiction_severity": "yellow",
+    "alert_on_commitment_miss": true,
+    "alert_on_silent_drop_high_risk": true,
+    "alert_on_item1a_omission": true,
+    "alert_on_late_notice": true,
+    "check_filings_cooldown_minutes": 30,
+    "check_filings_max_ciks_per_call": 5
+  }
+}

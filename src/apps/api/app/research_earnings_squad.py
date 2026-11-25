@@ -4825,6 +4825,39 @@ class EarningsSquadOrchestrator:
                     total_characters=len(src.text),
                 ))
 
+            # V3a D6: When no FMP BYOK transcript is available, reuse any eligible Topic-attached
+            # user transcript via parse_transcript_v2 while strictly preserving real retrieval_method,
+            # kind="user_supplied", and permissions (never forging fmp_transcript / export=False).
+            if transcript_index.status != "available":
+                from .research_transcript_parser import build_direction_a_transcript_index_from_user_source
+
+                best_user_tr = None
+                best_score = -1
+                for sid, src in self._tool_runner.source_by_id.items():
+                    if sid not in source_texts:
+                        continue
+                    if src.kind != "user_supplied" and src.retrieval_method not in (
+                        "user_supplied",
+                        "user_pdf",
+                        "user_docx",
+                        "user_text",
+                        "user_html",
+                    ):
+                        continue
+                    try:
+                        cand_tr, parsed_doc = build_direction_a_transcript_index_from_user_source(
+                            src, symbol=symbol
+                        )
+                    except Exception:
+                        continue
+                    if cand_tr is not None and parsed_doc is not None:
+                        score = len(parsed_doc.qa_exchanges) * 10 + len(parsed_doc.turns)
+                        if score > best_score:
+                            best_score = score
+                            best_user_tr = cand_tr
+                if best_user_tr is not None:
+                    transcript_index = best_user_tr
+
         # Deterministic guidance & Non-GAAP reconciliation (if structured inputs supplied)
         guidance_res: GuidanceAndNonGaapResult | None = None
         if request.guidance_inputs or request.nongaap_bridges:
