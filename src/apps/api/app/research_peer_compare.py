@@ -1231,22 +1231,57 @@ def generate_peer_attribution_brief(
     runner: Any,
     slot: str = "deep_reasoner",
     model_name: str | None = None,
-    max_repairs: int = 2,
+    max_repairs: int = 1,
 ) -> PeerAttributionBrief:
     """On-demand single-turn LLM attribution grounded strictly in the Layer 1 matrix."""
-    matrix_json = matrix.model_dump_json(indent=2)
+    compact_payload = {
+        "primary_symbol": matrix.primary_symbol,
+        "primary_coordinate_summary": matrix.primary_coordinate_summary,
+        "reverse_dcf_assumptions": matrix.reverse_dcf_assumptions,
+        "comparability_warnings": [
+            {"code": w.code, "severity": w.severity, "symbols": w.symbols, "message": w.message}
+            for w in matrix.comparability_warnings
+        ],
+        "peer_medians": {k: v for k, v in matrix.peer_medians.items() if v is not None},
+        "companies": [
+            {
+                "symbol": c.symbol,
+                "period_end_date": c.period_end_date,
+                "period_basis": c.period_basis,
+                "accounting_standard": c.accounting_standard,
+                "currency": c.currency,
+                "quality_light": c.quality_light,
+                "is_financial_gated": c.is_financial_gated,
+                "ttm_revenue_yoy_pct": c.ttm_revenue_yoy_pct,
+                "latest_q_revenue_yoy_pct": c.latest_q_revenue_yoy_pct,
+                "ttm_gross_margin_pct": c.ttm_gross_margin_pct,
+                "ttm_operating_margin_pct": c.ttm_operating_margin_pct,
+                "ttm_fcf_margin_pct": c.ttm_fcf_margin_pct,
+                "ttm_roic_pct": c.ttm_roic_pct,
+                "sbc_pct_of_fcf": c.sbc_pct_of_fcf,
+                "pe_ttm": c.pe_ttm,
+                "ev_to_sales_ttm": c.ev_to_sales_ttm,
+                "ev_to_ebit_ttm": c.ev_to_ebit_ttm,
+                "ev_to_fcf_ttm": c.ev_to_fcf_ttm,
+                "ev_to_fcf_ex_sbc_ttm": c.ev_to_fcf_ex_sbc_ttm,
+                "reverse_dcf_implied_5y_fcf_cagr_pct": c.reverse_dcf_implied_5y_fcf_cagr_pct,
+            }
+            for c in matrix.companies
+        ],
+    }
+    matrix_json = json.dumps(compact_payload, ensure_ascii=False, separators=(",", ":"))
     system_prompt = (
         "You are a buy-side Relative Valuation & Peer Comparison Analyst.\n"
         "Analyze ONLY the deterministic Layer 1 PeerComparisonMatrix JSON provided below.\n"
         "NEVER invent financial figures, consensus estimates, or stock prices not present in the matrix.\n"
         "If comparability_warnings exist (e.g. fiscal mismatch, IFRS/non-USD, financial SIC, negative FCF), explicitly note them.\n"
-        "For EVERY key figure you cite, include an exact entry in `cited_metrics` with the exact `symbol`, `metric_key`, and numeric `value` from the matrix.\n\n"
+        "Keep the response concise and sharp. For EVERY key figure you cite (3-8 metrics), include an exact entry in `cited_metrics` with the exact `symbol`, `metric_key`, and numeric `value` from the matrix.\n\n"
         "Output ONLY valid JSON matching `_LlmPeerBriefPayload` (`extra='forbid'`):\n"
         "{\n"
         "  \"summary\": \"2-3 sentence executive takeaway on where primary_symbol stands vs peers\",\n"
         "  \"valuation_vs_fundamentals\": \"Does relative valuation / Reverse-DCF spread align with growth, margin, ROIC, and FCF quality?\",\n"
         "  \"relative_risks\": [\"concise relative risk bullet 1\", \"bullet 2\"],\n"
-        "  \"cited_metrics\": [{\"symbol\": \"NVDA\", \"metric_key\": \"ttm_gross_margin_pct\", \"value\": \"75.20\"}]\n"
+        "  \"cited_metrics\": [{\"symbol\": \"NVDA\", \"metric_key\": \"ttm_gross_margin_pct\", \"value\": \"74.67\"}]\n"
         "}"
     )
     user_prompt = (
