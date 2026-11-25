@@ -463,3 +463,97 @@ def test_direction_b_api_end_to_end_ledger_subscription_inbox_decision(monkeypat
     assert len(hist["versions"]) == 2
     assert hist["latest_diff"]["from_version"] == 1
     assert hist["latest_diff"]["to_version"] == 2
+
+
+def test_earnings_delta_stage0_and_stage1_grounding_and_quiet_filter() -> None:
+    """Step B2: Verify deterministic Stage 0 diff, Stage 1 quotation grounding, and quiet no-change filtering."""
+    from types import SimpleNamespace
+    from app.research_delta_review import (
+        build_inbox_item_from_delta_review,
+        compute_delta_stage0,
+        run_earnings_delta_review,
+    )
+
+    draft = build_thesis_draft_from_dossier(account_id="acc_1", topic_id="topic_nvda", dossier=_sample_dossier())
+    v1 = confirm_thesis_ledger_version(account_id="acc_1", topic_id="topic_nvda", claims=draft.claims, base_draft=draft)
+
+    stage0 = compute_delta_stage0(
+        cik="0001045810",
+        symbol="NVDA",
+        accession="0001045810-26-000201",
+        form="8-K",
+        disclosed_at="2026-11-17",
+        period_label="FY2027 Q3",
+        ledger=v1,
+        prior_snapshot={
+            "flags": [{"code": "AR_GROWTH_GAP", "severity": "yellow", "summary": "AR gap 6pp"}],
+            "valuation": {"reverse_dcf": {"implied_5y_fcf_cagr_pct": "18.5"}},
+            "guidance_nongaap": {"new_guidance": {"revenue_b": "50.0", "gross_margin_pct": "74.5"}},
+        },
+        new_snapshot={
+            "flags": [{"code": "AR_GROWTH_GAP", "severity": "red", "summary": "AR gap widened to 11pp"}],
+            "valuation": {"reverse_dcf": {"implied_5y_fcf_cagr_pct": "24.0"}},
+        },
+        observed_metrics={"revenue_b": "52.5", "gross_margin_pct": "71.2"},
+    )
+    assert stage0.is_10q_or_10k is False
+    assert stage0.reverse_dcf_delta_bps == "550"
+    assert stage0.triggered_count == 1  # implied_5y_fcf_cagr_delta_bps >= 500 triggered!
+    assert len(stage0.flag_drifts) == 1 and stage0.flag_drifts[0].new_severity == "red"
+    assert any("10-Q/10-K" in g for g in stage0.open_gaps)
+    verdicts = {r.metric_name: r.verdict for r in stage0.promise_delivery_rows}
+    assert verdicts["revenue_b"] == "beat"
+    assert verdicts["gross_margin_pct"] == "miss"
+
+    filing_text = (
+        "NVIDIA reported Q3 FY27 revenue of $52.5 billion, beating guidance of $50.0 billion. "
+        "However, Q4 GAAP gross margin is guided to 71.2%, down 330 bps sequentially on Blackwell rack ramp costs."
+    )
+
+    class _FakeDeltaRunner:
+        def invoke(self, _req: Any) -> Any:
+            return SimpleNamespace(
+                content=(
+                    '{"overall_impact": "challenges_thesis", '
+                    '"headline": "Q3 revenue beat offset by 330bp Q4 gross margin guide cut", '
+                    '"promise_delivery_summary": "Revenue beat (+5.0%), gross margin missed (-330bps).", '
+                    '"claim_updates": [{"claim_id": "clm_margin_1", "pillar": "margin", "old_status": "active", '
+                    '"new_status": "weakened", "rationale": "Q4 gross margin guided to 71.2% below 74.0% floor.", '
+                    '"proposed_statement": "Blackwell ramp compressing near-term gross margins to ~71%.", '
+                    '"citations": [{"source_id": "sec:0001045810-26-000201:ex99", "accession": "0001045810-26-000201", '
+                    '"quotation": "Q4 GAAP gross margin is guided to 71.2%, down 330 bps sequentially"}]}], '
+                    '"new_variables": [], "open_gaps": []}'
+                ),
+                parsed=None,
+                usage={"input_tokens": 1200, "output_tokens": 350, "total_tokens": 1550},
+            )
+
+    diff = run_earnings_delta_review(
+        stage0=stage0,
+        filing_text=filing_text,
+        source_id="sec:0001045810-26-000201:ex99",
+        ledger=v1,
+        runner=_FakeDeltaRunner(),
+        model_name="glm-5.3-flash",
+    )
+    assert diff.overall_impact == "challenges_thesis"
+    assert diff.verified_quotes == 1 and diff.total_quotes == 1
+    assert diff.tokens_used == 1550
+    assert any("10-Q/10-K" in g for g in diff.open_gaps)
+
+    sub = FilingWatchSubscription(account_id="acc_1", topic_id="topic_nvda", cik="0001045810", symbol="NVDA")
+    inbox_item = build_inbox_item_from_delta_review(account_id="acc_1", subscription=sub, diff=diff)
+    assert inbox_item is not None
+    assert inbox_item.source_channel == "earnings_delta"
+    assert inbox_item.impact_level == "high"
+    assert "margin" in inbox_item.affected_pillars
+    assert inbox_item.linked_claim_ids == ["clm_margin_1"]
+
+    # Quiet filter: no_material_change + 0 triggers -> None (stays quiet!)
+    quiet_diff = diff.model_copy(
+        update={
+            "overall_impact": "no_material_change",
+            "stage0": stage0.model_copy(update={"triggered_count": 0}),
+        }
+    )
+    assert build_inbox_item_from_delta_review(account_id="acc_1", subscription=sub, diff=quiet_diff) is None
