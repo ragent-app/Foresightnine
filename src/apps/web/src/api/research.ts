@@ -168,6 +168,15 @@ export function getVersionSourceText(
   return apiRequest<SourceText>(`${versionPath(topicId, versionId)}/sources/${enc(sourceId)}/text`, opts(signal));
 }
 
+export function getOwnerSourceText(
+  sourceId: string,
+  topicId?: string | null,
+  signal?: AbortSignal,
+): Promise<SourceText> {
+  const qs = topicId ? `?topic_id=${enc(topicId)}` : "";
+  return apiRequest<SourceText>(`/v2/research/sources/${enc(sourceId)}/text${qs}`, opts(signal));
+}
+
 export function createVersion(topicId: string, input: ResearchV2.VersionInput): Promise<ResearchV2.ResearchTopic> {
   return apiRequest<ResearchV2.ResearchTopic>(`${topicPath(topicId)}/versions`, { method: "POST", body: input });
 }

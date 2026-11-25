@@ -91,7 +91,7 @@ export interface FilingWatchSubscription {
   symbol?: string | null;
   company_name?: string | null;
   enabled: boolean;
-  watched_channels: ("v1_events" | "earnings_delta" | "peer_relative" | "governance_audit")[];
+  watched_channels: ("v1_events" | "earnings_delta" | "peer_relative" | "governance_audit" | "call_commitment_verify")[];
   lookback_days: number;
   check_interval_minutes: number;
   last_checked_at?: string | null;
@@ -142,7 +142,7 @@ export interface ChangeInboxItem {
   cik: string;
   symbol?: string | null;
   company_name?: string | null;
-  source_channel: "v1_events" | "earnings_delta" | "peer_relative" | "governance_audit";
+  source_channel: "v1_events" | "earnings_delta" | "peer_relative" | "governance_audit" | "call_commitment_verify";
   event_thread_key: string;
   accession?: string | null;
   superseded_by_accession?: string | null;
@@ -163,6 +163,9 @@ export interface ChangeInboxItem {
   user_decision_note?: string | null;
   resulting_ledger_version?: number | null;
   disclosed_at?: string | null;
+  report_date?: string | null;
+  fiscal_period_key?: string | null;
+  has_confirmed_ledger?: boolean;
   created_at: string;
   updated_at: string;
 }

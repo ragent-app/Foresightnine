@@ -12,7 +12,7 @@ export interface LiveStreamStore {
 
 export type PanelState =
   | { kind: "record"; tab: AnswerTab; turnKey?: string }
-  | { kind: "reader"; sourceId: string; range: readonly [number, number] | null }
+  | { kind: "reader"; sourceId: string; range: readonly [number, number] | null; locBadge?: string | null }
   | { kind: "settings" }
   | { kind: "cite"; n: number; claimId: string; citationIndex: number }
   | { kind: "add"; initial?: AddSourceInitial }

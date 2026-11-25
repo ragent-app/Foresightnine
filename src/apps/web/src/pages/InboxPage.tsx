@@ -46,7 +46,22 @@ function InboxCard({
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState("");
   const [quotesOpen, setQuotesOpen] = useState(false);
+  const [v3aOpen, setV3aOpen] = useState(false);
   const quotes = item.signal_envelope?.verbatim_quotes ?? [];
+  const v3aDiff =
+    item.scorecard_diff && typeof item.scorecard_diff.v3a_call_collision === "object" && item.scorecard_diff.v3a_call_collision !== null
+      ? (item.scorecard_diff.v3a_call_collision as {
+          headline?: string;
+          badge_summary?: string;
+          call_audit_url?: string | null;
+          top_findings?: { severity?: string; title?: string; ledger_evidence?: string }[];
+        })
+      : null;
+  const v3aAuditUrl =
+    v3aDiff?.call_audit_url ||
+    (item.topic_id && item.source_channel === "call_commitment_verify"
+      ? `/research/${encodeURIComponent(item.topic_id)}?panel=call-audit`
+      : null);
 
   return (
     <article className={`inbox-card${item.review_state === "unread" ? " unread" : ""}`}>
@@ -61,7 +76,9 @@ function InboxCard({
               ? "同业估值偏离"
               : item.source_channel === "governance_audit"
                 ? "治理与资本配置"
-                : "财报增量复核"}
+                : item.source_channel === "call_commitment_verify"
+                  ? "电话会承诺核验"
+                  : "财报增量复核"}
         </span>
         {item.disclosed_at ? <span className="inbox-date">{item.disclosed_at}</span> : null}
         <span className="grow" />
@@ -78,6 +95,35 @@ function InboxCard({
           <Link className="peer-coord-link" to={String(item.scorecard_diff.compare_url)}>
             打开同业估值矩阵 →
           </Link>
+        </div>
+      ) : null}
+
+      {v3aDiff ? (
+        <div className="inbox-quotes-wrap">
+          <div className="v3a-inbox-strip">
+            <button
+              type="button"
+              className="inbox-link-btn"
+              onClick={() => setV3aOpen((v) => !v)}
+            >
+              {v3aOpen ? "收起电话会核验明细" : `查看电话会核验明细${v3aDiff.badge_summary ? `（${v3aDiff.badge_summary}）` : ""}`}
+            </button>
+            {v3aAuditUrl ? (
+              <Link className="peer-coord-link" to={v3aAuditUrl}>
+                打开电话会核验面板 →
+              </Link>
+            ) : null}
+          </div>
+          {v3aOpen && v3aDiff.top_findings && v3aDiff.top_findings.length > 0 ? (
+            <ul className="inbox-quotes-list">
+              {v3aDiff.top_findings.map((f, idx) => (
+                <li key={`v3a-f-${idx}`} className="inbox-quote-item">
+                  <strong>{f.title}</strong>
+                  {f.ledger_evidence ? <div className="quote-warn-note">{f.ledger_evidence}</div> : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 
@@ -164,7 +210,13 @@ function InboxCard({
             disabled={busy}
             onClick={() => onDecide("accept")}
           >
-            {item.topic_id ? "接受并升级假设台账" : "确认知晓"}
+            {item.has_confirmed_ledger
+              ? "接受并升级假设台账"
+              : item.topic_id && item.source_channel === "call_commitment_verify"
+                ? "确认知晓并查看核验面板"
+                : item.topic_id && item.has_confirmed_ledger !== false
+                  ? "接受并升级假设台账"
+                  : "确认知晓"}
           </button>
         ) : null}
         {item.review_state !== "dismissed_with_note" ? (
@@ -189,8 +241,11 @@ function InboxCard({
         ) : null}
         <span className="grow" />
         {item.topic_id ? (
-          <Link className="inbox-link-btn" to={`/research/${encodeURIComponent(item.topic_id)}`}>
-            查看完整底稿 →
+          <Link
+            className="inbox-link-btn"
+            to={v3aAuditUrl ?? `/research/${encodeURIComponent(item.topic_id)}`}
+          >
+            {item.source_channel === "call_commitment_verify" ? "查看核验面板 →" : "查看完整底稿 →"}
           </Link>
         ) : null}
       </div>

@@ -1,6 +1,7 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { Link, useBlocker, useNavigate, useParams } from "react-router-dom";
+import { Link, useBlocker, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { formatQuoteLocationBadge, type GroundedQuoteRef } from "../api/callVerification";
 import {
   getEarningsDossier,
   renderDeepReport,
@@ -31,6 +32,7 @@ import { describeError } from "./research/errors";
 import { DEFAULT_OPTIONS, optionsValid, runRequestFields, type RunOptions } from "./research/options";
 import { optionTokens } from "./research/optionTokens";
 import { ResearchSettingsPanel } from "./research/ResearchSettingsPanel";
+import { CallVerificationBar, type AttachedSourceTrigger } from "./topic/CallVerificationBar";
 import { CitationSheet } from "./topic/Citation";
 import { GovernanceAuditBar } from "./topic/GovernanceAuditBar";
 import { PeerCoordinateBar } from "./topic/PeerCoordinateBar";
@@ -241,6 +243,9 @@ function parseInspectLocation(location?: string | null): readonly [number, numbe
 
 export function TopicPage() {
   const { topicId = "" } = useParams();
+  const [searchParams] = useSearchParams();
+  const callAuditDeepLink = searchParams.get("panel") === "call-audit";
+  const [attachedTrigger, setAttachedTrigger] = useState<AttachedSourceTrigger | null>(null);
   const topicIdRef = useRef(topicId);
   topicIdRef.current = topicId;
   const draftKey = `research-draft:${readSession()?.account.account_id ?? "anonymous"}:${topicId}`;
@@ -670,10 +675,20 @@ export function TopicPage() {
     }
   }, [topicId]);
 
-  const handleInspectSource = useCallback((sourceId: string, location?: string | null) => {
+  const handleInspectSource = useCallback((sourceId: string, location?: string | null, locBadge?: string | null) => {
     if (!sourceId) return;
     const range = parseInspectLocation(location);
-    setPanel({ kind: "reader", sourceId, range });
+    setPanel({ kind: "reader", sourceId, range, ...(locBadge ? { locBadge } : {}) });
+  }, []);
+
+  const handleInspectQuote = useCallback((quote: GroundedQuoteRef) => {
+    if (!quote.source_id) return;
+    const range: readonly [number, number] | null =
+      typeof quote.raw_char_start === "number" && typeof quote.raw_char_end === "number" && quote.raw_char_end >= quote.raw_char_start
+        ? [quote.raw_char_start, quote.raw_char_end]
+        : null;
+    const locBadge = formatQuoteLocationBadge(quote);
+    setPanel({ kind: "reader", sourceId: quote.source_id, range, ...(locBadge ? { locBadge } : {}) });
   }, []);
 
   const updateText = (value: string) => {
@@ -791,6 +806,7 @@ export function TopicPage() {
     const latest = topicQuery.data ? latestVersion(topicQuery.data) : null;
     if (!latest) throw new Error("topic_not_loaded");
     await attach.mutateAsync({ parentVersionId: latest.version_id, sourceIds: [source.source_id] });
+    setAttachedTrigger((prev) => ({ sourceIds: [source.source_id], seq: (prev?.seq ?? 0) + 1 }));
     const reason = ineligibility(source, topicQuery.data?.request.as_of ?? null);
     if (reason === null) setOptions((current) => (current.selectedSourceIds === null || current.selectedSourceIds.includes(source.source_id)
       ? current : { ...current, selectedSourceIds: [...current.selectedSourceIds, source.source_id] }));
@@ -1392,6 +1408,18 @@ export function TopicPage() {
                 ) : null}
               </header>
               <TopicConclusion turns={turns} />
+              <CallVerificationBar
+                topicId={topicId}
+                sourceIds={version?.source_ids ?? []}
+                symbol={squadDossier?.symbol ?? null}
+                cik={squadDossier?.cik ?? null}
+                asOfIso={topic!.request.as_of ?? null}
+                locked={locked}
+                initialExpanded={callAuditDeepLink}
+                attachedTrigger={attachedTrigger}
+                onAddSources={() => setPanel({ kind: "add" })}
+                onInspectQuote={handleInspectQuote}
+              />
               {turns.map((turn, index) => (
                 <TurnView
                   key={turn.turn_id}
@@ -1627,7 +1655,7 @@ export function TopicPage() {
               onClose={() => setPanel(null)}
             />
           ) : null}
-          {panel?.kind === "reader" ? <ReaderPanel key={`${panel.sourceId}:${panel.range?.join(":") ?? ""}`} sourceId={panel.sourceId} range={panel.range} onClose={() => setPanel(null)} /> : null}
+          {panel?.kind === "reader" ? <ReaderPanel key={`${panel.sourceId}:${panel.range?.join(":") ?? ""}`} sourceId={panel.sourceId} range={panel.range} locBadge={panel.locBadge ?? null} onClose={() => setPanel(null)} /> : null}
           {panel?.kind === "cite" ? <CitationSheet n={panel.n} claimId={panel.claimId} citationIndex={panel.citationIndex} onClose={() => setPanel(null)} /> : null}
           {panel?.kind === "settings" ? (
             <ResearchSettingsPanel mode="topic" options={options} asOfIso={topic!.request.as_of ?? null} scope={topic!.request.scope ?? ""} sources={[...sources.values()]} onApply={setOptions} onClose={() => setPanel(null)} />

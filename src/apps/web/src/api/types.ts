@@ -262,11 +262,20 @@ export interface AvailableVersionSource {
 // apps/api/app/main.py list_research_version_sources
 export type VersionSource = AvailableVersionSource | { status: "unavailable"; source_id: string };
 
-// apps/api/app/main.py list_research_version_sources (source text endpoint)
+// apps/api/app/main.py list_research_version_sources & owner-scoped /sources/{source_id}/text
 export interface SourceText {
   source_id: string;
   text: string;
   content_sha256: string;
+  title?: string;
+  retrieval_method?: string;
+  permissions?: SourcePermissionFlags;
+  obtained_at?: string;
+  original_available?: boolean;
+  document_pages?: {
+    version?: number;
+    pages?: [number, number, string][];
+  } | null;
 }
 
 // apps/api/app/main.py _visible_research_source: creation endpoints return the

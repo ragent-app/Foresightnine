@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { nextPollDelay } from "../lib/polling";
 import { ApiError } from "./http";
-import { createCalculation, createVersion, deleteTopic, getProgress, getRecoveryStatus, getTopic, getVersionSourceText, forkTopic, isActiveStatus, listRuns, listTurnStatuses, listTopics, listVersionSources, recalculateCalculation, restoreTopic, updateTopic, type CreateCalculationRequest } from "./research";
+import { createCalculation, createVersion, deleteTopic, getOwnerSourceText, getProgress, getRecoveryStatus, getTopic, getVersionSourceText, forkTopic, isActiveStatus, listRuns, listTurnStatuses, listTopics, listVersionSources, recalculateCalculation, restoreTopic, updateTopic, type CreateCalculationRequest } from "./research";
 import { attachSources, reextractPdfSource } from "./sources";
 import { openResearchRunStream, StreamFallbackError } from "./stream";
 import type { CreatedSource, ProgressEvent, RecoveryStatus, RunProgress, SourceText, TransientStreamState, VersionSource } from "./types";
@@ -100,7 +100,17 @@ export function useSourceText(
 ) {
   return useQuery<SourceText>({
     queryKey: queryKeys.sourceText(topicId, versionId ?? "", sourceId ?? ""),
-    queryFn: ({ signal }) => getVersionSourceText(topicId, versionId ?? "", sourceId ?? "", signal),
+    queryFn: async ({ signal }) => {
+      try {
+        return await getVersionSourceText(topicId, versionId ?? "", sourceId ?? "", signal);
+      } catch (error) {
+        // Fallback to owner-scoped text for cross-Topic (historical Q2) or locked-Topic Layer 0b OCR sources.
+        if (error instanceof ApiError && error.status === 404 && sourceId) {
+          return await getOwnerSourceText(sourceId, topicId, signal);
+        }
+        throw error;
+      }
+    },
     enabled: enabled && versionId !== null && sourceId !== null,
     staleTime: Infinity,
   });

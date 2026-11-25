@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ApiError } from "../../api/http";
 import { useSourceText } from "../../api/queries";
-import { VERIFICATION_LABEL } from "../../lib/copy";
+import { PERMISSION_LABEL, VERIFICATION_LABEL } from "../../lib/copy";
 import { formatInteger } from "../../lib/format";
 import { prefersReducedMotion } from "../../ui/media";
 import { Panel, useKeyShortcut } from "../../ui/Panel";
@@ -13,8 +13,30 @@ const CONTEXT = 2000;
 const STEP = 4000;
 const DEFAULT_CHECK = VERIFICATION_LABEL.numeric_and_location_match_semantics_not_verified ?? "";
 
+function inferPageLabel(
+  documentPages: { pages?: [number, number, string][] } | null | undefined,
+  offset: number | null,
+): string | null {
+  if (offset === null || !documentPages?.pages) return null;
+  for (let i = 0; i < documentPages.pages.length; i += 1) {
+    const entry = documentPages.pages[i];
+    if (entry && offset >= entry[0] && offset < entry[1]) return `第 ${i + 1} 页`;
+  }
+  return null;
+}
+
 /** Spec §4.5: source text with the current citation highlighted and other cited spans underlined. */
-export function ReaderPanel({ sourceId, range, onClose }: { sourceId: string; range: Range | null; onClose: () => void }) {
+export function ReaderPanel({
+  sourceId,
+  range,
+  locBadge,
+  onClose,
+}: {
+  sourceId: string;
+  range: Range | null;
+  locBadge?: string | null;
+  onClose: () => void;
+}) {
   const view = useTopicView();
   const source = view.sources.get(sourceId);
   const text = useSourceText(view.topicId, view.version.version_id, sourceId, true);
@@ -83,9 +105,12 @@ export function ReaderPanel({ sourceId, range, onClose }: { sourceId: string; ra
   }
 
   const sha = text.data?.content_sha256 ?? source?.content_sha256 ?? "";
+  const resolvedTitle = source?.title ?? text.data?.title ?? view.sourceTitle(sourceId);
+  const effectiveLocBadge = locBadge ?? inferPageLabel(text.data?.document_pages, current ? current[0] : null);
+  const fallbackPerms = !source ? text.data?.permissions : undefined;
   return (
     <Panel
-      title={source?.title ?? view.sourceTitle(sourceId)}
+      title={resolvedTitle}
       onClose={onClose}
       detents
       footerClassName="split"
@@ -99,9 +124,16 @@ export function ReaderPanel({ sourceId, range, onClose }: { sourceId: string; ra
     >
       <div className="list">
         <div className="item">
-          {source ? <span className="meta">{sourceMeta(source)}</span> : null}
-          {source ? <Permissions source={source} /> : null}
+          {source ? <span className="meta">{sourceMeta(source)}</span> : text.data?.retrieval_method ? <span className="meta">跨期 / 账号级资料 · {text.data.retrieval_method}</span> : null}
+          {source ? <Permissions source={source} /> : fallbackPerms ? (
+            <span className="meta">
+              {(["store", "model_input", "display", "export"] as const)
+                .map((k) => `${PERMISSION_LABEL[k]}${fallbackPerms[k] ? "允许" : "禁止"}`)
+                .join(" · ")}
+            </span>
+          ) : null}
           <span className="meta">
+            {effectiveLocBadge ? <><span className="v3a-loc-pill">{effectiveLocBadge}</span>{" "}</> : null}
             {current ? `当前引文：字符 ${current[0]}–${current[1]} · ${DEFAULT_CHECK}` : `已标出 ${cited.length} 处引用`}
             {sha ? <> · <span className="mono">sha256 {sha.slice(0, 8)} {sha.slice(8, 16)}…</span></> : null}
           </span>
