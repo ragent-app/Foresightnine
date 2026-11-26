@@ -1,10 +1,10 @@
-# V3a 电话会 Q&A 核验与预期差引擎（零外部授权版）— 深度架构与实施方案（v3 终审定稿）
+# V3a 电话会 Q&A 核验与预期差引擎（零外部授权版）— 深度架构与实施方案（v4 实测收口与 Agent 供血加固版）
 
-更新日期：2026 年 11 月 25 日  
-状态：✅ **v3 终审定稿**（已完整融合两轮 `/grill-me` 14 项核心决策 D1–D8 / R2-D1–R2-D6、全链路源码逐行 `/boost` 审查检出的全部 P0/P1 排雷方案、8 大架构目标升级，以及 4 项运维/边界工程闭环，可直接指导 `Step V3a-0 → V3a-3` 编码）  
-前置基线：`master @ 00b1331`（方向 A 美股季报深研 Squad、V1 SEC 重大事件引擎、方向 B 假设台账与 P1-B 雷达、V2 同业对齐与相对估值、V2.5 治理激励与资本配置审计均已上线验收）  
+更新日期：2026 年 11 月 26 日  
+状态：✅ **v3 基础闭环（`Step V3a-0 → V3a-3` + 实测加固）已上线验收；📋 v4 P0+P1 缺口收口规格（§9，`Step V3a-4.1 → V3a-4.4`）终审定稿待执行**  
+当前代码基线：`master @ 1595c45`（已完成 `1043c12` / `c7dba27` / `c173923` / `1595c45` 四轮提交并部署现网 `foresightnine-api:c173923`）  
 上游总纲：[product-paradigm-a-engine-b-radar-2026-11-24.md](./product-paradigm-a-engine-b-radar-2026-11-24.md)  
-模型协议纪律：遵守 [AGENTS.md](../../../AGENTS.md)，业务代码按槽位（`slot="deep_reasoner"`）、具体 wire API 协议与显式能力配置接入，不硬编码模型品牌；受控实验与入口探针以当前部署配置为准并如实记录。
+模型协议纪律：遵守 [AGENTS.md](../../../AGENTS.md)，业务代码按槽位（`deep_reasoner` / `fast_extractor`）、具体 wire API 协议与显式能力配置接入，不硬编码模型品牌；受控实验固定任务、参数与预算并如实留档。
 
 ---
 
@@ -338,3 +338,102 @@ Pydantic `extra="forbid"` + 预编译正则 + 16 位 `rules_sha256` 随报告返
   - 合理商业保密误亮红灯率 **`<10%`**；同报告期 `/inbox` 重复卡数 **`0`**；
   - `512M / 1.0 vCPU` 压测下峰值 RSS **`<320MB`**（现网 `768M` 容器留足余量）、TTFT（`layer0_ready` / `layer1_ready`）**`<1.5s`**、0 次 OOM / Cloudflare `524` 断连；
   - 如实记录实测 P95 延迟、平均 Token 消耗、缓存命中率与人工核验状态（不以等待人工验收阻塞工程收尾）。
+
+---
+
+## 9. 现网实测基线与 v4 缺口收口规格（P0 + P1 · Agent 供血闭环）
+
+本节基于 `master @ 1595c45` 在现网容器（`foresightnine-api:c173923` + `glm-5.3-flash`）的受控实测数据与第三轮 `/grill-me` 深度讨论，整理出面向**上游主 Agent 与方向 B 雷达供血**的 P0 + P1 缺口收口执行规格。
+
+### 9.1 `1595c45` 现网实测基线与检出缺口
+
+| 验收维度 | `1595c45` 实测已达成 | 实测与代码审计暴露的具体缺口 |
+|---|---|---|
+| **引文零漂移与裸 Prompt 对比** | Live `NVDA` **`17/17`**、`MSFT` **`15/15`** 原文精确对齐；同模型 862 字裸 Prompt 手算偏移耗时暴涨 **5.6×**（`15.12s → 84.47s`）、输出膨胀 **6.7×**（`1,168 → 7,835` tokens）仍错 **25%**（2/8 错位）且 100% 误杀 NDA | `build_topic_call_verification_digest`（R2-D5）目前只吐 `<=2,500` 字符扁平文本，丢弃了 `source_id:[start:end]` 引文锚点、`open_gaps`、结构化数值差与半失败状态，上游主 Agent 无法直接复用精确引用或识别盲区 |
+| **冷跑延迟、SSE 与缓存** | SSE 已实时推送：`layer0_ready` `1.87s/2.21s`、`layer1_ready` `5.55s/9.60s`、`layer2_extracting` `5.65s/9.77s`，`step.current` 为 `0`；`WIRE_CHECK` 证实 `system` 带 `cache_control` 且 `user` 不带 | ① 单次串行 `deep_reasoner` 导致冷跑总耗时 **`91.33s`（NVDA）/ `106.62s`（MSFT）**，且线上未配置独立 `fast_extractor` 槽位；② `completed` 到 `run.terminal` 存在固定 **`+15.0s` 尾延迟**（`main.py:11327-11357` 落库与 SSE 推送时序竞争触发心跳超时）；③ 暖缓存重跑仍耗 **`1.58s–2.11s`**（因同步回源校验 SEC）；④ 当前 `z.ai` 网关上报 `cache_read/creation_input_tokens=0` |
+| **财务精度与 Q&A 降噪** | 8 类脏文档确定性套件（`eval_v3a_suite.py`）**8/8（100%）**；Live MSFT 检出 Non-GAAP 调节桥未解释项 `22.5%` / `1525 bps` 与运营 KPI；Live NVDA NDA 合规豁免 `1/1` 生效 | ① NVDA 与 MSFT 实跑均出现 **2 条同名 `revenue` 矛盾**（缺少 `scope=consolidated|segment` 分部隔离与同指标去重）；② MSFT 以“分部会计披露政策”拒答单产品拆细（Copilot）未被降噪，被计入 `2/2` 高危回避；③ `main.py:10254` 调用 `fetch_footnote_fallback_tables(..., user_agent=ua)` 传参错误导致运行期静默 `TypeError` 返回空列表，10-Q `R*.htm` 附注从未真正生效 |
+| **前端 CSP / WCAG AA / 容器资源** | 真机 Headless Chrome 4 组视口×主题 **15/15 选择器通过 WCAG AA**（Light 最小 `5.59` / Dark `6.62`），`0` 内联样式、`0` 横向溢出、`ReaderPanel` 重叠高亮与 `/inbox` CTA 实测通过；两次实跑后容器内存稳态 `222.7 MiB`、`leftover_probe_accounts=0` | ① 仓库模板 `src/infra/docker/compose.yaml:66` 仍为 `512M`（现网已调至 `768M`，2 次串行实跑 `memory.peak` 达 `379.1 MB`），缺 4 并发压测验证；② 浏览器 E2E 基于本地 Mock API，缺真后端上传 PPTX/扫描 PDF（容器内实测 `tesseract`）/VTT 闭环；③ `maintenance_lease.last_duration_ms` 为 `null`；④ 评测规模仅 2 份 Live + 8 份合成原型，且仓库有 2 处无关历史红灯测试（`TopicPage.test.tsx` 与 `test_research_live_stream.py`） |
+
+> 注：商业版权全球 Transcript/音视频供给、非美股自动化财务账本及多公司横向 Peer Call Matrix 明确归入 **P2 商业化阶段**，不在本轮 v4 收口范围内。
+
+---
+
+### 9.2 第三轮 `/grill-me` 锁定决策（`R3-D1` ~ `R3-D9`）
+
+| 编号 | 决策主题 | v4 锁定方案 |
+|---|---|---|
+| **R3-D1** | **本轮治理边界** | 聚焦 **P0 + P1 单公司 V3a 完整质量闭环**（速度、财务防误报、10-Q 附注/OCR、全自动 30 样本评测、4 并发内存安全、真后端上传 E2E 与 2 处历史红灯清理）；暂缓 P2 付费数据源与 Peer Matrix。 |
+| **R3-D2** | **产品消费形态与前端边界** | V3a 定位为向**上游主 Agent 与方向 B 雷达供血的底层高保真垂类引擎**；**本轮不改动前端 V3a 展示面板 UI**，完全沿用既定规划的 `R2-D5` `call_verification_digest` + `FinDataToolbox.call_qa_verification` + 雷达 Phase 2c 路径，重点强化结构化摘要对 Agent 的保真度（引文偏移、`open_gaps`、数值差与半失败状态）。 |
+| **R3-D3** | **2 路并发分片与槽位配置** | 主抽取 `v3a_mgmt_extract` 拆分为 **Lane A（Prepared Remarks）+ Lane B（Q&A）两路并发**；新增可选独立 `fast_extractor` 环境变量槽位绑定，未配置时自动无缝回退主研究模型（严守协议优先、零硬编码品牌，待后续接入独立快模型/支持 Prompt Cache 的端点时零改代码生效）。 |
+| **R3-D4** | **跨路耦合与半失败降级** | **双向提取 + 确定性跨路核对 + 部分成果可用**：Lane B 除 Q&A 回避审计外，同步提取 Q&A 中高管新抛出的口头承诺与数值声明，交由 Layer 3 合并去重并确定性核对 Prepared vs Q&A 内部回撤（`internal_walkback` / `ceo_cfo_divergence`）；若某一路超时/截断失败，仍立即交付另一路已完成成果并标注 `partial_lane_status` 供单路重试。 |
+| **R3-D5** | **暖缓存 TTL 与新鲜度平衡** | **15 分钟 TTL `<100ms` 零外呼直返**：暖缓存（L2 + 本地 SEC 快照）在 TTL 内零外部网络请求直接返回给上游 Agent；超期、调用方显式传 `force_refresh=true` 或雷达 Phase 2c 检测到新 Filing 时，仅重跑 0-LLM Layer 1+3 重撞（不重跑 L2）。 |
+| **R3-D6** | **分部口径隔离、去重与容差** | `ManagementFactualClaim` 新增 `scope: Literal["consolidated", "segment", "product_line", "geography"]`（默认 `consolidated`）：仅 `consolidated` 碰撞合并报表 XBRL，`segment/product_line` 进分部/KPI 轨绝不误撞总营收；Layer 3 碰撞前按 `(metric_canonical, fiscal_period_key, scope, operator)` 去重；补充基于有效数字位数的展示四舍五入半步容差；银行股继续走既有 `financial_sic_gated`（留待 V4a）。 |
+| **R3-D7** | **Q&A 拒答三级分流** | ① **严厉合规豁免（`confidentiality_whitelisted`）**：显式客户 NDA、法律/监管限制、在审诉讼或静默期（且非 `topic_pivot`）→ 折叠 `info`，不计回避；② **会计/分部披露口径缺口（`disclosure_policy_gap`，新增）**：以分部会计准则拒答单产品拆细（如独立 Copilot 收入）→ 独立低优 `info` 徽章呈现（保留买方知情权），**不计入高危回避计数**；③ **真实回避（`red`/`yellow`）**：`topic_pivot` 或无理由漏答核心子问 → 正常亮灯并计入 `evasion_red_yellow_count`。 |
+| **R3-D8** | **10-Q 附注按需核验与 OCR** | 修复 `main.py:10254` `fetch_footnote_fallback_tables` `adapter=` 传参 Bug 并扩充 `segment`/`disaggregated revenue`/`backlog` 关键词；仅当电话会明确提及 RPO、采购承诺或分部营收且 XBRL 无标量时，把匹配到的 `<=2` 张 `R*.htm` 表送 `fast_extractor` 做辅助核验（最高 `yellow`/`info`，绝不靠 LLM 自动判红灯）；OCR 保持容器内预装免费 `tesseract` + `pdftoppm` 优先，`FORESIGHTNINE_OCR_VISION_*` 仅作低置信度/复杂图表页可选兜底。 |
+| **R3-D9** | **全自动 30 样本评测与压测边界** | **严禁依赖人工逐条复核**：构建 **30 样本分层评测集（20 校准 + 10 冻结盲测）** 实现 **100% 自动化机器判分**，30/30 全跑 0-LLM 确定性层后再按板块分层抽取 **6–8 份代表样本**（含盲测与多页长文）在现网 `glm-5.3-flash` 执行受控 Live LLM 实跑；对齐仓库 `compose.yaml` 至 `768M` 并执行 4 路并发压测（`<550 MiB`）+ 真后端上传 E2E + 清理 2 处历史红灯测试。 |
+
+---
+
+### 9.3 v4 四批次可执行实施计划（`Step V3a-4.1 → V3a-4.4`）
+
+#### `Step V3a-4.1` · 确定性工程修复、双路并发引擎与 Agent Digest 升级
+1. **SSE 终态零尾延迟**（`src/apps/api/app/main.py:11327-11357`）：状态写入 `completed`/`failed`/`cancelled` 后立即执行 `research_live_broker.publish_terminal(...)`，并在 `_live_gen` 收到终态事件时零等待结束流（终态延迟 `<50ms`）。
+2. **修复 `R*.htm` 附注拉取传参 Bug**（`src/apps/api/app/main.py:10246-10261`、`research_call_collision.py:1814-1850`）：构造真实 SEC `adapter` 传入 `fetch_footnote_fallback_tables`，并将默认关键词扩展至覆盖 `segment`、`disaggregated revenue`、`backlog`。
+3. **15 分钟 TTL `<100ms` 暖缓存直返**（`src/apps/api/app/main.py:10911-10962`）：新增 `force_refresh: bool = False` 与缓存时间戳校验；当 `l2_cache_key` 与本地 `PEER_COMPANY_SNAPSHOTS` 均在 15m TTL 内暖命中且非强制刷新时，跳过外网解析与新鲜度请求直接返回 200（`<100ms`）。
+4. **2 路并发抽取 + 跨路合并 + 半失败降级 + `fast_extractor` 独立槽位**（`research_call_verification.py`、`research_earnings_squad.py`、`v3a_call_verification_rules.json`）：
+   - 将 `v3a_mgmt_extract` 拆分为 `v3a_call_extract_remarks`（Lane A：Prepared Remarks + IR Slides + 8-K 去重）与 `v3a_call_extract_qa`（Lane B：Q&A 回避审计 + Q&A 新口头承诺与数值声明），通过线程池并发执行，各自完成后推送细粒度 SSE 阶段事件；
+   - 在 Layer 2/3 新增 `partial_lane_status`（`{"remarks": "ok|failed|skipped", "qa": "ok|failed|skipped"}`）与单路重试入参 `retry_lane: Literal["remarks", "qa"] | None`；
+   - 合并两路结果并在 Layer 3 确定性交叉比对 Prepared vs Q&A 内部回撤；
+   - 在槽位解析器中支持独立可选 `FORESIGHTNINE_FAST_EXTRACTOR_*` 环境变量配置（未设置时自动回退主研究模型）；
+   - 将 `v3a_call_verification_rules.json` 的 `max_llm_calls_per_audit` 升至 `5`、`evaluation_rules_version` 升至 `"v2"`；
+   - 修复 `runtime_maintenance_leases` 写库逻辑，记录真实 `last_duration_ms`。
+5. **升级 `R2-D5` `build_topic_call_verification_digest`**（`research_call_verification.py:1523-1605`）：在 `<=2,800` 字符预算内保留结构化核心字段（高危/留意项的数值差、`source_id:[raw_char_start:raw_char_end]` 精确锚点、`open_gaps` 列表、`partial_lane_status` 与 `disclosure_policy_gap` 计数），供上游主 Agent 直接生成带精确溯源的研判且杜绝把缺口当事实。
+
+#### `Step V3a-4.2` · 财务防误报引擎、Q&A 三级分流与按需附注核验
+1. **分部隔离 + 同指标去重 + 展示有效数字容差**（`research_call_collision.py`、`research_call_verification.py`）：
+   - `ManagementFactualClaim` 增 `scope: Literal["consolidated", "segment", "product_line", "geography"] = "consolidated"`；
+   - Layer 3 严格只让 `scope == "consolidated"` 声明与合并 XBRL 科目做硬碰撞，`segment/product_line/geography` 自动分流至分部/KPI 核验轨；
+   - 碰撞前按 `(metric_canonical, fiscal_period_key, scope, operator)` 归并重复声明（保留最高置信/最完整引文），根除同名 `revenue` 重复红灯；
+   - 依据管理层声明数值的小数位精度计算半步展示四舍五入容差（取 `max(rounding_half_step, numeric_tolerance_rel_pct)`），消除 `$35.1B` vs `$35.08B` 类假红灯。
+2. **Q&A 拒答三级分流**（`research_call_collision.py:2850-2905`、`v3a_call_verification_rules.json`）：
+   - 在抽取 Schema 与规则文件中拆分 `confidentiality_policy_kind: Literal["none", "strict_nda_legal", "segment_disclosure_policy"]`；
+   - `strict_nda_legal` 且非 `topic_pivot` → `legitimate_confidentiality=True`（折叠 `info`，计入 `confidentiality_whitelisted_count`）；
+   - `segment_disclosure_policy` 且非 `topic_pivot` → 标 `disclosure_policy_gap=True`（独立低优 `info` 徽章，**不计入** `evasion_red_yellow_count`）；
+   - 其余 `topic_pivot` / 无理由漏答 → 保持红/黄灯告警。
+3. **10-Q 附注按需轻量化核验 & 容器 OCR 核验**：
+   - 仅当管理层声明涉及 `rpo`、`purchase_commitments` 或 `scope == "segment"` 且 XBRL 标量缺失时，调用已修通的 `fetch_footnote_fallback_tables` 取 `<=2` 张 `R*.htm` 表交 `fast_extractor` 做有依据比对，产出最高为 `yellow`/`info` 的附注对照卡片（带表格出处引用）；
+   - 核验容器内 `tesseract --list-langs`（确保中/英语言包就绪），保持 `FORESIGHTNINE_OCR_VISION_*` 为低置信度/复杂图表可选兜底。
+
+#### `Step V3a-4.3` · 全自动 30 样本分层评测集与 6–8 份 Live LLM 受控对照
+1. **30 样本分层评测套件**（扩展 `src/apps/api/scripts/eval_v3a_suite.py`）：
+   - **20 份校准集 + 10 份冻结盲测集**，覆盖 7 类真实场景：科技/SaaS（Billings/ARR/RPO/SBC 调节桥）、半导体（拆股重述/供应链/出口管制）、银行金融（`financial_sic_gated` 防误撞）、消费零售（库存/同店 KPI/毛利）、医药生物（管线/研发/一次性减值）、工业能源（CapEx/采购承诺）、港股与中文 `nonsec`（多语言别名/格式 5 Q&A/滚动字幕/双轴 PPTX/扫描 PDF）。
+   - **100% 自动化判分**：零人工介入，直接基于确定性账本真值与预期结构化断言输出 JSON 与 Markdown 汇总记分卡。
+2. **分层 Live LLM 受控实跑（6–8 份代表样本）**：
+   - 30/30 通过 0-LLM 确定性层后，按板块分层抽 6–8 份（含盲测集与长文样本）在现网 `glm-5.3-flash` 上实跑，固定变量对比 v3 单路基线（`91–107s`）与 v4 双路并发的耗时、Token、引用对齐率、分部防误报率与三级 Q&A 准确率，完整结果落盘留档。
+
+#### `Step V3a-4.4` · 容器内存并发压测、全栈真机上传 E2E 与全仓测试清理
+1. **内存限额对齐与 4 路并发压测**：
+   - 将 `src/infra/docker/compose.yaml:66` API 容器限额从 `512M` 同步至现网 `768M`；
+   - 审计 `companyfacts` 切片投影与 10-Q HTML/redline 大对象释放路径，构建并部署新镜像后执行 **4 路并发美股龙头审计压测**，采集 `cgroup memory.current / memory.peak`。
+2. **真后端全栈上传 E2E（零 Mock）**：
+   - 直连现网 `nginx → FastAPI → Postgres`，使用临时账号真实上传 `.pptx`（双轴图表+合并表）、扫描 `.pdf`（真实触发容器 `tesseract` Layer 0b OCR 生成不可变 `ocr_source_id`）与 `.vtt` 字幕，实测完整链路（含 SSE `<50ms` 终态收尾、15m TTL `<100ms` 快缓存、`R2-D5` digest 含精确字符偏移、以及 `DELETE /v1/auth/local/account` 0 残留清理）。
+3. **修复 2 处历史遗留无关红灯测试**：
+   - 修复 `src/apps/web/src/pages/TopicPage.test.tsx`（1/65 既有失败）与 `src/apps/api/tests/test_research_live_stream.py`（既有检查点计数偏差），确保全仓前后端回归测试 100% 全绿。
+
+---
+
+### 9.4 v4 预登记全自动验收门禁（不事后调整标准）
+
+| 门禁项 | 预登记硬指标 | 验证方式 |
+|---|---|---|
+| **30 样本确定性层通过率** | **30 / 30（100%）** | `eval_v3a_suite.py --mode deterministic` |
+| **原文引用零漂移率** | **100%**（所有 Live 与确定性样本偏移误差 `0`） | 自动化 `raw_text[start:end]` 断言 |
+| **分部营收误撞合并总营收** | **0 次** | 30 样本含 MSFT/NVDA/AMZN 等分部声明自动断言 |
+| **NDA / 分部披露政策误判高危回避** | **0%** | 30 样本 + 6–8 Live 样本三级分流自动断言 |
+| **合并报表红灯误报率（FPR）** | **`<= 5%`**（且预设真实冲突 Recall `>= 85%`） | 30 样本（含 10 盲测）自动混淆矩阵统计 |
+| **SSE 终态尾延迟（`completed → run.terminal`）** | **`< 100ms`**（目标 `<50ms`，消除 15s 拖尾） | Live SSE 时间戳探针 |
+| **暖缓存重跑延迟（TTL 内）** | **`< 100ms`**（0 次外部 SEC/LLM 请求） | Live 连续二次调用探针 |
+| **双路并发冷跑提速** | 较同模型单路基线（`91–107s`）显著降低且无字段丢失 | 6–8 份 Live 实跑受控对比记录 |
+| **4 路并发容器内存峰值** | **`cgroup memory.peak < 550 MiB`**（`768M` 上限，`0` OOM） | 现网容器 4 并发压测实采 |
+| **真后端上传 + OCR + 清理闭环** | `.pptx` / 扫描 `.pdf` / `.vtt` 全部成功，`leftover_probe_accounts = 0` | 全栈实测脚本 + Postgres 查表验证 |
+| **全仓回归测试** | pytest + Vitest **100% 全绿**（含 2 处历史红灯修复） | CI/本地全量回归输出 |
