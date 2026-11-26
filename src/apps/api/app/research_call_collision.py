@@ -1947,7 +1947,7 @@ def fetch_footnote_fallback_tables(
         "disaggregated revenue",
         "backlog",
     ),
-    max_tables: int = 2,
+    max_tables: int = 4,
     max_bytes: int = 1_500_000,
     user_agent: str | None = None,
     limiter: Any = None,
@@ -2031,10 +2031,15 @@ def fetch_footnote_fallback_tables(
             cat_weight = 2
         else:
             cat_weight = 0
-        # Prefer Details/Tables/Notes over bare primary Statements
+        # Prefer Details/Tables/Notes over bare primary Statements; boost revenue/disaggregation/segment details
         if norm_cat == "statements" and kw_hits < 2:
             continue
-        scored.append((kw_hits * 4 + cat_weight, -idx_e, entry))
+        rev_seg_bonus = 0
+        if any(tok in low_blob for tok in ("disaggregat", "revenue by", "net sales by", "product", "segment")):
+            rev_seg_bonus += 2
+        if "revenue" in low_blob or "net sales" in low_blob:
+            rev_seg_bonus += 1
+        scored.append((kw_hits * 4 + cat_weight + rev_seg_bonus, -idx_e, entry))
 
     scored.sort(reverse=True)
     matched = [item[2] for item in scored[:max_tables]]

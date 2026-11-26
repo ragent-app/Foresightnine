@@ -5642,7 +5642,7 @@ _SQUAD_STAGE_TIMEOUT_FLOORS: dict[str, float] = {
     "v3a_call_map_doc": 180.0,
     "v3a_sellside_extract": 180.0,
     "v3a_omission_verify": 180.0,
-    "v3a_footnote_verify": 120.0,
+    "v3a_footnote_verify": 240.0,
 }
 _SQUAD_SLOT_MAX_OUTPUT_TOKENS: dict[str, int] = {
     "fast_extractor": 8192,
@@ -10364,7 +10364,7 @@ def _v3a_aux_loaders(
                 cik=cik10(cik_in),
                 accession=accn_in,
                 keywords=kw_args,
-                max_tables=2,
+                max_tables=4,
                 user_agent=ua,
                 limiter=lim,
                 policy=pol,

@@ -2001,7 +2001,7 @@ def run_call_verification_pipeline(
         and fn_claims
         and raw_fb_tables
     ):
-        tables_with_rows = [t for t in raw_fb_tables if isinstance(t, Mapping) and (t.get("rows_preview") or t.get("narrative_excerpt"))][:2]
+        tables_with_rows = [t for t in raw_fb_tables if isinstance(t, Mapping) and (t.get("rows_preview") or t.get("narrative_excerpt"))][:4]
         if tables_with_rows:
             try:
                 fn_nonce = secrets.token_hex(6)
@@ -2011,14 +2011,14 @@ def run_call_verification_pipeline(
                 )
                 tbl_blocks = "\n\n".join(
                     f"[{t.get('r_file')} · {t.get('title')} ({t.get('currency') or ''} {t.get('unit_scale') or ''})]\n"
-                    f"{(t.get('rows_preview') or t.get('narrative_excerpt') or '')[:2000]}"
+                    f"{(t.get('rows_preview') or t.get('narrative_excerpt') or '')[:1600]}"
                     for t in tables_with_rows
                 )
                 fn_user = (
                     f"ENTITY: {symbol or entity_key} | PERIOD: {ledger.fiscal_period_key or 'unspecified'}\n"
                     f"MANAGEMENT_CLAIMS:\n{claim_lines}\n\n"
                     + _wrap_untrusted(tbl_blocks, source_id="sec_footnote_tables", nonce=fn_nonce, label="SEC_FOOTNOTE_TABLES")
-                )[:6000]
+                )[:8500]
                 fn_parsed, fn_stats = _invoke_slot_json(
                     runner=model_runner,
                     slot="fast_extractor",
