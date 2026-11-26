@@ -1996,7 +1996,7 @@ def sec_earnings_release(
         overall_gaps.append(f"wide_sequential_gap_days:{days_between}")
 
     has_any_exhibit = any(
-        p is not None and (p.ex99_1 is not None or p.ex99_2 is not None)
+        p is not None and (p.ex99_1 is not None or p.ex99_2 is not None or p.ex99_3 is not None)
         for p in (current_period, prior_period)
     )
     if not has_any_exhibit:
