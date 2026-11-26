@@ -84,8 +84,13 @@ _EX99_2_NAME_RE = re.compile(
     r"(?:ex(?:h(?:ibit)?)?[-_.]?99[-_.]?2|(?<![0-9])99[-_.]2)(?:[^0-9]|$)",
     re.IGNORECASE,
 )
+_EX99_3_NAME_RE = re.compile(
+    r"(?:ex(?:h(?:ibit)?)?[-_.]?99[-_.]?3|(?<![0-9])99[-_.]3)(?:[^0-9]|$)",
+    re.IGNORECASE,
+)
 _EX99_1_TYPE_RE = re.compile(r"^EX-?99\.0*1$", re.IGNORECASE)
 _EX99_2_TYPE_RE = re.compile(r"^EX-?99\.0*2$", re.IGNORECASE)
+_EX99_3_TYPE_RE = re.compile(r"^EX-?99\.0*3$", re.IGNORECASE)
 _HTML_EXT_RE = re.compile(r"\.(?:html?|txt)$", re.IGNORECASE)
 
 _SHOW_AR_RE = re.compile(r"Show\.showAR\s*\([^,]+,\s*['\"]([^'\"]+)['\"]", re.IGNORECASE)
@@ -119,12 +124,14 @@ class ParsedHtmlTable(_Frozen):
 
 
 class EarningsReleaseExhibit(_Frozen):
-    exhibit_type: Literal["EX-99.1", "EX-99.2"]
+    exhibit_type: Literal["EX-99.1", "EX-99.2", "EX-99.3"]
     filename: str
     url: str
     description: str | None = None
     text: str
     tables: list[ParsedHtmlTable] = Field(default_factory=list)
+    is_image_deck: bool = False
+    numeric_table_cells: int = 0
     content_sha256: str
     provenance: Provenance | None = None
 
@@ -135,6 +142,13 @@ class NonGaapReconciliation(_Frozen):
     table: ParsedHtmlTable | None = None
     metrics_mentioned: list[str] = Field(default_factory=list)
     source_exhibit: str = "EX-99.1"
+
+
+def normalize_sec_ratio_pct(val: Decimal, *, raw_text: str) -> Decimal:
+    """Normalize SEC R*.htm RegCap ratios where decimals (0.115) mix with percentages (11.50%)."""
+    if "%" not in (raw_text or "") and Decimal("0") < abs(val) <= Decimal("1.0"):
+        return val * Decimal("100")
+    return val
 
 
 class GuidancePassage(_Frozen):
@@ -156,6 +170,8 @@ class EarningsReleasePeriod(_Frozen):
     index_json_url: str
     ex99_1: EarningsReleaseExhibit | None = None
     ex99_2: EarningsReleaseExhibit | None = None
+    ex99_3: EarningsReleaseExhibit | None = None
+    exhibits_image_only_skipped: list[str] = Field(default_factory=list)
     management_summary: str = ""
     management_highlights: list[str] = Field(default_factory=list)
     nongaap_reconciliations: list[NonGaapReconciliation] = Field(default_factory=list)
@@ -230,6 +246,7 @@ class FilingTableCell(_Frozen):
     currency: str | None = None
     scale: str | None = None
     period: str | None = None
+    footnote_refs: list[str] = Field(default_factory=list)
 
 
 class FilingTableRow(_Frozen):
@@ -260,6 +277,8 @@ class FilingTableData(_Frozen):
     rows: list[FilingTableRow] = Field(default_factory=list)
     narrative_text: str = ""
     subtables: list["FilingTableData"] = Field(default_factory=list)
+    footnotes: dict[str, str] = Field(default_factory=dict)
+    dropped_footnote_columns: int = 0
     content_sha256: str
     provenance: Provenance | None = None
 
@@ -511,6 +530,7 @@ class _RawCell:
     rowspan: int = 1
     indent_level: int = 0
     row_class: str = ""
+    cell_classes: frozenset[str] = frozenset()
     xbrl_tag: str | None = None
     subtables: list["_RawTable"] = None  # type: ignore[assignment]
 
@@ -543,6 +563,7 @@ class _GridCell:
     indent_level: int = 0
     xbrl_tag: str | None = None
     row_class: str = ""
+    cell_classes: frozenset[str] = frozenset()
 
 
 def _parse_span(value: str | None) -> int:
@@ -571,18 +592,37 @@ def _extract_indent(attrs_map: dict[str, str]) -> int:
 
 
 class _StructuredHtmlParser(HTMLParser):
-    """HTML parser separating visible prose blocks and structured (possibly nested) tables."""
+    """HTML parser separating visible prose blocks, footnotes, and structured (possibly nested) tables."""
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self._hidden_depth = 0
-        self._tag_stack: list[tuple[str, bool]] = []
+        self._footnote_depth = 0
+        self._tag_stack: list[tuple[str, bool, bool]] = []
         self._table_stack: list[_RawTable] = []
         self._text_chunks: list[str] = []
         self._blocks: list[tuple[Literal["text", "table"], Any]] = []
         self._last_heading: str | None = None
         self._in_heading = False
         self._heading_parts: list[str] = []
+        self._footnote_chunks: list[str] = []
+        self.footnotes: dict[str, str] = {}
+        self.img_count: int = 0
+
+    def _flush_footnote(self) -> None:
+        raw = _clean_text("".join(self._footnote_chunks))
+        self._footnote_chunks.clear()
+        if not raw:
+            return
+        m = re.match(r"^(?:\[(\d+)\]|\((\d+)\)|(\d+)\.)\s*(.+)$", raw)
+        if m:
+            num = m.group(1) or m.group(2) or m.group(3)
+            body = m.group(4).strip()
+            if num and body:
+                self.footnotes[f"[{num}]"] = body
+                return
+        idx = len(self.footnotes) + 1
+        self.footnotes.setdefault(f"note_{idx}", raw)
 
     def _flush_text(self) -> None:
         raw = "".join(self._text_chunks)
@@ -610,6 +650,15 @@ class _StructuredHtmlParser(HTMLParser):
         if "authrefdata" in cls or "hide" in cls:
             return True
         if attrs_map.get("id", "").lower() == "authrefdata":
+            return True
+        return False
+
+    @staticmethod
+    def _is_footnote_attrs(tag: str, attrs_map: dict[str, str]) -> bool:
+        cls = {c.lower() for c in attrs_map.get("class", "").split()}
+        if tag == "table" and ("outerfootnotes" in cls or "authrefdata" in cls):
+            return True
+        if tag == "tr" and ("outerfootnote" in cls or "outerfootnotes" in cls):
             return True
         return False
 
@@ -651,12 +700,26 @@ class _StructuredHtmlParser(HTMLParser):
         t = tag.lower()
         attrs_map = {k.lower(): (v or "") for k, v in attrs if k}
         is_hidden = self._is_hidden_attrs(t, attrs_map)
+        is_footnote = (not is_hidden) and self._is_footnote_attrs(t, attrs_map)
         if t not in _VOID_TAGS:
-            self._tag_stack.append((t, is_hidden))
+            self._tag_stack.append((t, is_hidden, is_footnote))
         if is_hidden:
             self._hidden_depth += 1
             return
         if self._hidden_depth > 0:
+            return
+        if is_footnote:
+            if t == "tr" and self._footnote_depth > 0:
+                self._flush_footnote()
+            self._footnote_depth += 1
+            return
+        if self._footnote_depth > 0:
+            if t in ("tr", "br", "li") and self._footnote_chunks:
+                self._footnote_chunks.append(" ")
+            return
+
+        if t == "img":
+            self.img_count += 1
             return
 
         if t == "sup":
@@ -692,6 +755,7 @@ class _StructuredHtmlParser(HTMLParser):
             if cur_tbl.active_row is None:
                 cur_tbl.active_row = _RawRow(cells=[])
             self._finish_cell(cur_tbl)
+            cell_cls = frozenset(c.lower() for c in attrs_map.get("class", "").split() if c)
             cur_tbl.active_cell = _RawCell(
                 text_parts=[],
                 is_header=(t == "th"),
@@ -699,6 +763,7 @@ class _StructuredHtmlParser(HTMLParser):
                 rowspan=_parse_span(attrs_map.get("rowspan")),
                 indent_level=_extract_indent(attrs_map),
                 row_class=cur_tbl.active_row.row_class,
+                cell_classes=cell_cls,
             )
             return
 
@@ -738,16 +803,22 @@ class _StructuredHtmlParser(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         t = tag.lower()
         popped_hidden = False
+        popped_footnote = False
         for idx in range(len(self._tag_stack) - 1, -1, -1):
             if self._tag_stack[idx][0] == t:
                 removed = self._tag_stack[idx:]
                 del self._tag_stack[idx:]
-                for _, was_hidden in removed:
+                for _, was_hidden, was_fn in removed:
                     if was_hidden:
                         self._hidden_depth = max(0, self._hidden_depth - 1)
                         popped_hidden = True
+                    if was_fn:
+                        self._footnote_depth = max(0, self._footnote_depth - 1)
+                        popped_footnote = True
+                        if self._footnote_depth == 0:
+                            self._flush_footnote()
                 break
-        if popped_hidden or self._hidden_depth > 0 or t in _HARD_HIDDEN_TAGS:
+        if popped_hidden or self._hidden_depth > 0 or popped_footnote or self._footnote_depth > 0 or t in _HARD_HIDDEN_TAGS:
             return
 
         if t in _HEADING_TAGS and self._in_heading:
@@ -777,8 +848,11 @@ class _StructuredHtmlParser(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._hidden_depth > 0:
             return
-        # Collapse raw HTML source newlines/tabs inside text nodes so wrapped <p> text stays one paragraph
         collapsed = re.sub(r"\s+", " ", data)
+        if self._footnote_depth > 0:
+            self._footnote_chunks.append(collapsed)
+            return
+        # Collapse raw HTML source newlines/tabs inside text nodes so wrapped <p> text stays one paragraph
         if self._in_heading:
             self._heading_parts.append(collapsed)
         cur_cell = self._current_cell()
@@ -789,6 +863,7 @@ class _StructuredHtmlParser(HTMLParser):
 
     def close(self) -> None:
         super().close()
+        self._flush_footnote()
         while self._table_stack:
             self._finish_table()
         self._flush_text()
@@ -821,6 +896,7 @@ def _expand_table_grid(raw_table: _RawTable) -> list[list[_GridCell]]:
                         indent_level=raw_cell.indent_level if not is_cont else 0,
                         xbrl_tag=raw_cell.xbrl_tag if not is_cont else None,
                         row_class=raw_cell.row_class,
+                        cell_classes=raw_cell.cell_classes,
                     )
             c_idx += raw_cell.colspan
 
@@ -988,6 +1064,11 @@ def _table_grid_to_parsed(
 
 def strip_html_preserving_tables(html: str) -> tuple[str, list[ParsedHtmlTable]]:
     """Strip HTML cleanly, preserving table structure as pipe tables and parsed table records."""
+    text, tables, _stats = _strip_html_preserving_tables_with_stats(html)
+    return text, tables
+
+
+def _strip_html_preserving_tables_with_stats(html: str) -> tuple[str, list[ParsedHtmlTable], dict[str, int]]:
     parser = _StructuredHtmlParser()
     parser.feed(html or "")
     parser.close()
@@ -1041,7 +1122,13 @@ def strip_html_preserving_tables(html: str) -> tuple[str, list[ParsedHtmlTable]]
         prev_blank = is_blank
     while collapsed and not collapsed[-1].strip():
         collapsed.pop()
-    return "\n".join(collapsed), tables
+    numeric_cells = 0
+    for tbl in tables:
+        for row in tbl.rows:
+            for val in row[1:]:
+                if re.search(r"\d", str(val)):
+                    numeric_cells += 1
+    return "\n".join(collapsed), tables, {"img_count": parser.img_count, "numeric_cells": numeric_cells}
 
 
 # --------------------------------------------------------------------------- 1. sec_earnings_release (8-K Item 2.02)
@@ -1470,6 +1557,8 @@ def _parse_index_htm(html: str) -> tuple[list[str] | None, dict[str, tuple[str, 
             exhibits.setdefault("EX-99.1", (doc_name, desc or None))
         elif _EX99_2_TYPE_RE.fullmatch(doc_type):
             exhibits.setdefault("EX-99.2", (doc_name, desc or None))
+        elif _EX99_3_TYPE_RE.fullmatch(doc_type):
+            exhibits.setdefault("EX-99.3", (doc_name, desc or None))
     return items, exhibits
 
 
@@ -1478,7 +1567,7 @@ def _identify_exhibits_from_index_json(
     *,
     primary_document: str | None = None,
 ) -> tuple[list[str] | None, dict[str, tuple[str, str | None]], str | None]:
-    """Inspect ``index.json`` for Item hints, EX-99.1/EX-99.2 entries, and ``*-index.htm(l)``."""
+    """Inspect ``index.json`` for Item hints, EX-99.1/EX-99.2/EX-99.3 entries, and ``*-index.htm(l)``."""
     if not isinstance(doc, Mapping):
         return None, {}, None
     directory = doc.get("directory")
@@ -1510,12 +1599,17 @@ def _identify_exhibits_from_index_json(
         if _EX99_2_TYPE_RE.fullmatch(entry_type):
             exhibits["EX-99.2"] = (name, desc)
             continue
+        if _EX99_3_TYPE_RE.fullmatch(entry_type):
+            exhibits["EX-99.3"] = (name, desc)
+            continue
         if not _HTML_EXT_RE.search(name):
             continue
         if _EX99_1_NAME_RE.search(name) or (desc and re.search(r"\b(?:exhibit\s*99\.1|earnings\s+release)\b", desc, re.IGNORECASE)):
             exhibits.setdefault("EX-99.1", (name, desc))
         elif _EX99_2_NAME_RE.search(name) or (desc and re.search(r"\bexhibit\s*99\.2\b", desc, re.IGNORECASE)):
             exhibits.setdefault("EX-99.2", (name, desc))
+        elif _EX99_3_NAME_RE.search(name) or (desc and re.search(r"\bexhibit\s*99\.3\b", desc, re.IGNORECASE)):
+            exhibits.setdefault("EX-99.3", (name, desc))
     return items_meta, exhibits, index_htm
 
 
@@ -1783,7 +1877,7 @@ def sec_earnings_release(
                         return stop.result
                     total_calls += stop.result.cost.provider_calls
 
-        def load_exhibit(ex_type: Literal["EX-99.1", "EX-99.2"]) -> EarningsReleaseExhibit | None:
+        def load_exhibit(ex_type: Literal["EX-99.1", "EX-99.2", "EX-99.3"]) -> EarningsReleaseExhibit | None:
             nonlocal total_calls, gate
             ex_slug = ex_type.lower().replace("-", "").replace(".", "_")
             pair = exhibits.get(ex_type)
@@ -1811,8 +1905,9 @@ def sec_earnings_release(
             provs.append(ex_prov)
             total_calls += ex_cost.provider_calls
             decoded = _decode_bytes(raw_bytes, ct)
-            cleaned_text, parsed_tables = strip_html_preserving_tables(decoded)
-            if not cleaned_text.strip():
+            cleaned_text, parsed_tables, ex_stats = _strip_html_preserving_tables_with_stats(decoded)
+            is_img_deck = ex_stats["img_count"] >= 5 and ex_stats["numeric_cells"] < 20
+            if not cleaned_text.strip() and not is_img_deck:
                 period_gaps.append(f"{ex_slug}_malformed_or_empty")
                 return None
             return EarningsReleaseExhibit(
@@ -1821,7 +1916,9 @@ def sec_earnings_release(
                 url=url,
                 description=desc,
                 text=cleaned_text,
-                tables=parsed_tables,
+                tables=[] if is_img_deck else parsed_tables,
+                is_image_deck=is_img_deck,
+                numeric_table_cells=ex_stats["numeric_cells"],
                 content_sha256=sha256(cleaned_text.encode("utf-8")).hexdigest(),
                 provenance=ex_prov,
             )
@@ -1829,19 +1926,33 @@ def sec_earnings_release(
         try:
             ex99_1 = load_exhibit("EX-99.1")
             ex99_2 = load_exhibit("EX-99.2") if include_ex99_2 else None
+            ex99_3 = load_exhibit("EX-99.3") if "EX-99.3" in exhibits else None
         except StopWith as stop:
             return stop.result
 
+        skipped_decks: list[str] = []
+        for ex_item in (ex99_1, ex99_2, ex99_3):
+            if ex_item is not None and ex_item.is_image_deck:
+                skipped_decks.append(f"{ex_item.exhibit_type}:{ex_item.filename}")
+
         summary, highlights, nongaap, guidance = ("", [], [], [])
-        if ex99_1 is not None:
-            summary, highlights, nongaap, guidance = _extract_release_hints(ex99_1.text, ex99_1.tables, source_exhibit="EX-99.1")
-        if ex99_2 is not None:
-            s2, h2, ng2, g2 = _extract_release_hints(ex99_2.text, ex99_2.tables, source_exhibit="EX-99.2")
+        ranked_exhibits = sorted(
+            [e for e in (ex99_1, ex99_2, ex99_3) if e is not None and not e.is_image_deck],
+            key=lambda e: (e.numeric_table_cells, len(e.tables), -("1" in e.exhibit_type)),
+            reverse=True,
+        )
+        # Keep primary EX-99.1 narrative summary first while extracting hints from non-image exhibits ordered by table density
+        for ex_item in (ex99_1, ex99_2, ex99_3):
+            if ex_item is None or ex_item.is_image_deck:
+                continue
+            s_i, h_i, ng_i, g_i = _extract_release_hints(ex_item.text, ex_item.tables, source_exhibit=ex_item.exhibit_type)
             if not summary:
-                summary = s2
-            highlights = [*highlights, *h2][:12]
-            nongaap = [*nongaap, *ng2]
-            guidance = [*guidance, *g2]
+                summary = s_i
+            highlights = [*highlights, *h_i][:12]
+            nongaap = [*nongaap, *ng_i]
+            guidance = [*guidance, *g_i]
+        # Ensure densest table exhibit sits first for table-heavy extraction while keeping EX-99.1 text highlights
+        _ = ranked_exhibits
 
         return EarningsReleasePeriod(
             period_role=role,
@@ -1854,6 +1965,8 @@ def sec_earnings_release(
             index_json_url=index_json_url,
             ex99_1=ex99_1,
             ex99_2=ex99_2,
+            ex99_3=ex99_3,
+            exhibits_image_only_skipped=skipped_decks,
             management_summary=summary,
             management_highlights=highlights,
             nongaap_reconciliations=nongaap,
@@ -2222,6 +2335,7 @@ def _build_filing_table_data(
     narrative_text: str = "",
     fallback_title: str | None = None,
     inherited_note: str = "",
+    footnotes: dict[str, str] | None = None,
 ) -> FilingTableData:
     header_rows = 0
     while header_rows < len(grid) and any(c.is_header for c in grid[header_rows]):
@@ -2243,24 +2357,45 @@ def _build_filing_table_data(
             base_scale = base_scale or hs
             base_mult = base_mult or hm
 
-    width = len(grid[0])
+    width = len(grid[0]) if grid else 0
+    raw_col_headers: dict[int, str] = {}
+    footnote_cols: set[int] = set()
+    for c in range(1, width):
+        parts_chk: list[str] = []
+        for r in range(header_rows):
+            val = grid[r][c].text.strip()
+            if val and (not parts_chk or parts_chk[-1] != val):
+                parts_chk.append(val)
+        hdr_chk = " | ".join(parts_chk) if parts_chk else f"Column {c}"
+        raw_col_headers[c] = hdr_chk
+        if re.fullmatch(r"\[\d+\]", hdr_chk.strip()):
+            footnote_cols.add(c)
+            continue
+        body_cells = [grid[r][c] for r in range(header_rows, len(grid))]
+        nonempty = [gc for gc in body_cells if gc.text.strip()]
+        if nonempty and any("fn" in gc.cell_classes for gc in nonempty):
+            if all(("fn" in gc.cell_classes) or bool(re.fullmatch(r"(?:\[\d+\]|\(\d+\)|[*†‡])", gc.text.strip())) for gc in nonempty):
+                footnote_cols.add(c)
+
+    kept_grid_cols = [c for c in range(1, width) if c not in footnote_cols]
     columns: list[TableColumnMeta] = []
     periods: list[str] = []
+    header_counts: dict[str, int] = {}
 
-    for c in range(1, width):
+    for out_idx, c in enumerate(kept_grid_cols):
         parts: list[str] = []
         for r in range(header_rows):
             val = grid[r][c].text.strip()
             if val and (not parts or parts[-1] != val):
                 parts.append(val)
-        hdr_text = " | ".join(parts) if parts else f"Column {c}"
+        hdr_text = " | ".join(parts) if parts else f"Column {out_idx + 1}"
         p_label, p_end, p_kind = _parse_period_meta(" ".join(parts))
         col_curr, col_scale, col_mult = _extract_currency_and_scale(" ".join(parts))
         if p_label and p_label not in periods:
             periods.append(p_label)
         columns.append(
             TableColumnMeta(
-                index=c - 1,
+                index=out_idx,
                 header=hdr_text,
                 period_label=p_label,
                 period_end=p_end,
@@ -2272,6 +2407,13 @@ def _build_filing_table_data(
             )
         )
 
+    col_key_for_idx: list[str] = []
+    for out_idx, col_meta in enumerate(columns):
+        cnt = header_counts.get(col_meta.header, 0)
+        header_counts[col_meta.header] = cnt + 1
+        col_key_for_idx.append(col_meta.header if cnt == 0 else f"{col_meta.header}#c{out_idx}")
+
+    grid_to_kept_idx = {c: out_idx for out_idx, c in enumerate(kept_grid_cols)}
     parsed_rows: list[FilingTableRow] = []
     for r_idx, row in enumerate(grid[header_rows:]):
         stub = row[0]
@@ -2282,9 +2424,21 @@ def _build_filing_table_data(
         row_curr, row_scale, _ = _row_unit_override(label, base_currency, base_scale, tl_note)
         has_row_override = row_curr != base_currency or row_scale != base_scale
 
+        # Map each dropped footnote column's marker to its nearest left kept column
+        refs_by_kept_idx: dict[int, list[str]] = {}
+        last_kept: int | None = None
+        for gc_idx in range(1, width):
+            if gc_idx in grid_to_kept_idx:
+                last_kept = grid_to_kept_idx[gc_idx]
+            elif gc_idx in footnote_cols and last_kept is not None and gc_idx < len(row):
+                fn_txt = row[gc_idx].text.strip()
+                if fn_txt:
+                    refs_by_kept_idx.setdefault(last_kept, []).append(fn_txt)
+
         cells: list[FilingTableCell] = []
         values_by_col: dict[str, str] = {}
-        for col_idx, cell in enumerate(row[1:]):
+        for col_idx, gc_idx in enumerate(kept_grid_cols):
+            cell = row[gc_idx]
             col_meta = columns[col_idx] if col_idx < len(columns) else TableColumnMeta(index=col_idx, header=f"Column {col_idx + 1}")
             raw_val = cell.text.strip()
             num_val, is_pct, c_curr = _parse_numeric_cell(raw_val)
@@ -2298,6 +2452,7 @@ def _build_filing_table_data(
             else:
                 effective_curr = c_curr or col_meta.currency or row_curr
                 effective_scale = col_meta.scale or row_scale
+            fn_refs = refs_by_kept_idx.get(col_idx, [])
             cells.append(
                 FilingTableCell(
                     column_index=col_idx,
@@ -2308,9 +2463,11 @@ def _build_filing_table_data(
                     currency=effective_curr,
                     scale=effective_scale,
                     period=col_meta.period_label,
+                    footnote_refs=fn_refs,
                 )
             )
-            values_by_col[col_meta.header] = format(num_val, "f") if num_val is not None else raw_val
+            col_key = col_key_for_idx[col_idx] if col_idx < len(col_key_for_idx) else col_meta.header
+            values_by_col[col_key] = format(num_val, "f") if num_val is not None else raw_val
 
         if not label and all(not c.raw_text for c in cells):
             continue
@@ -2344,6 +2501,8 @@ def _build_filing_table_data(
         rows=parsed_rows,
         narrative_text=narrative_text,
         subtables=[],
+        footnotes=dict(footnotes or {}),
+        dropped_footnote_columns=len(footnote_cols),
         content_sha256=content_sha256,
         provenance=provenance,
     )
@@ -2374,6 +2533,7 @@ def parse_r_html_table(
             entity_id=entity_id,
             accession=accession,
             narrative_text="\n".join(p for k, p in parser._blocks if k == "text"),
+            footnotes=dict(parser.footnotes),
             content_sha256=digest,
             provenance=provenance,
         )
@@ -2410,6 +2570,7 @@ def parse_r_html_table(
                 narrative_text=narrative_text if idx == 0 else "",
                 fallback_title=outer_title,
                 inherited_note=outer_title,
+                footnotes=parser.footnotes if idx == 0 else None,
             )
             for idx, sub in enumerate(embedded_subtables)
             if _merge_currency_and_prune_spacers(_expand_table_grid(sub))
@@ -2423,6 +2584,7 @@ def parse_r_html_table(
                     "unit_header_note": lead.unit_header_note or outer_title,
                     "narrative_text": narrative_text,
                     "subtables": parsed_subs,
+                    "footnotes": dict(parser.footnotes),
                 }
             )
 
@@ -2434,6 +2596,7 @@ def parse_r_html_table(
             entity_id=entity_id,
             accession=accession,
             narrative_text=narrative_text,
+            footnotes=dict(parser.footnotes),
             content_sha256=digest,
             provenance=provenance,
         )
@@ -2448,6 +2611,7 @@ def parse_r_html_table(
         entity_id=entity_id,
         accession=accession,
         narrative_text=narrative_text,
+        footnotes=parser.footnotes,
     )
     extra_subs: list[FilingTableData] = []
     for idx, sub in enumerate(embedded_subtables, start=1):

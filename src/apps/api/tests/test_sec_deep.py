@@ -1086,3 +1086,117 @@ def test_sec_earnings_release_resolves_dot_html_index_page():
     assert len(cur.guidance_passages) >= 1
     assert "$65.0 billion" in cur.guidance_passages[0].text
 
+
+def test_v4a1_r_html_outer_footnotes_td_fn_isolation_and_ex99_3_image_deck_skip():
+    """Verify R1/R2 (outerFootnotes + td.fn stripping + unique column keys) & EX-99.3 image-deck skipping."""
+    from app.fin_data.adapters.sec_deep import normalize_sec_ratio_pct
+
+    # 1. Ratio normalization (R4b)
+    assert normalize_sec_ratio_pct(Decimal("0.115"), raw_text="0.115") == Decimal("11.500")
+    assert normalize_sec_ratio_pct(Decimal("2.50"), raw_text="2.50%") == Decimal("2.50")
+
+    # 2. JPM R166 / WFC R121 style Details table with td.fn, duplicate column headers, and nested outerFootnotes
+    r166_html = """
+    <html><body>
+    <table class="report">
+      <tr>
+        <th class="tl" rowspan="2">Segment Results ($ in Millions)</th>
+        <th class="th" colspan="2">3 Months Ended Sep. 30, 2026</th>
+        <th class="th" colspan="2">3 Months Ended Sep. 30, 2026</th>
+        <th class="th">[1]</th>
+      </tr>
+      <tr>
+        <th class="th" colspan="2">Total</th>
+        <th class="th" colspan="2">Total</th>
+        <th class="th"></th>
+      </tr>
+      <tr class="re">
+        <td class="pl"><a onclick="Show.showAR( this, 'defref_us-gaap_RevenuesNetOfInterestExpense', window );">Total net revenue</a></td>
+        <td class="nump">$ 50,172</td><td class="fn">[1]</td>
+        <td class="nump">22,877</td><td class="fn">[2]</td>
+        <td class="fn">[1]</td>
+      </tr>
+      <tr class="ro">
+        <td class="pl">Total assets</td>
+        <td class="nump">4,100,000</td><td class="fn"></td>
+        <td class="nump">3,900,000</td><td class="fn"></td>
+        <td class="fn">[1]</td>
+      </tr>
+      <tr>
+        <td colspan="6">
+          <table class="outerFootnotes">
+            <tr class="outerFootnote"><td class="fn">[1] Managed basis includes FTE adjustments.</td></tr>
+            <tr class="outerFootnote"><td><table class="nestedVIE"><tr><th>VIE</th><th>Total</th></tr><tr><td>Total assets</td><td>999</td></tr></table></td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+    </body></html>
+    """
+    parsed = parse_r_html_table(r166_html, r_file="R166.htm", url="https://www.sec.gov/Archives/edgar/data/19617/001/R166.htm")
+    assert parsed.dropped_footnote_columns >= 1
+    assert parsed.subtables == []  # nested outerFootnotes table MUST NEVER enter subtables
+    assert "[1]" in parsed.footnotes and "Managed basis" in parsed.footnotes["[1]"]
+    rev_row = next(r for r in parsed.rows if "Total net revenue" in r.label)
+    assert len(rev_row.cells) == 2
+    assert rev_row.cells[0].numeric_value == Decimal("50172")
+    assert rev_row.cells[0].footnote_refs == ["[1]"]
+    assert rev_row.cells[1].numeric_value == Decimal("22877")
+    assert rev_row.cells[1].footnote_refs == ["[2]", "[1]"]
+    # values_by_column preserves first column without overwriting by #c1 or td.fn!
+    vals = list(rev_row.values_by_column.values())
+    assert vals[0] == "50172" and vals[1] == "22877"
+    assets_row = next(r for r in parsed.rows if "Total assets" in r.label)
+    assert assets_row.cells[0].numeric_value == Decimal("4100000")
+
+    # 3. BAC 8-K pattern: EX-99.1 & EX-99.2 are image-only slide decks; numeric financial supplement is in EX-99.3
+    cik = "0000070858"
+    acc = "0000070858-26-000481"
+    nodash = acc.replace("-", "")
+    img_deck_html = "<html><body>" + "".join(f'<img src="slide{i}.jpg"/>' for i in range(1, 20)) + "<p>Slide Deck</p></body></html>"
+    ex99_3_html = (
+        "<html><body><h2>Supplemental Financial Information</h2>"
+        "<table><tr><th>($ in millions)</th><th>3Q26</th></tr>"
+        + "".join(f"<tr><td>Line {i}</td><td>{1000 + i}</td></tr>" for i in range(25))
+        + "</table></body></html>"
+    )
+    raw_subs = {
+        "cik": cik,
+        "filings": {
+            "recent": {
+                "accessionNumber": [acc],
+                "filingDate": ["2026-10-15"],
+                "reportDate": ["2026-09-30"],
+                "form": ["8-K"],
+                "items": [["2.02", "9.01"]],
+                "primaryDocument": ["bac-8k.htm"],
+            }
+        },
+    }
+    t = RoutingTransport({
+        f"/70858/{nodash}/index.json": raw_json_reply({
+            "directory": {
+                "item": [
+                    {"name": "bac-8k.htm", "type": "8-K"},
+                    {"name": "ex991.htm", "type": "EX-99.1"},
+                    {"name": "ex992.htm", "type": "EX-99.2"},
+                    {"name": "ex993.htm", "type": "EX-99.3"},
+                ]
+            }
+        }),
+        f"/70858/{nodash}/ex991.htm": html_reply(img_deck_html),
+        f"/70858/{nodash}/ex992.htm": html_reply(img_deck_html),
+        f"/70858/{nodash}/ex993.htm": html_reply(ex99_3_html),
+    })
+    res = sec_earnings_release(make_adapter(t), cik, submissions=raw_subs)
+    assert res.status == "partial"
+    cur = res.data[0].current
+    assert cur is not None
+    assert cur.ex99_1 is not None and cur.ex99_1.is_image_deck is True and cur.ex99_1.tables == []
+    assert cur.ex99_2 is not None and cur.ex99_2.is_image_deck is True
+    assert cur.ex99_3 is not None and cur.ex99_3.is_image_deck is False
+    assert cur.ex99_3.numeric_table_cells >= 20
+    assert any(s.startswith("EX-99.1:") for s in cur.exhibits_image_only_skipped)
+    assert len(cur.ex99_3.tables) == 1
+
+

@@ -719,3 +719,54 @@ def test_plan_b_p2_peer_relative_radar_trigger_and_hysteresis() -> None:
     assert len(re_items) == 1
 
 
+def test_v4a1_source_unavailable_maps_to_valid_503_contract_with_retry_after(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify SecPacingError('source_unavailable') on /peers/compare and /peers/watch returns 503 + Retry-After + valid error_code."""
+    from fastapi.testclient import TestClient
+    import app.main as api_main
+    from app.fin_data.adapters.sec_events.pacing import SecPacingError
+
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    client = TestClient(api_main.app)
+    reg = client.post(
+        "/v1/auth/local/register",
+        json={"email": "v4a1_503@example.com", "password": "Password123!"},
+    )
+    assert reg.status_code in (200, 201), reg.text
+    token = reg.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    def _boom(*_args: Any, **_kwargs: Any) -> Any:
+        raise SecPacingError("source_unavailable", "SEC EDGAR upstream timeout.", retryable=True, retry_after_seconds=12.0)
+
+    monkeypatch.setattr(api_main, "load_or_fetch_company_snapshot", _boom)
+    monkeypatch.setattr(api_main, "resolve_ticker_to_cik", _boom)
+    api_main.PEER_COMPANY_SNAPSHOTS.put("sym:BROKEN", {"cik": "0009999999", "symbol": "BROKEN"})
+    try:
+        r_cmp = client.post(
+            "/v2/research/peers/compare",
+            headers=headers,
+            json={"primary_symbol": "NVDA", "symbols": ["NVDA", "AMD"], "cache_only": False},
+        )
+        assert r_cmp.status_code == 503, r_cmp.text
+        assert r_cmp.headers.get("retry-after") == "12"
+        body_cmp = r_cmp.json()
+        assert body_cmp["error_code"] == "internal_error"
+        assert body_cmp["retryable"] is True
+        assert any(d.get("message") == "source_unavailable" for d in body_cmp.get("details") or [])
+
+        r_watch = client.post(
+            "/v2/research/peers/watch",
+            headers=headers,
+            json={"primary_symbol": "NO_CACHE_SYM", "symbols": ["NO_CACHE_SYM", "AMD"]},
+        )
+        assert r_watch.status_code == 503, r_watch.text
+        assert r_watch.headers.get("retry-after") == "12"
+        body_watch = r_watch.json()
+        assert body_watch["error_code"] == "internal_error"
+        assert any(d.get("message") == "source_unavailable" for d in body_watch.get("details") or [])
+    finally:
+        api_main.PEER_COMPANY_SNAPSHOTS.delete("sym:BROKEN")
+        client.delete("/v1/auth/local/account", headers=headers)
+
+
+

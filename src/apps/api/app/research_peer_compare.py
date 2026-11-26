@@ -110,7 +110,7 @@ def resolve_ticker_to_cik(
         raise SecPacingError("ticker_not_found", f"Ticker {symbol!r} not found in SEC company_tickers.json.", retryable=False)
     return hit
 
-_CURRENT_PROJECTION_VERSION = 5
+_CURRENT_PROJECTION_VERSION = 6
 
 _V2_PROJECTION_LINES: tuple[str, ...] = (
     "revenue",
@@ -152,7 +152,7 @@ _V2_PROJECTION_LINES: tuple[str, ...] = (
     "unrecognized_sbc",
     "repurchased_shares",
     "rsu_grants_shares",
-    # V3a 10-Q collision, footnote & finance-lease CapEx bridge lines (47 lines total)
+    # V3a 10-Q collision, footnote & finance-lease CapEx bridge lines (47 lines)
     "rpo",
     "deferred_revenue_current",
     "deferred_revenue_noncurrent",
@@ -161,6 +161,34 @@ _V2_PROJECTION_LINES: tuple[str, ...] = (
     "purchase_commitments",
     "finance_lease_principal_payments",
     "finance_lease_rou_additions",
+    # V4a US Major Bank Plugin lines (74 lines total)
+    "goodwill",
+    "intangible_assets",
+    "bank_net_revenue",
+    "net_interest_income",
+    "noninterest_income",
+    "noninterest_expense",
+    "provision_for_credit_losses",
+    "net_income_common",
+    "preferred_dividends",
+    "preferred_stock",
+    "aoci",
+    "common_shares_outstanding",
+    "loans_gross",
+    "loans_net",
+    "allowance_for_credit_losses",
+    "nonaccrual_loans",
+    "net_charge_offs",
+    "deposits",
+    "deposits_noninterest_bearing",
+    "securities_afs",
+    "securities_htm_carrying",
+    "securities_htm_fair_value",
+    "cet1_ratio",
+    "cet1_capital",
+    "tier1_leverage_ratio",
+    "slr_ratio",
+    "rwa",
 )
 
 _ISO_CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
@@ -474,6 +502,9 @@ def project_companyfacts_to_snapshot(
                         currency_found = True
                 elif spec.unit_kind == "shares":
                     if unit_key != "shares":
+                        continue
+                elif spec.unit_kind == "ratio":
+                    if unit_key.lower() not in ("pure", "ratio", "percent"):
                         continue
                 elif spec.unit_kind == "per_share":
                     uk_low = unit_key.lower()

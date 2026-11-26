@@ -1358,8 +1358,9 @@ def _reserve_model_call(request: Request, operation_id: str, *, session_id: str 
     decision = abuse_control.model.reserve(operation_id, _model_subjects(request, session_id))
     if not decision.available:
         raise ApiProblem(
-            503, "abuse_backend_unavailable", "Abuse controls are temporarily unavailable.",
+            503, "internal_error", "Abuse controls are temporarily unavailable.",
             retryable=True, retry_after=decision.retry_after or 1,
+            details=[ErrorDetail(location="abuse_control", message="abuse_backend_unavailable")],
         )
     if not decision.allowed:
         raise ApiProblem(
@@ -1382,7 +1383,11 @@ def _reserve_model_call(request: Request, operation_id: str, *, session_id: str 
     if account is not None and not getattr(request.state, "personal_model", False):
         reservation_id = f"model:{operation_id}"
         if token_budget is None:
-            raise ApiProblem(503, "billing_reservation_unknown", "Unable to bound the account token reservation.", retryable=False)
+            raise ApiProblem(
+                503, "internal_error", "Unable to bound the account token reservation.",
+                retryable=False,
+                details=[ErrorDetail(location="billing", message="billing_reservation_unknown")],
+            )
         try:
             billing_ledger.reserve(account.account_id, reservation_id, token_budget, now=lifecycle_clock.now(), provider_model=provider_model)
         except BillingError as error:
@@ -1480,8 +1485,9 @@ def _reserve_search_call(request: Request) -> None:
     decision = abuse_control.model.reserve(f"search:{uuid4().hex}", _model_subjects(request))
     if not decision.available:
         raise ApiProblem(
-            503, "abuse_backend_unavailable", "Abuse controls are temporarily unavailable.",
+            503, "internal_error", "Abuse controls are temporarily unavailable.",
             retryable=True, retry_after=decision.retry_after or 1,
+            details=[ErrorDetail(location="abuse_control", message="abuse_backend_unavailable")],
         )
     if not decision.allowed:
         raise ApiProblem(
@@ -3911,6 +3917,8 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
         and request.max_model_calls != 0
         and request.max_total_tokens != 0
         and request.max_elapsed_seconds != 0
+        and request.max_cost_usd is None
+        and request.max_input_tokens_per_call is None
         and request.allow_auto_squad is not False
     )
     if should_check_auto_squad:
@@ -7692,7 +7700,10 @@ def _sec_events_config_from_hook(hook_dict: Mapping[str, Any]) -> dict[str, Any]
         try:
             sec_ua = validate_user_agent(ua_raw)
         except SecFailure as error:
-            raise ApiProblem(503, "sec_contact_unconfigured", error.message, retryable=False) from error
+            raise ApiProblem(
+                503, "internal_error", error.message, retryable=False,
+                details=[ErrorDetail(location="sec_edgar", message="sec_contact_unconfigured")],
+            ) from error
     else:
         env_ua, env_ok = _configured_sec_user_agent()
         if env_ok and env_ua:
@@ -7702,9 +7713,10 @@ def _sec_events_config_from_hook(hook_dict: Mapping[str, Any]) -> dict[str, Any]
         else:
             raise ApiProblem(
                 503,
-                "sec_contact_unconfigured",
+                "internal_error",
                 "SEC EDGAR user agent is not configured.",
                 retryable=False,
+                details=[ErrorDetail(location="sec_edgar", message="sec_contact_unconfigured")],
             )
 
     limiter = hook_dict.get("limiter")
@@ -7772,7 +7784,11 @@ def _resolve_sec_events_cik(
     if res.status == "rate_limited":
         raise ApiProblem(429, "rate_limited", "SEC EDGAR rate limit reached resolving ticker.", retryable=True)
     if res.status == "unavailable":
-        raise ApiProblem(503, "service_unavailable", "SEC EDGAR ticker lookup is unavailable.", retryable=True)
+        raise ApiProblem(
+            503, "internal_error", "SEC EDGAR ticker lookup is unavailable.",
+            retryable=True,
+            details=[ErrorDetail(location="sec_edgar", message="service_unavailable")],
+        )
     if res.status not in ("ok", "partial") or not res.data:
         raise ApiProblem(404, "not_found", f"Could not resolve SEC CIK for ticker {sym!r}.")
     exact = next(
@@ -7881,17 +7897,33 @@ def _resolve_sec_events_runtime(
 
 
 def _handle_sec_pacing_error(error: SecPacingError) -> ApiProblem:
-    if error.reason == "sec_contact_unconfigured":
-        return ApiProblem(503, error.reason, error.message, retryable=False)
-    if error.reason == "provider_rate_limited":
-        return ApiProblem(429, "rate_limited", error.message, retryable=True, retry_after=error.retry_after_seconds)
-    if error.reason in ("forbidden", "invalid_sec_url") or "denied" in error.reason or "policy" in error.reason:
-        return ApiProblem(403, error.reason, error.message, retryable=False)
+    import math
+    reason = str(getattr(error, "reason", None) or "sec_error")
+    detail = [ErrorDetail(location="sec_edgar", message=reason)]
+    ra_sec: int | None = None
+    if error.retry_after_seconds is not None:
+        ra_sec = max(1, int(math.ceil(float(error.retry_after_seconds))))
+    if reason == "provider_rate_limited":
+        return ApiProblem(
+            429, "rate_limited", error.message,
+            retryable=True, retry_after=ra_sec, details=detail,
+        )
+    if reason in ("ticker_not_found", "not_found"):
+        return ApiProblem(404, "not_found", error.message, retryable=False, details=detail)
+    if reason in ("source_unavailable", "source_timeout", "deadline_exceeded", "sec_contact_unconfigured"):
+        return ApiProblem(
+            503, "internal_error", error.message,
+            retryable=bool(error.retryable), retry_after=ra_sec, details=detail,
+        )
+    if reason in ("forbidden", "invalid_sec_url", "invalid_json", "invalid_submissions") or "denied" in reason or "policy" in reason:
+        return ApiProblem(422, "invalid_request", error.message, retryable=False, details=detail)
     return ApiProblem(
         503 if error.retryable else 502,
-        "service_unavailable" if error.retryable else error.reason,
+        "internal_error",
         error.message,
-        retryable=error.retryable,
+        retryable=bool(error.retryable),
+        retry_after=ra_sec,
+        details=detail,
     )
 
 
@@ -9243,7 +9275,7 @@ def compare_research_peers(
             except SecPacingError as err:
                 if err.reason == "ticker_not_found":
                     continue
-                raise ApiProblem(503 if err.retryable else 422, err.reason, err.message, retryable=err.retryable) from err
+                raise _handle_sec_pacing_error(err) from err
 
     ordered_rows = [rows_by_sym[s] for s in symbols if s in rows_by_sym]
     elapsed_ms = int((monotonic() - t0) * 1000)
@@ -9342,6 +9374,7 @@ class PeerWatchCreateRequest(BaseModel):
 )
 def upsert_peer_relative_watch(
     request: PeerWatchCreateRequest,
+    http_request: Request,
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> FilingWatchSubscription:
     """Create or update a radar WatchSubscription with the 0-LLM ``peer_relative`` channel enabled."""
@@ -9351,14 +9384,28 @@ def upsert_peer_relative_watch(
     if len(syms) < 2:
         raise ApiProblem(422, "invalid_request", "At least 2 unique symbols are required.")
 
-    # Resolve CIK via in-memory ticker map or SEC ticker resolver (zero full-table .items() scans)
+    # Resolve CIK via PEER_COMPANY_SNAPSHOTS cache first, then injected hooks or SEC ticker resolver
     cik_val: str | None = None
     company_name: str | None = None
-    ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
-    try:
-        cik_val, company_name = resolve_ticker_to_cik(prim, user_agent=ua, limiter=SecPacingLimiter.from_env(), policy=load_fin_data_policy())
-    except SecPacingError as err:
-        raise ApiProblem(422, err.reason, err.message) from err
+    sym_ptr = PEER_COMPANY_SNAPSHOTS.get(f"sym:{prim}")
+    if isinstance(sym_ptr, Mapping) and sym_ptr.get("cik"):
+        cik_val = str(sym_ptr["cik"])
+        snap_cached = PEER_COMPANY_SNAPSHOTS.get(f"snap:{cik10(cik_val)}")
+        if isinstance(snap_cached, Mapping) and snap_cached.get("company_name"):
+            company_name = str(snap_cached["company_name"])
+    if cik_val is None:
+        hooks = getattr(http_request.app.state, "peer_compare_hooks", None)
+        hook_dict = hooks if isinstance(hooks, Mapping) else {}
+        ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
+        lim = hook_dict.get("limiter") or SecPacingLimiter.from_env()
+        pol = hook_dict.get("policy") or load_fin_data_policy()
+        transport = hook_dict.get("transport")
+        try:
+            cik_val, company_name = resolve_ticker_to_cik(
+                prim, user_agent=ua, limiter=lim, policy=pol, transport=transport,
+            )
+        except SecPacingError as err:
+            raise _handle_sec_pacing_error(err) from err
     cik_norm = cik10(cik_val)
 
     desc = request.description or f"{prim} 相对估值监控（健康边界 {request.metric_key} {request.operator} {request.threshold_decimal}）"
@@ -9617,7 +9664,7 @@ def run_governance_audit(
             hook_dict=hook_dict,
         )
     except SecPacingError as err:
-        raise ApiProblem(503 if err.retryable else 422, err.reason, err.message, retryable=err.retryable) from err
+        raise _handle_sec_pacing_error(err) from err
     if report is None and not request.cache_only:
         raise ApiProblem(404, "not_found", f"Could not load SEC governance facts for {request.symbol}.")
     return report
@@ -10034,7 +10081,7 @@ def _v3a_sec_loaders(
                 user_agent=ua,
                 limiter=lim,
                 snapshot_cache=PEER_COMPANY_SNAPSHOTS,
-                min_projection_version=5,
+                min_projection_version=6,
                 submissions=subs,
                 policy=pol,
                 transport=transport,
