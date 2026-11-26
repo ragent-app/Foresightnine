@@ -63,7 +63,7 @@ services:
       resources:
         limits:
           cpus: "1.0"
-          memory: 512M
+          memory: 768M
     env_file:
       # Deployment-owned secrets (OAuth clients, GLM key, App Link fingerprint,
       # licensed provider keys). Never commit the real file; only the .example.

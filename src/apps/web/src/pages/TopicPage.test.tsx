@@ -2685,7 +2685,7 @@ describe("research turn instructions", () => {
 
     // Clicking a bear-case evidence anchor opens ReaderPanel with highlighted quote.
     const bearCard = screen.getByTestId("bear-case-card");
-    fireEvent.click(within(bearCard).getByRole("button", { name: "card_rev" }));
+    fireEvent.click(within(bearCard).getByRole("button", { name: "cloud_revenue" }));
     expect(await screen.findByText(QUOTE, { selector: "mark" })).toBeTruthy();
   });
 

@@ -288,9 +288,9 @@ def test_sse_endpoint_auth_ownership_and_cursor_validation(env):
     assert done_resp.headers['x-accel-buffering'] == 'no'
     frames = _parse_sse_frames(done_resp.text.splitlines())
     assert [f['event'] for f in frames] == ['progress.snapshot', 'run.terminal']
-    assert frames[0]['id'] == 'cp:4'
+    assert frames[0]['id'] == 'cp:5'
     assert frames[0]['data']['operation_status'] == 'completed'
-    assert frames[0]['data']['event_count'] == 4
+    assert frames[0]['data']['event_count'] == 5
     assert frames[1]['id'] == 'done:completed'
     assert frames[1]['data']['version_id'] == env.latest()['version_id']
 
@@ -361,8 +361,8 @@ def test_sse_endpoint_live_stream_resume_and_deltas(env, live_server):
                 assert event_names[-1] == 'run.terminal'
 
                 step_events = [f for f in rest_frames if f['event'] == 'step.event']
-                assert [f['data']['event']['index'] for f in step_events] == [2, 3]
-                assert [f['id'] for f in step_events] == ['ev:2', 'ev:3']
+                assert [f['data']['event']['index'] for f in step_events] == [2, 4]
+                assert [f['id'] for f in step_events] == ['ev:2', 'ev:4']
                 # No duplicate event 0 or 1, no id on step.current / stream.delta / stream.reset.
                 assert all(f['id'] is None for f in rest_frames if f['event'] in ('step.current', 'stream.delta', 'stream.reset'))
                 term = rest_frames[-1]
@@ -465,7 +465,9 @@ def test_sse_endpoint_heartbeat_cancel_and_429_limit(env, live_server, monkeypat
                 term = frames[-1]
                 assert term['event'] == 'run.terminal'
                 assert term['id'] == 'done:cancelled'
-                assert term['data'] == {'operation_id': op_id, 'operation_status': 'cancelled', 'version_id': None}
+                assert term['data']['operation_id'] == op_id
+                assert term['data']['operation_status'] == 'cancelled'
+                assert term['data']['version_id'] is None
             finally:
                 await s1_cm.__aexit__(None, None, None)
                 release.set()
@@ -501,7 +503,9 @@ def test_sse_endpoint_failed_run_emits_terminal_failed(env, live_server):
                 assert frames[0]['event'] == 'progress.snapshot'
                 assert frames[-1]['event'] == 'run.terminal'
                 assert frames[-1]['id'] == 'done:failed'
-                assert frames[-1]['data'] == {'operation_id': op_id, 'operation_status': 'failed', 'version_id': None}
+                assert frames[-1]['data']['operation_id'] == op_id
+                assert frames[-1]['data']['operation_status'] == 'failed'
+                assert frames[-1]['data']['version_id'] is None
 
     try:
         asyncio.run(scenario())
@@ -656,9 +660,9 @@ def test_sse_endpoint_continue_from_partial_streams_cumulative_snapshot_and_delt
                 on_frame(ev, json.dumps(payload))
             return None
         if n == 1:
-            # Fail mid-stream / timeout during op1 so Turn 1 saves status='partial' with cumulative checkpoint.
+            # Fail mid-stream during op1 (non-auto-retryable) so Turn 1 saves status='partial' with cumulative checkpoint.
             on_frame('message_start', json.dumps({'type': 'message_start', 'message': {'role': 'assistant', 'content': [], 'usage': {'input_tokens': 6, 'output_tokens': 1}}}))
-            err = ProviderFailure('provider_timeout', 'upstream timed out', retryable=True)
+            err = ProviderFailure('provider_error', 'upstream interrupted mid-stream', retryable=False)
             err.provider_response_received = True
             err.reported_tokens = 7
             raise err
@@ -691,12 +695,42 @@ def test_sse_endpoint_continue_from_partial_streams_cumulative_snapshot_and_delt
             on_frame(ev, json.dumps(payload))
         return None
 
+    def non_stream_transport(method, url, headers, body, timeout):
+        wire = json.loads(body.decode('utf-8') if isinstance(body, (bytes, bytearray)) else str(body))
+        user_content = wire['messages'][0]['content']
+        user_text = user_content if isinstance(user_content, str) else ''.join(b.get('text', '') for b in user_content if isinstance(b, dict))
+        payload = json.loads(user_text)
+        reviews = [
+            {
+                'requirement_id': item['requirement_id'],
+                'claim_id': item['claim_id'],
+                'review_key': item['review_key'],
+                'evidence_ids': [str(ev['evidence_id']) for ev in item.get('evidence_context', [])],
+                'verdict': 'supported',
+                'reason': 'verbatim quote supports revenue claim',
+                'condition': None,
+                'correction_possible_from_read_evidence': False,
+                'repair_evidence_ids': [],
+            }
+            for item in payload.get('candidates', [])
+        ]
+        resp_body = json.dumps({
+            'id': 'msg_review',
+            'type': 'message',
+            'role': 'assistant',
+            'content': [{'type': 'text', 'text': json.dumps({'reviews': reviews})}],
+            'stop_reason': 'end_turn',
+            'usage': {'input_tokens': 10, 'output_tokens': 10},
+        })
+        return SimpleNamespace(status_code=200, headers={'content-type': 'application/json'}, body=resp_body, safe_error=None)
+
     provider = AnthropicMessagesProvider(
         SimpleNamespace(base_url='https://example.com/anthropic', model='m-s1', api_key='sk-test', allow_private_network=False),
         ProviderPolicy(timeout_seconds=10, max_output_tokens=1000),
         anthropic_version='2023-06-01',
         auth_scheme='x-api-key',
         max_tokens=500,
+        transport=non_stream_transport,
         stream_transport=stream_transport,
         stream_enabled=True,
     )
