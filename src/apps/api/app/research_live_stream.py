@@ -539,7 +539,7 @@ class ResearchLiveBroker:
         operation_id: str,
         *,
         operation_status: str,
-        version_id: str | None,
+        version_id: str | None = None,
         progress: dict[str, Any] | None = None,
     ) -> None:
         with self._lock:

@@ -55,6 +55,8 @@ from .research_transcript_parser import (
 
 CollisionSeverity = Literal["red", "yellow", "green", "info", "not_applicable"]
 BasisType = Literal["gaap", "non_gaap", "operating_kpi", "unknown", "inherited_call_default"]
+ClaimScope = Literal["consolidated", "segment", "product_line", "geography"]
+ConfidentialityPolicyKind = Literal["none", "strict_nda_legal", "segment_disclosure_policy"]
 PeriodScope = Literal["single_quarter", "ytd", "full_year", "ttm", "multi_year", "point_in_time", "unspecified"]
 EvidenceSufficiency = Literal["explicit", "implied", "ambiguous"]
 CommitmentOperator = Literal[
@@ -395,6 +397,7 @@ class ManagementFactualClaim(_StrictV3aModel):
     claim_id: str | None = None
     metric_canonical: str = "other"
     kpi_key: str | None = None
+    scope: ClaimScope = "consolidated"
     basis: BasisType = "unknown"
     period_scope: PeriodScope = "single_quarter"
     target_fy: int | None = None
@@ -421,6 +424,7 @@ class ExtractedVerbalCommitment(_StrictV3aModel):
     commitment_key: str | None = None
     metric_canonical: str = "other"
     kpi_key: str | None = None
+    scope: ClaimScope = "consolidated"
     basis: BasisType = "unknown"
     period_scope: PeriodScope = "single_quarter"
     target_fy: int | None = None
@@ -456,6 +460,7 @@ class ExtractedQaEvasion(_StrictV3aModel):
     topic_tags: list[str] = Field(default_factory=list)
     question_asks_sensitive_detail: bool = False
     exec_cites_confidentiality_policy: bool = False
+    confidentiality_policy_kind: ConfidentialityPolicyKind = "none"
     evasion_level: EvasionLevel = "direct"
     behavior_subtype: EvasionSubtype = "none"
     followup_count: int = 0
@@ -530,6 +535,8 @@ class Layer2ManagementExtraction(_StrictV3aModel):
     call_count: int = 0
     latency_ms: int = 0
     truncated_retried: bool = False
+    partial_lane_status: dict[str, str] = Field(default_factory=dict)
+    lane_errors: dict[str, str] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=_utcnow)
 
 
@@ -621,6 +628,7 @@ class QaEvasionFinding(_StrictV3aModel):
     behavior_subtype: EvasionSubtype = "none"
     display_severity: CollisionSeverity
     legitimate_confidentiality: bool = False
+    disclosure_policy_gap: bool = False
     collapsed_by_default: bool = False
     sub_questions: list[str] = Field(default_factory=list)
     unanswered_sub_questions: list[str] = Field(default_factory=list)
@@ -649,6 +657,7 @@ class VerbalCommitmentRecord(_StrictV3aModel):
     call_date: str | None = None
     metric_canonical: str
     kpi_key: str | None = None
+    scope: ClaimScope = "consolidated"
     basis: BasisType = "unknown"
     effective_basis: Literal["gaap", "non_gaap", "operating_kpi", "unknown"] = "unknown"
     period_scope: PeriodScope = "single_quarter"
@@ -758,6 +767,7 @@ class CallVerificationReport(_StrictV3aModel):
     evasion_total_exchanges: int = 0
     evasion_distribution: dict[str, int] = Field(default_factory=dict)
     confidentiality_whitelisted_count: int = 0
+    disclosure_policy_gap_count: int = 0
     collision_findings: list[CollisionFinding] = Field(default_factory=list)
     qa_evasions: list[QaEvasionFinding] = Field(default_factory=list)
     commitments: list[VerbalCommitmentRecord] = Field(default_factory=list)
@@ -781,6 +791,9 @@ class CallVerificationReport(_StrictV3aModel):
     cache_read_input_tokens: int = 0
     cache_creation_input_tokens: int = 0
     llm_call_count: int = 0
+    partial_lane_status: dict[str, str] = Field(default_factory=dict)
+    lane_errors: dict[str, str] = Field(default_factory=dict)
+    footnote_verification_notes: list[str] = Field(default_factory=list)
     generated_at: datetime = Field(default_factory=_utcnow)
 
 
@@ -1816,7 +1829,16 @@ def fetch_footnote_fallback_tables(
     adapter: Any,
     cik: str,
     accession: str,
-    keywords: Sequence[str] = ("remaining performance", "commitment", "purchase obligation", "deferred revenue", "contract"),
+    keywords: Sequence[str] = (
+        "remaining performance",
+        "commitment",
+        "purchase obligation",
+        "deferred revenue",
+        "contract",
+        "segment",
+        "disaggregated revenue",
+        "backlog",
+    ),
     max_tables: int = 3,
     max_bytes: int = 1_500_000,
 ) -> list[dict[str, Any]]:
@@ -1848,6 +1870,32 @@ def fetch_footnote_fallback_tables(
         )
         if tbl_res.status == "ok" and tbl_res.data:
             td = tbl_res.data[0]
+            md_rows: list[str] = []
+            for row in (getattr(td, "rows", None) or [])[:20]:
+                if isinstance(row, Mapping):
+                    lbl = str(row.get("label") or row.get("name") or "").strip()
+                    vals = row.get("values") or row.get("cells") or []
+                    if isinstance(vals, Mapping):
+                        v_str = " | ".join(f"{k}: {v}" for k, v in list(vals.items())[:5])
+                    elif isinstance(vals, Sequence) and not isinstance(vals, str):
+                        v_str = " | ".join(str(v) for v in list(vals)[:5])
+                    else:
+                        v_str = str(vals)
+                    line = f"{lbl} | {v_str}".strip(" |")
+                elif isinstance(row, Sequence) and not isinstance(row, str):
+                    line = " | ".join(str(c).strip() for c in list(row)[:6] if str(c).strip())
+                else:
+                    lbl = str(getattr(row, "label", "") or "").strip()
+                    vals = getattr(row, "values", None)
+                    if isinstance(vals, Mapping):
+                        v_str = " | ".join(f"{k}: {v}" for k, v in list(vals.items())[:5])
+                    elif isinstance(vals, Sequence) and not isinstance(vals, str):
+                        v_str = " | ".join(str(v) for v in list(vals)[:5])
+                    else:
+                        v_str = str(vals or "")
+                    line = f"{lbl} | {v_str}".strip(" |")
+                if line:
+                    md_rows.append(line[:180])
             out.append(
                 {
                     "r_file": td.r_file,
@@ -1855,6 +1903,7 @@ def fetch_footnote_fallback_tables(
                     "currency": td.currency,
                     "unit_scale": td.unit_scale,
                     "narrative_excerpt": (td.narrative_text or "")[:1200],
+                    "rows_preview": "\n".join(md_rows)[:2400],
                     "row_count": len(td.rows),
                 }
             )
@@ -2027,6 +2076,104 @@ def screen_item1a_omissions(
             )
         )
     return scored
+
+
+# --------------------------------------------------------------------------- Layer 3: Segment Scope Guard, Rounding Tolerance & Cross-Lane Dedup
+
+_SEGMENT_SCOPE_RE = re.compile(
+    r"(?:\b(?:intelligent\s+cloud|microsoft\s+cloud|productivity\s+and\s+business|more\s+personal\s+computing|"
+    r"azure|aws|google\s+cloud|cloud\s+revenue|data\s+center|gaming|automotive|professional\s+visualization|"
+    r"services\s+revenue|iphone|ipad|mac\s+revenue|wearables|family\s+of\s+apps|reality\s+labs|advertising\s+revenue|"
+    r"segment|sub-?segment|division|product\s+line|business\s+unit|standalone\s+product|copilot|blackwell\s+revenue|"
+    r"north\s+america|international|greater\s+china|china\s+revenue|emea|apac)\b|"
+    r"(?:分部|子业务|云业务|数据中心|游戏业务|智能云|产品线|大中华区|北美区))",
+    re.IGNORECASE,
+)
+_CONSOLIDATED_EXPLICIT_RE = re.compile(
+    r"(?:\b(?:total\s+(?:company\s+)?(?:revenue|revenues|sales|operating\s+income|gross\s+margin|capex|operating\s+cash\s+flow)|"
+    r"consolidated\s+(?:revenue|revenues|operating|gross\s+margin|cash\s+flow)|company-?wide)\b|"
+    r"(?:总营收|合并营收|公司整体|总收入|合并口径))",
+    re.IGNORECASE,
+)
+
+
+def _infer_effective_scope(
+    declared_scope: ClaimScope,
+    metric_canonical: str,
+    kpi_key: str | None,
+    summary_text: str,
+    quote_text: str,
+) -> ClaimScope:
+    """Guard against segment/product figures colliding into consolidated XBRL lines (R3-D6)."""
+    if declared_scope != "consolidated":
+        return declared_scope
+    if metric_canonical not in TWELVE_XBRL_METRICS:
+        return "consolidated"
+    blob = f"{kpi_key or ''} {summary_text} {quote_text}"
+    if _CONSOLIDATED_EXPLICIT_RE.search(blob):
+        return "consolidated"
+    if _SEGMENT_SCOPE_RE.search(blob):
+        return "segment"
+    return "consolidated"
+
+
+def _rounding_half_step_tolerance(
+    raw_value: str | None,
+    unit: str | None,
+    scale: str | None,
+    metric_canonical: str,
+) -> Decimal:
+    """Compute half-ULP presentation rounding tolerance (e.g. '$35.1B' -> ±$0.05B) so rounding never fires red."""
+    if not raw_value:
+        return Decimal("0")
+    cleaned = re.sub(r"[,$€£¥%\s]", "", str(raw_value).strip())
+    if not re.fullmatch(r"[+-]?\d+(?:\.\d+)?", cleaned):
+        return Decimal("0")
+    if "." in cleaned:
+        dec_places = len(cleaned.split(".", 1)[1])
+        half_step = Decimal("0.5") * (Decimal("10") ** (-dec_places))
+    else:
+        half_step = Decimal("0.5")
+    scaled = _scale_claim_value(half_step, unit, scale, metric_canonical)
+    return abs(scaled) if scaled is not None else Decimal("0")
+
+
+def _dedup_factual_claims(
+    claims: Sequence[ManagementFactualClaim],
+) -> list[ManagementFactualClaim]:
+    """Deterministically merge duplicate claims targeting the exact same (metric, scope, period, operator, value)."""
+    best: dict[tuple[Any, ...], ManagementFactualClaim] = {}
+    order: list[tuple[Any, ...]] = []
+    for cl in claims:
+        eff_scope = _infer_effective_scope(cl.scope, cl.metric_canonical, cl.kpi_key, cl.claim_summary, cl.verbatim_quote)
+        key = (
+            cl.metric_canonical,
+            (cl.kpi_key or "").casefold() if eff_scope != "consolidated" or cl.metric_canonical == "other" else "",
+            eff_scope,
+            cl.target_fy,
+            cl.target_fq,
+            cl.period_scope,
+            cl.operator,
+            (cl.value_low or "").strip(),
+            (cl.value_high or "").strip(),
+        )
+        if key not in best:
+            best[key] = cl.model_copy(update={"scope": eff_scope})
+            order.append(key)
+        else:
+            prev = best[key]
+            # Prefer explicit sufficiency, CFO speaker, or longer verbatim quote
+            prev_score = (
+                (2 if prev.evidence_sufficiency == "explicit" else 0)
+                + (1 if prev.speaker_role == "cfo" else 0)
+            )
+            cur_score = (
+                (2 if cl.evidence_sufficiency == "explicit" else 0)
+                + (1 if cl.speaker_role == "cfo" else 0)
+            )
+            if cur_score > prev_score:
+                best[key] = cl.model_copy(update={"scope": eff_scope})
+    return [best[k] for k in order]
 
 
 # --------------------------------------------------------------------------- Layer 3: Commitment Grading & Silent Drop
@@ -2275,7 +2422,66 @@ def run_layer3_call_collision(
         )
 
     if mgmt_extraction is not None:
-        for idx, claim in enumerate(mgmt_extraction.factual_claims):
+        deduped_claims = _dedup_factual_claims(mgmt_extraction.factual_claims)
+
+        # Deterministic Cross-Lane / Same-Call Numeric Contradiction Check (Prepared Remarks vs Q&A / CEO vs CFO)
+        _seen_numeric_by_slot: dict[tuple[Any, ...], tuple[ManagementFactualClaim, GroundedQuoteRef, Decimal]] = {}
+        for idx_c, cl_c in enumerate(deduped_claims):
+            if cl_c.evidence_sufficiency != "explicit" or cl_c.value_low is None or cl_c.operator not in ("approx", "ge", "le", "between"):
+                continue
+            q_c = ground_v3a_quote(
+                quotation=cl_c.verbatim_quote,
+                source_id=cl_c.source_id,
+                source_texts=source_texts,
+                document_pages_by_source=document_pages_by_source,
+                parsed_docs_by_source=parsed_by_src,
+                rules=compiled,
+                turn_index=cl_c.turn_index,
+                slide_index=cl_c.slide_index,
+            )
+            if not q_c.verified:
+                continue
+            scaled_v = _scale_claim_value(_dec(cl_c.value_low), cl_c.unit, cl_c.scale, cl_c.metric_canonical)
+            if scaled_v is None or scaled_v == 0:
+                continue
+            eff_b_c = _resolve_effective_basis(cl_c.basis, call_default_basis, cl_c.metric_canonical)
+            slot_k = (cl_c.metric_canonical, cl_c.scope, cl_c.target_fy, cl_c.target_fq, cl_c.period_scope, eff_b_c)
+            prev_entry = _seen_numeric_by_slot.get(slot_k)
+            if prev_entry is None:
+                _seen_numeric_by_slot[slot_k] = (cl_c, q_c, scaled_v)
+            else:
+                p_cl, p_q, p_val = prev_entry
+                if p_cl.verbatim_quote != cl_c.verbatim_quote and (p_cl.turn_index != cl_c.turn_index or p_cl.speaker_role != cl_c.speaker_role):
+                    if cl_c.metric_canonical in _MARGIN_METRICS:
+                        diverged = abs(scaled_v - p_val) >= Decimal("1.5")
+                    else:
+                        diverged = (abs(scaled_v - p_val) / max(abs(p_val), abs(scaled_v))) >= Decimal("0.05")
+                    if diverged:
+                        roles_pair = {p_cl.speaker_role, cl_c.speaker_role}
+                        is_ceo_cfo_x = ("ceo" in roles_pair and "cfo" in roles_pair)
+                        findings.append(
+                            CollisionFinding(
+                                finding_id=_fid("t0x", f"{idx_c}:{cl_c.metric_canonical}:{cl_c.scope}"),
+                                track="track_0_internal",
+                                collision_kind="ceo_cfo_divergence" if is_ceo_cfo_x else "internal_walkback",
+                                severity="red" if is_ceo_cfo_x else "yellow",
+                                title=(
+                                    f"跨段/跨角色数值分歧 · {cl_c.metric_canonical} ({cl_c.scope})"
+                                    if is_ceo_cfo_x
+                                    else f"同场前后数值回撤 · {cl_c.metric_canonical} ({cl_c.scope})"
+                                ),
+                                management_statement=f"{p_cl.speaker_name or p_cl.speaker_role}: {p_cl.claim_summary}",
+                                ledger_evidence=f"{cl_c.speaker_name or cl_c.speaker_role}: {cl_c.claim_summary}",
+                                formula_note=f"前值 {_fmt_dec(p_val, 2)} vs 后值 {_fmt_dec(scaled_v, 2)}（同口径 {eff_b_c} / {cl_c.scope}）",
+                                basis_badge="同场跨段确定性核对",
+                                period_badge=_fiscal_key(cl_c.target_fy, cl_c.target_fq) or fiscal_period_key,
+                                linked_pillar=_map_linked_pillar(cl_c.metric_canonical, cl_c.claim_summary, thesis_pillars),
+                                quotes=[p_q, q_c],
+                                priority_rank=6 if is_ceo_cfo_x else 17,
+                            )
+                        )
+
+        for idx, claim in enumerate(deduped_claims):
             qref = _track_quote(
                 ground_v3a_quote(
                     quotation=claim.verbatim_quote,
@@ -2410,7 +2616,37 @@ def run_layer3_call_collision(
                     )
                     continue
 
-            # Quantitative claim collision via stateless xbrl_actuals_lookup (12 metrics)
+            # R3-D6: Segment/Product/Geography figures MUST NOT collide against consolidated XBRL total lines!
+            if claim.scope != "consolidated" and claim.metric_canonical in TWELVE_XBRL_METRICS:
+                val_desc = ""
+                if claim.value_low is not None:
+                    val_desc = f"{claim.value_low}{f'-{claim.value_high}' if claim.value_high else ''} {claim.scale or ''}{claim.unit or ''}".strip()
+                findings.append(
+                    CollisionFinding(
+                        finding_id=_fid("seg", f"{idx}:{claim.metric_canonical}:{claim.kpi_key or claim.scope}"),
+                        track=track_name,
+                        collision_kind="observation_only_insufficient_evidence",
+                        severity="info",
+                        title=f"分部/产品线口径登记（不误撞合并报表）· {claim.kpi_key or claim.metric_canonical}" + (f" ({val_desc})" if val_desc else ""),
+                        management_statement=claim.claim_summary,
+                        ledger_evidence=(
+                            f"已识别为 {claim.scope} 口径（非合并总口径），按 R3-D6 隔离防误撞合并 XBRL；"
+                            + (
+                                f"已拉取 10-Q 附注表供对照（{'; '.join(ledger.footnote_fallbacks[:2])}）。"
+                                if ledger.footnote_fallbacks
+                                else "可对照 10-Q 分部附注或跨季电话会 KPI 追踪。"
+                            )
+                        ),
+                        basis_badge=f"{claim.scope} 口径隔离",
+                        period_badge=_fiscal_key(claim.target_fy, claim.target_fq) or fiscal_period_key,
+                        linked_pillar=pillar,
+                        quotes=[qref],
+                        priority_rank=80,
+                    )
+                )
+                continue
+
+            # Quantitative claim collision via stateless xbrl_actuals_lookup (12 metrics, consolidated only)
             if claim.metric_canonical in TWELVE_XBRL_METRICS and (claim.value_low is not None or claim.value_high is not None):
                 t_fy = claim.target_fy or ledger.target_fiscal_year
                 t_fq = claim.target_fq if claim.period_scope != "full_year" else None
@@ -2613,7 +2849,8 @@ def run_layer3_call_collision(
                     lo_d = _scale_claim_value(_dec(claim.value_low), claim.unit, claim.scale, claim.metric_canonical)
                     hi_d = _scale_claim_value(_dec(claim.value_high), claim.unit, claim.scale, claim.metric_canonical)
                     if actual_d is not None:
-                        abs_tol = margin_tol_pct if claim.metric_canonical in _MARGIN_METRICS else Decimal("0")
+                        round_tol = _rounding_half_step_tolerance(claim.value_low, claim.unit, claim.scale, claim.metric_canonical)
+                        abs_tol = max(margin_tol_pct if claim.metric_canonical in _MARGIN_METRICS else Decimal("0"), round_tol)
                         passed, formula_detail = _evaluate_operator(
                             operator=claim.operator,
                             actual=actual_d,
@@ -2815,10 +3052,17 @@ def run_layer3_call_collision(
             )
         )
 
-    # ------------------------------------------------------------------ Tab 2: Q&A Evasion Audit + D3 Dual-Condition Confidentiality
+    # ------------------------------------------------------------------ Tab 2: Q&A Evasion Audit + R3-D7 3-Tier Refusal Triage
     qa_findings: list[QaEvasionFinding] = []
-    evasion_dist = {"direct": 0, "intermediate": 0, "fully_evasive": 0, "confidentiality_whitelisted": 0}
+    evasion_dist = {
+        "direct": 0,
+        "intermediate": 0,
+        "fully_evasive": 0,
+        "confidentiality_whitelisted": 0,
+        "disclosure_policy_gap": 0,
+    }
     conf_whitelist_count = 0
+    disclosure_gap_count = 0
     evasion_ry_count = 0
 
     if mgmt_extraction is not None:
@@ -2847,17 +3091,39 @@ def run_layer3_call_collision(
                     part="answer",
                 )
             )
-            # D3 dual-condition confidentiality gate (anti-abuse: topic_pivot is NEVER whitelisted!)
+            # R3-D7 3-Tier Refusal Triage (anti-abuse: topic_pivot is NEVER whitelisted or downgraded!)
+            qa_text_blob = f"{ev.question_quote} {ev.answer_quote} {ev.rationale}"
+            seg_policy_regex_hit = any(rx.search(qa_text_blob) for rx in compiled.segment_policy_re)
+            strict_nda_regex_hit = any(rx.search(qa_text_blob) for rx in compiled.conf_whitelist_re)
             legit_conf = bool(
-                ev.question_asks_sensitive_detail
-                and ev.exec_cites_confidentiality_policy
+                ev.behavior_subtype != "topic_pivot"
+                and (
+                    ev.confidentiality_policy_kind == "strict_nda_legal"
+                    or (
+                        ev.confidentiality_policy_kind != "segment_disclosure_policy"
+                        and ev.question_asks_sensitive_detail
+                        and (ev.exec_cites_confidentiality_policy or strict_nda_regex_hit)
+                    )
+                )
+            )
+            disc_policy_gap = bool(
+                not legit_conf
                 and ev.behavior_subtype != "topic_pivot"
+                and (
+                    ev.confidentiality_policy_kind == "segment_disclosure_policy"
+                    or seg_policy_regex_hit
+                )
             )
             if legit_conf:
                 disp_sev: CollisionSeverity = "info"
                 collapsed = True
                 conf_whitelist_count += 1
                 evasion_dist["confidentiality_whitelisted"] += 1
+            elif disc_policy_gap:
+                disp_sev = "info"
+                collapsed = False
+                disclosure_gap_count += 1
+                evasion_dist["disclosure_policy_gap"] += 1
             elif ev.evasion_level == "direct":
                 disp_sev = "green"
                 collapsed = True
@@ -2889,6 +3155,7 @@ def run_layer3_call_collision(
                     behavior_subtype=ev.behavior_subtype,
                     display_severity=disp_sev,
                     legitimate_confidentiality=legit_conf,
+                    disclosure_policy_gap=disc_policy_gap,
                     collapsed_by_default=collapsed,
                     sub_questions=list(ev.sub_questions),
                     unanswered_sub_questions=list(ev.unanswered_sub_questions),
@@ -2927,12 +3194,16 @@ def run_layer3_call_collision(
             )
             if not qref.verified:
                 continue
+            eff_scope = _infer_effective_scope(vc.scope, vc.metric_canonical, vc.kpi_key, vc.commitment_text, vc.verbatim_quote)
             eff_basis = _resolve_effective_basis(vc.basis, call_default_basis, vc.metric_canonical)
             target_key = _fiscal_key(vc.target_fy, vc.target_fq) or vc.horizon_label
-            if vc.metric_canonical in TWELVE_XBRL_METRICS:
+            if eff_scope != "consolidated":
+                tier = "operating_kpi_next_call"
+                init_status = "pending_next_call"
+            elif vc.metric_canonical in TWELVE_XBRL_METRICS:
                 if eff_basis == "non_gaap" and vc.metric_canonical not in _REVENUE_METRICS:
-                    tier: VerificationTier = "8k_nongaap_manual"
-                    init_status: CommitmentStatus = "manual_nongaap_review"
+                    tier = "8k_nongaap_manual"
+                    init_status = "manual_nongaap_review"
                 elif ledger.status == "non_sec_entity":
                     tier = "next_call_check"
                     init_status = "pending_next_call"
@@ -3015,7 +3286,8 @@ def run_layer3_call_collision(
                 source_fiscal_period=fiscal_period_key,
                 call_date=call_date_iso,
                 metric_canonical=vc.metric_canonical,
-                kpi_key=vc.kpi_key,
+                kpi_key=vc.kpi_key or (f"{eff_scope}:{vc.metric_canonical}" if eff_scope != "consolidated" else None),
+                scope=eff_scope,
                 basis=vc.basis,
                 effective_basis=eff_basis,
                 period_scope=vc.period_scope,
@@ -3432,7 +3704,12 @@ def run_layer3_call_collision(
         headline = f"{light_emoji} {period_tag} · 未检出重大口头与账本矛盾（核验 {len(findings)} 项）"
 
     skeptic_cal = list(dict.fromkeys([*(f.skeptic_note for f in findings if f.skeptic_note), *(sk.note for sk in (mgmt_extraction.skeptic_notes if mgmt_extraction else []))]))[:8]
-    open_gaps = list(dict.fromkeys([*ledger.open_gaps, *(g for d in parsed_docs for g in d.open_gaps)]))
+    lane_gap_tags = [
+        f"lane_failed:{lname}"
+        for lname, lst in ((mgmt_extraction.partial_lane_status if mgmt_extraction else {}) or {}).items()
+        if lst == "failed"
+    ]
+    open_gaps = list(dict.fromkeys([*ledger.open_gaps, *(g for d in parsed_docs for g in d.open_gaps), *lane_gap_tags]))
     src_ids = list(dict.fromkeys(d.source_id for d in parsed_docs))
     src_hashes = {d.source_id: d.content_sha256 for d in parsed_docs}
 
@@ -3456,6 +3733,7 @@ def run_layer3_call_collision(
         evasion_total_exchanges=len(qa_findings),
         evasion_distribution=evasion_dist,
         confidentiality_whitelisted_count=conf_whitelist_count,
+        disclosure_policy_gap_count=disclosure_gap_count,
         collision_findings=findings,
         qa_evasions=qa_findings,
         commitments=updated_commitments,
@@ -3482,6 +3760,8 @@ def run_layer3_call_collision(
         + sum(s.cache_creation_input_tokens for s in sellside_extractions),
         llm_call_count=(mgmt_extraction.call_count if mgmt_extraction else 0)
         + sum(max(1, int(s.call_count)) for s in sellside_extractions),
+        partial_lane_status=dict(mgmt_extraction.partial_lane_status) if mgmt_extraction else {},
+        lane_errors=dict(mgmt_extraction.lane_errors) if mgmt_extraction else {},
     )
     return report, updated_ledger
 

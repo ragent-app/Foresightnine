@@ -1051,6 +1051,7 @@ def reset_state() -> None:
     CHALLENGE_OPERATION_RESULTS.clear()
     OPERATION_SESSIONS.clear()
     CHALLENGE_OPERATION_IDS.clear()
+    _v3a_fast_cache_invalidate()
 
 
 def _claim_maintenance_lease(task_name: str, *, ttl_seconds: float = 300.0, min_interval_seconds: float = 0.0) -> str | None:
@@ -5636,9 +5637,12 @@ _SQUAD_STAGE_TIMEOUT_FLOORS: dict[str, float] = {
     "v25_governance_cda_audit": 240.0,
     "v25_guidance_backfill": 240.0,
     "v3a_call_extract": 240.0,
+    "v3a_call_extract_remarks": 240.0,
+    "v3a_call_extract_qa": 240.0,
     "v3a_call_map_doc": 180.0,
     "v3a_sellside_extract": 180.0,
     "v3a_omission_verify": 180.0,
+    "v3a_footnote_verify": 120.0,
 }
 _SQUAD_SLOT_MAX_OUTPUT_TOKENS: dict[str, int] = {
     "fast_extractor": 8192,
@@ -5663,9 +5667,12 @@ _SQUAD_STAGE_MAX_OUTPUT_TOKENS: dict[str, int] = {
     "v25_governance_cda_audit": 16384,
     "v25_guidance_backfill": 16384,
     "v3a_call_extract": 16384,
+    "v3a_call_extract_remarks": 16384,
+    "v3a_call_extract_qa": 16384,
     "v3a_call_map_doc": 8192,
     "v3a_sellside_extract": 8192,
     "v3a_omission_verify": 8192,
+    "v3a_footnote_verify": 4096,
 }
 
 
@@ -9833,6 +9840,8 @@ class CallAuditRunApiRequest(BaseModel):
     fiscal_quarter: int | None = Field(default=None, ge=1, le=4)
     as_of: date | None = None
     slot_overrides: dict[str, Any] | None = None
+    force_refresh: bool = False
+    retry_lane: Literal["remarks", "qa"] | None = None
 
 
 class CallAuditCommitmentPatchRequest(BaseModel):
@@ -9876,6 +9885,60 @@ class CallAuditOperationView(BaseModel):
 
 
 _CALL_AUDIT_OP_ENDPOINT = "/v1/research/call-audit/run"
+
+
+_V3A_FAST_REPORT_CACHE_LOCK = RLock()
+_V3A_FAST_REPORT_CACHE: dict[tuple[Any, ...], tuple[float, dict[str, Any]]] = {}
+_V3A_FAST_REPORT_CACHE_MAX = 128
+
+
+def _v3a_fast_cache_ttl_seconds() -> float:
+    raw = os.environ.get("FORESIGHTNINE_V3A_FAST_CACHE_TTL_SECONDS", "900").strip()
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return 900.0
+
+
+def _v3a_fast_cache_get(key: tuple[Any, ...]) -> dict[str, Any] | None:
+    ttl = _v3a_fast_cache_ttl_seconds()
+    if ttl <= 0:
+        return None
+    now = monotonic()
+    with _V3A_FAST_REPORT_CACHE_LOCK:
+        entry = _V3A_FAST_REPORT_CACHE.get(key)
+        if entry is None:
+            return None
+        ts, payload = entry
+        if (now - ts) > ttl:
+            _V3A_FAST_REPORT_CACHE.pop(key, None)
+            return None
+        return payload
+
+
+def _v3a_fast_cache_put(key: tuple[Any, ...], payload: dict[str, Any]) -> None:
+    ttl = _v3a_fast_cache_ttl_seconds()
+    if ttl <= 0:
+        return
+    with _V3A_FAST_REPORT_CACHE_LOCK:
+        if len(_V3A_FAST_REPORT_CACHE) >= _V3A_FAST_REPORT_CACHE_MAX and key not in _V3A_FAST_REPORT_CACHE:
+            oldest = next(iter(_V3A_FAST_REPORT_CACHE))
+            _V3A_FAST_REPORT_CACHE.pop(oldest, None)
+        _V3A_FAST_REPORT_CACHE[key] = (monotonic(), payload)
+
+
+def _v3a_fast_cache_invalidate(*, account_id: str | None = None, entity_key: str | None = None) -> None:
+    with _V3A_FAST_REPORT_CACHE_LOCK:
+        if account_id is None and entity_key is None:
+            _V3A_FAST_REPORT_CACHE.clear()
+            return
+        drop = [
+            k
+            for k in _V3A_FAST_REPORT_CACHE
+            if (account_id is None or k[0] == account_id) and (entity_key is None or k[1] == entity_key)
+        ]
+        for k in drop:
+            _V3A_FAST_REPORT_CACHE.pop(k, None)
 
 
 def _v3a_account_alias_map(account_id: str) -> dict[str, str]:
@@ -10249,12 +10312,14 @@ def _v3a_aux_loaders(
         if cache_only:
             return []
         try:
+            from .fin_data.adapters.sec_edgar import SecEdgarAdapter
             from .research_call_collision import fetch_footnote_fallback_tables
 
+            adapter = SecEdgarAdapter(ua, transport=transport, limiter=lim, policy=pol)
             return fetch_footnote_fallback_tables(
+                adapter=adapter,
                 cik=cik10(cik_in),
                 accession=accn_in,
-                user_agent=ua,
                 max_tables=2,
             )
         except Exception:
@@ -10297,6 +10362,51 @@ def _resolve_v3a_runtime_for_account_id(
         settings=settings,
         config=config,
     )
+    # R3-D3: Optional platform-level fast_extractor env slot binding (protocol-first, zero hardcoded model brands)
+    if not is_personal and "fast_extractor" not in slot_providers:
+        fe_base = os.environ.get("FORESIGHTNINE_FAST_EXTRACTOR_BASE_URL", "").strip()
+        fe_model = os.environ.get("FORESIGHTNINE_FAST_EXTRACTOR_MODEL", "").strip()
+        fe_key = (
+            os.environ.get("FORESIGHTNINE_FAST_EXTRACTOR_API_KEY", "").strip()
+            or os.environ.get("FORESIGHTNINE_RESEARCH_LLM_API_KEY", "").strip()
+        )
+        if fe_base and fe_model and fe_key:
+            try:
+                fe_proto = os.environ.get("FORESIGHTNINE_FAST_EXTRACTOR_PROTOCOL", "anthropic_messages").strip()
+                fe_allowed = (
+                    os.environ.get("FORESIGHTNINE_FAST_EXTRACTOR_ALLOWED_HOSTS", "").strip()
+                    or os.environ.get("FORESIGHTNINE_RESEARCH_LLM_ALLOWED_HOSTS", "").strip()
+                )
+                fe_settings = OpenAICompatibleSettings.from_values(
+                    base_url=fe_base,
+                    model=fe_model,
+                    api_key=fe_key,
+                    allowlist=fe_allowed or None,
+                )
+                fe_max_out = int(os.environ.get("FORESIGHTNINE_FAST_EXTRACTOR_MAX_OUTPUT_TOKENS", "8192") or "8192")
+                fe_timeout = float(os.environ.get("FORESIGHTNINE_FAST_EXTRACTOR_TIMEOUT_SECONDS", "120") or "120")
+                if fe_proto == "anthropic_messages":
+                    from .anthropic_messages import AnthropicMessagesProvider
+                    from .phase3 import ProviderPolicy
+
+                    fe_ver = os.environ.get("FORESIGHTNINE_FAST_EXTRACTOR_ANTHROPIC_VERSION", os.environ.get("FORESIGHTNINE_MESSAGES_VERSION", "2023-06-01")).strip()
+                    fe_auth = os.environ.get("FORESIGHTNINE_FAST_EXTRACTOR_AUTH_SCHEME", os.environ.get("FORESIGHTNINE_MESSAGES_AUTH_SCHEME", "x-api-key")).strip()
+                    fe_effort = os.environ.get("FORESIGHTNINE_FAST_EXTRACTOR_EFFORT", "").strip() or None
+                    fe_stream = os.environ.get("FORESIGHTNINE_FAST_EXTRACTOR_STREAM", "true").strip().lower() in ("1", "true", "yes")
+                    slot_providers["fast_extractor"] = AnthropicMessagesProvider(
+                        fe_settings,
+                        ProviderPolicy(max_output_tokens=fe_max_out, timeout_seconds=fe_timeout),
+                        anthropic_version=fe_ver,
+                        auth_scheme=fe_auth,
+                        max_tokens=fe_max_out,
+                        stream_enabled=fe_stream,
+                        effort=fe_effort,
+                    )
+                else:
+                    slot_providers["fast_extractor"] = OpenAICompatibleLlmProvider(fe_settings)
+                slot_max_tokens["fast_extractor"] = fe_max_out
+            except Exception:
+                pass
     runner = _AccountSlotModelRunner(
         providers_by_slot=slot_providers,
         default_provider=_with_squad_provider_timeout_floor(primary_provider),
@@ -10503,6 +10613,8 @@ def _run_v3a_phase2c_for_subscription(
     from .research_call_verification import evaluate_call_commitment_verify_phase2c
 
     hooks = cfg or {}
+    if sub.cik:
+        _v3a_fast_cache_invalidate(account_id=account_id, entity_key=cik10(sub.cik))
     snap_loader, redline_loader, _cap_loader, _v25_loader = _v3a_sec_loaders(cache_only=False, hook_dict=hooks)
     snap, subs_doc = snap_loader(sub.cik, sub.symbol)
     return evaluate_call_commitment_verify_phase2c(
@@ -10545,7 +10657,7 @@ def _reconcile_orphaned_call_audits() -> int:
         V3A_CALL_AUDIT_STATES.put(op_id, updated)
         reconciled += 1
         try:
-            research_live_broker.publish_terminal(op_id, operation_status="failed", progress={"stage": "failed"})
+            research_live_broker.publish_terminal(op_id, operation_status="failed", version_id=None, progress={"stage": "failed"})
         except Exception:
             pass
     return reconciled
@@ -10908,16 +11020,41 @@ def run_call_audit_endpoint(
                 status_code=202,
             )
 
-    # Fast cache hit (<80ms): if L2 management cache already warm AND no pending OCR AND all sell-side cached, return 200 immediately!
+    # R3-D5: 15-minute TTL <100ms zero-outbound fast report cache (invalidated on force_refresh, retry_lane, commitment PATCH, merge, or Radar Phase 2c)
+    fast_cache_key = (
+        account.account_id,
+        eff_entity,
+        bundle_sha,
+        compiled_rules.rules_sha256,
+        request.fiscal_year,
+        request.fiscal_quarter,
+        request.as_of.isoformat() if request.as_of else None,
+    )
+    if (
+        not request.force_refresh
+        and request.retry_lane is None
+        and not hook_dict.get("force_async")
+    ):
+        cached_fast_payload = _v3a_fast_cache_get(fast_cache_key)
+        if cached_fast_payload is not None:
+            return JSONResponse(cached_fast_payload, status_code=200)
+
+    # Warm L2 cache hit (0-LLM): if L2 management cache already warm AND no pending OCR AND all sell-side cached, return 200 immediately!
     l2_cache_key = (
         f"v3a_l2:{account.account_id}:{eff_entity}:{mgmt_bundle_sha}:"
         f"{L2_PROMPT_VERSION}:{compiled_rules.context_budget_version}"
     )
+    raw_warm_l2 = V3A_CALL_L2_EXTRACTIONS.get(l2_cache_key)
+    warm_l2_complete = isinstance(raw_warm_l2, Mapping) and not any(
+        v == "failed" for v in ((raw_warm_l2.get("partial_lane_status") or {}) if isinstance(raw_warm_l2.get("partial_lane_status"), Mapping) else {}).values()
+    )
     if (
-        not hook_dict.get("force_async")
+        not request.force_refresh
+        and request.retry_lane is None
+        and not hook_dict.get("force_async")
         and preview.total_pending_ocr_pages == 0
         and not preview.sellside_source_ids
-        and isinstance(V3A_CALL_L2_EXTRACTIONS.get(l2_cache_key), Mapping)
+        and warm_l2_complete
     ):
         snap_loader, redline_loader, cap_loader, v25_loader = _v3a_sec_loaders(cache_only=True, hook_dict=hook_dict)
         thesis_lg = _latest_confirmed_ledger(account.account_id, request.topic_id) if request.topic_id else None
@@ -10948,18 +11085,17 @@ def run_call_audit_endpoint(
             rules=compiled_rules,
         )
         perms_map = {s.source_id: s.permissions.model_dump(mode="json") for s in loaded}
-        return JSONResponse(
-            {
-                "operation_id": f"cached_{bundle_sha[:16]}",
-                "status": "completed",
-                "cached": True,
-                "entity_key": report.entity_key,
-                "report": report.model_dump(mode="json", exclude_none=True),
-                "ledger": ledger.model_dump(mode="json", exclude_none=True),
-                "markdown": render_call_verification_markdown(report, source_permissions=perms_map),
-            },
-            status_code=200,
-        )
+        fast_body = {
+            "operation_id": f"cached_{bundle_sha[:16]}",
+            "status": "completed",
+            "cached": True,
+            "entity_key": report.entity_key,
+            "report": report.model_dump(mode="json", exclude_none=True),
+            "ledger": ledger.model_dump(mode="json", exclude_none=True),
+            "markdown": render_call_verification_markdown(report, source_permissions=perms_map),
+        }
+        _v3a_fast_cache_put(fast_cache_key, fast_body)
+        return JSONResponse(fast_body, status_code=200)
 
     # Idempotency replay check for async operation
     owner_subject = f"account:{account.account_id}"
@@ -11114,6 +11250,7 @@ def run_call_audit_endpoint(
                 cancel_event=op_cancel,
                 on_stage=_on_stage,
                 rules=compiled_rules,
+                retry_lane=request.retry_lane,
             )
             # Resolve permissions across report.source_ids (including newly created Layer 0b OCR immutable source versions!)
             final_srcs = _v3a_resolve_sources_for_account(account.account_id, list(dict.fromkeys([*(s.source_id for s in loaded), *report.source_ids])))
@@ -11122,6 +11259,20 @@ def run_call_audit_endpoint(
             led_d = ledger.model_dump(mode="json", exclude_none=True)
             md = render_call_verification_markdown(report, source_permissions=perms_map)
             _write_state("completed", stage="completed", report_d=rep_d, ledger_d=led_d, md=md, ent=report.entity_key)
+            # Warm 15m TTL fast report cache only when no lane failed
+            if not any(v == "failed" for v in (report.partial_lane_status or {}).values()):
+                _v3a_fast_cache_put(
+                    fast_cache_key,
+                    {
+                        "operation_id": f"cached_{bundle_sha[:16]}",
+                        "status": "completed",
+                        "cached": True,
+                        "entity_key": report.entity_key,
+                        "report": rep_d,
+                        "ledger": led_d,
+                        "markdown": md,
+                    },
+                )
             # D4/D5/D7: Auto-activate call_commitment_verify subscription when awaiting current 10-Q
             if report.awaiting_current_10q and report.cik:
                 baseline_accs = [a for a in (ledger.latest_10q_accession, ledger.initial_10q_accession) if a]
@@ -11137,6 +11288,7 @@ def run_call_audit_endpoint(
                 research_live_broker.publish_terminal(
                     operation_id,
                     operation_status="completed",
+                    version_id=None,
                     progress={"stage": "completed", "entity_key": report.entity_key, "overall_light": report.overall_light},
                 )
             except Exception:
@@ -11157,7 +11309,12 @@ def run_call_audit_endpoint(
             term_st: Literal["cancelled", "failed"] = "cancelled" if is_cancel else "failed"
             _write_state(term_st, stage=term_st, err=str(exc)[:500])
             try:
-                research_live_broker.publish_terminal(operation_id, operation_status=term_st, progress={"stage": term_st, "error": str(exc)[:300]})
+                research_live_broker.publish_terminal(
+                    operation_id,
+                    operation_status=term_st,
+                    version_id=None,
+                    progress={"stage": term_st, "error": str(exc)[:300]},
+                )
             except Exception:
                 pass
             raise
@@ -11649,6 +11806,7 @@ def patch_call_audit_commitment(
         raise ApiProblem(404, "not_found", "Commitment not found.")
     updated = ledger_obj.model_copy(update={"commitments": new_cmts, "updated_at": lifecycle_clock.now()})
     V3A_VERBAL_COMMITMENT_LEDGER.put(vcl_key, updated.model_dump(mode="json", exclude_none=True))
+    _v3a_fast_cache_invalidate(account_id=account.account_id, entity_key=request.entity_key)
     return {"commitment_id": commitment_id, "entity_key": request.entity_key, "muted": request.muted}
 
 
@@ -11744,6 +11902,8 @@ def merge_call_audit_entities(
             V3A_ACCOUNT_COMPANY_INDEX.delete(src_idx_key)
 
     V3A_ACCOUNT_MANIFEST.with_advisory_lock(m_key, _do_merge)
+    _v3a_fast_cache_invalidate(account_id=account.account_id, entity_key=src_ek)
+    _v3a_fast_cache_invalidate(account_id=account.account_id, entity_key=tgt_ek)
     return {
         "merged": True,
         "source_entity_key": src_ek,

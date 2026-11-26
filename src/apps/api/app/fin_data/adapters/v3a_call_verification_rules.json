@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "context_budget_version": "v1",
-  "evaluation_rules_version": "v1",
+  "evaluation_rules_version": "v2",
   "parsing_rules": {
     "negative_archetype_patterns": {
       "form_10k_10q": [
@@ -112,6 +112,10 @@
       "\\b(?:multi-?year\\s+(?:exact|specific)\\s+eps|2029\\s+eps|2030\\s+eps|five-?year\\s+quarterly)\\b",
       "(?:单一客户定价|具体客户份额|未公开并购|在审诉讼细节|保密协议)"
     ],
+    "segment_disclosure_policy_patterns": [
+      "\\b(?:segment\\s+reporting\\s+policy|per\\s+our\\s+segment|reporting\\s+structure|asc\\s*280|do\\s+not\\s+disclose\\s+standalone|don'?t\\s+break\\s+out\\s+(?:standalone|individual|sub-?segment|seat\\s+revenue)|not\\s+disclosed\\s+at\\s+the\\s+product\\s+level|individual\\s+product\\s+(?:revenue|margin|churn))\\b",
+      "(?:按分部准则|分部报告口径|不单独拆分|不单独披露单产品|未单独披露子业务)"
+    ],
     "red_evasion_count_threshold": 2,
     "yellow_evasion_count_threshold": 1
   },
@@ -182,7 +186,7 @@
     "sellside_max_chars": 8000,
     "omission_phase2_max_chars": 8000,
     "map_reduce_qa_trigger_chars": 28000,
-    "max_llm_calls_per_audit": 3,
+    "max_llm_calls_per_audit": 5,
     "remarks_8k_jaccard_dedup_threshold": 0.75,
     "opening_basis_protect_chars": 1000
   },

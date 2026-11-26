@@ -79,6 +79,7 @@ class EvasionScoringConfig(_StrictModel):
     quantitative_question_patterns: list[str]
     hedge_lexicon: list[str]
     confidentiality_whitelist_patterns: list[str]
+    segment_disclosure_policy_patterns: list[str] = Field(default_factory=list)
     red_evasion_count_threshold: int = 2
     yellow_evasion_count_threshold: int = 1
 
@@ -119,7 +120,7 @@ class ContextBudgetConfig(_StrictModel):
     sellside_max_chars: int = 8000
     omission_phase2_max_chars: int = 8000
     map_reduce_qa_trigger_chars: int = 28000
-    max_llm_calls_per_audit: int = 3
+    max_llm_calls_per_audit: int = 5
     remarks_8k_jaccard_dedup_threshold: float = 0.75
     opening_basis_protect_chars: int = 1000
 
@@ -177,6 +178,7 @@ class CompiledV3aRules:
         es = rules.evasion_scoring
         self.quant_q_re = [re.compile(p, re.IGNORECASE) for p in es.quantitative_question_patterns]
         self.conf_whitelist_re = [re.compile(p, re.IGNORECASE) for p in es.confidentiality_whitelist_patterns]
+        self.segment_policy_re = [re.compile(p, re.IGNORECASE) for p in es.segment_disclosure_policy_patterns]
         self.hedge_terms = tuple(h.casefold() for h in es.hedge_lexicon)
 
 

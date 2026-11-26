@@ -293,9 +293,8 @@ def test_split_authority_caching_and_truncation_compact_reset():
         company_index_repo=idx_repo,
         manifest_repo=man_repo,
     )
-    assert len(runner.calls) == 2  # attempt 0 truncated -> attempt 1 compact reset!
-    assert runner.calls[1]["turn_index"] == 0
-    assert ":reset1" in runner.calls[1]["conversation_id"]
+    assert len(runner.calls) == 3  # 2-lane parallel (remarks + qa) + 1 compact reset on truncated first call!
+    assert any(c["turn_index"] == 0 and ":reset1" in c["conversation_id"] for c in runner.calls)
     # Forged source_id sanitized to caller's real src_call_1 and grounded 100%!
     assert rep1.verified_quote_count >= 2
     assert all(q.source_id == "src_call_1" for f in rep1.collision_findings for q in f.quotes)
@@ -544,7 +543,10 @@ def test_v3a_api_full_lifecycle_sse_isolation_merge_cooldown_and_delete(monkeypa
                 time.sleep(0.05)
             assert op_data["status"] == "completed", op_data
             assert op_data["report"]["awaiting_current_10q"] is True
-            assert [st["stage"] for st in op_data["stages"]] == ["layer0_ready", "layer1_ready", "layer2_extracting", "completed"]
+            st_names = [st["stage"] for st in op_data["stages"]]
+            assert st_names[:3] == ["layer0_ready", "layer1_ready", "layer2_extracting"]
+            assert {"lane_remarks_ready", "lane_qa_ready"} <= set(st_names[3:-1])
+            assert st_names[-1] == "completed"
 
             # 3. SSE endpoint replays 3-stage events + run.terminal cleanly
             r_sse = client.get(f"/v2/research/call-audit/operations/{op_id}/events", headers=hdr_a)
@@ -988,7 +990,8 @@ def test_batch2_p1_fast_extractor_routing_regg_html_radar_health_lease_and_async
         company_index_repo=InMemoryDocumentRepository(),
         manifest_repo=InMemoryDocumentRepository(),
     )
-    assert ("v3a_call_extract", "deep_reasoner") in slots_seen
+    assert ("v3a_call_extract_remarks", "deep_reasoner") in slots_seen
+    assert ("v3a_call_extract_qa", "deep_reasoner") in slots_seen
     assert ("v3a_sellside_extract", "fast_extractor") in slots_seen
     assert len(led.reg_g_reconciliation_excerpts) == 1
 
@@ -1070,5 +1073,361 @@ def test_batch2_p1_fast_extractor_routing_regg_html_radar_health_lease_and_async
             assert len(body["triggered_operation_ids"]) == 1
     finally:
         api_main.app.state.v3a_call_audit_hooks = None
+
+
+def test_v3a4_parallel_partial_retry_scope_dedup_3tier_qa_footnote_digest_and_ttl_cache(monkeypatch: pytest.MonkeyPatch):
+    """Comprehensive V3a-4.1/4.2 test: partial lane failure + single-lane retry, segment isolation,
+    duplicate claim dedup, rounding tolerance, 3-tier Q&A refusal triage, conditional footnote verify,
+    upgraded R2-D5 Agent digest anchors/open_gaps, and 15m TTL <100ms fast cache + invalidation."""
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    monkeypatch.setenv("FORESIGHTNINE_ENV", "test")
+    api_main.reset_state()
+
+    msft_call = """Microsoft Corporation (NASDAQ: MSFT) Q1 FY26 Earnings Conference Call
+October 29, 2025
+
+Prepared Remarks
+Operator: Good afternoon. Unless otherwise stated, margins include Non-GAAP adjustments.
+Amy Hood (CFO): Total revenue was $65.6 billion. Microsoft Cloud revenue reached $40.0 billion. For Q2 FY26, we expect Intelligent Cloud revenue between $25.55 billion and $25.85 billion.
+
+Questions and Answers
+Operator: First question from Stacy Rasgon.
+Stacy Rasgon (Bernstein): What exact unit discount did you give OpenAI?
+Amy Hood (CFO): Per our customer NDA policy, we do not disclose single-customer pricing or discounts.
+Operator: Next question from Mark Moerdler.
+Mark Moerdler (Bernstein): Can you break out standalone Copilot seat revenue and churn rate?
+Satya Nadella (CEO): Per our segment reporting policy we do not disclose standalone seat revenue or individual customer churn figures.
+Operator: Next question from Keith Weiss.
+Keith Weiss (Morgan Stanley): Can you quantify Q2 AI server depreciation headwind in basis points?
+Amy Hood (CFO): We are very excited about the long-term AI platform transition across industries worldwide.
+"""
+    src_msft = ResearchSource(
+        source_id="src_msft_v4",
+        owner_id="acct_v4",
+        title="MSFT Q1 FY26 Call",
+        text=msft_call,
+        kind="user_supplied",
+        retrieval_method="user_text",
+        is_simulated=False,
+        obtained_at=datetime.now(timezone.utc),
+        content_sha256="9" * 64,
+        permissions=SourcePermissions(store=True, model_input=True, display=True, export=True),
+    )
+
+    class _V4LaneRunner:
+        def __init__(self, *, fail_qa: bool = False) -> None:
+            self.fail_qa = fail_qa
+            self.calls: list[dict[str, Any]] = []
+
+        def invoke(self, req: Any) -> SlotModelResponse:
+            self.calls.append({"stage": req.stage, "slot": req.slot})
+            if req.stage == "v3a_call_extract_qa" and self.fail_qa:
+                raise RuntimeError("simulated_qa_lane_timeout")
+            if req.stage == "v3a_call_extract_remarks":
+                payload = {
+                    "factual_claims": [
+                        # Consolidated total revenue ($65.6B vs XBRL $65.58B -> passes via rounding half-step!)
+                        {
+                            "metric_canonical": "revenue",
+                            "scope": "consolidated",
+                            "basis": "gaap",
+                            "period_scope": "single_quarter",
+                            "target_fy": 2026,
+                            "target_fq": 1,
+                            "operator": "approx",
+                            "value_low": "65.6",
+                            "unit": "USD",
+                            "scale": "billions",
+                            "evidence_sufficiency": "explicit",
+                            "speaker_name": "Amy Hood",
+                            "speaker_role": "cfo",
+                            "source_id": "src_msft_v4",
+                            "verbatim_quote": "Total revenue was $65.6 billion.",
+                            "claim_summary": "Q1 consolidated revenue was $65.6B",
+                        },
+                        # Duplicate consolidated revenue claim -> MUST be deduped!
+                        {
+                            "metric_canonical": "revenue",
+                            "scope": "consolidated",
+                            "basis": "gaap",
+                            "period_scope": "single_quarter",
+                            "target_fy": 2026,
+                            "target_fq": 1,
+                            "operator": "approx",
+                            "value_low": "65.6",
+                            "unit": "USD",
+                            "scale": "billions",
+                            "evidence_sufficiency": "explicit",
+                            "speaker_name": "Amy Hood",
+                            "speaker_role": "cfo",
+                            "source_id": "src_msft_v4",
+                            "verbatim_quote": "Total revenue was $65.6 billion.",
+                            "claim_summary": "Duplicate Q1 consolidated revenue $65.6B",
+                        },
+                        # Segment revenue mislabeled as consolidated -> Layer 3 segment guard MUST isolate!
+                        {
+                            "metric_canonical": "revenue",
+                            "scope": "consolidated",
+                            "kpi_key": "microsoft_cloud_revenue",
+                            "basis": "gaap",
+                            "period_scope": "single_quarter",
+                            "target_fy": 2026,
+                            "target_fq": 1,
+                            "operator": "approx",
+                            "value_low": "40.0",
+                            "unit": "USD",
+                            "scale": "billions",
+                            "evidence_sufficiency": "explicit",
+                            "speaker_name": "Amy Hood",
+                            "speaker_role": "cfo",
+                            "source_id": "src_msft_v4",
+                            "verbatim_quote": "Microsoft Cloud revenue reached $40.0 billion.",
+                            "claim_summary": "Microsoft Cloud revenue reached $40.0B",
+                        },
+                    ],
+                    "verbal_commitments": [
+                        # Segment commitment -> MUST NOT collide against consolidated total revenue!
+                        {
+                            "metric_canonical": "revenue",
+                            "scope": "segment",
+                            "kpi_key": "intelligent_cloud_revenue",
+                            "basis": "gaap",
+                            "period_scope": "single_quarter",
+                            "target_fy": 2026,
+                            "target_fq": 2,
+                            "operator": "between",
+                            "value_low": "25.55",
+                            "value_high": "25.85",
+                            "unit": "USD",
+                            "scale": "billions",
+                            "evidence_sufficiency": "explicit",
+                            "speaker_name": "Amy Hood",
+                            "speaker_role": "cfo",
+                            "source_id": "src_msft_v4",
+                            "verbatim_quote": "For Q2 FY26, we expect Intelligent Cloud revenue between $25.55 billion and $25.85 billion.",
+                            "commitment_text": "Q2 Intelligent Cloud revenue $25.55B-$25.85B",
+                        }
+                    ],
+                    "internal_contradictions": [],
+                    "skeptic_notes": [],
+                }
+            elif req.stage == "v3a_call_extract_qa":
+                payload = {
+                    "qa_evasions": [
+                        {
+                            "exchange_index": 1,
+                            "analyst_name": "Stacy Rasgon",
+                            "executive_name": "Amy Hood",
+                            "executive_role": "cfo",
+                            "sub_questions": ["OpenAI discount"],
+                            "unanswered_sub_questions": ["OpenAI discount"],
+                            "question_asks_sensitive_detail": True,
+                            "exec_cites_confidentiality_policy": True,
+                            "confidentiality_policy_kind": "strict_nda_legal",
+                            "evasion_level": "fully_evasive",
+                            "behavior_subtype": "omission",
+                            "source_id": "src_msft_v4",
+                            "question_quote": "What exact unit discount did you give OpenAI?",
+                            "answer_quote": "Per our customer NDA policy, we do not disclose single-customer pricing or discounts.",
+                            "rationale": "NDA customer pricing refusal",
+                        },
+                        {
+                            "exchange_index": 2,
+                            "analyst_name": "Mark Moerdler",
+                            "executive_name": "Satya Nadella",
+                            "executive_role": "ceo",
+                            "sub_questions": ["standalone Copilot seat revenue"],
+                            "unanswered_sub_questions": ["standalone Copilot seat revenue"],
+                            "question_asks_sensitive_detail": False,
+                            "exec_cites_confidentiality_policy": True,
+                            "confidentiality_policy_kind": "segment_disclosure_policy",
+                            "evasion_level": "fully_evasive",
+                            "behavior_subtype": "omission",
+                            "source_id": "src_msft_v4",
+                            "question_quote": "Can you break out standalone Copilot seat revenue and churn rate?",
+                            "answer_quote": "Per our segment reporting policy we do not disclose standalone seat revenue or individual customer churn figures.",
+                            "rationale": "ASC 280 segment reporting policy refusal",
+                        },
+                        {
+                            "exchange_index": 3,
+                            "analyst_name": "Keith Weiss",
+                            "executive_name": "Amy Hood",
+                            "executive_role": "cfo",
+                            "sub_questions": ["Q2 AI server depreciation headwind in bps"],
+                            "unanswered_sub_questions": ["Q2 AI server depreciation headwind in bps"],
+                            "question_asks_sensitive_detail": False,
+                            "exec_cites_confidentiality_policy": False,
+                            "confidentiality_policy_kind": "none",
+                            "evasion_level": "fully_evasive",
+                            "behavior_subtype": "topic_pivot",
+                            "source_id": "src_msft_v4",
+                            "question_quote": "Can you quantify Q2 AI server depreciation headwind in basis points?",
+                            "answer_quote": "We are very excited about the long-term AI platform transition across industries worldwide.",
+                            "rationale": "Pivoted away from depreciation bps question",
+                        },
+                    ],
+                    "factual_claims": [],
+                    "verbal_commitments": [],
+                    "internal_contradictions": [],
+                    "expectation_signals": [],
+                    "skeptic_notes": [],
+                }
+            elif req.stage == "v3a_footnote_verify":
+                payload = {
+                    "checks": [
+                        {
+                            "claim_ref": "microsoft_cloud_revenue",
+                            "status": "divergence_warning",
+                            "r_file": "R14.htm",
+                            "table_figure": "$38.9B",
+                            "note": "10-Q Segment footnote lists Intelligent Cloud + Productivity cloud components at $38.9B vs $40.0B",
+                        }
+                    ]
+                }
+            else:
+                payload = {}
+            return SlotModelResponse(
+                content=json.dumps(payload),
+                usage={"input_tokens": 150, "output_tokens": 120, "total_tokens": 270},
+            )
+
+    msft_snap = PeerCompanySnapshot(
+        cik="0000789019",
+        symbol="MSFT",
+        company_name="MICROSOFT CORP",
+        sic="7372",
+        sic_description="PREPACKAGED SOFTWARE",
+        latest_periodic_accession="0000789019-26-0002",
+        latest_periodic_filed_at="2026-01-29",
+        taxonomy="us-gaap",
+        currency="USD",
+        projection_version=4,
+        facts_by_line={
+            "revenue": {
+                "Revenues": {
+                    "USD": [
+                        {"val": 65_580_000_000, "fy": 2026, "fp": "Q1", "form": "10-Q", "start": "2025-07-01", "end": "2025-09-30", "filed": "2025-10-30", "accn": "0000789019-25-0001"},
+                        {"val": 69_000_000_000, "fy": 2026, "fp": "Q2", "form": "10-Q", "start": "2025-10-01", "end": "2025-12-31", "filed": "2026-01-29", "accn": "0000789019-26-0002"},
+                    ],
+                },
+            },
+        },
+    )
+    msft_subs = {
+        "filings": {
+            "recent": {
+                "form": ["10-Q", "10-Q"],
+                "accessionNumber": ["0000789019-26-0002", "0000789019-25-0001"],
+                "filingDate": ["2026-01-29", "2025-10-30"],
+                "reportDate": ["2025-12-31", "2025-09-30"],
+            }
+        }
+    }
+    doc_repo = InMemoryDocumentRepository()
+    l2_repo = InMemoryDocumentRepository()
+    vcl_repo = InMemoryDocumentRepository()
+    idx_repo = InMemoryDocumentRepository()
+    man_repo = InMemoryDocumentRepository()
+
+    # 1. Partial failure: QA lane fails, Remarks lane succeeds -> partial report delivered with lane_failed:qa in open_gaps!
+    runner_fail = _V4LaneRunner(fail_qa=True)
+    rep_part, _led_p, _vcl_p = run_call_verification_pipeline(
+        account_id="acct_v4",
+        sources=[src_msft],
+        symbol_override="MSFT",
+        cik_override="0000789019",
+        model_runner=runner_fail,
+        snap_loader=lambda _c, _s: (msft_snap, msft_subs),
+        footnote_fallback_loader=lambda _c, _a: [{"r_file": "R14.htm", "title": "Segment Information", "currency": "USD", "unit_scale": "millions", "rows_preview": "Microsoft Cloud | 38900", "row_count": 5}],
+        doc_facts_repo=doc_repo,
+        l2_mgmt_repo=l2_repo,
+        commitment_ledger_repo=vcl_repo,
+        company_index_repo=idx_repo,
+        manifest_repo=man_repo,
+    )
+    assert rep_part.partial_lane_status == {"remarks": "ok", "qa": "failed"}
+    assert "lane_failed:qa" in rep_part.open_gaps
+    assert rep_part.red_count == 0  # Consolidated $65.6B vs $65.58B corroborated; segment $40B isolated; Q2 segment commitment isolated!
+    assert sum(1 for f in rep_part.collision_findings if f.collision_kind == "corroborated" and "revenue" in f.title) == 1  # Deduped!
+    assert any("分部/产品线口径登记" in f.title for f in rep_part.collision_findings)
+    assert any("R14.htm" in n for n in rep_part.footnote_verification_notes)
+    assert all(f.severity != "red" for f in rep_part.collision_findings if "附注" in f.title)  # R3-D8 NEVER auto-red!
+
+    # 2. Single-lane retry (retry_lane="qa") reuses cached Remarks lane (0 remarks re-run!) & resolves 3-tier Q&A triage!
+    runner_retry = _V4LaneRunner(fail_qa=False)
+    rep_full, _led_f, _vcl_f = run_call_verification_pipeline(
+        account_id="acct_v4",
+        sources=[src_msft],
+        symbol_override="MSFT",
+        cik_override="0000789019",
+        model_runner=runner_retry,
+        snap_loader=lambda _c, _s: (msft_snap, msft_subs),
+        doc_facts_repo=doc_repo,
+        l2_mgmt_repo=l2_repo,
+        commitment_ledger_repo=vcl_repo,
+        company_index_repo=idx_repo,
+        manifest_repo=man_repo,
+        retry_lane="qa",
+    )
+    assert [c["stage"] for c in runner_retry.calls] == ["v3a_call_extract_qa"]  # Remarks lane reused without re-running!
+    assert rep_full.partial_lane_status == {"remarks": "ok", "qa": "ok"}
+    assert "lane_failed:qa" not in rep_full.open_gaps
+    assert rep_full.confidentiality_whitelisted_count == 1  # OpenAI NDA -> collapsed info
+    assert rep_full.disclosure_policy_gap_count == 1  # Copilot segment policy -> info badge, NOT high-risk evasion!
+    assert rep_full.evasion_red_yellow_count == 1  # ONLY Keith Weiss topic_pivot counted!
+    assert rep_full.red_count == 0
+
+    # 3. Upgraded R2-D5 Agent Digest carries exact [src_id:start-end] quote anchors, structured_findings & open_gaps!
+    digest = build_topic_call_verification_digest(
+        rep_full,
+        topic_source_ids={"src_msft_v4"},
+        all_owner_sources_by_id={"src_msft_v4": src_msft},
+    )
+    assert digest is not None
+    assert "SegPolicyGap=1" in digest["summary"]
+    assert "[src_msft_v4:" in digest["summary"]
+    assert "OPEN_GAPS" in digest["summary"]
+    assert len(digest["structured_findings"]) >= 1
+    assert digest["structured_findings"][0]["quote_anchor"]["source_id"] == "src_msft_v4"
+
+    # 4. 15m TTL <100ms fast report cache hit + force_refresh bypass + SSE <100ms terminal
+    api_main.app.state.v3a_call_audit_hooks = {
+        "model_runner": _V4LaneRunner(fail_qa=False),
+        "snap_loader": lambda _c, _s: (msft_snap, msft_subs),
+        "redline_loader": lambda _c, _s, _d: ([], None, None),
+        "eight_k_loader": lambda _c, _s, _d: (None, []),
+        "footnote_fallback_loader": lambda _c, _a: [],
+    }
+    try:
+        with TestClient(api_main.app) as client:
+            hdr, _acct = _auth_headers(client, "v3a_v4_ttl@example.com")
+            r_s = client.post(
+                "/v2/research/sources",
+                headers=hdr,
+                json={"title": "MSFT Call", "text": msft_call, "kind": "user_supplied", "permissions": {"store": True, "model_input": True, "display": True, "export": True}},
+            )
+            sid = r_s.json()["source_id"]
+            r1 = client.post("/v2/research/call-audit/run", headers={**hdr, "Idempotency-Key": "v4-ttl-1"}, json={"source_ids": [sid], "symbol": "MSFT", "cik": "0000789019"})
+            assert r1.status_code == 202
+            op1 = r1.json()["operation_id"]
+            for _ in range(40):
+                if client.get(f"/v2/research/call-audit/operations/{op1}", headers=hdr).json()["status"] == "completed":
+                    break
+                time.sleep(0.05)
+
+            # Second run MUST hit 15m TTL in-memory fast cache in <100ms!
+            t0 = time.perf_counter()
+            r2 = client.post("/v2/research/call-audit/run", headers={**hdr, "Idempotency-Key": "v4-ttl-2"}, json={"source_ids": [sid], "symbol": "MSFT", "cik": "0000789019"})
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            assert r2.status_code == 200
+            assert r2.json()["cached"] is True
+            assert elapsed_ms < 250.0  # Sub-100ms in prod (generous 250ms CI margin)
+
+            # force_refresh=True bypasses fast cache -> 202 async
+            r3 = client.post("/v2/research/call-audit/run", headers={**hdr, "Idempotency-Key": "v4-ttl-3"}, json={"source_ids": [sid], "symbol": "MSFT", "cik": "0000789019", "force_refresh": True})
+            assert r3.status_code == 202
+    finally:
+        api_main.app.state.v3a_call_audit_hooks = None
+
 
 
