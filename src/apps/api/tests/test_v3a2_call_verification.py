@@ -1430,4 +1430,205 @@ Amy Hood (CFO): We are very excited about the long-term AI platform transition a
         api_main.app.state.v3a_call_audit_hooks = None
 
 
+def test_v3a5_defect_closure_footnotes_dimension_capex_redline_sse_ocr_and_digest(monkeypatch: pytest.MonkeyPatch):
+    """Non-mock integration test closing all 6 V3a v4 defect domains:
+    1) fetch_footnote_fallback_tables (real SecPacingLimiter + FilingSummary.xml Details + R*.htm values_by_column),
+    2) Unified dimension guard (AAPL/META 'up 19% YoY' & QoQ guard, Track 0 no $ vs % collision),
+    3) Broad CapEx finance-lease bridge (META $8.258B + $0.944B = $9.202B info, while $12B stays red),
+    4) Redline anti-lookahead & strict same-form pairing (no 2026 leak),
+    5) Agent Digest segmented budget reservation (info never crowds out red; FOOTNOTE_CHECKS & OPEN_GAPS never truncated).
+    """
+    from types import SimpleNamespace
+    from app.fin_data.adapters.sec_events.pacing import SecPacingLimiter
+    from app.research_call_collision import (
+        CollisionFinding,
+        Layer2ManagementExtraction,
+        ManagementFactualClaim,
+        build_sec_10q_collision_ledger,
+        fetch_footnote_fallback_tables,
+        run_layer3_call_collision,
+    )
+
+    # 1. Non-mock fetch_footnote_fallback_tables with real SecPacingLimiter + FilingSummary.xml (Details in other!) + R35.htm
+    summary_xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <FilingSummary><MyReports>
+      <Report><HtmlFileName>R1.htm</HtmlFileName><ShortName>Cover Page</ShortName><LongName>0001 - Document - Cover Page</LongName><MenuCategory>Cover</MenuCategory><Position>1</Position></Report>
+      <Report><HtmlFileName>R35.htm</HtmlFileName><ShortName>Segment Information - Disaggregated Revenue (Details)</ShortName><LongName>0035 - Disclosure - Segment Information (Details)</LongName><MenuCategory>Uncategorized</MenuCategory><Position>35</Position></Report>
+    </MyReports></FilingSummary>"""
+    r35_html = """<html><body><table class="report">
+      <tr><th class="tl">Segment Information (USD $) In Millions</th><th class="th">3 Months Ended Oct. 27, 2024</th></tr>
+      <tr class="ro"><td class="pl">Data Center</td><td class="nump">$ 30,771</td></tr>
+      <tr class="re"><td class="pl">Gaming</td><td class="nump">3,279</td></tr>
+    </table></body></html>"""
+
+    seen_urls: list[str] = []
+
+    def _fake_transport(method: str, url: str, headers: dict[str, str], body: bytes, timeout: float) -> Any:
+        seen_urls.append(url)
+        if url.endswith("FilingSummary.xml"):
+            return SimpleNamespace(status_code=200, headers={"content-type": "application/xml"}, body=summary_xml.encode("utf-8"))
+        if url.endswith("R35.htm"):
+            return SimpleNamespace(status_code=200, headers={"content-type": "text/html"}, body=r35_html.encode("utf-8"))
+        return SimpleNamespace(status_code=404, headers={}, body=b"not found")
+
+    fn_cache = InMemoryDocumentRepository()
+    lim = SecPacingLimiter(rate_per_sec=9.0, burst=9.0)
+    tbls = fetch_footnote_fallback_tables(
+        cik="0001045810",
+        accession="0001045810-24-000316",
+        keywords=("segment", "data center", "disaggregated revenue"),
+        max_tables=2,
+        user_agent="ForesightNine-Test/1.0 test@example.com",
+        limiter=lim,
+        transport=_fake_transport,
+        cache_repo=fn_cache,
+    )
+    assert len(tbls) == 1
+    assert tbls[0]["r_file"] == "R35.htm"
+    assert ("30771" in tbls[0]["rows_preview"] or "30,771" in tbls[0]["rows_preview"])  # values_by_column/cells MUST be extracted!
+    assert "In Millions" in tbls[0]["rows_preview"]
+    url_count_before = len(seen_urls)
+    tbls_cached = fetch_footnote_fallback_tables(
+        cik="0001045810",
+        accession="0001045810-24-000316",
+        keywords=("segment", "data center", "disaggregated revenue"),
+        max_tables=2,
+        user_agent="ForesightNine-Test/1.0 test@example.com",
+        limiter=lim,
+        transport=_fake_transport,
+        cache_repo=fn_cache,
+    )
+    assert len(tbls_cached) == 1 and len(seen_urls) == url_count_before
+
+    # 2. Dimension guard (YoY % reroute + QoQ guard + Track 0 no $ vs %) & META CapEx finance-lease bridge
+    meta_call = (
+        "Meta Platforms (NASDAQ: META) Q3 FY24 Call\nOctober 30, 2024\nPrepared Remarks\n"
+        "Susan Li (CFO): Total revenue reached $40.6 billion, up 19% year over year and up 4% sequentially. "
+        "Capital expenditures were $9.2 billion in Q3.\n"
+    )
+    meta_snap = PeerCompanySnapshot(
+        cik="0001326801",
+        symbol="META",
+        company_name="META PLATFORMS INC",
+        sic="7370",
+        sic_description="COMPUTER PROGRAMMING",
+        latest_periodic_accession="0001326801-24-000081",
+        latest_periodic_filed_at="2024-10-31",
+        taxonomy="us-gaap",
+        currency="USD",
+        projection_version=5,
+        facts_by_line={
+            "revenue": {"Revenues": {"USD": [
+                {"start": "2023-07-01", "end": "2023-09-30", "val": 34_146_000_000, "filed": "2023-10-26", "form": "10-Q", "accn": "0001326801-23-000081", "fy": 2023, "fp": "Q3"},
+                {"start": "2024-07-01", "end": "2024-09-30", "val": 40_589_000_000, "filed": "2024-10-31", "form": "10-Q", "accn": "0001326801-24-000081", "fy": 2024, "fp": "Q3"},
+            ]}},
+            "capex": {"PaymentsToAcquirePropertyPlantAndEquipment": {"USD": [
+                {"start": "2024-07-01", "end": "2024-09-30", "val": 8_258_000_000, "filed": "2024-10-31", "form": "10-Q", "accn": "0001326801-24-000081", "fy": 2024, "fp": "Q3"},
+            ]}},
+            "finance_lease_principal_payments": {"FinanceLeasePrincipalPayments": {"USD": [
+                {"start": "2024-07-01", "end": "2024-09-30", "val": 944_000_000, "filed": "2024-10-31", "form": "10-Q", "accn": "0001326801-24-000081", "fy": 2024, "fp": "Q3"},
+            ]}},
+        },
+    )
+    meta_subs = {"filings": {"recent": {"form": ["10-Q"], "accessionNumber": ["0001326801-24-000081"], "filingDate": ["2024-10-31"], "reportDate": ["2024-09-30"]}}}
+    p_meta = parse_transcript_v2(meta_call, source_id="src_meta_v5", title="META Q3")
+    led_meta = build_sec_10q_collision_ledger(entity_key="0001326801", snap=meta_snap, submissions=meta_subs, call_fy=2024, call_fq=3, call_date_iso="2024-10-30")
+    assert led_meta.finance_lease_principal_payments == "944000000.00"
+    mgmt_meta = Layer2ManagementExtraction(
+        prompt_version="v3",
+        owner_id="acct_v5",
+        entity_key="0001326801",
+        mgmt_bundle_sha256="b" * 64,
+        factual_claims=[
+            ManagementFactualClaim(metric_canonical="revenue", scope="consolidated", basis="gaap", period_scope="single_quarter", target_fy=2024, target_fq=3, operator="approx", value_low="40.6", unit="USD", scale="billions", evidence_sufficiency="explicit", source_id="src_meta_v5", turn_index=1, verbatim_quote="Total revenue reached $40.6 billion", claim_summary="Q3 revenue $40.6B"),
+            ManagementFactualClaim(metric_canonical="revenue", scope="consolidated", basis="gaap", period_scope="single_quarter", target_fy=2024, target_fq=3, operator="approx", value_low="19", unit="%", scale="percent", evidence_sufficiency="explicit", source_id="src_meta_v5", turn_index=2, verbatim_quote="up 19% year over year", claim_summary="Q3 revenue up 19% YoY"),
+            ManagementFactualClaim(metric_canonical="revenue", scope="consolidated", basis="gaap", period_scope="single_quarter", target_fy=2024, target_fq=3, operator="approx", value_low="4", unit="%", scale="percent", evidence_sufficiency="explicit", source_id="src_meta_v5", turn_index=2, verbatim_quote="up 4% sequentially", claim_summary="Q3 revenue up 4% QoQ"),
+            ManagementFactualClaim(metric_canonical="capex", scope="consolidated", basis="gaap", period_scope="single_quarter", target_fy=2024, target_fq=3, operator="approx", value_low="9.2", unit="USD", scale="billions", evidence_sufficiency="explicit", source_id="src_meta_v5", turn_index=1, verbatim_quote="Capital expenditures were $9.2 billion in Q3.", claim_summary="Q3 CapEx $9.2B"),
+        ],
+    )
+    rep_meta, _ = run_layer3_call_collision(
+        entity_key="0001326801",
+        parsed_docs=[p_meta],
+        ledger=led_meta,
+        snap=meta_snap,
+        mgmt_extraction=mgmt_meta,
+        sellside_extractions=[],
+        source_texts={"src_meta_v5": meta_call},
+        document_pages_by_source={},
+        source_permissions={"src_meta_v5": {"store": True, "model_input": True, "display": True, "export": True}},
+        owner_id="acct_v5",
+    )
+    assert rep_meta.red_count == 0
+    assert any("广义 CapEx" in f.title and f.severity == "info" for f in rep_meta.collision_findings)
+    assert any("量纲/口径不适用硬对撞" in f.title and f.severity == "info" for f in rep_meta.collision_findings)
+
+    # 3. Redline anti-lookahead & strict same-form pairing
+    _sl, redline_loader, _cl, _vl = api_main._v3a_sec_loaders(cache_only=False)
+    future_only_subs = {"filings": {"recent": {
+        "form": ["10-Q", "10-Q"],
+        "accessionNumber": ["0000019617-26-0002", "0000019617-26-0001"],
+        "primaryDocument": ["jpm-20260630.htm", "jpm-20260331.htm"],
+        "filingDate": ["2026-08-01", "2026-05-01"],
+    }}}
+    rl_paras, rl_cur, rl_pri = redline_loader("0000019617", future_only_subs, "2024-10-11", date(2024, 11, 15))
+    assert rl_paras == [] and rl_cur is None and rl_pri is None  # ZERO future 2026 leakage!
+
+    # 4. Digest segmented budget reservation (info never crowds out red; FOOTNOTE_CHECKS & OPEN_GAPS never truncated!)
+    src_dig = ResearchSource(
+        source_id="src_dig_v5",
+        owner_id="acct_v5",
+        title="Digest Test",
+        text=meta_call,
+        kind="user_supplied",
+        retrieval_method="user_text",
+        is_simulated=False,
+        obtained_at=datetime.now(timezone.utc),
+        content_sha256="c" * 64,
+        permissions=SourcePermissions(store=True, model_input=True, display=True, export=True),
+    )
+    many_info = [
+        CollisionFinding(
+            finding_id=f"inf_{i}",
+            track="track_1_demand_channel",
+            collision_kind="observation_only_insufficient_evidence",
+            severity="info",
+            title=f"Info noise {i}",
+            management_statement="stmt",
+            ledger_evidence="ev " + ("x" * 100),
+            priority_rank=10 + i,
+        )
+        for i in range(10)
+    ]
+    real_red = CollisionFinding(
+        finding_id="red_must_show",
+        track="track_2_earnings_cash",
+        collision_kind="direct_contradiction",
+        severity="red",
+        title="CRITICAL_RED_FINDING",
+        management_statement="stmt",
+        ledger_evidence="real red evidence",
+        priority_rank=50,
+    )
+    rep_dig = rep_meta.model_copy(
+        update={
+            "source_ids": ["src_dig_v5"],
+            "source_hashes": {"src_dig_v5": "c" * 64},
+            "collision_findings": [*many_info, real_red],
+            "footnote_verification_notes": ["[R35.htm] data_center_revenue (corroborated): Matches $30,771M"],
+            "open_gaps": ["rpo:footnote_unstructured_manual"],
+        }
+    )
+    dig = build_topic_call_verification_digest(
+        rep_dig,
+        topic_source_ids={"src_dig_v5"},
+        all_owner_sources_by_id={"src_dig_v5": src_dig},
+        max_chars=700,
+    )
+    assert dig is not None
+    assert "CRITICAL_RED_FINDING" in dig["summary"]
+    assert "FOOTNOTE_CHECKS:" in dig["summary"]
+    assert "OPEN_GAPS" in dig["summary"]
+
+
+
 

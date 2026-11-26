@@ -791,7 +791,7 @@ def _original_pdf(source, directory: str) -> Path | None:
             path = Path(directory) / "source.pdf"
             path.write_bytes(raw)
             return path
-    digest = document_pages.get("original_blob_sha256")
+    digest = document_pages.get("original_blob_sha256") or (source.provenance or {}).get("original_blob_sha256")
     store = configured_blob_store()
     if digest and store is not None:
         return store.path_for(digest)
@@ -884,9 +884,18 @@ def build_ocr_pages_callback(*, operation_id: str, persist_version: Callable[...
         events = list(hooks.events[first_event:]) if hooks is not None else []
         if result.text is None or result.document_pages is None:
             return OcrOutcome(result.status, None, result.reason, result.message, result.pages, events, result.usage)
-        digest = sha256(json.dumps([source.source_id, sorted(r["page"] for r in result.pages
-                                                          if r.get("status") == "ocr")]).encode()).hexdigest()
-        new_id = "source_" + sha256(f"{operation_id}:ocr-version:{digest}".encode()).hexdigest()[:32]
+        engine_sig = ",".join(getattr(e, "name", type(e).__name__) for e in (engines or ())) or "default"
+        digest = sha256(
+            json.dumps(
+                [
+                    getattr(source, "owner_id", "") or "",
+                    source.source_id,
+                    sorted(r["page"] for r in result.pages if r.get("status") == "ocr"),
+                    engine_sig,
+                ]
+            ).encode()
+        ).hexdigest()
+        new_id = "source_" + sha256(f"ocr-version:{digest}".encode()).hexdigest()[:32]
         provenance = {**(source.provenance or {}),
                       "document_pages": {**result.document_pages},
                       "supersedes_source_id": source.source_id}

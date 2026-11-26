@@ -110,7 +110,7 @@ def resolve_ticker_to_cik(
         raise SecPacingError("ticker_not_found", f"Ticker {symbol!r} not found in SEC company_tickers.json.", retryable=False)
     return hit
 
-_CURRENT_PROJECTION_VERSION = 4
+_CURRENT_PROJECTION_VERSION = 5
 
 _V2_PROJECTION_LINES: tuple[str, ...] = (
     "revenue",
@@ -152,13 +152,15 @@ _V2_PROJECTION_LINES: tuple[str, ...] = (
     "unrecognized_sbc",
     "repurchased_shares",
     "rsu_grants_shares",
-    # V3a 10-Q collision & footnote lines (45 lines total)
+    # V3a 10-Q collision, footnote & finance-lease CapEx bridge lines (47 lines total)
     "rpo",
     "deferred_revenue_current",
     "deferred_revenue_noncurrent",
     "restructuring_charges",
     "impairment_charges",
     "purchase_commitments",
+    "finance_lease_principal_payments",
+    "finance_lease_rou_additions",
 )
 
 _ISO_CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
@@ -776,25 +778,28 @@ def load_or_fetch_company_snapshot(
         from .fin_data.adapters.sec_events.pacing import sec_get_to_tempfile
         from .research_memory_gate import heavy_memory_section
 
-        with heavy_memory_section(), _PARSE_SEMAPHORE:
-            tmp_path: Path | None = None
-            try:
-                tmp_path, _ct, _sha = sec_get_to_tempfile(
-                    url,
-                    accept="application/json",
-                    category="financials",
-                    user_agent=user_agent,
-                    limiter=limiter,
-                    policy=policy,
-                    transport=transport,
-                    stream_transport=stream_transport,
-                    max_bytes=60_000_000,
-                    suffix=".json",
-                )
+        tmp_path: Path | None = None
+        try:
+            # Download streaming to disk OUTSIDE heavy_memory_section (uses only ~64KB buffer)
+            # so concurrent SEC fetches do not serialize on memory parsing semaphore!
+            tmp_path, _ct, _sha = sec_get_to_tempfile(
+                url,
+                accept="application/json",
+                category="financials",
+                user_agent=user_agent,
+                limiter=limiter,
+                policy=policy,
+                transport=transport,
+                stream_transport=stream_transport,
+                max_bytes=60_000_000,
+                suffix=".json",
+            )
+            with heavy_memory_section(), _PARSE_SEMAPHORE:
                 cf_doc = extract_sliced_companyfacts_from_file(tmp_path)
-            finally:
-                if tmp_path is not None:
-                    tmp_path.unlink(missing_ok=True)
+        finally:
+            if tmp_path is not None:
+                tmp_path.unlink(missing_ok=True)
+        with _PARSE_SEMAPHORE:
             # Guard against SEC submissions-vs-companyfacts 15-120m indexing lag:
             # Verify latest_acc (or latest_row.period_of_report) actually appears in cf_doc before advancing latest_periodic_accession!
             eff_latest_acc = latest_acc

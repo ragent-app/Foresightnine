@@ -555,8 +555,12 @@ class ResearchLiveBroker:
                 'data': {
                     'operation_id': operation_id,
                     'operation_status': operation_status,
+                    'status': operation_status,
                     'version_id': version_id,
-                    **{key: progress[key] for key in ('logical_status', 'current_operation_id')
+                    **{key: progress[key] for key in (
+                        'logical_status', 'current_operation_id', 'final_sequence',
+                        'stage', 'entity_key', 'overall_light', 'error',
+                    )
                        if progress and key in progress},
                 },
             })

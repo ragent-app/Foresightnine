@@ -5672,7 +5672,7 @@ _SQUAD_STAGE_MAX_OUTPUT_TOKENS: dict[str, int] = {
     "v3a_call_map_doc": 8192,
     "v3a_sellside_extract": 8192,
     "v3a_omission_verify": 8192,
-    "v3a_footnote_verify": 4096,
+    "v3a_footnote_verify": 8192,
 }
 
 
@@ -5841,25 +5841,31 @@ def _reconcile_orphaned_earnings_squads() -> int:
 
 
 _PLATFORM_LLM_GATE_LOCK = RLock()
-_PLATFORM_LLM_GATE: tuple[int, BoundedSemaphore] | None = None
+_PLATFORM_LLM_GATES: dict[tuple[str, int], BoundedSemaphore] = {}
 
 
-def _platform_llm_concurrency_gate() -> BoundedSemaphore:
-    """Return process-wide concurrency gate for platform-managed LLM slots (BYOK exempt)."""
-    global _PLATFORM_LLM_GATE
+def _platform_llm_concurrency_gate(bucket: str = "default") -> BoundedSemaphore:
+    """Return process-wide (per-bucket) concurrency gate for platform-managed LLM slots (BYOK exempt)."""
     raw = os.environ.get("FORESIGHTNINE_PLATFORM_LLM_MAX_CONCURRENCY", "").strip()
-    limit = 2
+    limit = 6
     if raw:
         try:
             parsed = int(raw)
-            if 1 <= parsed <= 8:
+            if 1 <= parsed <= 16:
                 limit = parsed
         except ValueError:
             pass
+    b_key = (bucket or "default").strip() or "default"
     with _PLATFORM_LLM_GATE_LOCK:
-        if _PLATFORM_LLM_GATE is None or _PLATFORM_LLM_GATE[0] != limit:
-            _PLATFORM_LLM_GATE = (limit, BoundedSemaphore(limit))
-        return _PLATFORM_LLM_GATE[1]
+        key = (b_key, limit)
+        gate = _PLATFORM_LLM_GATES.get(key)
+        if gate is None:
+            # Prune stale limit entries for this bucket
+            for old_k in [k for k in _PLATFORM_LLM_GATES if k[0] == b_key and k[1] != limit]:
+                _PLATFORM_LLM_GATES.pop(old_k, None)
+            gate = BoundedSemaphore(limit)
+            _PLATFORM_LLM_GATES[key] = gate
+        return gate
 
 
 class _AccountSlotModelRunner:
@@ -9949,17 +9955,18 @@ def _v3a_account_alias_map(account_id: str) -> dict[str, str]:
 
 
 def _v3a_resolve_sources_for_account(account_id: str, source_ids: Sequence[str]) -> list[ResearchSource]:
-    out: list[ResearchSource] = []
+    dedup_ids: list[str] = []
     seen: set[str] = set()
     for sid in source_ids:
         s = str(sid or "").strip()
         if not s or s in seen:
             continue
         seen.add(s)
-        found = research_sources.get_many(account_id, [s])
-        if found:
-            out.append(found[0])
-    return out
+        dedup_ids.append(s)
+    if not dedup_ids:
+        return []
+    found_map = {src.source_id: src for src in research_sources.get_many(account_id, dedup_ids)}
+    return [found_map[sid] for sid in dedup_ids if sid in found_map]
 
 
 def _v3a_sec_loaders(
@@ -10027,7 +10034,7 @@ def _v3a_sec_loaders(
                 user_agent=ua,
                 limiter=lim,
                 snapshot_cache=PEER_COMPANY_SNAPSHOTS,
-                min_projection_version=4,
+                min_projection_version=5,
                 submissions=subs,
                 policy=pol,
                 transport=transport,
@@ -10054,9 +10061,17 @@ def _v3a_sec_loaders(
                     pass
             return None, None
 
-    def _redline_loader(cik_in: str, subs_doc: Mapping[str, Any] | None, call_date_iso: str | None) -> tuple[list[dict[str, Any]], str | None, str | None]:
+    def _redline_loader(
+        cik_in: str,
+        subs_doc: Mapping[str, Any] | None,
+        call_date_iso: str | None,
+        as_of_in: date | None = None,
+    ) -> tuple[list[dict[str, Any]], str | None, str | None]:
         if callable(hooks.get("redline_loader")):
-            return hooks["redline_loader"](cik_in, subs_doc, call_date_iso)
+            try:
+                return hooks["redline_loader"](cik_in, subs_doc, call_date_iso, as_of_in)
+            except TypeError:
+                return hooks["redline_loader"](cik_in, subs_doc, call_date_iso)
         if cache_only or not isinstance(subs_doc, Mapping):
             return [], None, None
         recent = (subs_doc.get("filings") or {}).get("recent") if isinstance(subs_doc.get("filings"), Mapping) else None
@@ -10066,12 +10081,15 @@ def _v3a_sec_loaders(
         accns = recent.get("accessionNumber") or []
         docs = recent.get("primaryDocument") or []
         filed_dates = recent.get("filingDate") or []
-        cutoff_iso: str | None = None
+        cutoffs: list[str] = []
         if isinstance(call_date_iso, str) and len(call_date_iso.strip()) >= 10:
             try:
-                cutoff_iso = (date.fromisoformat(call_date_iso.strip()[:10]) + timedelta(days=45)).isoformat()
+                cutoffs.append((date.fromisoformat(call_date_iso.strip()[:10]) + timedelta(days=45)).isoformat())
             except ValueError:
-                cutoff_iso = None
+                pass
+        if as_of_in is not None:
+            cutoffs.append(as_of_in.isoformat())
+        eff_cutoff: str | None = min(cutoffs) if cutoffs else None
         periodic = [
             (
                 str(forms[i]).upper(),
@@ -10082,14 +10100,17 @@ def _v3a_sec_loaders(
             for i in range(min(len(forms), len(accns), len(docs)))
             if str(forms[i]).upper() in ("10-Q", "10-K") and str(docs[i]).strip()
         ]
-        if cutoff_iso:
-            anchored = [p for p in periodic if not p[3] or p[3] <= cutoff_iso]
-            if len(anchored) >= 2:
-                periodic = anchored
+        # Strict point-in-time anti-lookahead guard: NEVER fall back to future filings when <2 anchored filings exist!
+        if eff_cutoff:
+            periodic = [p for p in periodic if p[3] and p[3] <= eff_cutoff]
         if len(periodic) < 2:
             return [], None, None
         cur_form, cur_accn, cur_doc, _cur_f = periodic[0]
-        pri_form, pri_accn, pri_doc, _pri_f = periodic[1]
+        # Strict same-form pairing: 10-K diffs prior 10-K; 10-Q diffs prior 10-Q (eliminates cross-form false yellows!)
+        pri_hit = next((p for p in periodic[1:] if p[0] == cur_form), None)
+        if pri_hit is None:
+            return [], None, None
+        pri_form, pri_accn, pri_doc, _pri_f = pri_hit
         try:
             added = compute_streaming_10q_redline(
                 cik=cik_in,
@@ -10106,7 +10127,11 @@ def _v3a_sec_loaders(
                 cache_repo=SEC_10Q_REDLINE_CACHE,
             )
             return added, cur_accn, pri_accn
-        except Exception:
+        except Exception as exc_rl:
+            logging.getLogger("foresightnine.v3a").warning(
+                "v3a_redline_loader_failed cik=%s cur=%s pri=%s exc=%s:%s",
+                cik_in, cur_accn, pri_accn, type(exc_rl).__name__, str(exc_rl)[:160],
+            )
             return [], None, None
 
     def _cap_alloc_loader(cik_in: str) -> Mapping[str, Any] | None:
@@ -10306,23 +10331,51 @@ def _v3a_aux_loaders(
         except Exception:
             return None, []
 
-    def _footnote_fallback_loader(cik_in: str, accn_in: str) -> list[dict[str, Any]]:
+    def _footnote_fallback_loader(
+        cik_in: str,
+        accn_in: str,
+        keywords: Sequence[str] | None = None,
+    ) -> list[dict[str, Any]]:
         if callable(hooks.get("footnote_fallback_loader")):
-            return hooks["footnote_fallback_loader"](cik_in, accn_in)
+            try:
+                return hooks["footnote_fallback_loader"](cik_in, accn_in, keywords=keywords)
+            except TypeError:
+                return hooks["footnote_fallback_loader"](cik_in, accn_in)
         if cache_only:
             return []
         try:
-            from .fin_data.adapters.sec_edgar import SecEdgarAdapter
             from .research_call_collision import fetch_footnote_fallback_tables
 
-            adapter = SecEdgarAdapter(ua, transport=transport, limiter=lim, policy=pol)
+            kw_args = (
+                tuple(keywords)
+                if keywords
+                else (
+                    "remaining performance",
+                    "commitment",
+                    "purchase obligation",
+                    "deferred revenue",
+                    "contract",
+                    "segment",
+                    "disaggregated revenue",
+                    "backlog",
+                )
+            )
             return fetch_footnote_fallback_tables(
-                adapter=adapter,
                 cik=cik10(cik_in),
                 accession=accn_in,
+                keywords=kw_args,
                 max_tables=2,
+                user_agent=ua,
+                limiter=lim,
+                policy=pol,
+                transport=transport,
+                cache_repo=SEC_10Q_REDLINE_CACHE,
             )
-        except Exception:
+        except Exception as exc_fn:
+            logging.getLogger("foresightnine.v3a").warning(
+                "v3a_footnote_loader_failed cik=%s accn=%s exc=%s:%s",
+                cik_in, accn_in, type(exc_fn).__name__, str(exc_fn)[:160],
+            )
             return []
 
     return _eight_k_loader, _footnote_fallback_loader
@@ -10403,16 +10456,38 @@ def _resolve_v3a_runtime_for_account_id(
                         effort=fe_effort,
                     )
                 else:
-                    slot_providers["fast_extractor"] = OpenAICompatibleLlmProvider(fe_settings)
+                    from .phase3 import ProviderPolicy
+
+                    slot_providers["fast_extractor"] = OpenAICompatibleLlmProvider(
+                        fe_settings,
+                        policy=ProviderPolicy(max_output_tokens=fe_max_out, timeout_seconds=fe_timeout),
+                    )
                 slot_max_tokens["fast_extractor"] = fe_max_out
-            except Exception:
-                pass
+            except Exception as exc_fe:
+                logging.getLogger("foresightnine.v3a").warning(
+                    "v3a_fast_extractor_env_init_failed exc=%s:%s",
+                    type(exc_fe).__name__, str(exc_fe)[:160],
+                )
+    eff_v3a_effort = os.environ.get("FORESIGHTNINE_V3A_EXTRACT_EFFORT", "").strip() or None
+    default_prov = _with_squad_provider_timeout_floor(primary_provider)
+    if eff_v3a_effort and hasattr(default_prov, "effort") and getattr(default_prov, "effort", None) is None:
+        try:
+            import copy as _copy
+
+            default_prov = _copy.copy(default_prov)
+            default_prov.effort = eff_v3a_effort
+        except Exception:
+            pass
+    gate_bucket = "v3a_platform"
+    prov_settings = getattr(default_prov, "settings", None)
+    if prov_settings is not None:
+        gate_bucket = f"{getattr(prov_settings, 'base_url', '')}|{getattr(prov_settings, 'model', '')}"
     runner = _AccountSlotModelRunner(
         providers_by_slot=slot_providers,
-        default_provider=_with_squad_provider_timeout_floor(primary_provider),
+        default_provider=default_prov,
         cancel_event=cancel_event,
         slot_max_output_tokens=slot_max_tokens,
-        concurrency_gate=None if is_personal else _platform_llm_concurrency_gate(),
+        concurrency_gate=None if is_personal else _platform_llm_concurrency_gate(gate_bucket),
     )
     return runner, None
 
@@ -10977,6 +11052,30 @@ def run_call_audit_endpoint(
     compiled_rules = load_v3a_call_rules()
 
     alias_map = _v3a_account_alias_map(account.account_id)
+    bundle_seed = "|".join(sorted(f"{s.source_id}:{s.content_sha256}" for s in loaded))
+    bundle_sha = sha256(bundle_seed.encode("utf-8")).hexdigest()
+
+    # Pre-preview 15m TTL fast cache check: avoids parse_transcript_v2 CPU work on hot repeat calls (<20ms even on 60KB calls!)
+    pre_fast_cache_key = (
+        "pre",
+        account.account_id,
+        bundle_sha,
+        compiled_rules.rules_sha256,
+        request.entity_key,
+        (request.symbol or "").strip().upper() or None,
+        cik10(request.cik) if request.cik else None,
+        request.fiscal_year,
+        request.fiscal_quarter,
+        request.as_of.isoformat() if request.as_of else None,
+    )
+    if (
+        not request.force_refresh
+        and request.retry_lane is None
+        and not hook_dict.get("force_async")
+    ):
+        pre_hit = _v3a_fast_cache_get(pre_fast_cache_key)
+        if pre_hit is not None:
+            return JSONResponse(pre_hit, status_code=200)
 
     def _cache_only_cik_run(sym: str) -> tuple[str, str] | None:
         ptr = PEER_COMPANY_SNAPSHOTS.get(f"sym:{sym.strip().upper()}")
@@ -10997,8 +11096,6 @@ def run_call_audit_endpoint(
         if (request.fiscal_year and request.fiscal_quarter)
         else (preview.fiscal_period_key or "unspecified")
     )
-    bundle_seed = "|".join(sorted(f"{s.source_id}:{s.content_sha256}" for s in loaded))
-    bundle_sha = sha256(bundle_seed.encode("utf-8")).hexdigest()
     mgmt_id_set = set(preview.management_source_ids)
     mgmt_loaded = [s for s in loaded if s.source_id in mgmt_id_set]
     mgmt_bundle_seed = "|".join(sorted(f"{s.source_id}:{s.content_sha256}" for s in mgmt_loaded))
@@ -11095,6 +11192,7 @@ def run_call_audit_endpoint(
             "markdown": render_call_verification_markdown(report, source_permissions=perms_map),
         }
         _v3a_fast_cache_put(fast_cache_key, fast_body)
+        _v3a_fast_cache_put(pre_fast_cache_key, fast_body)
         return JSONResponse(fast_body, status_code=200)
 
     # Idempotency replay check for async operation
@@ -11126,7 +11224,19 @@ def run_call_audit_endpoint(
     thesis_lg = _latest_confirmed_ledger(account.account_id, request.topic_id) if request.topic_id else None
     pillars = [{"pillar": c.pillar, "keywords": [c.pillar, c.claim_text[:60]]} for c in (thesis_lg.claims if thesis_lg else [])]
 
+    def _find_existing_ocr_ver(old: ResearchSource, target_pages: list[int]) -> ResearchSource | None:
+        # O(1) lookup by deterministic ocr_source_id to skip Tesseract & preserve Layer 2 cache!
+        cand_digest = sha256(
+            json.dumps([account.account_id, old.source_id, sorted(target_pages), "default"]).encode()
+        ).hexdigest()
+        cand_id = "source_" + sha256(f"ocr-version:{cand_digest}".encode()).hexdigest()[:32]
+        hits = research_sources.get_many(account.account_id, [cand_id])
+        return hits[0] if hits else None
+
     def _persist_ocr_ver(old: ResearchSource, new_source_id: str, text: str, provenance: dict[str, Any]) -> ResearchSource:
+        existing_hits = research_sources.get_many(account.account_id, [new_source_id])
+        if existing_hits:
+            return existing_hits[0]
         created = research_sources.create(
             account.account_id,
             SourceInput(
@@ -11150,8 +11260,11 @@ def run_call_audit_endpoint(
         if request.topic_id:
             try:
                 research_topics.attach_sources(account.account_id, request.topic_id, [created.source_id])
-            except Exception:
-                pass
+            except Exception as exc_att:
+                logging.getLogger("foresightnine.v3a").warning(
+                    "v3a_ocr_attach_topic_failed topic_id=%s src=%s exc=%s",
+                    request.topic_id, created.source_id, type(exc_att).__name__,
+                )
         return created
 
     def build_call_audit_operation(operation_id: str) -> tuple[BaseModel, str]:
@@ -11161,6 +11274,7 @@ def run_call_audit_endpoint(
 
         stages_log: list[dict[str, Any]] = []
         seq_counter = [0]
+        stage_lock = RLock()
 
         def _write_state(status_val: str, *, stage: str | None = None, report_d: dict[str, Any] | None = None, ledger_d: dict[str, Any] | None = None, md: str | None = None, err: str | None = None, ent: str | None = None) -> None:
             V3A_CALL_AUDIT_STATES.put(
@@ -11180,18 +11294,19 @@ def run_call_audit_endpoint(
                     "updated_at": lifecycle_clock.now().isoformat(),
                 },
             )
-            _register_manifest_key(V3A_ACCOUNT_MANIFEST, account.account_id, "v3a_call_audit_states", operation_id)
 
         def _on_stage(stage_name: str, payload: dict[str, Any]) -> None:
-            seq_counter[0] += 1
-            ev_obj = {
-                "sequence": seq_counter[0],
-                "stage": stage_name,
-                "payload": payload,
-                "timestamp": lifecycle_clock.now().isoformat(),
-            }
-            stages_log.append(ev_obj)
-            _write_state("running", stage=stage_name, ent=payload.get("entity_key") or eff_entity)
+            with stage_lock:
+                seq_counter[0] += 1
+                seq_now = seq_counter[0]
+                ev_obj = {
+                    "sequence": seq_now,
+                    "stage": stage_name,
+                    "payload": payload,
+                    "timestamp": lifecycle_clock.now().isoformat(),
+                }
+                stages_log.append(ev_obj)
+                _write_state("running", stage=stage_name, ent=payload.get("entity_key") or eff_entity)
             try:
                 operations.renew_lease(operation_id)
             except Exception:
@@ -11201,10 +11316,13 @@ def run_call_audit_endpoint(
                     operation_id,
                     event_name=stage_name,
                     payload=ev_obj,
-                    event_id=str(seq_counter[0]),
+                    event_id=str(seq_now),
                 )
-            except Exception:
-                pass
+            except Exception as exc_pub:
+                logging.getLogger("foresightnine.v3a").warning(
+                    "v3a_sse_publish_stage_failed op=%s stage=%s exc=%s",
+                    operation_id, stage_name, type(exc_pub).__name__,
+                )
 
         with _ACTIVE_CALL_AUDIT_LOCK:
             _ACTIVE_CALL_AUDIT_RUNS[operation_id] = {
@@ -11247,10 +11365,12 @@ def run_call_audit_endpoint(
                 manifest_repo=V3A_ACCOUNT_MANIFEST,
                 operation_id=operation_id,
                 persist_ocr_version=_persist_ocr_ver if hook_dict.get("enable_layer0b_ocr", True) else None,
+                find_existing_ocr_version=_find_existing_ocr_ver if hook_dict.get("enable_layer0b_ocr", True) else None,
                 cancel_event=op_cancel,
                 on_stage=_on_stage,
                 rules=compiled_rules,
                 retry_lane=request.retry_lane,
+                emit_completed=False,
             )
             # Resolve permissions across report.source_ids (including newly created Layer 0b OCR immutable source versions!)
             final_srcs = _v3a_resolve_sources_for_account(account.account_id, list(dict.fromkeys([*(s.source_id for s in loaded), *report.source_ids])))
@@ -11258,22 +11378,63 @@ def run_call_audit_endpoint(
             rep_d = report.model_dump(mode="json", exclude_none=True)
             led_d = ledger.model_dump(mode="json", exclude_none=True)
             md = render_call_verification_markdown(report, source_permissions=perms_map)
-            _write_state("completed", stage="completed", report_d=rep_d, ledger_d=led_d, md=md, ent=report.entity_key)
-            # Warm 15m TTL fast report cache only when no lane failed
+            completed_payload = {
+                "entity_key": report.entity_key,
+                "overall_light": report.overall_light,
+                "headline": report.headline,
+                "red_count": report.red_count,
+                "yellow_count": report.yellow_count,
+                "awaiting_current_10q": report.awaiting_current_10q,
+            }
+            # Persist completed state FIRST (zero read-after-write race), then emit completed + run.terminal back-to-back (<5ms!)
+            with stage_lock:
+                seq_counter[0] += 1
+                final_seq = seq_counter[0]
+                comp_ev = {
+                    "sequence": final_seq,
+                    "stage": "completed",
+                    "payload": completed_payload,
+                    "timestamp": lifecycle_clock.now().isoformat(),
+                }
+                stages_log.append(comp_ev)
+                _write_state("completed", stage="completed", report_d=rep_d, ledger_d=led_d, md=md, ent=report.entity_key)
+            # Warm 15m TTL fast report cache (both full & pre-preview keys) only when no lane failed
             if not any(v == "failed" for v in (report.partial_lane_status or {}).values()):
-                _v3a_fast_cache_put(
-                    fast_cache_key,
-                    {
-                        "operation_id": f"cached_{bundle_sha[:16]}",
-                        "status": "completed",
-                        "cached": True,
+                fast_payload = {
+                    "operation_id": f"cached_{bundle_sha[:16]}",
+                    "status": "completed",
+                    "cached": True,
+                    "entity_key": report.entity_key,
+                    "report": rep_d,
+                    "ledger": led_d,
+                    "markdown": md,
+                }
+                _v3a_fast_cache_put(fast_cache_key, fast_payload)
+                _v3a_fast_cache_put(pre_fast_cache_key, fast_payload)
+            try:
+                research_live_broker.publish_stage_event(
+                    operation_id,
+                    event_name="completed",
+                    payload=comp_ev,
+                    event_id=str(final_seq),
+                )
+                research_live_broker.publish_terminal(
+                    operation_id,
+                    operation_status="completed",
+                    version_id=None,
+                    progress={
+                        "final_sequence": final_seq,
+                        "stage": "completed",
                         "entity_key": report.entity_key,
-                        "report": rep_d,
-                        "ledger": led_d,
-                        "markdown": md,
+                        "overall_light": report.overall_light,
                     },
                 )
-            # D4/D5/D7: Auto-activate call_commitment_verify subscription when awaiting current 10-Q
+            except Exception as exc_term:
+                logging.getLogger("foresightnine.v3a").warning(
+                    "v3a_sse_publish_terminal_failed op=%s exc=%s",
+                    operation_id, type(exc_term).__name__,
+                )
+            # D4/D5/D7: Auto-activate call_commitment_verify subscription AFTER terminal SSE push (zero latency overhead!)
             if report.awaiting_current_10q and report.cik:
                 baseline_accs = [a for a in (ledger.latest_10q_accession, ledger.initial_10q_accession) if a]
                 _auto_upsert_call_verify_subscription(
@@ -11284,15 +11445,6 @@ def run_call_audit_endpoint(
                     topic_id=request.topic_id,
                     baseline_accessions=baseline_accs,
                 )
-            try:
-                research_live_broker.publish_terminal(
-                    operation_id,
-                    operation_status="completed",
-                    version_id=None,
-                    progress={"stage": "completed", "entity_key": report.entity_key, "overall_light": report.overall_light},
-                )
-            except Exception:
-                pass
             return CallAuditOperationView(
                 operation_id=operation_id,
                 status="completed",
@@ -11420,6 +11572,18 @@ def cancel_call_audit_operation(
         updated["stage"] = "cancelled"
         updated["updated_at"] = lifecycle_clock.now().isoformat()
         V3A_CALL_AUDIT_STATES.put(operation_id, updated)
+        try:
+            research_live_broker.publish_terminal(
+                operation_id,
+                operation_status="cancelled",
+                version_id=None,
+                progress={"stage": "cancelled"},
+            )
+        except Exception as exc_ct:
+            logging.getLogger("foresightnine.v3a").warning(
+                "v3a_cancel_publish_terminal_failed op=%s exc=%s",
+                operation_id, type(exc_ct).__name__,
+            )
     return {"operation_id": operation_id, "status": "cancelled"}
 
 
@@ -11460,7 +11624,7 @@ async def stream_call_audit_events(
     loop = asyncio.get_running_loop()
     subscriber = research_live_broker.subscribe(operation_id, account_id=account.account_id, loop=loop)
     try:
-        st_init, replay_init = _snapshot(cursor_after)
+        st_init, replay_init = await asyncio.to_thread(_snapshot, cursor_after)
     except BaseException:
         research_live_broker.unsubscribe(subscriber)
         raise
@@ -11471,7 +11635,7 @@ async def stream_call_audit_events(
         async def _term_gen():
             for ev in replay_init:
                 yield format_sse_frame(str(ev.get("stage") or "progress"), dict(ev), event_id=str(ev.get("sequence") or ""))
-            yield format_sse_frame("run.terminal", {"operation_id": operation_id, "status": st_init})
+            yield format_sse_frame("run.terminal", {"operation_id": operation_id, "status": st_init, "operation_status": st_init})
 
         return StreamingResponse(_term_gen(), media_type="text/event-stream", headers=sse_headers)
 
@@ -11482,27 +11646,38 @@ async def stream_call_audit_events(
                 last_seq = max(last_seq, int(ev.get("sequence") or 0))
                 yield format_sse_frame(str(ev.get("stage") or "progress"), dict(ev), event_id=str(ev.get("sequence") or ""))
             while True:
-                st_now, missed = _snapshot(last_seq)
-                for ev in missed:
-                    last_seq = max(last_seq, int(ev.get("sequence") or 0))
-                    yield format_sse_frame(str(ev.get("stage") or "progress"), dict(ev), event_id=str(ev.get("sequence") or ""))
-                if st_now in ("completed", "failed", "cancelled"):
-                    yield format_sse_frame("run.terminal", {"operation_id": operation_id, "status": st_now})
-                    return
+                if getattr(subscriber, "needs_resync", False):
+                    subscriber.needs_resync = False
+                    st_sync, missed = await asyncio.to_thread(_snapshot, last_seq)
+                    for ev in missed:
+                        last_seq = max(last_seq, int(ev.get("sequence") or 0))
+                        yield format_sse_frame(str(ev.get("stage") or "progress"), dict(ev), event_id=str(ev.get("sequence") or ""))
+                    if st_sync in ("completed", "failed", "cancelled"):
+                        yield format_sse_frame("run.terminal", {"operation_id": operation_id, "status": st_sync, "operation_status": st_sync})
+                        return
                 try:
                     frame = await asyncio.wait_for(subscriber.queue.get(), timeout=15.0)
                 except asyncio.TimeoutError:
                     if await http_request.is_disconnected():
+                        return
+                    st_hb, missed_hb = await asyncio.to_thread(_snapshot, last_seq)
+                    for ev in missed_hb:
+                        last_seq = max(last_seq, int(ev.get("sequence") or 0))
+                        yield format_sse_frame(str(ev.get("stage") or "progress"), dict(ev), event_id=str(ev.get("sequence") or ""))
+                    if st_hb in ("completed", "failed", "cancelled"):
+                        yield format_sse_frame("run.terminal", {"operation_id": operation_id, "status": st_hb, "operation_status": st_hb})
                         return
                     yield ": heartbeat\n\n"
                     continue
                 ev_name = str(frame.get("event") or "progress")
                 data = frame.get("data") or {}
                 if ev_name == "run.terminal":
-                    _, tail = _snapshot(last_seq)
-                    for ev in tail:
-                        last_seq = max(last_seq, int(ev.get("sequence") or 0))
-                        yield format_sse_frame(str(ev.get("stage") or "progress"), dict(ev), event_id=str(ev.get("sequence") or ""))
+                    final_seq_hint = data.get("final_sequence") if isinstance(data, Mapping) else None
+                    if not isinstance(final_seq_hint, int) or final_seq_hint > last_seq:
+                        _, tail = await asyncio.to_thread(_snapshot, last_seq)
+                        for ev in tail:
+                            last_seq = max(last_seq, int(ev.get("sequence") or 0))
+                            yield format_sse_frame(str(ev.get("stage") or "progress"), dict(ev), event_id=str(ev.get("sequence") or ""))
                     yield format_sse_frame("run.terminal", data, event_id=frame.get("id"))
                     return
                 seq_v = data.get("sequence") if isinstance(data, Mapping) else None

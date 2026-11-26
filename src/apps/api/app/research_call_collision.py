@@ -66,6 +66,8 @@ CommitmentOperator = Literal[
     "approx",
     "growth_yoy_ge",
     "growth_yoy_le",
+    "growth_yoy_approx",
+    "growth_yoy_between",
     "direction_up_down",
 ]
 VerificationTier = Literal[
@@ -375,10 +377,12 @@ class Sec10QCollisionLedger(_StrictV3aModel):
     impairment_charges: str | None = None
     consecutive_restructuring_quarters: int = 0
     reg_g_reconciliation_excerpts: list[str] = Field(default_factory=list)
-    # Track 3: CapEx & ASC 440 supply commitments
+    # Track 3: CapEx & ASC 440 supply commitments + finance-lease CapEx bridge
     capex_yoy_pct: str | None = None
     ppe_net_yoy_pct: str | None = None
     purchase_commitments_yoy_pct: str | None = None
+    finance_lease_principal_payments: str | None = None
+    finance_lease_rou_additions: str | None = None
     # Track 4: V2.5 Capital allocation cross-reference (read-only)
     capital_allocation_summary: dict[str, Any] | None = None
     # Track 5: 10-Q / 10-K redline added risks
@@ -1399,6 +1403,9 @@ def build_sec_10q_collision_ledger(
     redline_added_paragraphs: Sequence[Mapping[str, Any]] = (),
     redline_current_accession: str | None = None,
     redline_prior_accession: str | None = None,
+    cached_initial_10q_accession: str | None = None,
+    cached_initial_10q_filed_at: str | None = None,
+    cached_period_end_date: str | None = None,
     rules: CompiledV3aRules | None = None,
 ) -> Sec10QCollisionLedger:
     """Build deterministic Layer 1 ``Sec10QCollisionLedger`` aligned to Period ``P`` initial filing basis."""
@@ -1434,6 +1441,19 @@ def build_sec_10q_collision_ledger(
     period_end: date | None = anchor["period_end"]
     init_filed: date | None = anchor["initial_10q_filed_at"]
     init_accn: str | None = anchor["initial_10q_accession"]
+
+    # Preserve exact initial-filing anchor under cache_only=True (submissions=None) so GET /report &
+    # R2-D5 Agent Digest never drift to a later comparative 10-K or mis-downgrade financial_sic_gated!
+    if submissions is None and cached_initial_10q_filed_at:
+        c_filed = _parse_iso_date(cached_initial_10q_filed_at)
+        c_end = _parse_iso_date(cached_period_end_date)
+        if c_filed is not None and (as_of is None or c_filed <= as_of):
+            init_filed = c_filed
+            if cached_initial_10q_accession:
+                init_accn = cached_initial_10q_accession
+            if c_end is not None:
+                period_end = c_end
+            anchor["awaiting_10q"] = False
 
     open_gaps: list[str] = []
     if anchor["awaiting_10q"]:
@@ -1529,6 +1549,8 @@ def build_sec_10q_collision_ledger(
         "restructuring_charges",
         "impairment_charges",
         "purchase_commitments",
+        "finance_lease_principal_payments",
+        "finance_lease_rou_additions",
     )
     picked: dict[str, tuple[Period | None, Period | None]] = {}
     for ln in core_line_names:
@@ -1569,6 +1591,8 @@ def build_sec_10q_collision_ledger(
     restruct_cur, _ = picked["restructuring_charges"]
     impair_cur, _ = picked["impairment_charges"]
     pcomm_cur, pcomm_py = picked["purchase_commitments"]
+    fl_princ_cur, _ = picked["finance_lease_principal_payments"]
+    fl_rou_cur, _ = picked["finance_lease_rou_additions"]
 
     def _yoy(c: Period | None, p: Period | None, *, take_abs: bool = False) -> Decimal | None:
         if c is None or p is None:
@@ -1728,6 +1752,8 @@ def build_sec_10q_collision_ledger(
         capex_yoy_pct=_fmt_dec(capex_yoy, 2),
         ppe_net_yoy_pct=_fmt_dec(ppe_yoy, 2),
         purchase_commitments_yoy_pct=_fmt_dec(pcomm_yoy, 2),
+        finance_lease_principal_payments=_fmt_dec(abs(fl_princ_cur.value), 2) if fl_princ_cur else None,
+        finance_lease_rou_additions=_fmt_dec(abs(fl_rou_cur.value), 2) if fl_rou_cur else None,
         capital_allocation_summary=dict(capital_allocation_summary) if capital_allocation_summary else None,
         redline_added_risks=redline_snips,
         redline_current_accession=redline_current_accession,
@@ -1772,18 +1798,19 @@ def compute_streaming_10q_redline(
         url = f"https://www.sec.gov/Archives/edgar/data/{cik_num}/{accn_nodash}/{doc_name}"
         tmp_path: Path | None = None
         try:
+            # Download streaming to disk OUTSIDE heavy_memory_section (~64KB buffer) so concurrent fetches don't block!
+            tmp_path, _sha, _sz = sec_get_to_tempfile(
+                url,
+                category="filings",
+                user_agent=user_agent,
+                limiter=limiter,
+                policy=policy,
+                transport=transport,
+                accept="text/html, text/plain",
+                max_bytes=80_000_000,
+                suffix=".htm",
+            )
             with heavy_memory_section():
-                tmp_path, _sha, _sz = sec_get_to_tempfile(
-                    url,
-                    category="filings",
-                    user_agent=user_agent,
-                    limiter=limiter,
-                    policy=policy,
-                    transport=transport,
-                    accept="text/html, text/plain",
-                    max_bytes=80_000_000,
-                    suffix=".htm",
-                )
                 plain = stream_strip_sec_html_file(tmp_path)
             return split_filing_sections(plain, form=form, is_html=False)
         finally:
@@ -1824,9 +1851,90 @@ def compute_streaming_10q_redline(
     return added_out
 
 
+class _PacingToRateLimiterShim:
+    """Adapt ``SecPacingLimiter`` (wait-based) to ``SecEdgarAdapter``'s ``RateLimiter.acquire`` contract."""
+
+    def __init__(self, pacing_limiter: Any) -> None:
+        self._pacing = pacing_limiter
+
+    def acquire(self, provider: str = "sec_edgar", cost: float = 1.0) -> Any:
+        from types import SimpleNamespace
+
+        if self._pacing is not None and hasattr(self._pacing, "wait"):
+            self._pacing.wait()
+        return SimpleNamespace(allowed=True, retry_after_seconds=0.0, provider=provider, cost=cost)
+
+
+def _format_r_table_rows_markdown(td: Any, *, max_rows: int = 24) -> tuple[str, int]:
+    """Extract compact Markdown rows from ``FilingTableData`` (handling ``values_by_column``, ``cells``, and ``subtables``)."""
+    md_rows: list[str] = []
+    header_parts: list[str] = []
+    if getattr(td, "unit_header_note", None):
+        header_parts.append(str(td.unit_header_note).strip())
+    elif getattr(td, "currency", None) or getattr(td, "unit_scale", None):
+        header_parts.append(f"{getattr(td, 'currency', '') or ''} {getattr(td, 'unit_scale', '') or ''}".strip())
+    periods = getattr(td, "periods", None) or []
+    if periods:
+        header_parts.append("Periods: " + " | ".join(str(p).strip() for p in list(periods)[:6] if str(p).strip()))
+    if header_parts:
+        md_rows.append(" · ".join(p for p in header_parts if p)[:180])
+
+    def _emit_rows(rows_seq: Sequence[Any]) -> int:
+        cnt = 0
+        for row in list(rows_seq)[:max_rows]:
+            if len(md_rows) >= max_rows + 2:
+                break
+            line = ""
+            if isinstance(row, Mapping):
+                lbl = str(row.get("label") or row.get("name") or "").strip()
+                vals = row.get("values_by_column") or row.get("values") or row.get("cells") or []
+                if isinstance(vals, Mapping):
+                    v_str = " | ".join(f"{k}: {v}" for k, v in list(vals.items())[:5] if str(v).strip())
+                elif isinstance(vals, Sequence) and not isinstance(vals, str):
+                    v_str = " | ".join(str(v).strip() for v in list(vals)[:5] if str(v).strip())
+                else:
+                    v_str = str(vals).strip()
+                line = f"{lbl} | {v_str}".strip(" |")
+            elif isinstance(row, Sequence) and not isinstance(row, str):
+                line = " | ".join(str(c).strip() for c in list(row)[:6] if str(c).strip())
+            else:
+                lbl = str(getattr(row, "label", "") or "").strip()
+                vbc = getattr(row, "values_by_column", None)
+                cells = getattr(row, "cells", None)
+                vals = getattr(row, "values", None)
+                if isinstance(vbc, Mapping) and vbc:
+                    v_str = " | ".join(f"{k}: {v}" for k, v in list(vbc.items())[:5] if str(v).strip())
+                elif isinstance(cells, Sequence) and not isinstance(cells, str) and cells:
+                    v_str = " | ".join(
+                        str(getattr(c, "raw_text", c) or "").strip()
+                        for c in list(cells)[:5]
+                        if str(getattr(c, "raw_text", c) or "").strip()
+                    )
+                elif isinstance(vals, Mapping):
+                    v_str = " | ".join(f"{k}: {v}" for k, v in list(vals.items())[:5] if str(v).strip())
+                elif isinstance(vals, Sequence) and not isinstance(vals, str):
+                    v_str = " | ".join(str(v).strip() for v in list(vals)[:5] if str(v).strip())
+                else:
+                    v_str = str(vals or "").strip()
+                line = f"{lbl} | {v_str}".strip(" |")
+            if line:
+                md_rows.append(line[:200])
+                cnt += 1
+        return cnt
+
+    total_rows = _emit_rows(getattr(td, "rows", None) or [])
+    if total_rows == 0:
+        for sub in (getattr(td, "subtables", None) or [])[:3]:
+            sub_title = str(getattr(sub, "title", "") or "").strip()
+            if sub_title:
+                md_rows.append(f"## {sub_title[:120]}")
+            total_rows += _emit_rows(getattr(sub, "rows", None) or [])
+    return "\n".join(md_rows)[:2600], total_rows
+
+
 def fetch_footnote_fallback_tables(
     *,
-    adapter: Any,
+    adapter: Any = None,
     cik: str,
     accession: str,
     keywords: Sequence[str] = (
@@ -1839,74 +1947,155 @@ def fetch_footnote_fallback_tables(
         "disaggregated revenue",
         "backlog",
     ),
-    max_tables: int = 3,
+    max_tables: int = 2,
     max_bytes: int = 1_500_000,
+    user_agent: str | None = None,
+    limiter: Any = None,
+    policy: Any = None,
+    transport: Any = None,
+    cache_repo: Any = None,
 ) -> list[dict[str, Any]]:
-    """Lightweight ``FilingSummary.xml`` + <=3 ``R*.htm`` (<=1.5MB) footnote fallback when XBRL scalars are absent."""
-    from .fin_data.adapters.sec_deep import fetch_filing_table, list_filing_tables
+    """Lightweight ``FilingSummary.xml`` + <=max_tables ``R*.htm`` (<=1.5MB) footnote loader.
 
-    res = list_filing_tables(adapter, cik=cik, accession=accession)
-    if res.status != "ok" or not res.data:
-        return []
-    catalog = res.data[0]
-    entries = getattr(catalog, "tables", None) or []
-    kws = tuple(k.casefold() for k in keywords)
-    matched = [
-        e
-        for e in entries
-        if any(k in (f"{getattr(e, 'short_name', '')} {getattr(e, 'long_name', '')}").casefold() for k in kws)
-    ][:max_tables]
+    Supports both direct ``sec_get_text`` (shared ``SecPacingLimiter``) and ``adapter=SecEdgarAdapter``
+    paths, scans ``catalog.all_reports`` (capturing ``Details`` in ``catalog.other`` as well as
+    ``Tables``/``Notes``), and extracts ``FilingTableRow.values_by_column`` / ``cells`` / ``subtables``.
+    """
+    from .fin_data.adapters.sec_deep import (
+        fetch_filing_table,
+        normalize_accession,
+        parse_filing_summary_xml,
+        parse_r_html_table,
+        sec_filing_tables,
+    )
+    from .fin_data.adapters.sec_edgar import cik10
+    from .fin_data.adapters.sec_events.pacing import sec_get_text
+
+    target_cik = cik10(cik)
+    dashed, nodash = normalize_accession(accession)
+    base_url = f"https://www.sec.gov/Archives/edgar/data/{int(target_cik)}/{nodash}"
+
+    catalog: Any = None
+    if adapter is not None:
+        # Adapt SecPacingLimiter if passed directly on adapter
+        if getattr(adapter, "limiter", None) is not None and not hasattr(adapter.limiter, "acquire"):
+            adapter.limiter = _PacingToRateLimiterShim(adapter.limiter)
+        res = sec_filing_tables(adapter, cik=target_cik, accession=dashed)
+        if res.status != "ok" or not res.data:
+            return []
+        catalog = res.data[0]
+    else:
+        summary_url = f"{base_url}/FilingSummary.xml"
+        sum_cache_key = f"fn_sum:{target_cik}:{dashed}"
+        xml_text: str | None = None
+        if cache_repo is not None:
+            cached_sum = cache_repo.get(sum_cache_key)
+            if isinstance(cached_sum, Mapping) and isinstance(cached_sum.get("xml"), str):
+                xml_text = cached_sum["xml"]
+        if xml_text is None:
+            xml_text, _ct_s, _sha_s = sec_get_text(
+                summary_url,
+                category="filings",
+                user_agent=user_agent,
+                limiter=limiter,
+                policy=policy,
+                transport=transport,
+                max_bytes=2_000_000,
+            )
+            if cache_repo is not None and xml_text:
+                cache_repo.put(sum_cache_key, {"xml": xml_text[:1_500_000], "cached_at": _utcnow().isoformat()})
+        if not xml_text:
+            return []
+        catalog = parse_filing_summary_xml(xml_text, cik=target_cik, accession=dashed, filing_summary_url=summary_url)
+
+    entries = list(getattr(catalog, "all_reports", None) or getattr(catalog, "tables", None) or [])
+    kws = [k.strip().casefold() for k in keywords if isinstance(k, str) and len(k.strip()) >= 3]
+    _exclude_re = re.compile(r"\b(?:cover\s+page|document\s+and\s+entity|summary\s+of\s+significant\s+accounting\s+policies)\b", re.I)
+
+    scored: list[tuple[int, int, Any]] = []
+    for idx_e, entry in enumerate(entries):
+        name_blob = f"{getattr(entry, 'short_name', '')} {getattr(entry, 'long_name', '')}".strip()
+        low_blob = name_blob.casefold()
+        if not low_blob or _exclude_re.search(low_blob):
+            continue
+        menu_cat = str(getattr(entry, "menu_category", "") or "").casefold()
+        norm_cat = str(getattr(entry, "normalized_category", "") or "").casefold()
+        if norm_cat == "cover" or "cover" in menu_cat:
+            continue
+        kw_hits = sum(1 for k in kws if k in low_blob)
+        if kw_hits <= 0:
+            continue
+        if "detail" in low_blob or "detail" in menu_cat:
+            cat_weight = 3
+        elif norm_cat in ("tables", "notes") or "table" in menu_cat or "note" in menu_cat:
+            cat_weight = 2
+        else:
+            cat_weight = 0
+        # Prefer Details/Tables/Notes over bare primary Statements
+        if norm_cat == "statements" and kw_hits < 2:
+            continue
+        scored.append((kw_hits * 4 + cat_weight, -idx_e, entry))
+
+    scored.sort(reverse=True)
+    matched = [item[2] for item in scored[:max_tables]]
+
     out: list[dict[str, Any]] = []
     for entry in matched:
-        r_file = getattr(entry, "html_file", None) or getattr(entry, "r_file", None)
+        r_file = getattr(entry, "r_file", None) or getattr(entry, "html_file", None)
         if not r_file:
             continue
-        tbl_res = fetch_filing_table(
-            adapter,
-            cik=cik,
-            accession=accession,
-            r_file=r_file,
-            max_bytes=max_bytes,
-        )
-        if tbl_res.status == "ok" and tbl_res.data:
-            td = tbl_res.data[0]
-            md_rows: list[str] = []
-            for row in (getattr(td, "rows", None) or [])[:20]:
-                if isinstance(row, Mapping):
-                    lbl = str(row.get("label") or row.get("name") or "").strip()
-                    vals = row.get("values") or row.get("cells") or []
-                    if isinstance(vals, Mapping):
-                        v_str = " | ".join(f"{k}: {v}" for k, v in list(vals.items())[:5])
-                    elif isinstance(vals, Sequence) and not isinstance(vals, str):
-                        v_str = " | ".join(str(v) for v in list(vals)[:5])
-                    else:
-                        v_str = str(vals)
-                    line = f"{lbl} | {v_str}".strip(" |")
-                elif isinstance(row, Sequence) and not isinstance(row, str):
-                    line = " | ".join(str(c).strip() for c in list(row)[:6] if str(c).strip())
-                else:
-                    lbl = str(getattr(row, "label", "") or "").strip()
-                    vals = getattr(row, "values", None)
-                    if isinstance(vals, Mapping):
-                        v_str = " | ".join(f"{k}: {v}" for k, v in list(vals.items())[:5])
-                    elif isinstance(vals, Sequence) and not isinstance(vals, str):
-                        v_str = " | ".join(str(v) for v in list(vals)[:5])
-                    else:
-                        v_str = str(vals or "")
-                    line = f"{lbl} | {v_str}".strip(" |")
-                if line:
-                    md_rows.append(line[:180])
-            out.append(
-                {
-                    "r_file": td.r_file,
-                    "title": td.title,
-                    "currency": td.currency,
-                    "unit_scale": td.unit_scale,
-                    "narrative_excerpt": (td.narrative_text or "")[:1200],
-                    "rows_preview": "\n".join(md_rows)[:2400],
-                    "row_count": len(td.rows),
-                }
+        r_cache_key = f"fn_tbl:{target_cik}:{dashed}:{r_file}"
+        if cache_repo is not None:
+            cached_tbl = cache_repo.get(r_cache_key)
+            if isinstance(cached_tbl, Mapping) and cached_tbl.get("r_file") == r_file:
+                out.append(dict(cached_tbl))
+                continue
+
+        td: Any = None
+        if adapter is not None:
+            tbl_res = fetch_filing_table(
+                adapter,
+                cik=target_cik,
+                accession=dashed,
+                r_file=r_file,
+                max_bytes=max_bytes,
             )
+            if tbl_res.status == "ok" and tbl_res.data:
+                td = tbl_res.data[0]
+        else:
+            r_url = f"{base_url}/{r_file}"
+            r_html, _ct_r, _sha_r = sec_get_text(
+                r_url,
+                category="filings",
+                user_agent=user_agent,
+                limiter=limiter,
+                policy=policy,
+                transport=transport,
+                max_bytes=max_bytes,
+            )
+            if r_html:
+                td = parse_r_html_table(
+                    r_html,
+                    r_file=r_file,
+                    url=r_url,
+                    accession=dashed,
+                )
+
+        if td is not None:
+            rows_preview, total_rows = _format_r_table_rows_markdown(td)
+            item_dict = {
+                "r_file": td.r_file,
+                "title": td.title or getattr(entry, "short_name", r_file),
+                "category": getattr(entry, "menu_category", None),
+                "currency": td.currency,
+                "unit_scale": td.unit_scale,
+                "narrative_excerpt": (td.narrative_text or "")[:1200],
+                "rows_preview": rows_preview,
+                "row_count": total_rows or len(getattr(td, "rows", None) or []),
+            }
+            if cache_repo is not None:
+                cache_repo.put(r_cache_key, item_dict)
+            out.append(item_dict)
     return out
 
 
@@ -2044,6 +2233,7 @@ def screen_item1a_omissions(
     }
 
     scored: list[RedlineRiskSnippet] = []
+    _HIGH_RISK_MDA_BUCKETS = frozenset({"litigation_regulatory", "liquidity_going_concern", "export_control", "cyber_incident", "customer_concentration"})
     for snip in redline_snippets:
         p_low = snip.paragraph_text.casefold()
         hit_buckets = [
@@ -2051,6 +2241,10 @@ def screen_item1a_omissions(
             for b_name, terms in buckets.items()
             if any(term.casefold() in p_low for term in terms)
         ]
+        # Routine MD&A narrative fluctuates every quarter; restrict MD&A alerts to high-risk buckets only
+        sec_low = (snip.section_key or "").casefold()
+        if "mda" in sec_low and "item_1a" not in sec_low:
+            hit_buckets = [b for b in hit_buckets if b in _HIGH_RISK_MDA_BUCKETS]
         raw_toks = [t for t in tokenize_query(p_low) if len(t) >= 4 and t not in _stop]
         stems = list(dict.fromkeys(_stem_token(t) for t in raw_toks))[:24]
         overlap_ratio = (
@@ -2178,6 +2372,60 @@ def _dedup_factual_claims(
 
 # --------------------------------------------------------------------------- Layer 3: Commitment Grading & Silent Drop
 
+_PCT_UNIT_TOKENS = frozenset({"%", "percent", "pct", "percentage", "bps", "basis_points", "pp"})
+_MONEY_SCALE_TOKENS = frozenset({"thousands", "thousand", "k", "millions", "million", "m", "billions", "billion", "b", "trillions", "trillion", "t"})
+_QOQ_ONLY_RE = re.compile(r"(?:\b(?:qoq|sequential(?:ly)?|quarter[- ]over[- ]quarter|from\s+(?:the\s+)?prior\s+quarter)\b|环比)", re.I)
+_YOY_HINT_RE = re.compile(r"(?:\b(?:yoy|year[- ]over[- ]year|year[- ]on[- ]year|annual(?:ized)?\s+growth|vs\.?\s+prior\s+year)\b|同比)", re.I)
+
+
+def _is_pct_or_bps_unit(unit: str | None, scale: str | None) -> bool:
+    u = (unit or "").strip().casefold()
+    s = (scale or "").strip().casefold()
+    return u in _PCT_UNIT_TOKENS or s in _PCT_UNIT_TOKENS or "%" in u
+
+
+def _is_bps_unit(unit: str | None, scale: str | None) -> bool:
+    u = (unit or "").strip().casefold()
+    s = (scale or "").strip().casefold()
+    return u in ("bps", "basis_points") or s in ("bps", "basis_points")
+
+
+def _check_dimension_compatibility(
+    *,
+    metric_canonical: str,
+    operator: CommitmentOperator,
+    unit: str | None,
+    scale: str | None,
+    text_blob: str,
+) -> tuple[Literal["ok", "reroute_yoy", "mismatch"], CommitmentOperator, str | None]:
+    """Deterministic unit/dimension guard preventing %/bps growth rates from colliding with absolute $ totals (and vice versa)."""
+    is_margin = metric_canonical in _MARGIN_METRICS
+    is_pct = _is_pct_or_bps_unit(unit, scale)
+    s_low = (scale or "").strip().casefold()
+
+    if is_margin and s_low in _MONEY_SCALE_TOKENS:
+        return "mismatch", operator, f"利润率指标 {metric_canonical} 声明量纲为金额规模 ({scale})，跳过绝对值硬对撞。"
+
+    if not is_margin and is_pct:
+        if operator in ("growth_yoy_ge", "growth_yoy_le", "growth_yoy_approx", "growth_yoy_between"):
+            return "ok", operator, None
+        has_qoq = bool(_QOQ_ONLY_RE.search(text_blob or ""))
+        has_yoy = bool(_YOY_HINT_RE.search(text_blob or ""))
+        if has_qoq and not has_yoy:
+            return "mismatch", operator, "该表述为环比 (QoQ) 增速百分比，不与 10-Q 单季绝对金额硬对撞。"
+        if operator == "approx":
+            return "reroute_yoy", "growth_yoy_approx", None
+        if operator == "between":
+            return "reroute_yoy", "growth_yoy_between", None
+        if operator == "ge":
+            return "reroute_yoy", "growth_yoy_ge", None
+        if operator == "le":
+            return "reroute_yoy", "growth_yoy_le", None
+        return "mismatch", operator, "百分比/基点量纲不与 10-Q 绝对金额硬对撞。"
+
+    return "ok", operator, None
+
+
 def _evaluate_operator(
     *,
     operator: CommitmentOperator,
@@ -2187,8 +2435,9 @@ def _evaluate_operator(
     high: Decimal | None,
     rel_tol_pct: Decimal,
     abs_tol: Decimal,
+    is_margin_metric: bool = False,
 ) -> tuple[bool, str]:
-    """Evaluate 7 commitment operators against Decimal actual with configured tolerance."""
+    """Evaluate 9 commitment operators against Decimal actual with configured tolerance."""
     if operator == "ge":
         if low is None:
             return True, "no_threshold"
@@ -2218,15 +2467,40 @@ def _evaluate_operator(
         margin = max(abs(target) * rel_tol_pct / Decimal(100), abs_tol)
         passed = abs(actual - target) <= margin
         return passed, f"actual={_fmt_dec(actual, 2)} vs ~{_fmt_dec(target, 2)}"
-    if operator in ("growth_yoy_ge", "growth_yoy_le"):
-        if prior_year is None or prior_year == 0 or low is None:
+    if operator in ("growth_yoy_ge", "growth_yoy_le", "growth_yoy_approx", "growth_yoy_between"):
+        if prior_year is None or (not is_margin_metric and prior_year == 0):
             return True, "prior_year_unavailable"
-        yoy = ((actual - prior_year) / abs(prior_year)) * Decimal(100)
+        if is_margin_metric:
+            # Align with xbrl_actuals_lookup: margin YoY is percentage-point delta (actual - prior_year)
+            yoy = actual - prior_year
+            unit_lbl = "pp"
+        else:
+            yoy = ((actual - prior_year) / abs(prior_year)) * Decimal(100)
+            unit_lbl = "%"
+        tol = max(rel_tol_pct, abs_tol, Decimal("1.0"))
         if operator == "growth_yoy_ge":
-            passed = yoy >= (low - rel_tol_pct)
-            return passed, f"YoY={_fmt_dec(yoy, 2)}% vs >= {_fmt_dec(low, 2)}%"
-        passed = yoy <= (low + rel_tol_pct)
-        return passed, f"YoY={_fmt_dec(yoy, 2)}% vs <= {_fmt_dec(low, 2)}%"
+            if low is None:
+                return True, "no_threshold"
+            passed = yoy >= (low - tol)
+            return passed, f"YoY={_fmt_dec(yoy, 2)}{unit_lbl} vs >= {_fmt_dec(low, 2)}{unit_lbl}"
+        if operator == "growth_yoy_le":
+            bound = high if high is not None else low
+            if bound is None:
+                return True, "no_threshold"
+            passed = yoy <= (bound + tol)
+            return passed, f"YoY={_fmt_dec(yoy, 2)}{unit_lbl} vs <= {_fmt_dec(bound, 2)}{unit_lbl}"
+        if operator == "growth_yoy_approx":
+            target = low if low is not None else high
+            if target is None:
+                return True, "no_target"
+            passed = abs(yoy - target) <= tol
+            return passed, f"YoY={_fmt_dec(yoy, 2)}{unit_lbl} vs ~{_fmt_dec(target, 2)}{unit_lbl}"
+        lo = low if low is not None else high
+        hi = high if high is not None else low
+        if lo is None or hi is None:
+            return True, "incomplete_range"
+        passed = (lo - tol) <= yoy <= (hi + tol)
+        return passed, f"YoY={_fmt_dec(yoy, 2)}{unit_lbl} vs [{_fmt_dec(lo, 2)}, {_fmt_dec(hi, 2)}]{unit_lbl}"
     if operator == "direction_up_down":
         if prior_year is None:
             return True, "prior_year_unavailable"
@@ -2445,7 +2719,8 @@ def run_layer3_call_collision(
             if scaled_v is None or scaled_v == 0:
                 continue
             eff_b_c = _resolve_effective_basis(cl_c.basis, call_default_basis, cl_c.metric_canonical)
-            slot_k = (cl_c.metric_canonical, cl_c.scope, cl_c.target_fy, cl_c.target_fq, cl_c.period_scope, eff_b_c)
+            is_pct_dim = _is_pct_or_bps_unit(cl_c.unit, cl_c.scale) and cl_c.metric_canonical not in _MARGIN_METRICS
+            slot_k = (cl_c.metric_canonical, cl_c.scope, cl_c.target_fy, cl_c.target_fq, cl_c.period_scope, eff_b_c, is_pct_dim)
             prev_entry = _seen_numeric_by_slot.get(slot_k)
             if prev_entry is None:
                 _seen_numeric_by_slot[slot_k] = (cl_c, q_c, scaled_v)
@@ -2846,19 +3121,57 @@ def run_layer3_call_collision(
                 if xres.status == "matched" and xres.value is not None:
                     actual_d = _dec(xres.value)
                     py_d = _dec(xres.prior_year_value)
-                    lo_d = _scale_claim_value(_dec(claim.value_low), claim.unit, claim.scale, claim.metric_canonical)
-                    hi_d = _scale_claim_value(_dec(claim.value_high), claim.unit, claim.scale, claim.metric_canonical)
+                    dim_status, eff_op, dim_note = _check_dimension_compatibility(
+                        metric_canonical=claim.metric_canonical,
+                        operator=claim.operator,
+                        unit=claim.unit,
+                        scale=claim.scale,
+                        text_blob=f"{claim.claim_summary} {claim.verbatim_quote}",
+                    )
+                    if dim_status == "mismatch":
+                        findings.append(
+                            CollisionFinding(
+                                finding_id=_fid("dim", f"{idx}:{claim.metric_canonical}"),
+                                track=track_name,
+                                collision_kind="observation_only_insufficient_evidence",
+                                severity="info",
+                                title=f"量纲/口径不适用硬对撞 · {claim.metric_canonical}",
+                                management_statement=claim.claim_summary,
+                                ledger_evidence=dim_note or "管理层量纲与 10-Q 指标量纲不一致，跳过算术硬对撞。",
+                                basis_badge="量纲守卫隔离",
+                                period_badge=xres.fiscal_period_key,
+                                linked_pillar=pillar,
+                                quotes=[qref],
+                                priority_rank=79,
+                            )
+                        )
+                        continue
+                    is_yoy_eval = eff_op in ("growth_yoy_ge", "growth_yoy_le", "growth_yoy_approx", "growth_yoy_between")
+                    if is_yoy_eval:
+                        lo_d = _dec(claim.value_low)
+                        hi_d = _dec(claim.value_high)
+                        if _is_bps_unit(claim.unit, claim.scale):
+                            lo_d = (lo_d / Decimal("100")) if lo_d is not None else None
+                            hi_d = (hi_d / Decimal("100")) if hi_d is not None else None
+                    else:
+                        lo_d = _scale_claim_value(_dec(claim.value_low), claim.unit, claim.scale, claim.metric_canonical)
+                        hi_d = _scale_claim_value(_dec(claim.value_high), claim.unit, claim.scale, claim.metric_canonical)
                     if actual_d is not None:
-                        round_tol = _rounding_half_step_tolerance(claim.value_low, claim.unit, claim.scale, claim.metric_canonical)
+                        round_tol = (
+                            _rounding_half_step_tolerance(claim.value_low, "%", None, "gross_margin")
+                            if is_yoy_eval
+                            else _rounding_half_step_tolerance(claim.value_low, claim.unit, claim.scale, claim.metric_canonical)
+                        )
                         abs_tol = max(margin_tol_pct if claim.metric_canonical in _MARGIN_METRICS else Decimal("0"), round_tol)
                         passed, formula_detail = _evaluate_operator(
-                            operator=claim.operator,
+                            operator=eff_op,
                             actual=actual_d,
                             prior_year=py_d,
                             low=lo_d,
                             high=hi_d,
                             rel_tol_pct=rel_tol,
                             abs_tol=abs_tol,
+                            is_margin_metric=(claim.metric_canonical in _MARGIN_METRICS),
                         )
                         if passed:
                             findings.append(
@@ -2871,7 +3184,7 @@ def run_layer3_call_collision(
                                     management_statement=claim.claim_summary,
                                     ledger_evidence=f"10-Q 首发实数 {xres.value} {xres.unit or ''}（{xres.fiscal_period_key or ''}）",
                                     formula_note=formula_detail,
-                                    basis_badge="GAAP 10-Q 首发口径",
+                                    basis_badge="GAAP 10-Q 首发口径" + ("（同比增速核验）" if is_yoy_eval else ""),
                                     period_badge=xres.fiscal_period_key,
                                     restated_later=xres.restated_later,
                                     restatement_note=rest_note,
@@ -2881,6 +3194,58 @@ def run_layer3_call_collision(
                                 )
                             )
                         else:
+                            # Deterministic Broad CapEx (Finance Lease) Bridge: cash PP&E + finance lease principal / ROU additions
+                            capex_bridge_note: str | None = None
+                            if (
+                                claim.metric_canonical == "capex"
+                                and not is_yoy_eval
+                                and lo_d is not None
+                                and lo_d > actual_d
+                            ):
+                                fl_princ = _dec(ledger.finance_lease_principal_payments)
+                                fl_rou = _dec(ledger.finance_lease_rou_additions)
+                                for fl_lbl, fl_val in (
+                                    ("融资租赁本金偿付", fl_princ),
+                                    ("融资租赁使用权资产新增", fl_rou),
+                                ):
+                                    if fl_val is not None and fl_val > 0:
+                                        broad_actual = actual_d + fl_val
+                                        b_ok, b_detail = _evaluate_operator(
+                                            operator=eff_op,
+                                            actual=broad_actual,
+                                            prior_year=None,
+                                            low=lo_d,
+                                            high=hi_d,
+                                            rel_tol_pct=rel_tol,
+                                            abs_tol=abs_tol,
+                                        )
+                                        if b_ok:
+                                            capex_bridge_note = (
+                                                f"管理层广义 CapEx 口径吻合：10-Q 现金购建 PP&E ({_fmt_dec(actual_d, 0)}) "
+                                                f"+ {fl_lbl} ({_fmt_dec(fl_val, 0)}) = {_fmt_dec(broad_actual, 0)} {xres.unit or ''}（{b_detail}）"
+                                            )
+                                            break
+                            if capex_bridge_note:
+                                findings.append(
+                                    CollisionFinding(
+                                        finding_id=_fid("capfl", f"{idx}:capex"),
+                                        track="track_3_capex_supply",
+                                        collision_kind="basis_divergence_nongaap_gap",
+                                        severity="info",
+                                        title="广义 CapEx 口径调节吻合（含融资租赁） · capex",
+                                        management_statement=claim.claim_summary,
+                                        ledger_evidence=capex_bridge_note,
+                                        formula_note="广义 CapEx = 现金购建固定资产 + 融资租赁本金偿付/新增 ROU",
+                                        basis_badge="CapEx 融资租赁调节桥",
+                                        period_badge=xres.fiscal_period_key,
+                                        restated_later=xres.restated_later,
+                                        restatement_note=rest_note,
+                                        linked_pillar=pillar,
+                                        quotes=[qref],
+                                        priority_rank=64,
+                                    )
+                                )
+                                continue
                             # If surrounding context had a qualifying/negation clause, soften red -> yellow
                             sev_m: CollisionSeverity = "yellow" if qref.quote_context_warning else "red"
                             findings.append(
@@ -3413,18 +3778,41 @@ def run_layer3_call_collision(
             ):
                 act_d = _dec(xres.value)
                 py_d = _dec(xres.prior_year_value)
-                lo_d = _scale_claim_value(_dec(cmt.value_low), cmt.unit, cmt.scale, cmt.metric_canonical)
-                hi_d = _scale_claim_value(_dec(cmt.value_high), cmt.unit, cmt.scale, cmt.metric_canonical)
+                c_dim, c_op, _c_dim_note = _check_dimension_compatibility(
+                    metric_canonical=cmt.metric_canonical,
+                    operator=cmt.operator,
+                    unit=cmt.unit,
+                    scale=cmt.scale,
+                    text_blob=f"{cmt.commitment_text} {cmt.quote.quotation if cmt.quote else ''}",
+                )
+                if c_dim == "mismatch":
+                    continue
+                c_is_yoy = c_op in ("growth_yoy_ge", "growth_yoy_le", "growth_yoy_approx", "growth_yoy_between")
+                if c_is_yoy:
+                    lo_d = _dec(cmt.value_low)
+                    hi_d = _dec(cmt.value_high)
+                    if _is_bps_unit(cmt.unit, cmt.scale):
+                        lo_d = (lo_d / Decimal("100")) if lo_d is not None else None
+                        hi_d = (hi_d / Decimal("100")) if hi_d is not None else None
+                else:
+                    lo_d = _scale_claim_value(_dec(cmt.value_low), cmt.unit, cmt.scale, cmt.metric_canonical)
+                    hi_d = _scale_claim_value(_dec(cmt.value_high), cmt.unit, cmt.scale, cmt.metric_canonical)
                 if act_d is not None:
-                    abs_tol = margin_tol_pct if cmt.metric_canonical in _MARGIN_METRICS else Decimal("0")
+                    c_round_tol = (
+                        _rounding_half_step_tolerance(cmt.value_low, "%", None, "gross_margin")
+                        if c_is_yoy
+                        else _rounding_half_step_tolerance(cmt.value_low, cmt.unit, cmt.scale, cmt.metric_canonical)
+                    )
+                    abs_tol = max(margin_tol_pct if cmt.metric_canonical in _MARGIN_METRICS else Decimal("0"), c_round_tol)
                     passed, detail = _evaluate_operator(
-                        operator=cmt.operator,
+                        operator=c_op,
                         actual=act_d,
                         prior_year=py_d,
                         low=lo_d,
                         high=hi_d,
                         rel_tol_pct=rel_tol,
                         abs_tol=abs_tol,
+                        is_margin_metric=(cmt.metric_canonical in _MARGIN_METRICS),
                     )
                     cmt = cmt.model_copy(
                         update={

@@ -353,9 +353,9 @@ def test_retrieval_methods_and_sliced_companyfacts_v4_and_streaming_html(tmp_pat
         assert src.retrieval_method == method
     assert "user_pptx" in PAGED_RETRIEVAL_METHODS
 
-    assert len(STANDARD_LINES) == 55
-    assert _CURRENT_PROJECTION_VERSION == 4
-    assert len(_V2_PROJECTION_LINES) == 45
+    assert len(STANDARD_LINES) == 57
+    assert _CURRENT_PROJECTION_VERSION == 5
+    assert len(_V2_PROJECTION_LINES) == 47
     tags_by_tax = _projection_target_tags_by_taxonomy()
     assert len(tags_by_tax["us-gaap"]) + len(tags_by_tax["ifrs-full"]) >= 120
 
@@ -393,7 +393,7 @@ def test_retrieval_methods_and_sliced_companyfacts_v4_and_streaming_html(tmp_pat
         companyfacts_doc=sliced,
     )
     assert snap.currency == "KRW"
-    assert snap.projection_version == 4
+    assert snap.projection_version == 5
     assert "KRW/shares" in snap.facts_by_line["eps_diluted"]["EarningsPerShareDiluted"]
     assert "pure" not in snap.facts_by_line["eps_diluted"]["EarningsPerShareDiluted"]
     assert "rpo" in snap.facts_by_line and "purchase_commitments" in snap.facts_by_line

@@ -21,11 +21,41 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone
 from hashlib import sha256
 import json
+import logging
 import re
 import secrets
 import time
 import unicodedata
 from typing import Any, Callable, Literal, Mapping, Sequence
+
+_v3a_logger = logging.getLogger("foresightnine.v3a")
+
+
+def _record_v3a_nonfatal(
+    stage: str,
+    exc: BaseException,
+    *,
+    open_gaps: list[str] | None = None,
+    operation_id: str | None = None,
+    entity_key: str | None = None,
+    cik: str | None = None,
+) -> None:
+    """Log non-fatal V3a degradation without leaking secrets/raw text and record structured open_gaps code."""
+    exc_name = type(exc).__name__
+    exc_msg = str(exc).replace("\n", " ")[:180]
+    _v3a_logger.warning(
+        "v3a_nonfatal_degradation stage=%s operation_id=%s entity_key=%s cik=%s exc_type=%s msg=%s",
+        stage,
+        operation_id or "-",
+        entity_key or "-",
+        cik or "-",
+        exc_name,
+        exc_msg,
+    )
+    if open_gaps is not None:
+        gap_code = f"{stage}_error:{exc_name}"
+        if gap_code not in open_gaps:
+            open_gaps.append(gap_code)
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -125,7 +155,7 @@ CRITICAL SECURITY & GROUNDING DISCIPLINE:
    - Set question_asks_sensitive_detail=true ONLY if analyst asked for single-customer pricing/share, unannounced M&A, active litigation details, or multi-year exact EPS; set exec_cites_confidentiality_policy=true when confidentiality_policy_kind != "none".
 7. CANONICAL METRICS (use exact key or "other" + kpi_key for operating KPIs like ARR/NRR/Utilization):
    revenue, gross_margin, operating_margin, operating_income, net_income, eps_diluted, operating_cash_flow, free_cash_flow, capex, rd_expense, sga_or_opex, rpo_or_deferred_revenue, other.
-8. OPERATORS: ge | le | between | approx | growth_yoy_ge | growth_yoy_le | direction_up_down.
+8. OPERATORS: ge | le | between | approx | growth_yoy_ge | growth_yoy_le | growth_yoy_approx | growth_yoy_between | direction_up_down. (Use growth_yoy_* for YoY % growth rates on dollar metrics; NEVER use approx with unit="%" on revenue/capex/OCF!).
 9. PERIOD SCOPE: single_quarter | ytd | full_year | ttm | multi_year | point_in_time | unspecified.
 10. CONCISENESS & COMPACT JSON: Keep internal reasoning brief and emit ONE raw compact JSON object immediately. Omit any null, false, or empty-list optional fields (defaults are filled server-side). Keep at most 12 highest-signal items per main list, at most 6 internal_contradictions/expectation_signals/skeptic_notes, and keep every quote <= 180 characters.
 
@@ -162,7 +192,7 @@ CRITICAL DISCIPLINE:
    - basis: "gaap" | "non_gaap" | "operating_kpi" | "inherited_call_default" | "unknown".
    - scope: "consolidated" (total company) | "segment" (e.g. Intelligent Cloud, Data Center) | "product_line" (e.g. Copilot, Blackwell) | "geography". NEVER tag segment/product revenue as "consolidated"!
 5. CANONICAL METRICS: revenue, gross_margin, operating_margin, operating_income, net_income, eps_diluted, operating_cash_flow, free_cash_flow, capex, rd_expense, sga_or_opex, rpo_or_deferred_revenue, other (with kpi_key).
-6. OPERATORS: ge | le | between | approx | growth_yoy_ge | growth_yoy_le | direction_up_down.
+6. OPERATORS: ge | le | between | approx | growth_yoy_ge | growth_yoy_le | growth_yoy_approx | growth_yoy_between | direction_up_down. (Use growth_yoy_* for YoY % growth rates on dollar metrics; NEVER use approx with unit="%" on revenue/capex/OCF!).
 7. PERIOD SCOPE: single_quarter | ytd | full_year | ttm | multi_year | point_in_time | unspecified.
 8. CONCISENESS: Emit ONE raw compact JSON object immediately (omit null/false/empty optional keys; <=12 factual_claims, <=10 verbal_commitments, <=4 internal_contradictions/skeptic_notes).
 
@@ -363,6 +393,15 @@ class AccountCompanyIndexEntry(_StrictModel):
     latest_call_date: str | None = None
     awaiting_current_10q: bool = False
     last_filing_fingerprint_check_at: str | None = None
+    # Persisted initial-basis & auxiliary caches so cache_only=True (GET /report, FinDataToolbox, R2-D5 Digest) stays 100% faithful
+    latest_initial_10q_accession: str | None = None
+    latest_initial_10q_filed_at: str | None = None
+    latest_period_end_date: str | None = None
+    latest_redline_current_accession: str | None = None
+    latest_redline_prior_accession: str | None = None
+    latest_redline_added_paragraphs: list[dict[str, Any]] = Field(default_factory=list)
+    latest_footnote_fallbacks: list[str] = Field(default_factory=list)
+    latest_footnote_checks: list[dict[str, Any]] = Field(default_factory=list)
     recent_runs: list[dict[str, Any]] = Field(default_factory=list)
     updated_at: datetime = Field(default_factory=_utcnow)
 
@@ -752,7 +791,21 @@ def _sanitize_mgmt_payload(raw: dict[str, Any], *, allowed_source_ids: set[str],
     _valid_claim_scope = {"consolidated", "segment", "product_line", "geography"}
     _valid_conf_kind = {"none", "strict_nda_legal", "segment_disclosure_policy"}
     _valid_scope = {"single_quarter", "ytd", "full_year", "ttm", "multi_year", "point_in_time", "unspecified"}
-    _valid_op = {"ge", "le", "between", "approx", "growth_yoy_ge", "growth_yoy_le", "direction_up_down"}
+    _valid_op = {"ge", "le", "between", "approx", "growth_yoy_ge", "growth_yoy_le", "growth_yoy_approx", "growth_yoy_between", "direction_up_down"}
+
+    def _norm_op(raw_op: Any) -> str:
+        s = str(raw_op or "").strip().lower()
+        if s in _valid_op:
+            return s
+        if "yoy" in s or "growth" in s:
+            if "between" in s or "range" in s:
+                return "growth_yoy_between"
+            if "le" in s or "below" in s or "max" in s:
+                return "growth_yoy_le"
+            if "ge" in s or "above" in s or "min" in s:
+                return "growth_yoy_ge"
+            return "growth_yoy_approx"
+        return "approx"
     _valid_suff = {"explicit", "implied", "ambiguous"}
     _valid_role = {"ceo", "cfo", "executive", "analyst", "operator", "unknown"}
     _valid_stance = {"bullish_healthy", "cautious_headwind", "neutral", "unspecified"}
@@ -771,7 +824,7 @@ def _sanitize_mgmt_payload(raw: dict[str, Any], *, allowed_source_ids: set[str],
             "period_scope": item.get("period_scope") if item.get("period_scope") in _valid_scope else "single_quarter",
             "target_fy": int(item["target_fy"]) if isinstance(item.get("target_fy"), int) else None,
             "target_fq": int(item["target_fq"]) if isinstance(item.get("target_fq"), int) and item["target_fq"] in (1, 2, 3, 4) else None,
-            "operator": item.get("operator") if item.get("operator") in _valid_op else "approx",
+            "operator": _norm_op(item.get("operator")),
             "value_low": str(item["value_low"]) if item.get("value_low") is not None else None,
             "value_high": str(item["value_high"]) if item.get("value_high") is not None else None,
             "unit": str(item["unit"]) if item.get("unit") is not None else None,
@@ -800,7 +853,7 @@ def _sanitize_mgmt_payload(raw: dict[str, Any], *, allowed_source_ids: set[str],
             "period_scope": item.get("period_scope") if item.get("period_scope") in _valid_scope else "single_quarter",
             "target_fy": int(item["target_fy"]) if isinstance(item.get("target_fy"), int) else None,
             "target_fq": int(item["target_fq"]) if isinstance(item.get("target_fq"), int) and item["target_fq"] in (1, 2, 3, 4) else None,
-            "operator": item.get("operator") if item.get("operator") in _valid_op else "approx",
+            "operator": _norm_op(item.get("operator")),
             "value_low": str(item["value_low"]) if item.get("value_low") is not None else None,
             "value_high": str(item["value_high"]) if item.get("value_high") is not None else None,
             "unit": str(item["unit"]) if item.get("unit") is not None else None,
@@ -1053,11 +1106,18 @@ def run_layer0b_async_ocr(
     sources: Sequence[Any],
     operation_id: str,
     persist_version: Callable[..., Any] | None,
+    find_existing_version: Callable[[Any, list[int]], Any | None] | None = None,
     ocr_usage: Any = None,
     max_pages_per_source: int = MAX_LAYER0B_OCR_PAGES,
+    cancel_event: Any = None,
     on_progress: Callable[[dict[str, Any]], None] | None = None,
+    on_done: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[list[Any], list[str]]:
-    """Stage B async OCR for remaining high-value ``text_partial``/``needs_ocr`` pages via immutable source version."""
+    """Stage B async OCR for remaining high-value ``text_partial``/``needs_ocr`` pages via immutable source version.
+
+    Reuses an existing immutable derived OCR version when already stored for the exact source & target pages,
+    preventing redundant Tesseract runs and Layer 2 cache busting.
+    """
     if persist_version is None:
         return list(sources), []
 
@@ -1066,6 +1126,8 @@ def run_layer0b_async_ocr(
     ocr_cb = build_ocr_pages_callback(operation_id=operation_id, persist_version=persist_version, usage=ocr_usage)
 
     for src in sources:
+        if cancel_event is not None and cancel_event.is_set():
+            raise RuntimeError("call_audit_cancelled")
         doc_pages = (getattr(src, "provenance", None) or {}).get("document_pages")
         if not isinstance(doc_pages, Mapping) or not isinstance(doc_pages.get("pages"), list):
             updated_sources.append(src)
@@ -1086,12 +1148,36 @@ def run_layer0b_async_ocr(
         target_set = set(target_pages)
         skipped_pages = [p for p in cand_pages if p not in target_set]
 
+        if find_existing_version is not None:
+            existing_ver = find_existing_version(src, target_pages)
+            if existing_ver is not None:
+                updated_sources.append(existing_ver)
+                if on_done is not None:
+                    on_done({
+                        "source_id": src.source_id,
+                        "ocr_source_id": existing_ver.source_id,
+                        "pages_ocred": target_pages,
+                        "reused_existing": True,
+                        "remaining_unocred_pages": len(skipped_pages),
+                    })
+                if skipped_pages:
+                    ocr_gaps.append(f"unocred_pages:{src.source_id}:{','.join(str(p) for p in skipped_pages[:12])}")
+                continue
+
         if on_progress is not None:
             on_progress({"source_id": src.source_id, "target_pages": target_pages, "remaining_skipped": len(skipped_pages)})
 
         outcome = ocr_cb(src, target_pages)
         if outcome.source is not None:
             updated_sources.append(outcome.source)
+            if on_done is not None:
+                on_done({
+                    "source_id": src.source_id,
+                    "ocr_source_id": outcome.source.source_id,
+                    "pages_ocred": target_pages,
+                    "reused_existing": False,
+                    "remaining_unocred_pages": len(skipped_pages),
+                })
         else:
             updated_sources.append(src)
             ocr_gaps.append(f"layer0b_ocr_skipped:{src.source_id}:{outcome.reason or outcome.status}")
@@ -1258,14 +1344,17 @@ def run_call_verification_pipeline(
     # Async Layer 0b OCR & lifecycle callbacks
     operation_id: str = "sync",
     persist_ocr_version: Callable[..., Any] | None = None,
+    find_existing_ocr_version: Callable[[Any, list[int]], Any | None] | None = None,
     ocr_usage: Any = None,
     cancel_event: Any = None,
     on_stage: Callable[[str, dict[str, Any]], None] | None = None,
     rules: CompiledV3aRules | None = None,
     retry_lane: Literal["remarks", "qa"] | None = None,
+    emit_completed: bool = True,
 ) -> tuple[CallVerificationReport, Sec10QCollisionLedger, AccountVerbalCommitmentLedger]:
     """Run full 4-layer V3a pipeline (or <80ms zero-outbound ``cache_only=True`` re-evaluation)."""
     compiled = rules or load_v3a_call_rules()
+    pipeline_nonfatal_gaps: list[str] = []
 
     def _emit(stage_name: str, payload: dict[str, Any]) -> None:
         if on_stage is not None:
@@ -1296,8 +1385,11 @@ def run_call_verification_pipeline(
                 sources=active_sources,
                 operation_id=operation_id,
                 persist_version=persist_ocr_version,
+                find_existing_version=find_existing_ocr_version,
                 ocr_usage=ocr_usage,
+                cancel_event=cancel_event,
                 on_progress=lambda info: _emit("layer0b_ocr", info),
+                on_done=lambda info: _emit("layer0b_ocr_done", info),
             )
 
     # ---------------- Layer 0: Multi-format parsing (cached in v3a_doc_parsed_facts)
@@ -1391,14 +1483,54 @@ def run_call_verification_pipeline(
 
     # ---------------- Layer 1: 10-Q Initial-Basis Ledger
     _check_cancel()
+    idx_key = f"v3a_idx:{account_id}:{entity_key}"
+    prev_idx_raw = company_index_repo.get(idx_key) if company_index_repo is not None else None
+    if not (isinstance(prev_idx_raw, Mapping) and prev_idx_raw.get("owner_id") == account_id):
+        prev_idx_raw = None
+
+    cached_init_accn: str | None = None
+    cached_init_filed: str | None = None
+    cached_period_end: str | None = None
+    cached_fb_labels: list[str] = []
+    cached_fn_checks: list[dict[str, Any]] = []
     redline_paras: list[dict[str, Any]] = []
     red_cur_accn: str | None = None
     red_pri_accn: str | None = None
+
+    if cache_only and prev_idx_raw is not None:
+        c_filed_s = prev_idx_raw.get("latest_initial_10q_filed_at")
+        c_ok = True
+        if as_of is not None and isinstance(c_filed_s, str) and len(c_filed_s) >= 10:
+            try:
+                if date.fromisoformat(c_filed_s[:10]) > as_of:
+                    c_ok = False
+            except ValueError:
+                pass
+        if c_ok:
+            cached_init_accn = prev_idx_raw.get("latest_initial_10q_accession")
+            cached_init_filed = c_filed_s
+            cached_period_end = prev_idx_raw.get("latest_period_end_date")
+            red_cur_accn = prev_idx_raw.get("latest_redline_current_accession")
+            red_pri_accn = prev_idx_raw.get("latest_redline_prior_accession")
+            if isinstance(prev_idx_raw.get("latest_redline_added_paragraphs"), list):
+                redline_paras = [dict(p) for p in prev_idx_raw["latest_redline_added_paragraphs"] if isinstance(p, Mapping)]
+            if isinstance(prev_idx_raw.get("latest_footnote_fallbacks"), list):
+                cached_fb_labels = [str(x) for x in prev_idx_raw["latest_footnote_fallbacks"] if str(x).strip()]
+            if isinstance(prev_idx_raw.get("latest_footnote_checks"), list):
+                cached_fn_checks = [dict(c) for c in prev_idx_raw["latest_footnote_checks"] if isinstance(c, Mapping)]
+
+    # Overlap SEC 10-Q/10-K redline fetch with Layer 2 LLM extraction (Layer 2 does not depend on redline!)
+    redline_pool: ThreadPoolExecutor | None = None
+    redline_future: Any = None
     if redline_loader is not None and cik and not cache_only:
-        try:
-            redline_paras, red_cur_accn, red_pri_accn = redline_loader(cik, submissions, call_date_iso)
-        except Exception:
-            redline_paras = []
+        def _exec_redline() -> tuple[list[dict[str, Any]], str | None, str | None]:
+            try:
+                return redline_loader(cik, submissions, call_date_iso, as_of)  # type: ignore[call-arg]
+            except TypeError:
+                return redline_loader(cik, submissions, call_date_iso)
+
+        redline_pool = ThreadPoolExecutor(max_workers=1)
+        redline_future = redline_pool.submit(_exec_redline)
 
     cap_alloc = capital_allocation_loader(cik) if (capital_allocation_loader is not None and cik) else None
     resolved_eight_k_text = eight_k_text
@@ -1406,7 +1538,8 @@ def run_call_verification_pipeline(
     if resolved_eight_k_text is None and eight_k_loader is not None and cik and not cache_only:
         try:
             resolved_eight_k_text, reg_g_excerpts = eight_k_loader(cik, submissions, call_date_iso)
-        except Exception:
+        except Exception as exc_8k:
+            _record_v3a_nonfatal("eight_k_fetch", exc_8k, open_gaps=pipeline_nonfatal_gaps, operation_id=operation_id, entity_key=entity_key, cik=cik)
             resolved_eight_k_text, reg_g_excerpts = None, []
 
     ledger = build_sec_10q_collision_ledger(
@@ -1421,30 +1554,19 @@ def run_call_verification_pipeline(
         redline_added_paragraphs=redline_paras,
         redline_current_accession=red_cur_accn,
         redline_prior_accession=red_pri_accn,
+        cached_initial_10q_accession=cached_init_accn,
+        cached_initial_10q_filed_at=cached_init_filed,
+        cached_period_end_date=cached_period_end,
         rules=compiled,
     )
     extra_ledger_updates: dict[str, Any] = {}
     if reg_g_excerpts:
         extra_ledger_updates["reg_g_reconciliation_excerpts"] = reg_g_excerpts[:4]
-    raw_fb_tables: list[dict[str, Any]] = []
-    if (
-        footnote_fallback_loader is not None
-        and cik
-        and not cache_only
-        and ledger.initial_10q_accession
-    ):
-        try:
-            raw_fb_tables = list(footnote_fallback_loader(cik, ledger.initial_10q_accession) or [])
-            if raw_fb_tables:
-                extra_ledger_updates["footnote_fallbacks"] = [
-                    f"{t.get('r_file')}: {t.get('title')} ({t.get('row_count', 0)} rows)"
-                    for t in raw_fb_tables[:4]
-                    if isinstance(t, Mapping)
-                ]
-        except Exception:
-            raw_fb_tables = []
+    if cached_fb_labels:
+        extra_ledger_updates["footnote_fallbacks"] = cached_fb_labels[:4]
     if extra_ledger_updates:
         ledger = ledger.model_copy(update=extra_ledger_updates)
+    raw_fb_tables: list[dict[str, Any]] = []
 
     _emit(
         "layer1_ready",
@@ -1761,6 +1883,91 @@ def run_call_verification_pipeline(
                 _register_manifest_key(manifest_repo, account_id, "v3a_sellside_extractions", ss_key)
             sellside_extractions.append(ss_obj)
 
+    # ---------------- Join overlapped redline & on-demand R3-D8 footnote fetch (Layer 2 -> Layer 3)
+    if redline_future is not None:
+        try:
+            redline_paras, red_cur_accn, red_pri_accn = redline_future.result()
+        except Exception as exc_rl:
+            _record_v3a_nonfatal("redline_fetch", exc_rl, open_gaps=pipeline_nonfatal_gaps, operation_id=operation_id, entity_key=entity_key, cik=cik)
+            redline_paras, red_cur_accn, red_pri_accn = [], None, None
+        finally:
+            if redline_pool is not None:
+                redline_pool.shutdown(wait=False)
+        if redline_paras:
+            redline_snips: list[RedlineRiskSnippet] = []
+            for item in redline_paras:
+                txt = str(item.get("current_text") or item.get("paragraph_text") or "").strip()
+                if len(txt) < 40:
+                    continue
+                redline_snips.append(
+                    RedlineRiskSnippet(
+                        section_key=str(item.get("section_key") or "item_1a_risk_factors"),
+                        paragraph_text=txt[:2000],
+                        filing_accession=red_cur_accn,
+                    )
+                )
+            ledger = ledger.model_copy(
+                update={
+                    "redline_added_risks": redline_snips,
+                    "redline_current_accession": red_cur_accn,
+                    "redline_prior_accession": red_pri_accn,
+                }
+            )
+
+    # R3-D8 + R3-D6: Fetch <=2 R*.htm footnote tables strictly ON-DEMAND after Layer 2 and BEFORE Layer 3!
+    # Banks/financials (financial_sic_gated) stay strictly segment-registration-only until V4a.
+    fn_claims: list[ManagementFactualClaim] = []
+    if mgmt_extraction is not None:
+        fn_claims = [
+            c
+            for c in mgmt_extraction.factual_claims
+            if c.evidence_sufficiency == "explicit"
+            and (
+                _infer_effective_scope(c.scope, c.metric_canonical, c.kpi_key, c.claim_summary, c.verbatim_quote) != "consolidated"
+                or c.metric_canonical == "rpo_or_deferred_revenue"
+                or bool(re.search(r"rpo|remaining\s+performance|purchase\s+commitment|segment|分部", f"{c.kpi_key or ''} {c.claim_summary}", re.I))
+            )
+        ][:6]
+
+    if (
+        not cache_only
+        and footnote_fallback_loader is not None
+        and cik
+        and ledger.status == "same_period_10q_matched"
+        and ledger.initial_10q_accession
+        and fn_claims
+    ):
+        dyn_kws: list[str] = [
+            "segment",
+            "disaggregated revenue",
+            "remaining performance",
+            "commitment",
+            "purchase obligation",
+            "deferred revenue",
+            "backlog",
+        ]
+        for fc in fn_claims:
+            raw_k = f"{fc.kpi_key or ''} {fc.claim_summary}".replace("_", " ")
+            for phrase in re.findall(r"[A-Za-z][A-Za-z0-9]{2,}(?:\s+[A-Za-z][A-Za-z0-9]{2,})?", raw_k):
+                pl = phrase.strip().lower()
+                if pl not in ("revenue", "total", "quarter", "billion", "million", "fiscal", "reached", "growth") and pl not in dyn_kws:
+                    dyn_kws.append(pl)
+        try:
+            try:
+                raw_fb_tables = list(footnote_fallback_loader(cik, ledger.initial_10q_accession, keywords=dyn_kws[:16]) or [])  # type: ignore[call-arg]
+            except TypeError:
+                raw_fb_tables = list(footnote_fallback_loader(cik, ledger.initial_10q_accession) or [])
+            if raw_fb_tables:
+                fb_labels = [
+                    f"{t.get('r_file')}: {t.get('title')} ({t.get('row_count', 0)} rows)"
+                    for t in raw_fb_tables[:4]
+                    if isinstance(t, Mapping)
+                ]
+                ledger = ledger.model_copy(update={"footnote_fallbacks": fb_labels})
+        except Exception as exc_fnl:
+            _record_v3a_nonfatal("footnote_fallback", exc_fnl, open_gaps=pipeline_nonfatal_gaps, operation_id=operation_id, entity_key=entity_key, cik=cik)
+            raw_fb_tables = []
+
     # ---------------- Layer 3: <10ms Live Rules Evaluation
     v25_recs = list(v25_credibility_loader(cik)) if (v25_credibility_loader is not None and cik) else []
     report, updated_vcl = run_layer3_call_collision(
@@ -1783,24 +1990,19 @@ def run_call_verification_pipeline(
     )
 
     # R3-D8: Conditional <=2 R*.htm Footnote Table Verification via fast_extractor (capped at yellow/info, NEVER auto-red!)
+    persisted_fn_checks: list[dict[str, Any]] = []
+    fn_tokens_delta = 0
+    fn_calls_delta = 0
     if (
         not cache_only
         and model_runner is not None
         and mgmt_extraction is not None
+        and ledger.status == "same_period_10q_matched"
+        and fn_claims
         and raw_fb_tables
     ):
-        fn_claims = [
-            c
-            for c in mgmt_extraction.factual_claims
-            if c.evidence_sufficiency == "explicit"
-            and (
-                _infer_effective_scope(c.scope, c.metric_canonical, c.kpi_key, c.claim_summary, c.verbatim_quote) != "consolidated"
-                or c.metric_canonical == "rpo_or_deferred_revenue"
-                or bool(re.search(r"rpo|remaining\s+performance|purchase\s+commitment|segment|分部", f"{c.kpi_key or ''} {c.claim_summary}", re.I))
-            )
-        ][:6]
         tables_with_rows = [t for t in raw_fb_tables if isinstance(t, Mapping) and (t.get("rows_preview") or t.get("narrative_excerpt"))][:2]
-        if fn_claims and tables_with_rows:
+        if tables_with_rows:
             try:
                 fn_nonce = secrets.token_hex(6)
                 claim_lines = "\n".join(
@@ -1843,44 +2045,66 @@ def run_call_verification_pipeline(
                     max_repairs=1,
                     cancel_event=cancel_event,
                 )
-                fn_notes: list[str] = []
-                extra_findings = list(report.collision_findings)
-                for chk in fn_parsed.checks:
-                    if chk.status == "not_found_in_table":
-                        continue
-                    tag = f"[{chk.r_file or 'R*.htm'}]"
-                    fn_notes.append(f"{tag} {chk.claim_ref} ({chk.status}): {chk.note}")
-                    if chk.status == "divergence_warning":
-                        from .research_call_collision import CollisionFinding
+                fn_tokens_delta = int(fn_stats.get("total_tokens") or 0)
+                fn_calls_delta = int(fn_stats.get("call_count") or 0)
+                persisted_fn_checks = [chk.model_dump(mode="json", exclude_none=True) for chk in fn_parsed.checks]
+            except Exception as exc_fnv:
+                _record_v3a_nonfatal("footnote_verify", exc_fnv, open_gaps=pipeline_nonfatal_gaps, operation_id=operation_id, entity_key=entity_key, cik=cik)
+    elif cache_only and cached_fn_checks:
+        persisted_fn_checks = cached_fn_checks
 
-                        extra_findings.append(
-                            CollisionFinding(
-                                finding_id=f"fn_{sha256(f'{chk.claim_ref}:{chk.r_file}'.encode()).hexdigest()[:12]}",
-                                track="track_1_demand_channel",
-                                collision_kind="basis_divergence_nongaap_gap",
-                                severity="yellow",  # R3-D8: NEVER auto-red from LLM footnote check!
-                                title=f"10-Q 附注表辅助核验提示 ({chk.r_file or 'R*.htm'}) · {chk.claim_ref}",
-                                management_statement=chk.claim_ref,
-                                ledger_evidence=f"{tag} 附注表数值 {chk.table_figure or '见原文'}：{chk.note}",
-                                basis_badge="10-Q 附注辅助核验",
-                                period_badge=ledger.fiscal_period_key,
-                                skeptic_note="附注表格抽取结果仅供辅助对照（最高黄灯），请结合完整 10-Q 附注说明复核口径差异。",
-                                priority_rank=42,
-                            )
-                        )
-                if fn_notes:
-                    extra_findings.sort(key=lambda f: (f.priority_rank, f.finding_id))
-                    report = report.model_copy(
-                        update={
-                            "collision_findings": extra_findings,
-                            "yellow_count": sum(1 for f in extra_findings if f.severity == "yellow"),
-                            "footnote_verification_notes": fn_notes[:6],
-                            "total_tokens": report.total_tokens + fn_stats["total_tokens"],
-                            "llm_call_count": report.llm_call_count + fn_stats["call_count"],
-                        }
+    if persisted_fn_checks or fn_tokens_delta or fn_calls_delta or pipeline_nonfatal_gaps:
+        from .research_call_collision import CollisionFinding
+
+        fn_notes: list[str] = []
+        extra_findings = list(report.collision_findings)
+        for raw_chk in persisted_fn_checks:
+            st_chk = str(raw_chk.get("status") or "not_found_in_table")
+            if st_chk == "not_found_in_table":
+                continue
+            r_file_chk = raw_chk.get("r_file")
+            claim_ref_chk = str(raw_chk.get("claim_ref") or "footnote")
+            note_chk = str(raw_chk.get("note") or "")
+            fig_chk = raw_chk.get("table_figure")
+            tag = f"[{r_file_chk or 'R*.htm'}]"
+            fn_notes.append(f"{tag} {claim_ref_chk} ({st_chk}): {note_chk}")
+            if st_chk == "divergence_warning":
+                extra_findings.append(
+                    CollisionFinding(
+                        finding_id=f"fn_{sha256(f'{claim_ref_chk}:{r_file_chk}'.encode()).hexdigest()[:12]}",
+                        track="track_1_demand_channel",
+                        collision_kind="basis_divergence_nongaap_gap",
+                        severity="yellow",  # R3-D8: NEVER auto-red from LLM footnote check!
+                        title=f"10-Q 附注表辅助核验提示 ({r_file_chk or 'R*.htm'}) · {claim_ref_chk}",
+                        management_statement=claim_ref_chk,
+                        ledger_evidence=f"{tag} 附注表数值 {fig_chk or '见原文'}：{note_chk}",
+                        basis_badge="10-Q 附注辅助核验",
+                        period_badge=ledger.fiscal_period_key,
+                        skeptic_note="附注表格抽取结果仅供辅助对照（最高黄灯），请结合完整 10-Q 附注说明复核口径差异。",
+                        priority_rank=42,
                     )
-            except Exception:
-                pass
+                )
+        extra_findings.sort(key=lambda f: (f.priority_rank, f.finding_id))
+        new_yellow = sum(1 for f in extra_findings if f.severity == "yellow")
+        new_light = report.overall_light
+        new_headline = report.headline
+        if new_light == "green" and new_yellow > 0:
+            new_light = "yellow"
+            if new_headline.startswith("🟢"):
+                new_headline = "🟡" + new_headline[1:]
+        merged_gaps = list(dict.fromkeys([*report.open_gaps, *pipeline_nonfatal_gaps]))
+        report = report.model_copy(
+            update={
+                "collision_findings": extra_findings,
+                "yellow_count": new_yellow,
+                "overall_light": new_light,
+                "headline": new_headline,
+                "footnote_verification_notes": fn_notes[:6],
+                "open_gaps": merged_gaps,
+                "total_tokens": report.total_tokens + fn_tokens_delta,
+                "llm_call_count": report.llm_call_count + fn_calls_delta,
+            }
+        )
 
     # Persist updated account-isolated commitment ledger & O(1) company index (never mutates on cache_only!)
     if not cache_only:
@@ -1888,8 +2112,6 @@ def run_call_verification_pipeline(
             commitment_ledger_repo.put(vcl_key, updated_vcl.model_dump(mode="json", exclude_none=True))
             _register_manifest_key(manifest_repo, account_id, "v3a_verbal_commitment_ledger", vcl_key)
         if company_index_repo is not None:
-            idx_key = f"v3a_idx:{account_id}:{entity_key}"
-            prev_idx_raw = company_index_repo.get(idx_key)
             prev_runs = list(prev_idx_raw.get("recent_runs") or []) if isinstance(prev_idx_raw, Mapping) else []
             run_entry = {
                 "fiscal_period_key": report.fiscal_period_key,
@@ -1921,13 +2143,21 @@ def run_call_verification_pipeline(
                 last_filing_fingerprint_check_at=(
                     prev_idx_raw.get("last_filing_fingerprint_check_at") if isinstance(prev_idx_raw, Mapping) else None
                 ),
+                latest_initial_10q_accession=ledger.initial_10q_accession,
+                latest_initial_10q_filed_at=ledger.initial_10q_filed_at,
+                latest_period_end_date=ledger.period_end_date,
+                latest_redline_current_accession=ledger.redline_current_accession,
+                latest_redline_prior_accession=ledger.redline_prior_accession,
+                latest_redline_added_paragraphs=[dict(p) for p in redline_paras[:12]],
+                latest_footnote_fallbacks=list(ledger.footnote_fallbacks[:4]),
+                latest_footnote_checks=persisted_fn_checks[:6],
                 recent_runs=dedup_runs[:20],
             )
             company_index_repo.put(idx_key, idx_entry.model_dump(mode="json", exclude_none=True))
             _register_manifest_key(manifest_repo, account_id, "v3a_account_company_index", idx_key)
 
     _emit(
-        "completed",
+        "completed" if emit_completed else "layer3_ready",
         {
             "entity_key": entity_key,
             "overall_light": report.overall_light,
@@ -2005,7 +2235,7 @@ def build_topic_call_verification_digest(
             return f" [{sid_q}:{cs}-{ce}]"
         return f" [{sid_q}]" if sid_q else ""
 
-    lines: list[str] = [
+    header_lines: list[str] = [
         f"V3a Call Verification Digest [{report.symbol or report.entity_key} {report.fiscal_period_key or ''}]",
         f"Headline: {report.headline}",
         (
@@ -2015,56 +2245,77 @@ def build_topic_call_verification_digest(
             f"(NDA_exempt={report.confidentiality_whitelisted_count}, SegPolicyGap={report.disclosure_policy_gap_count})"
         ),
     ]
+    tail_lines: list[str] = []
     if report.partial_lane_status and any(v == "failed" for v in report.partial_lane_status.values()):
-        lines.append(f"PARTIAL_LANE_STATUS: {json.dumps(report.partial_lane_status, ensure_ascii=False)}")
+        tail_lines.append(f"PARTIAL_LANE_STATUS: {json.dumps(report.partial_lane_status, ensure_ascii=False)}")
+    if report.footnote_verification_notes:
+        tail_lines.append("FOOTNOTE_CHECKS: " + " ; ".join(report.footnote_verification_notes[:3]))
+    if report.open_gaps:
+        tail_lines.append("OPEN_GAPS (do NOT invent missing data): " + ", ".join(report.open_gaps[:8]))
 
+    # Filter actionable findings BEFORE slicing so info items never crowd out red/yellow/green findings!
+    actionable_findings = [f for f in report.collision_findings if f.severity in ("red", "yellow", "green")][:7]
+    body_lines: list[str] = []
     structured_findings: list[dict[str, Any]] = []
-    for f in report.collision_findings[:7]:
-        if f.severity in ("red", "yellow", "green"):
-            q0 = f.quotes[0] if f.quotes else None
-            anc = _anchor(q0)
-            delta_s = f" | {f.formula_note[:90]}" if f.formula_note else ""
-            lines.append(f"- [{f.severity.upper()}|{f.collision_kind}] {f.title} :: {f.ledger_evidence[:120]}{delta_s}{anc}")
-            structured_findings.append(
-                {
-                    "finding_id": f.finding_id,
-                    "severity": f.severity,
-                    "kind": f.collision_kind,
-                    "title": f.title,
-                    "ledger_evidence": f.ledger_evidence[:160],
-                    "formula_note": f.formula_note[:120] if f.formula_note else None,
-                    "quote_anchor": (
-                        {
-                            "source_id": q0.source_id,
-                            "char_start": q0.raw_char_start,
-                            "char_end": q0.raw_char_end,
-                            "quotation": q0.quotation[:140],
-                        }
-                        if q0 is not None and q0.verified
-                        else None
-                    ),
-                }
-            )
+    for f in actionable_findings:
+        q0 = f.quotes[0] if f.quotes else None
+        anc = _anchor(q0)
+        delta_s = f" | {f.formula_note[:90]}" if f.formula_note else ""
+        body_lines.append(f"- [{f.severity.upper()}|{f.collision_kind}] {f.title} :: {f.ledger_evidence[:120]}{delta_s}{anc}")
+        structured_findings.append(
+            {
+                "finding_id": f.finding_id,
+                "severity": f.severity,
+                "kind": f.collision_kind,
+                "title": f.title,
+                "ledger_evidence": f.ledger_evidence[:160],
+                "formula_note": f.formula_note[:120] if f.formula_note else None,
+                "quote_anchor": (
+                    {
+                        "source_id": q0.source_id,
+                        "char_start": q0.raw_char_start,
+                        "char_end": q0.raw_char_end,
+                        "quotation": q0.quotation[:140],
+                    }
+                    if q0 is not None and q0.verified
+                    else None
+                ),
+            }
+        )
     for ev in report.qa_evasions[:4]:
         if ev.display_severity in ("red", "yellow") or ev.disclosure_policy_gap:
             tag = "QA-POLICY_GAP" if ev.disclosure_policy_gap else f"QA-{ev.evasion_level}"
             anc_q = _anchor(ev.question_quote)
             anc_a = _anchor(ev.answer_quote)
-            lines.append(
+            body_lines.append(
                 f"- [{tag}] Q{ev.exchange_index} {ev.analyst_name}->{ev.executive_name} ({ev.behavior_subtype}): {ev.rationale[:110]}{anc_q}{anc_a}"
             )
     for cmt in report.commitments[:5]:
         if not cmt.muted and cmt.status in ("missed", "silent_drop_high_risk", "pending_10q"):
             anc_c = _anchor(cmt.quote)
-            lines.append(
+            body_lines.append(
                 f"- [CMT:{cmt.status}|{cmt.scope}] {cmt.kpi_key or cmt.metric_canonical} ({cmt.target_period_key or ''}): {cmt.commitment_text[:100]}{anc_c}"
             )
-    if report.footnote_verification_notes:
-        lines.append("FOOTNOTE_CHECKS: " + " ; ".join(report.footnote_verification_notes[:3]))
-    if report.open_gaps:
-        lines.append("OPEN_GAPS (do NOT invent missing data): " + ", ".join(report.open_gaps[:8]))
 
-    summary_text = "\n".join(lines)[:max_chars]
+    # Reserved segmented budget: Header + PARTIAL_LANE_STATUS + FOOTNOTE_CHECKS + OPEN_GAPS are NEVER truncated!
+    header_block = "\n".join(header_lines)
+    tail_block = "\n".join(tail_lines)
+    reserved_len = len(header_block) + (len(tail_block) + 1 if tail_block else 0)
+    remaining_budget = max(0, max_chars - reserved_len - 1)
+    kept_body: list[str] = []
+    used_body = 0
+    for bl in body_lines:
+        add_len = len(bl) + (1 if kept_body else 0)
+        if used_body + add_len > remaining_budget:
+            break
+        kept_body.append(bl)
+        used_body += add_len
+    parts_out = [header_block]
+    if kept_body:
+        parts_out.append("\n".join(kept_body))
+    if tail_block:
+        parts_out.append(tail_block)
+    summary_text = "\n".join(parts_out)[:max_chars]
     return {
         "entity_key": report.entity_key,
         "symbol": report.symbol,

@@ -73,6 +73,7 @@ services:
       FORESIGHTNINE_DOCUMENT_STORE_DIR: /data/documents
       FORESIGHTNINE_ENV: development
       FORESIGHTNINE_STORAGE_MODE: postgres
+      FORESIGHTNINE_PLATFORM_LLM_MAX_CONCURRENCY: ${FORESIGHTNINE_PLATFORM_LLM_MAX_CONCURRENCY:-6}
       FORESIGHTNINE_POSTGRES_URL: ${FORESIGHTNINE_POSTGRES_URL:?FORESIGHTNINE_POSTGRES_URL must be supplied by the deployment secret file}
       # Let the deployment env file select the provider; keep mock as the
       # secret-free local default when no staging env file is supplied.
