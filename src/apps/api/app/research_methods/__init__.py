@@ -38,6 +38,7 @@ KNOWN_TOOLS = frozenset({
     'earnings_consensus', 'earnings_transcript',
     'earnings_quality_diagnostics', 'guidance_and_nongaap_reconciler',
     'valuation_and_implied_expectations',
+    'bank_fundamentals_diagnostics', 'bank_valuation_and_peer_compare',
 })
 OPTIONAL_TOOLS = frozenset({
     'search_library',
@@ -59,6 +60,8 @@ CAPABILITY_FLAG = {
     'sec_fulltext_search': 'filings_available',
     'earnings_consensus': 'earnings_consensus_available',
     'earnings_transcript': 'earnings_transcript_available',
+    'bank_fundamentals_diagnostics': 'sec_financials_available',
+    'bank_valuation_and_peer_compare': 'sec_financials_available',
 }
 
 INDUSTRY_PACK_IDS: tuple[str, ...] = (
@@ -67,6 +70,7 @@ INDUSTRY_PACK_IDS: tuple[str, ...] = (
     'kpi_internet_ads',
     'kpi_consumer_retail',
     'kpi_pharma_biotech',
+    'kpi_us_large_banks',
 )
 
 # Disjoint SEC SIC ranges mapped to the 5 non-financial L2 industry KPI packs.
@@ -273,7 +277,8 @@ class ComposedEarningsMethodPack(_Model):
     industry_pack_id: str | None = None
     sector_category: Literal['non_financial', 'bank', 'insurance', 'reit', 'financial_other'] = 'non_financial'
     is_sector_gated: bool = False
-    selection_source: Literal['none', 'sic_auto', 'explicit_override', 'sector_gated']
+    active_sector_plugin: str | None = None
+    selection_source: Literal['none', 'sic_auto', 'explicit_override', 'sector_gated', 'sector_plugin']
     fingerprint: str
     pack_records: list[dict[str, Any]]
     required_blocks: list[str]
@@ -450,6 +455,8 @@ def tool_available_in_run(
         'request_ocr', 'extract_statements', 'sec_filing_sections', 'sec_redline_diff',
     ):
         return has_eligible_sources or can_acquire_sources
+    if tool in ('bank_fundamentals_diagnostics', 'bank_valuation_and_peer_compare'):
+        return bool(c.get('sec_financials_available') or c.get('filings_available'))
     return tool in KNOWN_TOOLS
 
 
@@ -663,8 +670,9 @@ def _render_composed_prompt(
             'non-financial L2 KPI packs and industrial metrics (gross margin, inventory turnover, standard EV/EBITDA, '
             'standard FCF, Reverse-DCF) are disabled; apply sector-specific metrics only.]'
         )
-    elif industry_pack is not None:
-        remaining = max(512, max_chars - len(parts[0]) - 1)
+    if industry_pack is not None:
+        used_chars = sum(len(p) for p in parts) + len(parts)
+        remaining = max(512, max_chars - used_chars)
         parts.append(
             render_industry_pack_for_prompt(
                 industry_pack,
@@ -708,17 +716,21 @@ def compose_earnings_method_pack(
     sic: str | int | None = None,
     industry_pack_id: str | None = None,
     *,
+    active_sector_plugin: str | None = None,
     available_capabilities: Mapping[str, Any] | None = None,
     max_chars: int = MAX_COMPOSED_PACK_CHARS,
 ) -> ComposedEarningsMethodPack:
     """Compose the L1 ``earnings_review`` backbone with a deterministic L2 industry KPI pack.
 
     Selection precedence:
-    1. If ``sic`` falls in a gated financial sector (Banks, Insurance, REITs, or 6200-6799),
-       non-financial L2 KPI packs are blocked (explicit override raises ``ValueError``; auto-match
-       returns ``industry_pack=None`` with ``is_sector_gated=True``).
-    2. Otherwise, an explicit ``industry_pack_id`` overrides SIC auto-matching (raising ``ValueError``
-       if unknown).
+    1. If ``sic`` falls in a gated financial sector (Banks, Insurance, REITs, or 6200-6799):
+       - When ``active_sector_plugin == 'us_large_bank_v4a'``, keep ``is_sector_gated=True``
+         and layer the specialized ``kpi_us_large_banks`` L2 pack (``selection_source='sector_plugin'``),
+         while rejecting non-bank overrides (e.g., ``kpi_saas_cloud``).
+       - Otherwise, all L2 packs remain blocked (explicit override raises ``ValueError``;
+         auto-match returns ``industry_pack=None`` with ``is_sector_gated=True``).
+    2. Otherwise (non-financial SIC), bank packs are rejected (e.g., ``7372 + kpi_us_large_banks``),
+       and an explicit non-financial ``industry_pack_id`` overrides SIC auto-matching.
     3. Otherwise, ``match_industry_pack_by_sic(sic)`` deterministically selects the L2 pack (or ``None``).
     """
     base_pack = get_pack('earnings_review')
@@ -733,16 +745,32 @@ def compose_earnings_method_pack(
         raise ValueError('industry_pack_id must be a string when provided.')
 
     industry_pack: IndustryKpiPack | None = None
-    selection_source: Literal['none', 'sic_auto', 'explicit_override', 'sector_gated'] = 'none'
+    selection_source: Literal['none', 'sic_auto', 'explicit_override', 'sector_gated', 'sector_plugin'] = 'none'
 
     if is_sector_gated:
-        if cleaned_override is not None:
-            raise ValueError(
-                f'Cannot apply non-financial industry pack {cleaned_override!r} to gated financial SEC SIC '
-                f'{sic_code} ({sector_category}).'
-            )
-        selection_source = 'sector_gated'
+        if active_sector_plugin == 'us_large_bank_v4a':
+            if cleaned_override is not None and cleaned_override != 'kpi_us_large_banks':
+                raise ValueError(
+                    f'Cannot apply non-financial industry pack {cleaned_override!r} to bank plugin SEC SIC '
+                    f'{sic_code} ({sector_category}).'
+                )
+            industry_pack = get_industry_pack('kpi_us_large_banks')
+            if industry_pack is None:
+                raise RuntimeError('Matched bank plugin pack kpi_us_large_banks could not be loaded.')
+            selection_source = 'sector_plugin'
+        else:
+            if cleaned_override is not None:
+                raise ValueError(
+                    f'Cannot apply non-financial industry pack {cleaned_override!r} to gated financial SEC SIC '
+                    f'{sic_code} ({sector_category}).'
+                )
+            selection_source = 'sector_gated'
     elif cleaned_override is not None:
+        if sic_code is not None and cleaned_override == 'kpi_us_large_banks':
+            raise ValueError(
+                f'Cannot apply financial industry pack {cleaned_override!r} to non-financial SEC SIC '
+                f'{sic_code}.'
+            )
         industry_pack = get_industry_pack(cleaned_override)
         if industry_pack is None:
             available = sorted(_load_industry_packs())
@@ -806,6 +834,7 @@ def compose_earnings_method_pack(
         industry_pack_id=industry_pack.id if industry_pack is not None else None,
         sector_category=sector_category,
         is_sector_gated=is_sector_gated,
+        active_sector_plugin=active_sector_plugin if selection_source == 'sector_plugin' else None,
         selection_source=selection_source,
         fingerprint=fingerprint,
         pack_records=pack_records,

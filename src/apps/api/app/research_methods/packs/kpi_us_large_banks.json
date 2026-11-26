@@ -1,0 +1,103 @@
+{
+ "id": "kpi_us_large_banks",
+ "version": "1.0.0",
+ "layer": "l2_industry_kpi",
+ "parent_pack_id": "earnings_review",
+ "title_zh": "美股大型银行与投行核心 KPI",
+ "title_en": "US Large Banks & Investment Banks KPIs",
+ "sector_scope": "US Commercial Banks & Large Broker-Dealer BHCs (SEC SIC 6020-6036, 6211)",
+ "sic_major_groups": ["60", "62"],
+ "kpis": [
+  {
+   "id": "nii_nim_ppnr_efficiency",
+   "name_en": "NII, NIM (FTE), PPNR & Efficiency Ratio",
+   "name_zh": "净利息收入、净息差 (FTE)、PPNR 与成本收入比",
+   "definition_and_formula": "PPNR = Net Rev - Nonint Exp; Efficiency = Nonint Exp / Net Rev (GAAP vs Managed/FTE); NIM = Annualized FTE NII / Avg Earning Assets",
+   "preferred_tools": ["sec_earnings_release", "sec_filing_tables", "bank_fundamentals_diagnostics"],
+   "where_to_look": "8-K EX-99.1/2/3 Supplement, 10-Q Segment Details (R*.htm) & MD&A Avg Balance Sheet",
+   "red_flags": [
+    "Negative operating leverage (expense outpacing net revenue)",
+    "Deposit beta outpacing asset yields, compressing NIM >= 15bps QoQ"
+   ],
+   "required": true
+  },
+  {
+   "id": "cet1_buffer_and_htm_overhang",
+   "name_en": "CET1 Standardized Buffer & HTM Unrealized Loss",
+   "name_zh": "CET1 资本缓冲与 HTM 浮亏压力",
+   "definition_and_formula": "CET1 Buffer = (Std CET1 - Reg Min [4.5%+SCB+G-SIB]) * 100 bps; HTM Overhang = |HTM FV - Amortized Cost| / TCE; Pro-Forma CET1 ex-HTM (24% tax)",
+   "preferred_tools": ["sec_filing_tables", "sec_earnings_release", "bank_fundamentals_diagnostics"],
+   "where_to_look": "10-Q Reg Capital (BHC parent ex-N.A. bank sub) & HTM Securities Details (R*.htm)",
+   "red_flags": [
+    "CET1 Std buffer < 100bps above reg minimum (red < 50bps)",
+    "HTM pre-tax loss >= 30% of TCE stacked with thin CET1 buffer or deposit outflow"
+   ],
+   "required": true
+  },
+  {
+   "id": "credit_cost_and_reserve_coverage",
+   "name_en": "Provision/PPNR, NCO, NPL & ACL Coverage",
+   "name_zh": "拨备占比、净核销率、不良率与拨备覆盖",
+   "definition_and_formula": "Provision/PPNR = Provision / PPNR; Annualized NCO = Q NCO * 4 / Avg Loans; ACL/Loans = ACL / Gross Loans; NPL = Nonaccrual / Gross Loans",
+   "preferred_tools": ["sec_earnings_release", "sec_filing_tables", "bank_fundamentals_diagnostics"],
+   "where_to_look": "8-K Credit Quality Supplement & 10-Q Allowance / Nonaccrual notes (R*.htm)",
+   "red_flags": [
+    "Provision absorbs >= 30% of PPNR (red >= 50%) or reserve release masks rising NCOs",
+    "CRE/card delinquencies & nonaccruals rise while ACL/Loans declines"
+   ],
+   "required": true
+  },
+  {
+   "id": "rotce_tbvps_and_gordon_ptbv",
+   "name_en": "ROTCE, Dual-Basis TBVPS & Gordon P/TBV",
+   "name_zh": "ROTCE、双口径 TBVPS 与 Gordon 隐含回报",
+   "definition_and_formula": "TBVPS Reported = Mgmt TCE / Basic Shares (incl. RSUs); XBRL-Std = (Eq - Pref - GW - Intang ex-MSR) / Ending Common; Implied ROTCE = g + (P/TBV)*(Ke - g)",
+   "preferred_tools": ["bank_valuation_and_peer_compare", "sec_earnings_release", "sec_filing_sections"],
+   "where_to_look": "8-K Non-GAAP TCE/TBVPS/ROTCE tables & 10-Q MD&A Non-GAAP Measures",
+   "red_flags": [
+    "Market P/TBV implies permanent ROTCE > 300bps above through-cycle ROTCE",
+    "Reported vs XBRL-Std TBVPS diverges > 1% via RSU denominators without bridge"
+   ],
+   "required": true
+  }
+ ],
+ "filing_focus": [
+  "10-Q Segment Details (R*.htm): GAAP vs Managed/FTE & zero-delta revenue conservation",
+  "10-Q Reg Capital Details (BHC parent ex-N.A. bank sub) & HTM fair value vs amortized cost",
+  "8-K EX-99.1/2/3 Supplement & 10-Q MD&A Non-GAAP TBVPS/ROTCE reconciliation"
+ ],
+ "counter_evidence_angles": [
+  {
+   "angle": "Buyback capacity constrained by thin CET1 buffer, RWA inflation, or HTM unrealized losses",
+   "evidence_anchor": "10-Q Reg Capital (CET1 Std vs 4.5%+SCB+G-SIB) & HTM FV vs amortized cost",
+   "next_quarter_trigger": "Next-Q CET1 buffer < 100bps or buybacks pause/cut QoQ"
+  },
+  {
+   "angle": "Normalized credit cost & deposit repricing pushing through-cycle ROTCE below Gordon implied ROTCE",
+   "evidence_anchor": "Provision/PPNR, NCO vs reserve build, NIM FTE & bank_valuation_and_peer_compare spread",
+   "next_quarter_trigger": "Next-Q NCO rate rises >= 15bps QoQ or ROTCE drops below implied ROTCE"
+  }
+ ],
+ "unit_and_period_checks": [
+  "Separate Consolidated GAAP vs Managed/FTE net revenue & PPNR explicitly",
+  "Normalize decimal ratios (0.115) vs percent strings (11.5%) in R*.htm Reg Capital",
+  "Use Reported TBVPS as primary P/TBV basis with XBRL-Std bridge",
+  "Use BHC consolidated CET1/SLR; exclude operating subsidiary (N.A.) capital blocks"
+ ],
+ "reconciliation": [
+  {
+   "metric": "Net Revenue & PPNR (GAAP vs FTE)",
+   "source_classes": ["10-Q income statement", "10-Q segment R*.htm", "8-K supplement"],
+   "note": "verify OpSegs + Corp/Other + Reconciling = Consolidated GAAP (delta <= $2M)"
+  },
+  {
+   "metric": "TBVPS & ROTCE (Reported vs XBRL-Std)",
+   "source_classes": ["8-K Non-GAAP table", "10-Q balance sheet & MD&A"],
+   "note": "bridge Goodwill, Intangibles ex-MSR & unconditional RSU shares"
+  }
+ ],
+ "limits": [
+  "Industrial EV/EBITDA, gross margin, DIO/CCC, standard FCF & Reverse-DCF stay disabled.",
+  "Insurance (SIC 6300-6411), REITs (6798) & pure asset managers remain outside this pack."
+ ]
+}

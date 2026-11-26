@@ -125,7 +125,7 @@ def test_l2_industry_packs_load_validate_and_match_expected_kpis():
 
     packs = load_industry_packs()
     assert set(packs) == set(INDUSTRY_PACK_IDS)
-    assert len(packs) == 5
+    assert len(packs) == 6
 
     expected_kpis = {
         'kpi_saas_cloud': {'rpo_crpo', 'deferred_revenue_billings', 'nrr_expansion', 'rule_of_40_fcf_ex_sbc'},
@@ -133,6 +133,7 @@ def test_l2_industry_packs_load_validate_and_match_expected_kpis():
         'kpi_internet_ads': {'users_arpu_take_rate', 'ad_volume_vs_price', 'ai_capex_depreciation', 'tac_margin'},
         'kpi_consumer_retail': {'sssg_traffic_ticket', 'store_count_unit_econ', 'gm_pricing_vs_promo', 'inventory_turnover_dio'},
         'kpi_pharma_biotech': {'pipeline_clinical_milestones', 'product_concentration_loe', 'rd_burn_cash_runway', 'gross_to_net_payer_mix'},
+        'kpi_us_large_banks': {'nii_nim_ppnr_efficiency', 'cet1_buffer_and_htm_overhang', 'credit_cost_and_reserve_coverage', 'rotce_tbvps_and_gordon_ptbv'},
     }
 
     listed = list_industry_packs()

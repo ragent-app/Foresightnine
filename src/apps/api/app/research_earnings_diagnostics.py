@@ -28,7 +28,13 @@ from .research_calculations import CalculationError, UnitScaleSpec, parse_unit_s
 
 MetricStatus = Literal["computed", "unavailable", "disabled_by_sector"]
 FlagSeverity = Literal["red", "yellow", "green"]
-SectorCategory = Literal["non_financial", "bank", "insurance", "reit"]
+SectorCategory = Literal["non_financial", "bank", "insurance", "reit", "financial_other"]
+BankSubtypeOptional = Literal[
+    "universal_commercial",
+    "investment_bank_bhc",
+    "custodian_or_broker_bank",
+    "not_applicable",
+]
 PeriodType = Literal["quarter", "annual", "ttm"]
 NewGuidanceDirection = Literal["Raise", "Maintain", "Cut", "Not Provided"]
 SurpriseOutcome = Literal["Beat", "Inline", "Miss", "Unavailable"]
@@ -550,6 +556,8 @@ class SectorApplicability(BaseModel):
     disabled_metrics: list[str] = Field(default_factory=list)
     recommended_alternatives: list[str] = Field(default_factory=list)
     explanation: str
+    bank_subtype: BankSubtypeOptional | None = None
+    active_sector_plugin: Literal["us_large_bank_v4a"] | None = None
 
 
 def evaluate_sec_sic_gate(

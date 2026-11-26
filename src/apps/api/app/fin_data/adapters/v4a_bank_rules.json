@@ -1,0 +1,45 @@
+{
+  "schema_version": "v4a.1",
+  "description": "Generic externalized diagnostic & valuation rules for US Large Banks & BHCs (zero issuer special-cases, strictly no FRED).",
+  "gordon_defaults": {
+    "default_coe_pct": "10.0",
+    "default_terminal_g_pct": "3.0",
+    "sensitivity_coe_grid": ["9.0", "10.0", "11.0"],
+    "sensitivity_g_grid": ["2.0", "3.0", "4.0"]
+  },
+  "tbvps": {
+    "comparability_gap_warning_pct": "1.00",
+    "rsu_addon_warning_shares": "500000"
+  },
+  "capital_and_htm": {
+    "htm_effective_tax_rate": "0.24",
+    "cet1_buffer_red_bps": "50",
+    "cet1_buffer_yellow_bps": "100",
+    "htm_loss_pct_of_tce_yellow": "15.0",
+    "htm_loss_pct_of_tce_red_escalation_base": "30.0",
+    "htm_red_stack_cet1_buffer_lt_bps": "100",
+    "htm_red_stack_deposits_qoq_lte_pct": "-3.0"
+  },
+  "profitability_and_credit": {
+    "efficiency_ratio_yellow_pct": "68.0",
+    "rotce_yellow_lt_pct": "10.0",
+    "provision_to_ppnr_yellow_pct": "30.0",
+    "provision_to_ppnr_red_pct": "50.0",
+    "ldr_high_yellow_pct": "95.0",
+    "deposits_qoq_yellow_lte_pct": "-3.0"
+  },
+  "subtype_exemptions": {
+    "universal_commercial": {
+      "exempt_groups": [],
+      "exempt_commercial_red_checks": []
+    },
+    "investment_bank_bhc": {
+      "exempt_groups": [],
+      "exempt_commercial_red_checks": ["ldr_high_yellow", "provision_to_ppnr_red", "retail_credit_red"]
+    },
+    "custodian_or_broker_bank": {
+      "exempt_groups": [],
+      "exempt_commercial_red_checks": ["ldr_high_yellow", "nim_compression_red", "provision_to_ppnr_red", "retail_credit_red"]
+    }
+  }
+}
