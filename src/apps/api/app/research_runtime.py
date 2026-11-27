@@ -1225,6 +1225,23 @@ def run_research_agent(
                 reason=reason,
                 eligible_sources=[s for s in sources if _is_source_eligible(s, as_of)],
             )
+        # Stopped or exhausted runs can still expose source-bound observations.
+        if status == 'partial' and reason != 'awaiting_user':
+            from .research_observations import structured_partial_notes
+            refs = [ref for part in state.get('question_parts', []) if isinstance(part, Mapping)
+                    and part.get('question') and part['question'] in question
+                    for ref in part.get('references', []) if isinstance(ref, Mapping)]
+            selected_calcs = {c.get('calculation_id') for c in state.get('calculations', []) if isinstance(c, Mapping)}
+            selected_calcs.update(r['calculation_id'] for r in refs if r.get('calculation_id'))
+            selected_facts = {f.get('fact_id') for f in state.get('facts', []) if isinstance(f, Mapping)}
+            selected_facts.update(r['fact_id'] for r in refs if r.get('fact_id'))
+            selected_facts.update(i.get('fact_id') for key in ('calculations', 'prior_calculations')
+                                  for c in state.get(key, []) if isinstance(c, Mapping) and c.get('calculation_id') in selected_calcs
+                                  for i in c.get('inputs', []) if isinstance(i, Mapping) and i.get('fact_id'))
+            structured = structured_partial_notes(state, source_by_id, as_of, fact_ids=selected_facts,
+                                                  calculation_ids=selected_calcs)
+            if structured and structured not in (resolved_partial_notes or ''):
+                resolved_partial_notes = '\n\n'.join(x for x in (resolved_partial_notes, structured) if x)
         report_rec = insights.reconcile_run(state, source_by_id)
         derived.extend(insights.reconciliation_gap_rows(report_rec))
         unique = list({(item['code'], item['message']): item for item in [*derived, *(gaps or [])]}.values())
@@ -1268,6 +1285,28 @@ def run_research_agent(
         verified = parse_reviews(json.dumps({'reviews': state.get('_semantic_reviews', [])}), candidate_items)
         denied = {item['claim_id'] for item in verified if item['verdict'] == 'contradicted'}
         supported = {item['claim_id'] for item in verified if item['verdict'] in ('supported', 'conditional', 'partial')} - denied
+        # Requirement assessment may carry a writer-authored checkpoint answer.
+        # Do not let it bypass claim-level review through question_parts.
+        for part in parts:
+            refs = part.get('references') or []
+            if part.get('answer') and not any(r.get('claim_id') in supported for r in refs):
+                deterministic = (state.get('submission') or {}).get('deterministic_report') and report
+                fact_ids = {r.get('fact_id') for r in refs if r.get('fact_id')}
+                calc_ids = {r.get('calculation_id') for r in refs if r.get('calculation_id')}
+                for calc in [*state.get('calculations', []), *state.get('prior_calculations', [])]:
+                    if calc.get('calculation_id') in calc_ids:
+                        fact_ids.update(i.get('fact_id') for i in calc.get('inputs', []) if i.get('fact_id'))
+                from .research_observations import structured_partial_notes
+                answer = structured_partial_notes(state, source_by_id, as_of, fact_ids=fact_ids,
+                                                  calculation_ids=calc_ids) if fact_ids else ''
+                if answer:
+                    part['answer'] = answer
+                    part['status'] = 'answered' if deterministic else 'partial'
+                    part['reason'] = '' if deterministic else '已保留可核对的原文或计算，完整判断仍待核验。'
+                else:
+                    part['answer'] = ''
+                    part['status'] = 'unresolved'
+                    part['reason'] = '答案的语义尚未独立核验；可核对的来源摘录另行保留。'
         from .research_observations import deterministic_observation_ids
         observations = deterministic_observation_ids(outcome_claims, state, source_by_id, as_of) - denied
         outcome_claims = [claim for claim in outcome_claims if claim.get('claim_id') in supported

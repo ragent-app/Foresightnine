@@ -21,6 +21,7 @@ from typing_extensions import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ...research_bank_versions import BANK_DISCLOSURE_VERSION
 from .sec_deep import (
     DualPeriodEarningsRelease,
     EarningsReleasePeriod,
@@ -164,21 +165,21 @@ class BankSegmentSnapshot(_FrozenBankModel):
 
 
 class TbvpsReconciliationBridge(_FrozenBankModel):
-    total_stockholders_equity_usd: str
-    preferred_stock_usd: str
-    preferred_apic_adj_usd: str = "0"
-    common_equity_usd: str
-    goodwill_usd: str
-    intangibles_gross_xbrl_usd: str = "0"
-    msr_excluded_from_intangibles_usd: str = "0"
-    intangibles_ex_msr_usd: str = "0"
-    dtl_intangibles_addback_usd: str = "0"
-    other_tce_adjustments_usd: str = "0"
+    total_stockholders_equity_usd: str | None = None
+    preferred_stock_usd: str | None = None
+    preferred_apic_adj_usd: str | None = None
+    common_equity_usd: str | None = None
+    goodwill_usd: str | None = None
+    intangibles_gross_xbrl_usd: str | None = None
+    msr_excluded_from_intangibles_usd: str | None = None
+    intangibles_ex_msr_usd: str | None = None
+    dtl_intangibles_addback_usd: str | None = None
+    other_tce_adjustments_usd: str | None = None
     tce_reported_usd: str | None = None
-    tce_xbrl_std_usd: str
-    shares_ending_common: str
+    tce_xbrl_std_usd: str | None = None
+    shares_ending_common: str | None = None
     shares_reported_denominator: str | None = None
-    rsu_share_addon: str = "0"
+    rsu_share_addon: str | None = None
     bvps_reported_usd: str | None = None
     tbvps_reported_usd: str | None = None
     tbvps_reported_source: Literal[
@@ -187,13 +188,19 @@ class TbvpsReconciliationBridge(_FrozenBankModel):
         "tce_div_reported_basic_shares",
         "unavailable",
     ] = "unavailable"
-    tbvps_xbrl_std_usd: str
+    tbvps_xbrl_std_usd: str | None = None
     tbvps_gap_pct: str | None = None
     denominator_note: str | None = None
+    tbvps_reported_verified: bool = False
+    tbvps_reported_verification_reason: str = "unverified"
+    tbvps_xbrl_std_verified: bool = False
+    tbvps_xbrl_std_verification_reason: str = "unverified"
+    tbvps_reported_provenance: dict[str, str] = Field(default_factory=dict)
+    tbvps_xbrl_std_provenance: dict[str, str] = Field(default_factory=dict)
 
 
 class BankDisclosureSnapshot(_FrozenBankModel):
-    schema_version: Literal["v4a.1"] = "v4a.1"
+    schema_version: Literal["v4a.1", "v4a.2", "v4a.3"] = BANK_DISCLOSURE_VERSION
     cik: str
     symbol: str
     company_name: str
@@ -267,11 +274,15 @@ class BankDisclosureSnapshot(_FrozenBankModel):
     efficiency_ratio_reported_pct: str | None = None
     nim_fte_pct: str | None = None
     rotce_q_reported_pct: str | None = None
+    rotce_q_verified: bool = False
+    rotce_q_verification_reason: str = "unverified"
+    rotce_q_provenance: dict[str, str] = Field(default_factory=dict)
     rotce_ytd_reported_pct: str | None = None
     tbvps_bridge: TbvpsReconciliationBridge
     segments: BankSegmentSnapshot | None = None
 
     provenance_sources: list[dict[str, str]] = Field(default_factory=list)
+    metric_provenance: dict[str, dict[str, str]] = Field(default_factory=dict)
     data_gaps: list[str] = Field(default_factory=list)
     cached_at: datetime = Field(default_factory=_utcnow)
 
@@ -294,7 +305,7 @@ def _extract_latest_instant_from_snapshot(
     line_name: str,
     *,
     as_of: date | None = None,
-    prefer_unit: str | None = None,
+    required_unit: str | None = None,
     target_end: date | None = None,
     max_end_drift_days: int | None = None,
 ) -> tuple[Decimal | None, date | None, str | None, str | None]:
@@ -308,9 +319,7 @@ def _extract_latest_instant_from_snapshot(
     for idx_tag, (tag, units_map) in enumerate(line_bucket.items()):
         if not isinstance(units_map, Mapping):
             continue
-        unit_keys = list(units_map.keys())
-        if prefer_unit and prefer_unit in units_map:
-            unit_keys = [prefer_unit]
+        unit_keys = [required_unit] if required_unit else units_map.keys()
         for uk in unit_keys:
             rows = units_map.get(uk) or []
             for r in rows:
@@ -320,6 +329,8 @@ def _extract_latest_instant_from_snapshot(
                 if end_d is None:
                     continue
                 filed_d = _parse_date(r.get("filed"))
+                if required_unit and as_of and filed_d is None:
+                    continue
                 if as_of is not None and filed_d is not None and filed_d > as_of:
                     continue
                 if target_end is not None and max_end_drift_days is not None:
@@ -1136,6 +1147,8 @@ def extract_bank_segment_snapshot(
 
 def parse_r4_balance_sheet_bank(table: FilingTableData) -> dict[str, Any]:
     """Parse ``R4.htm`` Balance Sheet strictly stopping before Consolidated VIEs supplemental block."""
+    if table.currency and table.currency.upper() != "USD":
+        return {}
     # Find newest instant column matching balance sheet date
     bs_col: int | None = None
     bs_end: date | None = None
@@ -1176,7 +1189,14 @@ def parse_r4_balance_sheet_bank(table: FilingTableData) -> dict[str, Any]:
                 if exclude_re and exclude_re.search(r.label):
                     continue
                 if rx.search(r.xbrl_tag or ""):
-                    v = _scale_cell_money(r.cells[bs_col], table.scale_multiplier, table.unit_header_note)
+                    cell = r.cells[bs_col]
+                    # A par-value annotation in the row label may be mistaken for
+                    # the data cell's unit by the HTML parser. The statement's
+                    # explicit money scale applies to the reported stock balance.
+                    if "preferredstock" in pat.lower() and "par value" in r.label.lower() and cell.scale == "units" and table.scale_multiplier and cell.numeric_value is not None:
+                        v = cell.numeric_value * Decimal(table.scale_multiplier)
+                    else:
+                        v = _scale_cell_money(cell, table.scale_multiplier, table.unit_header_note)
                     if v is not None:
                         return abs(v) if "allowance" in pat.lower() else v
         for pat in label_pats:
@@ -1233,8 +1253,8 @@ def parse_r4_balance_sheet_bank(table: FilingTableData) -> dict[str, Any]:
     )
     if total_equity is None and common_equity is not None and preferred is not None:
         total_equity = common_equity + preferred
-    if common_equity is None and total_equity is not None:
-        common_equity = total_equity - (preferred or Decimal("0"))
+    if common_equity is None and total_equity is not None and preferred is not None:
+        common_equity = total_equity - preferred
     goodwill = _find_money((r"^us-gaap_Goodwill$",), (r"^goodwill$",), exclude_re=re.compile(r"servicing|intangible", re.IGNORECASE))
     intangibles = _find_money(
         (r"^us-gaap_IntangibleAssetsNetExcludingGoodwill$", r"FiniteLivedIntangibleAssetsNet"),
@@ -1247,25 +1267,26 @@ def parse_r4_balance_sheet_bank(table: FilingTableData) -> dict[str, Any]:
         if gw_and_int is not None and gw_and_int >= goodwill:
             intangibles = gw_and_int - goodwill
 
-    # Parenthetical ending common shares if present on BS — STRICTLY 'outstanding', NEVER 'issued'!
-    shares_end: Decimal | None = None
-    for r in main_rows:
-        low = r.label.lower()
-        tag_l = (r.xbrl_tag or "").lower()
-        if "commonstocksharesoutstanding" in tag_l or (
-            "common" in low and "outstanding" in low and "treasury" not in low
-        ):
-            if bs_col < len(r.cells):
-                c_val = r.cells[bs_col].numeric_value
-                if c_val is not None and c_val > Decimal("1000"):
-                    sc_m = table.scale_multiplier or 1_000_000
-                    m_sh = re.search(r"shares?\s+in\s+(millions|thousands)", (table.unit_header_note or "").lower())
-                    if m_sh:
-                        sc_m = 1_000_000 if m_sh.group(1) == "millions" else 1_000
-                    elif c_val > Decimal("100000000"):
-                        sc_m = 1
-                    shares_end = c_val * Decimal(sc_m)
-                    break
+    # A monetary common-stock row often mentions outstanding share counts in
+    # its caption. Its numeric cells still contain dollars, not shares.
+    share_counts: set[Decimal] = set()
+    for row in main_rows:
+        tag = (row.xbrl_tag or "").lower()
+        label = row.label.strip().lower()
+        dedicated_row = bool(re.fullmatch(
+            r"(?:number of )?common (?:stock )?shares outstanding(?:\s*\([^)]*\))?", label,
+        ))
+        if not (tag.endswith("commonstocksharesoutstanding") or (not tag and dedicated_row)):
+            continue
+        if bs_col >= len(row.cells):
+            continue
+        count = row.cells[bs_col].numeric_value
+        unit_text = " ".join((label, table.unit_header_note or "", table.title)).lower()
+        scales = set(re.findall(r"\bshares?\s*(?:in|\()\s*(millions?|thousands?|units?)\b", unit_text))
+        if count is not None and count > 0 and len(scales) == 1:
+            scale = scales.pop().rstrip("s")
+            share_counts.add(count * {"million": 1_000_000, "thousand": 1_000, "unit": 1}[scale])
+    shares_end = share_counts.pop() if len(share_counts) == 1 else None
 
     return {
         "period_end_date": bs_end,
@@ -1511,137 +1532,187 @@ def parse_htm_securities_details(tables: Sequence[FilingTableData]) -> dict[str,
 
 # --------------------------------------------------------------------------- Tier C Extractors (8-K Tables + Streaming 10-Q MD&A)
 
-def _extract_8k_supplement_metrics(period: EarningsReleasePeriod | None) -> dict[str, Any]:
-    """Table-first extraction from 8-K EX-99.1/2/3 with physical sanity bounds (skipping image decks)."""
+def _bank_metric_unit_evidence(key: str, raw: str, marker: str, scope: str) -> dict[str, str] | None:
+    """Bind units to this cell, retaining the disclosure text used to establish them."""
+    text = " ".join((marker, raw)).strip()
+    scope = re.sub(r"\s+", " ", scope).strip()
+    if not re.fullmatch(r"\s*(?:(?:USD|US\$|\$)\s*)?\(?[+-]?[\d,]+(?:\.\d+)?\)?\s*%?\s*", text, re.I):
+        return None
+    if key not in ("tbvps_usd", "bvps_usd"):
+        if re.search(r"\$|\bUSD\b", text, re.I):
+            return None
+        if "%" in text:
+            return {"unit": "percent", "unit_evidence": text, "unit_scope": "cell"}
+        if re.search(r"(?i)\bpercent(?:age)?s?\b|%", scope) and not re.search(r"(?i)\bexcept\s+(?:for\s+)?(?:percent|percentage)", scope):
+            return {"unit": "percent", "unit_evidence": scope, "unit_scope": "table"}
+        return None
+    if "%" in text or re.search(r"(?i)\bpercent(?:age)?s?\b|%", scope):
+        return None
+    combined = " ".join((scope, text))
+    if re.search(r"(?i)\b(?:EUR|GBP|CAD|JPY|CHF|AUD|NZD|CNY|RMB|HKD|SGD|KRW|INR|SEK|NOK|DKK|BRL|MXN|ZAR|euros?|pounds?|yen|yuan|sterling|(?:canadian|australian|hong kong) dollars?)\b|[€£¥₩]", combined):
+        return None
+    if (re.search(r"\b(?i:currency|in)\s+(?!USD\b)[A-Z]{3}\b", scope)
+            or re.search(r"(?i)\bcurrency\s+(?:unknown|unspecified|undisclosed)\b", scope)):
+        return None
+    scale = re.search(r"(?i)\b(?:in|\$\s*in|usd\s*in)\s+(?:the\s+)?(thousands?|millions?|billions?)\b|\b(thousands?|millions?|billions?)\s+of\s+(?:usd|dollars?)\b", scope)
+    except_share = re.search(r"(?i)\bexcept\s+(?:for\s+)?(?:per[ -]share|share\s+and\s+per[ -]share)\b", scope)
+    if scale and not except_share:
+        return None
+    cell_currency = bool(re.search(r"(?i)\$|\bUSD\b", text))
+    scope_currency = bool(re.search(r"(?i)\b(?:USD|US\s+dollars?|dollars?)\b|\$", scope))
+    if not (cell_currency or scope_currency):
+        return None
+    return {"unit": "USD/share", "unit_evidence": text if cell_currency else scope,
+            "unit_scope": "cell" if cell_currency else "table", "scale_evidence": scale.group(0) if scale else "unscaled per share"}
+
+
+_BANK_QUARTER_PATTERN = r"\b(?:[1-4]\s*q|q\s*[1-4])\s*['’]?\s*(?:\d{4}|\d{2})\b"
+_BANK_QUARTER_TOKEN = re.compile(_BANK_QUARTER_PATTERN, re.I)
+_BANK_DATE_PATTERN = r"\b(?:[A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4}|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}/\d{1,2}/\d{4})\b"
+_BANK_PERIOD_TOKEN = re.compile(rf"{_BANK_QUARTER_PATTERN}|{_BANK_DATE_PATTERN}|\b(?:h[12]|[12]h|fy|ytd)\s*['’]?\s*(?:\d{{4}}|\d{{2}})\b", re.I)
+_BANK_DURATION = re.compile(r"\b(?:quarters?|years?|annual|year.to.date|ytd|(?:three|six|nine|twelve|3|6|9|12)\s+months?)\s*(?:ended|ending|to.date)?\b", re.I)
+_BANK_NONQUARTER = re.compile(r"\b(?:annual|years?|year.to.date|ytd|(?:six|nine|twelve|6|9|12)\s+months?)\b", re.I)
+# Common within-table metric group labels do not introduce new columns.
+# Other standalone headings are boundaries unless followed by a new period row.
+_BANK_METRIC_GROUP = re.compile(
+    r"^(?:per (?:common )?share|(?:average )?common shares outstanding(?: \(in (?:thousands|millions)\))?|"
+    r"balance sheet averages|ratios and other metrics|"
+    r"(?:consolidated )?(?:regulatory )?capital ratios|"
+    r"(?:average )?tangible common (?:shareholders'? )?equity(?:\s*[-–—]\s*(?:period end|average))?|"
+    r"less|plus)\s*:\s*(?:\([a-z0-9]+\))?$", re.I)
+
+
+def _bank_target_quarter(cell: str, target_end: date) -> bool:
+    if not _BANK_QUARTER_TOKEN.fullmatch(cell.strip()):
+        return False
+    compact = re.sub(r"[\s'’]", "", cell).lower()
+    q = (target_end.month - 1) // 3 + 1
+    return compact in {f"{q}q{target_end.year}", f"q{q}{target_end.year}",
+                       f"{q}q{target_end.year % 100:02d}", f"q{q}{target_end.year % 100:02d}"}
+
+
+def _period_table_metrics(period: EarningsReleasePeriod | None, target_end: date) -> dict[str, Any]:
+    """Extract exact-period consolidated metrics; ambiguous layouts remain unavailable."""
+    if period is None or not (target_end <= period.filed_at and (period.filed_at - target_end).days <= 90):
+        return {}
+    month_names = (target_end.strftime("%B"), target_end.strftime("%b"))
+    date_re = re.compile(rf"^(?:{'|'.join(month_names)}|sept)\.?\s+{target_end.day},?\s+{target_end.year}$", re.I) if target_end.month == 9 else re.compile(rf"^(?:{'|'.join(month_names)})\.?\s+{target_end.day},?\s+{target_end.year}$", re.I)
+    out: dict[str, Any] = {}
+    conflicts: set[str] = set()
+    for ex in (period.ex99_1, period.ex99_2, period.ex99_3):
+        if ex is None or ex.is_image_deck:
+            continue
+        for tbl in ex.tables:
+            context = " ".join([tbl.title or "", *tbl.headers, *(r[0] for r in tbl.rows[:8] if r)]).lower()
+            if not any(x in context for x in ("consolidated", "firmwide", "reconciliations of tangible", "net income applicable to common shareholders of")):
+                continue
+            if any(x in context for x in ("business segment", "by segment")):
+                continue
+            header = None
+            col = 0
+            is_quarter = False
+            duration_groups: list[str] = []
+            for row in [tbl.headers, *tbl.rows]:
+                # A single HTML table may contain multiple differently ordered sections.
+                # A new period header replaces, or invalidates, the preceding column map.
+                # Period-like headers always replace the prior binding, even when
+                # their period is unsupported. This prevents a later section from
+                # inheriting a column position from an earlier one.
+                cells = [cell.strip() for cell in row[1:]]
+                period_header = any(_BANK_PERIOD_TOKEN.search(cell) for cell in cells)
+                year_count = sum(bool(re.fullmatch(r"(?:19|20)\d{2}", cell)) for cell in cells)
+                year_header = year_count >= 2 or (year_count == 1 and bool(row and re.search(r"(?i)\b(?:year|annual)\b", row[0])))
+                section_header = bool(row and _BANK_DURATION.search(" ".join(row)))
+                if period_header or year_header or section_header:
+                    matches = [(i, _bank_target_quarter(cell, target_end)) for i, cell in enumerate(row[1:], 1)
+                               if _bank_target_quarter(cell, target_end) or date_re.fullmatch(cell.strip())]
+                    # Explicit annual/YTD durations cannot be treated as quarterly
+                    # observations, even if a column also bears a quarter label.
+                    nonquarter = _BANK_NONQUARTER.search(" ".join(row))
+                    if section_header and not period_header and not year_header:
+                        # Carry grouped duration headings to their following date or
+                        # quarter row, preserving the scope of each column.
+                        duration_groups = []
+                        group = row[0] if row else ""
+                        for cell in row:
+                            if cell.strip():
+                                group = cell
+                            duration_groups.append(group)
+                    if len(matches) == 1:
+                        match_col, match_quarter = matches[0]
+                        group = duration_groups[match_col] if match_col < len(duration_groups) else ""
+                        group_nonquarter = _BANK_NONQUARTER.search(group)
+                        header = row if not nonquarter and not group_nonquarter else None
+                        if header is not None:
+                            col, is_quarter = match_col, match_quarter
+                        duration_groups = []
+                    else:
+                        header = None
+                        if period_header or year_header:
+                            duration_groups = []
+                    continue
+                # A standalone section label is a boundary, not a data row.
+                if row and row[0].strip() and not any(c.strip() for c in row[1:]):
+                    if not _BANK_METRIC_GROUP.fullmatch(row[0].strip()):
+                        header = None
+                        duration_groups = []
+                    continue
+                if header is None:
+                    continue
+                if col >= len(row) or not row:
+                    continue
+                label = re.sub(r"\s*\((?:[a-z]|\d+)\)\s*$", "", row[0].strip().lower())
+                key = None
+                if re.fullmatch(r"tangible book value per (?:common )?share(?:\s*[-–—]\s*non-gaap)?", label):
+                    key = "tbvps_usd"
+                elif re.fullmatch(r"book value per (?:common )?share(?:\s*[-–—]\s*gaap)?", label):
+                    key = "bvps_usd"
+                elif is_quarter and re.fullmatch(r"return on (?:average )?tangible common equity(?:\s*[-–—]\s*non-gaap)?", label):
+                    key = "rotce_q_pct"
+                elif re.fullmatch(r"(?:standardized (?:common equity tier 1|cet1)(?: capital)? ratio|(?:common equity tier 1|cet1)(?: capital)? ratio \(standardized\))", label):
+                    key = "cet1_std_pct"
+                elif is_quarter and re.fullmatch(r"(?:net interest (?:margin|yield)|nim) \(fte\)(?:\s*[-–—]\s*non-gaap)?", label):
+                    key = "nim_fte_pct"
+                elif is_quarter and re.fullmatch(r"(?:efficiency|overhead) ratio(?:\s*[-–—]\s*(?:gaap|non-gaap))?", label):
+                    key = "efficiency_pct"
+                if key is None:
+                    continue
+                raw_value = row[col]
+                marker = ""
+                value = _d(re.sub(r"(?i)^\s*(?:USD|US\$)\s*", "", raw_value))
+                # Currency symbols may occupy a separate cell in HTML tables.
+                if (value is None and raw_value.strip() in ("", "$", "US$", "USD")
+                        and col + 1 < len(row) and col + 1 < len(header) and not header[col + 1].strip()):
+                    marker, raw_value = raw_value, row[col + 1]
+                    value = _d(re.sub(r"(?i)^\s*(?:USD|US\$)\s*", "", raw_value))
+                scope = " ".join([tbl.title or "", tbl.headers[0] if tbl.headers else "",
+                                  tbl.headers[col] if col < len(tbl.headers) else "",
+                                  header[0] if header else "", header[col], row[0]])
+                unit_evidence = _bank_metric_unit_evidence(key, raw_value, marker, scope)
+                if value is None or unit_evidence is None:
+                    continue
+                if key in out and out[key] != value:
+                    conflicts.add(key)
+                elif key not in out:
+                    out[key] = value
+                    out[key + "_provenance"] = {
+                        "source": "8k_supplement", "accession": period.accession, "url": ex.url,
+                        "exhibit": ex.exhibit_type, "period_end": target_end.isoformat(),
+                        "column": header[col], "row": row[0], "raw_value": raw_value,
+                        **unit_evidence,
+                    }
+    for key in conflicts:
+        del out[key], out[key + "_provenance"]
+    return out
+
+
+def _extract_8k_supplement_metrics(period: EarningsReleasePeriod | None, target_end: date | None = None) -> dict[str, Any]:
+    """Only return period-aligned metrics; unverified legacy heuristics are ineligible."""
     if period is None:
         return {}
-    metrics: dict[str, Any] = {}
-    exhibits_used: list[str] = []
-    exhibits = [
-        ex for ex in (period.ex99_3, period.ex99_2, period.ex99_1)
-        if ex is not None and not ex.is_image_deck
-    ]
-    # Process densest table exhibits first
-    exhibits.sort(key=lambda e: (e.numeric_table_cells, len(e.tables)), reverse=True)
-    for ex in exhibits:
-        exhibits_used.append(ex.exhibit_type)
-        for tbl in ex.tables:
-            # Skip obvious segment-level breakdown sub-tables when scanning consolidated highlights
-            tbl_title_l = (tbl.title or "").lower()
-            is_seg_table = "by segment" in tbl_title_l or "business segment" in tbl_title_l
-
-            # Find QTD column index (strictly prefer 3M/3Q/quarterly col over 9M/YTD col; check top rows if headers are blank)
-            q_col: int | None = None
-            for idx_h, h in enumerate(tbl.headers[1:], start=1):
-                hl = h.lower()
-                if any(k in hl for k in ("9m", "nine month", "ytd", "year to date", "change", "bps")):
-                    continue
-                if any(k in hl for k in ("3m", "3 month", "three month", "q3", "3q", "q2", "2q", "q1", "1q", "q4", "4q", "sep", "jun", "mar", "dec", "2026", "2025", "2024")):
-                    q_col = idx_h
-                    break
-            if q_col is None:
-                for hdr_r in tbl.rows[:4]:
-                    for idx_c, hcell in enumerate(hdr_r[1:], start=1):
-                        hl = hcell.lower()
-                        if any(k in hl for k in ("9m", "nine month", "ytd", "year to date", "change", "bps")):
-                            continue
-                        if any(k in hl for k in ("three month", "3 month", "3q2", "2q2", "1q2", "4q2", "third quarter", "second quarter", "first quarter", "fourth quarter")):
-                            q_col = idx_c
-                            break
-                    if q_col is not None:
-                        break
-            in_segment_section = False
-            for row in tbl.rows:
-                if not row:
-                    continue
-                # Pick label cell (col 0 if non-empty alphabetic, else col 1 for indented MS/BAC tables)
-                lbl_idx = 0
-                raw_lbl = row[0].strip()
-                if (not raw_lbl or len(raw_lbl) <= 3 or re.fullmatch(r"\([a-z0-9]+\)|[-—]", raw_lbl)) and len(row) > 1 and row[1].strip():
-                    lbl_idx = 1
-                    raw_lbl = row[1].strip()
-                if not raw_lbl or len(raw_lbl) > 160 or _d(raw_lbl) is not None:
-                    continue
-                lbl = raw_lbl.lower()
-                if any(hdr in lbl for hdr in ("institutional securities", "wealth management", "consumer banking", "global banking", "services", "commercial & investment")):
-                    if all(_d(c) is None for c in row[lbl_idx + 1 :]):
-                        in_segment_section = True
-                        continue
-                if "consolidated" in lbl or "firmwide" in lbl or "company-wide" in lbl:
-                    in_segment_section = False
-
-                # Resolve first numeric value to the right of lbl_idx (honoring q_col if valid numeric and not footnote/formula)
-                raw_v = ""
-                val: Decimal | None = None
-                cand_indices: list[int] = []
-                if q_col is not None and lbl_idx < q_col < len(row):
-                    cand_indices.append(q_col)
-                for idx_c in range(lbl_idx + 1, min(lbl_idx + 5, len(row))):
-                    if idx_c not in cand_indices:
-                        cand_indices.append(idx_c)
-                for idx_c in cand_indices:
-                    cell_txt = row[idx_c].strip()
-                    if not cell_txt or re.fullmatch(r"\([a-z0-9]{1,3}\)|(?:\([A-Z]\)/?)+", cell_txt):
-                        continue
-                    v_try = _d(cell_txt)
-                    if v_try is not None:
-                        raw_v = cell_txt
-                        val = v_try
-                        break
-                if val is None:
-                    continue
-
-                if ("tangible book value per" in lbl or re.search(r"\btbvps\b", lbl)) and "change" not in lbl:
-                    if Decimal("1") <= val <= Decimal("2000"):
-                        metrics.setdefault("tbvps_usd", val)
-                elif re.search(r"^book\s+value\s+per\s+(?:common\s+)?share", lbl) and "tangible" not in lbl:
-                    if Decimal("1") <= val <= Decimal("2500"):
-                        metrics.setdefault("bvps_usd", val)
-                elif (not is_seg_table and not in_segment_section) and (
-                    "rotce" in lbl or "rote" in lbl or "return on average tangible common" in lbl or "return on tangible common" in lbl
-                ):
-                    # Guard against segment-level > 28% ROTCE overriding consolidated ROTCE when q_col lacked quarter filter
-                    if Decimal("-50") <= val <= Decimal("45"):
-                        metrics.setdefault("rotce_q_pct", val)
-                elif ("net interest yield" in lbl or "net interest margin" in lbl or re.fullmatch(r"\s*nim(?:\s*\(fte\))?\s*", lbl)):
-                    if not is_seg_table and not in_segment_section and Decimal("0.3") <= val <= Decimal("10"):
-                        metrics.setdefault("nim_fte_pct", val)
-                elif (not is_seg_table and not in_segment_section) and ("efficiency ratio" in lbl or "overhead ratio" in lbl) and "change" not in lbl and "bps" not in lbl:
-                    if Decimal("25") <= val <= Decimal("120"):
-                        metrics.setdefault("efficiency_pct", val)
-                elif ("common equity tier 1" in lbl or re.search(r"\bcet1\b", lbl)) and ("ratio" in lbl or "%" in raw_v or Decimal("5") <= val <= Decimal("30")):
-                    if "minimum" not in lbl and "buffer" not in lbl and "advanced" not in lbl and Decimal("5") <= val <= Decimal("30"):
-                        metrics.setdefault("cet1_std_pct", val)
-                elif "tangible common equity" in lbl and "average" not in lbl and "ratio" not in lbl and "return" not in lbl:
-                    if val > Decimal("1000"):
-                        mult = Decimal("1000000") if ("million" in tbl_title_l or val < Decimal("1000000")) else Decimal("1")
-                        metrics.setdefault("tce_reported_usd", val * mult)
-                elif ("basic" in lbl and "shares" in lbl and "ending" in lbl) or re.search(r"common\s+shares\s+outstanding.*period[- ]end", lbl):
-                    if val > Decimal("10"):
-                        mult = Decimal("1000000") if val < Decimal("50000") else Decimal("1")
-                        metrics.setdefault("shares_reported_ending", val * mult)
-
-    # Secondary strict single-sentence fallback only for narrative releases (never across multi-metric lines)
-    for ex in exhibits:
-        if "rotce_q_pct" in metrics and "tbvps_usd" in metrics and "cet1_std_pct" in metrics:
-            break
-        for sent in re.split(r"(?<=[.!?])\s+|\n+", ex.text or ""):
-            if "|" in sent or len(sent) > 320:
-                continue
-            if "tbvps_usd" not in metrics:
-                m_t = re.search(r"tangible\s+book\s+value\s+per\s+(?:common\s+)?share[^$\d]{0,25}\$\s*([0-9,]+\.\d{2})", sent, re.IGNORECASE)
-                if m_t:
-                    v = _d(m_t.group(1))
-                    if v and Decimal("1") <= v <= Decimal("2000"):
-                        metrics["tbvps_usd"] = v
-            if "cet1_std_pct" not in metrics and "minimum" not in sent.lower():
-                m_c = re.search(r"(?:standardized\s+)?cet1\s+(?:capital\s+)?ratio[^%\d]{0,30}(\d{1,2}\.\d{1,2})\s*%", sent, re.IGNORECASE)
-                if m_c:
-                    v = _d(m_c.group(1))
-                    if v and Decimal("5") <= v <= Decimal("30"):
-                        metrics["cet1_std_pct"] = v
-    metrics["exhibits_used"] = exhibits_used
-    return metrics
+    result = _period_table_metrics(period, target_end) if target_end is not None else {}
+    result["exhibits_used"] = list(dict.fromkeys(v["exhibit"] for k, v in result.items() if k.endswith("_provenance")))
+    return result
 
 
 def scan_10q_mda_bank_disclosures_from_text(clean_text: str) -> dict[str, Any]:
@@ -1952,7 +2023,7 @@ def fetch_bank_disclosure_snapshot(
 
     if not force_refresh and bank_cache is not None:
         cached_ptr = bank_cache.get(f"bank:{cik_norm}:{as_of_key}")
-        if isinstance(cached_ptr, Mapping) and cached_ptr.get("schema_version") == "v4a.1":
+        if isinstance(cached_ptr, Mapping) and cached_ptr.get("schema_version") == BANK_DISCLOSURE_VERSION:
             try:
                 return BankDisclosureSnapshot.model_validate(cached_ptr), True
             except Exception:
@@ -2233,25 +2304,33 @@ def fetch_bank_disclosure_snapshot(
     nco_q, _, _, _ = _extract_quarter_and_ttm_flow_from_snapshot(snap, "net_charge_offs", as_of=as_of)
     aoci, _, _, _ = _extract_latest_instant_from_snapshot(snap, "aoci", as_of=as_of, target_end=period_end_date, max_end_drift_days=15)
 
-    total_equity = r4_info.get("total_equity") or _extract_latest_instant_from_snapshot(snap, "equity", as_of=as_of, target_end=period_end_date, max_end_drift_days=15)[0] or Decimal("0")
-    pref_stock_r4 = r4_info.get("preferred_stock")
-    pref_stock_xbrl, pref_end, _, _ = _extract_latest_instant_from_snapshot(snap, "preferred_stock", as_of=as_of, target_end=period_end_date, max_end_drift_days=10)
+    bridge_r4 = r4_info if r4_end == period_end_date else {}
+    def aligned_money(line: str) -> Decimal | None:
+        return _extract_latest_instant_from_snapshot(
+            snap, line, as_of=as_of, required_unit="USD", target_end=period_end_date, max_end_drift_days=0,
+        )[0]
+
+    total_equity = bridge_r4.get("total_equity")
+    if total_equity is None:
+        total_equity = aligned_money("equity")
+    pref_stock_r4 = bridge_r4.get("preferred_stock")
+    pref_stock_xbrl = aligned_money("preferred_stock")
     # Face-value-zero guard: if preferred_stock == 0 while preferred dividends > 0, trust R4.htm!
     if pref_stock_xbrl == Decimal("0") and (x_pdiv_q is not None and abs(x_pdiv_q) > 0):
         pref_stock_xbrl = None
-    preferred_stock = pref_stock_r4 if pref_stock_r4 is not None else (pref_stock_xbrl or Decimal("0"))
-    common_equity = r4_info.get("common_equity") if r4_info.get("common_equity") is not None else (total_equity - preferred_stock)
+    preferred_stock = pref_stock_r4 if pref_stock_r4 is not None else pref_stock_xbrl
+    common_equity = bridge_r4.get("common_equity") if bridge_r4.get("common_equity") is not None else (total_equity - preferred_stock if total_equity is not None and preferred_stock is not None else None)
 
-    goodwill = r4_info.get("goodwill") if r4_info.get("goodwill") is not None else (_extract_latest_instant_from_snapshot(snap, "goodwill", as_of=as_of, target_end=period_end_date, max_end_drift_days=15)[0] or Decimal("0"))
-    intangibles_ex_msr = r4_info.get("intangibles") if r4_info.get("intangibles") is not None else (_extract_latest_instant_from_snapshot(snap, "intangible_assets", as_of=as_of, target_end=period_end_date, max_end_drift_days=15)[0] or Decimal("0"))
-    msr = r4_info.get("msr") or Decimal("0")
+    goodwill = bridge_r4.get("goodwill") if bridge_r4.get("goodwill") is not None else aligned_money("goodwill")
+    intangibles_ex_msr = bridge_r4.get("intangibles") if bridge_r4.get("intangibles") is not None else aligned_money("intangible_assets")
+    msr = bridge_r4.get("msr")
 
-    # Ending common shares date-aligned hierarchy: XBRL (<=15d) -> R4/R5 (Issued-Treasury) -> DEI (<=45d) -> 10-Q Cover -> WeightedAvg
+    # Ending common shares must be measured at the balance-sheet date.
     sh_usg, _, _, _ = _extract_latest_instant_from_snapshot(
-        snap, "common_shares_outstanding", as_of=as_of, target_end=period_end_date, max_end_drift_days=15,
+        snap, "common_shares_outstanding", as_of=as_of, required_unit="shares", target_end=period_end_date, max_end_drift_days=0,
     )
     sh_dei, _ = _extract_dei_shares_from_snapshot(snap, target_end=period_end_date, max_drift_days=45, as_of=as_of)
-    sh_r4 = r4_info.get("shares_ending_common") or r5_info.get("shares_ending_common")
+    sh_r4 = bridge_r4.get("shares_ending_common")
     sh_basic, _, _, _ = _extract_quarter_and_ttm_flow_from_snapshot(snap, "shares_basic", as_of=as_of)
 
     # Step 4: Tier C (8-K EX-99.1/2/3 tables + 10-Q MD&A streaming fallback)
@@ -2282,8 +2361,10 @@ def fetch_bank_disclosure_snapshot(
         except Exception as exc_8k:
             data_gaps.append(f"8k_release_unavailable:{type(exc_8k).__name__}")
 
-    er_cur = er.current if er is not None else None
-    er_metrics = _extract_8k_supplement_metrics(er_cur)
+    er_cur = er.current if er is not None and er.cik.lstrip("0") == cik_norm.lstrip("0") else None
+    if er_cur is not None and as_of and er_cur.filed_at > as_of:
+        er_cur = None
+    er_metrics = _extract_8k_supplement_metrics(er_cur, period_end_date)
 
     # Tier C2: 10-Q MD&A scan when 8-K omits TBVPS/ROTE (GS) or RegCap/SCB/Min (BAC/C/GS) or shares fell through
     need_tbvps_or_rote = er_metrics.get("tbvps_usd") is None or er_metrics.get("rotce_q_pct") is None
@@ -2310,13 +2391,13 @@ def fetch_bank_disclosure_snapshot(
             except Exception as exc_mda:
                 data_gaps.append(f"10q_mda_scan_failed:{type(exc_mda).__name__}")
 
-    sh_cover = mda_metrics.get("cover_common_shares_outstanding")
-    shares_ending = sh_usg or sh_r4 or sh_dei or sh_cover or sh_basic or Decimal("1")
-    if sh_usg is None and sh_r4 is None and sh_dei is None and sh_cover is None:
-        data_gaps.append("shares_outstanding_weighted_avg_fallback")
-
-    tce_xbrl_std = common_equity - goodwill - intangibles_ex_msr
-    tbvps_xbrl_std = (tce_xbrl_std / shares_ending) if shares_ending > 0 else Decimal("0")
+    # Only shares measured at the balance-sheet date are eligible for this bridge.
+    shares_ending = sh_usg if sh_usg is not None else sh_r4
+    components = (common_equity, goodwill, intangibles_ex_msr)
+    tce_xbrl_std = common_equity - goodwill - intangibles_ex_msr if all(v is not None for v in components) else None
+    tbvps_xbrl_std = tce_xbrl_std / shares_ending if tce_xbrl_std is not None and shares_ending is not None and shares_ending > 0 else None
+    if tbvps_xbrl_std is None:
+        data_gaps.append("tbvps_standardized_missing_aligned_inputs")
 
     # Reconcile CET1 (10-Q final takes precedence over 8-K preliminary for identical period)
     cet1_prelim_8k = er_metrics.get("cet1_std_pct")
@@ -2352,58 +2433,35 @@ def fetch_bank_disclosure_snapshot(
     else:
         cet1_min_final = rc_min or mda_min
 
-    # Reported TBVPS & RSU bridge
-    tce_reported = er_metrics.get("tce_reported_usd") or mda_metrics.get("tce_reported_usd")
-    shares_rep = er_metrics.get("shares_reported_ending") or shares_ending
-    if er_metrics.get("tbvps_usd") is not None:
-        tbvps_reported = er_metrics["tbvps_usd"]
-        tbvps_src: Literal["8k_supplement", "10q_mda", "tce_div_reported_basic_shares", "unavailable"] = "8k_supplement"
-    elif mda_metrics.get("tbvps_reported_usd") is not None:
-        tbvps_reported = mda_metrics["tbvps_reported_usd"]
-        tbvps_src = "10q_mda"
-    elif tce_reported is not None and shares_rep > 0:
-        tbvps_reported = tce_reported / shares_rep
-        tbvps_src = "tce_div_reported_basic_shares"
-    else:
-        tbvps_reported = None
-        tbvps_src = "unavailable"
-
-    if tbvps_reported is not None and tce_reported is not None and tbvps_reported > 0 and shares_rep == shares_ending:
-        inferred_den = tce_reported / tbvps_reported
-        if inferred_den > shares_ending * Decimal("1.005"):
-            shares_rep = inferred_den
-
-    rsu_addon = max(Decimal("0"), shares_rep - shares_ending)
-    tbvps_gap_pct = (
-        ((tbvps_xbrl_std - tbvps_reported) / tbvps_reported) * Decimal("100")
-        if (tbvps_reported is not None and tbvps_reported > 0)
-        else None
-    )
-    denom_note: str | None = None
-    if rsu_addon > Decimal("500000"):
-        denom_note = f"Reported TBVPS denominator includes +{format(rsu_addon / Decimal('1000000'), '.1f')}M unvested/award RSUs vs ending common shares."
-
+    # A reported ratio must be an actual, period-aligned consolidated disclosure.
+    tbvps_evidence = er_metrics.get("tbvps_usd_provenance") or {}
+    tbvps_reported = (er_metrics.get("tbvps_usd") if tbvps_evidence.get("unit") == "USD/share"
+                       and tbvps_evidence.get("unit_evidence") and tbvps_evidence.get("scale_evidence") else None)
+    tbvps_src = "8k_supplement" if tbvps_reported is not None else "unavailable"
+    if tbvps_reported is None:
+        data_gaps.append("tbvps_reported_no_period_aligned_consolidated_table")
+    tbvps_gap_pct = ((tbvps_xbrl_std - tbvps_reported) / tbvps_reported * Decimal("100")
+                     if tbvps_xbrl_std is not None and tbvps_reported is not None and tbvps_reported > 0 else None)
     bridge = TbvpsReconciliationBridge(
-        total_stockholders_equity_usd=_dstr(total_equity) or "0",
-        preferred_stock_usd=_dstr(preferred_stock) or "0",
-        common_equity_usd=_dstr(common_equity) or "0",
-        goodwill_usd=_dstr(goodwill) or "0",
-        intangibles_ex_msr_usd=_dstr(intangibles_ex_msr) or "0",
-        msr_excluded_from_intangibles_usd=_dstr(msr) or "0",
-        tce_reported_usd=_dstr(tce_reported),
-        tce_xbrl_std_usd=_dstr(tce_xbrl_std) or "0",
-        shares_ending_common=_dstr(shares_ending) or "0",
-        shares_reported_denominator=_dstr(shares_rep),
-        rsu_share_addon=_dstr(rsu_addon) or "0",
-        bvps_reported_usd=_qstr(er_metrics.get("bvps_usd") or mda_metrics.get("bvps_reported_usd"), 2),
-        tbvps_reported_usd=_qstr(tbvps_reported, 2),
-        tbvps_reported_source=tbvps_src,
-        tbvps_xbrl_std_usd=_qstr(tbvps_xbrl_std, 2) or "0",
-        tbvps_gap_pct=_qstr(tbvps_gap_pct, 2),
-        denominator_note=denom_note,
+        total_stockholders_equity_usd=_dstr(total_equity), preferred_stock_usd=_dstr(preferred_stock),
+        common_equity_usd=_dstr(common_equity), goodwill_usd=_dstr(goodwill),
+        intangibles_ex_msr_usd=_dstr(intangibles_ex_msr), msr_excluded_from_intangibles_usd=_dstr(msr),
+        tce_xbrl_std_usd=_dstr(tce_xbrl_std), shares_ending_common=_dstr(shares_ending),
+        tbvps_reported_usd=_qstr(tbvps_reported, 2), tbvps_reported_source=tbvps_src,
+        bvps_reported_usd=_qstr(er_metrics.get("bvps_usd"), 2),
+        tbvps_xbrl_std_usd=_qstr(tbvps_xbrl_std, 2), tbvps_gap_pct=_qstr(tbvps_gap_pct, 2),
+        tbvps_reported_verified=tbvps_reported is not None,
+        tbvps_reported_verification_reason="period_aligned_consolidated_table_with_unit_evidence" if tbvps_reported is not None else "no_period_aligned_consolidated_table_with_unit_evidence",
+        tbvps_xbrl_std_verified=tbvps_xbrl_std is not None,
+        tbvps_xbrl_std_verification_reason="aligned_components" if tbvps_xbrl_std is not None else "missing_aligned_inputs",
+        tbvps_reported_provenance=er_metrics.get("tbvps_usd_provenance", {}),
+        tbvps_xbrl_std_provenance={"period_end": period_end_date.isoformat(), "common_equity": "filing_balance_sheet" if bridge_r4.get("common_equity") is not None or (bridge_r4.get("total_equity") is not None and bridge_r4.get("preferred_stock") is not None) else "aligned_companyfacts_or_mixed", "goodwill": "filing_balance_sheet" if bridge_r4.get("goodwill") is not None else "aligned_companyfacts", "intangibles": "filing_balance_sheet" if bridge_r4.get("intangibles") is not None else "aligned_companyfacts", "shares": "aligned_companyfacts" if sh_usg is not None else "filing_balance_sheet", "unit": "USD/share"} if tbvps_xbrl_std is not None else {},
     )
-
-    rotce_q = er_metrics.get("rotce_q_pct") or mda_metrics.get("rotce_q_reported_pct")
+    rotce_evidence = er_metrics.get("rotce_q_pct_provenance") or {}
+    rotce_q = (er_metrics.get("rotce_q_pct") if rotce_evidence.get("unit") == "percent"
+               and rotce_evidence.get("unit_evidence") else None)
+    if rotce_q is None:
+        data_gaps.append("rotce_q_no_period_aligned_consolidated_table")
     eff_reported = er_metrics.get("efficiency_pct")
     # Managed revenue/PPNR from 10-Q segments if R*.htm indicated FTE reconciling offset
     net_rev_managed = None
@@ -2483,7 +2541,7 @@ def fetch_bank_disclosure_snapshot(
         allowance_credit_losses_usd=_dstr(acl),
         nonaccrual_loans_usd=_dstr(nonaccrual),
         net_charge_offs_q_usd=_dstr(nco_q),
-        avg_tangible_common_equity_q_usd=_dstr(tce_reported),
+        avg_tangible_common_equity_q_usd=None,
         aoci_usd=_dstr(aoci),
         common_dividends_ttm_usd=_dstr(abs(x_div_ttm)) if x_div_ttm is not None else None,
         common_buybacks_ttm_usd=_dstr(abs(x_bbk_ttm)) if x_bbk_ttm is not None else None,
@@ -2508,9 +2566,13 @@ def fetch_bank_disclosure_snapshot(
         efficiency_ratio_reported_pct=_qstr(eff_reported, 2),
         nim_fte_pct=_qstr(er_metrics.get("nim_fte_pct"), 2),
         rotce_q_reported_pct=_qstr(rotce_q, 2),
+        rotce_q_verified=rotce_q is not None,
+        rotce_q_verification_reason="period_aligned_consolidated_table_with_unit_evidence" if rotce_q is not None else "no_period_aligned_consolidated_table_with_unit_evidence",
+        rotce_q_provenance=er_metrics.get("rotce_q_pct_provenance", {}),
         tbvps_bridge=bridge,
         segments=seg_snapshot,
         provenance_sources=provenance_sources,
+        metric_provenance={k.removesuffix("_provenance"): v for k, v in er_metrics.items() if k.endswith("_provenance")},
         data_gaps=list(dict.fromkeys(data_gaps)),
     )
 

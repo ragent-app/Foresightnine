@@ -727,6 +727,27 @@ describe("earningsSquad API client", () => {
 });
 
 describe("EarningsDossierView", () => {
+  it("opens the original edition of a corrected bank report only on request", async () => {
+    storeSession();
+    const original = buildSampleDossier({ memo_markdown: "原备忘录的估值结论" });
+    const current = buildSampleDossier({
+      dossier_id: "new-edition", memo_markdown: "本期银行披露已更正",
+      supersedes_sha256: original.dossier_sha256 ?? "",
+      open_gaps: [{ gap_id: "restatement", code: "bank_disclosure_restatement",
+        stage: "disclosure_review", source: original.dossier_id ?? null, message: "旧估值已撤回" }],
+    });
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL) => jsonResponse({ dossier: original }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<EarningsDossierView topicId="bank" dossier={current} />);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.queryByText(original.memo_markdown)).toBeNull();
+    const details = screen.getByText("查看更正前的备忘录").closest("details")!;
+    details.open = true;
+    fireEvent(details, new Event("toggle"));
+    await waitFor(() => expect(screen.getByText(original.memo_markdown)).toBeTruthy());
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("revision=original&original_sha256=");
+  });
+
   it("renders all 7 buy-side sections, transparent R/Y/G diagnostics without composite scores, and Reverse-DCF 3x3 matrix", () => {
     const dossier = buildSampleDossier();
     render(<EarningsDossierView dossier={dossier} topicId="t1" />);

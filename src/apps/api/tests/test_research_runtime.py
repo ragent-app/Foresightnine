@@ -893,6 +893,7 @@ def test_web_retrieval_methods_and_turn_partial_notes_schema():
 
 
 def test_company_financials_rate_limit_allows_one_retry_and_stops_on_second_repeat():
+    from app.fin_data.adapters.sec_edgar import STANDARD_LINES
     from tests.fin_data.helpers import ConceptTransport
     from tests.fin_runtime_helpers import FakeTransport, Reply, json_reply, make_toolbox
     fin_args = {'cik': '320193', 'lines': ['revenue'], 'periods': 'last_4_quarters', 'rationale': 'Quarterly revenue.'}
@@ -910,7 +911,9 @@ def test_company_financials_rate_limit_allows_one_retry_and_stops_on_second_repe
     first = json.loads(_last_tool(m_ok, 1)['content'])
     assert first['status'] == 'rate_limited' and first['retryable'] is True
     assert json.loads(_last_tool(m_ok, 2)['content'])['status'] in ('ok', 'partial')
-    assert len(t.concept_urls) == 4 and len(saved[-1]['rate_limit_retries']) == 1
+    requested_tags = [u.rsplit('/', 1)[1].removesuffix('.json') for u in t.concept_urls]
+    assert sorted(requested_tags) == sorted(STANDARD_LINES['revenue'].tags['us-gaap'])
+    assert len(saved[-1]['rate_limit_retries']) == 1
 
     # 2. A second consecutive rate limit keeps the signature in seen, so repeating again stops with no_progress.
     t2 = FakeTransport(Reply())
@@ -1376,6 +1379,7 @@ def test_below_watermark_runtime_keeps_history_prefix_byte_identical_for_kv_cach
         checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
     )
     assert res.status == 'completed'
+    assert 'Revenue was 100 USD in FY2025.' in res.report
     assert res.question_parts[0]['status'] == 'answered'
     assert 'compaction_count' not in saved[-1]
     assert len(m.inputs) == 5
@@ -1658,7 +1662,9 @@ def test_l1_compaction_triggers_under_tight_context_and_record_facts_still_locat
         context=context(),
         checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
     )
-    assert outcome.status == 'completed'
+    assert outcome.status == 'partial'
+    assert quote_1 in (outcome.partial_notes or '')
+    assert outcome.report == ''
     assert len(outcome.facts) == 1
     assert outcome.facts[0]['character_start'] == 0
     assert saved[-1]['compaction_count'] == 1
@@ -2588,7 +2594,9 @@ def test_checkpointed_question_parts_survive_interruption_and_reopen_without_lea
     out = run_research_agent(question=question, sources=[source()], model=model, context=context(),
                              checkpoint=lambda s: snapshots.append(json.loads(json.dumps(s))))
     assert out.status == 'partial'
-    assert out.question_parts[0]['answer'] == 'The filing reports revenue of 100 USD.'
+    assert out.question_parts[0]['status'] == 'partial'
+    assert 'Revenue was 100 USD.' in out.question_parts[0]['answer']
+    assert 'The filing reports' not in out.question_parts[0]['answer']
     assert out.question_parts[0]['references'][0]['origin'] == 'current'
     assert out.question_parts[1]['reason'] == 'A current price and entry criteria are missing.'
     assert any(len(s.get('question_parts', [])) == 2 for s in snapshots)

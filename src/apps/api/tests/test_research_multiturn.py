@@ -154,7 +154,8 @@ def test_two_turns_accumulate_and_second_turn_calculates_from_prior_fact_ids(env
     assert content['calculations'][0]['input_status'] == 'matched'
     assert content['claims'][0]['turn_id'] == turn1['turn_id'] == first['content']['claims'][0]['turn_id']
     assert content['claims'] == first['content']['claims']
-    assert '25.00' in turn2['report'] and 'growth_percent' in turn2['report'] and turn2['status'] == 'completed'
+    assert turn2['status'] == 'completed'
+    assert '25.00' in turn2['report'] and 'growth_percent' in turn2['report']
     assert turn2['parent_version_id'] == first['version_id']
     assert turn1['usage']['model_calls'] == 3 and turn2['usage']['model_calls'] == 2
 
@@ -736,7 +737,9 @@ def test_continue_after_incomplete_model_response_clears_stopped_and_compacts(mo
     assert op['status'] == 'completed'
     assert provider.calls == 4
     assert payloads[3] < payloads[2]
-    assert client.get(path, headers=headers).json()['versions'][-1]['content']['turns'][-1]['status'] == 'completed'
+    recovered_turn = client.get(path, headers=headers).json()['versions'][-1]['content']['turns'][-1]
+    assert recovered_turn['status'] == 'completed'
+    assert quote in recovered_turn['report']
 
 
 def test_continue_after_provider_timeout_preserves_unread_sources_and_injects_timeout_guidance(monkeypatch):
@@ -831,6 +834,7 @@ def test_continue_after_provider_timeout_preserves_unread_sources_and_injects_ti
     assert provider.calls == 4
     final = client.get(path, headers=headers).json()['versions'][-1]['content']
     assert final['turns'][-1]['status'] == 'completed'
+    assert quote in final['turns'][-1]['report']
     assert final['turns'][-1]['operation_ids'] == [op1, op2]
     assert final['claims'][0]['citations'][0]['quotation'] == quote
 
@@ -927,3 +931,93 @@ def test_prior_research_priority_bucketing_dedupes_includes_failed_sources_and_o
     omitted = compact_prior['prior_omitted']
     assert omitted['claims']['count'] == 12 - len(compact_prior['claims'])
     assert omitted['read_ranges']['count'] == 30 - len(compact_prior['read_ranges'])
+
+
+def test_unreviewed_mixed_delivery_survives_version_and_export(env):
+    sid = env.source_id
+    def mixed(messages, kwargs):
+        return turn('submit_research', {'report': 'Revenue was 100 USD. Revenue doubled.', 'claims': [
+            {'text': 'Revenue was 100 USD.', 'source_id': sid, 'quotation': 'Revenue was 100 USD.', 'role': 'support'},
+            {'text': 'Revenue doubled.', 'source_id': sid, 'quotation': 'Revenue was 100 USD.', 'role': 'support'}],
+            'limitations': [], 'stopping_reason': 'done'}, 'submit')
+    env.install(Scripted(read_all(sid), record_revenue(sid), mixed))
+    env.run({'max_model_calls': 3})
+    version = env.latest()
+    saved = version['content']['turns'][-1]
+    assert saved['status'] == 'partial' and not saved['report']
+    assert 'Revenue was 100 USD.' in saved['partial_notes']
+    assert 'Revenue doubled.' not in saved['partial_notes']
+    assert all('Revenue doubled.' not in part.get('answer', '') for part in saved['question_parts'])
+    fetched = env.client.get(f"{env.path}/versions/{version['version_id']}", headers=env.headers).json()
+    exported = env.client.get(f"{env.path}/versions/{version['version_id']}/export", headers=env.headers).json()
+    assert fetched['content']['turns'][-1]['partial_notes'] == saved['partial_notes']
+    assert exported['version']['content']['turns'][-1]['partial_notes'] == saved['partial_notes']
+    stored = api.research_sources.repository.get(sid)
+    no_export = stored.model_copy(update={'permissions': stored.permissions.model_copy(update={'export': False})})
+    api.research_sources.repository.put(sid, no_export)
+    assert env.client.get(f"{env.path}/versions/{version['version_id']}/export", headers=env.headers).status_code == 403
+    hidden = no_export.model_copy(update={'permissions': no_export.permissions.model_copy(update={'display': False})})
+    api.research_sources.repository.put(sid, hidden)
+    filtered = env.client.get(f"{env.path}/versions/{version['version_id']}", headers=env.headers).json()
+    assert 'Revenue was 100 USD.' not in json.dumps(filtered, ensure_ascii=False)
+
+
+def test_calculation_identity_survives_turns_checkpoint_and_export(env):
+    """Opposite operations on the same facts stay scoped to the referenced turn."""
+    sid = env.source_id
+    def calc(reverse):
+        def step(messages, kwargs):
+            ids = {f['period']: f['fact_id'] for f in prior_of(messages)['facts']}
+            first, second = ('2024', '2025') if reverse else ('2025', '2024')
+            return turn('calculate_financials', {'rationale': 'difference', 'calculations': [
+                {'formula': 'difference', 'first_fact_id': ids[first], 'second_fact_id': ids[second]}]}, 'calc')
+        return step
+    def finish(messages, kwargs):
+        value = tool_results(messages)[-1]['calculations'][0]['value']
+        return turn('submit_research', {'report': f'Revenue difference is {value} USD.', 'claims': [], 'limitations': [],
+                                       'stopping_reason': 'done'}, 'submit')
+    env.install(Scripted(read_all(sid), record_revenue(sid), submit(sid)))
+    env.run()
+    env.install(Scripted(calc(True), finish))
+    env.run({'question_override': 'What is the revenue difference?', 'max_model_calls': 2})
+    old = env.latest()['content']['calculations'][-1]
+    assert old['value'] == '-20.00'
+    env.install(Scripted(calc(False), finish))
+    env.run({'question_override': 'What is the revenue difference?', 'max_model_calls': 2})
+    current = env.latest()['content']
+    latest_turn = current['turns'][-1]
+    text = (latest_turn.get('report') or '') + (latest_turn.get('partial_notes') or '') + json.dumps(latest_turn['question_parts'], ensure_ascii=False)
+    assert '20.00' in text and '-20.00' not in text
+    assert current['calculations'][-1]['value'] == '20.00'
+    version = env.latest()['version_id']
+    exported = env.client.get(f'{env.path}/versions/{version}/export', headers=env.headers)
+    assert exported.status_code == 200
+    assert exported.json()['version']['content']['turns'][-1] == latest_turn
+
+    def checkpoint(messages, kwargs):
+        return turn('checkpoint_question_part', {'question': 'What was the earlier difference?',
+                    'answer': 'Difference: -20.00 USD', 'calculation_ids': [old['calculation_id']]}, 'checkpoint')
+    captured = {}
+    def interrupted(messages, kwargs):
+        captured.update(tool_results(messages)[-1])
+        raise ProviderFailure('provider_error', 'interrupted', retryable=False)
+    env.install(Scripted(read_all(sid), checkpoint, interrupted))
+    env.run({'question_override': 'What was the earlier difference?', 'max_model_calls': 3})
+    assert captured.get('status') == 'saved', captured
+    last = env.latest()['content']['turns'][-1]
+    assert '-20.00' in (last.get('partial_notes') or '')
+    assert any('-20.00' in p.get('answer', '') and any(r.get('calculation_id') == old['calculation_id']
+               for r in p.get('references', [])) for p in last['question_parts'])
+    assert 'difference: 20.00' not in (last.get('partial_notes') or '')
+    version = env.latest()['version_id']
+    exported = env.client.get(f'{env.path}/versions/{version}/export', headers=env.headers)
+    assert exported.status_code == 200
+    assert exported.json()['version']['content']['turns'][-1] == last
+    stored = api.research_sources.repository.get(sid)
+    no_export = stored.model_copy(update={'permissions': stored.permissions.model_copy(update={'export': False})})
+    api.research_sources.repository.put(sid, no_export)
+    assert env.client.get(f'{env.path}/versions/{version}/export', headers=env.headers).status_code == 403
+    hidden = no_export.model_copy(update={'permissions': no_export.permissions.model_copy(update={'display': False})})
+    api.research_sources.repository.put(sid, hidden)
+    displayed = env.client.get(f'{env.path}/versions/{version}', headers=env.headers).json()
+    assert '-20.00' not in json.dumps(displayed, ensure_ascii=False)

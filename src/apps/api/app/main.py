@@ -33,6 +33,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, model_validator
 from starlette.middleware.cors import CORSMiddleware
 
+from .research_bank_versions import BANK_DISCLOSURE_VERSION, BANK_VALUATION_VERSION
 from .contract_models import (
     CONTRACT_SCHEMA,
     OAuthAuthorizationResponse,
@@ -220,6 +221,7 @@ from .fin_data.adapters.sec_bank_disclosure import (
     fetch_bank_disclosure_snapshot,
     qualify_bank_sector_applicability,
 )
+from .research_bank_restatement import bank_restatement_notes, needs_bank_restatement, restated_dossier
 from .research_bank_diagnostics import (
     BankDiagnosticsSummary,
     BankValuationResult,
@@ -236,7 +238,6 @@ from .research_earnings_squad import (
     EarningsDossier,
     EarningsSquadOrchestrator,
     FinToolboxToolRunner,
-    InMemorySquadCheckpointStore,
     OrgGraphEvent,
     PrefetchDependencies,
     SlotBinding,
@@ -5604,10 +5605,8 @@ class _RepoSquadCheckpointStore:
         self._account_id = account_id
         self._topic_id = topic_id
         self._state_key = state_lock_key
-        self._mem = InMemorySquadCheckpointStore()
 
     def save(self, checkpoint: SquadCheckpoint) -> None:
-        self._mem.save(checkpoint)
         dumped = checkpoint.model_dump(mode="json")
         cp_key = _squad_checkpoint_key(self._account_id, self._topic_id, checkpoint.run_id)
         EARNINGS_SQUAD_CHECKPOINTS.put(cp_key, {
@@ -5625,18 +5624,15 @@ class _RepoSquadCheckpointStore:
             updated = dict(current)
             updated["checkpoint"] = dumped
             updated["checkpoint_completed_stages"] = list(checkpoint.completed_stages)
-            updated["org_events"] = [ev.model_dump(mode="json") for ev in checkpoint.org_events]
+            updated["org_events"] = dumped["org_events"]
             if checkpoint.dossier is not None:
-                updated["dossier"] = checkpoint.dossier.model_dump(mode="json")
+                updated["dossier"] = dumped["dossier"]
             updated["updated_at"] = lifecycle_clock.now().isoformat()
             EARNINGS_SQUAD_STATES.put(self._state_key, updated)
 
         EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{self._state_key}", update_state)
 
     def load(self, run_id: str) -> SquadCheckpoint | None:
-        loaded = self._mem.load(run_id)
-        if loaded is not None:
-            return loaded
         cp_key = _squad_checkpoint_key(self._account_id, self._topic_id, run_id)
         row = EARNINGS_SQUAD_CHECKPOINTS.get(cp_key)
         if isinstance(row, Mapping) and isinstance(row.get("checkpoint"), Mapping):
@@ -6036,6 +6032,22 @@ class _AccountSlotModelRunner:
             else:
                 _prev_gen, init_user, prev_history, last_msg = self._turns[key]
                 history = list(prev_history)
+                # Keep native assistant envelopes (including provider-specific reasoning),
+                # but honor the worker's compacted versions of already-sent tool results.
+                # Match by position and ID so reused call IDs cannot cross exchanges.
+                old_results = [r for exchange in history for r in exchange.results]
+                presented = [m for m in mreq.messages if m.get("role") == "tool"]
+                if old_results and len(presented) >= len(old_results) and all(
+                    m.get("tool_call_id") == r.tool_call_id and isinstance(m.get("content"), str)
+                    for r, m in zip(old_results, presented)
+                ) and any(r.content != m["content"] for r, m in zip(old_results, presented)):
+                    contents = iter(m["content"] for m in presented)
+                    history = [
+                        dataclass_replace(exchange, results=tuple(
+                            dataclass_replace(result, content=next(contents)) for result in exchange.results
+                        ))
+                        for exchange in history
+                    ]
                 if last_msg is not None:
                     trailing_results: list[ModelToolResult] = []
                     trailing_user_parts: list[str] = []
@@ -6120,6 +6132,7 @@ class _AccountSlotModelRunner:
                 model_resp = adapter.complete_turn(turn)
                 break
             except ProviderFailure as exc:
+                exc.transport_retries = transient_attempts + rate_limit_attempts
                 if _is_cancelled() or exc.code == "provider_cancelled":
                     raise
                 if _is_superseded():
@@ -6188,6 +6201,7 @@ class _AccountSlotModelRunner:
         )
         return SlotModelResponse(
             content=text_out,
+            transport_retries=transient_attempts + rate_limit_attempts,
             tool_calls=tuple(model_resp.tool_calls or ()),
             usage=model_resp.usage,
             finish_reason=str(model_resp.finish_reason or "stop"),
@@ -6826,12 +6840,29 @@ def _prepare_earnings_squad_execution(
         )
 
     resume_cp: SquadCheckpoint | None = None
+    superseded_checkpoint: SquadCheckpoint | None = None
     existing_steering: list[dict[str, Any]] = []
     if request.resume_from_checkpoint or request.resume_run_id:
         resume_cp = cp_store.load(run_id)
         if resume_cp is None and isinstance(prior_state, Mapping) and isinstance(prior_state.get("checkpoint"), Mapping):
             resume_cp = SquadCheckpoint.model_validate(prior_state["checkpoint"])
         if resume_cp is not None:
+            if resume_cp.snapshot and resume_cp.snapshot.bank_disclosure and resume_cp.snapshot.bank_disclosure.schema_version != BANK_DISCLOSURE_VERSION:
+                superseded_checkpoint = resume_cp
+                previous = resume_cp.snapshot
+                # Keep the fiscal scope, accepted instructions and charged usage.
+                # Rebuild dependent stages from verified data on this authorized resume.
+                scope = {k: getattr(previous, k) for k in (
+                    "entity_id", "symbol", "cik", "company_name", "as_of", "filing_accession",
+                    "prior_filing_accession", "current_filing_url", "prior_filing_url", "period_label",
+                ) if getattr(previous, k) is not None and getattr(prefetch_req, k) is None}
+                prefetch_req = prefetch_req.model_copy(update=scope)
+                resume_cp = SquadCheckpoint(
+                    run_id=resume_cp.run_id, question=resume_cp.question, entity_id=previous.entity_id,
+                    symbol=previous.symbol, cik=previous.cik, user_instructions=resume_cp.user_instructions,
+                    slot_usage=resume_cp.slot_usage, stage_usage=resume_cp.stage_usage,
+                    org_events=resume_cp.org_events, last_sequence=resume_cp.last_sequence,
+                )
             org_events_buf.extend(resume_cp.org_events)
         if isinstance(prior_state, Mapping) and isinstance(prior_state.get("steering_instructions"), list):
             existing_steering = list(prior_state["steering_instructions"])
@@ -6854,6 +6885,17 @@ def _prepare_earnings_squad_execution(
             next_seq += 1
 
     def init_state() -> None:
+        previous_row = EARNINGS_SQUAD_STATES.get(state_key) or {}
+        old_dossier = previous_row.get("dossier")
+        if isinstance(old_dossier, Mapping) and needs_bank_restatement(old_dossier["snapshot"]):
+            _archive_bank_dossier(previous_row, old_dossier)
+        if superseded_checkpoint is not None:
+            archive_key = _squad_checkpoint_key(account.account_id, topic_id, f"original_bank_{run_id}")
+            if EARNINGS_SQUAD_CHECKPOINTS.get(archive_key) is None:
+                EARNINGS_SQUAD_CHECKPOINTS.put(archive_key, {
+                    "account_id": account.account_id, "topic_id": topic_id, "run_id": run_id,
+                    "checkpoint": superseded_checkpoint.model_dump(mode="json"),
+                })
         EARNINGS_SQUAD_STATES.put(state_key, {
             "account_id": account.account_id,
             "topic_id": topic_id,
@@ -6878,7 +6920,10 @@ def _prepare_earnings_squad_execution(
         })
 
     def persist_checkpoint_and_check_cancel(cp: SquadCheckpoint) -> None:
-        cp_store.save(cp)
+        # The orchestrator saves before invoking this callback. A custom runner
+        # can supply its own store; mirror only those checkpoints to the API.
+        if orch._checkpoint_store is not cp_store:
+            cp_store.save(cp)
         if cancel_checker is not None and cancel_checker():
             orch.cancel()
 
@@ -7234,6 +7279,43 @@ def run_earnings_squad(
     )
 
 
+def _archive_bank_dossier(row: Mapping, raw: Mapping) -> dict:
+    """Called with the topic state locked, before replacing or correcting a report."""
+    digest = raw["dossier_sha256"]
+    archive_key = _squad_checkpoint_key(row["account_id"], row["topic_id"], f"restatement_{digest}")
+    archive = EARNINGS_SQUAD_CHECKPOINTS.get(archive_key)
+    if archive is not None and archive["bank_restatement"].get("rules_version") == BANK_DISCLOSURE_VERSION:
+        return archive["bank_restatement"]
+    record = {"original_sha256": digest, "rules_version": BANK_DISCLOSURE_VERSION,
+              "notes": bank_restatement_notes(raw)}
+    EARNINGS_SQUAD_CHECKPOINTS.put(archive_key, {
+        "account_id": row["account_id"], "topic_id": row["topic_id"],
+        "original_dossier": raw, "bank_restatement": record,
+    })
+    return record
+
+
+def _current_squad_dossier(state_key: str, row: Mapping) -> EarningsDossier:
+    raw = row["dossier"]
+    if not needs_bank_restatement(raw["snapshot"]):
+        return EarningsDossier.model_validate(raw)
+    digest = raw["dossier_sha256"]
+    saved = row.get("bank_restatement")
+    if (isinstance(saved, Mapping) and saved.get("original_sha256") == digest
+            and saved.get("rules_version") == BANK_DISCLOSURE_VERSION):
+        return restated_dossier(raw, saved["notes"])
+    def remember() -> dict:
+        record = _archive_bank_dossier(row, raw)
+        current = EARNINGS_SQUAD_STATES.get(state_key)
+        if isinstance(current, Mapping) and (current.get("dossier") or {}).get("dossier_sha256") == digest:
+            if current.get("bank_restatement") != record:
+                EARNINGS_SQUAD_STATES.put(state_key, {**current, "bank_restatement": record})
+        return record
+
+    record = EARNINGS_SQUAD_STATES.with_advisory_lock(f"squad-state:{state_key}", remember)
+    return restated_dossier(raw, record["notes"])
+
+
 @app.get(
     "/v2/research/topics/{topic_id}/earnings-squad/dossier",
     response_model=EarningsSquadDossierResponse,
@@ -7242,6 +7324,8 @@ def run_earnings_squad(
 def get_earnings_squad_dossier(
     topic_id: str,
     http_request: Request,
+    revision: Literal["current", "original"] = "current",
+    original_sha256: str | None = Query(default=None, pattern=r"^[0-9a-f]{64}$"),
 ) -> EarningsSquadDossierResponse:
     """Return locked ``EarningsDossier``, sequenced ``org_events``, and ``slot_routing_summary``."""
     account = _authenticated_account(http_request.headers.get("Authorization"))
@@ -7256,7 +7340,25 @@ def get_earnings_squad_dossier(
         raise ApiProblem(404, "not_found", "No earnings squad run found for this topic.")
 
     dossier_raw = row.get("dossier")
-    dossier = EarningsDossier.model_validate(dossier_raw) if isinstance(dossier_raw, Mapping) else None
+    if original_sha256 is not None:
+        key = _squad_checkpoint_key(account.account_id, topic_id, f"restatement_{original_sha256}")
+        archive = EARNINGS_SQUAD_CHECKPOINTS.get(key)
+        if not isinstance(archive, Mapping):
+            raise ApiProblem(404, "not_found", "该研究更正版本不存在。")
+        archived = archive["original_dossier"]
+        if revision == "original" or not needs_bank_restatement(archived["snapshot"]):
+            dossier = EarningsDossier.model_validate(archived)
+        else:
+            record = archive["bank_restatement"]
+            notes = (record["notes"] if record.get("rules_version") == BANK_DISCLOSURE_VERSION
+                     else bank_restatement_notes(archived))
+            dossier = restated_dossier(archived, notes)
+        return EarningsSquadDossierResponse(topic_id=topic_id, run_id=dossier.run_id, operation_id="",
+                                           status="completed", dossier=dossier, ticker=dossier.symbol, cik=dossier.cik)
+    dossier = None
+    if isinstance(dossier_raw, Mapping):
+        dossier = (EarningsDossier.model_validate(dossier_raw) if revision == "original"
+                   else _current_squad_dossier(state_key, row))
     org_events = [OrgGraphEvent.model_validate(ev) for ev in row.get("org_events") or []]
     org_events.sort(key=lambda e: e.sequence)
     steering = [
@@ -7307,6 +7409,8 @@ def generate_earnings_squad_deep_report(
     dossier_raw = row.get("dossier")
     if not isinstance(dossier_raw, Mapping):
         raise ApiProblem(409, "lifecycle_conflict", "Locked EarningsDossier is not available yet.")
+    if needs_bank_restatement(dossier_raw["snapshot"]):
+        raise ApiProblem(409, "lifecycle_conflict", "这份银行研究已有披露更正。生成新的深度报告需使用已核验的估值资料。")
     dossier = EarningsDossier.model_validate(dossier_raw)
     if not dossier.locked:
         raise ApiProblem(409, "lifecycle_conflict", "EarningsDossier must be locked before rendering Deep Report.")
@@ -7405,7 +7509,7 @@ def export_earnings_squad_dossier(
     dossier_raw = row.get("dossier")
     if not isinstance(dossier_raw, Mapping):
         raise ApiProblem(409, "lifecycle_conflict", "Locked EarningsDossier is not available yet.")
-    dossier = EarningsDossier.model_validate(dossier_raw)
+    dossier = _current_squad_dossier(state_key, row)
 
     extra_perms: dict[str, dict[str, bool]] = {}
     cp_raw = row.get("checkpoint")
@@ -8319,8 +8423,11 @@ def _latest_confirmed_ledger(account_id: str, topic_id: str | None) -> ThesisLed
 
 
 def _latest_locked_dossier_for_topic(account_id: str, topic_id: str) -> Any | None:
-    direct = EARNINGS_SQUAD_STATES.get(_squad_state_key(account_id, topic_id))
+    state_key = _squad_state_key(account_id, topic_id)
+    direct = EARNINGS_SQUAD_STATES.get(state_key)
     if isinstance(direct, Mapping) and isinstance(direct.get("dossier"), Mapping):
+        if needs_bank_restatement(direct["dossier"].get("snapshot") or {}):
+            return _current_squad_dossier(state_key, direct).model_dump(mode="json")
         return direct.get("dossier")
     latest: Any | None = None
     latest_ts = ""
@@ -8333,7 +8440,8 @@ def _latest_locked_dossier_for_topic(account_id: str, topic_id: str) -> Any | No
         if isinstance(dossier, Mapping):
             ts = str(dossier.get("created_at") or raw.get("updated_at") or "")
             if latest is None or ts >= latest_ts:
-                latest = dossier
+                latest = (_current_squad_dossier(_k, raw).model_dump(mode="json")
+                          if needs_bank_restatement(dossier.get("snapshot") or {}) else dossier)
                 latest_ts = ts
     return latest
 
@@ -8762,8 +8870,7 @@ def radar_check_now_endpoint(
         ) -> list[ChangeInboxItem]:
             if ledger is None or not sub.topic_id or not new_accs:
                 return []
-            prior_state = EARNINGS_SQUAD_STATES.get(_squad_state_key(account.account_id, sub.topic_id))
-            prior_dossier = prior_state.get("dossier") if isinstance(prior_state, Mapping) else None
+            prior_dossier = _latest_locked_dossier_for_topic(account.account_id, sub.topic_id)
             if not isinstance(prior_dossier, Mapping):
                 return []
             # Also ensure Track A guidance records from prior dossier are persisted
@@ -9430,15 +9537,15 @@ def _run_peer_compare_core(
                 bank_quality_light=diag.bank_quality_light,
                 price_usd=val.price_usd,
                 market_cap_usd=val.market_cap_usd,
-                tbvps_reported_usd=disc.tbvps_bridge.tbvps_reported_usd,
-                tbvps_xbrl_std_usd=disc.tbvps_bridge.tbvps_xbrl_std_usd,
+                tbvps_reported_usd=disc.tbvps_bridge.tbvps_reported_usd if disc.schema_version == BANK_DISCLOSURE_VERSION and disc.tbvps_bridge.tbvps_reported_verified else None,
+                tbvps_xbrl_std_usd=disc.tbvps_bridge.tbvps_xbrl_std_usd if disc.schema_version == BANK_DISCLOSURE_VERSION and disc.tbvps_bridge.tbvps_xbrl_std_verified else None,
                 tbvps_primary_usd=(
-                    disc.tbvps_bridge.tbvps_xbrl_std_usd
+                    (disc.tbvps_bridge.tbvps_xbrl_std_usd if disc.schema_version == BANK_DISCLOSURE_VERSION and disc.tbvps_bridge.tbvps_xbrl_std_verified else None)
                     if val.primary_tbvps_basis in ("xbrl_standardized", "xbrl_std_fallback")
-                    else disc.tbvps_bridge.tbvps_reported_usd
+                    else (disc.tbvps_bridge.tbvps_reported_usd if disc.schema_version == BANK_DISCLOSURE_VERSION and disc.tbvps_bridge.tbvps_reported_verified else None)
                 ),
                 tbvps_basis=val.primary_tbvps_basis,
-                tbvps_gap_pct=disc.tbvps_bridge.tbvps_gap_pct,
+                tbvps_gap_pct=disc.tbvps_bridge.tbvps_gap_pct if disc.schema_version == BANK_DISCLOSURE_VERSION and disc.tbvps_bridge.tbvps_reported_verified and disc.tbvps_bridge.tbvps_xbrl_std_verified else None,
                 p_to_tbv_primary=val.p_to_tbv_primary,
                 p_to_tbv_xbrl_std=val.p_to_tbv_xbrl_std,
                 p_to_bv=val.p_to_bv,
@@ -9456,6 +9563,7 @@ def _run_peer_compare_core(
                 htm_loss_pct_of_tce=diag.htm_loss_pct_of_tce,
                 pro_forma_cet1_ex_htm_pct=diag.pro_forma_cet1_ex_htm_pct,
                 provision_to_ppnr_pct=diag.provision_to_ppnr_pct,
+                notes=val.notes,
             )
 
         with ThreadPoolExecutor(max_workers=min(4, len(ordered_snaps))) as bpool:
@@ -9565,6 +9673,8 @@ def generate_research_peer_brief(
             matrix = PeerComparisonMatrix.model_validate(cached["matrix"])
     if matrix is None:
         raise ApiProblem(404, "not_found", "Provide a valid comparison_id or PeerComparisonMatrix.")
+    if matrix.comparison_mode == "us_large_banks" and matrix.bank_basis_validation_version != BANK_VALUATION_VERSION:
+        raise ApiProblem(422, "invalid_request", "Bank comparison predates basis validation; run a new comparison.")
 
     hooks = getattr(http_request.app.state, "peer_compare_hooks", None)
     hook_dict = hooks if isinstance(hooks, Mapping) else {}
@@ -11406,8 +11516,7 @@ def _run_background_radar_sweep_once(*, max_subs_per_sweep: int = 20) -> int:
                 def _delta_bg(sub: FilingWatchSubscription, new_accs: list[str], led: ThesisLedger | None) -> list[ChangeInboxItem]:
                     if led is None or not sub.topic_id or not new_accs:
                         return []
-                    prior_state = EARNINGS_SQUAD_STATES.get(_squad_state_key(acct_id, sub.topic_id))
-                    prior_dossier = prior_state.get("dossier") if isinstance(prior_state, Mapping) else None
+                    prior_dossier = _latest_locked_dossier_for_topic(acct_id, sub.topic_id)
                     if not isinstance(prior_dossier, Mapping):
                         return []
                     from .research_delta_review import (

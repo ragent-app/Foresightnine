@@ -57,7 +57,7 @@ export function GovernanceAuditBar({ symbol, cik }: GovernanceAuditBarProps) {
     if (!sym || checkedCache) return;
     setCheckedCache(true);
     auditMut.mutate(
-      { symbol: sym, cik: cik || undefined, cache_only: true },
+      { symbol: sym, ...(cik ? { cik } : {}), cache_only: true },
       {
         onSuccess: (data) => {
           if (data) setReport(data);
@@ -99,7 +99,7 @@ export function GovernanceAuditBar({ symbol, cik }: GovernanceAuditBarProps) {
               disabled={auditMut.isPending}
               onClick={() =>
                 auditMut.mutate(
-                  { symbol: sym, cik: cik || undefined, cache_only: false },
+                  { symbol: sym, ...(cik ? { cik } : {}), cache_only: false },
                   {
                     onSuccess: (data) => {
                       if (data) {

@@ -97,6 +97,9 @@ _NS_REL = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}
 @pytest.fixture(autouse=True)
 def _clean_api_state(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    # Dossier delivery tests use frozen filings. The independent governance
+    # prewarmer would otherwise schedule a live SEC request after delivery.
+    monkeypatch.setattr(api, "_prewarm_v25_layer1_async", lambda _dossier: None)
     api.reset_state()
     api.set_earnings_squad_runner_hook(None)
     yield
@@ -1176,7 +1179,7 @@ def test_async_squad_run_live_sse_org_events_and_mid_run_steering(live_server):
     snap = dossier_seed.snapshot
     segments_done = threading.Event()
     forensics_started = threading.Event()
-    forensics_cancelled_seen = threading.Event()
+    steering_accepted = threading.Event()
     exec_counts = {"worker_segments": 0, "worker_forensics": 0, "worker_guidance": 0}
     lock = threading.Lock()
 
@@ -1184,13 +1187,9 @@ def test_async_squad_run_live_sse_org_events_and_mid_run_steering(live_server):
         def call_tool(self, tool_name: str, arguments: dict[str, Any], *, worker_role: str | None = None) -> dict[str, Any]:
             if worker_role == "worker_forensics":
                 forensics_started.set()
-                # Wait until Lead Coordinator emits cancellation for worker_forensics
-                forensics_cancelled_seen.wait(timeout=3.0)
+                # Keep this worker active until the client has actually queued steering.
+                assert steering_accepted.wait(timeout=30.0)
             return {"status": "ok", "tool": tool_name}
-
-    def watch_org_sink(ev: OrgGraphEvent) -> None:
-        if ev.stage == "steering" and ev.node_id == "worker_forensics" and ev.runtime_state == "cancelled":
-            forensics_cancelled_seen.set()
 
     def model_fn(mreq: SlotModelRequest) -> SlotModelResponse:
         if mreq.role == "lead_coordinator" and mreq.stage == "stage_1_plan":
@@ -1307,18 +1306,13 @@ def test_async_squad_run_live_sse_org_events_and_mid_run_steering(live_server):
         raise AssertionError(f"Unexpected request: {mreq}")
 
     def hook(org_sink=None, checkpoint_store=None, **_kwargs):
-        def combined_sink(ev: OrgGraphEvent) -> None:
-            watch_org_sink(ev)
-            if org_sink is not None:
-                org_sink(ev)
-
         return {
             "orchestrator": EarningsSquadOrchestrator(
                 model_runner=CallableSlotModelRunner(model_fn),
                 tool_runner=BlockingToolRunner(),
                 prefetch_deps=PrefetchDependencies(precomputed_snapshot=snap),
                 checkpoint_store=checkpoint_store,
-                org_sinks=[combined_sink],
+                org_sinks=[org_sink] if org_sink is not None else [],
             )
         }
 
@@ -1357,6 +1351,7 @@ def test_async_squad_run_live_sse_org_events_and_mid_run_steering(live_server):
                 )
                 assert steer_resp.status_code == 202
                 assert steer_resp.json()["status"] == "queued"
+                steering_accepted.set()
 
                 lines: list[str] = []
                 async for line in sse_resp.aiter_lines():
@@ -1826,3 +1821,116 @@ def test_platform_mode_partial_model_slots_without_hook(monkeypatch: pytest.Monk
     assert bad_resp.status_code == 422
 
 
+
+
+def test_saved_bank_report_gets_a_traceable_correction_across_read_and_export():
+    from tests.test_v4a_bank_diagnostics import _snap_fixture
+
+    client = TestClient(api.app)
+    headers = _register_user(client)
+    topic_id = _create_topic(client, headers)
+    owner, _ = api.authenticate_local(api.ACCOUNTS, api.AUTH_SESSIONS, headers["Authorization"], now=api.lifecycle_clock.now())
+    key = api._squad_state_key(owner.account_id, topic_id)
+    base = f"/v2/research/topics/{topic_id}/earnings-squad"
+    raw = _build_rich_dossier().model_dump(mode="json")
+    raw["snapshot"]["bank_disclosure"] = {**_snap_fixture().model_dump(mode="json"), "schema_version": "v4a.1"}
+    raw["memo_markdown"] = "Outdated bank valuation 9.53x"
+    row = {"account_id": owner.account_id, "topic_id": topic_id, "run_id": raw["run_id"],
+           "operation_id": "bank-archive", "status": "completed", "dossier": raw}
+    api.EARNINGS_SQUAD_STATES.put(key, row)
+    current = client.get(f"{base}/dossier", headers=headers)
+    assert current.status_code == 200, current.text
+    dossier = current.json()["dossier"]
+    assert dossier["supersedes_sha256"] == raw["dossier_sha256"]
+    assert dossier["snapshot"]["bank_valuation"] is None
+    original_fact = raw["snapshot"]["statements"][0]["revenue"]
+    current_fact = dossier["snapshot"]["statements"][0]["revenue"]
+    assert (current_fact["value"], current_fact["fact_id"]) == (original_fact["value"], original_fact["fact_id"])
+    assert "9.53x" not in dossier["memo_markdown"]
+    assert client.post(f"{base}/deep-report", json={}, headers=headers).status_code == 409
+    for fmt in ["markdown", "csv", "xlsx"]:
+        exported = client.get(f"{base}/export", headers=headers, params={"format": fmt})
+        assert exported.status_code == 200
+        assert exported.headers["x-dossier-id"] == dossier["dossier_id"]
+    params = {"original_sha256": raw["dossier_sha256"]}
+    api.EARNINGS_SQUAD_STATES.put(key, {**row, "dossier": None})
+    replay = client.get(f"{base}/dossier", params=params, headers=headers)
+    assert replay.json()["dossier"]["dossier_sha256"] == dossier["dossier_sha256"]
+    archived = client.get(f"{base}/dossier", params={**params, "revision": "original"}, headers=headers)
+    assert archived.json()["dossier"]["memo_markdown"] == raw["memo_markdown"]
+    assert client.get(f"{base}/dossier", params=params, headers=_register_user(client)).status_code == 404
+
+    # Starting fresh must also archive a report that nobody has opened.
+    second_topic = _create_topic(client, headers)
+    second_key = api._squad_state_key(owner.account_id, second_topic)
+    api.EARNINGS_SQUAD_STATES.put(second_key, {**row, "topic_id": second_topic})
+    hook, _ = _make_api_squad_hook(exportable_source_id="public", restricted_source_id="private")
+    api.set_earnings_squad_runner_hook(hook)
+    second_base = f"/v2/research/topics/{second_topic}/earnings-squad"
+    fresh = client.post(f"{second_base}/run", json={}, headers=headers)
+    assert fresh.status_code == 200, fresh.text
+    archived = client.get(f"{second_base}/dossier", params={**params, "revision": "original"}, headers=headers)
+    assert archived.json()["dossier"]["memo_markdown"] == raw["memo_markdown"]
+
+
+@pytest.mark.parametrize(("source_value", "disposition"), [
+    ("$30.60", "unchanged"), ("$29.57", "corrected"), (None, "unverified"),
+])
+def test_prior_bank_edition_rechecks_saved_cells_before_read_and_export(source_value, disposition):
+    from tests.test_v4a_bank_diagnostics import _snap_fixture
+
+    client = TestClient(api.app)
+    headers = _register_user(client)
+    topic_id = _create_topic(client, headers)
+    owner, _ = api.authenticate_local(api.ACCOUNTS, api.AUTH_SESSIONS, headers["Authorization"], now=api.lifecycle_clock.now())
+    key = api._squad_state_key(owner.account_id, topic_id)
+    base = f"/v2/research/topics/{topic_id}/earnings-squad"
+
+    raw = _build_rich_dossier().model_dump(mode="json")
+    snap = raw["snapshot"]
+    bank = _snap_fixture(tbvps_rep="30.60", rotce_q=None).model_dump(mode="json")
+    release = snap["earnings_release"]
+    bank.update(schema_version="v4a.2", cik=release["cik"], period_end_date="2026-06-30",
+                cet1_standardized_pct="13.00", cet1_standardized_source="10q_final",
+                earnings_8k_accession=release["current"]["accession"])
+    snap["bank_disclosure"] = bank
+    assert snap["bank_valuation"] is None
+    if source_value:
+        release["current"]["ex99_1"]["tables"] = [{
+            "title": "Consolidated results (USD per share)",
+            "headers": ["", "2Q26", "1Q26"],
+            "rows": [["Tangible book value per common share", source_value, "$28.00"]],
+        }]
+    else:
+        snap["earnings_release"] = None
+    raw["memo_markdown"] = "Saved edition using the historic bank basis."
+    raw["dossier_sha256"] = ""
+    raw = EarningsDossier.model_validate(raw).model_dump(mode="json")
+    api.EARNINGS_SQUAD_STATES.put(key, {"account_id": owner.account_id, "topic_id": topic_id,
+        "run_id": raw["run_id"], "status": "completed", "operation_id": "recheck", "dossier": raw})
+
+    read = client.get(f"{base}/dossier", headers=headers)
+    assert read.status_code == 200, read.text
+    current = read.json()["dossier"]
+    exported = client.get(f"{base}/export", headers=headers, params={"format": "markdown"})
+    assert exported.status_code == 200
+    assert exported.headers["x-dossier-id"] == current["dossier_id"]
+    if disposition == "unchanged":
+        assert current["dossier_sha256"] == raw["dossier_sha256"]
+        assert raw["memo_markdown"] in exported.text
+        assert "bank_restatement" not in api.EARNINGS_SQUAD_STATES.get(key)
+    else:
+        assert current["supersedes_sha256"] == raw["dossier_sha256"]
+        assert raw["memo_markdown"] not in exported.text
+        note = current["memo_markdown"]
+        verified_bank = current["snapshot"]["bank_disclosure"]
+        assert verified_bank["cet1_standardized_pct"] == "13.00"
+        if disposition == "corrected":
+            assert "29.57美元" in note and "有误" in note
+            assert verified_bank["tbvps_bridge"]["tbvps_reported_usd"] == "29.57"
+        else:
+            assert "资料不足" in note
+            assert verified_bank["tbvps_bridge"]["tbvps_reported_usd"] is None
+        historic = client.get(f"{base}/dossier", headers=headers, params={"revision": "original",
+                              "original_sha256": raw["dossier_sha256"]})
+        assert historic.json()["dossier"]["memo_markdown"] == raw["memo_markdown"]

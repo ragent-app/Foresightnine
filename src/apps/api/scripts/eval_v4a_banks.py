@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 import json
 import os
 from pathlib import Path
@@ -41,6 +42,21 @@ EXPECTED_SUBTYPES = {
     "GS": "investment_bank_bhc",
     "MS": "investment_bank_bhc",
 }
+
+
+# SEC-filed company financial supplement, 3Q26, rows "Tangible book value
+# per common share" and "Return on average tangible common equity".
+REFERENCE_3Q26 = {
+    "STT": {"tbvps": "59.69", "rotce": "25.1",
+            "source": "https://www.sec.gov/Archives/edgar/data/93751/000009375126000592/exhibit992-3q26earningsrel.htm"},
+}
+
+def _finite_decimal(value: Any) -> Decimal | None:
+    try:
+        number = Decimal(str(value))
+        return number if number.is_finite() else None
+    except (InvalidOperation, ValueError, TypeError):
+        return None
 
 
 class EvalFailure(AssertionError):
@@ -87,6 +103,60 @@ def _req(
 def _assert(cond: bool, msg: str) -> None:
     if not cond:
         raise EvalFailure(msg)
+
+
+def _audit_bank_values(sym: str, data: dict[str, Any]) -> dict[str, Any]:
+    """Check safety independently of completeness; unavailable results are valid."""
+    disc = data.get("disclosure") or {}
+    bridge = disc.get("tbvps_bridge") or {}
+    diag = data.get("diagnostics") or {}
+    val = data.get("valuation") or {}
+    rep = _finite_decimal(bridge.get("tbvps_reported_usd"))
+    std = _finite_decimal(bridge.get("tbvps_xbrl_std_usd"))
+    current_schema = disc.get("schema_version") == "v4a.3"
+    rep_ok = current_schema and bridge.get("tbvps_reported_verified") is True and rep is not None and rep > 0
+    std_ok = current_schema and bridge.get("tbvps_xbrl_std_verified") is True and std is not None and std > 0
+    rot_ok = current_schema and disc.get("rotce_q_verified") is True and _finite_decimal(disc.get("rotce_q_reported_pct")) is not None
+    mode = val.get("primary_tbvps_basis")
+    basis_ok = rep_ok if mode == "reported_market_convention" else std_ok if mode in ("xbrl_standardized", "xbrl_std_fallback") else False
+    price = _finite_decimal(val.get("price_usd"))
+    price_ok = price is not None and price > 0
+    for field in ("p_to_tbv_primary", "p_to_tbv_xbrl_std", "implied_rotce_pct", "current_rotce_pct", "rotce_spread_vs_implied_pp", "justified_p_to_tbv_at_current_rotce"):
+        raw = val.get(field)
+        _assert(raw is None or _finite_decimal(raw) is not None, f"{sym} non-finite {field}")
+    ptbv = _finite_decimal(val.get("p_to_tbv_primary"))
+    implied = _finite_decimal(val.get("implied_rotce_pct"))
+    current = _finite_decimal(val.get("current_rotce_pct"))
+    justified = _finite_decimal(val.get("justified_p_to_tbv_at_current_rotce"))
+    spread = _finite_decimal(val.get("rotce_spread_vs_implied_pp"))
+    _assert(ptbv is None or (basis_ok and price_ok), f"{sym} P/TBV has unverified/non-positive inputs")
+    _assert(val.get("p_to_tbv_xbrl_std") is None or (std_ok and price_ok), f"{sym} standardized P/TBV has unverified/non-positive inputs")
+    _assert(implied is None or ptbv is not None, f"{sym} implied ROTCE lacks market P/TBV")
+    _assert(current is None or rot_ok, f"{sym} current ROTCE is unverified")
+    _assert(justified is None or rot_ok, f"{sym} justified P/TBV lacks verified ROTCE")
+    _assert(spread is None or (implied is not None and current is not None), f"{sym} spread lacks verified inputs")
+    _assert(diag.get("rotce_q_pct") is None or rot_ok, f"{sym} diagnostic ROTCE is unverified")
+    cells = val.get("sensitivity_matrix") or []
+    _assert(not cells or len(cells) == 9, f"{sym} malformed sensitivity matrix")
+    for cell in cells:
+        for field, allowed in (("implied_rotce_pct", ptbv is not None),
+                               ("justified_p_to_tbv", rot_ok),
+                               ("rotce_spread_pp", ptbv is not None and rot_ok)):
+            raw = cell.get(field)
+            _assert(raw is None or (_finite_decimal(raw) is not None and allowed), f"{sym} invalid sensitivity {field}")
+    reference = REFERENCE_3Q26.get(sym)
+    reference_status = "not_registered"
+    if reference:
+        if disc.get("period_end_date") != "2026-09-30" or not rep_ok or not rot_ok:
+            reference_status = "unavailable"
+        else:
+            _assert(abs(rep - Decimal(reference["tbvps"])) <= Decimal("0.01"), f"{sym} reported TBVPS disagrees with SEC checkpoint")
+            actual_rotce = _finite_decimal(disc.get("rotce_q_reported_pct"))
+            _assert(abs(actual_rotce - Decimal(reference["rotce"])) <= Decimal("0.01"), f"{sym} ROTCE disagrees with SEC checkpoint")
+            reference_status = "matched"
+    return {"tbvps": basis_ok, "rotce": rot_ok, "market_valuation": ptbv is not None,
+            "sensitivity": bool(cells) and all(_finite_decimal(c.get("implied_rotce_pct")) is not None and _finite_decimal(c.get("justified_p_to_tbv")) is not None and _finite_decimal(c.get("rotce_spread_pp")) is not None for c in cells),
+            "reference_status": reference_status, "reference_source": reference.get("source") if reference else None}
 
 
 def read_container_memory(container: str = "foresightnine-api-1") -> dict[str, Any]:
@@ -147,7 +217,7 @@ def run_gate_1_14_issuer_probe(
     headers: dict[str, str],
 ) -> dict[str, Any]:
     _log("\n=== Gate 1: 14-Issuer 0-LLM Bank Applicability & Disclosure Probe ===")
-    results: dict[str, Any] = {"qualified": {}, "negative_controls": {}, "segments": {}}
+    results: dict[str, Any] = {"qualified": {}, "negative_controls": {}, "segments": {}, "coverage": {}}
 
     for sym in MAJOR_BANKS + CUSTODIAN_AND_REGIONAL_BANKS:
         t0 = time.perf_counter()
@@ -191,15 +261,7 @@ def run_gate_1_14_issuer_probe(
             f"{sym} invalid bank_quality_light: {diag.get('bank_quality_light')}",
         )
         _assert(len(diag.get("metrics") or {}) >= 5, f"{sym} expected >= 5 diagnostic metrics")
-        _assert(disc.get("cet1_standardized_pct") is not None, f"{sym} missing cet1_standardized_pct")
-        _assert(
-            bridge.get("tbvps_reported_usd") is not None or bridge.get("tbvps_xbrl_std_usd") is not None,
-            f"{sym} missing both TBVPS values in tbvps_bridge",
-        )
-        _assert(
-            len(val.get("sensitivity_matrix") or []) == 9,
-            f"{sym} expected 3x3 sensitivity_matrix (9 cells), got {len(val.get('sensitivity_matrix') or [])}",
-        )
+        results["coverage"][sym] = _audit_bank_values(sym, data)
 
         seg_resp = _req(
             client,
@@ -300,7 +362,11 @@ def run_gate_2_v2_peer_compare(
     rep = rep_resp.json()
     _assert(rep.get("comparison_mode") == "us_large_banks", f"Expected us_large_banks mode, got {rep.get('comparison_mode')}")
     _assert(len(rep.get("bank_companies") or []) == 6, f"Expected 6 bank_companies, got {len(rep.get('bank_companies') or [])}")
-    _assert(bool(rep.get("bank_peer_medians")), "Missing bank_peer_medians")
+    medians = rep.get("bank_peer_medians") or {}
+    for metric in ("p_to_tbv_primary", "rotce_q_pct", "implied_rotce_pct"):
+        coverage = sum(_finite_decimal(row.get(metric)) is not None for row in rep.get("bank_companies") or [])
+        _assert(coverage >= 2 and _finite_decimal(medians.get(metric)) is not None,
+                f"{metric} needs at least two comparable observations and a finite median; got {coverage}")
 
     xbrl_resp = _req(
         client,
@@ -444,9 +510,17 @@ def _run_earnings_squad_for_symbol(
     elapsed = round(time.perf_counter() - t0, 3)
     _assert(body.get("status") == "completed", f"Squad {sym} status={body.get('status')} error={body.get('error')}")
     dossier = body.get("dossier") or {}
+    events = body.get("org_events") or []
+    first_verified_s = None
+    if events:
+        first = datetime.fromisoformat(events[0]["timestamp"])
+        verified = next((event for event in events if event.get("stage") == "verified_evidence_ready"), None)
+        if verified:
+            first_verified_s = (datetime.fromisoformat(verified["timestamp"]) - first).total_seconds()
     return {
         "topic_id": topic_id,
         "elapsed_s": elapsed,
+        "first_verified_evidence_s": first_verified_s,
         "run_id": body.get("run_id"),
         "status": body.get("status"),
         "dossier": dossier,
@@ -508,6 +582,7 @@ def _validate_and_summarize_bank_squad(sym: str, res: dict[str, Any]) -> dict[st
     entry = {
         "topic_id": res["topic_id"],
         "elapsed_s": res["elapsed_s"],
+        "first_verified_evidence_s": res["first_verified_evidence_s"],
         "selected_l2_pack_id": dossier.get("selected_l2_pack_id"),
         "active_sector_plugin": sec_app.get("active_sector_plugin"),
         "is_gated": sec_app.get("is_gated"),
@@ -515,6 +590,7 @@ def _validate_and_summarize_bank_squad(sym: str, res: dict[str, Any]) -> dict[st
         "bear_cases_count": len(bears),
         "total_calls": usage.get("total_calls"),
         "total_tokens": usage.get("total_tokens"),
+        "stage_usage": usage.get("stages", {}),
     }
     _log(
         f"  [PASS] Squad {sym:4s}: plugin={sec_app.get('active_sector_plugin')} l2={dossier.get('selected_l2_pack_id')} "
@@ -868,8 +944,14 @@ def main() -> int:
             summary["gates"]["gate1_14_issuer"] = {
                 "qualified": g1["qualified"],
                 "negative_controls": g1["negative_controls"],
+                "coverage": g1["coverage"],
             }
             _save_summary(args.output_json, summary)
+            missing = {sym: [field for field in ("tbvps", "rotce", "market_valuation", "sensitivity") if not status[field]]
+                       for sym, status in g1["coverage"].items()}
+            missing = {sym: fields for sym, fields in missing.items() if fields}
+            _assert(not missing, f"Gate 1 coverage incomplete (safety checks passed): {missing}")
+            _assert(g1["coverage"]["STT"]["reference_status"] == "matched", "Gate 1 STT reference unavailable")
 
             prior_g2 = prior_gates.get("gate2_v2_peer_compare")
             if args.resume and isinstance(prior_g2, dict) and prior_g2.get("brief_cited_metrics_count"):
@@ -910,6 +992,10 @@ def main() -> int:
             )
             summary["gates"]["gate6_concurrency"] = g6
             summary["status"] = "ALL_GATES_PASSED"
+        except EvalFailure as exc:
+            summary["status"] = "FAILED"
+            summary["failure"] = str(exc)
+            raise
         finally:
             cleanup = delete_ephemeral_account(client, headers)
             summary["account_cleanup"] = cleanup

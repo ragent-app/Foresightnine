@@ -1,0 +1,109 @@
+{
+  "description": "Public SEC exhibit acceptance controls. SHA256 is over the fetched raw HTML bytes, before parsing. The PNC holdout was not used to tune extraction. These are direct adapter replays, not full live valuation pipeline runs.",
+  "samples": [
+    {
+      "issuer": "State Street",
+      "period_end": "2026-09-30",
+      "role": "development",
+      "url": "https://www.sec.gov/Archives/edgar/data/93751/000009375126000592/exhibit992-3q26earningsrel.htm",
+      "sha256": "f4b8b51b1cef95c88bae2fb94cda04e040e9040f8b72f5150f58a3f12e16adc8",
+      "source_values": {
+        "tbvps_usd_per_share": "59.69",
+        "quarterly_rotce_percent": "25.1"
+      },
+      "extractor_values": {
+        "tbvps_usd_per_share": "59.69",
+        "quarterly_rotce_percent": "25.1"
+      },
+      "evidence": "Consolidated results and non-GAAP reconciliation, 3Q26 column; ratio percent explicitly present in reconciliation.",
+      "full_adapter_replay": {
+        "method": "fetch_bank_disclosure_snapshot with live 10-Q FilingSummary/tables, companyfacts and submissions, plus preloaded EX-99.2; preloaded blank 10-Q narrative",
+        "date": "2026-11-27",
+        "companyfacts_url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000093751.json",
+        "companyfacts_sha256": "995c328f3ff0ba8dd1044ea0f78ef35104573a085ed45e274be447f62382c4ff",
+        "submissions_url": "https://data.sec.gov/submissions/CIK0000093751.json",
+        "submissions_sha256": "a51870c40482b52648e531b264def41d728af57ef24ad21ae64999058d86f1c0",
+        "filing_summary_url": "https://www.sec.gov/Archives/edgar/data/93751/000009375126000600/FilingSummary.xml",
+        "fetched_tables": [
+          "R2.htm",
+          "R97.htm",
+          "R90.htm"
+        ],
+        "limitation": "R4 balance sheet was not obtained; no narrative scan was performed.",
+        "reported_tbvps_usd": "59.69",
+        "quarterly_rotce_percent": "25.10",
+        "equity_usd": "28710000000",
+        "preferred_usd": null,
+        "common_equity_usd": null,
+        "goodwill_usd": "8094000000",
+        "intangibles_usd": "763000000",
+        "shares": "272828262",
+        "standardized_tbvps_usd": null,
+        "standardized_verified": false,
+        "data_gap": "tbvps_standardized_missing_aligned_inputs"
+      }
+    },
+    {
+      "issuer": "Bank of New York Mellon",
+      "period_end": "2025-09-30",
+      "role": "development",
+      "url": "https://www.sec.gov/Archives/edgar/data/1390777/000139077725000144/ex991_earningsreleasex3q25.htm",
+      "sha256": "53979e013dd995281f8431c0bdc8f96309f8b5fe7128d8ed641788a42650be9b",
+      "source_values": {
+        "tbvps_usd_per_share": "30.60",
+        "quarterly_rotce_percent": "25.6"
+      },
+      "extractor_values": {
+        "tbvps_usd_per_share": "30.60",
+        "quarterly_rotce_percent": "25.6"
+      },
+      "evidence": "Capital/liquidity table dated September 30 and corporate common equity reconciliation labeled 3Q25.",
+      "full_adapter_replay": {
+        "method": "fetch_bank_disclosure_snapshot as of 2025-11-05 with current companyfacts and submissions filtered as-of, live 10-Q filing tables, and preloaded EX-99.1; no narrative scan",
+        "companyfacts_url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0001390777.json",
+        "companyfacts_sha256": "d9463ac93e49e5f28bb3d7a25ed4f7a88e381ce976abb1ca433d73b16b57c3d8",
+        "submissions_url": "https://data.sec.gov/submissions/CIK0001390777.json",
+        "submissions_sha256": "c5c65f09ebc158bb68c9b2f5646dfbc881965599af01cb43102c606d9bef02de",
+        "balance_sheet_url": "https://www.sec.gov/Archives/edgar/data/1390777/000139077725000159/R5.htm",
+        "balance_sheet_sha256": "a8e794c438b113033c94a3ee40df284b7a56fdd47934195f64194e34716696c6",
+        "reported_tbvps_usd": "30.60",
+        "quarterly_rotce_percent": "25.60",
+        "preferred_stock_usd": "4836000000",
+        "common_equity_usd": "39043000000",
+        "standardized_tbvps_usd": null,
+        "standardized_verified": false,
+        "limitation": "No eligible period-end share denominator was retrieved; standardized TBVPS remains unavailable."
+      }
+    },
+    {
+      "issuer": "JPMorgan Chase",
+      "period_end": "2025-09-30",
+      "role": "control",
+      "url": "https://www.sec.gov/Archives/edgar/data/19617/000162828025044845/a3q25erfexhibit991narrative.htm",
+      "sha256": "ee74a4c45337d6909a877e7cabecb3afbae09148f71013d8833053abe48c2039",
+      "source_values": {
+        "tbvps_usd_per_share": "105.70",
+        "quarterly_rotce_percent": "20"
+      },
+      "extractor_values": {
+        "tbvps_usd_per_share": null,
+        "quarterly_rotce_percent": null
+      },
+      "evidence": "Narrative and summary figures; the TBVPS sentence gives a current value and YoY change but no explicit date. The extractor does not infer sentence-to-period binding from the surrounding announcement."
+    },
+    {
+      "issuer": "PNC",
+      "period_end": "2025-09-30",
+      "role": "holdout",
+      "url": "https://www.sec.gov/Archives/edgar/data/713676/000071367625000126/q32025financialhighlightsa.htm",
+      "sha256": "e863ed25322f277991c1caeb7010c8173a5a00663669e3fe5e6fa0623e356734",
+      "source_values": {
+        "tbvps_usd_per_share": "107.84"
+      },
+      "extractor_values": {
+        "tbvps_usd_per_share": null
+      },
+      "evidence": "Narrative TBV per-share highlight; no accepted explicitly dated consolidated metric cell."
+    }
+  ]
+}

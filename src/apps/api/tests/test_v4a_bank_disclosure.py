@@ -443,10 +443,27 @@ def test_v4a2_r4_vie_guard_r8_bhc_filter_citigroup_ttm_and_gs_10q_rsu_bridge() -
     # TTM = 73,244 + 85,000 - 65,354 = 92,890M USD!
     assert disc.net_revenue_gaap_ttm_usd == "92890000000"
     assert disc.cet1_reg_min_pct == "11.60"
-    # Pre-split 2010 shares rejected; DEI 1,655.2M used -> TCE 168,149 / 1,655.2 = $101.59 (NO $6.00 distortion!)
-    assert Decimal(disc.tbvps_bridge.tbvps_xbrl_std_usd) > Decimal("100.00")
-    assert disc.tbvps_bridge.tbvps_reported_usd == "101.59"
+    # A later DEI cover date cannot stand in for period-end shares.
+    assert disc.tbvps_bridge.tbvps_xbrl_std_usd is None
+    assert disc.tbvps_bridge.tbvps_reported_usd is None
+    assert not disc.tbvps_bridge.tbvps_xbrl_std_verified
+    assert not disc.tbvps_bridge.tbvps_reported_verified
+    assert disc.tbvps_bridge.shares_ending_common is None
+    assert disc.tbvps_bridge.rsu_share_addon is None
+    assert disc.avg_tangible_common_equity_q_usd is None
 
+    # Old snapshots cannot bypass the current eligibility rules.
+    from app.fin_data.adapters.sec_bank_disclosure import BankDisclosureSnapshot
+    for old_version in ("v4a.1", "v4a.2"):
+        previous = {**disc.model_dump(mode="json"), "schema_version": old_version}
+        bank_repo.put("bank:0000831001:latest", previous)
+        assert BankDisclosureSnapshot.model_validate(previous).schema_version == old_version
+        old, old_hit = fetch_bank_disclosure_snapshot(
+            snap=c_snap, user_agent="u", limiter=SecPacingLimiter(rate_per_sec=9.0, burst=9.0),
+            bank_cache=bank_repo, cache_only=True,
+        )
+        assert old is None and not old_hit
+    bank_repo.put("bank:0000831001:latest", disc.model_dump(mode="json"))
     # Cache hit under cache_only=True
     disc_cached, hit2 = fetch_bank_disclosure_snapshot(
         snap=c_snap, user_agent="u", limiter=SecPacingLimiter(rate_per_sec=9.0, burst=9.0),
@@ -520,3 +537,173 @@ def test_v4a5_reg_capital_rwa_ratio_row_ignored_and_implied_rwa_fallback() -> No
     )
     assert disc is not None and disc.rwa_standardized_usd is not None
     assert Decimal(disc.rwa_standardized_usd) > Decimal("2000000000000")
+
+
+def test_period_table_metrics_selects_current_consolidated_cell_and_preserves_provenance() -> None:
+    from datetime import date
+    from app.fin_data.adapters.sec_deep import EarningsReleaseExhibit, EarningsReleasePeriod, ParsedHtmlTable
+    from app.fin_data.adapters.sec_bank_disclosure import _extract_8k_supplement_metrics
+    table = ParsedHtmlTable(headers=["Consolidated results (USD per share)", "3Q25", "2Q26", "3Q26", "YTD2026"], rows=[
+        ["Tangible book value per common share", "55.57", "59.23", "59.69", "59.69"],
+        ["Return on average tangible common equity", "20.9%", "25.5%", "25.1%", "22.8%"],
+    ])
+    toc = ParsedHtmlTable(headers=["Contents", "3Q26"], rows=[["Tangible book value per common share", "43"]])
+    exhibit = EarningsReleaseExhibit(exhibit_type="EX-99.1", filename="x.htm", url="https://sec.test/x.htm", text="", tables=[toc, table], content_sha256="x")
+    period = EarningsReleasePeriod(period_role="current", accession="acc", filed_at=date(2026, 10, 15), period_of_report=date(2026, 9, 30), index_json_url="x", ex99_1=exhibit)
+    metrics = _extract_8k_supplement_metrics(period, date(2026, 9, 30))
+    assert metrics["tbvps_usd"] == Decimal("59.69")
+    assert metrics["rotce_q_pct"] == Decimal("25.1")
+    assert metrics["tbvps_usd_provenance"]["unit"] == "USD/share"
+    assert metrics["rotce_q_pct_provenance"]["column"] == "3Q26"
+    assert "tbvps_usd" not in _extract_8k_supplement_metrics(period, date(2026, 6, 30))
+
+
+def test_period_table_rejects_segment_and_ambiguous_columns() -> None:
+    from datetime import date
+    from app.fin_data.adapters.sec_deep import EarningsReleaseExhibit, EarningsReleasePeriod, ParsedHtmlTable
+    from app.fin_data.adapters.sec_bank_disclosure import _extract_8k_supplement_metrics
+    segment = ParsedHtmlTable(headers=["Business segment", "3Q26"], rows=[["Return on average tangible common equity", "25.1%"]])
+    ambiguous = ParsedHtmlTable(headers=["Consolidated", "3Q26", "3Q26"], rows=[["Tangible book value per share", "59.69", "45.00"]])
+    foreign_currency = ParsedHtmlTable(headers=["Consolidated results in CAD", "3Q26"], rows=[
+        ["Tangible book value per common share", "$59.69"],
+    ])
+    exhibit = EarningsReleaseExhibit(exhibit_type="EX-99.1", filename="x", url="x", text="", tables=[segment, ambiguous, foreign_currency], content_sha256="x")
+    period = EarningsReleasePeriod(period_role="current", accession="acc", filed_at=date(2026, 10, 15), period_of_report=date(2026, 9, 30), index_json_url="x", ex99_1=exhibit)
+    result = _extract_8k_supplement_metrics(period, date(2026, 9, 30))
+    assert "tbvps_usd" not in result
+    assert "rotce_q_pct" not in result
+
+
+def test_dated_table_currency_cell_and_unsafe_metrics():
+    from datetime import date
+    from app.fin_data.adapters.sec_deep import EarningsReleaseExhibit, EarningsReleasePeriod, ParsedHtmlTable
+    from app.fin_data.adapters.sec_bank_disclosure import _extract_8k_supplement_metrics
+    table = ParsedHtmlTable(headers=["Consolidated capital", "Sept. 30, 2025", "", "June 30, 2025", ""], rows=[
+        ["Tangible book value per common share – Non-GAAP (b)", "", "$30.60", "", "$29.57"],
+        ["CET1 ratio", "11.7%", "", "11.5%", ""],
+        ["Return on average tangible common equity", "25.6%", "", "27.8%", ""],
+    ])
+    exhibit = EarningsReleaseExhibit(exhibit_type="EX-99.1", filename="x", url="x", text="", tables=[table], content_sha256="x")
+    period = EarningsReleasePeriod(period_role="current", accession="acc", filed_at=date(2025, 10, 16), period_of_report=date(2025, 9, 30), index_json_url="x", ex99_1=exhibit)
+    result = _extract_8k_supplement_metrics(period, date(2025, 9, 30))
+    assert result["tbvps_usd"] == Decimal("30.60")
+    assert "cet1_std_pct" not in result
+    # A date alone does not establish a quarterly duration for a flow ratio.
+    assert "rotce_q_pct" not in result
+
+
+def test_quarter_header_and_explicit_units_block_annual_or_ambiguous_ratio():
+    from datetime import date
+    from app.fin_data.adapters.sec_deep import EarningsReleaseExhibit, EarningsReleasePeriod, ParsedHtmlTable
+    from app.fin_data.adapters.sec_bank_disclosure import _extract_8k_supplement_metrics
+    table = ParsedHtmlTable(headers=["Consolidated results", "", "", ""], rows=[
+        ["", "Quarter ended", "", "Year to date"],
+        ["", "3Q25", "2Q25", "2025"],
+        ["Efficiency ratio", "54%", "56%", "70%"],
+        ["Net interest margin (FTE)", "3.2%", "3.1%", "3.0%"],
+        ["Standardized CET1 capital ratio", "13.5%", "13.2%", "12%"],
+        ["Return on average tangible common equity", "0.25", "0.24", "0.23"],
+    ])
+    exhibit = EarningsReleaseExhibit(exhibit_type="EX-99.1", filename="x", url="x", text="", tables=[table], content_sha256="x")
+    period = EarningsReleasePeriod(period_role="current", accession="acc", filed_at=date(2025, 10, 16), period_of_report=date(2025, 10, 16), index_json_url="x", ex99_1=exhibit)
+    result = _extract_8k_supplement_metrics(period, date(2025, 9, 30))
+    assert result["efficiency_pct"] == Decimal("54")
+    assert result["nim_fte_pct"] == Decimal("3.2")
+    assert result["cet1_std_pct"] == Decimal("13.5")
+    assert "rotce_q_pct" not in result
+    assert result["nim_fte_pct_provenance"]["unit"] == "percent"
+
+
+def test_balance_sheet_does_not_invent_absent_preferred_equity():
+    html = '''<html><body><table class="report">
+      <tr><th class="tl">Balance Sheet ($ in Millions)</th><th class="th">Sep. 30, 2026</th></tr>
+      <tr class="ro"><td class="pl">Total assets</td><td class="nump">320,000</td></tr>
+      <tr class="ro"><td class="pl">Deposits</td><td class="nump">200,000</td></tr>
+      <tr class="ro"><td class="pl">Total stockholders' equity</td><td class="nump">28,710</td></tr>
+      <tr class="ro"><td class="pl">Goodwill</td><td class="nump">5,000</td></tr>
+      <tr class="ro"><td class="pl">Common stock, shares issued and outstanding</td><td class="nump">2,500</td></tr>
+      <tr class="ro"><td class="pl">Intangible assets</td><td class="nump">1,000</td></tr>
+    </table></body></html>'''
+    result = parse_r4_balance_sheet_bank(parse_r_html_table(html, r_file="R4.htm", url="https://sec.test/R4.htm"))
+    assert result["total_equity"] == Decimal("28710000000")
+    assert result["preferred_stock"] is None
+    assert result["common_equity"] is None
+    assert result["shares_ending_common"] is None
+    share_table = html.replace("Common stock, shares issued and outstanding", "Common shares outstanding")
+    assert parse_r4_balance_sheet_bank(parse_r_html_table(share_table, r_file="R4.htm", url="x"))["shares_ending_common"] is None
+    share_table = share_table.replace("$ in Millions", "$ in Millions, shares in thousands")
+    assert parse_r4_balance_sheet_bank(parse_r_html_table(share_table, r_file="R4.htm", url="x"))["shares_ending_common"] == 2_500_000
+
+
+def test_valuation_inputs_require_matching_units_and_known_filing_date():
+    from types import SimpleNamespace
+    from app.fin_data.adapters.sec_bank_disclosure import _extract_latest_instant_from_snapshot
+
+    row = {"end": "2025-09-30", "filed": "2025-10-16", "val": 91}
+    units = {"EUR": [row], "USD": [{**row, "filed": None}, {**row, "filed": "2025-12-01"}]}
+    snap = SimpleNamespace(facts_by_line={"equity": {"Equity": units}})
+    def read():
+        return _extract_latest_instant_from_snapshot(
+            snap, "equity", required_unit="USD", as_of=date(2025, 11, 1),
+            target_end=date(2025, 9, 30), max_end_drift_days=0,
+        )[0]
+
+    assert read() is None
+    units["USD"].append({**row, "val": 12})
+    assert read() == 12
+
+
+def test_preferred_stock_par_value_label_does_not_override_statement_units():
+    html = '''<html><body><table class="report">
+      <tr><th class="tl">Balance Sheet - USD ($) $ in Millions</th><th class="th">Sep. 30, 2025</th></tr>
+      <tr class="ro"><td class="pl">Total assets</td><td class="nump">455,312</td></tr>
+      <tr class="ro"><td class="pl">Deposits</td><td class="nump">314,697</td></tr>
+      <tr class="ro"><td class="pl"><a onclick="Show.showAR(this,'defref_us-gaap_PreferredStockValue',window);">Preferred stock – par value $0.01 per share</a></td><td class="nump">4,836</td></tr>
+      <tr class="ro"><td class="pl">Total stockholders' equity</td><td class="nump">43,879</td></tr>
+      <tr class="ro"><td class="pl">Goodwill</td><td class="nump">16,773</td></tr>
+      <tr class="ro"><td class="pl">Intangible assets</td><td class="nump">2,834</td></tr>
+    </table></body></html>'''
+    result = parse_r4_balance_sheet_bank(parse_r_html_table(html, r_file="R5.htm", url="https://sec.test/R5.htm"))
+    assert result["preferred_stock"] == Decimal("4836000000")
+    assert result["common_equity"] == Decimal("39043000000")
+
+
+def test_period_rebinding_rejects_conflicts_and_old_quarter_and_annual_sections():
+    from app.fin_data.adapters.sec_deep import EarningsReleaseExhibit, EarningsReleasePeriod, ParsedHtmlTable
+    from app.fin_data.adapters.sec_bank_disclosure import _extract_8k_supplement_metrics
+
+    def extract(rows):
+        table = ParsedHtmlTable(headers=["Consolidated results", "", ""], rows=rows)
+        exhibit = EarningsReleaseExhibit(exhibit_type="EX-99.1", filename="x", url="x", text="", tables=[table], content_sha256="x")
+        period = EarningsReleasePeriod(period_role="current", accession="acc", filed_at=date(2025, 10, 16), period_of_report=date(2025, 10, 16), index_json_url="x", ex99_1=exhibit)
+        return _extract_8k_supplement_metrics(period, date(2025, 9, 30))
+
+    # The second quarterly section moves 3Q25 into another column.
+    shifted = extract([
+        ["", "3Q25", "2Q25"],
+        ["Tangible book value per common share", "$30.60", "$29.57"],
+        ["", "2Q25", "3Q25"],
+        ["Tangible book value per common share", "$29.57", "$30.60"],
+    ])
+    assert shifted["tbvps_usd"] == Decimal("30.60")
+    conflicting = extract([
+        ["", "3Q25", "2Q25"],
+        ["Tangible book value per common share", "$30.60", "$29.57"],
+        ["", "2Q25", "3Q25"],
+        ["Tangible book value per common share", "$29.57", "$31.00"],
+    ])
+    assert "tbvps_usd" not in conflicting
+    assert "tbvps_usd_provenance" not in conflicting
+    annual = extract([
+        ["", "3Q25", "2Q25"],
+        ["Tangible book value per common share", "$30.60", "$29.57"],
+        ["Year ended", "2025", "2024"],
+        ["Tangible book value per common share", "$31.64", "$27.05"],
+    ])
+    assert annual["tbvps_usd"] == Decimal("30.60")
+    old_quarter = extract([
+        ["", "3Q25", "2Q25"],
+        ["", "2Q25", "1Q25"],
+        ["Tangible book value per common share", "$29.57", "$28.00"],
+    ])
+    assert "tbvps_usd" not in old_quarter

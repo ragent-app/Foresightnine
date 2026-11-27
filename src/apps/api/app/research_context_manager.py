@@ -1403,8 +1403,10 @@ def _prior_research(
         'prior_table_ids': [t['table_id'] for t in prior_tables],
         'prior_facts': [{key: f.get(key) for key in ('fact_id', 'label', 'value', 'unit', 'currency', 'period', 'source_id',
                                                       'character_start', 'character_end', 'quotation')} for f in facts_pool],
-        'prior_calculations': [{key: c.get(key) for key in ('calculation_id', 'formula_id', 'expression', 'inputs',
-                                                             'value', 'unit', 'currency', 'return_context')} for c in calcs_pool],
+        # Keep the full deterministic receipt in runtime state: rounding,
+        # formula version and other fields are needed to revalidate historical
+        # results. The separately constructed model summary remains bounded.
+        'prior_calculations': [dict(c) for c in calcs_pool],
         'prior_claim_ids': [c['claim_id'] for c in claims_all],
         'prior_claims': [dict(c) for c in claims_pool if isinstance(c, Mapping) and isinstance(c.get('claim_id'), str) and c.get('citations') and all(isinstance(cit, Mapping) and cit.get('source_id') in eligible for cit in c['citations'])],
         'prior_claims_meta': [

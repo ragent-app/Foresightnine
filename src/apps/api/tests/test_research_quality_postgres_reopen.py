@@ -26,6 +26,7 @@ sys.path.insert(0, 'apps/api')
 import app.main as api
 from fastapi.testclient import TestClient
 from tests.test_research_runtime import turn
+from app.model_protocol import ModelResponse, ModelUsage
 c = TestClient(api.app)
 r = c.post('/v1/auth/local/register', json={'email': uuid4().hex+'@example.test', 'password':'correct horse battery staple!'})
 assert r.status_code == 201, r.text
@@ -49,6 +50,8 @@ class Provider:
     policy = SimpleNamespace(timeout_seconds=30, max_input_tokens=None, max_output_tokens=2048)
     calls = 0
     def complete(self, messages, tools, **kwargs):
+        if not tools:
+            return ModelResponse({'role':'assistant','content':'{}'}, (), ModelUsage(1,1,2), 'stop')
         self.calls += 1
         if self.calls == 1:
             return turn('read_sources', {'reads':[{'source_id':sid}], 'rationale':'Read disclosure.'}, 'read')
@@ -58,7 +61,11 @@ class Provider:
                      ('120','FY2025','Revenue was 120 USD in FY2025.'),('100','FY2024','Revenue was 100 USD in FY2024.')]]
             return turn('record_facts', {'facts':facts,'rationale':'Record two annual figures.'}, 'facts')
         if self.calls == 3:
-            self.fact_ids = [x['fact_id'] for x in json.loads([m for m in messages if m.get('role')=='tool'][-1]['content'])['facts']]
+            tool_messages = [m for m in messages if m.get('role')=='tool']
+            assert tool_messages, 'missing tool messages'
+            results = json.loads(tool_messages[-1]['content'])
+            self.fact_ids = [x['fact_id'] for x in results['facts']]
+            assert len(self.fact_ids) == 2, repr(results)
             return turn('calculate_financials', {'calculations':[{'formula':'growth_percent','first_fact_id':self.fact_ids[0],
                         'second_fact_id':self.fact_ids[1]}], 'rationale':'Calculate growth.'}, 'calc')
         if self.calls == 4:
@@ -79,13 +86,17 @@ versions = c.get(path, headers=h).json()['versions']; assert len(versions) == 2,
 v = versions[-1]; content = v['content']; assert p.calls == 5
 assert len(content['facts']) == 2 and len(content['calculations']) == 1, content
 assert content['calculations'][0]['value'] == '20.00', content['calculations']
-assert any(x.get('answer') and '120' in x['answer'] for x in content['turns'][-1]['question_parts'])
+assert '120' in content['turns'][-1]['partial_notes'] and '20.00' in content['turns'][-1]['partial_notes']
+parts = content['turns'][-1]['question_parts']
+part = next(x for x in parts if 'revenue' in x['question'].lower() and x.get('answer'))
+assert part['status'] == 'partial' and 'Revenue was 120 USD in FY2025.' in part['answer'], part
+assert part['answer'] != 'Revenue was 120 USD in FY2025.' and part['references'], part
 assert any('EPS' in x['question'] and x['status'] != 'answered' for x in content['turns'][-1]['question_parts'])
 with open(os.environ['QUALITY_REOPEN_STATE'], 'w') as f:
     json.dump({'auth':h['Authorization'],'other':other,'path':path,'source':sid,'parent':parent,
                'version':v['version_id'],'operation':operation['operation_id'],'payload':payload,
                'fact_ids':[x['fact_id'] for x in content['facts']],
-               'calculation_id':content['calculations'][0]['calculation_id']}, f)
+               'calculation_id':content['calculations'][0]['calculation_id'], 'parts':parts}, f)
 release.set()
 os._exit(0)
 '''
@@ -109,7 +120,8 @@ assert [x['fact_id'] for x in facts] == s['fact_ids'] and len(set(s['fact_ids'])
 assert len(calcs) == 1 and calcs[0]['calculation_id'] == s['calculation_id'] and calcs[0]['value'] == '20.00'
 assert {x['fact_id'] for x in calcs[0]['inputs']} == set(s['fact_ids'])
 parts = content['turns'][-1]['question_parts']
-assert any(x.get('answer') and '120' in x['answer'] for x in parts), parts
+assert parts == s['parts'], parts
+assert '120' in content['turns'][-1]['partial_notes'] and '20.00' in content['turns'][-1]['partial_notes']
 assert any('EPS' in x['question'] and x['status'] != 'answered' for x in parts), parts
 export = c.get(vpath+'/export', headers=h); assert export.status_code == 200, export.text
 assert export.json()['version']['content'] == content
@@ -167,7 +179,9 @@ class Provider:
   self.calls+=1
   with open(os.environ['QUALITY_CALLS'],'a') as f: f.write('called\n')
   if self.calls==1:return turn('read_sources',{'reads':[{'source_id':sid}],'rationale':'read'},'read')
-  return turn('submit_research',{'report':'Revenue was 100 USD.','claims':[{'text':'Revenue was 100 USD.',
+  if self.calls==2:return turn('record_facts',{'facts':[{'source_id':sid,'label':'revenue','value':100,'unit':'USD','currency':'USD','period':'2025','quotation':'Revenue was 100 USD.'}],'rationale':'record'},'fact')
+  return turn('submit_research',{'report':'Revenue was 100 USD. Revenue doubled.','claims':[{'text':'Revenue was 100 USD.',
+   'source_id':sid,'quotation':'Revenue was 100 USD.','role':'support'}, {'text':'Revenue doubled.',
    'source_id':sid,'quotation':'Revenue was 100 USD.','role':'support'}],'limitations':[],'stopping_reason':'answered'},'submit')
 api.challenge_provider=Provider()
 def hold_before_save(self,parent,content):
@@ -175,7 +189,7 @@ def hold_before_save(self,parent,content):
  Event().wait(60)
  raise AssertionError('the parent must kill this process')
 api.ResearchVersionChain.save=hold_before_save
-payload={'parent_version_id':parent,'discover_sources':False,'max_model_calls':2}
+payload={'parent_version_id':parent,'discover_sources':False,'max_model_calls':3}
 r=c.post(path+'/runs',headers={**h,'Idempotency-Key':'kill-start'},json=payload)
 assert r.status_code==202,r.text
 with open(os.environ['QUALITY_REOPEN_STATE'],'w') as f:json.dump({'auth':h['Authorization'],'path':path,'parent':parent,
@@ -201,7 +215,7 @@ class NoReplay:
   raise AssertionError('recovery must not call the provider')
 api.challenge_provider=NoReplay()
 record=api.RESEARCH_RUN_INPUTS.get(op);cp=record['runtime_checkpoint']
-# The explicit two-call budget leaves no independent semantic review. Recovery
+# The explicit three-call budget leaves no independent semantic review. Recovery
 # must preserve the limited submission rather than promote its unverified text.
 assert cp.get('submission') and cp['submission']['status']=='partial' and cp['submission']['report']=='',cp
 assert api.operations.recover_expired_leases(now=api.lifecycle_clock.now()+timedelta(seconds=301))>=1
@@ -218,14 +232,17 @@ for _ in range(400):
 assert current=='completed',current
 settlement=c.get(path+'/runs/'+recovered+'/settlement',headers=h)
 assert settlement.status_code==200,settlement.text
-assert settlement.json()['model_ledger']['settled_calls']==2,settlement.text
+assert settlement.json()['model_ledger']['settled_calls']==3,settlement.text
 assert settlement.json()['model_ledger']['reserved_calls']==0,settlement.text
 versions=c.get(path,headers=h).json()['versions'];assert len(versions)==2,versions
 version=versions[-1];assert version['parent_version_id']==s['parent']
 assert version['content']['turns'][-1]['status']=='partial'
 assert version['content']['turns'][-1]['report']==''
+notes=version['content']['turns'][-1]['partial_notes']
+assert 'Revenue was 100 USD.' in notes and 'Revenue doubled.' not in notes
 vpath=path+'/versions/'+version['version_id']
-assert c.get(vpath+'/export',headers=h).json()['version']['version_id']==version['version_id']
+export=c.get(vpath+'/export',headers=h).json()['version']
+assert export['version_id']==version['version_id'] and export['content']['turns'][-1]['partial_notes']==notes
 replay=c.post(path+'/runs/'+op+'/recover',headers=request_headers,json={})
 assert replay.status_code==202 and replay.headers['Idempotency-Replayed']=='true',replay.text
 assert replay.json()['operation']['operation_id']==recovered
@@ -233,7 +250,7 @@ new=c.post(path+'/runs/'+op+'/recover',headers={**h,'Idempotency-Key':'kill-reco
 assert new.status_code==409 and new.json()['error_code']=='lifecycle_conflict',new.text
 assert len(c.get(path,headers=h).json()['versions'])==2
 assert c.get(vpath,headers=h).json()['version_id']==version['version_id']
-with open(os.environ['QUALITY_CALLS']) as f:assert f.read().splitlines()==['called','called']
+with open(os.environ['QUALITY_CALLS']) as f:assert f.read().splitlines()==['called','called','called']
 assert c.delete('/v1/auth/local/account',headers=h).status_code==200
 '''
     process = subprocess.Popen([sys.executable, '-c', first], cwd=root, env=env,

@@ -1575,13 +1575,13 @@ export function TopicPage() {
                     <>
                       <ThesisLedgerBar
                         topicId={topicId}
-                        symbol={squadDossier.symbol}
-                        cik={squadDossier.cik}
-                        companyName={squadDossier.company_name}
+                        symbol={squadDossier.symbol ?? null}
+                        cik={squadDossier.cik ?? null}
+                        companyName={squadDossier.company_name ?? null}
                         hasLockedDossier={Boolean(squadDossier.locked)}
                       />
-                      <PeerCoordinateBar symbol={squadDossier.symbol} />
-                      <GovernanceAuditBar symbol={squadDossier.symbol} cik={squadDossier.cik} />
+                      <PeerCoordinateBar symbol={squadDossier.symbol ?? null} />
+                      <GovernanceAuditBar symbol={squadDossier.symbol ?? null} cik={squadDossier.cik ?? null} />
                       <EarningsDossierView
                       dossier={squadDossier}
                       topicId={topicId}

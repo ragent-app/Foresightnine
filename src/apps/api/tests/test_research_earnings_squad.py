@@ -715,6 +715,10 @@ def test_full_6_stage_orchestration_with_real_stage0_and_on_demand_deep_report()
     assert dossier.slot_usage_summary.slots["deep_reasoner"].fallback_used is True
     assert dossier.slot_usage_summary.slots["bear_reviewer"].model == "cross-family-bear-model"
     assert ctx.calls == dossier.slot_usage_summary.total_calls
+    stages = dossier.slot_usage_summary.stages
+    assert stages["stage_0_prefetch"].calls == 0
+    assert stages["stage_2_workers"].tool_calls == len(tool_calls_log)
+    assert sum(s.total_tokens for s in stages.values()) == dossier.slot_usage_summary.total_tokens
 
     # Bear Reviewer isolated prompt: NO bull narrative or memo
     assert len(bear_prompts) == 1
@@ -1328,7 +1332,8 @@ def test_budget_enforcement_cancellation_and_async_execution() -> None:
     dossier_async = asyncio.run(_run_both())
     assert dossier_async.memo_markdown == "Async Memo"
     assert dossier_async.deep_report_markdown == "Async Deep Report"
-    assert dossier_async.slot_usage_summary.total_calls == 5
+    assert dossier_async.slot_usage_summary.total_calls == 6
+    assert dossier_async.slot_usage_summary.stages["deep_report"].calls == 1
 
     # Cancellation stops execution cleanly
     cancel_ev = Event()
@@ -1713,6 +1718,8 @@ def test_invoke_and_parse_with_repair_concise_retry_and_fallback_on_provider_tru
     )
     assert used_fb is False and last_err is None
     assert parsed.batch_id == "bear_retry_ok"
+    observed = ledger.summary().stages["stage_3a_bear"]
+    assert (observed.calls, observed.truncated_calls, observed.repair_calls) == (2, 1, 1)
     assert len(seen_prompts) == 2
     assert len(seen_prompts[1]) == 2
     assert "provider output token limit" in seen_prompts[1][1]["content"]

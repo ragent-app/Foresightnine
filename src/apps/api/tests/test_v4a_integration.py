@@ -21,6 +21,7 @@ from app.fin_data.models import ToolResult
 from app.main import (
     BANK_DISCLOSURE_SNAPSHOTS,
     PEER_COMPANY_SNAPSHOTS,
+    PEER_COMPARE_CACHE,
     _build_bank_delta_inputs,
     _v3a_bank_disclosure_loader,
     app,
@@ -253,6 +254,7 @@ def _bank_disclosure_fixture(
         slr_min_pct="5.0",
         htm_net_unrealized_pnl_usd=htm_pnl,
         rotce_q_reported_pct=rotce_q,
+        rotce_q_verified=True,
         common_dividends_ttm_usd="14000000000",
         common_buybacks_ttm_usd="22000000000",
         tbvps_bridge=TbvpsReconciliationBridge(
@@ -266,6 +268,8 @@ def _bank_disclosure_fixture(
             shares_reported_denominator="2761904762",
             rsu_share_addon="0",
             tbvps_reported_usd=tbvps_rep,
+            tbvps_reported_verified=True,
+            tbvps_xbrl_std_verified=True,
             tbvps_reported_source="8k_supplement",
             tbvps_xbrl_std_usd=tbvps_std,
             tbvps_gap_pct="-3.62",
@@ -812,6 +816,10 @@ def test_v4a_direction_b_delta_radar_thesis_and_export() -> None:
         dossier=dossier.model_dump(mode="json"),
     )
     assert any(t.metric_key in ("peer_rotce_spread_pp", "cet1_buffer_bps") for c in thesis.claims for t in c.watch_triggers)
+    old_dossier = dossier.model_dump(mode="json")
+    old_dossier["snapshot"]["bank_valuation"]["basis_validation_version"] = "v1"
+    old_thesis = build_thesis_draft_from_dossier(account_id="acct_rad", topic_id="top_bac", dossier=old_dossier)
+    assert not any(t.metric_key == "peer_rotce_spread_pp" for c in old_thesis.claims for t in c.watch_triggers)
 
     exported = export_earnings_dossier(dossier, fmt="markdown")
     md_text = exported.text
@@ -844,6 +852,8 @@ def test_v4a_rest_endpoints_and_two_agent_tools(monkeypatch: Any) -> None:
         bank_cache.put(f"bank:{cik}:latest", bd)
     snap_cache.put("sym:BLK", {"cik": "0001364742", "symbol": "BLK"})
     snap_cache.put("snap:0001364742", blk_peer)
+    # The watch endpoint resolves its durable symbol alias before contacting SEC.
+    PEER_COMPANY_SNAPSHOTS.put("sym:BAC", {"cik": bac_peer.cik, "symbol": "BAC"})
 
     # FinDataToolbox 2 new tools persist export=True official ResearchSources
     persisted: list[ResearchSource] = []
@@ -937,6 +947,36 @@ def test_v4a_rest_endpoints_and_two_agent_tools(monkeypatch: Any) -> None:
             assert r_cmp.status_code == 200, r_cmp.text
             assert r_cmp.json()["comparison_mode"] == "us_large_banks"
             assert len(r_cmp.json()["bank_companies"]) == 2
+
+            bad_bridge = jpm_disc.tbvps_bridge.model_copy(update={
+                "tbvps_reported_verified": False, "tbvps_xbrl_std_verified": False,
+                "tbvps_reported_verification_reason": "period not verified",
+            })
+            bad_disc = jpm_disc.model_copy(update={"tbvps_bridge": bad_bridge, "rotce_q_verified": False})
+            bank_cache.put("bank:0000019617:latest", bad_disc)
+            bad_analyze = client.post("/v2/research/banks/analyze", headers=headers,
+                                      json={"symbol": "JPM", "cache_only": True})
+            assert bad_analyze.status_code == 200
+            bad_val = bad_analyze.json()["valuation"]
+            assert bad_val.get("p_to_tbv_primary") is None and bad_val.get("implied_rotce_pct") is None
+            assert "period not verified" in bad_val["notes"]
+            bad_cmp = client.post("/v2/research/peers/compare", headers=headers,
+                                  json={"primary_symbol": "JPM", "symbols": ["JPM", "BAC"], "cache_only": True})
+            assert bad_cmp.status_code == 200
+            bad_matrix = bad_cmp.json()
+            bad_row = next(r for r in bad_matrix["bank_companies"] if r["symbol"] == "JPM")
+            assert bad_row.get("p_to_tbv_primary") is None and bad_row.get("rotce_q_pct") is None
+            assert "p_to_tbv_primary" not in bad_row["ranks"]
+            assert bad_row.get("cet1_buffer_bps") is not None
+            assert bad_matrix["primary_watch_trigger_metrics"].get("peer_ptbv_vs_median_x") is None
+            old_matrix = r_cmp.json()
+            old_matrix["bank_basis_validation_version"] = "v1"
+            old_brief = client.post("/v2/research/peers/compare/brief", headers=headers, json={"matrix": old_matrix})
+            assert old_brief.status_code == 422
+            PEER_COMPARE_CACHE.put("old-bank-comparison", {"account_id": acct_id, "matrix": old_matrix})
+            old_cached_brief = client.post("/v2/research/peers/compare/brief", headers=headers,
+                                           json={"comparison_id": "old-bank-comparison"})
+            assert old_cached_brief.status_code == 422
 
             r_watch = client.post(
                 "/v2/research/peers/watch",

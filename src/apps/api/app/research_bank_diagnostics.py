@@ -15,6 +15,7 @@ from typing import Any, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .research_bank_versions import BANK_DISCLOSURE_VERSION, BANK_VALUATION_VERSION
 from .fin_data.adapters.sec_bank_disclosure import (
     BankDisclosureSnapshot,
     BankSubtype,
@@ -110,9 +111,10 @@ class BankValuationResult(_FrozenModel):
     cik: str
     period_end_date: str
     as_of: str
+    basis_validation_version: str | None = None
     price_usd: str | None = None
     market_cap_usd: str | None = None
-    primary_tbvps_basis: Literal["reported_market_convention", "xbrl_std_fallback", "xbrl_standardized"]
+    primary_tbvps_basis: Literal["reported_market_convention", "xbrl_std_fallback", "xbrl_standardized", "unavailable"]
     coe_pct: str
     terminal_g_pct: str
     p_to_tbv_primary: str | None = None
@@ -170,6 +172,12 @@ def _check_anti_future(snapshot: BankDisclosureSnapshot, as_of: date | None) -> 
     return eff_as_of
 
 
+def _verified(snapshot: BankDisclosureSnapshot, flag: str, *, bridge: bool = False) -> bool:
+    # Archives remain readable, but pre-validation snapshots cannot feed new results.
+    target = snapshot.tbvps_bridge if bridge else snapshot
+    return snapshot.schema_version == BANK_DISCLOSURE_VERSION and bool(getattr(target, flag, False))
+
+
 def _build_comparability_warnings(
     snapshot: BankDisclosureSnapshot,
     rules: Mapping[str, Any],
@@ -177,31 +185,18 @@ def _build_comparability_warnings(
     warnings: list[dict[str, str]] = []
     tbv_rules = rules.get("tbvps") or {}
     gap_thresh = _dec(tbv_rules.get("comparability_gap_warning_pct")) or Decimal("1.00")
-    rsu_thresh = _dec(tbv_rules.get("rsu_addon_warning_shares")) or Decimal("500000")
 
     bridge = snapshot.tbvps_bridge
-    gap_pct = _dec(bridge.tbvps_gap_pct)
-    rsu_addon = _dec(bridge.rsu_share_addon) or Decimal("0")
-    if (gap_pct is not None and abs(gap_pct) > gap_thresh) or rsu_addon > rsu_thresh:
-        warnings.append(
-            {
-                "code": "tbvps_denominator_rsu_adjustment",
-                "severity": "info",
-                "message": (
-                    f"Reported TBVPS (${bridge.tbvps_reported_usd}) differs from XBRL-Standardized "
-                    f"(${bridge.tbvps_xbrl_std_usd}) by {bridge.tbvps_gap_pct or 'n/a'}% "
-                    f"(RSU share add-on: {bridge.rsu_share_addon}; primary basis stays Reported Market Convention)."
-                ),
-            }
-        )
-    elif bridge.tbvps_reported_usd is None:
-        warnings.append(
-            {
-                "code": "tbvps_reported_unavailable_xbrl_fallback",
-                "severity": "info",
-                "message": f"Reported TBVPS unavailable; falling back to XBRL-Standardized (${bridge.tbvps_xbrl_std_usd}).",
-            }
-        )
+    reported_ok = _verified(snapshot, "tbvps_reported_verified", bridge=True)
+    std_ok = _verified(snapshot, "tbvps_xbrl_std_verified", bridge=True)
+    for ok, name in ((reported_ok, "reported"), (std_ok, "xbrl_std")):
+        if not ok:
+            reason = getattr(bridge, f"tbvps_{name}_verification_reason", None) or "basis not verified"
+            warnings.append({"code": f"tbvps_{name}_unverified", "severity": "info", "message": reason})
+    gap_pct = _dec(bridge.tbvps_gap_pct) if reported_ok and std_ok else None
+    if gap_pct is not None and abs(gap_pct) > gap_thresh:
+        warnings.append({"code": "tbvps_basis_difference", "severity": "info",
+                         "message": f"Verified TBVPS bases differ by {gap_pct}%."})
     if snapshot.segments and snapshot.segments.segments_basis != snapshot.segments.consolidated_basis:
         warnings.append(
             {
@@ -248,13 +243,10 @@ def evaluate_bank_diagnostics(
         eff_mgd = ((exp_q / rev_mgd) * Decimal("100")) if (exp_q is not None and rev_mgd and rev_mgd > 0) else _dec(snapshot.efficiency_ratio_reported_pct)
         ppnr_margin = ((ppnr_gaap / rev_gaap) * Decimal("100")) if (ppnr_gaap is not None and rev_gaap and rev_gaap > 0) else None
         nii_share = ((nii_gaap / rev_gaap) * Decimal("100")) if (nii_gaap is not None and rev_gaap and rev_gaap > 0) else None
-        rotce_q = _dec(snapshot.rotce_q_reported_pct)
-        # Fallback ROTCE = annualized common net income / avg (or ending) TCE when 8-K/MD&A omitted
-        if rotce_q is None:
-            ni_c = _dec(snapshot.net_income_to_common_q_usd)
-            tce_base = _dec(snapshot.avg_tangible_common_equity_q_usd) or _dec(snapshot.tbvps_bridge.tce_reported_usd) or _dec(snapshot.tbvps_bridge.tce_xbrl_std_usd)
-            if ni_c is not None and tce_base and tce_base > 0:
-                rotce_q = ((ni_c * Decimal("4")) / tce_base) * Decimal("100")
+        # Ending TCE is not average TCE; neither an unverified disclosure nor
+        # an inferred denominator can support a quarterly ROTCE.
+        rotce_q = (_dec(snapshot.rotce_q_reported_pct)
+                   if _verified(snapshot, "rotce_q_verified") else None)
 
         metrics["efficiency_ratio_gaap_pct"] = BankDiagnosticMetric(
             name="efficiency_ratio_gaap_pct",
@@ -292,9 +284,10 @@ def evaluate_bank_diagnostics(
             status="computed" if rotce_q is not None else "unavailable",
             value=_q(rotce_q, 2),
             unit="%",
-            basis="reported_or_derived",
-            formula="Reported ROTCE (Q annualized), fallback (NI_to_Common_Q * 4 / TCE) * 100",
-            input_ids=["rotce_q_reported_pct", "net_income_to_common_q_usd"],
+            basis="reported",
+            formula="Verified reported quarterly ROTCE",
+            input_ids=["rotce_q_reported_pct"],
+            reason=None if rotce_q is not None else (getattr(snapshot, "rotce_q_verification_reason", None) or "Quarterly ROTCE is unverified or unavailable."),
         )
 
         # ---- Pillar 2: Capital Adequacy ----
@@ -318,7 +311,7 @@ def evaluate_bank_diagnostics(
 
         # ---- Pillar 3: Securities Portfolio & HTM Overhang (D4 Tax-Adjusted CET1 Stress) ----
         htm_pnl = _dec(snapshot.htm_net_unrealized_pnl_usd)
-        tce_for_htm = _dec(snapshot.tbvps_bridge.tce_reported_usd) or _dec(snapshot.tbvps_bridge.tce_xbrl_std_usd)
+        tce_for_htm = (_dec(snapshot.tbvps_bridge.tce_xbrl_std_usd) if _verified(snapshot, "tbvps_xbrl_std_verified", bridge=True) else None)
         rwa_std = _dec(snapshot.rwa_standardized_usd)
         tax_rate = _dec(cap_rules.get("htm_effective_tax_rate")) or Decimal("0.24")
 
@@ -671,23 +664,28 @@ def evaluate_bank_valuation(
         ctx.prec = 100
 
         px = _dec(price_usd)
-        ke = _dec(coe_pct) or Decimal("10.0")
-        g = _dec(terminal_g_pct) or Decimal("3.0")
+        ke = _dec(coe_pct)
+        g = _dec(terminal_g_pct)
+        ke = ke if ke is not None else Decimal("10.0")
+        g = g if g is not None else Decimal("3.0")
 
         bridge = snapshot.tbvps_bridge
-        tbvps_rep = _dec(bridge.tbvps_reported_usd)
-        tbvps_std = _dec(bridge.tbvps_xbrl_std_usd)
+        tbvps_rep = _dec(bridge.tbvps_reported_usd) if _verified(snapshot, "tbvps_reported_verified", bridge=True) else None
+        tbvps_std = _dec(bridge.tbvps_xbrl_std_usd) if _verified(snapshot, "tbvps_xbrl_std_verified", bridge=True) else None
         if tbvps_basis == "xbrl_standardized":
             primary_tbvps = tbvps_std
-            primary_mode: Literal["reported_market_convention", "xbrl_std_fallback", "xbrl_standardized"] = "xbrl_standardized"
+            primary_mode: Literal["reported_market_convention", "xbrl_std_fallback", "xbrl_standardized", "unavailable"] = "xbrl_standardized"
         elif tbvps_rep is not None and tbvps_rep > 0:
             primary_tbvps = tbvps_rep
             primary_mode = "reported_market_convention"
-        else:
+        elif tbvps_std is not None and tbvps_std > 0:
             primary_tbvps = tbvps_std
             primary_mode = "xbrl_std_fallback"
+        else:
+            primary_tbvps = None
+            primary_mode = "unavailable"
 
-        shares_den = _dec(bridge.shares_reported_denominator) or _dec(bridge.shares_ending_common)
+        shares_den = _dec(bridge.shares_ending_common)
         mcap = (px * shares_den) if (px is not None and px > 0 and shares_den and shares_den > 0) else None
         comm_eq = _dec(bridge.common_equity_usd)
         bvps_eff = _dec(bridge.bvps_reported_usd) or (
@@ -710,14 +708,17 @@ def evaluate_bank_valuation(
         p_e_ttm = (mcap / ni_ttm) if (mcap is not None and ni_ttm is not None and ni_ttm > 0) else None
         p_ppnr_ttm = (mcap / ppnr_ttm) if (mcap is not None and ppnr_ttm is not None and ppnr_ttm > 0) else None
 
-        rotce = _dec(snapshot.rotce_q_reported_pct)
-        if rotce is None:
-            ni_q = _dec(snapshot.net_income_to_common_q_usd)
-            tce_b = _dec(bridge.tce_reported_usd) or _dec(bridge.tce_xbrl_std_usd)
-            if ni_q is not None and tce_b and tce_b > 0:
-                rotce = ((ni_q * Decimal("4")) / tce_b) * Decimal("100")
+        rotce = (_dec(snapshot.rotce_q_reported_pct)
+                 if _verified(snapshot, "rotce_q_verified") else None)
 
         notes: list[str] = []
+        if rotce is None:
+            notes.append(getattr(snapshot, "rotce_q_verification_reason", None) or "Quarterly ROTCE is unverified or unavailable.")
+        if primary_tbvps is None:
+            basis_reason = (getattr(bridge, "tbvps_xbrl_std_verification_reason", None)
+                            if tbvps_basis == "xbrl_standardized" else
+                            getattr(bridge, "tbvps_reported_verification_reason", None))
+            notes.append(basis_reason or "TBVPS basis is unverified or unavailable.")
         if ke <= g:
             notes.append(f"Degenerate Gordon boundary guarded: K_e ({_q(ke,2)}%) <= terminal g ({_q(g,2)}%).")
         if primary_tbvps is None or primary_tbvps <= 0:
@@ -768,6 +769,7 @@ def evaluate_bank_valuation(
             cik=snapshot.cik,
             period_end_date=snapshot.period_end_date,
             as_of=eff_as_of,
+            basis_validation_version=BANK_VALUATION_VERSION,
             price_usd=_q(px, 2),
             market_cap_usd=_q(mcap, 0),
             primary_tbvps_basis=primary_mode,

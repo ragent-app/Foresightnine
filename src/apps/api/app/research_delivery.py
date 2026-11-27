@@ -97,6 +97,11 @@ def assemble_parts(question: str, state: dict, source_by_id: dict, eligible_ids:
         answer = ' '.join(c['text'] for c in referenced_claims if c and c.get('text'))
         if not answer and status == 'satisfied' and len({r.get('source_id') for r in refs if r.get('source_id') in eligible_ids}) >= 2 and 'conflict' in requirement.get('reason', '').casefold():
             answer = '所列资料存在可核对的数值差异。'
+        if not answer and not refs and checkpoint and any(r.get('calculation_id') for r in checkpoint.get('references', [])):
+            # Preserve the checkpoint's explicit calculation identity for the
+            # runtime to reconstruct a source-checked partial answer.
+            refs = [dict(r) for r in checkpoint['references']]
+            answer = checkpoint.get('answer', '')
         if not answer and not any(r.get('calculation_id') for r in refs) and checkpoint and any(any(r.get(k) and r.get(k) == x.get(k) for k in ('fact_id', 'source_id', 'claim_id', 'calculation_id')) for r in checkpoint.get('references', []) for x in refs):
             # Checkpoint answers are independently validated at write time and source-filtered above.
             answer = checkpoint.get('answer', '')

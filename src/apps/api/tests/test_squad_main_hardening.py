@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 from decimal import Decimal
 import threading
 import time
@@ -22,7 +23,7 @@ from app.openai_responses import OpenAIResponsesProvider
 from app.phase3 import ProviderFailure, ProviderPolicy
 from app.provider_capabilities import ChatGenerationParameters
 from app.research_budget import ResearchExecutionBudget
-from app.research_earnings_squad import SlotBinding, SlotModelRequest
+from app.research_earnings_squad import SlotBinding, SlotModelRequest, _compact_stale_worker_tool_messages
 from app.research_fin_tools import FinDataToolbox, FinToolOutcome
 from app.research_model_slots import ResolvedModelSlot
 from app.research_sources import ResearchSource, SourceInput, SourcePermissions
@@ -70,6 +71,42 @@ def _http_request(headers: dict[str, str] | None = None) -> Request:
 
 
 # --------------------------------------------------------------------------- 1. _AccountSlotModelRunner
+def test_stale_evidence_compaction_reaches_provider_and_preserves_native_exchanges():
+    turns = []
+
+    class Provider:
+        def complete_turn(self, turn):
+            turns.append(turn)
+            return ModelResponse(
+                message={"role": "assistant", "content": "", "native_state": len(turns)},
+                tool_calls=(), usage=ModelUsage(None, None, None), finish_reason="stop", stop_class="end",
+            )
+
+    runner = api._AccountSlotModelRunner(providers_by_slot={}, default_provider=Provider())
+    messages = [{"role": "system", "content": "s"}, {"role": "user", "content": "compare"}]
+    original = json.dumps({"source_id": "annual", "text": "Company disclosure. " * 1200})
+    for i in range(3):
+        _compact_stale_worker_tool_messages(messages)
+        runner.invoke(SlotModelRequest(
+            slot="fast_extractor", stage="stage_2_workers", role="worker_segments",
+            system_prompt="s", user_prompt="compare", messages=messages, binding=_binding(),
+            turn_index=i, conversation_id="compare-filings",
+        ))
+        messages.extend([
+            {"role": "assistant", "tool_calls": [{"id": f"read-{i}"}]},
+            {"role": "tool", "tool_call_id": f"read-{i}", "content": original},
+        ])
+    assert turns[1].history[0].results[0].content == original
+    old, recent = turns[2].history
+    result = old.results[0]
+    assert result.tool_call_id == "read-0"
+    assert json.loads(result.content)["source_id"] == "annual"
+    assert len(result.content.encode()) < len(original.encode()) / 10
+    assert recent.results[0].content == original
+    assert old.assistant.envelope["native_state"] == 1
+    assert recent.assistant.envelope["native_state"] == 2
+
+
 def test_account_slot_runner_forwards_runtime_schema_tokens_timeout_and_cancel():
     recorded_turns: list[Any] = []
     cancel_evt = threading.Event()
@@ -122,12 +159,12 @@ def test_account_slot_runner_forwards_runtime_schema_tokens_timeout_and_cancel()
     t0, t1 = recorded_turns
     assert t0.response_schema == schema
     assert t0.response_schema_name == "WorkerOut"
-    assert t0.max_output_tokens == 8192
-    assert t0.timeout_seconds == 90.0
+    assert t0.max_output_tokens == api._SQUAD_STAGE_MAX_OUTPUT_TOKENS["stage_2_workers"]
+    assert t0.timeout_seconds == api._SQUAD_STAGE_TIMEOUT_FLOORS["stage_2_workers"]
     assert t0.cancel_event is cancel_evt
 
     assert t1.max_output_tokens == 20000
-    assert t1.timeout_seconds == 180.0
+    assert t1.timeout_seconds == api._SQUAD_STAGE_TIMEOUT_FLOORS["deep_report"]
     assert t1.cancel_event is cancel_evt
 
 
@@ -357,7 +394,8 @@ def test_account_slot_runner_handles_non_tool_and_mixed_followups_with_anthropic
     assert any(isinstance(b, dict) and b.get("type") == "text" and "Emit final JSON now." in b.get("text", "") for b in last_b1_blocks)
 
 
-def test_account_slot_runner_exponential_backoff_retries_and_cancel_handling():
+def test_account_slot_runner_exponential_backoff_retries_and_cancel_handling(monkeypatch):
+    monkeypatch.setattr(api.random, "uniform", lambda _lo, _hi: 1.0)
     sleeps: list[float] = []
 
     class FlakyProvider:
@@ -402,9 +440,9 @@ def test_account_slot_runner_exponential_backoff_retries_and_cancel_handling():
     assert resp.content == '{"recovered": true}'
     assert flaky.calls == 3
     assert len(sleeps) == 2
-    assert sleeps[1] > sleeps[0] * 1.1  # exponential progression even with +-25% jitter
+    assert sleeps == [5.0, 0.4]  # Independent 429 and transient failure schedules
 
-    # Exhausting max_transient_retries re-raises final error
+    # Exhausting the independent 429 retry budget re-raises the last error
     sleeps.clear()
     always_429 = FlakyProvider([
         ProviderFailure("provider_rate_limited", "429 #1", retryable=True),
@@ -414,7 +452,7 @@ def test_account_slot_runner_exponential_backoff_retries_and_cancel_handling():
     runner_fail = api._AccountSlotModelRunner(
         providers_by_slot={},
         default_provider=always_429,
-        max_transient_retries=2,
+        max_rate_limit_retries=2,
         retry_base_seconds=0.1,
         sleeper=sleeps.append,
     )
@@ -991,7 +1029,7 @@ def test_resolve_earnings_squad_runtime_personal_chat_generation_params_without_
             messages=[{"role": "system", "content": "sys"}, {"role": "user", "content": "extract"}],
             binding=_binding("fast_extractor"),
         )
-    ) == 8192
+    ) == api._SQUAD_STAGE_MAX_OUTPUT_TOKENS["stage_2_workers"]
 
     # 2) Fallback resolution when generation_parameters exposes max_tokens=4096 (no max_output_tokens attr)
     real_settings, real_config = api.model_settings.runtime_configuration(account.account_id)
@@ -1054,6 +1092,7 @@ def test_openai_responses_squad_e2e_and_safe_rejection_diagnostics(
     from app import openai_compatible, openai_responses
     from app.openai_compatible import HttpResponse
 
+    monkeypatch.setattr(api, "_prewarm_v25_layer1_async", lambda _dossier: None)
     monkeypatch.setattr(openai_compatible, "_require_public_dns", lambda *_: None)
     monkeypatch.setattr(api.model_settings, "cipher", ModelCredentialCipher(b"r" * 32))
     client = TestClient(api.app)

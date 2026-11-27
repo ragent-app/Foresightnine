@@ -210,9 +210,14 @@ export function runEarningsSquad(
 export function getEarningsDossier(
   topicId: string,
   signal?: AbortSignal,
+  revision: "current" | "original" = "current",
+  originalSha256?: string,
 ): Promise<ResearchV2.EarningsSquadDossierResponse> {
+  const params = new URLSearchParams();
+  if (revision === "original") params.set("revision", revision);
+  if (originalSha256) params.set("original_sha256", originalSha256);
   return apiRequest<ResearchV2.EarningsSquadDossierResponse>(
-    `${squadBasePath(topicId)}/dossier`,
+    `${squadBasePath(topicId)}/dossier${params.size ? `?${params}` : ""}`,
     buildRequestOptions({ signal }),
   );
 }

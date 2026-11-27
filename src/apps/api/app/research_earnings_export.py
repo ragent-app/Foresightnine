@@ -1396,6 +1396,8 @@ def export_dossier_csv(
             cits,
             card.caveat or "",
         ])
+    if any(g.code == "bank_disclosure_restatement" for g in dossier.open_gaps):
+        wrow(["restatement", dossier.dossier_id, "", "", view.sanitized_memo_markdown])
     for gap in dossier.open_gaps:
         wrow([
             "open_gaps",
@@ -2010,6 +2012,8 @@ def _build_xlsx_sheets(view: SanitizedDossierView) -> list[tuple[str, list[list[
         ["[SECTION] Open Gaps"],
         ["[HEADER] Gap ID", "Stage", "Worker Role", "Code", "Message", "Fallback"],
     ])
+    if any(g.code == "bank_disclosure_restatement" for g in dossier.open_gaps):
+        s6.append([dossier.dossier_id, "disclosure_review", "", "restatement", view.sanitized_memo_markdown, ""])
     if dossier.open_gaps:
         for gap in dossier.open_gaps:
             s6.append([gap.gap_id, gap.stage, gap.worker_role or "", gap.code, gap.message, gap.fallback or ""])

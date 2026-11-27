@@ -9,6 +9,7 @@ with on-demand Deep Report caching, and Organization-Graph event emission.
 from __future__ import annotations
 
 import asyncio
+from collections import Counter
 from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import nullcontext
 import copy
@@ -388,6 +389,14 @@ def _compact_tool_output_for_worker(tool_name: str, out: Any) -> Any:
                 data[k] = _truncate_str(data[k], 6000)
                 data["truncated_for_context"] = True
     return data
+
+
+def _replayed_tool_bytes(messages: list[dict[str, Any]]) -> int:
+    """Count UTF-8 tool content previously sent, excluding results new to this turn."""
+    last_assistant = next((i for i in reversed(range(len(messages)))
+                           if messages[i].get("role") == "assistant"), 0)
+    return sum(len(m["content"].encode("utf-8")) for m in messages[:last_assistant]
+               if m.get("role") == "tool" and isinstance(m.get("content"), str))
 
 
 def _compact_stale_worker_tool_messages(messages: list[dict[str, Any]], *, keep_recent_tool_turns: int = 1) -> None:
@@ -793,10 +802,29 @@ class SlotUsageRecord(_FrozenContract):
     elapsed_ms: int = Field(default=0, ge=0)
 
 
+class StageUsage(_FrozenContract):
+    """Settled logical calls. Model and tool time sum across concurrent workers."""
+
+    calls: int = 0
+    failed_calls: int = 0
+    repair_calls: int = 0
+    transport_retries: int = 0
+    truncated_calls: int = 0
+    calls_missing_usage: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    model_ms: int = 0
+    tool_ms: int = 0
+    tool_calls: int = 0
+    replayed_tool_bytes: int = 0
+
+
 class SlotUsageSummary(_FrozenContract):
     """Aggregated slot usage summary attached to EarningsDossier."""
 
     slots: dict[ModelSlot, SlotUsageRecord]
+    stages: dict[str, StageUsage] = Field(default_factory=dict)
     total_calls: int = Field(default=0, ge=0)
     total_tokens: int = Field(default=0, ge=0)
     stage_0_model_calls: int = Field(default=0, ge=0)
@@ -827,6 +855,7 @@ class EarningsDossier(_FrozenContract):
     slot_usage_summary: SlotUsageSummary
     locked: bool = True
     dossier_sha256: str = ""
+    supersedes_sha256: str | None = None
     created_at: datetime = Field(default_factory=_utcnow)
 
     @model_validator(mode="after")
@@ -943,6 +972,7 @@ class SquadCheckpoint(_FrozenContract):
     user_instructions: list[UserSteeringInstruction] = Field(default_factory=list)
     applied_instruction_sequences: list[int] = Field(default_factory=list)
     slot_usage: dict[ModelSlot, SlotUsageRecord] = Field(default_factory=dict)
+    stage_usage: dict[str, StageUsage] = Field(default_factory=dict)
     org_events: list[OrgGraphEvent] = Field(default_factory=list)
     last_sequence: int = 0
     updated_at: datetime = Field(default_factory=_utcnow)
@@ -1355,6 +1385,7 @@ class SquadExecutionLedger:
         budget: ResearchExecutionBudget | None = None,
         cancel_event: Event | None = None,
         initial_usage: Mapping[ModelSlot, SlotUsageRecord] | None = None,
+        initial_stages: Mapping[str, StageUsage] | None = None,
     ) -> None:
         self._lock = RLock()
         self._bindings = dict(slot_bindings)
@@ -1377,6 +1408,7 @@ class SquadExecutionLedger:
                 "failed_calls": prior.failed_calls if prior else 0,
                 "elapsed_ms": prior.elapsed_ms if prior else 0,
             }
+        self._stages = {k: Counter(v.model_dump()) for k, v in (initial_stages or {}).items()}
         self._stage_0_model_calls = 0
         self._deep_report_tool_calls = 0
         self._tool_calls_total = 0
@@ -1445,7 +1477,11 @@ class SquadExecutionLedger:
         *,
         usage: ModelUsage | None,
         elapsed_ms: int,
+        stage: str,
         failed: bool = False,
+        repair: bool = False,
+        truncated: bool = False,
+        replayed_tool_bytes: int = 0,
     ) -> None:
         with self._lock:
             rec = self._usage[slot]
@@ -1459,11 +1495,34 @@ class SquadExecutionLedger:
             rec["input_tokens"] += inp
             rec["output_tokens"] += out
             rec["total_tokens"] += tot
+            self._stages.setdefault(stage, Counter()).update(
+                calls=1, failed_calls=int(failed), repair_calls=int(repair),
+                truncated_calls=int(truncated), model_ms=max(0, elapsed_ms),
+                calls_missing_usage=int(usage is None or all(v is None for v in (
+                    usage.input_tokens, usage.output_tokens, usage.total_tokens))),
+                input_tokens=inp, output_tokens=out, total_tokens=tot,
+                replayed_tool_bytes=replayed_tool_bytes,
+            )
             if self._context is not None and before is not None:
                 receipt = self._context.model_call_receipts.get(call_id)
                 if receipt is not None and not failed:
                     receipt["provider"] = "returned"
                 self._context.finish_model(call_id, tot if usage is not None else None, before)
+
+    def invoke(self, runner: SquadModelRunner, request: SlotModelRequest) -> SlotModelResponse:
+        """Account for additional transport attempts separately from logical repairs."""
+        try:
+            response = runner.invoke(request)
+        except Exception as error:
+            retries = getattr(error, "transport_retries", 0)
+            if retries:
+                with self._lock:
+                    self._stages.setdefault(request.stage, Counter())["transport_retries"] += retries
+            raise
+        if response.transport_retries:
+            with self._lock:
+                self._stages.setdefault(request.stage, Counter())["transport_retries"] += response.transport_retries
+        return response
 
     def record_tool_call(self, *, stage: str) -> None:
         with self._lock:
@@ -1474,6 +1533,11 @@ class SquadExecutionLedger:
                     stage=stage,
                 )
             self._tool_calls_total += 1
+            self._stages.setdefault(stage, Counter())["tool_calls"] += 1
+
+    def record_tool_elapsed(self, stage: str, started: float) -> None:
+        with self._lock:
+            self._stages.setdefault(stage, Counter())["tool_ms"] += int((monotonic() - started) * 1000)
 
     def slot_usage_snapshot(self) -> dict[ModelSlot, SlotUsageRecord]:
         with self._lock:
@@ -1484,6 +1548,7 @@ class SquadExecutionLedger:
             records = self.slot_usage_snapshot()
             return SlotUsageSummary(
                 slots=records,
+                stages={k: StageUsage(**v) for k, v in self._stages.items()},
                 total_calls=sum(r.calls for r in records.values()),
                 total_tokens=sum(r.total_tokens for r in records.values()),
                 stage_0_model_calls=self._stage_0_model_calls,
@@ -1520,6 +1585,7 @@ class SlotModelResponse:
     usage: ModelUsage | None = None
     finish_reason: str = "stop"
     model: str | None = None
+    transport_retries: int = 0
 
 
 @runtime_checkable
@@ -3609,7 +3675,7 @@ def render_deep_report(
     slot_bindings: Mapping[ModelSlot, SlotBinding] | None = None,
     ledger: SquadExecutionLedger | None = None,
     org_emitter: OrgGraphEmitter | None = None,
-    cache: dict[tuple[str, str], str] | None = None,
+    cache: dict[tuple[str, str], str | tuple[str, SlotUsageSummary]] | None = None,
     force: bool = False,
 ) -> EarningsDossier:
     """Render and cache the full Deep Report from a locked ``EarningsDossier``.
@@ -3630,7 +3696,8 @@ def render_deep_report(
                 )
             return dossier
         if cache is not None and cache_key in cache:
-            cached_md = cache[cache_key]
+            entry = cache[cache_key]
+            cached_md, cached_usage = (entry, dossier.slot_usage_summary) if isinstance(entry, str) else entry
             if org_emitter is not None:
                 org_emitter.emit(
                     stage="deep_report",
@@ -3640,10 +3707,13 @@ def render_deep_report(
                     current_activity="Returned cached Deep Report from dossier cache.",
                     slot="writer",
                 )
-            return dossier.model_copy(update={"deep_report_markdown": cached_md})
+            return dossier.model_copy(update={"deep_report_markdown": cached_md, "slot_usage_summary": cached_usage})
 
     bindings = dict(slot_bindings) if slot_bindings is not None else resolve_squad_slots()
-    active_ledger = ledger or SquadExecutionLedger(slot_bindings=bindings)
+    active_ledger = ledger or SquadExecutionLedger(
+        slot_bindings=bindings, initial_usage=dossier.slot_usage_summary.slots,
+        initial_stages=dossier.slot_usage_summary.stages,
+    )
     active_ledger.ensure_running(stage="deep_report")
 
     if org_emitter is not None:
@@ -3672,6 +3742,7 @@ def render_deep_report(
     call_id, before = active_ledger.admit_model_call("writer", stage="deep_report")
     t0 = monotonic()
     failed = False
+    truncated = False
     usage: ModelUsage | None = None
     try:
         req = SlotModelRequest(
@@ -3688,7 +3759,7 @@ def render_deep_report(
             binding=bindings["writer"],
             conversation_id=f"{dossier.run_id}:deep_report",
         )
-        resp = model_runner.invoke(req)
+        resp = active_ledger.invoke(model_runner, req)
         usage = resp.usage
         if resp.tool_calls:
             active_ledger.record_tool_call(stage="deep_report")
@@ -3698,6 +3769,7 @@ def render_deep_report(
         raise
     except Exception as exc:
         failed = True
+        truncated = _is_provider_truncation_error(exc)
         if org_emitter is not None:
             org_emitter.emit(
                 stage="deep_report",
@@ -3711,10 +3783,12 @@ def render_deep_report(
         raise
     finally:
         elapsed_ms = int((monotonic() - t0) * 1000)
-        active_ledger.settle_model_call("writer", call_id, before, usage=usage, elapsed_ms=elapsed_ms, failed=failed)
+        active_ledger.settle_model_call("writer", call_id, before, stage="deep_report", usage=usage,
+                                        elapsed_ms=elapsed_ms, failed=failed, truncated=truncated)
 
+    usage_summary = active_ledger.summary()
     if cache is not None:
-        cache[cache_key] = md
+        cache[cache_key] = md, usage_summary
     if org_emitter is not None:
         org_emitter.emit(
             stage="deep_report",
@@ -3724,7 +3798,7 @@ def render_deep_report(
             current_activity="Deep Report synthesized and cached on locked EarningsDossier.",
             slot="writer",
         )
-    return dossier.model_copy(update={"deep_report_markdown": md})
+    return dossier.model_copy(update={"deep_report_markdown": md, "slot_usage_summary": usage_summary})
 
 
 def _extract_markdown_or_fallback(
@@ -3816,7 +3890,7 @@ class EarningsSquadOrchestrator:
         self._steering_wakeup = Event()
         self._steering_queue: list[UserSteeringInstruction] = []
         self._next_instruction_seq = 0
-        self._deep_report_cache: dict[tuple[str, str], str] = {}
+        self._deep_report_cache: dict[tuple[str, str], str | tuple[str, SlotUsageSummary]] = {}
         self._active_ledger: SquadExecutionLedger | None = None
         self._active_emitter: OrgGraphEmitter | None = None
         self._repair_diagnostics: list[dict[str, Any]] = []
@@ -4022,6 +4096,7 @@ class EarningsSquadOrchestrator:
             budget=self._budget,
             cancel_event=self._cancel_event,
             initial_usage=checkpoint.slot_usage if checkpoint else None,
+            initial_stages=checkpoint.stage_usage if checkpoint else None,
         )
         emitter = OrgGraphEmitter(
             sinks=self._org_sinks,
@@ -4064,6 +4139,7 @@ class EarningsSquadOrchestrator:
                     state["stage_status"][stage_completed] = "completed"
                 with self._steering_lock:
                     all_instr = sorted(self._steering_queue, key=lambda x: x.sequence)
+                usage = ledger.summary()
                 cp_obj = SquadCheckpoint(
                     run_id=active_run_id,
                     question=request.question,
@@ -4084,7 +4160,8 @@ class EarningsSquadOrchestrator:
                     source_permissions=dict(state["source_permissions"]),
                     user_instructions=all_instr,
                     applied_instruction_sequences=sorted(state["applied_instruction_sequences"]),
-                    slot_usage=ledger.slot_usage_snapshot(),
+                    slot_usage=usage.slots,
+                    stage_usage=usage.stages,
                     org_events=emitter.events,
                     last_sequence=emitter.sequence,
                     updated_at=_utcnow(),
@@ -4114,6 +4191,7 @@ class EarningsSquadOrchestrator:
                 current_activity="Reused Stage 0 EarningsPrefetchSnapshot from checkpoint.",
             )
         else:
+            prefetch_start = monotonic()
             snapshot = self._run_stage_0_prefetch(
                 request,
                 ledger=ledger,
@@ -4121,6 +4199,7 @@ class EarningsSquadOrchestrator:
                 source_texts=state["source_texts"],
                 source_permissions=state["source_permissions"],
             )
+            ledger.record_tool_elapsed("stage_0_prefetch", prefetch_start)
             self._sync_stage0_into_tool_runner(
                 request=request,
                 snapshot=snapshot,
@@ -5238,7 +5317,7 @@ class EarningsSquadOrchestrator:
             truncation_exc: Exception | None = None
             resp: SlotModelResponse | None = None
             try:
-                resp = self._model_runner.invoke(SlotModelRequest(
+                resp = ledger.invoke(self._model_runner, SlotModelRequest(
                     slot=slot,
                     stage=stage,
                     role=role,
@@ -5269,7 +5348,7 @@ class EarningsSquadOrchestrator:
                     before,
                     usage=usage,
                     elapsed_ms=int((monotonic() - t0) * 1000),
-                    failed=failed,
+                    failed=failed, stage=stage, repair=attempt_idx > 0, truncated=truncation_exc is not None,
                 )
 
             if truncation_exc is not None:
@@ -6140,6 +6219,7 @@ class EarningsSquadOrchestrator:
         turns_used = 0
         loop_limit = 2 if task.soft_turn_limit == 1 else task.soft_turn_limit
 
+        retry_after_truncation = False
         for turn_idx in range(loop_limit):
             check_active()
             if turn_idx >= 2:
@@ -6165,7 +6245,7 @@ class EarningsSquadOrchestrator:
             truncation_exc: Exception | None = None
             resp: SlotModelResponse | None = None
             try:
-                resp = self._model_runner.invoke(SlotModelRequest(
+                resp = ledger.invoke(self._model_runner, SlotModelRequest(
                     slot="fast_extractor",
                     stage=stage_name,
                     role=role,
@@ -6190,7 +6270,10 @@ class EarningsSquadOrchestrator:
                 ledger.settle_model_call(
                     "fast_extractor", call_id, before, usage=usage,
                     elapsed_ms=int((monotonic() - t0) * 1000), failed=failed,
+                    stage=stage_name, truncated=truncation_exc is not None, repair=retry_after_truncation,
+                    replayed_tool_bytes=_replayed_tool_bytes(messages),
                 )
+            retry_after_truncation = truncation_exc is not None
 
             if truncation_exc is not None:
                 if turn_idx < loop_limit - 1:
@@ -6327,7 +6410,7 @@ class EarningsSquadOrchestrator:
                         rep_usage: ModelUsage | None = None
                         rep_trunc_exc: Exception | None = None
                         try:
-                            cur_resp = self._model_runner.invoke(SlotModelRequest(
+                            cur_resp = ledger.invoke(self._model_runner, SlotModelRequest(
                                 slot="fast_extractor",
                                 stage=stage_name,
                                 role=role,
@@ -6355,7 +6438,8 @@ class EarningsSquadOrchestrator:
                                 rep_before,
                                 usage=rep_usage,
                                 elapsed_ms=int((monotonic() - rep_t0) * 1000),
-                                failed=rep_failed,
+                                failed=rep_failed, stage=stage_name, repair=True, truncated=rep_trunc_exc is not None,
+                                replayed_tool_bytes=_replayed_tool_bytes(messages),
                             )
                         if rep_trunc_exc is not None:
                             last_parse_err = rep_trunc_exc
@@ -6509,7 +6593,11 @@ class EarningsSquadOrchestrator:
                     current_activity=f"{role} executing {tc.name}.",
                     slot="fast_extractor",
                 )
-                out = self._tool_runner.call_tool(tc.name, tc_args, worker_role=role)
+                started = monotonic()
+                try:
+                    out = self._tool_runner.call_tool(tc.name, tc_args, worker_role=role)
+                finally:
+                    ledger.record_tool_elapsed(stage_name, started)
                 if isinstance(out, Mapping) and out.get("reason") in ("byok_key_required", "market_data_key_required", "api_key_not_configured"):
                     emitter.emit(
                         stage=stage_name,
@@ -6870,6 +6958,11 @@ class EarningsSquadOrchestrator:
         verified_cards, card_gate, gate_gaps = gate_evidence_cards(
             batches, snapshot, source_texts=source_texts, source_permissions=source_permissions
         )
+        if verified_cards:
+            emitter.emit(
+                stage="verified_evidence_ready", node_id="dossier_writer", action_kind="INSPECTING",
+                runtime_state="running", current_activity=f"已核验 {len(verified_cards)} 条研究发现，正在生成报告。",
+            )
         all_gaps = _merge_gaps(open_gaps, gate_gaps)
 
         # Re-verify bear cases against final gated cards so dropped-card-only anchors never slip through
@@ -6915,9 +7008,10 @@ class EarningsSquadOrchestrator:
             cid, before_state = ledger.admit_model_call("writer", stage="stage_3b_gate_memo")
             started_at = monotonic()
             call_failed = False
+            truncated = False
             call_usage: ModelUsage | None = None
             try:
-                resp = self._model_runner.invoke(SlotModelRequest(
+                resp = ledger.invoke(self._model_runner, SlotModelRequest(
                     slot="writer",
                     stage="stage_3b_gate_memo",
                     role="writer",
@@ -6932,13 +7026,15 @@ class EarningsSquadOrchestrator:
                 if resp.tool_calls:
                     raise SquadToolViolationError("Stage 3B writer is not permitted to invoke retrieval tools.", stage="stage_3b_gate_memo")
                 return _extract_markdown_or_fallback(resp, dossier_core, mode="memo")
-            except Exception:
+            except Exception as exc:
                 call_failed = True
+                truncated = _is_provider_truncation_error(exc)
                 raise
             finally:
                 ledger.settle_model_call(
                     "writer", cid, before_state, usage=call_usage,
                     elapsed_ms=int((monotonic() - started_at) * 1000), failed=call_failed,
+                    stage="stage_3b_gate_memo", repair=conv_suffix.endswith("_concise"), truncated=truncated,
                 )
 
         try:

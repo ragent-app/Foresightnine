@@ -161,6 +161,2023 @@
         "title": "BalanceSheetLeverageGroup",
         "type": "object"
       },
+      "BankAnalysisResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "cache_hit": {
+            "default": false,
+            "title": "Cache Hit",
+            "type": "boolean"
+          },
+          "cik": {
+            "title": "Cik",
+            "type": "string"
+          },
+          "diagnostics": {
+            "$ref": "#/components/schemas/BankDiagnosticsSummary"
+          },
+          "disclosure": {
+            "$ref": "#/components/schemas/BankDisclosureSnapshot"
+          },
+          "elapsed_ms": {
+            "default": 0,
+            "title": "Elapsed Ms",
+            "type": "integer"
+          },
+          "qualification": {
+            "$ref": "#/components/schemas/BankQualificationResult"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "valuation": {
+            "$ref": "#/components/schemas/BankValuationResult"
+          }
+        },
+        "required": [
+          "symbol",
+          "cik",
+          "qualification",
+          "disclosure",
+          "diagnostics",
+          "valuation"
+        ],
+        "title": "BankAnalysisResponse",
+        "type": "object"
+      },
+      "BankAnalyzeApiRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "cache_only": {
+            "default": false,
+            "title": "Cache Only",
+            "type": "boolean"
+          },
+          "cik": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cik"
+          },
+          "coe_pct": {
+            "default": "10.0",
+            "maxLength": 16,
+            "title": "Coe Pct",
+            "type": "string"
+          },
+          "force_refresh": {
+            "default": false,
+            "title": "Force Refresh",
+            "type": "boolean"
+          },
+          "manual_price": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Price"
+          },
+          "symbol": {
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Symbol",
+            "type": "string"
+          },
+          "tbvps_basis": {
+            "default": "reported_market_convention",
+            "enum": [
+              "reported_market_convention",
+              "xbrl_standardized"
+            ],
+            "title": "Tbvps Basis",
+            "type": "string"
+          },
+          "terminal_g_pct": {
+            "default": "3.0",
+            "maxLength": 16,
+            "title": "Terminal G Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol"
+        ],
+        "title": "BankAnalyzeApiRequest",
+        "type": "object"
+      },
+      "BankDiagnosticFlag": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "formula": {
+            "title": "Formula",
+            "type": "string"
+          },
+          "group": {
+            "enum": [
+              "profitability_leverage",
+              "capital_adequacy",
+              "securities_overhang",
+              "credit_quality",
+              "funding_liquidity"
+            ],
+            "title": "Group",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "metric_key": {
+            "title": "Metric Key",
+            "type": "string"
+          },
+          "metric_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric Value"
+          },
+          "severity": {
+            "enum": [
+              "red",
+              "yellow",
+              "green",
+              "info"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "group",
+          "severity",
+          "title",
+          "detail",
+          "metric_key",
+          "threshold",
+          "formula"
+        ],
+        "title": "BankDiagnosticFlag",
+        "type": "object"
+      },
+      "BankDiagnosticMetric": {
+        "additionalProperties": false,
+        "properties": {
+          "basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "formula": {
+            "title": "Formula",
+            "type": "string"
+          },
+          "group": {
+            "enum": [
+              "profitability_leverage",
+              "capital_adequacy",
+              "securities_overhang",
+              "credit_quality",
+              "funding_liquidity"
+            ],
+            "title": "Group",
+            "type": "string"
+          },
+          "input_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Ids",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "enum": [
+              "computed",
+              "unavailable",
+              "exempt_by_subtype"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name",
+          "group",
+          "status",
+          "unit",
+          "formula"
+        ],
+        "title": "BankDiagnosticMetric",
+        "type": "object"
+      },
+      "BankDiagnosticsSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "acl_to_loans_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acl To Loans Pct"
+          },
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "bank_quality_light": {
+            "enum": [
+              "red",
+              "yellow",
+              "green"
+            ],
+            "title": "Bank Quality Light",
+            "type": "string"
+          },
+          "bank_quality_score_breakdown": {
+            "additionalProperties": true,
+            "title": "Bank Quality Score Breakdown",
+            "type": "object"
+          },
+          "bank_subtype": {
+            "enum": [
+              "universal_commercial",
+              "investment_bank_bhc",
+              "custodian_or_broker_bank",
+              "not_applicable"
+            ],
+            "title": "Bank Subtype",
+            "type": "string"
+          },
+          "cet1_buffer_bps": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cet1 Buffer Bps"
+          },
+          "cik": {
+            "title": "Cik",
+            "type": "string"
+          },
+          "comparability_warnings": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Comparability Warnings",
+            "type": "array"
+          },
+          "deposits_qoq_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deposits Qoq Pct"
+          },
+          "efficiency_ratio_gaap_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Efficiency Ratio Gaap Pct"
+          },
+          "efficiency_ratio_managed_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Efficiency Ratio Managed Pct"
+          },
+          "flag_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Flag Counts",
+            "type": "object"
+          },
+          "flags": {
+            "items": {
+              "$ref": "#/components/schemas/BankDiagnosticFlag"
+            },
+            "title": "Flags",
+            "type": "array"
+          },
+          "htm_after_tax_cet1_hit_bps": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Htm After Tax Cet1 Hit Bps"
+          },
+          "htm_loss_pct_of_tce": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Htm Loss Pct Of Tce"
+          },
+          "ldr_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ldr Pct"
+          },
+          "metrics": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BankDiagnosticMetric"
+            },
+            "title": "Metrics",
+            "type": "object"
+          },
+          "nco_annualized_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nco Annualized Pct"
+          },
+          "nib_deposit_share_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nib Deposit Share Pct"
+          },
+          "nii_share_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nii Share Pct"
+          },
+          "npl_to_loans_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Npl To Loans Pct"
+          },
+          "period_end_date": {
+            "title": "Period End Date",
+            "type": "string"
+          },
+          "ppnr_margin_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ppnr Margin Pct"
+          },
+          "pro_forma_cet1_ex_htm_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pro Forma Cet1 Ex Htm Pct"
+          },
+          "provision_to_ppnr_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provision To Ppnr Pct"
+          },
+          "rotce_q_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotce Q Pct"
+          },
+          "schema_version": {
+            "const": "v4a.1",
+            "default": "v4a.1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "segment_mix_summary": {
+            "additionalProperties": true,
+            "title": "Segment Mix Summary",
+            "type": "object"
+          },
+          "slr_buffer_bps": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slr Buffer Bps"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "thresholds_reference": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Thresholds Reference",
+            "type": "object"
+          }
+        },
+        "required": [
+          "symbol",
+          "cik",
+          "bank_subtype",
+          "period_end_date",
+          "as_of",
+          "bank_quality_light"
+        ],
+        "title": "BankDiagnosticsSummary",
+        "type": "object"
+      },
+      "BankDisclosureSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "afs_net_unrealized_pnl_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Afs Net Unrealized Pnl Usd"
+          },
+          "allowance_credit_losses_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowance Credit Losses Usd"
+          },
+          "aoci_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aoci Usd"
+          },
+          "avg_tangible_common_equity_q_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Tangible Common Equity Q Usd"
+          },
+          "bank_subtype": {
+            "enum": [
+              "universal_commercial",
+              "investment_bank_bhc",
+              "custodian_or_broker_bank",
+              "not_applicable"
+            ],
+            "title": "Bank Subtype",
+            "type": "string"
+          },
+          "cached_at": {
+            "format": "date-time",
+            "title": "Cached At",
+            "type": "string"
+          },
+          "cet1_advanced_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cet1 Advanced Pct"
+          },
+          "cet1_capital_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cet1 Capital Usd"
+          },
+          "cet1_gsib_surcharge_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cet1 Gsib Surcharge Pct"
+          },
+          "cet1_preliminary_8k_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cet1 Preliminary 8K Pct"
+          },
+          "cet1_reg_min_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cet1 Reg Min Pct"
+          },
+          "cet1_scb_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cet1 Scb Pct"
+          },
+          "cet1_standardized_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cet1 Standardized Pct"
+          },
+          "cet1_standardized_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "10q_final",
+                  "8k_preliminary",
+                  "xbrl_companyfacts"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cet1 Standardized Source"
+          },
+          "cik": {
+            "title": "Cik",
+            "type": "string"
+          },
+          "common_buybacks_ttm_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Common Buybacks Ttm Usd"
+          },
+          "common_dividends_ttm_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Common Dividends Ttm Usd"
+          },
+          "company_name": {
+            "title": "Company Name",
+            "type": "string"
+          },
+          "data_gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Data Gaps",
+            "type": "array"
+          },
+          "deposits_noninterest_bearing_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deposits Noninterest Bearing Usd"
+          },
+          "earnings_8k_accession": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earnings 8K Accession"
+          },
+          "earnings_8k_exhibits_used": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Earnings 8K Exhibits Used",
+            "type": "array"
+          },
+          "earnings_8k_filed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earnings 8K Filed At"
+          },
+          "efficiency_ratio_reported_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Efficiency Ratio Reported Pct"
+          },
+          "fiscal_period_label": {
+            "title": "Fiscal Period Label",
+            "type": "string"
+          },
+          "htm_acl_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Htm Acl Usd"
+          },
+          "htm_amortized_cost_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Htm Amortized Cost Usd"
+          },
+          "htm_fair_value_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Htm Fair Value Usd"
+          },
+          "htm_gross_unrealized_gain_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Htm Gross Unrealized Gain Usd"
+          },
+          "htm_gross_unrealized_loss_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Htm Gross Unrealized Loss Usd"
+          },
+          "htm_net_unrealized_pnl_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Htm Net Unrealized Pnl Usd"
+          },
+          "metric_provenance": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Metric Provenance",
+            "type": "object"
+          },
+          "net_charge_offs_q_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Charge Offs Q Usd"
+          },
+          "net_income_q_usd": {
+            "title": "Net Income Q Usd",
+            "type": "string"
+          },
+          "net_income_to_common_q_usd": {
+            "title": "Net Income To Common Q Usd",
+            "type": "string"
+          },
+          "net_income_to_common_ttm_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Income To Common Ttm Usd"
+          },
+          "net_revenue_gaap_q_usd": {
+            "title": "Net Revenue Gaap Q Usd",
+            "type": "string"
+          },
+          "net_revenue_gaap_ttm_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Revenue Gaap Ttm Usd"
+          },
+          "net_revenue_managed_q_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Revenue Managed Q Usd"
+          },
+          "nii_fte_q_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nii Fte Q Usd"
+          },
+          "nii_gaap_q_usd": {
+            "title": "Nii Gaap Q Usd",
+            "type": "string"
+          },
+          "nim_fte_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nim Fte Pct"
+          },
+          "nonaccrual_loans_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nonaccrual Loans Usd"
+          },
+          "noninterest_expense_q_usd": {
+            "title": "Noninterest Expense Q Usd",
+            "type": "string"
+          },
+          "noninterest_income_gaap_q_usd": {
+            "title": "Noninterest Income Gaap Q Usd",
+            "type": "string"
+          },
+          "period_end_date": {
+            "title": "Period End Date",
+            "type": "string"
+          },
+          "periodic_accession": {
+            "title": "Periodic Accession",
+            "type": "string"
+          },
+          "periodic_filed_at": {
+            "title": "Periodic Filed At",
+            "type": "string"
+          },
+          "periodic_form": {
+            "enum": [
+              "10-Q",
+              "10-K"
+            ],
+            "title": "Periodic Form",
+            "type": "string"
+          },
+          "ppnr_gaap_q_usd": {
+            "title": "Ppnr Gaap Q Usd",
+            "type": "string"
+          },
+          "ppnr_gaap_ttm_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ppnr Gaap Ttm Usd"
+          },
+          "ppnr_managed_q_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ppnr Managed Q Usd"
+          },
+          "provenance_sources": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Provenance Sources",
+            "type": "array"
+          },
+          "provision_q_usd": {
+            "title": "Provision Q Usd",
+            "type": "string"
+          },
+          "provision_ttm_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provision Ttm Usd"
+          },
+          "rotce_q_provenance": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Rotce Q Provenance",
+            "type": "object"
+          },
+          "rotce_q_reported_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotce Q Reported Pct"
+          },
+          "rotce_q_verification_reason": {
+            "default": "unverified",
+            "title": "Rotce Q Verification Reason",
+            "type": "string"
+          },
+          "rotce_q_verified": {
+            "default": false,
+            "title": "Rotce Q Verified",
+            "type": "boolean"
+          },
+          "rotce_ytd_reported_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotce Ytd Reported Pct"
+          },
+          "rwa_standardized_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rwa Standardized Usd"
+          },
+          "schema_version": {
+            "default": "v4a.3",
+            "enum": [
+              "v4a.1",
+              "v4a.2",
+              "v4a.3"
+            ],
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "segments": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BankSegmentSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sic": {
+            "title": "Sic",
+            "type": "string"
+          },
+          "slr_min_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slr Min Pct"
+          },
+          "slr_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slr Pct"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "tbvps_bridge": {
+            "$ref": "#/components/schemas/TbvpsReconciliationBridge"
+          },
+          "tier1_leverage_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier1 Leverage Pct"
+          },
+          "total_assets_usd": {
+            "title": "Total Assets Usd",
+            "type": "string"
+          },
+          "total_deposits_prior_q_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Deposits Prior Q Usd"
+          },
+          "total_deposits_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Deposits Usd"
+          },
+          "total_loans_gross_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Loans Gross Usd"
+          },
+          "xbrl_companyfacts_fresh": {
+            "default": true,
+            "title": "Xbrl Companyfacts Fresh",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cik",
+          "symbol",
+          "company_name",
+          "sic",
+          "bank_subtype",
+          "period_end_date",
+          "fiscal_period_label",
+          "periodic_form",
+          "periodic_accession",
+          "periodic_filed_at",
+          "net_revenue_gaap_q_usd",
+          "nii_gaap_q_usd",
+          "noninterest_income_gaap_q_usd",
+          "noninterest_expense_q_usd",
+          "ppnr_gaap_q_usd",
+          "provision_q_usd",
+          "net_income_q_usd",
+          "net_income_to_common_q_usd",
+          "total_assets_usd",
+          "tbvps_bridge"
+        ],
+        "title": "BankDisclosureSnapshot",
+        "type": "object"
+      },
+      "BankGordonSensitivityCell": {
+        "additionalProperties": false,
+        "properties": {
+          "coe_pct": {
+            "title": "Coe Pct",
+            "type": "string"
+          },
+          "implied_rotce_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implied Rotce Pct"
+          },
+          "justified_p_to_tbv": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Justified P To Tbv"
+          },
+          "rotce_spread_pp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotce Spread Pp"
+          },
+          "terminal_g_pct": {
+            "title": "Terminal G Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "coe_pct",
+          "terminal_g_pct"
+        ],
+        "title": "BankGordonSensitivityCell",
+        "type": "object"
+      },
+      "BankQualificationResult": {
+        "additionalProperties": false,
+        "properties": {
+          "active_sector_plugin": {
+            "anyOf": [
+              {
+                "const": "us_large_bank_v4a",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Sector Plugin"
+          },
+          "bank_subtype": {
+            "default": "not_applicable",
+            "enum": [
+              "universal_commercial",
+              "investment_bank_bhc",
+              "custodian_or_broker_bank",
+              "not_applicable"
+            ],
+            "title": "Bank Subtype",
+            "type": "string"
+          },
+          "deposits_to_assets_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deposits To Assets Pct"
+          },
+          "is_bank_v4a": {
+            "title": "Is Bank V4A",
+            "type": "boolean"
+          },
+          "loans_to_assets_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loans To Assets Pct"
+          },
+          "noninterest_share_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noninterest Share Pct"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "sic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sic"
+          }
+        },
+        "required": [
+          "is_bank_v4a",
+          "reason"
+        ],
+        "title": "BankQualificationResult",
+        "type": "object"
+      },
+      "BankSegmentRow": {
+        "additionalProperties": false,
+        "properties": {
+          "avg_deposits_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Deposits Usd"
+          },
+          "avg_equity_or_tce_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Equity Or Tce Usd"
+          },
+          "avg_loans_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Loans Usd"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "net_income_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Income Usd"
+          },
+          "net_revenue_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Revenue Usd"
+          },
+          "net_revenue_yoy_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Revenue Yoy Pct"
+          },
+          "nii_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nii Usd"
+          },
+          "noninterest_expense_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noninterest Expense Usd"
+          },
+          "noninterest_income_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noninterest Income Usd"
+          },
+          "ppnr_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ppnr Usd"
+          },
+          "ppnr_yoy_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ppnr Yoy Pct"
+          },
+          "pretax_income_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pretax Income Usd"
+          },
+          "provision_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provision Usd"
+          },
+          "reporting_basis": {
+            "default": "gaap",
+            "enum": [
+              "gaap",
+              "managed_fte"
+            ],
+            "title": "Reporting Basis",
+            "type": "string"
+          },
+          "revenue_share_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revenue Share Pct"
+          },
+          "section_role": {
+            "enum": [
+              "operating_segment",
+              "corporate_or_other",
+              "reconciling_or_elimination",
+              "operating_segments_subtotal"
+            ],
+            "title": "Section Role",
+            "type": "string"
+          },
+          "segment_efficiency_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Segment Efficiency Pct"
+          },
+          "segment_key": {
+            "title": "Segment Key",
+            "type": "string"
+          },
+          "segment_roe_or_rotce_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Segment Roe Or Rotce Pct"
+          },
+          "total_assets_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Assets Usd"
+          },
+          "xbrl_axis_member": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xbrl Axis Member"
+          }
+        },
+        "required": [
+          "segment_key",
+          "display_name",
+          "section_role"
+        ],
+        "title": "BankSegmentRow",
+        "type": "object"
+      },
+      "BankSegmentSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "accession": {
+            "title": "Accession",
+            "type": "string"
+          },
+          "cik": {
+            "title": "Cik",
+            "type": "string"
+          },
+          "consolidated_basis": {
+            "enum": [
+              "gaap",
+              "fte"
+            ],
+            "title": "Consolidated Basis",
+            "type": "string"
+          },
+          "consolidated_net_revenue_usd": {
+            "title": "Consolidated Net Revenue Usd",
+            "type": "string"
+          },
+          "corporate_or_other": {
+            "items": {
+              "$ref": "#/components/schemas/BankSegmentRow"
+            },
+            "title": "Corporate Or Other",
+            "type": "array"
+          },
+          "dropped_footnote_columns": {
+            "default": 0,
+            "title": "Dropped Footnote Columns",
+            "type": "integer"
+          },
+          "footnotes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Footnotes",
+            "type": "object"
+          },
+          "fte_reconciling_adjustment_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fte Reconciling Adjustment Usd"
+          },
+          "operating_segments": {
+            "items": {
+              "$ref": "#/components/schemas/BankSegmentRow"
+            },
+            "title": "Operating Segments",
+            "type": "array"
+          },
+          "period_end_date": {
+            "title": "Period End Date",
+            "type": "string"
+          },
+          "period_kind": {
+            "enum": [
+              "3M",
+              "9M",
+              "12M"
+            ],
+            "title": "Period Kind",
+            "type": "string"
+          },
+          "prior_yoy_period_end_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Yoy Period End Date"
+          },
+          "r_file": {
+            "title": "R File",
+            "type": "string"
+          },
+          "reconciliation_delta_usd": {
+            "default": "0",
+            "title": "Reconciliation Delta Usd",
+            "type": "string"
+          },
+          "reconciliation_status": {
+            "default": "exact",
+            "enum": [
+              "exact",
+              "within_rounding",
+              "mismatch"
+            ],
+            "title": "Reconciliation Status",
+            "type": "string"
+          },
+          "reconciling_items": {
+            "items": {
+              "$ref": "#/components/schemas/BankSegmentRow"
+            },
+            "title": "Reconciling Items",
+            "type": "array"
+          },
+          "segments_basis": {
+            "enum": [
+              "gaap",
+              "managed_fte"
+            ],
+            "title": "Segments Basis",
+            "type": "string"
+          },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cik",
+          "symbol",
+          "accession",
+          "r_file",
+          "source_url",
+          "period_kind",
+          "period_end_date",
+          "consolidated_basis",
+          "segments_basis",
+          "consolidated_net_revenue_usd"
+        ],
+        "title": "BankSegmentSnapshot",
+        "type": "object"
+      },
+      "BankValuationResult": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "basis_validation_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis Validation Version"
+          },
+          "cik": {
+            "title": "Cik",
+            "type": "string"
+          },
+          "coe_pct": {
+            "title": "Coe Pct",
+            "type": "string"
+          },
+          "comparability_warnings": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Comparability Warnings",
+            "type": "array"
+          },
+          "current_rotce_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Rotce Pct"
+          },
+          "implied_rotce_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implied Rotce Pct"
+          },
+          "justified_p_to_tbv_at_current_rotce": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Justified P To Tbv At Current Rotce"
+          },
+          "market_cap_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Cap Usd"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "p_to_bv": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P To Bv"
+          },
+          "p_to_e_ttm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P To E Ttm"
+          },
+          "p_to_ppnr_ttm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P To Ppnr Ttm"
+          },
+          "p_to_tbv_primary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P To Tbv Primary"
+          },
+          "p_to_tbv_xbrl_std": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P To Tbv Xbrl Std"
+          },
+          "period_end_date": {
+            "title": "Period End Date",
+            "type": "string"
+          },
+          "price_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Usd"
+          },
+          "primary_tbvps_basis": {
+            "enum": [
+              "reported_market_convention",
+              "xbrl_std_fallback",
+              "xbrl_standardized",
+              "unavailable"
+            ],
+            "title": "Primary Tbvps Basis",
+            "type": "string"
+          },
+          "rotce_spread_vs_implied_pp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotce Spread Vs Implied Pp"
+          },
+          "schema_version": {
+            "const": "v4a.1",
+            "default": "v4a.1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "sensitivity_matrix": {
+            "items": {
+              "$ref": "#/components/schemas/BankGordonSensitivityCell"
+            },
+            "title": "Sensitivity Matrix",
+            "type": "array"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "tbvps_bridge": {
+            "$ref": "#/components/schemas/TbvpsReconciliationBridge"
+          },
+          "terminal_g_pct": {
+            "title": "Terminal G Pct",
+            "type": "string"
+          },
+          "valuation_signal": {
+            "default": "unavailable",
+            "enum": [
+              "attractive_discount",
+              "fairly_valued",
+              "rich_premium",
+              "unavailable"
+            ],
+            "title": "Valuation Signal",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "cik",
+          "period_end_date",
+          "as_of",
+          "primary_tbvps_basis",
+          "coe_pct",
+          "terminal_g_pct",
+          "tbvps_bridge"
+        ],
+        "title": "BankValuationResult",
+        "type": "object"
+      },
       "BearCaseItem": {
         "additionalProperties": false,
         "description": "Evidence-anchored adversarial bear challenge with next-quarter invalidation trigger.",
@@ -1143,6 +3160,42 @@
         "title": "CompanySignalEnvelope",
         "type": "object"
       },
+      "ComparabilityWarning": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "severity": {
+            "default": "warning",
+            "enum": [
+              "warning",
+              "error",
+              "info"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "symbols": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Symbols",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ComparabilityWarning",
+        "type": "object"
+      },
       "ConfirmDirectionRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1993,6 +4046,17 @@
           "snapshot": {
             "$ref": "#/components/schemas/EarningsPrefetchSnapshot"
           },
+          "supersedes_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Sha256"
+          },
           "symbol": {
             "anyOf": [
               {
@@ -2036,6 +4100,36 @@
               }
             ],
             "title": "As Of"
+          },
+          "bank_diagnostics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BankDiagnosticsSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bank_disclosure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BankDisclosureSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bank_valuation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BankValuationResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "cik": {
             "anyOf": [
@@ -2473,7 +4567,8 @@
           "exhibit_type": {
             "enum": [
               "EX-99.1",
-              "EX-99.2"
+              "EX-99.2",
+              "EX-99.3"
             ],
             "title": "Exhibit Type",
             "type": "string"
@@ -2481,6 +4576,16 @@
           "filename": {
             "title": "Filename",
             "type": "string"
+          },
+          "is_image_deck": {
+            "default": false,
+            "title": "Is Image Deck",
+            "type": "boolean"
+          },
+          "numeric_table_cells": {
+            "default": 0,
+            "title": "Numeric Table Cells",
+            "type": "integer"
           },
           "provenance": {
             "anyOf": [
@@ -2556,6 +4661,23 @@
                 "type": "null"
               }
             ]
+          },
+          "ex99_3": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EarningsReleaseExhibit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "exhibits_image_only_skipped": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Exhibits Image Only Skipped",
+            "type": "array"
           },
           "filed_at": {
             "format": "date",
@@ -5683,6 +7805,1205 @@
           "permissions"
         ],
         "title": "PdfUploadRequest",
+        "type": "object"
+      },
+      "PeerAttributionBrief": {
+        "additionalProperties": false,
+        "description": "Optional Layer 2 on-demand LLM relative valuation attribution with server numeric gate.",
+        "properties": {
+          "cited_metrics": {
+            "items": {
+              "$ref": "#/components/schemas/PeerCitedMetric"
+            },
+            "title": "Cited Metrics",
+            "type": "array"
+          },
+          "comparison_id": {
+            "title": "Comparison Id",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "model_used": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Used"
+          },
+          "primary_symbol": {
+            "title": "Primary Symbol",
+            "type": "string"
+          },
+          "relative_risks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Relative Risks",
+            "type": "array"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "tokens_used": {
+            "default": 0,
+            "title": "Tokens Used",
+            "type": "integer"
+          },
+          "total_cited_metric_count": {
+            "default": 0,
+            "title": "Total Cited Metric Count",
+            "type": "integer"
+          },
+          "valuation_vs_fundamentals": {
+            "title": "Valuation Vs Fundamentals",
+            "type": "string"
+          },
+          "verified_metric_count": {
+            "default": 0,
+            "title": "Verified Metric Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "comparison_id",
+          "primary_symbol",
+          "summary",
+          "valuation_vs_fundamentals"
+        ],
+        "title": "PeerAttributionBrief",
+        "type": "object"
+      },
+      "PeerBankMetrics": {
+        "additionalProperties": false,
+        "description": "V4a deterministic US Large Bank / BHC peer comparison row.",
+        "properties": {
+          "bank_quality_light": {
+            "default": "green",
+            "enum": [
+              "green",
+              "yellow",
+              "red",
+              "not_applicable"
+            ],
+            "title": "Bank Quality Light",
+            "type": "string"
+          },
+          "bank_subtype": {
+            "default": "universal_commercial",
+            "title": "Bank Subtype",
+            "type": "string"
+          },
+          "cet1_buffer_bps": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cet1 Buffer Bps"
+          },
+          "cet1_reg_min_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cet1 Reg Min Pct"
+          },
+          "cet1_standardized_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cet1 Standardized Pct"
+          },
+          "cik": {
+            "title": "Cik",
+            "type": "string"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "efficiency_ratio_gaap_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Efficiency Ratio Gaap Pct"
+          },
+          "fiscal_period_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fiscal Period Label"
+          },
+          "htm_loss_pct_of_tce": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Htm Loss Pct Of Tce"
+          },
+          "implied_rotce_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implied Rotce Pct"
+          },
+          "market_cap_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Cap Usd"
+          },
+          "nii_share_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nii Share Pct"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "p_to_bv": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P To Bv"
+          },
+          "p_to_e_ttm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P To E Ttm"
+          },
+          "p_to_ppnr_ttm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P To Ppnr Ttm"
+          },
+          "p_to_tbv_primary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P To Tbv Primary"
+          },
+          "p_to_tbv_xbrl_std": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P To Tbv Xbrl Std"
+          },
+          "period_end_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End Date"
+          },
+          "ppnr_margin_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ppnr Margin Pct"
+          },
+          "price_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Usd"
+          },
+          "pro_forma_cet1_ex_htm_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pro Forma Cet1 Ex Htm Pct"
+          },
+          "provision_to_ppnr_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provision To Ppnr Pct"
+          },
+          "ranks": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Ranks",
+            "type": "object"
+          },
+          "rotce_q_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotce Q Pct"
+          },
+          "rotce_spread_vs_implied_pp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotce Spread Vs Implied Pp"
+          },
+          "sic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sic"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "tbvps_basis": {
+            "default": "reported_market_convention",
+            "title": "Tbvps Basis",
+            "type": "string"
+          },
+          "tbvps_gap_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tbvps Gap Pct"
+          },
+          "tbvps_primary_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tbvps Primary Usd"
+          },
+          "tbvps_reported_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tbvps Reported Usd"
+          },
+          "tbvps_xbrl_std_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tbvps Xbrl Std Usd"
+          },
+          "vs_median": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Vs Median",
+            "type": "object"
+          }
+        },
+        "required": [
+          "symbol",
+          "cik"
+        ],
+        "title": "PeerBankMetrics",
+        "type": "object"
+      },
+      "PeerCitedMetric": {
+        "additionalProperties": false,
+        "properties": {
+          "metric_key": {
+            "title": "Metric Key",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          },
+          "verified": {
+            "default": false,
+            "title": "Verified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "symbol",
+          "metric_key",
+          "value"
+        ],
+        "title": "PeerCitedMetric",
+        "type": "object"
+      },
+      "PeerCompanyMetrics": {
+        "additionalProperties": false,
+        "description": "Deterministic financial, quality, and relative valuation row for one peer.",
+        "properties": {
+          "accounting_standard": {
+            "default": "us-gaap",
+            "title": "Accounting Standard",
+            "type": "string"
+          },
+          "cik": {
+            "title": "Cik",
+            "type": "string"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "currency": {
+            "default": "USD",
+            "title": "Currency",
+            "type": "string"
+          },
+          "enterprise_value_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enterprise Value Usd"
+          },
+          "ev_to_ebit_ttm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ev To Ebit Ttm"
+          },
+          "ev_to_fcf_ex_sbc_ttm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ev To Fcf Ex Sbc Ttm"
+          },
+          "ev_to_fcf_ttm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ev To Fcf Ttm"
+          },
+          "ev_to_sales_ttm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ev To Sales Ttm"
+          },
+          "fiscal_period_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fiscal Period Label"
+          },
+          "is_comparable_for_median": {
+            "default": true,
+            "title": "Is Comparable For Median",
+            "type": "boolean"
+          },
+          "is_financial_gated": {
+            "default": false,
+            "title": "Is Financial Gated",
+            "type": "boolean"
+          },
+          "latest_q_revenue_yoy_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Q Revenue Yoy Pct"
+          },
+          "market_cap_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Cap Usd"
+          },
+          "net_cash_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Cash Usd"
+          },
+          "non_comparable_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Non Comparable Reasons",
+            "type": "array"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "ocf_to_ni_ratio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocf To Ni Ratio"
+          },
+          "pe_ttm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pe Ttm"
+          },
+          "period_basis": {
+            "default": "partial",
+            "enum": [
+              "TTM",
+              "FY",
+              "partial"
+            ],
+            "title": "Period Basis",
+            "type": "string"
+          },
+          "period_end_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End Date"
+          },
+          "price_as_of_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price As Of Date"
+          },
+          "price_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Source"
+          },
+          "price_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Usd"
+          },
+          "quality_light": {
+            "default": "green",
+            "enum": [
+              "green",
+              "yellow",
+              "red",
+              "not_applicable"
+            ],
+            "title": "Quality Light",
+            "type": "string"
+          },
+          "quality_notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Quality Notes",
+            "type": "array"
+          },
+          "ranks": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Ranks",
+            "type": "object"
+          },
+          "revenue_accel_pp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revenue Accel Pp"
+          },
+          "reverse_dcf_implied_5y_fcf_cagr_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reverse Dcf Implied 5Y Fcf Cagr Pct"
+          },
+          "sbc_pct_of_fcf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sbc Pct Of Fcf"
+          },
+          "sector_category": {
+            "default": "non_financial",
+            "title": "Sector Category",
+            "type": "string"
+          },
+          "sic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sic"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "ttm_fcf_margin_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttm Fcf Margin Pct"
+          },
+          "ttm_fcf_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttm Fcf Usd"
+          },
+          "ttm_gross_margin_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttm Gross Margin Pct"
+          },
+          "ttm_net_margin_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttm Net Margin Pct"
+          },
+          "ttm_operating_margin_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttm Operating Margin Pct"
+          },
+          "ttm_revenue_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttm Revenue Usd"
+          },
+          "ttm_revenue_yoy_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttm Revenue Yoy Pct"
+          },
+          "ttm_roic_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttm Roic Pct"
+          },
+          "vs_median": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Vs Median",
+            "type": "object"
+          }
+        },
+        "required": [
+          "symbol",
+          "cik"
+        ],
+        "title": "PeerCompanyMetrics",
+        "type": "object"
+      },
+      "PeerCompareApiRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "bank_coe_pct": {
+            "default": "10.0",
+            "maxLength": 16,
+            "title": "Bank Coe Pct",
+            "type": "string"
+          },
+          "bank_terminal_g_pct": {
+            "default": "3.0",
+            "maxLength": 16,
+            "title": "Bank Terminal G Pct",
+            "type": "string"
+          },
+          "cache_only": {
+            "default": false,
+            "title": "Cache Only",
+            "type": "boolean"
+          },
+          "exclude_non_comparable_from_median": {
+            "default": true,
+            "title": "Exclude Non Comparable From Median",
+            "type": "boolean"
+          },
+          "fx_rates_to_usd": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Rates To Usd"
+          },
+          "manual_prices": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Prices"
+          },
+          "primary_symbol": {
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Primary Symbol",
+            "type": "string"
+          },
+          "symbols": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 6,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbols"
+          },
+          "tbvps_basis": {
+            "default": "reported_market_convention",
+            "enum": [
+              "reported_market_convention",
+              "xbrl_standardized"
+            ],
+            "title": "Tbvps Basis",
+            "type": "string"
+          }
+        },
+        "required": [
+          "primary_symbol"
+        ],
+        "title": "PeerCompareApiRequest",
+        "type": "object"
+      },
+      "PeerCompareBriefApiRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "comparison_id": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparison Id"
+          },
+          "matrix": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PeerComparisonMatrix"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "slot_overrides": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot Overrides"
+          }
+        },
+        "title": "PeerCompareBriefApiRequest",
+        "type": "object"
+      },
+      "PeerComparisonMatrix": {
+        "additionalProperties": false,
+        "description": "Complete 0-LLM Layer 1 peer comparison output.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "bank_basis_validation_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Basis Validation Version"
+          },
+          "bank_companies": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PeerBankMetrics"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Companies"
+          },
+          "bank_gordon_assumptions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Gordon Assumptions"
+          },
+          "bank_peer_medians": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Peer Medians"
+          },
+          "cache_hits": {
+            "default": 0,
+            "title": "Cache Hits",
+            "type": "integer"
+          },
+          "cache_misses": {
+            "default": 0,
+            "title": "Cache Misses",
+            "type": "integer"
+          },
+          "companies": {
+            "items": {
+              "$ref": "#/components/schemas/PeerCompanyMetrics"
+            },
+            "title": "Companies",
+            "type": "array"
+          },
+          "comparability_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/ComparabilityWarning"
+            },
+            "title": "Comparability Warnings",
+            "type": "array"
+          },
+          "comparison_id": {
+            "title": "Comparison Id",
+            "type": "string"
+          },
+          "comparison_mode": {
+            "default": "corporate_industrial",
+            "enum": [
+              "corporate_industrial",
+              "us_large_banks"
+            ],
+            "title": "Comparison Mode",
+            "type": "string"
+          },
+          "elapsed_ms": {
+            "default": 0,
+            "title": "Elapsed Ms",
+            "type": "integer"
+          },
+          "exclude_non_comparable_from_median": {
+            "default": true,
+            "title": "Exclude Non Comparable From Median",
+            "type": "boolean"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "peer_medians": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Peer Medians",
+            "type": "object"
+          },
+          "primary_coordinate_summary": {
+            "default": "",
+            "title": "Primary Coordinate Summary",
+            "type": "string"
+          },
+          "primary_symbol": {
+            "title": "Primary Symbol",
+            "type": "string"
+          },
+          "primary_watch_trigger_metrics": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Primary Watch Trigger Metrics",
+            "type": "object"
+          },
+          "reverse_dcf_assumptions": {
+            "default": "Uniform WACC 10.0% / Terminal Growth 3.0% / 5Y explicit horizon (excludes company-specific beta)",
+            "title": "Reverse Dcf Assumptions",
+            "type": "string"
+          },
+          "tbvps_display_mode": {
+            "default": "reported_market_convention",
+            "enum": [
+              "reported_market_convention",
+              "xbrl_standardized"
+            ],
+            "title": "Tbvps Display Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "primary_symbol"
+        ],
+        "title": "PeerComparisonMatrix",
         "type": "object"
       },
       "PeriodFinancials": {
@@ -11039,6 +14360,35 @@
         "additionalProperties": false,
         "description": "SEC SIC sector gate assessment explaining disabled non-financial metrics.",
         "properties": {
+          "active_sector_plugin": {
+            "anyOf": [
+              {
+                "const": "us_large_bank_v4a",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Sector Plugin"
+          },
+          "bank_subtype": {
+            "anyOf": [
+              {
+                "enum": [
+                  "universal_commercial",
+                  "investment_bank_bhc",
+                  "custodian_or_broker_bank",
+                  "not_applicable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Subtype"
+          },
           "disabled_metrics": {
             "items": {
               "type": "string"
@@ -11066,7 +14416,8 @@
               "non_financial",
               "bank",
               "insurance",
-              "reit"
+              "reit",
+              "financial_other"
             ],
             "title": "Sector Category",
             "type": "string"
@@ -11663,6 +15014,13 @@
             "title": "Stage 0 Model Calls",
             "type": "integer"
           },
+          "stages": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/StageUsage"
+            },
+            "title": "Stages",
+            "type": "object"
+          },
           "total_calls": {
             "default": 0,
             "minimum": 0.0,
@@ -11946,6 +15304,79 @@
           "message"
         ],
         "title": "SquadGap",
+        "type": "object"
+      },
+      "StageUsage": {
+        "additionalProperties": false,
+        "description": "Settled logical calls. Model and tool time sum across concurrent workers.",
+        "properties": {
+          "calls": {
+            "default": 0,
+            "title": "Calls",
+            "type": "integer"
+          },
+          "calls_missing_usage": {
+            "default": 0,
+            "title": "Calls Missing Usage",
+            "type": "integer"
+          },
+          "failed_calls": {
+            "default": 0,
+            "title": "Failed Calls",
+            "type": "integer"
+          },
+          "input_tokens": {
+            "default": 0,
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "model_ms": {
+            "default": 0,
+            "title": "Model Ms",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "default": 0,
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "repair_calls": {
+            "default": 0,
+            "title": "Repair Calls",
+            "type": "integer"
+          },
+          "replayed_tool_bytes": {
+            "default": 0,
+            "title": "Replayed Tool Bytes",
+            "type": "integer"
+          },
+          "tool_calls": {
+            "default": 0,
+            "title": "Tool Calls",
+            "type": "integer"
+          },
+          "tool_ms": {
+            "default": 0,
+            "title": "Tool Ms",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "default": 0,
+            "title": "Total Tokens",
+            "type": "integer"
+          },
+          "transport_retries": {
+            "default": 0,
+            "title": "Transport Retries",
+            "type": "integer"
+          },
+          "truncated_calls": {
+            "default": 0,
+            "title": "Truncated Calls",
+            "type": "integer"
+          }
+        },
+        "title": "StageUsage",
         "type": "object"
       },
       "SuppressedEventRecord": {
@@ -12438,6 +15869,278 @@
           "cells"
         ],
         "title": "TableRow",
+        "type": "object"
+      },
+      "TbvpsReconciliationBridge": {
+        "additionalProperties": false,
+        "properties": {
+          "bvps_reported_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bvps Reported Usd"
+          },
+          "common_equity_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Common Equity Usd"
+          },
+          "denominator_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Denominator Note"
+          },
+          "dtl_intangibles_addback_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dtl Intangibles Addback Usd"
+          },
+          "goodwill_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goodwill Usd"
+          },
+          "intangibles_ex_msr_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intangibles Ex Msr Usd"
+          },
+          "intangibles_gross_xbrl_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intangibles Gross Xbrl Usd"
+          },
+          "msr_excluded_from_intangibles_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Msr Excluded From Intangibles Usd"
+          },
+          "other_tce_adjustments_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Other Tce Adjustments Usd"
+          },
+          "preferred_apic_adj_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Apic Adj Usd"
+          },
+          "preferred_stock_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Stock Usd"
+          },
+          "rsu_share_addon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsu Share Addon"
+          },
+          "shares_ending_common": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shares Ending Common"
+          },
+          "shares_reported_denominator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shares Reported Denominator"
+          },
+          "tbvps_gap_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tbvps Gap Pct"
+          },
+          "tbvps_reported_provenance": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Tbvps Reported Provenance",
+            "type": "object"
+          },
+          "tbvps_reported_source": {
+            "default": "unavailable",
+            "enum": [
+              "8k_supplement",
+              "10q_mda",
+              "tce_div_reported_basic_shares",
+              "unavailable"
+            ],
+            "title": "Tbvps Reported Source",
+            "type": "string"
+          },
+          "tbvps_reported_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tbvps Reported Usd"
+          },
+          "tbvps_reported_verification_reason": {
+            "default": "unverified",
+            "title": "Tbvps Reported Verification Reason",
+            "type": "string"
+          },
+          "tbvps_reported_verified": {
+            "default": false,
+            "title": "Tbvps Reported Verified",
+            "type": "boolean"
+          },
+          "tbvps_xbrl_std_provenance": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Tbvps Xbrl Std Provenance",
+            "type": "object"
+          },
+          "tbvps_xbrl_std_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tbvps Xbrl Std Usd"
+          },
+          "tbvps_xbrl_std_verification_reason": {
+            "default": "unverified",
+            "title": "Tbvps Xbrl Std Verification Reason",
+            "type": "string"
+          },
+          "tbvps_xbrl_std_verified": {
+            "default": false,
+            "title": "Tbvps Xbrl Std Verified",
+            "type": "boolean"
+          },
+          "tce_reported_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tce Reported Usd"
+          },
+          "tce_xbrl_std_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tce Xbrl Std Usd"
+          },
+          "total_stockholders_equity_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Stockholders Equity Usd"
+          }
+        },
+        "title": "TbvpsReconciliationBridge",
         "type": "object"
       },
       "TopicDeletion": {
@@ -13373,6 +17076,143 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/v2/research/banks/analyze": {
+      "post": {
+        "description": "0-LLM V4a US Major Bank 5-pillar diagnostics, segment reconciliation & Gordon P/TBV engine.",
+        "operationId": "analyze_us_major_bank_v2_research_banks_analyze_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BankAnalyzeApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankAnalysisResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Analyze Us Major Bank"
+      }
+    },
     "/v2/research/calculations": {
       "post": {
         "operationId": "calculate_research_v2_research_calculations_post",
@@ -13572,6 +17412,280 @@
           }
         },
         "summary": "Search Research Sec Identities"
+      }
+    },
+    "/v2/research/peers/compare": {
+      "post": {
+        "description": "Layer 1 0-LLM deterministic peer alignment & relative valuation matrix (supports V4a US Major Banks).",
+        "operationId": "compare_research_peers_v2_research_peers_compare_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeerCompareApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeerComparisonMatrix"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Compare Research Peers"
+      }
+    },
+    "/v2/research/peers/compare/brief": {
+      "post": {
+        "description": "Layer 2 on-demand single-turn LLM attribution grounded strictly in Layer 1 matrix.",
+        "operationId": "generate_research_peer_brief_v2_research_peers_compare_brief_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeerCompareBriefApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeerAttributionBrief"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Generate Research Peer Brief"
       }
     },
     "/v2/research/sec-events/analyze": {
@@ -15070,6 +19184,37 @@
             "schema": {
               "title": "Topic Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "revision",
+            "required": false,
+            "schema": {
+              "default": "current",
+              "enum": [
+                "current",
+                "original"
+              ],
+              "title": "Revision",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "original_sha256",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Original Sha256"
             }
           }
         ],

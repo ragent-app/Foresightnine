@@ -76,7 +76,12 @@ export function ThesisLedgerBar({
     }
     if (!cik && !symbol) return;
     mutations.createSubscription.mutate(
-      { cik: cik ?? undefined, symbol: symbol ?? undefined, company_name: companyName ?? undefined, topic_id: topicId },
+      {
+        topic_id: topicId,
+        ...(cik != null && { cik }),
+        ...(symbol != null && { symbol }),
+        ...(companyName != null && { company_name: companyName }),
+      },
       {
         onSuccess: () => showToast(`已为 ${symbol ?? cik} 开启 SEC 变化雷达监控`),
         onError: (err) => showToast(describeError(err), { tone: "error" }),

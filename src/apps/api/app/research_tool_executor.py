@@ -2931,6 +2931,22 @@ def _exec_checkpoint_question_part(ctx: ToolExecutionContext, inv: _CallInvocati
     if not req.answer.strip() and not req.unresolved.strip():
         raise ValueError('Provide an answer or explain what is missing')
     refs = []
+    linked_calculations = []
+    all_facts = {f.get('fact_id'): f for key in ('facts', 'prior_facts') for f in ctx.state.get(key, [])}
+    from .research_observations import verified_partial_calculation_ids
+    for calc_id in req.calculation_ids:
+        found = next(((origin, calc) for origin, key in (('current', 'calculations'), ('prior', 'prior_calculations'))
+                      for calc in ctx.state.get(key, []) if calc.get('calculation_id') == calc_id), None)
+        if not found:
+            raise ValueError('Unknown calculation ID: ' + calc_id)
+        origin, calc = found
+        input_ids = {i.get('fact_id') for i in calc.get('inputs', []) if i.get('fact_id')}
+        verified = verified_partial_calculation_ids(ctx.state, ctx.source_by_id, ctx.as_of,
+                                                   fact_ids=input_ids, calculation_ids={calc_id})
+        if calc_id not in verified:
+            raise ValueError('Calculation is unavailable, unauthorized, or cannot be verified: ' + calc_id)
+        refs.append({'calculation_id': calc_id, 'origin': origin})
+        linked_calculations.append(calc)
     for fact_id in req.fact_ids:
         found = None
         for origin, key in (('current', 'facts'), ('prior', 'prior_facts')):
@@ -2959,10 +2975,11 @@ def _exec_checkpoint_question_part(ctx: ToolExecutionContext, inv: _CallInvocati
         raise ValueError('An answer requires an authorized recorded fact or a located quotation')
     if req.answer.strip():
         from .research_report_grounding import clause_problem
-        all_facts = {f.get('fact_id'): f for key in ('facts', 'prior_facts') for f in ctx.state.get(key, [])}
         linked = [all_facts[r['fact_id']] for r in refs if r.get('fact_id') in all_facts]
+        linked += [all_facts[i['fact_id']] for c in linked_calculations for i in c.get('inputs', [])
+                   if i.get('fact_id') in all_facts]
         quotations = [c.quotation for c in req.citations] + [f.get('quotation', '') for f in linked]
-        problem = clause_problem(req.answer, quotations, linked, [])
+        problem = clause_problem(req.answer, quotations, linked, linked_calculations)
         if problem:
             raise ValueError(problem)
     row = {'question': req.question.strip(), 'answer': req.answer.strip(),
@@ -3393,7 +3410,8 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
             value = re.sub(r'\[\[claim:[A-Za-z0-9_-]+\]\]', '', value)
             value = re.sub(r'^\s*(?:[-+*]\s+|\d+[.)]\s+)', '', value)
             return re.sub(r'\s+', ' ', value.replace('**', '')).strip().rstrip('.。!?！？').casefold()
-        reviewed_claims = [c for c in support_claims if c.get('claim_id') in reviewed_ids - rejected_ids]
+        from .research_observations import deduplicate_reviewed_claims
+        reviewed_claims = deduplicate_reviewed_claims([c for c in support_claims if c.get('claim_id') in reviewed_ids - rejected_ids], checked_reviews)
         reviewed_sentences = {normalize_sentence(c['text']) for c in reviewed_claims}
         safe_headings = {'summary', 'overview', 'conclusion', '概览', '摘要', '结论'}
         unbound = bool(set(markers) - (reviewed_ids - rejected_ids))
@@ -3413,39 +3431,58 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
             if normalize_sentence(stripped) not in reviewed_sentences:
                 unbound = True
                 break
-        if unbound and reviewed_claims:
+        duplicate_reviewed = len(reviewed_claims) < len([c for c in support_claims if c.get('claim_id') in reviewed_ids - rejected_ids])
+        if (unbound or duplicate_reviewed) and reviewed_claims:
             # Retain the useful verified answer, with its citation anchors; do
             # not carry over prose that was never reviewed.
             req.report = '\n\n'.join(c['text'] + ' [[claim:' + c['claim_id'] + ']]' for c in reviewed_claims)
             report_issues = report_problems(req.report, support_claims, calculations, partial_notes=req.status == 'partial')
         elif unbound:
             report_issues.append({'clause': '', 'reason': 'Report prose is not bound to a reviewed claim.'})
-    # Deterministic observations do not review the writer's free-form prose.
-    # Where all core components are directly assembled from recorded numerical
-    # results, deliver that assembly instead of the unreviewed draft.
-    deterministic_report = False
-    if not review_items:
-        cores = [row for row in requirements if row.get('core', True)]
-        deterministic = bool(cores) and all(
-            row.get('status') == 'satisfied' and row.get('references') and
-            (any(any(ref.get(k) for k in ('fact_id', 'calculation_id', 'analysis_id')) for ref in row['references'])
-             or ('conflict' in row.get('reason', '').casefold() and
-                 len({ref.get('source_id') for ref in row['references'] if ref.get('source_id')}) >= 2))
-            for row in cores)
-        if deterministic and not missing_answer:
-            snippets = [p['answer'] for p in assessed_parts if p.get('core', True) and p.get('answer')]
-            referenced_facts = {ref.get('fact_id') for row in cores for ref in row.get('references', []) if ref.get('fact_id')}
-            referenced_calculations = {ref.get('calculation_id') for row in cores for ref in row.get('references', []) if ref.get('calculation_id')}
-            for calc in calculations:
-                inputs = {item.get('fact_id') for item in calc.get('inputs', []) if item.get('fact_id')}
-                if (calc.get('calculation_id') not in referenced_calculations and len(inputs) >= 2
-                        and inputs.issubset(referenced_facts)):
-                    snippets.append(' '.join(str(calc.get(k) or '') for k in ('formula_id', 'value', 'unit')).strip())
-            req.report = '\n\n'.join(snippets)
-            report_issues = []
-            deterministic_report = bool(req.report)
-        elif claims:
-            unreviewed_candidate = True
+    # For wholly mechanical requirements, deliver only newly assembled source
+    # excerpts and recomputed calculations, never checkpoint or writer prose.
+    from .research_observations import structured_partial_notes
+    from .research_calculations import calculation_input_status, calculation_result_status
+    all_facts = {f.get('fact_id'): f for key in ('facts', 'prior_facts')
+                 for f in ctx.state.get(key, []) if isinstance(f, dict)}
+    all_calcs = {c.get('calculation_id'): c for c in calculations}
+    cores = [r for r in requirements if r.get('core', True)]
+    refs = [ref for row in cores for ref in row.get('references', [])]
+    fact_ids = {r['fact_id'] for r in refs if r.get('fact_id')}
+    calc_ids = {r['calculation_id'] for r in refs if r.get('calculation_id')}
+    # Some mechanical requirements identify their inputs without identifying a
+    # calculation. Preserve a current-turn result in that case; never infer a
+    # historical result from shared inputs.
+    if not calc_ids:
+        candidates = {c.get('calculation_id') for c in ctx.state.get('calculations', [])
+                      if isinstance(c, dict) and c.get('calculation_id') and c.get('inputs')
+                      and all(i.get('fact_id') in fact_ids for i in c['inputs'])}
+        if len(candidates) == 1:
+            calc_ids = candidates
+    for calc_id in calc_ids:
+        calc = all_calcs.get(calc_id, {})
+        fact_ids.update(i.get('fact_id') for i in calc.get('inputs', []) if i.get('fact_id'))
+    deterministic = bool(cores and refs and fact_ids) and all(
+        r.get('status') == 'satisfied' and not r.get('semantic_required') and r.get('references')
+        and all(ref.get('fact_id') or ref.get('calculation_id') for ref in r['references']) for r in cores)
+    deterministic = deterministic and all(
+        fid in all_facts and bool(structured_partial_notes(ctx.state, ctx.source_by_id, ctx.as_of, fact_ids={fid}, calculation_ids=set()))
+        for fid in fact_ids)
+    deterministic = deterministic and all(
+        cid in all_calcs and calculation_input_status(all_calcs[cid], list(all_facts.values())) == 'matched'
+        and calculation_result_status(all_calcs[cid]) == 'matched' for cid in calc_ids)
+    structured_notes = structured_partial_notes(ctx.state, ctx.source_by_id, ctx.as_of,
+                                                fact_ids=fact_ids or None, calculation_ids=calc_ids)
+    deterministic_report = bool(not review_items and deterministic and structured_notes)
+    if deterministic_report:
+        from .research_observations import deterministic_observation_ids
+        safe_claims = deterministic_observation_ids(claims, ctx.state, ctx.source_by_id, ctx.as_of)
+        unreviewed_candidate = any(c.get('claim_id') not in safe_claims for c in claims)
+        req.report = structured_notes
+        report_issues = []
+        missing_answer = False
+    elif not review_items and req.report.strip():
+        unreviewed_candidate = True
     displayable_report = not rejected_claims and not report_issues
     available_claim_ids = {claim.get('claim_id') for claim in support_claims}
     available_fact_ids = set()
@@ -3600,6 +3637,8 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
     # Preserve only prose whose claims have passed independent review.
     partial_notes = (req.report.strip() or None) if (status == 'partial' and (review_items or deterministic_report)
                      and not unreviewed_candidate and not rejected_claims and not report_issues) else None
+    if status == 'partial' and structured_notes:
+        partial_notes = '\n\n'.join(x for x in (partial_notes, structured_notes) if x)
     for review in instruction_reviews:
         for ref in review['references']:
             excerpt = ref.pop('report_excerpt', None)
@@ -3621,6 +3660,7 @@ def _exec_submit_research(ctx: ToolExecutionContext, inv: _CallInvocation) -> To
     ctx.state['submission'] = {
         'status': status,
         'report': report,
+        'deterministic_report': deterministic_report,
         'partial_notes': partial_notes,
         'draft_report': draft_report,
         'claims': claims,

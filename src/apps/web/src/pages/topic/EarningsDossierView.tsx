@@ -2,6 +2,7 @@ import type { ResearchV2 } from "@foresightnine/contracts";
 import { useEffect, useId, useMemo, useState } from "react";
 import {
   downloadEarningsExport,
+  getEarningsDossier,
   type EarningsExportFormat,
 } from "../../api/earningsSquad";
 import { formatInteger, formatNumberString } from "../../lib/format";
@@ -27,6 +28,7 @@ export interface EarningsDossierViewProps {
 
 const SECTOR_LABEL: Readonly<Record<ResearchV2.SectorApplicability["sector_category"], string>> = {
   non_financial: "非金融企业",
+  financial_other: "其他金融机构",
   bank: "银行 / 信贷机构",
   insurance: "保险机构",
   reit: "REITs 房地产信托",
@@ -290,6 +292,31 @@ function collectNonExportableSources(dossier: ResearchV2.EarningsDossier): strin
   return [...set].sort();
 }
 
+function OriginalBankMemo({ topicId, originalId, digest }: { topicId: string; originalId: string; digest: string }) {
+  const [open, setOpen] = useState(false);
+  const [memo, setMemo] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    if (!open || memo !== null) return;
+    const controller = new AbortController();
+    setError(false);
+    getEarningsDossier(topicId, controller.signal, "original", digest).then(({ dossier }) => {
+      if (controller.signal.aborted) return;
+      if (dossier?.dossier_id === originalId) setMemo(dossier.memo_markdown);
+      else setError(true);
+    }).catch(() => { if (!controller.signal.aborted) setError(true); });
+    return () => controller.abort();
+  }, [open, topicId, originalId, digest, memo]);
+  return (
+    <details onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>查看更正前的备忘录</summary>
+      {open ? <><p>历史版本。当前可采用的披露值和估值依据见本次复核说明。</p>
+        {memo !== null ? <pre style={{ whiteSpace: "pre-wrap" }}>{memo}</pre> :
+          <p>{error ? "未能读取原版本。可收起后重新打开。" : "正在读取原版本…"}</p>}</> : null}
+    </details>
+  );
+}
+
 export function EarningsDossierView({
   dossier,
   topicId,
@@ -313,7 +340,8 @@ export function EarningsDossierView({
   const [redactionTipOpen, setRedactionTipOpen] = useState(false);
 
   const tooltipId = useId();
-  const activeMode = reportMode ?? internalMode;
+  const correction = dossier.open_gaps?.find((gap) => gap.code === "bank_disclosure_restatement");
+  const activeMode = correction ? "memo" : reportMode ?? internalMode;
 
   useEffect(() => {
     setLocalDeepReport(dossier.deep_report_markdown ?? null);
@@ -645,6 +673,9 @@ export function EarningsDossierView({
     >
       {/* Top Bar: Company/Period Header, Sector Gate Badge, Dual-Mode Switcher, Export Controls */}
       <header className="chart-card ed-topbar">
+        {correction?.source && dossier.supersedes_sha256 && topicId ? (
+          <OriginalBankMemo key={dossier.supersedes_sha256} topicId={topicId} originalId={correction.source} digest={dossier.supersedes_sha256} />
+        ) : null}
         <div className="chart-head ed-topbar-head">
           <div className="chart-title-wrap ed-identity">
             <div className="chart-title-row">
@@ -690,6 +721,7 @@ export function EarningsDossierView({
                 type="button"
                 role="tab"
                 aria-selected={activeMode === "deep_report"}
+                disabled={Boolean(correction)}
                 onClick={() => void handleModeSwitch("deep_report")}
               >
                 完整深研报告 (Deep Report)

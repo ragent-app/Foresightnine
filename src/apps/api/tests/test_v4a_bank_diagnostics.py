@@ -82,6 +82,7 @@ def _snap_fixture(
         rwa_standardized_usd=rwa_std,
         htm_net_unrealized_pnl_usd=htm_pnl,
         rotce_q_reported_pct=rotce_q,
+        rotce_q_verified=rotce_q is not None,
         tbvps_bridge=TbvpsReconciliationBridge(
             total_stockholders_equity_usd="296749000000",
             preferred_stock_usd="24996000000",
@@ -93,6 +94,8 @@ def _snap_fixture(
             shares_reported_denominator=shares_rep,
             rsu_share_addon=rsu,
             tbvps_reported_usd=tbvps_rep,
+            tbvps_reported_verified=tbvps_rep is not None,
+            tbvps_xbrl_std_verified=True,
             tbvps_reported_source="8k_supplement" if tbvps_rep else "unavailable",
             tbvps_xbrl_std_usd=tbvps_std,
             tbvps_gap_pct=gap_pct,
@@ -136,7 +139,7 @@ def test_v4a3_d4_htm_tiered_escalation_bac_red_vs_wfc_yellow_and_subtypes() -> N
         tbvps_rep="341.43", tbvps_std="349.71", shares_end="288600000", shares_rep="295600000",
     ))
     assert gs_diag.metrics["ldr_pct"].status == "exempt_by_subtype"
-    assert gs_diag.comparability_warnings and gs_diag.comparability_warnings[0]["code"] == "tbvps_denominator_rsu_adjustment"
+    assert gs_diag.comparability_warnings and gs_diag.comparability_warnings[0]["code"] == "tbvps_basis_difference"
     assert Decimal(gs_diag.provision_to_ppnr_pct or "0") < 0
 
 
@@ -174,6 +177,35 @@ def test_v4a3_gordon_ptbv_valuation_3x3_matrix_rsu_and_anti_future_guard() -> No
     val_fb = evaluate_bank_valuation(no_rep, price_usd="75.00")
     assert val_fb.primary_tbvps_basis == "xbrl_std_fallback"
     assert val_fb.p_to_tbv_primary == "1.50"
+
+
+
+def test_unverified_bases_do_not_flow_to_valuation_or_diagnostics() -> None:
+    original = _snap_fixture()
+    bridge = original.tbvps_bridge.model_copy(update={
+        "tbvps_reported_verified": False, "tbvps_xbrl_std_verified": False,
+        "tbvps_reported_verification_reason": "period not verified",
+    })
+    snap = original.model_copy(update={"tbvps_bridge": bridge, "rotce_q_verified": False})
+    val = evaluate_bank_valuation(snap, price_usd="60")
+    diag = evaluate_bank_diagnostics(snap)
+    assert val.p_to_tbv_primary is None and val.p_to_tbv_xbrl_std is None
+    assert val.implied_rotce_pct is None and val.justified_p_to_tbv_at_current_rotce is None
+    assert val.valuation_signal == "unavailable"
+    assert all(c.implied_rotce_pct is None and c.justified_p_to_tbv is None for c in val.sensitivity_matrix)
+    assert diag.rotce_q_pct is None and diag.htm_loss_pct_of_tce is None
+    assert diag.cet1_buffer_bps is not None
+    assert "period not verified" in val.notes
+
+    # A legacy archive cannot opt in by carrying similarly named flags.
+    legacy = original.model_copy(update={"schema_version": "v4a.1"})
+    old_val = evaluate_bank_valuation(legacy, price_usd="60")
+    assert old_val.p_to_tbv_primary is None and old_val.current_rotce_pct is None
+    negative_bridge = original.tbvps_bridge.model_copy(update={"tbvps_reported_usd": "-3", "tbvps_xbrl_std_verified": False})
+    negative = original.model_copy(update={"tbvps_bridge": negative_bridge, "rotce_q_reported_pct": "-0.5"})
+    negative_val = evaluate_bank_valuation(negative, price_usd="60")
+    assert negative_val.p_to_tbv_primary is None and negative_val.implied_rotce_pct is None
+    assert negative_val.justified_p_to_tbv_at_current_rotce == "-0.50"
 
 
 def test_v4a3_kpi_us_large_banks_pack_no_truncation_cross_domain_and_no_blk_poisoning() -> None:

@@ -333,6 +333,7 @@ def test_kv_cache_prefix_byte_identical_across_turns_and_anthropic_wire(monkeypa
     ])
     out = run_research_agent(question='Revenue Q4?', sources=[src], model=recorder, context=_ctx())
     assert out.status == 'completed'
+    assert 'Revenue was 100 USD in Q4 2025.' in out.report
     assert len(recorder.turns) == 4
 
     base_user = recorder.turns[0].user
@@ -385,7 +386,9 @@ def test_kv_cache_prefix_byte_identical_across_turns_and_anthropic_wire(monkeypa
     provider = AnthropicMessagesProvider(settings, ProviderPolicy(retry_base_seconds=0),
                                          anthropic_version='2023-06-01', auth_scheme='x-api-key', max_tokens=200)
     res = run_research_agent(question='Revenue Q4?', sources=[src], model=provider, context=_ctx())
-    assert res.status == 'completed' and len(bodies) == 3
+    assert res.status == 'partial' and len(bodies) == 3
+    assert 'Revenue was 100 USD in Q4 2025.' in (res.partial_notes or '')
+    assert res.report == ''
     assert bodies[0]['system'] == bodies[1]['system'] == bodies[2]['system']
     assert bodies[0]['tools'] == bodies[1]['tools'] == bodies[2]['tools']
     # Initial user message (bodies[k]['messages'][0]) is cached and stays identical across all turns.
@@ -802,7 +805,9 @@ def test_three_consecutive_zero_yield_turns_emit_tail_note_convergence_hint():
         context=_ctx(),
         checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
     )
-    assert out.status == 'completed'
+    assert out.status == 'partial'
+    assert out.report == ''
+    assert 'Revenue was 100 USD in FY2025.' in (out.partial_notes or '')
     assert len(recorder.turns) == 5
     assert recorder.turns[0].tail_note is None
     assert recorder.turns[1].tail_note is None  # outline_source only (1 zero-yield turn)

@@ -36,20 +36,42 @@ def _part_key(value: str) -> str:
 
 def question_parts(question: str, state: Mapping[str, Any], eligible_source_ids: set[str], source_by_id: Mapping[str, Any] | None = None) -> list[dict]:
     facts = {fact.get('fact_id'): fact for key in ('prior_facts', 'facts') for fact in (state.get(key) or []) if isinstance(fact, Mapping)}
+    calculations = {c.get('calculation_id'): c for key in ('prior_calculations', 'calculations')
+                    for c in (state.get(key) or []) if isinstance(c, Mapping)}
     if source_by_id is not None:
         from .research_evidence_requirements import _source_hashes
         hashes = _source_hashes(state)
     else:
         hashes = {}
     rows = []
+    def calculation_inputs_visible(calc_id):
+        calc = calculations.get(calc_id)
+        inputs = calc.get('inputs') if calc else None
+        return bool(inputs) and all(isinstance(i, Mapping) and i.get('fact_id') in facts
+                                    and facts[i['fact_id']].get('source_id') in eligible_source_ids for i in inputs)
+    def visible(ref):
+        if not isinstance(ref, Mapping):
+            return False
+        if ref.get('calculation_id'):
+            return calculation_inputs_visible(ref['calculation_id'])
+        return (facts.get(ref.get('fact_id'), {}).get('source_id') in eligible_source_ids
+                or bool(ref.get('source_id') and ref.get('source_id') in eligible_source_ids))
     for item in state.get('question_parts') or []:
         if not isinstance(item, Mapping) or not item.get('question') or item['question'] not in question:
             continue
-        refs = [ref for ref in item.get('references', []) if isinstance(ref, Mapping)
-                and (facts.get(ref.get('fact_id'), {}).get('source_id') in eligible_source_ids
-                     or (ref.get('source_id') and ref.get('source_id') in eligible_source_ids))]
+        refs = [ref for ref in item.get('references', []) if visible(ref)]
         if source_by_id is not None:
             def current(ref):
+                if ref.get('calculation_id'):
+                    from .research_observations import verified_partial_calculation_ids
+                    calc = calculations.get(ref['calculation_id'])
+                    if not calc:
+                        return False
+                    ids = {i.get('fact_id') for i in calc.get('inputs', []) if isinstance(i, Mapping) and i.get('fact_id')}
+                    if not ids or any(facts.get(i, {}).get('source_id') not in eligible_source_ids for i in ids):
+                        return False
+                    return ref['calculation_id'] in verified_partial_calculation_ids(
+                        state, source_by_id, fact_ids=ids, calculation_ids={ref['calculation_id']})
                 fact = facts.get(ref.get('fact_id'))
                 sid = fact.get('source_id') if fact else ref.get('source_id')
                 source = source_by_id.get(sid)

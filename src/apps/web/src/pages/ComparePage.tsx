@@ -124,17 +124,18 @@ export function ComparePage() {
 
   function runCompare(nextPrimary = primary, nextSymbols = symbols, nextExclude = excludeNonComparable) {
     const clean = Array.from(new Set([nextPrimary, ...nextSymbols].map((s) => s.trim().toUpperCase()).filter(Boolean))).slice(0, 6);
-    if (clean.length < 2) {
+    const [primarySymbol, ...peers] = clean;
+    if (!primarySymbol || peers.length === 0) {
       showToast("请至少选择 2 家公司进行同业对比。", { tone: "error" });
       return;
     }
-    setPrimary(clean[0]);
+    setPrimary(primarySymbol);
     setSymbols(clean);
-    setSearchParams({ primary: clean[0], peers: clean.slice(1).join(",") }, { replace: true });
+    setSearchParams({ primary: primarySymbol, peers: peers.join(",") }, { replace: true });
     briefMutation.reset();
     compareMutation.mutate(
       {
-        primary_symbol: clean[0],
+        primary_symbol: primarySymbol,
         symbols: clean,
         exclude_non_comparable_from_median: nextExclude,
       },
@@ -163,8 +164,9 @@ export function ComparePage() {
   function handleRemoveTicker(sym: string) {
     const next = symbols.filter((s) => s !== sym);
     setSymbols(next);
-    if (sym === primary && next.length > 0) {
-      setPrimary(next[0]);
+    const [nextPrimary] = next;
+    if (sym === primary && nextPrimary) {
+      setPrimary(nextPrimary);
     }
   }
 

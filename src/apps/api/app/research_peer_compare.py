@@ -34,6 +34,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .research_bank_versions import BANK_VALUATION_VERSION
 from .fin_data.adapters.sec_edgar import (
     STANDARD_LINES,
     Period,
@@ -416,6 +417,7 @@ class PeerComparisonMatrix(_FrozenPeerModel):
     exclude_non_comparable_from_median: bool = True
     reverse_dcf_assumptions: str = "Uniform WACC 10.0% / Terminal Growth 3.0% / 5Y explicit horizon (excludes company-specific beta)"
     comparison_mode: Literal["corporate_industrial", "us_large_banks"] = "corporate_industrial"
+    bank_basis_validation_version: str | None = None
     companies: list[PeerCompanyMetrics] = Field(default_factory=list)
     peer_medians: dict[str, str | None] = Field(default_factory=dict)
     bank_companies: list[PeerBankMetrics] | None = None
@@ -1688,6 +1690,7 @@ def assemble_bank_peer_matrix(
     return base.model_copy(
         update={
             "comparison_mode": "us_large_banks",
+            "bank_basis_validation_version": BANK_VALUATION_VERSION,
             "bank_companies": enriched_bank,
             "bank_peer_medians": medians_str,
             "bank_gordon_assumptions": (

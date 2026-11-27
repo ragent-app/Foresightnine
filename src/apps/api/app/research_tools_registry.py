@@ -353,6 +353,7 @@ class CheckpointQuestionPartRequest(BaseModel):
     answer: str = Field(default='', max_length=3000, description='Evidence-based partial answer, explicitly identify uncertainty.')
     unresolved: str = Field(default='', max_length=1000, description='Specific missing information or conditions.')
     fact_ids: list[str] = Field(default_factory=list, max_length=20)
+    calculation_ids: list[str] = Field(default_factory=list, max_length=20)
     citations: list[DraftCitation] = Field(default_factory=list, max_length=10, description='Exact quotations for qualitative answers.')
 
 

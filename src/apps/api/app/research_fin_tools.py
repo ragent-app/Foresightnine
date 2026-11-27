@@ -23,6 +23,7 @@ from typing import Any, Callable, Literal, Mapping, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from .research_bank_versions import BANK_DISCLOSURE_VERSION
 from .earnings_external_data import (
     ExternalEarningsService,
     FMP_ALLOW_PLATFORM_KEY_ENV,
@@ -2345,6 +2346,14 @@ class FinDataToolbox:
             )
             if sym == prim:
                 primary_val = val
+            bridge = disclosure.tbvps_bridge
+            verified_schema = disclosure.schema_version == BANK_DISCLOSURE_VERSION
+            reported = bridge.tbvps_reported_usd if verified_schema and bridge.tbvps_reported_verified else None
+            standard = bridge.tbvps_xbrl_std_usd if verified_schema and bridge.tbvps_xbrl_std_verified else None
+            primary_tbvps = {
+                "reported_market_convention": reported,
+                "xbrl_standardized": standard, "xbrl_std_fallback": standard,
+            }.get(val.primary_tbvps_basis)
             bank_rows.append(PeerBankMetrics(
                 symbol=sym,
                 cik=disclosure.cik,
@@ -2356,15 +2365,11 @@ class FinDataToolbox:
                 bank_quality_light=diag.bank_quality_light,
                 price_usd=val.price_usd,
                 market_cap_usd=val.market_cap_usd,
-                tbvps_reported_usd=disclosure.tbvps_bridge.tbvps_reported_usd,
-                tbvps_xbrl_std_usd=disclosure.tbvps_bridge.tbvps_xbrl_std_usd,
-                tbvps_primary_usd=(
-                    disclosure.tbvps_bridge.tbvps_xbrl_std_usd
-                    if val.primary_tbvps_basis in ("xbrl_standardized", "xbrl_std_fallback")
-                    else disclosure.tbvps_bridge.tbvps_reported_usd
-                ),
+                tbvps_reported_usd=reported,
+                tbvps_xbrl_std_usd=standard,
+                tbvps_primary_usd=primary_tbvps,
                 tbvps_basis=val.primary_tbvps_basis,
-                tbvps_gap_pct=disclosure.tbvps_bridge.tbvps_gap_pct,
+                tbvps_gap_pct=bridge.tbvps_gap_pct if reported is not None and standard is not None else None,
                 p_to_tbv_primary=val.p_to_tbv_primary,
                 p_to_tbv_xbrl_std=val.p_to_tbv_xbrl_std,
                 p_to_bv=val.p_to_bv,
@@ -2382,6 +2387,7 @@ class FinDataToolbox:
                 htm_loss_pct_of_tce=diag.htm_loss_pct_of_tce,
                 pro_forma_cet1_ex_htm_pct=diag.pro_forma_cet1_ex_htm_pct,
                 provision_to_ppnr_pct=diag.provision_to_ppnr_pct,
+                notes=val.notes,
             ))
 
         if non_bank_syms:

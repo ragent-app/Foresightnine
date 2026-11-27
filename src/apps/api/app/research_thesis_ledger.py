@@ -16,6 +16,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Literal, Mapping, Sequence
 from uuid import uuid4
 
+from .research_bank_versions import BANK_VALUATION_VERSION
 from pydantic import BaseModel, ConfigDict, Field
 
 ThesisPillar = Literal[
@@ -358,7 +359,12 @@ def build_thesis_draft_from_dossier(
     implied_cagr = _parse_decimal_safe(rdcf.get("implied_5y_fcf_cagr_pct"))
     bank_val = _to_mapping(snapshot.get("bank_valuation"))
     bank_diag = _to_mapping(snapshot.get("bank_diagnostics"))
-    if bank_val and "valuation" not in claims_by_pillar and len(claims_by_pillar) < 5:
+    if (bank_val.get("basis_validation_version") == BANK_VALUATION_VERSION
+            and _parse_decimal_safe(bank_val.get("p_to_tbv_primary")) is not None
+            and _parse_decimal_safe(bank_val.get("implied_rotce_pct")) is not None
+            and _parse_decimal_safe(bank_val.get("current_rotce_pct")) is not None
+            and _parse_decimal_safe(bank_val.get("rotce_spread_vs_implied_pp")) is not None
+            and "valuation" not in claims_by_pillar and len(claims_by_pillar) < 5):
         p_tbv = str(bank_val.get("p_to_tbv_primary") or "n/a")
         imp_rotce = _parse_decimal_safe(bank_val.get("implied_rotce_pct"))
         cur_rotce = _parse_decimal_safe(bank_val.get("current_rotce_pct"))
