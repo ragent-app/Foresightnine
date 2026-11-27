@@ -6179,7 +6179,7 @@ class _AccountSlotModelRunner:
         resolved_model_name = (
             getattr(getattr(adapter, "settings", None), "model", None)
             or getattr(model_resp, "model", None)
-            or getattr(mreq.binding, "model", None)
+            or getattr(getattr(mreq, "binding", None), "model", None)
         )
         return SlotModelResponse(
             content=text_out,
