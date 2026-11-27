@@ -465,3 +465,58 @@ def test_v4a2_r4_vie_guard_r8_bhc_filter_citigroup_ttm_and_gs_10q_rsu_bridge() -
         "At September 30, 2026, the Corporation's SCB was 2.5 percent, with a Common equity tier 1 (CET1) minimum requirement of 10.0 percent."
     )
     assert bac_mda["cet1_reg_min_pct"] == Decimal("10.0") and bac_mda["cet1_scb_pct"] == Decimal("2.5")
+
+
+def test_v4a5_reg_capital_rwa_ratio_row_ignored_and_implied_rwa_fallback() -> None:
+    """Percentage rows labeled with risk-weighted assets (e.g. '10.5% as a % of RWA') must not overwrite RWA USD."""
+    r_pct_trap = """<html><body><table class="report">
+      <tr><th class="tl">Regulatory Capital ($ in Millions)</th><th class="th">Sep. 30, 2026</th></tr>
+      <tr class="re"><td class="pl">Standardized Approach</td><td class="nump"></td></tr>
+      <tr class="ro"><td class="pl">Common Equity Tier 1 capital ratio</td><td class="nump">14.0%</td></tr>
+      <tr class="ro"><td class="pl">Common Equity Tier 1 capital</td><td class="nump">$304,146</td></tr>
+      <tr class="ro"><td class="pl">Risk-weighted assets as a % of total assets (ratio)</td><td class="nump">10.5%</td></tr>
+      <tr class="ro"><td class="pl">Risk-weighted assets</td><td class="nump">$2,172,471</td></tr>
+    </table></body></html>"""
+    parsed = parse_r_html_table(r_pct_trap, r_file="R35.htm", url="https://www.sec.gov/R35.htm")
+    assert parsed is not None
+    rc = parse_reg_capital_details_table([parsed])
+    assert rc["cet1_rwa"] == Decimal("2172471000000")
+
+    # Even if R8 table only has the ratio-like small row (no valid dollar row), fetch_bank_disclosure_snapshot
+    # rejects implausible RWA (< 5% assets) and derives RWA from CET1 capital / CET1 ratio when available.
+    r_only_trap = """<html><body><table class="report">
+      <tr><th class="tl">Regulatory Capital ($ in Millions)</th><th class="th">Sep. 30, 2026</th></tr>
+      <tr class="re"><td class="pl">Standardized Approach</td><td class="nump"></td></tr>
+      <tr class="ro"><td class="pl">Common Equity Tier 1 capital ratio</td><td class="nump">14.0%</td></tr>
+      <tr class="ro"><td class="pl">Common Equity Tier 1 capital</td><td class="nump">$304,146</td></tr>
+    </table></body></html>"""
+    snap = _make_snap(
+        symbol="JPM",
+        cik="0000019617",
+        sic="6021",
+        facts_by_line={
+            "revenue": {"us-gaap:Revenues": {"USD": [{"start": "2026-07-01", "end": "2026-09-30", "val": 45000000000, "fy": 2026, "fp": "Q3", "form": "10-Q", "filed": "2026-11-01", "accn": "0001000000-26-000100"}]}},
+            "net_income": {"us-gaap:NetIncomeLoss": {"USD": [{"start": "2026-07-01", "end": "2026-09-30", "val": 12000000000, "fy": 2026, "fp": "Q3", "form": "10-Q", "filed": "2026-11-01", "accn": "0001000000-26-000100"}]}},
+            "total_assets": {"us-gaap:Assets": {"USD": [{"end": "2026-09-30", "val": 4000000000000, "fy": 2026, "fp": "Q3", "form": "10-Q", "filed": "2026-11-01", "accn": "0001000000-26-000100"}]}},
+            "cet1_capital": {"us-gaap:CommonEquityTierOneCapital": {"USD": [{"end": "2026-09-30", "val": 304146000000, "fy": 2026, "fp": "Q3", "form": "10-Q", "filed": "2026-11-01", "accn": "0001000000-26-000100"}]}},
+            "rwa": {"us-gaap:RiskWeightedAssets": {"USD": [{"end": "2026-09-30", "val": 105000, "fy": 2026, "fp": "Q3", "form": "10-Q", "filed": "2026-11-01", "accn": "0001000000-26-000100"}]}},
+        },
+        dei_shares=[{"end": "2026-09-30", "val": 2800000000, "filed": "2026-11-01", "form": "10-Q", "accn": "0001000000-26-000100"}],
+    )
+    from types import SimpleNamespace
+    fs_xml = """<FilingSummary><MyReports><Report><HtmlFileName>R35.htm</HtmlFileName><ShortName>Regulatory Capital</ShortName><LongName>Regulatory Capital Details</LongName><MenuCategory>Details</MenuCategory><Position>35</Position></Report></MyReports></FilingSummary>"""
+    def _tr(method: str, url: str, headers: dict, body: bytes, timeout: float) -> Any:
+        if url.endswith("FilingSummary.xml"):
+            return SimpleNamespace(status_code=200, headers={"content-type": "application/xml"}, body=fs_xml.encode())
+        if url.endswith("R35.htm"):
+            return SimpleNamespace(status_code=200, headers={"content-type": "text/html"}, body=r_only_trap.encode())
+        return SimpleNamespace(status_code=404, headers={}, body=b"")
+    disc, _ = fetch_bank_disclosure_snapshot(
+        snap=snap,
+        user_agent="ForesightNine-Test/1.0 test@example.com",
+        limiter=SecPacingLimiter(rate_per_sec=9.0, burst=9.0),
+        submissions={"cik": "0000019617", "filings": {"recent": {"accessionNumber": ["0001000000-26-000100"], "filingDate": ["2026-11-01"], "reportDate": ["2026-09-30"], "form": ["10-Q"], "items": [[]], "primaryDocument": ["jpm.htm"]}}},
+        transport=_tr,
+    )
+    assert disc is not None and disc.rwa_standardized_usd is not None
+    assert Decimal(disc.rwa_standardized_usd) > Decimal("2000000000000")

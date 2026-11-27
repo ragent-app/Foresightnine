@@ -211,3 +211,16 @@ def test_v4a3_kpi_us_large_banks_pack_no_truncation_cross_domain_and_no_blk_pois
     # SectorApplicability remains backward compatible while supporting new optional fields
     gate = evaluate_sec_sic_gate("6021")
     assert gate.is_gated is True and gate.bank_subtype is None and gate.active_sector_plugin is None
+
+
+def test_v4a5_pro_forma_cet1_ex_htm_rejects_implausible_small_rwa() -> None:
+    """Defensive guard: tiny ratio-corrupted RWA (< 5% of total_assets) must return unavailable, never -18M%."""
+    diag = evaluate_bank_diagnostics(_snap_fixture(
+        symbol="JPM",
+        cet1_pct="14.00",
+        cet1_min="11.50",
+        htm_pnl="-25831000000",
+        rwa_std="105000",
+    ))
+    assert diag.pro_forma_cet1_ex_htm_pct is None
+    assert diag.metrics["pro_forma_cet1_ex_htm_pct"].status == "unavailable"

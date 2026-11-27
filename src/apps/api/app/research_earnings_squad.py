@@ -5228,6 +5228,8 @@ class EarningsSquadOrchestrator:
             t0 = monotonic()
             failed = False
             usage: ModelUsage | None = None
+            truncation_exc: Exception | None = None
+            resp: SlotModelResponse | None = None
             try:
                 resp = self._model_runner.invoke(SlotModelRequest(
                     slot=slot,
@@ -5247,9 +5249,12 @@ class EarningsSquadOrchestrator:
                 if resp.tool_calls:
                     msg = forbidden_tool_error or f"{role} is not permitted to invoke tools during {stage}."
                     raise SquadToolViolationError(msg, stage=stage)
-            except Exception:
+            except Exception as invoke_exc:
                 failed = True
-                raise
+                if _is_provider_truncation_error(invoke_exc):
+                    truncation_exc = invoke_exc
+                else:
+                    raise
             finally:
                 ledger.settle_model_call(
                     slot,
@@ -5259,6 +5264,25 @@ class EarningsSquadOrchestrator:
                     elapsed_ms=int((monotonic() - t0) * 1000),
                     failed=failed,
                 )
+
+            if truncation_exc is not None:
+                last_exc = truncation_exc
+                if attempt_idx >= max_repairs:
+                    break
+                concise_user = (
+                    user_prompt
+                    + "\n\nIMPORTANT: Your previous response hit the provider output token limit and was truncated. "
+                    + f"Reply ONLY with a concise, valid JSON object matching {model_cls.__name__} "
+                    + "(brief values <= 2 sentences per field, at most 5 items, no markdown fences or verbose preamble) "
+                    + "so it fits well within the output token limit."
+                )
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": concise_user},
+                ]
+                continue
+
+            assert resp is not None
 
             try:
                 parsed = _parse_model_output(resp, model_cls, **norm_args)
@@ -6131,6 +6155,8 @@ class EarningsSquadOrchestrator:
             t0 = monotonic()
             failed = False
             usage: ModelUsage | None = None
+            truncation_exc: Exception | None = None
+            resp: SlotModelResponse | None = None
             try:
                 resp = self._model_runner.invoke(SlotModelRequest(
                     slot="fast_extractor",
@@ -6147,15 +6173,61 @@ class EarningsSquadOrchestrator:
                     conversation_id=worker_conv_id,
                 ))
                 usage = resp.usage
-            except Exception:
+            except Exception as invoke_exc:
                 failed = True
-                raise
+                if _is_provider_truncation_error(invoke_exc):
+                    truncation_exc = invoke_exc
+                else:
+                    raise
             finally:
                 ledger.settle_model_call(
                     "fast_extractor", call_id, before, usage=usage,
                     elapsed_ms=int((monotonic() - t0) * 1000), failed=failed,
                 )
 
+            if truncation_exc is not None:
+                if turn_idx < loop_limit - 1:
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            "Your previous response hit the output token limit and was truncated. "
+                            "Either make a single concise tool call or emit a compact EvidenceCardBatch JSON "
+                            "(at most 5 cards, concise claims/snippets) with no prose."
+                        ),
+                    })
+                    continue
+                gap_msg = f"{role} output truncated at wrap-up turn: {truncation_exc}"[:1000]
+                emitter.emit(
+                    stage=stage_name,
+                    node_id=role,
+                    action_kind="RESPONDING",
+                    runtime_state="completed",
+                    current_activity=gap_msg,
+                    blocker_text=gap_msg,
+                    edge_event=OrgEdgeEvent(
+                        from_node_id=role,
+                        to_node_id="lead_coordinator",
+                        is_review=True,
+                        edge_kind="report",
+                        label="Partial (truncated)",
+                    ),
+                    slot="fast_extractor",
+                )
+                return EvidenceCardBatch(
+                    task_id=task.task_id,
+                    worker_role=role,
+                    round_number=task.round_number,
+                    status="partial",
+                    cards=[],
+                    unresolved_gaps=[gap_msg],
+                    tools_invoked=list(dict.fromkeys(tools_invoked)),
+                    blocked_tool_attempts=list(dict.fromkeys(blocked_attempts)),
+                    tool_calls_made=tool_calls_made,
+                    turns_used=turns_used,
+                    instruction_sequence=task.steering_instruction_sequence,
+                )
+
+            assert resp is not None
             if not resp.tool_calls:
                 max_repairs = max(0, int(self._max_repair_attempts))
                 cur_resp = resp
@@ -6246,6 +6318,7 @@ class EarningsSquadOrchestrator:
                         rep_t0 = monotonic()
                         rep_failed = False
                         rep_usage: ModelUsage | None = None
+                        rep_trunc_exc: Exception | None = None
                         try:
                             cur_resp = self._model_runner.invoke(SlotModelRequest(
                                 slot="fast_extractor",
@@ -6262,9 +6335,12 @@ class EarningsSquadOrchestrator:
                                 conversation_id=worker_conv_id,
                             ))
                             rep_usage = cur_resp.usage
-                        except Exception:
+                        except Exception as rep_exc:
                             rep_failed = True
-                            raise
+                            if _is_provider_truncation_error(rep_exc):
+                                rep_trunc_exc = rep_exc
+                            else:
+                                raise
                         finally:
                             ledger.settle_model_call(
                                 "fast_extractor",
@@ -6274,6 +6350,9 @@ class EarningsSquadOrchestrator:
                                 elapsed_ms=int((monotonic() - rep_t0) * 1000),
                                 failed=rep_failed,
                             )
+                        if rep_trunc_exc is not None:
+                            last_parse_err = rep_trunc_exc
+                            break
                         if cur_resp.tool_calls:
                             repair_forced_err = ValueError(
                                 "Tools are disabled during schema repair; emit ONLY valid EvidenceCardBatch JSON."
@@ -6824,8 +6903,6 @@ class EarningsSquadOrchestrator:
             question=question,
         )
         user_prompt = _build_writer_payload(dossier_core, mode="memo")
-        def _is_truncation_error(exc: Exception) -> bool:
-            return getattr(exc, "code", None) == "provider_output_truncated" or "truncated" in str(exc).lower()
 
         def _invoke_writer(prompt_text: str, conv_suffix: str) -> tuple[str, bool]:
             cid, before_state = ledger.admit_model_call("writer", stage="stage_3b_gate_memo")
@@ -6867,7 +6944,7 @@ class EarningsSquadOrchestrator:
                     message="Stage 3B Writer returned empty content; deterministic Markdown memo fallback used.",
                 )])
         except Exception as exc:
-            if not _is_truncation_error(exc):
+            if not _is_provider_truncation_error(exc):
                 emitter.emit(
                     stage="stage_3b_gate_memo",
                     node_id="dossier_writer",
@@ -6892,7 +6969,7 @@ class EarningsSquadOrchestrator:
                         message="Stage 3B Writer returned empty content on concise retry; deterministic Markdown memo fallback used.",
                     )])
             except Exception as retry_exc:
-                if not _is_truncation_error(retry_exc):
+                if not _is_provider_truncation_error(retry_exc):
                     emitter.emit(
                         stage="stage_3b_gate_memo",
                         node_id="dossier_writer",
@@ -7699,6 +7776,13 @@ def _normalize_for_model_cls(
     if model_cls is EvidenceCardBatch and "task" in kwargs and "role" in kwargs:
         return _normalize_worker_batch_payload(data, task=kwargs["task"], role=kwargs["role"], notes=notes)
     return data
+
+
+def _is_provider_truncation_error(exc: Exception) -> bool:
+    return (
+        getattr(exc, "code", None) == "provider_output_truncated"
+        or "truncated" in str(exc).lower()
+    )
 
 
 def _format_pydantic_repair_prompt(

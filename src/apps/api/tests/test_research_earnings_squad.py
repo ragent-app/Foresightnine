@@ -1670,4 +1670,157 @@ def test_fetch_sec_submissions_meta_and_build_periods_from_sec_regressions():
     assert snap.derived_metrics["statement_lines_count"] == derived["statement_lines_count"]
 
 
+def test_invoke_and_parse_with_repair_concise_retry_and_fallback_on_provider_truncation() -> None:
+    """Verify _invoke_and_parse_with_repair retries concisely on provider_output_truncated and uses fallback_fn."""
+    from app.phase3 import ProviderFailure
+    from app.research_earnings_diagnostics import evaluate_sec_sic_gate
+    from app.research_earnings_squad import (
+        OrgGraphEmitter,
+        SquadExecutionLedger,
+        _fallback_bear_batch,
+    )
+
+    seen_prompts: list[list[dict[str, Any]]] = []
+
+    def _retry_succeeds(mreq: SlotModelRequest) -> SlotModelResponse:
+        seen_prompts.append(list(mreq.messages))
+        if len(seen_prompts) == 1:
+            raise ProviderFailure("provider_output_truncated", "Provider output was truncated.", retryable=False)
+        return SlotModelResponse(
+            content=json.dumps({
+                "batch_id": "bear_retry_ok",
+                "items": [],
+                "rejected_items": [],
+                "reviewer_notes": "Concise retry succeeded.",
+            }),
+            usage=ModelUsage(40, 20, 60),
+        )
+
+    orch = EarningsSquadOrchestrator(model_runner=CallableSlotModelRunner(_retry_succeeds))
+    ledger = SquadExecutionLedger(slot_bindings=orch._slot_bindings)
+    emitter = OrgGraphEmitter()
+    parsed, used_fb, last_err = orch._invoke_and_parse_with_repair(
+        slot="bear_reviewer",
+        stage="stage_3a_bear",
+        role="bear_reviewer",
+        node_id="bear_reviewer",
+        system_prompt="sys",
+        user_prompt="usr",
+        model_cls=BearCaseBatch,
+        ledger=ledger,
+        emitter=emitter,
+        fallback_fn=lambda _exc: BearCaseBatch(batch_id="fb", items=[], rejected_items=[]),
+    )
+    assert used_fb is False and last_err is None
+    assert parsed.batch_id == "bear_retry_ok"
+    assert len(seen_prompts) == 2
+    assert len(seen_prompts[1]) == 2
+    assert "provider output token limit" in seen_prompts[1][1]["content"]
+
+    def _always_truncates(_mreq: SlotModelRequest) -> SlotModelResponse:
+        raise ProviderFailure("provider_output_truncated", "Provider output was truncated.", retryable=False)
+
+    orch_fb = EarningsSquadOrchestrator(model_runner=CallableSlotModelRunner(_always_truncates))
+    ledger_fb = SquadExecutionLedger(slot_bindings=orch_fb._slot_bindings)
+    emitter_fb = OrgGraphEmitter()
+    snap = EarningsPrefetchSnapshot(
+        entity_id="cik:0000070858",
+        symbol="BAC",
+        cik="0000070858",
+        sector_applicability=evaluate_sec_sic_gate("6021").model_copy(
+            update={"active_sector_plugin": "us_large_bank_v4a", "bank_subtype": "universal_commercial"}
+        ),
+        statements=[],
+        derived_metrics={},
+    )
+    fb_batch, fb_used, fb_err = orch_fb._invoke_and_parse_with_repair(
+        slot="bear_reviewer",
+        stage="stage_3a_bear",
+        role="bear_reviewer",
+        node_id="bear_reviewer",
+        system_prompt="sys",
+        user_prompt="usr",
+        model_cls=BearCaseBatch,
+        ledger=ledger_fb,
+        emitter=emitter_fb,
+        fallback_fn=lambda _exc: _fallback_bear_batch(snap, [], []),
+    )
+    assert fb_used is True and fb_err is not None
+    assert isinstance(fb_batch, BearCaseBatch)
+
+
+def test_stage2_worker_truncation_retries_and_survives_wrapup() -> None:
+    """Verify Stage 2 _execute_worker_task survives provider_output_truncated without raising."""
+    from app.phase3 import ProviderFailure
+    from app.research_earnings_diagnostics import evaluate_sec_sic_gate
+    from app.research_earnings_squad import OrgGraphEmitter, SquadExecutionLedger
+
+    snap = EarningsPrefetchSnapshot(
+        entity_id="cik:0000070858",
+        symbol="BAC",
+        cik="0000070858",
+        sector_applicability=evaluate_sec_sic_gate("6021"),
+        statements=[],
+        derived_metrics={},
+    )
+    req = SquadPrefetchRequest(entity_id="cik:0000070858", symbol="BAC", cik="0000070858", question="Analyze BAC.")
+    task = WorkerTask(
+        worker_role="worker_forensics",
+        objective="Check credit quality.",
+        allowed_tools=[],
+        soft_turn_limit=1,
+    )
+
+    calls_retry: list[int] = []
+
+    def _worker_recovers(mreq: SlotModelRequest) -> SlotModelResponse:
+        calls_retry.append(len(mreq.messages))
+        if len(calls_retry) == 1:
+            raise ProviderFailure("provider_output_truncated", "Provider output was truncated.", retryable=False)
+        return SlotModelResponse(
+            content=json.dumps({
+                "task_id": task.task_id,
+                "worker_role": "worker_forensics",
+                "round_number": 1,
+                "status": "completed",
+                "cards": [],
+                "unresolved_gaps": [],
+            }),
+            usage=ModelUsage(20, 10, 30),
+        )
+
+    orch_ok = EarningsSquadOrchestrator(model_runner=CallableSlotModelRunner(_worker_recovers))
+    batch_ok = orch_ok._execute_worker_task(
+        request=req,
+        snapshot=snap,
+        task=task,
+        l2_pack_id=None,
+        ledger=SquadExecutionLedger(slot_bindings=orch_ok._slot_bindings),
+        emitter=OrgGraphEmitter(),
+        worker_cancel=Event(),
+        source_texts={},
+        source_permissions={},
+    )
+    assert batch_ok.status == "completed" and len(calls_retry) == 2
+
+    def _worker_always_truncates(_mreq: SlotModelRequest) -> SlotModelResponse:
+        raise ProviderFailure("provider_output_truncated", "Provider output was truncated.", retryable=False)
+
+    orch_partial = EarningsSquadOrchestrator(model_runner=CallableSlotModelRunner(_worker_always_truncates))
+    batch_partial = orch_partial._execute_worker_task(
+        request=req,
+        snapshot=snap,
+        task=task,
+        l2_pack_id=None,
+        ledger=SquadExecutionLedger(slot_bindings=orch_partial._slot_bindings),
+        emitter=OrgGraphEmitter(),
+        worker_cancel=Event(),
+        source_texts={},
+        source_permissions={},
+    )
+    assert batch_partial.status == "partial"
+    assert batch_partial.cards == []
+    assert batch_partial.unresolved_gaps and "truncated" in batch_partial.unresolved_gaps[0].lower()
+
+
 

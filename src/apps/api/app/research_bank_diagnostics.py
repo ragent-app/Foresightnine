@@ -326,7 +326,14 @@ def evaluate_bank_diagnostics(
         htm_loss_pct_tce = ((htm_loss_abs / tce_for_htm) * Decimal("100")) if (htm_loss_abs is not None and tce_for_htm and tce_for_htm > 0) else None
         htm_after_tax_hit_bps: Decimal | None = None
         pro_forma_cet1: Decimal | None = None
-        if htm_loss_abs is not None and rwa_std and rwa_std > 0:
+        total_assets_d = _dec(snapshot.total_assets_usd)
+        rwa_sane = (
+            rwa_std is not None
+            and rwa_std > 0
+            and (total_assets_d is None or total_assets_d <= 0 or rwa_std >= total_assets_d * Decimal("0.05"))
+        )
+        if htm_loss_abs is not None and rwa_sane:
+            assert rwa_std is not None
             after_tax_loss = htm_loss_abs * (Decimal("1") - tax_rate)
             htm_after_tax_hit_bps = (after_tax_loss / rwa_std) * Decimal("10000")
             if cet1_std is not None:

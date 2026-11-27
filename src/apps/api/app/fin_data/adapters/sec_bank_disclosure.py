@@ -1406,9 +1406,17 @@ def parse_reg_capital_details_table(tables: Sequence[FilingTableData]) -> dict[s
                     out.setdefault("tier1_leverage_pct", t1)
             elif ("commonequitytieronecapital" in tag or tag.endswith("commonequitytier1capital")) and "ratio" not in tag and "minimum" not in tag:
                 out.setdefault("cet1_capital_usd", _scale_cell_money(cell, table.scale_multiplier, table.unit_header_note))
-            elif "riskweightedassets" in tag or "risk-weighted assets" in lbl:
+            elif (
+                ("riskweightedassets" in tag or "risk-weighted assets" in lbl)
+                and "ratio" not in tag
+                and "ratio" not in lbl
+                and "percent" not in tag
+                and "%" not in cell.raw_text
+                and "as a %" not in lbl
+                and not is_req_context
+            ):
                 v_rwa = _scale_cell_money(cell, table.scale_multiplier, table.unit_header_note)
-                if v_rwa is not None and v_rwa > 0:
+                if v_rwa is not None and v_rwa >= Decimal("1000000000"):
                     if cur_approach == "standardized" or "cet1_rwa" not in out:
                         out["cet1_rwa"] = v_rwa
 
@@ -2425,6 +2433,18 @@ def fetch_bank_disclosure_snapshot(
         bank_subtype = tmp_qual.bank_subtype
 
     fiscal_lbl = x_rev_lbl or f"{period_end_date.isoformat()[:7]}"
+    cet1_cap_raw = rc_info.get("cet1_capital_usd") or _extract_latest_instant_from_snapshot(snap, "cet1_capital", as_of=as_of)[0]
+    if cet1_cap_raw is not None and cet1_cap_raw <= 0:
+        cet1_cap_raw = None
+    rwa_raw = rc_info.get("cet1_rwa") or _extract_latest_instant_from_snapshot(snap, "rwa", as_of=as_of)[0]
+    if rwa_raw is not None and total_assets is not None and total_assets > 0:
+        if not (total_assets * Decimal("0.05") <= rwa_raw <= total_assets * Decimal("2.5")):
+            rwa_raw = None
+    if rwa_raw is None and cet1_cap_raw is not None and cet1_std_final is not None and cet1_std_final > 0:
+        derived_rwa = (cet1_cap_raw / (cet1_std_final / Decimal("100"))).quantize(Decimal("1"))
+        if total_assets is None or total_assets <= 0 or (total_assets * Decimal("0.05") <= derived_rwa <= total_assets * Decimal("2.5")):
+            rwa_raw = derived_rwa
+
     out = BankDisclosureSnapshot(
         cik=cik_norm,
         symbol=sym_u,
@@ -2467,8 +2487,8 @@ def fetch_bank_disclosure_snapshot(
         aoci_usd=_dstr(aoci),
         common_dividends_ttm_usd=_dstr(abs(x_div_ttm)) if x_div_ttm is not None else None,
         common_buybacks_ttm_usd=_dstr(abs(x_bbk_ttm)) if x_bbk_ttm is not None else None,
-        cet1_capital_usd=_dstr(rc_info.get("cet1_capital_usd") or _extract_latest_instant_from_snapshot(snap, "cet1_capital", as_of=as_of)[0]),
-        rwa_standardized_usd=_dstr(rc_info.get("cet1_rwa") or _extract_latest_instant_from_snapshot(snap, "rwa", as_of=as_of)[0]),
+        cet1_capital_usd=_dstr(cet1_cap_raw),
+        rwa_standardized_usd=_dstr(rwa_raw),
         cet1_standardized_pct=_qstr(cet1_std_final, 2),
         cet1_standardized_source=cet1_source,
         cet1_preliminary_8k_pct=_qstr(cet1_prelim_8k, 2),
