@@ -121,7 +121,7 @@ class Bar(_Frozen):
 
 class StatementLine(_Frozen):
     entity_id: str
-    statement: Literal["income", "balance", "cashflow"]
+    statement: Literal["income", "balance", "cashflow", "footnote", "regulatory", "credit", "equity"]
     line: str
     reported_tag: str
     taxonomy: str
