@@ -1823,4 +1823,17 @@ def test_stage2_worker_truncation_retries_and_survives_wrapup() -> None:
     assert batch_partial.unresolved_gaps and "truncated" in batch_partial.unresolved_gaps[0].lower()
 
 
+def test_org_edge_event_clamps_long_skipped_label() -> None:
+    from app.research_earnings_squad import OrgEdgeEvent
+
+    ev = OrgEdgeEvent(
+        from_node_id="lead_coordinator",
+        to_node_id="worker_guidance",
+        label="Skipped: " + ("x" * 300),
+    )
+    assert ev.label is not None
+    assert len(ev.label) == 240
+    assert ev.label.endswith("...")
+
+
 

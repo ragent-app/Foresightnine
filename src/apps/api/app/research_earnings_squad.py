@@ -893,6 +893,13 @@ class OrgEdgeEvent(_FrozenContract):
     edge_kind: Literal["dispatch", "report", "review", "steering"] = "dispatch"
     label: str | None = Field(default=None, max_length=240)
 
+    @field_validator("label", mode="before")
+    @classmethod
+    def _clamp_label(cls, v: Any) -> Any:
+        if isinstance(v, str) and len(v) > 240:
+            return v[:237] + "..."
+        return v
+
 
 class OrgGraphEvent(_FrozenContract):
     """Sequenced Organization-Graph event aligned with OrganizationUiState.kt."""
@@ -5590,7 +5597,7 @@ class EarningsSquadOrchestrator:
                         to_node_id=task.worker_role,
                         is_review=False,
                         edge_kind="dispatch",
-                        label=f"Skipped: {task.skip_reason}",
+                        label=f"Skipped: {task.skip_reason}"[:240],
                     ),
                 )
             else:
