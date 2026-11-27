@@ -317,6 +317,13 @@ class InMemoryDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
             if owner == account_id:
                 yield key, value
 
+    def items_with_status(self, status: str) -> Iterator[tuple[str, ValueT]]:
+        """Enumerate non-expired documents whose top-level ``status`` equals ``status``."""
+        for key, value in list(self.items()):
+            cur = value.get("status") if isinstance(value, Mapping) else getattr(value, "status", None)
+            if cur == status:
+                yield key, value
+
     def live_blob_sha256s(self) -> set[str]:
         """Return live ``original_blob_sha256`` digests referenced by non-expired documents."""
         digests: set[str] = set()
@@ -402,6 +409,15 @@ WHERE collection = %s
       document->'provenance'->'document_pages'->>'original_blob_sha256',
       document->'provenance'->>'original_blob_sha256'
   ) IS NOT NULL
+""".strip()
+
+_STATUS_ITEMS_SQL = f"""
+SELECT document_key, document, version
+FROM {DOCUMENT_TABLE}
+WHERE collection = %s
+  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+  AND document->>'status' = %s
+ORDER BY document_key
 """.strip()
 
 _RETENTION_ITEMS_SQL = f"""
@@ -590,6 +606,13 @@ class PostgresDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
         return (
             (key, value)
             for key, value, _version in self._items_with_versions(_ACCOUNT_ITEMS_SQL, (self.collection, account_id))
+        )
+
+    def items_with_status(self, status: str) -> Iterator[tuple[str, ValueT]]:
+        """Enumerate non-expired documents whose JSONB top-level ``status`` equals ``status``."""
+        return (
+            (key, value)
+            for key, value, _version in self._items_with_versions(_STATUS_ITEMS_SQL, (self.collection, status))
         )
 
     def live_blob_sha256s(self) -> set[str]:

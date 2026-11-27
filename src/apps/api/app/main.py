@@ -5647,9 +5647,9 @@ class _RepoSquadCheckpointStore:
 _SQUAD_DEFAULT_TIMEOUT_SECONDS = 90.0
 _SQUAD_STAGE_TIMEOUT_FLOORS: dict[str, float] = {
     "stage_0_prefetch": 60.0,
-    "stage_1_plan": 90.0,
-    "stage_2_workers": 90.0,
-    "stage_2_5_review": 90.0,
+    "stage_1_plan": 180.0,
+    "stage_2_workers": 180.0,
+    "stage_2_5_review": 180.0,
     "stage_3a_bear": 120.0,
     "stage_3b_gate_memo": 120.0,
     "deep_report": 180.0,
@@ -5677,13 +5677,13 @@ _SQUAD_SLOT_MAX_OUTPUT_TOKENS: dict[str, int] = {
     "writer": 16384,
 }
 _SQUAD_STAGE_MAX_OUTPUT_TOKENS: dict[str, int] = {
-    "stage_1_plan": 4096,
+    "stage_1_plan": 8192,
     "stage_2_workers": 8192,
-    "stage_2_5_review": 4096,
+    "stage_2_5_review": 8192,
     "stage_3a_bear": 8192,
     "stage_3b_gate_memo": 8192,
     "deep_report": 16384,
-    "steering": 4096,
+    "steering": 8192,
     "sec_event_analysis": 16384,
     "sec_event_analysis_mode_b_round1": 16384,
     "sec_event_analysis_mode_b_round2": 16384,
@@ -5786,7 +5786,12 @@ def _with_squad_provider_timeout_floor(provider: Any) -> Any:
 def _reconcile_orphaned_earnings_squads() -> int:
     """Reconcile orphaned 'running' squad states after an API restart into checkpoint-resumable 'failed'."""
     reconciled = 0
-    for state_key, row in list(EARNINGS_SQUAD_STATES.items()):
+    rows = (
+        list(EARNINGS_SQUAD_STATES.items_with_status("running"))
+        if hasattr(EARNINGS_SQUAD_STATES, "items_with_status")
+        else list(EARNINGS_SQUAD_STATES.items())
+    )
+    for state_key, row in rows:
         if not isinstance(row, Mapping) or row.get("status") != "running":
             continue
         account_id = str(row.get("account_id") or "")
@@ -11237,7 +11242,14 @@ def _run_v3a_phase2c_for_subscription(
 def _reconcile_orphaned_call_audits() -> int:
     """Reconcile orphaned 'running'/'queued' V3a call audit operations after an API restart."""
     reconciled = 0
-    for op_id, row in list(V3A_CALL_AUDIT_STATES.items()):
+    if hasattr(V3A_CALL_AUDIT_STATES, "items_with_status"):
+        rows = [
+            *V3A_CALL_AUDIT_STATES.items_with_status("queued"),
+            *V3A_CALL_AUDIT_STATES.items_with_status("running"),
+        ]
+    else:
+        rows = list(V3A_CALL_AUDIT_STATES.items())
+    for op_id, row in rows:
         if not isinstance(row, Mapping) or row.get("status") not in ("queued", "running"):
             continue
         with _ACTIVE_CALL_AUDIT_LOCK:
