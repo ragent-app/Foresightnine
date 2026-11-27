@@ -1069,8 +1069,18 @@ def strip_html_preserving_tables(html: str) -> tuple[str, list[ParsedHtmlTable]]
 
 
 def _strip_html_preserving_tables_with_stats(html: str) -> tuple[str, list[ParsedHtmlTable], dict[str, int]]:
+    raw_html = html or ""
+    if len(raw_html) >= 512_000:
+        from ...research_memory_gate import heavy_memory_section
+
+        with heavy_memory_section():
+            return _strip_html_preserving_tables_with_stats_impl(raw_html)
+    return _strip_html_preserving_tables_with_stats_impl(raw_html)
+
+
+def _strip_html_preserving_tables_with_stats_impl(html: str) -> tuple[str, list[ParsedHtmlTable], dict[str, int]]:
     parser = _StructuredHtmlParser()
-    parser.feed(html or "")
+    parser.feed(html)
     parser.close()
 
     out_lines: list[str] = []

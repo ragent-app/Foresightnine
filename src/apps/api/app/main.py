@@ -2073,7 +2073,7 @@ def _delete_research_run_inputs(owner_id: str) -> None:
     for key, _ in owner_items(TURN_STATUS, owner_id):
         TURN_STATUS.delete(key)
     for repo in (RESEARCH_WORK, TURN_RECORDS, EARNINGS_SQUAD_STATES, EARNINGS_SQUAD_CHECKPOINTS,
-                 THESIS_LEDGERS, WATCH_SUBSCRIPTIONS, CHANGE_INBOX_ITEMS):
+                 THESIS_LEDGERS, WATCH_SUBSCRIPTIONS, CHANGE_INBOX_ITEMS, PEER_COMPARE_CACHE):
         for key, _record in list(account_items(repo, owner_id)):
             repo.delete(key)
     for key, _record in list(owner_items(RESEARCH_RUN_INPUTS, owner_id)):

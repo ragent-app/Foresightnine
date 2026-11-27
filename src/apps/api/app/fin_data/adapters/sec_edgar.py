@@ -930,7 +930,7 @@ class SecEdgarAdapter:
         return decision
 
     def _get(self, url: str, category: str, not_found_reason: str = "not_found", *, large: bool = False,
-             max_bytes: int | None = None):
+             max_bytes: int | None = None, stream_parser: Callable[[Any], Any] | None = None):
         gate = self._gate(category)
         if isinstance(gate, ToolResult):
             raise StopWith(gate)
@@ -951,7 +951,7 @@ class SecEdgarAdapter:
         doc, prov, cost = request_json(provider=PROVIDER, url=url, headers={"User-Agent": self._ua or ""},
                                        transport=transport, timeout=self._timeout, limiter=self._limiter,
                                        now_fn=self._now, not_found_reason=not_found_reason,
-                                       stream_transport=stream)
+                                       stream_transport=stream, stream_parser=stream_parser)
         return doc, prov, cost, gate
 
     # -- identity
@@ -1092,6 +1092,26 @@ class SecEdgarAdapter:
                           retrieved_at=self._now(), response_sha256=digest, endpoints=urls)
         return facts, prov, Cost(provider_calls=calls), gate
 
+    @staticmethod
+    def _all_standard_line_tags_by_taxonomy() -> dict[str, set[str]]:
+        us_tags: set[str] = set()
+        ifrs_tags: set[str] = set()
+        for spec in STANDARD_LINES.values():
+            us_tags.update(spec.tags.get("us-gaap") or ())
+            ifrs_tags.update(spec.tags.get("ifrs-full") or ())
+        return {"us-gaap": us_tags, "ifrs-full": ifrs_tags}
+
+    def _parse_companyfacts_stream(self, sink: Any) -> Any:
+        from ...research_memory_gate import heavy_memory_section
+        from ...research_peer_compare import extract_sliced_companyfacts_from_fh
+
+        with heavy_memory_section():
+            return extract_sliced_companyfacts_from_fh(
+                sink,
+                target_by_tax=self._all_standard_line_tags_by_taxonomy(),
+                parse_float=Decimal,
+            )
+
     def statement_lines(self, cik: str | int, *, lines: Iterable[str] | None = None, period: str = "quarter",
                         n: int = 8, derive_q4: bool = False, taxonomy: str = "us-gaap",
                         entity_id: str | None = None) -> ToolResult:
@@ -1115,9 +1135,11 @@ class SecEdgarAdapter:
                                   coverage=Coverage(entity_id=eid, rows=0),
                                   message="No requested line was reported under the standard tag mapping.")
         else:
+            stream_parser = self._parse_companyfacts_stream if self._stream is not None else None
             try:
                 doc, prov, cost, perms = self._get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{c}.json", "financials",
-                                                   "no_xbrl_facts", large=True, max_bytes=MAX_COMPANYFACTS_BYTES)
+                                                   "no_xbrl_facts", large=True, max_bytes=MAX_COMPANYFACTS_BYTES,
+                                                   stream_parser=stream_parser)
             except StopWith as stop:
                 if stop.result.reason == "source_too_large":
                     return ToolResult.failure(

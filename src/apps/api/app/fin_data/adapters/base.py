@@ -82,7 +82,8 @@ def request_json(*, provider: str, url: str, headers: Mapping[str, str], transpo
                  unknown_on_transport_error: bool = False, secrets: tuple[str, ...] = (),
                  not_found_reason: str = "not_found",
                  limiter_key: str | None = None,
-                 stream_transport: StreamTransport | None = None) -> tuple[Any, Provenance, Cost]:
+                 stream_transport: StreamTransport | None = None,
+                 stream_parser: Callable[[Any], Any] | None = None) -> tuple[Any, Provenance, Cost]:
     """Rate-limit, GET and parse JSON; raise ``StopWith`` carrying the failure envelope."""
     decision = limiter.acquire(limiter_key or provider, 1)
     if not decision.allowed:
@@ -111,13 +112,13 @@ def request_json(*, provider: str, url: str, headers: Mapping[str, str], transpo
                                           retryable=retry, cost=cost)) from None
     try:
         return _finish_json(response, sink, provider=provider, url=url, now_fn=now_fn, cost=cost,
-                            not_found_reason=not_found_reason)
+                            not_found_reason=not_found_reason, stream_parser=stream_parser)
     finally:
         if sink is not None:
             sink.close()
 
 
-def _finish_json(response, sink, *, provider, url, now_fn, cost, not_found_reason):
+def _finish_json(response, sink, *, provider, url, now_fn, cost, not_found_reason, stream_parser=None):
     code = response.status_code
     if code == 429:
         wait = retry_after(response.headers) or 60.0
@@ -139,7 +140,7 @@ def _finish_json(response, sink, *, provider, url, now_fn, cost, not_found_reaso
             digest.update(chunk)
         sink.seek(0)
         prov = Provenance(provider=provider, endpoint=url, retrieved_at=now_fn(), response_sha256=digest.hexdigest())
-        loader = lambda: json.load(sink, parse_float=Decimal)
+        loader = (lambda: stream_parser(sink)) if stream_parser is not None else (lambda: json.load(sink, parse_float=Decimal))
     else:
         body = response.body
         prov = Provenance(provider=provider, endpoint=url, retrieved_at=now_fn(), response_sha256=sha256(body).hexdigest())

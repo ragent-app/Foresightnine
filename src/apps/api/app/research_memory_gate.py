@@ -7,6 +7,8 @@ and trigger cgroup OOM kills.
 from __future__ import annotations
 
 from contextlib import contextmanager
+import ctypes
+import gc
 import os
 from threading import BoundedSemaphore
 from typing import Iterator
@@ -23,6 +25,14 @@ def _heavy_mem_concurrency() -> int:
     return 1
 
 
+def _release_unused_heap() -> None:
+    gc.collect()
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except Exception:
+        pass
+
+
 HEAVY_MEM_GATE = BoundedSemaphore(_heavy_mem_concurrency())
 
 
@@ -33,4 +43,5 @@ def heavy_memory_section() -> Iterator[None]:
     try:
         yield
     finally:
+        _release_unused_heap()
         HEAVY_MEM_GATE.release()
