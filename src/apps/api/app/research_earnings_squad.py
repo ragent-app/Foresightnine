@@ -6824,26 +6824,41 @@ class EarningsSquadOrchestrator:
             question=question,
         )
         user_prompt = _build_writer_payload(dossier_core, mode="memo")
-        call_id, before = ledger.admit_model_call("writer", stage="stage_3b_gate_memo")
-        t0 = monotonic()
-        failed = False
-        usage: ModelUsage | None = None
+        def _is_truncation_error(exc: Exception) -> bool:
+            return getattr(exc, "code", None) == "provider_output_truncated" or "truncated" in str(exc).lower()
+
+        def _invoke_writer(prompt_text: str, conv_suffix: str) -> tuple[str, bool]:
+            cid, before_state = ledger.admit_model_call("writer", stage="stage_3b_gate_memo")
+            started_at = monotonic()
+            call_failed = False
+            call_usage: ModelUsage | None = None
+            try:
+                resp = self._model_runner.invoke(SlotModelRequest(
+                    slot="writer",
+                    stage="stage_3b_gate_memo",
+                    role="writer",
+                    system_prompt=sys_prompt,
+                    user_prompt=prompt_text,
+                    messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": prompt_text}],
+                    tools=[],
+                    binding=self._slot_bindings["writer"],
+                    conversation_id=f"{run_id}:{conv_suffix}",
+                ))
+                call_usage = resp.usage
+                if resp.tool_calls:
+                    raise SquadToolViolationError("Stage 3B writer is not permitted to invoke retrieval tools.", stage="stage_3b_gate_memo")
+                return _extract_markdown_or_fallback(resp, dossier_core, mode="memo")
+            except Exception:
+                call_failed = True
+                raise
+            finally:
+                ledger.settle_model_call(
+                    "writer", cid, before_state, usage=call_usage,
+                    elapsed_ms=int((monotonic() - started_at) * 1000), failed=call_failed,
+                )
+
         try:
-            resp = self._model_runner.invoke(SlotModelRequest(
-                slot="writer",
-                stage="stage_3b_gate_memo",
-                role="writer",
-                system_prompt=sys_prompt,
-                user_prompt=user_prompt,
-                messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
-                tools=[],
-                binding=self._slot_bindings["writer"],
-                conversation_id=f"{run_id}:stage3b_memo",
-            ))
-            usage = resp.usage
-            if resp.tool_calls:
-                raise SquadToolViolationError("Stage 3B writer is not permitted to invoke retrieval tools.", stage="stage_3b_gate_memo")
-            memo_md, writer_fallback_used = _extract_markdown_or_fallback(resp, dossier_core, mode="memo")
+            memo_md, writer_fallback_used = _invoke_writer(user_prompt, "stage3b_memo")
             if writer_fallback_used:
                 all_gaps = _merge_gaps(all_gaps, [SquadGap(
                     stage="stage_3b_gate_memo",
@@ -6852,22 +6867,49 @@ class EarningsSquadOrchestrator:
                     message="Stage 3B Writer returned empty content; deterministic Markdown memo fallback used.",
                 )])
         except Exception as exc:
-            failed = True
-            emitter.emit(
-                stage="stage_3b_gate_memo",
-                node_id="dossier_writer",
-                action_kind="FAILED",
-                runtime_state="failed",
-                current_activity="Memo rendering failed at Stage 3B.",
-                blocker_text=str(exc),
-                slot="writer",
+            if not _is_truncation_error(exc):
+                emitter.emit(
+                    stage="stage_3b_gate_memo",
+                    node_id="dossier_writer",
+                    action_kind="FAILED",
+                    runtime_state="failed",
+                    current_activity="Memo rendering failed at Stage 3B.",
+                    blocker_text=str(exc),
+                    slot="writer",
+                )
+                raise
+            concise_prompt = (
+                user_prompt
+                + "\n\nIMPORTANT: Keep the memo concise (under 1,500 words) and avoid reproducing raw tables verbatim so it fits well within the output token limit."
             )
-            raise
-        finally:
-            ledger.settle_model_call(
-                "writer", call_id, before, usage=usage,
-                elapsed_ms=int((monotonic() - t0) * 1000), failed=failed,
-            )
+            try:
+                memo_md, writer_fallback_used = _invoke_writer(concise_prompt, "stage3b_memo_concise")
+                if writer_fallback_used:
+                    all_gaps = _merge_gaps(all_gaps, [SquadGap(
+                        stage="stage_3b_gate_memo",
+                        worker_role=None,
+                        code="stage3b_writer_fallback_used",
+                        message="Stage 3B Writer returned empty content on concise retry; deterministic Markdown memo fallback used.",
+                    )])
+            except Exception as retry_exc:
+                if not _is_truncation_error(retry_exc):
+                    emitter.emit(
+                        stage="stage_3b_gate_memo",
+                        node_id="dossier_writer",
+                        action_kind="FAILED",
+                        runtime_state="failed",
+                        current_activity="Memo rendering failed at Stage 3B concise retry.",
+                        blocker_text=str(retry_exc),
+                        slot="writer",
+                    )
+                    raise
+                memo_md = _deterministic_markdown_fallback(dossier_core, mode="memo")
+                all_gaps = _merge_gaps(all_gaps, [SquadGap(
+                    stage="stage_3b_gate_memo",
+                    worker_role=None,
+                    code="stage3b_writer_truncated_fallback",
+                    message="Stage 3B Writer output truncated at provider cap; deterministic Markdown memo fallback used.",
+                )])
 
         usage_summary = ledger.summary()
         dossier = EarningsDossier(
