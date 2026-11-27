@@ -106,6 +106,7 @@ class DeltaStage0Package(_FrozenDeltaModel):
     promise_delivery_rows: list[PromiseDeliveryRow] = Field(default_factory=list)
     flag_drifts: list[FlagDriftItem] = Field(default_factory=list)
     reverse_dcf_delta_bps: str | None = None
+    bank_metric_deltas: dict[str, dict[str, str | None]] = Field(default_factory=dict)
     evaluated_triggers: list[WatchTrigger] = Field(default_factory=list)
     triggered_count: int = 0
     redline_highlights: list[str] = Field(default_factory=list)
@@ -266,6 +267,27 @@ def compute_delta_stage0(
         )
 
     # 4. Evaluate deterministic metric_rule WatchTriggers
+    bank_metric_deltas: dict[str, dict[str, str | None]] = {}
+    bank_watch_keys = (
+        "cet1_buffer_bps",
+        "cet1_standardized_pct",
+        "rotce_q_pct",
+        "ppnr_gaap_q_usd",
+        "efficiency_ratio_gaap_pct",
+        "htm_loss_pct_of_tce",
+        "tbvps_reported_usd",
+    )
+    for bkey in bank_watch_keys:
+        old_b = _dec(prior_m.get(bkey))
+        new_b = _dec(obs_map.get(bkey))
+        if old_b is not None or new_b is not None:
+            diff_b = (new_b - old_b) if (old_b is not None and new_b is not None) else None
+            bank_metric_deltas[bkey] = {
+                "prior": format(old_b, "f") if old_b is not None else None,
+                "current": format(new_b, "f") if new_b is not None else None,
+                "delta": f"{diff_b:+.2f}" if diff_b is not None else None,
+            }
+
     evaluated_triggers: list[WatchTrigger] = []
     triggered_count = 0
     if ledger is not None:
@@ -294,6 +316,7 @@ def compute_delta_stage0(
         promise_delivery_rows=promise_rows,
         flag_drifts=drifts,
         reverse_dcf_delta_bps=rdcf_delta_bps,
+        bank_metric_deltas=bank_metric_deltas,
         evaluated_triggers=evaluated_triggers,
         triggered_count=triggered_count,
         redline_highlights=list(redline_highlights or [])[:12],

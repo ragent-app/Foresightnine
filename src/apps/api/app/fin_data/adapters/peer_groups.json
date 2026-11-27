@@ -58,8 +58,8 @@
     },
     {
       "group_id": "us_large_banks",
-      "name": "美股大型银行与投行（金融 SIC 门控）",
-      "symbols": ["JPM", "BAC", "WFC", "GS", "MS"]
+      "name": "美股大型银行与投行（V4a 银行插件）",
+      "symbols": ["JPM", "BAC", "WFC", "C", "GS", "MS"]
     }
   ],
   "fpi_adr_metadata": {

@@ -352,11 +352,61 @@ def build_thesis_draft_from_dossier(
             evidence_refs=list(dict.fromkeys(refs))[:8],
         )
 
-    # 3. Add deterministic Reverse-DCF valuation pillar if available and pillar uncovered
+    # 3. Add deterministic Reverse-DCF OR V4a Bank Gordon P/TBV valuation pillar if uncovered
     valuation = _to_mapping(snapshot.get("valuation"))
     rdcf = _to_mapping(valuation.get("reverse_dcf"))
     implied_cagr = _parse_decimal_safe(rdcf.get("implied_5y_fcf_cagr_pct"))
-    if implied_cagr is not None and "valuation" not in claims_by_pillar and len(claims_by_pillar) < 5:
+    bank_val = _to_mapping(snapshot.get("bank_valuation"))
+    bank_diag = _to_mapping(snapshot.get("bank_diagnostics"))
+    if bank_val and "valuation" not in claims_by_pillar and len(claims_by_pillar) < 5:
+        p_tbv = str(bank_val.get("p_to_tbv_primary") or "n/a")
+        imp_rotce = _parse_decimal_safe(bank_val.get("implied_rotce_pct"))
+        cur_rotce = _parse_decimal_safe(bank_val.get("current_rotce_pct"))
+        spread_pp = _parse_decimal_safe(bank_val.get("rotce_spread_vs_implied_pp"))
+        cet1_buf = _parse_decimal_safe(bank_diag.get("cet1_buffer_bps")) if bank_diag else None
+        triggers_b: list[WatchTrigger] = [
+            WatchTrigger(
+                trigger_id="trg_bank_val_rotce_spread",
+                kind="metric_rule",
+                description=(
+                    f"Bank ROTCE vs Gordon Implied ROTCE spread shifts >= 1.50pp "
+                    f"(baseline spread={spread_pp if spread_pp is not None else 'n/a'}pp, Ke={bank_val.get('coe_pct', '10.00')}%, g={bank_val.get('terminal_g_pct', '3.00')}%)"
+                ),
+                metric_key="peer_rotce_spread_pp",
+                operator="<=",
+                threshold_decimal="-1.50",
+                horizon="next_quarter",
+            ),
+        ]
+        if cet1_buf is not None:
+            triggers_b.append(
+                WatchTrigger(
+                    trigger_id="trg_bank_cet1_buffer",
+                    kind="metric_rule",
+                    description="CET1 standardized buffer compresses below 100 bps regulatory cushion",
+                    metric_key="cet1_buffer_bps",
+                    operator="<",
+                    threshold_decimal="100",
+                    horizon="next_quarter",
+                )
+            )
+        claims_by_pillar["valuation"] = ThesisClaim(
+            claim_id="clm_valuation_bank_gordon",
+            pillar="valuation",
+            statement=(
+                f"Bank trades at {p_tbv}x P/TBV (Reported Market Convention), implying {imp_rotce if imp_rotce is not None else 'n/a'}% "
+                f"sustainable ROTCE vs {cur_rotce if cur_rotce is not None else 'n/a'}% current ROTCE "
+                f"(CET1 buffer +{cet1_buf if cet1_buf is not None else 'n/a'} bps)."
+            ),
+            stance="bull" if (spread_pp is not None and spread_pp >= Decimal("1.50")) else ("cautious" if (spread_pp is not None and spread_pp <= Decimal("-1.50")) else "neutral"),
+            watch_triggers=triggers_b,
+            invalidation_condition=(
+                "CET1 standardized buffer drops below 100 bps, HTM overhang escalates to red, or sustainable ROTCE falls below Gordon implied ROTCE."
+            ),
+            status="active",
+            evidence_refs=[dossier_id] if dossier_id else [],
+        )
+    elif implied_cagr is not None and "valuation" not in claims_by_pillar and len(claims_by_pillar) < 5:
         cagr_str = f"{implied_cagr:.2f}"
         claims_by_pillar["valuation"] = ThesisClaim(
             claim_id="clm_valuation_rdcf",

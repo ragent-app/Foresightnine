@@ -12,10 +12,12 @@ The default policy denies the platform key.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from hashlib import sha256
+import json
 import math
 import re
-from datetime import date, datetime, timezone
 from time import monotonic
 from typing import Any, Callable, Literal, Mapping, Sequence
 
@@ -439,6 +441,34 @@ class CallQaVerificationRequest(BaseModel):
         return self
 
 
+class BankFundamentalsToolRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    symbol: str = Field(min_length=1, max_length=16, description='US ticker symbol to evaluate under V4a major bank rules.')
+    cik: str | None = Field(default=None, pattern=r'^\d{1,10}$')
+    as_of: date | None = Field(default=None, description='Optional point-in-time cutoff date (inclusive).')
+    cache_only: bool = Field(default=False, description='When true, read only from cached snapshots.')
+    rationale: str = Field(min_length=1, max_length=500, description='Why US bank fundamentals diagnostics are needed.')
+
+
+class BankValuationPeerToolRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    primary_symbol: str = Field(min_length=1, max_length=16, description='Primary US bank ticker symbol to value and benchmark.')
+    peer_symbols: list[str] | None = Field(
+        default=None,
+        max_length=5,
+        description='Optional 1-5 US bank peer tickers; omit to use curated us_large_banks peer group.',
+    )
+    tbvps_basis: Literal['reported_market_convention', 'xbrl_standardized'] = Field(
+        default='reported_market_convention',
+        description='Primary TBVPS convention for P/TBV and ROTCE.',
+    )
+    coe_pct: str = Field(default='10.0', max_length=16, description='Cost of equity assumption (%) for Gordon P/TBV benchmark.')
+    terminal_g_pct: str = Field(default='3.0', max_length=16, description='Long-term growth assumption (%) for Gordon P/TBV benchmark.')
+    as_of: date | None = Field(default=None, description='Optional point-in-time cutoff date (inclusive).')
+    cache_only: bool = Field(default=False, description='When true, read only from cached snapshots.')
+    rationale: str = Field(min_length=1, max_length=500, description='Why Gordon P/TBV and US bank peer benchmarking are needed.')
+
+
 # --------------------------------------------------------------------------- outcome
 @dataclass
 class FinToolOutcome:
@@ -531,6 +561,7 @@ class FinDataToolbox:
                  l1_cache: Any = None, sec_events_limiter: SecPacingLimiter | None = None,
                  peer_snapshot_cache: Any = None, def14a_snapshot_cache: Any = None,
                  guidance_ledger_cache: Any = None,
+                 bank_disclosure_cache: Any = None,
                  v3a_report_loader: Callable[[str | None, str | None, date | None], dict[str, Any] | None] | None = None) -> None:
         self.account_id, self._market_key = account_id, market_key or None
         self._owner = credential_owner if credential_owner in ('platform', 'user_byok') else 'user_byok'
@@ -560,6 +591,7 @@ class FinDataToolbox:
         self._peer_snapshot_cache = peer_snapshot_cache if peer_snapshot_cache is not None else l1_cache
         self._def14a_snapshot_cache = def14a_snapshot_cache
         self._guidance_ledger_cache = guidance_ledger_cache
+        self._bank_disclosure_cache = bank_disclosure_cache
         self._sec_events_limiter = sec_events_limiter
         self._v3a_report_loader = v3a_report_loader
 
@@ -1969,6 +2001,464 @@ class FinDataToolbox:
                 'source_id': source.source_id,
                 'title': source.title,
                 'report': report.model_dump(mode='json', exclude_none=True),
+            },
+            source=source,
+        )
+
+    def _latest_quote_usd_for_symbol(
+        self,
+        sym: str,
+        *,
+        ref_date: date,
+    ) -> tuple[Decimal | None, str | None, str | None]:
+        """Resolve latest closing USD price via TD BYOK or Yahoo fallback for deterministic valuation."""
+        start_d = ref_date - timedelta(days=10)
+        if self._market_key and self._owner:
+            try:
+                res = self._td(8.0).bars(sym, interval='1day', start=start_d, end=ref_date)
+                bars = [b for b in (res.data or ()) if getattr(b, 'close', None) is not None]
+                if bars:
+                    latest = max(bars, key=lambda b: getattr(b, 'ts_start', None) or datetime.min.replace(tzinfo=timezone.utc))
+                    ts_attr = getattr(latest, 'ts_start', None)
+                    p_date = ts_attr.date().isoformat() if isinstance(ts_attr, datetime) else ref_date.isoformat()
+                    return Decimal(str(latest.close)), p_date, 'twelve_data'
+            except Exception:
+                pass
+        try:
+            res = self._yahoo().bars(sym, interval='1day', start=start_d, end=ref_date)
+            bars = [b for b in (res.data or ()) if getattr(b, 'close', None) is not None]
+            if bars:
+                latest = max(bars, key=lambda b: getattr(b, 'ts_start', None) or datetime.min.replace(tzinfo=timezone.utc))
+                ts_attr = getattr(latest, 'ts_start', None)
+                p_date = ts_attr.date().isoformat() if isinstance(ts_attr, datetime) else ref_date.isoformat()
+                return Decimal(str(latest.close)), p_date, 'yahoo'
+        except Exception:
+            pass
+        return None, None, None
+
+    def bank_fundamentals_diagnostics_key(self, req: BankFundamentalsToolRequest) -> str:
+        return '|'.join([
+            'bank_fundamentals_diagnostics',
+            req.symbol.strip().upper(),
+            cik10(req.cik) if req.cik else '',
+            req.as_of.isoformat() if req.as_of else '',
+        ])
+
+    def bank_fundamentals_diagnostics(
+        self,
+        req: BankFundamentalsToolRequest,
+        entities: Mapping[str, Mapping[str, Any]] | None = None,
+    ) -> FinToolOutcome:
+        """Pure Layer 1 (0-LLM) V4a 5-pillar bank disclosure, HTM/CET1 stress & segment reconciliation tool."""
+        from .fin_data.adapters.sec_bank_disclosure import (
+            fetch_bank_disclosure_snapshot,
+            qualify_bank_sector_applicability,
+        )
+        from .fin_data.adapters.sec_events.pacing import fetch_company_submissions
+        from .research_bank_diagnostics import evaluate_bank_diagnostics
+        from .research_peer_compare import load_or_fetch_company_snapshot
+
+        blocked = self._sec_blocked()
+        if blocked:
+            return FinToolOutcome(blocked)
+        try:
+            self._reserve_call()
+        except Exception as err:
+            wait = getattr(err, 'retry_after', None)
+            return FinToolOutcome({
+                'status': 'rate_limited',
+                'reason': 'rate_limit',
+                'message': str(err),
+                'retryable': True,
+                **({'retry_after_seconds': float(wait)} if isinstance(wait, (int, float)) and wait > 0 else {}),
+            })
+
+        pol_perm = self._policy.decide('sec_edgar', 'filings')
+        if isinstance(pol_perm, Denied):
+            return FinToolOutcome({'status': 'denied', 'reason': pol_perm.reason, 'message': pol_perm.message})
+
+        sym = req.symbol.strip().upper()
+        events_limiter = self._sec_events_limiter or SecPacingLimiter.from_env()
+        try:
+            snap, _hit = load_or_fetch_company_snapshot(
+                symbol=sym,
+                cik=cik10(req.cik) if req.cik else None,
+                user_agent=self._sec_ua,
+                limiter=events_limiter,
+                snapshot_cache=self._peer_snapshot_cache,
+                min_projection_version=6,
+                cache_only=req.cache_only,
+                policy=self._policy,
+                transport=self._sec_transport,
+                stream_transport=self._sec_stream,
+            )
+        except SecPacingError as err:
+            return FinToolOutcome({'status': 'unavailable', 'reason': err.reason, 'message': str(err)})
+        if snap is None:
+            return FinToolOutcome({'status': 'unavailable', 'reason': 'sec_snapshot_unavailable', 'message': f'Could not load SEC snapshot for {sym}.'})
+
+        qual = qualify_bank_sector_applicability(sic=snap.sic, snap=snap, as_of=req.as_of)
+        if not qual.is_bank_v4a:
+            return FinToolOutcome({
+                'status': 'not_applicable',
+                'is_bank_v4a': False,
+                'symbol': sym,
+                'cik': snap.cik,
+                'sic': qual.sic,
+                'reason': qual.reason,
+                'message': f'{sym} does not qualify for V4a bank diagnostics ({qual.reason}).',
+            })
+
+        subs = None
+        if not req.cache_only:
+            try:
+                subs = fetch_company_submissions(
+                    snap.cik,
+                    user_agent=self._sec_ua,
+                    max_pages=0,
+                    limiter=events_limiter,
+                    policy=self._policy,
+                    transport=self._sec_transport,
+                )
+            except SecPacingError:
+                subs = None
+
+        disclosure, cache_hit = fetch_bank_disclosure_snapshot(
+            snap=snap,
+            user_agent=self._sec_ua or 'ForesightNine/1.0 research@foresightnine.local',
+            limiter=events_limiter,
+            bank_cache=self._bank_disclosure_cache,
+            submissions=subs,
+            as_of=req.as_of,
+            cache_only=req.cache_only,
+            policy=self._policy,
+            transport=self._sec_transport,
+            stream_transport=self._sec_stream,
+        )
+        if disclosure is None:
+            return FinToolOutcome({'status': 'unavailable', 'reason': 'bank_disclosure_unavailable', 'message': f'Could not load V4a bank disclosure for {sym}.'})
+
+        diag = evaluate_bank_diagnostics(disclosure, as_of=req.as_of)
+        seg_rows = (
+            [
+                *disclosure.segments.operating_segments,
+                *disclosure.segments.corporate_or_other,
+                *disclosure.segments.reconciling_items,
+            ]
+            if disclosure.segments is not None
+            else []
+        )
+        seg_lines = [
+            f"  - {r.display_name} [{r.reporting_basis}]: Rev={r.net_revenue_usd}, Pretax={r.pretax_income_usd}, NetInc={r.net_income_usd}, ROTCE={r.segment_roe_or_rotce_pct}%, Assets={r.total_assets_usd}"
+            for r in seg_rows[:16]
+        ]
+        flag_lines = [
+            f"  - [{f.severity.upper()}] {f.id}: {f.detail} (val={f.metric_value}, thresh={f.threshold})"
+            for f in diag.flags
+        ]
+        digest_lines = [
+            f"# {sym} (CIK {disclosure.cik}, {disclosure.bank_subtype}) V4a Bank Fundamentals & 5-Pillar Diagnostics",
+            f"Period End: {disclosure.period_end_date} | As Of: {diag.as_of} | Quality Light: {diag.bank_quality_light.upper()}",
+            f"CET1 Std={disclosure.cet1_standardized_pct}% | Min={disclosure.cet1_reg_min_pct}% | Buffer={diag.cet1_buffer_bps} bps | SLR={disclosure.slr_pct}%",
+            f"HTM NetPnL={disclosure.htm_net_unrealized_pnl_usd} | HTM/TCE={diag.htm_loss_pct_of_tce}% | AfterTax CET1 Hit={diag.htm_after_tax_cet1_hit_bps} bps | ProForma CET1 ex-HTM={diag.pro_forma_cet1_ex_htm_pct}%",
+            f"TBVPS Reported=${disclosure.tbvps_bridge.tbvps_reported_usd} | XBRL-Std=${disclosure.tbvps_bridge.tbvps_xbrl_std_usd} | Gap={disclosure.tbvps_bridge.tbvps_gap_pct}%",
+            f"Efficiency GAAP={diag.efficiency_ratio_gaap_pct}% | Managed={diag.efficiency_ratio_managed_pct}% | ROTCE Q={diag.rotce_q_pct}% | PPNR Margin={diag.ppnr_margin_pct}% | ACL/Loans={diag.acl_to_loans_pct}% | LDR={diag.ldr_pct}% | Deposits QoQ={diag.deposits_qoq_pct}%",
+            f"Segments Status: {disclosure.segments.reconciliation_status if disclosure.segments else 'unavailable'} ({disclosure.segments.accession if disclosure.segments else 'none'})",
+            *seg_lines,
+            "Flags:",
+            *flag_lines,
+        ]
+        digest_text = "\n".join(digest_lines)
+        digest_sha = sha256(digest_text.encode('utf-8')).hexdigest()
+        ref_date = req.as_of or self._now().date()
+        pub_dt = datetime(ref_date.year, ref_date.month, ref_date.day, tzinfo=timezone.utc)
+        sub_url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{disclosure.cik}.json"
+        prov_meta = {
+            'provider': 'sec_edgar',
+            'endpoint': sub_url,
+            'credential_owner': 'platform_public_data',
+            'provider_response_sha256': digest_sha,
+            'retrieved_at': self._now().isoformat(),
+            'permissions': pol_perm.model_dump(mode='json'),
+            'bank_subtype': disclosure.bank_subtype,
+            'cache_hit': cache_hit,
+        }
+        try:
+            source = self._persist(
+                SourceInput(
+                    title=f"{sym} V4a Bank 5-Pillar Diagnostics & Segment Reconciliation ({disclosure.period_end_date})",
+                    text=digest_text,
+                    url=sub_url,
+                    kind='official',
+                    published_at=pub_dt,
+                    permissions=self._source_permissions(pol_perm),
+                ),
+                retrieval_method='bank_fundamentals_diagnostics',
+                response_sha256=digest_sha,
+                response_content_type='text/plain',
+                provenance=prov_meta,
+            )
+        except (ValueError, ValidationError):
+            return FinToolOutcome({'status': 'denied', 'reason': 'source_not_storable'})
+
+        return FinToolOutcome(
+            {
+                'status': 'ok',
+                'is_bank_v4a': True,
+                'source_id': source.source_id,
+                'title': source.title,
+                'bank_subtype': disclosure.bank_subtype,
+                'diagnostics': diag.model_dump(mode='json', exclude_none=True),
+                'segments': disclosure.segments.model_dump(mode='json', exclude_none=True) if disclosure.segments else None,
+                'tbvps_bridge': disclosure.tbvps_bridge.model_dump(mode='json', exclude_none=True),
+            },
+            source=source,
+        )
+
+    def bank_valuation_and_peer_compare_key(self, req: BankValuationPeerToolRequest) -> str:
+        peers = ','.join(sorted(s.strip().upper() for s in (req.peer_symbols or []) if s.strip()))
+        return '|'.join([
+            'bank_valuation_and_peer_compare',
+            req.primary_symbol.strip().upper(),
+            peers,
+            req.tbvps_basis,
+            str(req.coe_pct),
+            str(req.terminal_g_pct),
+            req.as_of.isoformat() if req.as_of else '',
+        ])
+
+    def bank_valuation_and_peer_compare(
+        self,
+        req: BankValuationPeerToolRequest,
+        entities: Mapping[str, Mapping[str, Any]] | None = None,
+    ) -> FinToolOutcome:
+        """Pure Layer 1 (0-LLM) V4a Gordon P/TBV vs ROTCE valuation & US bank peer benchmarking tool."""
+        from .fin_data.adapters.sec_bank_disclosure import (
+            fetch_bank_disclosure_snapshot,
+            qualify_bank_sector_applicability,
+        )
+        from .research_bank_diagnostics import evaluate_bank_diagnostics, evaluate_bank_valuation
+        from .research_peer_compare import (
+            PeerBankMetrics,
+            assemble_bank_peer_matrix,
+            compute_company_metrics_from_snapshot,
+            load_or_fetch_company_snapshot,
+            load_peer_groups_config,
+            suggest_peers_for_symbol,
+        )
+
+        blocked = self._sec_blocked()
+        if blocked:
+            return FinToolOutcome(blocked)
+        try:
+            self._reserve_call()
+        except Exception as err:
+            wait = getattr(err, 'retry_after', None)
+            return FinToolOutcome({
+                'status': 'rate_limited',
+                'reason': 'rate_limit',
+                'message': str(err),
+                'retryable': True,
+                **({'retry_after_seconds': float(wait)} if isinstance(wait, (int, float)) and wait > 0 else {}),
+            })
+
+        pol_perm = self._policy.decide('sec_edgar', 'financials')
+        if isinstance(pol_perm, Denied):
+            return FinToolOutcome({'status': 'denied', 'reason': pol_perm.reason, 'message': pol_perm.message})
+
+        prim = req.primary_symbol.strip().upper()
+        peers = [s.strip().upper() for s in (req.peer_symbols or []) if s.strip()]
+        if not peers:
+            sugg = suggest_peers_for_symbol(prim)
+            peers = list(sugg.recommended_peers)[:5]
+        symbols = list(dict.fromkeys([prim, *peers]))[:6]
+        if len(symbols) < 2:
+            return FinToolOutcome({'status': 'failed', 'reason': 'invalid_request', 'message': 'Need at least 2 unique bank tickers.'})
+
+        coe_dec = Decimal(str(req.coe_pct))
+        g_dec = Decimal(str(req.terminal_g_pct))
+        if coe_dec <= g_dec:
+            return FinToolOutcome({'status': 'failed', 'reason': 'invalid_gordon_params', 'message': 'coe_pct must be strictly greater than terminal_g_pct.'})
+
+        events_limiter = self._sec_events_limiter or SecPacingLimiter.from_env()
+        _curated, fpi_meta_map = load_peer_groups_config()
+        ref_date = req.as_of or self._now().date()
+
+        legacy_rows = []
+        bank_rows: list[PeerBankMetrics] = []
+        primary_val = None
+        non_bank_syms: list[str] = []
+
+        for sym in symbols:
+            try:
+                snap, _hit = load_or_fetch_company_snapshot(
+                    symbol=sym,
+                    user_agent=self._sec_ua,
+                    limiter=events_limiter,
+                    snapshot_cache=self._peer_snapshot_cache,
+                    min_projection_version=6,
+                    cache_only=req.cache_only,
+                    transport=self._sec_transport,
+                    stream_transport=self._sec_stream,
+                    policy=self._policy,
+                )
+            except SecPacingError:
+                continue
+            if snap is None:
+                continue
+            qual = qualify_bank_sector_applicability(sic=snap.sic, snap=snap, as_of=req.as_of)
+            if not qual.is_bank_v4a:
+                non_bank_syms.append(f"{sym} ({qual.reason})")
+                continue
+            p_dec, p_date, p_src = self._latest_quote_usd_for_symbol(sym, ref_date=ref_date)
+            legacy_rows.append(
+                compute_company_metrics_from_snapshot(
+                    snap,
+                    price_usd=p_dec,
+                    price_as_of_date=p_date,
+                    price_source=p_src,
+                    as_of=req.as_of,
+                    fpi_meta=fpi_meta_map.get(sym),
+                )
+            )
+            disclosure, _bhit = fetch_bank_disclosure_snapshot(
+                snap=snap,
+                user_agent=self._sec_ua or 'ForesightNine/1.0 research@foresightnine.local',
+                limiter=events_limiter,
+                bank_cache=self._bank_disclosure_cache,
+                as_of=req.as_of,
+                cache_only=req.cache_only,
+                policy=self._policy,
+                transport=self._sec_transport,
+                stream_transport=self._sec_stream,
+            )
+            if disclosure is None:
+                continue
+            diag = evaluate_bank_diagnostics(disclosure, as_of=req.as_of)
+            val = evaluate_bank_valuation(
+                disclosure,
+                price_usd=p_dec,
+                coe_pct=coe_dec,
+                terminal_g_pct=g_dec,
+                tbvps_basis=req.tbvps_basis,
+                as_of=req.as_of,
+            )
+            if sym == prim:
+                primary_val = val
+            bank_rows.append(PeerBankMetrics(
+                symbol=sym,
+                cik=disclosure.cik,
+                company_name=disclosure.company_name,
+                sic=disclosure.sic,
+                bank_subtype=disclosure.bank_subtype,
+                period_end_date=disclosure.period_end_date,
+                fiscal_period_label=disclosure.fiscal_period_label,
+                bank_quality_light=diag.bank_quality_light,
+                price_usd=val.price_usd,
+                market_cap_usd=val.market_cap_usd,
+                tbvps_reported_usd=disclosure.tbvps_bridge.tbvps_reported_usd,
+                tbvps_xbrl_std_usd=disclosure.tbvps_bridge.tbvps_xbrl_std_usd,
+                tbvps_primary_usd=(
+                    disclosure.tbvps_bridge.tbvps_xbrl_std_usd
+                    if val.primary_tbvps_basis in ("xbrl_standardized", "xbrl_std_fallback")
+                    else disclosure.tbvps_bridge.tbvps_reported_usd
+                ),
+                tbvps_basis=val.primary_tbvps_basis,
+                tbvps_gap_pct=disclosure.tbvps_bridge.tbvps_gap_pct,
+                p_to_tbv_primary=val.p_to_tbv_primary,
+                p_to_tbv_xbrl_std=val.p_to_tbv_xbrl_std,
+                p_to_bv=val.p_to_bv,
+                p_to_e_ttm=val.p_to_e_ttm,
+                p_to_ppnr_ttm=val.p_to_ppnr_ttm,
+                rotce_q_pct=diag.rotce_q_pct,
+                implied_rotce_pct=val.implied_rotce_pct,
+                rotce_spread_vs_implied_pp=val.rotce_spread_vs_implied_pp,
+                efficiency_ratio_gaap_pct=diag.efficiency_ratio_gaap_pct,
+                ppnr_margin_pct=diag.ppnr_margin_pct,
+                nii_share_pct=diag.nii_share_pct,
+                cet1_standardized_pct=disclosure.cet1_standardized_pct,
+                cet1_reg_min_pct=disclosure.cet1_reg_min_pct,
+                cet1_buffer_bps=diag.cet1_buffer_bps,
+                htm_loss_pct_of_tce=diag.htm_loss_pct_of_tce,
+                pro_forma_cet1_ex_htm_pct=diag.pro_forma_cet1_ex_htm_pct,
+                provision_to_ppnr_pct=diag.provision_to_ppnr_pct,
+            ))
+
+        if non_bank_syms:
+            return FinToolOutcome({
+                'status': 'failed',
+                'reason': 'financial_sic_mixed',
+                'message': f"US bank peer comparison requires all peers to pass V4a bank qualification; non-bank issuers: {', '.join(non_bank_syms)}",
+            })
+        if len(bank_rows) < 2:
+            return FinToolOutcome({'status': 'unavailable', 'reason': 'sec_snapshots_unavailable', 'message': 'Could not load at least 2 qualified V4a bank snapshots.'})
+
+        matrix = assemble_bank_peer_matrix(
+            primary_symbol=prim,
+            rows=legacy_rows,
+            bank_rows=bank_rows,
+            tbvps_display_mode=req.tbvps_basis,
+            coe_pct=coe_dec,
+            terminal_g_pct=g_dec,
+            as_of=req.as_of,
+        )
+        lines_txt = [
+            f"# V4a US Major Bank Peer Valuation Matrix ({prim} vs {', '.join(b.symbol for b in bank_rows if b.symbol != prim)})",
+            f"Summary: {matrix.primary_coordinate_summary}",
+            f"Gordon Assumptions: {matrix.bank_gordon_assumptions} | TBVPS Mode: {matrix.tbvps_display_mode}",
+            "",
+        ]
+        for b in matrix.bank_companies:
+            lines_txt.append(
+                f"- {b.symbol} ({b.bank_subtype}, {b.period_end_date}, light={b.bank_quality_light}): "
+                f"Px=${b.price_usd} | P/TBV={b.p_to_tbv_primary}x (XBRL-Std={b.p_to_tbv_xbrl_std}x) | "
+                f"ROTCE={b.rotce_q_pct}% | ImpliedROTCE={b.implied_rotce_pct}% | Spread={b.rotce_spread_vs_implied_pp}pp | "
+                f"CET1={b.cet1_standardized_pct}% (+{b.cet1_buffer_bps}bps) | HTM/TCE={b.htm_loss_pct_of_tce}% | "
+                f"PF_CET1={b.pro_forma_cet1_ex_htm_pct}% | Eff={b.efficiency_ratio_gaap_pct}%"
+            )
+        lines_txt.append("")
+        lines_txt.append(f"## Bank Peer Medians: {json.dumps(matrix.bank_peer_medians, ensure_ascii=False)}")
+        digest_text = "\n".join(lines_txt)
+        digest_sha = sha256(digest_text.encode('utf-8')).hexdigest()
+        pub_dt = datetime(ref_date.year, ref_date.month, ref_date.day, tzinfo=timezone.utc)
+        sub_url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{bank_rows[0].cik}.json"
+        prov_meta = {
+            'provider': 'sec_edgar',
+            'endpoint': sub_url,
+            'credential_owner': 'platform_public_data',
+            'provider_response_sha256': digest_sha,
+            'retrieved_at': self._now().isoformat(),
+            'permissions': pol_perm.model_dump(mode='json'),
+        }
+        try:
+            source = self._persist(
+                SourceInput(
+                    title=f"{prim} US Major Bank Gordon P/TBV & Peer Benchmark ({', '.join(b.symbol for b in bank_rows)})",
+                    text=digest_text,
+                    url=sub_url,
+                    kind='official',
+                    published_at=pub_dt,
+                    permissions=self._source_permissions(pol_perm),
+                ),
+                retrieval_method='bank_valuation_and_peer_compare',
+                response_sha256=digest_sha,
+                response_content_type='text/plain',
+                provenance=prov_meta,
+            )
+        except (ValueError, ValidationError):
+            return FinToolOutcome({'status': 'denied', 'reason': 'source_not_storable'})
+
+        return FinToolOutcome(
+            {
+                'status': 'ok',
+                'source_id': source.source_id,
+                'title': source.title,
+                'primary_symbol': matrix.primary_symbol,
+                'primary_coordinate_summary': matrix.primary_coordinate_summary,
+                'bank_peer_medians': matrix.bank_peer_medians,
+                'bank_gordon_assumptions': matrix.bank_gordon_assumptions,
+                'primary_valuation': primary_val.model_dump(mode='json', exclude_none=True) if primary_val else None,
+                'bank_companies': [b.model_dump(mode='json', exclude_none=True) for b in matrix.bank_companies],
             },
             source=source,
         )

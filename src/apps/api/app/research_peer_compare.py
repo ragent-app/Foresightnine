@@ -367,6 +367,46 @@ class PeerCompanyMetrics(_FrozenPeerModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class PeerBankMetrics(_FrozenPeerModel):
+    """V4a deterministic US Large Bank / BHC peer comparison row."""
+
+    symbol: str
+    cik: str
+    company_name: str | None = None
+    sic: str | None = None
+    bank_subtype: str = "universal_commercial"
+    period_end_date: str | None = None
+    fiscal_period_label: str | None = None
+    price_usd: str | None = None
+    market_cap_usd: str | None = None
+    tbvps_reported_usd: str | None = None
+    tbvps_xbrl_std_usd: str | None = None
+    tbvps_primary_usd: str | None = None
+    tbvps_basis: str = "reported_market_convention"
+    tbvps_gap_pct: str | None = None
+    p_to_tbv_primary: str | None = None
+    p_to_tbv_xbrl_std: str | None = None
+    p_to_bv: str | None = None
+    p_to_e_ttm: str | None = None
+    p_to_ppnr_ttm: str | None = None
+    rotce_q_pct: str | None = None
+    implied_rotce_pct: str | None = None
+    rotce_spread_vs_implied_pp: str | None = None
+    efficiency_ratio_gaap_pct: str | None = None
+    ppnr_margin_pct: str | None = None
+    nii_share_pct: str | None = None
+    cet1_standardized_pct: str | None = None
+    cet1_reg_min_pct: str | None = None
+    cet1_buffer_bps: str | None = None
+    htm_loss_pct_of_tce: str | None = None
+    pro_forma_cet1_ex_htm_pct: str | None = None
+    provision_to_ppnr_pct: str | None = None
+    bank_quality_light: QualityLight = "green"
+    ranks: dict[str, int] = Field(default_factory=dict)
+    vs_median: dict[str, str] = Field(default_factory=dict)
+    notes: list[str] = Field(default_factory=list)
+
+
 class PeerComparisonMatrix(_FrozenPeerModel):
     """Complete 0-LLM Layer 1 peer comparison output."""
 
@@ -375,8 +415,13 @@ class PeerComparisonMatrix(_FrozenPeerModel):
     as_of: str | None = None
     exclude_non_comparable_from_median: bool = True
     reverse_dcf_assumptions: str = "Uniform WACC 10.0% / Terminal Growth 3.0% / 5Y explicit horizon (excludes company-specific beta)"
+    comparison_mode: Literal["corporate_industrial", "us_large_banks"] = "corporate_industrial"
     companies: list[PeerCompanyMetrics] = Field(default_factory=list)
     peer_medians: dict[str, str | None] = Field(default_factory=dict)
+    bank_companies: list[PeerBankMetrics] | None = None
+    bank_peer_medians: dict[str, str | None] | None = None
+    bank_gordon_assumptions: str | None = None
+    tbvps_display_mode: Literal["reported_market_convention", "xbrl_standardized"] = "reported_market_convention"
     comparability_warnings: list[ComparabilityWarning] = Field(default_factory=list)
     primary_coordinate_summary: str = ""
     # Stable WatchTrigger metric_keys pre-wired for Direction B ThesisLedger
@@ -713,7 +758,9 @@ def load_or_fetch_company_snapshot(
     Returns ``(snapshot, cache_hit)``.
     """
     sym_u = symbol.strip().upper()
-    if cache_only and snapshot_cache is not None:
+    if cache_only:
+        if snapshot_cache is None:
+            return None, False
         if cik:
             hit = snapshot_cache.get(f"snap:{cik10(cik)}")
             if isinstance(hit, Mapping):
@@ -1524,21 +1571,139 @@ def assemble_peer_matrix(
 
 # --------------------------------------------------------------------------- Layer 2 Optional AI Attribution Brief
 
+_BANK_HIGHER_IS_BETTER: tuple[str, ...] = (
+    "rotce_q_pct",
+    "ppnr_margin_pct",
+    "cet1_buffer_bps",
+    "rotce_spread_vs_implied_pp",
+)
+_BANK_LOWER_IS_CHEAPER: tuple[str, ...] = (
+    "p_to_tbv_primary",
+    "p_to_e_ttm",
+    "p_to_ppnr_ttm",
+    "efficiency_ratio_gaap_pct",
+    "htm_loss_pct_of_tce",
+    "implied_rotce_pct",
+)
+
+
+def assemble_bank_peer_matrix(
+    *,
+    primary_symbol: str,
+    rows: Sequence[PeerCompanyMetrics],
+    bank_rows: Sequence[PeerBankMetrics],
+    tbvps_display_mode: Literal["reported_market_convention", "xbrl_standardized"] = "reported_market_convention",
+    coe_pct: Decimal = Decimal("10.0"),
+    terminal_g_pct: Decimal = Decimal("3.0"),
+    as_of: date | None = None,
+    exclude_non_comparable_from_median: bool = True,
+    cache_hits: int = 0,
+    cache_misses: int = 0,
+    elapsed_ms: int = 0,
+    extra_warnings: Sequence[ComparabilityWarning] = (),
+) -> PeerComparisonMatrix:
+    """Assemble V4a ``us_large_banks`` PeerComparisonMatrix keeping minimal legacy ``companies`` rows."""
+    base = assemble_peer_matrix(
+        primary_symbol=primary_symbol,
+        rows=rows,
+        as_of=as_of,
+        exclude_non_comparable_from_median=exclude_non_comparable_from_median,
+        cache_hits=cache_hits,
+        cache_misses=cache_misses,
+        elapsed_ms=elapsed_ms,
+    )
+    prim_u = primary_symbol.strip().upper()
+    all_keys = (*_BANK_HIGHER_IS_BETTER, *_BANK_LOWER_IS_CHEAPER)
+    medians_dec: dict[str, Decimal | None] = {}
+    medians_str: dict[str, str | None] = {}
+    for mk in all_keys:
+        vals = [d for r in bank_rows if (d := _dec(getattr(r, mk, None))) is not None]
+        med = _median_decimal(vals)
+        medians_dec[mk] = med
+        medians_str[mk] = _fmt_dec(med, 0 if mk == "cet1_buffer_bps" else 2)
+
+    enriched_bank: list[PeerBankMetrics] = []
+    for br in bank_rows:
+        ranks: dict[str, int] = {}
+        vs_med: dict[str, str] = {}
+        for mk in all_keys:
+            rv = _dec(getattr(br, mk, None))
+            if rv is None:
+                continue
+            pool = [(p.symbol, d) for p in bank_rows if (d := _dec(getattr(p, mk, None))) is not None]
+            pool.sort(key=lambda x: x[1], reverse=(mk in _BANK_HIGHER_IS_BETTER))
+            for idx, (sk, _v) in enumerate(pool, 1):
+                if sk == br.symbol:
+                    ranks[mk] = idx
+                    break
+            med = medians_dec.get(mk)
+            if med is not None:
+                diff = rv - med
+                vs_med[mk] = f"{diff:+.0f}" if mk == "cet1_buffer_bps" else f"{diff:+.2f}"
+        enriched_bank.append(br.model_copy(update={"ranks": ranks, "vs_median": vs_med}))
+
+    prim_b = next((r for r in enriched_bank if r.symbol == prim_u), enriched_bank[0] if enriched_bank else None)
+    coord_bits: list[str] = []
+    trig: dict[str, str | None] = {
+        "peer_ptbv_vs_median_x": None,
+        "peer_rotce_spread_pp": None,
+        "peer_cet1_buffer_bps": None,
+    }
+    if prim_b is not None:
+        n_b = len(enriched_bank)
+        if prim_b.p_to_tbv_primary is not None:
+            rk_p = prim_b.ranks.get("p_to_tbv_primary")
+            trig["peer_ptbv_vs_median_x"] = prim_b.vs_median.get("p_to_tbv_primary")
+            coord_bits.append(f"P/TBV {prim_b.p_to_tbv_primary}x（第 {rk_p}/{n_b}）")
+        if prim_b.rotce_q_pct is not None:
+            rk_r = prim_b.ranks.get("rotce_q_pct")
+            trig["peer_rotce_spread_pp"] = prim_b.rotce_spread_vs_implied_pp
+            coord_bits.append(f"ROTCE {prim_b.rotce_q_pct}%（第 {rk_r}/{n_b}，隐含 {prim_b.implied_rotce_pct or 'n/a'}%）")
+        if prim_b.cet1_buffer_bps is not None:
+            trig["peer_cet1_buffer_bps"] = prim_b.cet1_buffer_bps
+            coord_bits.append(f"CET1缓冲 +{prim_b.cet1_buffer_bps} bps")
+
+    combined_warnings = list(base.comparability_warnings) + list(extra_warnings)
+    return base.model_copy(
+        update={
+            "comparison_mode": "us_large_banks",
+            "bank_companies": enriched_bank,
+            "bank_peer_medians": medians_str,
+            "bank_gordon_assumptions": (
+                f"Gordon P/TBV=(ROTCE-g)/(K_e-g) | Uniform K_e={_fmt_dec(coe_pct, 1)}%, "
+                f"g={_fmt_dec(terminal_g_pct, 1)}%, TBVPS={tbvps_display_mode}"
+            ),
+            "tbvps_display_mode": tbvps_display_mode,
+            "comparability_warnings": combined_warnings,
+            "primary_coordinate_summary": " · ".join(coord_bits) or base.primary_coordinate_summary,
+            "primary_watch_trigger_metrics": trig,
+        }
+    )
+
+
 def _verify_cited_metrics(
     cited: Sequence[PeerCitedMetric],
     matrix: PeerComparisonMatrix,
 ) -> tuple[list[PeerCitedMetric], int]:
     """Deterministically verify every LLM-cited metric against the Layer 1 matrix."""
     by_sym = {c.symbol.upper(): c for c in matrix.companies}
+    bank_by_sym = {b.symbol.upper(): b for b in (matrix.bank_companies or [])}
     verified_list: list[PeerCitedMetric] = []
     ok_count = 0
     for cm in cited:
         sym_key = cm.symbol.strip().upper()
         if sym_key in ("PEER_MEDIAN", "MEDIAN"):
-            actual_raw = matrix.peer_medians.get(cm.metric_key)
+            actual_raw = (
+                (matrix.bank_peer_medians or {}).get(cm.metric_key)
+                if matrix.comparison_mode == "us_large_banks"
+                else None
+            ) or matrix.peer_medians.get(cm.metric_key)
         else:
-            row = by_sym.get(sym_key)
-            actual_raw = getattr(row, cm.metric_key, None) if row is not None else None
+            b_row = bank_by_sym.get(sym_key) if matrix.comparison_mode == "us_large_banks" else None
+            actual_raw = getattr(b_row, cm.metric_key, None) if b_row is not None else None
+            if actual_raw is None:
+                row = by_sym.get(sym_key)
+                actual_raw = getattr(row, cm.metric_key, None) if row is not None else None
         ok = False
         if actual_raw is not None:
             a_dec = _dec(actual_raw)
@@ -1562,10 +1727,13 @@ def generate_peer_attribution_brief(
     max_repairs: int = 1,
 ) -> PeerAttributionBrief:
     """On-demand single-turn LLM attribution grounded strictly in the Layer 1 matrix."""
-    compact_payload = {
+    compact_payload: dict[str, Any] = {
         "primary_symbol": matrix.primary_symbol,
+        "comparison_mode": matrix.comparison_mode,
         "primary_coordinate_summary": matrix.primary_coordinate_summary,
         "reverse_dcf_assumptions": matrix.reverse_dcf_assumptions,
+        "bank_gordon_assumptions": matrix.bank_gordon_assumptions,
+        "tbvps_display_mode": matrix.tbvps_display_mode,
         "comparability_warnings": [
             {"code": w.code, "severity": w.severity, "symbols": w.symbols, "message": w.message}
             for w in matrix.comparability_warnings
@@ -1597,6 +1765,32 @@ def generate_peer_attribution_brief(
             for c in matrix.companies
         ],
     }
+    if matrix.comparison_mode == "us_large_banks" and matrix.bank_companies:
+        compact_payload["bank_peer_medians"] = {k: v for k, v in (matrix.bank_peer_medians or {}).items() if v is not None}
+        compact_payload["bank_companies"] = [
+            {
+                "symbol": b.symbol,
+                "bank_subtype": b.bank_subtype,
+                "period_end_date": b.period_end_date,
+                "price_usd": b.price_usd,
+                "tbvps_reported_usd": b.tbvps_reported_usd,
+                "tbvps_xbrl_std_usd": b.tbvps_xbrl_std_usd,
+                "p_to_tbv_primary": b.p_to_tbv_primary,
+                "p_to_e_ttm": b.p_to_e_ttm,
+                "p_to_ppnr_ttm": b.p_to_ppnr_ttm,
+                "rotce_q_pct": b.rotce_q_pct,
+                "implied_rotce_pct": b.implied_rotce_pct,
+                "rotce_spread_vs_implied_pp": b.rotce_spread_vs_implied_pp,
+                "efficiency_ratio_gaap_pct": b.efficiency_ratio_gaap_pct,
+                "cet1_standardized_pct": b.cet1_standardized_pct,
+                "cet1_reg_min_pct": b.cet1_reg_min_pct,
+                "cet1_buffer_bps": b.cet1_buffer_bps,
+                "htm_loss_pct_of_tce": b.htm_loss_pct_of_tce,
+                "pro_forma_cet1_ex_htm_pct": b.pro_forma_cet1_ex_htm_pct,
+                "bank_quality_light": b.bank_quality_light,
+            }
+            for b in matrix.bank_companies
+        ]
     matrix_json = json.dumps(compact_payload, ensure_ascii=False, separators=(",", ":"))
     system_prompt = (
         "You are a buy-side Relative Valuation & Peer Comparison Analyst.\n"

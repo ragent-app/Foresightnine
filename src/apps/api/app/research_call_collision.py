@@ -54,7 +54,7 @@ from .research_transcript_parser import (
 # --------------------------------------------------------------------------- Shared Enums & Helpers
 
 CollisionSeverity = Literal["red", "yellow", "green", "info", "not_applicable"]
-BasisType = Literal["gaap", "non_gaap", "operating_kpi", "unknown", "inherited_call_default"]
+BasisType = Literal["gaap", "non_gaap", "fte_managed", "operating_kpi", "unknown", "inherited_call_default"]
 ClaimScope = Literal["consolidated", "segment", "product_line", "geography"]
 ConfidentialityPolicyKind = Literal["none", "strict_nda_legal", "segment_disclosure_policy"]
 PeriodScope = Literal["single_quarter", "ytd", "full_year", "ttm", "multi_year", "point_in_time", "unspecified"]
@@ -98,6 +98,7 @@ EvasionSubtype = Literal[
 ]
 LedgerMatchStatus = Literal[
     "same_period_10q_matched",
+    "bank_v4a_matched",
     "awaiting_current_10q_using_8k_and_prior_10q",
     "fpi_20f_6k_limited",
     "financial_sic_gated",
@@ -132,12 +133,17 @@ _SCALE_MULTIPLIERS: dict[str, Decimal] = {
     "exact": Decimal("1"),
     "thousands": Decimal("1000"),
     "thousand": Decimal("1000"),
+    "usd_thousands": Decimal("1000"),
     "k": Decimal("1000"),
     "millions": Decimal("1000000"),
     "million": Decimal("1000000"),
+    "usd_millions": Decimal("1000000"),
+    "$m": Decimal("1000000"),
     "m": Decimal("1000000"),
     "billions": Decimal("1000000000"),
     "billion": Decimal("1000000000"),
+    "usd_billions": Decimal("1000000000"),
+    "$b": Decimal("1000000000"),
     "b": Decimal("1000000000"),
     "trillions": Decimal("1000000000000"),
     "percent": Decimal("1"),
@@ -333,6 +339,8 @@ class Sec10QCollisionLedger(_StrictV3aModel):
     sic: str | None = None
     sector_category: str = "non_financial"
     is_financial_gated: bool = False
+    active_sector_plugin: str | None = None
+    bank_disclosure: dict[str, Any] | None = None
     accounting_standard: str = "us-gaap"
     currency: str = "USD"
     # Four-timestamp availability contract (R2-D2 / ICAIF '26)
@@ -1406,6 +1414,8 @@ def build_sec_10q_collision_ledger(
     cached_initial_10q_accession: str | None = None,
     cached_initial_10q_filed_at: str | None = None,
     cached_period_end_date: str | None = None,
+    bank_disclosure: Any | None = None,
+    active_sector_plugin: str | None = None,
     rules: CompiledV3aRules | None = None,
 ) -> Sec10QCollisionLedger:
     """Build deterministic Layer 1 ``Sec10QCollisionLedger`` aligned to Period ``P`` initial filing basis."""
@@ -1455,13 +1465,32 @@ def build_sec_10q_collision_ledger(
                 period_end = c_end
             anchor["awaiting_10q"] = False
 
+    is_awaiting = bool(anchor["awaiting_10q"])
+    is_fpi_limited = bool(snap.taxonomy == "ifrs-full" and period_end is None)
     open_gaps: list[str] = []
-    if anchor["awaiting_10q"]:
-        status: LedgerMatchStatus = "awaiting_current_10q_using_8k_and_prior_10q"
+    if is_awaiting:
         open_gaps.append("awaiting_current_10q:using_prior_10q_baseline_until_filed")
-    elif snap.taxonomy == "ifrs-full" and period_end is None:
-        status = "fpi_20f_6k_limited"
+    elif is_fpi_limited:
         open_gaps.append("fpi_20f_6k_limited:quarterly_xbrl_unavailable")
+
+    bank_disc_dict: dict[str, Any] | None = None
+    eff_plugin = active_sector_plugin
+    if bank_disclosure is not None:
+        bank_disc_dict = (
+            bank_disclosure.model_dump(mode="json")
+            if hasattr(bank_disclosure, "model_dump")
+            else dict(bank_disclosure)
+        )
+        if not eff_plugin:
+            eff_plugin = "us_large_bank_v4a"
+
+    status: LedgerMatchStatus
+    if is_fpi_limited:
+        status = "fpi_20f_6k_limited"
+    elif is_awaiting:
+        status = "awaiting_current_10q_using_8k_and_prior_10q"
+    elif bank_disc_dict is not None and eff_plugin == "us_large_bank_v4a":
+        status = "bank_v4a_matched"
     elif is_fin:
         status = "financial_sic_gated"
     elif period_end is not None or init_filed is not None:
@@ -1471,7 +1500,7 @@ def build_sec_10q_collision_ledger(
         open_gaps.append("period_p_10q_not_matched_in_snapshot")
 
     # Reconstruct initial-basis facts (filtered <= init_filed when period P matched, else <= as_of)
-    basis_cutoff = init_filed if status in ("same_period_10q_matched", "financial_sic_gated") else as_of
+    basis_cutoff = init_filed if status in ("same_period_10q_matched", "bank_v4a_matched", "financial_sic_gated") else as_of
     facts_init = _rebuild_snapshot_facts_dict(snap, filed_cutoff=basis_cutoff)
     facts_latest = _rebuild_snapshot_facts_dict(snap, filed_cutoff=as_of)
 
@@ -1709,6 +1738,8 @@ def build_sec_10q_collision_ledger(
         sic=snap.sic,
         sector_category=sector_cat,
         is_financial_gated=is_fin,
+        active_sector_plugin=eff_plugin,
+        bank_disclosure=bank_disc_dict,
         accounting_standard=snap.taxonomy,
         currency=snap.currency,
         target_fiscal_year=target_fy,
@@ -2515,9 +2546,11 @@ def _evaluate_operator(
     return True, "unsupported_operator"
 
 
-def _resolve_effective_basis(raw_basis: BasisType, call_default_basis: CallDefaultBasis, metric_canonical: str) -> Literal["gaap", "non_gaap", "operating_kpi", "unknown"]:
+def _resolve_effective_basis(raw_basis: BasisType, call_default_basis: CallDefaultBasis, metric_canonical: str) -> Literal["gaap", "non_gaap", "fte_managed", "operating_kpi", "unknown"]:
     if raw_basis == "operating_kpi":
         return "operating_kpi"
+    if raw_basis == "fte_managed":
+        return "fte_managed"
     if raw_basis == "gaap":
         return "gaap"
     if raw_basis == "non_gaap":
@@ -2529,6 +2562,186 @@ def _resolve_effective_basis(raw_basis: BasisType, call_default_basis: CallDefau
     if call_default_basis == "gaap":
         return "gaap"
     return "unknown"
+
+
+_BANK_SUBLINE_KEYWORDS_RE = re.compile(
+    r"\b(?:equities|fixed income|ficc|investment banking fees?|advisory|underwriting|"
+    r"credit card|card services|home lending|auto|commercial real estate|\bcre\b|"
+    r"wealth lending|treasury services|securities services)\b",
+    re.IGNORECASE,
+)
+
+
+def _fid(prefix: str, seed: str) -> str:
+    return f"{prefix}_{sha256(seed.encode('utf-8')).hexdigest()[:14]}"
+
+
+def collide_bank_segment_claims(
+    *,
+    claims: Sequence[ManagementFactualClaim],
+    bank_disclosure: Mapping[str, Any],
+    call_default_basis: CallDefaultBasis = "unspecified",
+    fiscal_period_key: str | None = None,
+    quote_lookup: Mapping[int, GroundedQuoteRef] | None = None,
+    rel_tol_pct: Decimal = Decimal("2.0"),
+) -> tuple[list[CollisionFinding], list[ManagementFactualClaim]]:
+    """D6: 0-LLM deterministic collision of bank segment claims against 10-Q ``(Details)`` segments.
+
+    Returns ``(matched_findings, unmatched_claims)``. Top-level segment figures (with strict
+    GAAP vs Managed/FTE basis isolation) resolve cleanly with 0 LLM calls; only unmatched
+    sub-line claims (e.g., Card / Markets / FICC breakdown) pass onward to ``v3a_footnote_verify``.
+    """
+    segs_obj = bank_disclosure.get("segments") if isinstance(bank_disclosure, Mapping) else None
+    if not isinstance(segs_obj, Mapping):
+        return [], list(claims)
+    rows: list[Mapping[str, Any]] = [
+        *[r for r in (segs_obj.get("operating_segments") or []) if isinstance(r, Mapping)],
+        *[r for r in (segs_obj.get("corporate_or_other") or []) if isinstance(r, Mapping)],
+    ]
+    if not rows:
+        return [], list(claims)
+
+    r_file = str(segs_obj.get("r_file") or "segment Details R*.htm")
+    matched: list[CollisionFinding] = []
+    unmatched: list[ManagementFactualClaim] = []
+
+    for idx, cl in enumerate(claims):
+        eff_scope = _infer_effective_scope(cl.scope, cl.metric_canonical, cl.kpi_key, cl.claim_summary, cl.verbatim_quote)
+        if eff_scope == "consolidated" or cl.value_low is None:
+            unmatched.append(cl)
+            continue
+        text_probe = f"{cl.kpi_key or ''} {cl.claim_summary}".lower()
+        # Sub-line disclosures (e.g., FICC, Equities, Card) stay in unmatched for v3a_footnote_verify
+        if _BANK_SUBLINE_KEYWORDS_RE.search(text_probe):
+            unmatched.append(cl)
+            continue
+
+        # Find matching top-level segment row
+        target_row: Mapping[str, Any] | None = None
+        for r in rows:
+            sk = str(r.get("segment_key") or "").lower()
+            dn = str(r.get("display_name") or "").lower()
+            if (sk and re.search(rf"(?<![a-z0-9]){re.escape(sk)}(?![a-z0-9])", text_probe)) or (dn and dn in text_probe):
+                target_row = r
+                break
+        if target_row is None:
+            unmatched.append(cl)
+            continue
+
+        # Map metric to segment field
+        metric_hint = f"{cl.metric_canonical} {cl.kpi_key or ''} {cl.claim_summary}".lower()
+        seg_field: str | None = None
+        is_pct_metric = False
+        if "rotce" in metric_hint or "roe" in metric_hint or "return" in metric_hint:
+            seg_field = "segment_roe_or_rotce_pct"
+            is_pct_metric = True
+        elif "efficiency" in metric_hint or "overhead" in metric_hint:
+            seg_field = "segment_efficiency_pct"
+            is_pct_metric = True
+        elif "net interest" in metric_hint or re.search(r"\bnii\b", metric_hint):
+            seg_field = "nii_usd"
+        elif "noninterest income" in metric_hint or "non-interest income" in metric_hint or "fee revenue" in metric_hint:
+            seg_field = "noninterest_income_usd"
+        elif "expense" in metric_hint:
+            seg_field = "noninterest_expense_usd"
+        elif "ppnr" in metric_hint or "pre-provision" in metric_hint:
+            seg_field = "ppnr_usd"
+        elif "provision" in metric_hint:
+            seg_field = "provision_usd"
+        elif "net income" in metric_hint or "net earnings" in metric_hint or cl.metric_canonical == "net_income":
+            seg_field = "net_income_usd"
+        elif "revenue" in metric_hint or cl.metric_canonical == "revenue":
+            seg_field = "net_revenue_usd"
+
+        ledger_val = _dec(target_row.get(seg_field)) if seg_field else None
+        if ledger_val is None or cl.value_low is None:
+            unmatched.append(cl)
+            continue
+
+        claim_val = (
+            _dec(cl.value_low)
+            if is_pct_metric
+            else _scale_claim_value(_dec(cl.value_low), cl.unit, cl.scale, cl.metric_canonical)
+        )
+        if claim_val is None:
+            unmatched.append(cl)
+            continue
+
+        seg_basis = str(target_row.get("reporting_basis") or "gaap")
+        eff_basis = _resolve_effective_basis(cl.basis, call_default_basis, cl.metric_canonical)
+        q_ref_list = [quote_lookup[idx]] if (quote_lookup and idx in quote_lookup) else []
+        seg_label = str(target_row.get("display_name") or target_row.get("segment_key") or "Segment")
+
+        # Strict GAAP vs Managed/FTE isolation
+        is_explicit_gaap_vs_fte = (
+            (eff_basis in ("fte_managed", "non_gaap") or "fte" in text_probe or "managed" in text_probe)
+            and seg_basis == "gaap"
+        ) or (eff_basis == "gaap" and "gaap" in text_probe and seg_basis == "managed_fte")
+
+        if is_explicit_gaap_vs_fte:
+            matched.append(
+                CollisionFinding(
+                    finding_id=_fid("bsegb", f"{idx}:{seg_label}:{seg_field}"),
+                    track="track_2_earnings_cash",
+                    collision_kind="nongaap_or_basis_divergence",
+                    severity="info",
+                    title=f"银行分部口径隔离 · {seg_label} ({seg_field})",
+                    management_statement=cl.claim_summary,
+                    ledger_evidence=(
+                        f"10-Q {r_file} 分部 [{seg_label}] ({seg_basis} 口径) 披露为 {ledger_val}；"
+                        f"管理层引用口径为 {eff_basis}（已按 D6 严格隔离 GAAP 与 Managed/FTE）。"
+                    ),
+                    basis_badge=f"10-Q {seg_basis} vs Call {eff_basis}",
+                    period_badge=fiscal_period_key,
+                    linked_pillar="growth",
+                    quotes=q_ref_list,
+                    priority_rank=55,
+                )
+            )
+            continue
+
+        diff = abs(claim_val - ledger_val)
+        pct_diff = (diff / abs(ledger_val) * Decimal("100")) if ledger_val != 0 else Decimal("0")
+        tol_bound = Decimal("0.5") if is_pct_metric else rel_tol_pct
+        tol_cmp = diff if is_pct_metric else pct_diff
+        if tol_cmp <= tol_bound:
+            matched.append(
+                CollisionFinding(
+                    finding_id=_fid("bseg", f"{idx}:{seg_label}:{seg_field}"),
+                    track="track_2_earnings_cash",
+                    collision_kind="corroborated",
+                    severity="green",
+                    title=f"0-LLM 银行分部直撞印证 · {seg_label} {seg_field}",
+                    management_statement=cl.claim_summary,
+                    ledger_evidence=f"10-Q {r_file} ({seg_basis} 口径) [{seg_label}] {seg_field}={ledger_val} 与业绩会一致。",
+                    basis_badge=f"10-Q {r_file} ({seg_basis})",
+                    period_badge=fiscal_period_key,
+                    linked_pillar="growth" if seg_field == "net_revenue_usd" else "margin",
+                    quotes=q_ref_list,
+                    priority_rank=65,
+                )
+            )
+        else:
+            sev_b: CollisionSeverity = "red" if pct_diff >= Decimal("5.0") or (is_pct_metric and diff >= Decimal("2.0")) else "yellow"
+            matched.append(
+                CollisionFinding(
+                    finding_id=_fid("bsegd", f"{idx}:{seg_label}:{seg_field}"),
+                    track="track_2_earnings_cash",
+                    collision_kind="direct_contradiction",
+                    severity=sev_b,
+                    title=f"0-LLM 银行分部偏离 · {seg_label} {seg_field} 差 {pct_diff:.1f}%",
+                    management_statement=cl.claim_summary,
+                    ledger_evidence=f"10-Q {r_file} ({seg_basis} 口径) [{seg_label}] {seg_field}={ledger_val} vs Call {claim_val}。",
+                    formula_note=f"|Call - 10Q_Segment| = {pct_diff:.2f}%",
+                    basis_badge=f"10-Q {r_file} ({seg_basis})",
+                    period_badge=fiscal_period_key,
+                    linked_pillar="growth" if seg_field == "net_revenue_usd" else "margin",
+                    quotes=q_ref_list,
+                    priority_rank=15 if sev_b == "red" else 30,
+                )
+            )
+
+    return matched, unmatched
 
 
 def _map_linked_pillar(metric_canonical: str, text_hint: str, thesis_pillars: Sequence[Mapping[str, Any]] = ()) -> str | None:
@@ -2686,7 +2899,7 @@ def run_layer3_call_collision(
     rel_tol = Decimal(str(th.numeric_tolerance_rel_pct))
     margin_tol_pct = Decimal(str(th.margin_tolerance_bps)) / Decimal(100)
 
-    if ledger.is_financial_gated:
+    if ledger.is_financial_gated and ledger.status != "bank_v4a_matched":
         findings.append(
             CollisionFinding(
                 finding_id=_fid("t1", f"sic_gate:{entity_key}"),
@@ -2695,10 +2908,43 @@ def run_layer3_call_collision(
                 severity="not_applicable",
                 title="金融行业 SIC 豁免 · AR/库存/DSO/DIO 对撞不适用",
                 management_statement=f"SIC {ledger.sic or 'N/A'} ({ledger.sector_category})",
-                ledger_evidence="银行/保险/REITs 无传统库存与应收渠道周转口径，轨道 1 自动豁免。",
+                ledger_evidence="保险/REIT/纯资管无传统库存与应收渠道周转口径，轨道 1 自动豁免。",
                 priority_rank=95,
             )
         )
+
+    matched_bank_segment_ids: set[int] = set()
+    if (
+        mgmt_extraction is not None
+        and ledger.status == "bank_v4a_matched"
+        and isinstance(ledger.bank_disclosure, Mapping)
+    ):
+        deduped_for_bank = _dedup_factual_claims(mgmt_extraction.factual_claims)
+        quote_map_b: dict[int, GroundedQuoteRef] = {}
+        for idx_b, cl_b in enumerate(deduped_for_bank):
+            quote_map_b[idx_b] = _track_quote(
+                ground_v3a_quote(
+                    quotation=cl_b.verbatim_quote,
+                    source_id=cl_b.source_id,
+                    source_texts=source_texts,
+                    document_pages_by_source=document_pages_by_source,
+                    parsed_docs_by_source=parsed_by_src,
+                    rules=compiled,
+                    turn_index=cl_b.turn_index,
+                    slide_index=cl_b.slide_index,
+                )
+            )
+        b_findings, b_unmatched = collide_bank_segment_claims(
+            claims=deduped_for_bank,
+            bank_disclosure=ledger.bank_disclosure,
+            call_default_basis=call_default_basis,
+            fiscal_period_key=fiscal_period_key,
+            quote_lookup=quote_map_b,
+            rel_tol_pct=rel_tol,
+        )
+        findings.extend(b_findings)
+        unmatched_obj_ids = {id(c) for c in b_unmatched}
+        matched_bank_segment_ids = {id(c) for c in deduped_for_bank if id(c) not in unmatched_obj_ids}
 
     if mgmt_extraction is not None:
         deduped_claims = _dedup_factual_claims(mgmt_extraction.factual_claims)
@@ -2807,6 +3053,10 @@ def run_layer3_call_collision(
                 )
                 continue
 
+            # Skip segment claims already collided deterministically via 0-LLM BankSegmentSnapshot!
+            if id(claim) in matched_bank_segment_ids:
+                continue
+
             # Non-SEC or awaiting current 10-Q
             if ledger.status == "non_sec_entity":
                 continue
@@ -2828,6 +3078,42 @@ def run_layer3_call_collision(
                     )
                 )
                 continue
+
+            # Bank Track 1: Credit / Capital / HTM Securities / Deposits collision when V4a bank matched
+            if (
+                ledger.status == "bank_v4a_matched"
+                and isinstance(ledger.bank_disclosure, Mapping)
+                and claim.qualitative_stance == "bullish_healthy"
+                and (
+                    claim.track_hint == "demand_channel"
+                    or bool(re.search(r"\b(?:capital|cet1|liquidity|deposit|credit|htm|securities)\b", claim.claim_summary, re.I))
+                )
+            ):
+                bd = ledger.bank_disclosure
+                cet1_v = _dec(bd.get("cet1_standardized_pct"))
+                cet1_m = _dec(bd.get("cet1_reg_min_pct"))
+                htm_v = _dec(bd.get("htm_net_unrealized_pnl_usd"))
+                tce_v = _dec(((bd.get("tbvps_bridge") or {}) if isinstance(bd.get("tbvps_bridge"), Mapping) else {}).get("tce_reported_usd")) or _dec(((bd.get("tbvps_bridge") or {}) if isinstance(bd.get("tbvps_bridge"), Mapping) else {}).get("tce_xbrl_std_usd"))
+                buf_bps = ((cet1_v - cet1_m) * Decimal(100)) if (cet1_v is not None and cet1_m is not None) else None
+                htm_tce_pct = ((max(Decimal(0), -htm_v) / tce_v) * Decimal(100)) if (htm_v is not None and tce_v and tce_v > 0) else None
+                if htm_tce_pct is not None and htm_tce_pct >= Decimal("30") and buf_bps is not None and buf_bps < Decimal("100"):
+                    findings.append(
+                        CollisionFinding(
+                            finding_id=_fid("t1bank", f"{idx}:{claim.verbatim_quote[:30]}"),
+                            track="track_1_demand_channel",
+                            collision_kind="direct_contradiction",
+                            severity="red",
+                            title=f"HTM 浮亏 {htm_tce_pct:.1f}% TCE 叠加 CET1 缓冲仅 +{buf_bps:.0f}bps，与资产负债/资本充裕表述存在张力",
+                            management_statement=claim.claim_summary,
+                            ledger_evidence=f"10-Q CET1={cet1_v}% vs Min={cet1_m}%, HTM 税前浮亏 {htm_tce_pct:.1f}% TCE。",
+                            basis_badge="10-Q Standardized Basel III & HTM Details",
+                            period_badge=fiscal_period_key,
+                            linked_pillar="capital_allocation",
+                            quotes=[qref],
+                            priority_rank=12,
+                        )
+                    )
+                    continue
 
             # Track 1 qualitative demand/channel claim vs 10-Q AR/Inv/RPO divergences
             if claim.track_hint == "demand_channel" and claim.qualitative_stance == "bullish_healthy" and not ledger.is_financial_gated:

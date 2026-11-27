@@ -75,6 +75,7 @@ from .research_call_collision import (
     Sec10QCollisionLedger,
     _infer_effective_scope,
     build_sec_10q_collision_ledger,
+    collide_bank_segment_claims,
     compute_streaming_10q_redline,
     render_call_verification_markdown,
     run_layer3_call_collision,
@@ -1330,6 +1331,8 @@ def run_call_verification_pipeline(
     v25_credibility_loader: Callable[[str], Sequence[Mapping[str, Any]]] | None = None,
     eight_k_loader: Callable[[str, Mapping[str, Any] | None, str | None], tuple[str | None, list[str]]] | None = None,
     footnote_fallback_loader: Callable[[str, str], list[dict[str, Any]]] | None = None,
+    bank_disclosure: Any | None = None,
+    bank_disclosure_loader: Callable[[Any, Mapping[str, Any] | None, date | None], Any] | None = None,
     thesis_pillars: Sequence[Mapping[str, Any]] = (),
     eight_k_text: str | None = None,
     extra_benchmark_providers: Sequence[ExpectationBenchmarkProvider] = (),
@@ -1542,6 +1545,22 @@ def run_call_verification_pipeline(
             _record_v3a_nonfatal("eight_k_fetch", exc_8k, open_gaps=pipeline_nonfatal_gaps, operation_id=operation_id, entity_key=entity_key, cik=cik)
             resolved_eight_k_text, reg_g_excerpts = None, []
 
+    resolved_bank_disc = bank_disclosure
+    resolved_bank_plugin: str | None = None
+    if resolved_bank_disc is None and snap is not None and not cache_only:
+        try:
+            from .fin_data.adapters.sec_bank_disclosure import qualify_bank_sector_applicability
+
+            q_res = qualify_bank_sector_applicability(sic=getattr(snap, "sic", None), snap=snap, as_of=as_of)
+            if q_res.is_bank_v4a and bank_disclosure_loader is not None:
+                resolved_bank_disc = bank_disclosure_loader(snap, submissions, as_of)
+                if resolved_bank_disc is not None:
+                    resolved_bank_plugin = "us_large_bank_v4a"
+        except Exception as exc_bd:
+            _record_v3a_nonfatal("bank_disclosure_load", exc_bd, open_gaps=pipeline_nonfatal_gaps, operation_id=operation_id, entity_key=entity_key, cik=cik)
+    elif resolved_bank_disc is not None:
+        resolved_bank_plugin = "us_large_bank_v4a"
+
     ledger = build_sec_10q_collision_ledger(
         entity_key=entity_key,
         snap=snap,
@@ -1557,6 +1576,8 @@ def run_call_verification_pipeline(
         cached_initial_10q_accession=cached_init_accn,
         cached_initial_10q_filed_at=cached_init_filed,
         cached_period_end_date=cached_period_end,
+        bank_disclosure=resolved_bank_disc,
+        active_sector_plugin=resolved_bank_plugin,
         rules=compiled,
     )
     extra_ledger_updates: dict[str, Any] = {}
@@ -1914,11 +1935,10 @@ def run_call_verification_pipeline(
                 }
             )
 
-    # R3-D8 + R3-D6: Fetch <=2 R*.htm footnote tables strictly ON-DEMAND after Layer 2 and BEFORE Layer 3!
-    # Banks/financials (financial_sic_gated) stay strictly segment-registration-only until V4a.
+    # R3-D8 + V4a-D6: Run 0-LLM BankSegmentSnapshot collision first; send ONLY unmatched sub-lines to footnote fallback + LLM!
     fn_claims: list[ManagementFactualClaim] = []
     if mgmt_extraction is not None:
-        fn_claims = [
+        raw_fn_cands = [
             c
             for c in mgmt_extraction.factual_claims
             if c.evidence_sufficiency == "explicit"
@@ -1927,13 +1947,23 @@ def run_call_verification_pipeline(
                 or c.metric_canonical == "rpo_or_deferred_revenue"
                 or bool(re.search(r"rpo|remaining\s+performance|purchase\s+commitment|segment|分部", f"{c.kpi_key or ''} {c.claim_summary}", re.I))
             )
-        ][:6]
+        ]
+        if ledger.status == "bank_v4a_matched" and isinstance(ledger.bank_disclosure, Mapping):
+            _pre_findings, remaining_cands = collide_bank_segment_claims(
+                claims=raw_fn_cands,
+                bank_disclosure=ledger.bank_disclosure,
+                call_default_basis=primary_doc.call_default_basis if primary_doc else "unspecified",
+                fiscal_period_key=ledger.fiscal_period_key,
+            )
+            fn_claims = remaining_cands[:6]
+        else:
+            fn_claims = raw_fn_cands[:6]
 
     if (
         not cache_only
         and footnote_fallback_loader is not None
         and cik
-        and ledger.status == "same_period_10q_matched"
+        and ledger.status in ("same_period_10q_matched", "bank_v4a_matched")
         and ledger.initial_10q_accession
         and fn_claims
     ):
@@ -1997,7 +2027,7 @@ def run_call_verification_pipeline(
         not cache_only
         and model_runner is not None
         and mgmt_extraction is not None
-        and ledger.status == "same_period_10q_matched"
+        and ledger.status in ("same_period_10q_matched", "bank_v4a_matched")
         and fn_claims
         and raw_fb_tables
     ):

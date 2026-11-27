@@ -33,6 +33,8 @@ _GROUPS = {
         'earnings_quality_diagnostics': (),
         'guidance_and_nongaap_reconciler': (),
         'valuation_and_implied_expectations': (),
+        'bank_fundamentals_diagnostics': ('sec_financials_available',),
+        'bank_valuation_and_peer_compare': ('sec_financials_available',),
     },
     'external_sources': {'acquire_sources': ('acquire_available',), 'news_search': ('news_search_available',)},
 }

@@ -2233,6 +2233,10 @@ def _exec_fin_tool(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallR
         key = ctx.fin_data.governance_capital_audit_key(inv.req)
     elif name == 'call_qa_verification':
         key = ctx.fin_data.call_qa_verification_key(inv.req)
+    elif name == 'bank_fundamentals_diagnostics':
+        key = ctx.fin_data.bank_fundamentals_diagnostics_key(inv.req)
+    elif name == 'bank_valuation_and_peer_compare':
+        key = ctx.fin_data.bank_valuation_and_peer_compare_key(inv.req)
     elif name == 'earnings_consensus':
         key = ctx.fin_data.earnings_consensus_key(inv.req)
     elif name == 'earnings_transcript':
@@ -2281,6 +2285,10 @@ def _exec_fin_tool(ctx: ToolExecutionContext, inv: _CallInvocation) -> ToolCallR
         produced = ctx.fin_data.governance_capital_audit(inv.req, entities)
     elif name == 'call_qa_verification':
         produced = ctx.fin_data.call_qa_verification(inv.req, entities)
+    elif name == 'bank_fundamentals_diagnostics':
+        produced = ctx.fin_data.bank_fundamentals_diagnostics(inv.req, entities)
+    elif name == 'bank_valuation_and_peer_compare':
+        produced = ctx.fin_data.bank_valuation_and_peer_compare(inv.req, entities)
     elif name == 'earnings_consensus':
         produced = ctx.fin_data.earnings_consensus(inv.req, entities)
     elif name == 'earnings_transcript':
@@ -3676,6 +3684,8 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     'peer_relative_valuation': _exec_fin_tool,
     'governance_capital_audit': _exec_fin_tool,
     'call_qa_verification': _exec_fin_tool,
+    'bank_fundamentals_diagnostics': _exec_fin_tool,
+    'bank_valuation_and_peer_compare': _exec_fin_tool,
     'earnings_consensus': _exec_fin_tool,
     'earnings_transcript': _exec_fin_tool,
     'earnings_quality_diagnostics': _exec_earnings_diagnostic,

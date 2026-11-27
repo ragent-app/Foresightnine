@@ -27,6 +27,8 @@ from .research_fin_tools import (
     SecFilingTablesRequest,
     SecFulltextSearchRequest,
     CallQaVerificationRequest,
+    BankFundamentalsToolRequest,
+    BankValuationPeerToolRequest,
     GovernanceCapitalAuditRequest,
     PeerRelativeValuationRequest,
     SecMaterialEventsRequest,
@@ -1163,6 +1165,29 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         compaction_role='bulk',
         is_fin_tool=True,
         activity_summarizer=_rationale_summarizer(_fin_summary_target('symbol')),
+    ),
+    ToolSpec(
+        name='bank_fundamentals_diagnostics',
+        description=(
+            'Deterministically evaluate US major bank (SIC 6020-6036/6211 with banking book) 5-pillar diagnostics (0-LLM): '
+            'CET1/SLR regulatory buffers, HTM unrealized loss / TCE stress & pro-forma CET1 ex-HTM, GAAP vs Managed efficiency '
+            'ratio, dual-basis TBVPS bridge, credit ACL/NCO/NPL, deposit liquidity, and SEC 10-Q/8-K segment reconciliation.'
+        ),
+        input_model=BankFundamentalsToolRequest,
+        compaction_role='bulk',
+        is_fin_tool=True,
+        activity_summarizer=_rationale_summarizer(_target_earnings_diag),
+    ),
+    ToolSpec(
+        name='bank_valuation_and_peer_compare',
+        description=(
+            'Deterministically benchmark a US major bank against peers using Gordon P/TBV = (ROTCE - g) / (K_e - g), '
+            'market-implied ROTCE, 3x3 sensitivity matrix, dual-basis TBVPS toggle, CET1 buffers, and HTM pro-forma CET1 (0-LLM).'
+        ),
+        input_model=BankValuationPeerToolRequest,
+        compaction_role='bulk',
+        is_fin_tool=True,
+        activity_summarizer=_rationale_summarizer(_fin_summary_target('primary_symbol')),
     ),
     ToolSpec(
         name='earnings_consensus',

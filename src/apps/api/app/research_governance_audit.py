@@ -215,11 +215,13 @@ class CapitalAllocationAudit(_FrozenGovModel):
     sbc_ttm_usd: str | None = None
     sbc_pct_of_revenue: str | None = None
     sbc_pct_of_fcf: str | None = None
+    sbc_pct_of_net_income_common: str | None = None
     sbc_tax_withholding_usd: str | None = None
     unrecognized_sbc_usd: str | None = None
     unrecognized_sbc_pct_of_mcap: str | None = None
     buybacks_ttm_usd: str | None = None
     dividends_ttm_usd: str | None = None
+    total_payout_pct_of_net_income_common: str | None = None
     buyback_to_sbc_ratio: str | None = None
     net_diluted_share_change_1y_pct: str | None = None
     net_diluted_share_change_3y_pct: str | None = None
@@ -695,6 +697,25 @@ def compute_capital_allocation_audit(
     if sic_gate.is_gated:
         notes.append(f"Financial sector ({sic_gate.sector_category}): SBC/FCF hidden; share dilution & buybacks preserved.")
 
+    ni_comm_y = _sel("net_income_common", "year", 2) or _sel("net_income", "year", 2)
+    latest_ni_comm = ni_comm_y[0].value if ni_comm_y else None
+    sbc_pct_ni = (
+        (latest_sbc / latest_ni_comm * Decimal(100))
+        if (latest_sbc is not None and latest_ni_comm is not None and latest_ni_comm > 0)
+        else None
+    )
+    tot_payout = (
+        (_to_usd(latest_buy) or Decimal(0)) + (_to_usd(latest_div) or Decimal(0))
+        if (latest_buy is not None or latest_div is not None)
+        else None
+    )
+    ni_comm_usd = _to_usd(latest_ni_comm)
+    total_payout_pct_ni = (
+        (tot_payout / ni_comm_usd * Decimal(100))
+        if (tot_payout is not None and ni_comm_usd is not None and ni_comm_usd > 0)
+        else None
+    )
+
     light: GovernanceLight = "red" if red > 0 else ("yellow" if yellow > 0 else "green")
     return CapitalAllocationAudit(
         quality_light=light,
@@ -703,11 +724,13 @@ def compute_capital_allocation_audit(
         sbc_ttm_usd=_fmt_dec(_to_usd(latest_sbc), 0),
         sbc_pct_of_revenue=_fmt_dec(sbc_pct_rev, 2),
         sbc_pct_of_fcf=_fmt_dec(sbc_pct_fcf, 1),
+        sbc_pct_of_net_income_common=_fmt_dec(sbc_pct_ni, 2),
         sbc_tax_withholding_usd=_fmt_dec(_to_usd(latest_tax_wh), 0),
         unrecognized_sbc_usd=_fmt_dec(_to_usd(latest_unrec), 0),
         unrecognized_sbc_pct_of_mcap=_fmt_dec(unrec_pct_mcap, 2),
         buybacks_ttm_usd=_fmt_dec(buy_usd, 0),
         dividends_ttm_usd=_fmt_dec(_to_usd(latest_div), 0),
+        total_payout_pct_of_net_income_common=_fmt_dec(total_payout_pct_ni, 2),
         buyback_to_sbc_ratio=_fmt_dec(buy_to_sbc, 2),
         net_diluted_share_change_1y_pct=_fmt_dec(sh_1y, 2),
         net_diluted_share_change_3y_pct=_fmt_dec(sh_3y, 2),

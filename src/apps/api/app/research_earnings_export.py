@@ -213,6 +213,42 @@ def _collect_exportable_numeric_tokens(dossier: EarningsDossier) -> set[str]:
             if mv is not None and getattr(mv, "value", None) is not None:
                 tokens.add(_fmt_decimal(mv.value))
                 tokens.add(str(mv.value))
+    # Register V4a bank disclosure, diagnostics, Gordon valuation & segment tokens as exportable
+    b_disc = getattr(dossier.snapshot, "bank_disclosure", None)
+    if b_disc is not None:
+        for attr in (
+            "net_revenue_gaap_q_usd", "net_revenue_managed_q_usd", "nii_gaap_q_usd", "ppnr_gaap_q_usd",
+            "provision_q_usd", "net_income_to_common_q_usd", "cet1_standardized_pct", "cet1_reg_min_pct",
+            "htm_net_unrealized_pnl_usd", "rotce_q_reported_pct", "efficiency_ratio_reported_pct",
+        ):
+            v = getattr(b_disc, attr, None)
+            if v is not None:
+                tokens.add(str(v))
+        br = getattr(b_disc, "tbvps_bridge", None)
+        if br is not None:
+            for attr in ("tbvps_reported_usd", "tbvps_xbrl_std_usd", "tbvps_gap_pct", "tce_reported_usd", "tce_xbrl_std_usd"):
+                v = getattr(br, attr, None)
+                if v is not None:
+                    tokens.add(str(v))
+        segs = getattr(b_disc, "segments", None)
+        if segs is not None:
+            for sr in (*(segs.operating_segments or ()), *(segs.corporate_or_other or ()), *(segs.reconciling_items or ())):
+                for attr in ("net_revenue_usd", "ppnr_usd", "net_income_usd", "revenue_share_pct", "segment_roe_or_rotce_pct"):
+                    v = getattr(sr, attr, None)
+                    if v is not None:
+                        tokens.add(str(v))
+    b_val = getattr(dossier.snapshot, "bank_valuation", None)
+    if b_val is not None:
+        for attr in ("price_usd", "p_to_tbv_primary", "p_to_tbv_xbrl_std", "p_to_bv", "p_to_e_ttm", "implied_rotce_pct", "rotce_spread_vs_implied_pp", "justified_p_to_tbv_at_current_rotce"):
+            v = getattr(b_val, attr, None)
+            if v is not None:
+                tokens.add(str(v))
+    b_diag = getattr(dossier.snapshot, "bank_diagnostics", None)
+    if b_diag is not None:
+        for attr in ("efficiency_ratio_gaap_pct", "ppnr_margin_pct", "nii_share_pct", "rotce_q_pct", "cet1_buffer_bps", "htm_loss_pct_of_tce", "pro_forma_cet1_ex_htm_pct", "provision_to_ppnr_pct", "ldr_pct"):
+            v = getattr(b_diag, attr, None)
+            if v is not None:
+                tokens.add(str(v))
     return {t for t in tokens if t}
 
 
@@ -971,6 +1007,27 @@ def export_dossier_markdown(
         lines.extend(["", "## Valuation & Implied Expectations", "", "| Metric | Value | Unit | Status | Notes |", "| --- | --- | --- | --- | --- |"])
         for row in val_rows:
             lines.append(f"| `{row[0]}` | {row[1]} | {row[2]} | {row[4]} | {row[7]} |")
+
+    b_diag = getattr(snap, "bank_diagnostics", None)
+    b_val = getattr(snap, "bank_valuation", None)
+    b_disc = getattr(snap, "bank_disclosure", None)
+    if b_diag is not None or b_val is not None:
+        lines.extend(["", "## US Large Bank 5-Pillar Diagnostics & Gordon P/TBV"])
+        if b_diag is not None:
+            lines.append(f"- **Overall Bank Light**: `{b_diag.bank_quality_light.upper()}` (`{b_diag.bank_subtype}`) | **CET1 Buffer**: `+{b_diag.cet1_buffer_bps or 'n/a'} bps` | **HTM Loss / TCE**: `{b_diag.htm_loss_pct_of_tce or 'n/a'}%` | **Pro-Forma CET1 ex-HTM (24% tax)**: `{b_diag.pro_forma_cet1_ex_htm_pct or 'n/a'}%` | **Efficiency (GAAP)**: `{b_diag.efficiency_ratio_gaap_pct or 'n/a'}%` | **ROTCE**: `{b_diag.rotce_q_pct or 'n/a'}%`")
+        if b_val is not None:
+            lines.append(f"- **Valuation ({b_val.primary_tbvps_basis}, Ke={b_val.coe_pct}%, g={b_val.terminal_g_pct}%)**: **P/TBV Primary**: `{b_val.p_to_tbv_primary or 'n/a'}x` (XBRL-Std `{b_val.p_to_tbv_xbrl_std or 'n/a'}x`) | **Implied ROTCE**: `{b_val.implied_rotce_pct or 'n/a'}%` | **ROTCE Spread**: `{b_val.rotce_spread_vs_implied_pp or 'n/a'} pp` | **Signal**: `{b_val.valuation_signal}`")
+            br = b_val.tbvps_bridge
+            lines.append(f"- **TBVPS Bridge**: Reported `${br.tbvps_reported_usd or 'n/a'}` ({br.tbvps_reported_source}) vs XBRL-Std `${br.tbvps_xbrl_std_usd}` (gap `{br.tbvps_gap_pct or 'n/a'}%`, RSU add-on `{br.rsu_share_addon}`)")
+            if b_val.sensitivity_matrix:
+                lines.extend(["", "| Ke % | g % | Implied ROTCE % | Justified P/TBV | Spread (pp) |", "| --- | --- | --- | --- | --- |"])
+                for cell in b_val.sensitivity_matrix:
+                    lines.append(f"| {cell.coe_pct}% | {cell.terminal_g_pct}% | {cell.implied_rotce_pct or 'n/a'}% | {cell.justified_p_to_tbv or 'n/a'}x | {cell.rotce_spread_pp or 'n/a'} |")
+        if b_disc is not None and b_disc.segments is not None:
+            segs = b_disc.segments
+            lines.extend(["", f"### 10-Q Segment Results (`{segs.r_file}`, Consolidated `{segs.consolidated_basis}`, Segments `{segs.segments_basis}`, Delta `${segs.reconciliation_delta_usd}` `{segs.reconciliation_status}`)", "", "| Segment | Basis | Net Revenue (USD) | Share % | PPNR (USD) | Net Income (USD) |", "| --- | --- | --- | --- | --- | --- |"])
+            for sr in (*segs.operating_segments, *segs.corporate_or_other, *segs.reconciling_items):
+                lines.append(f"| {sr.display_name} | `{sr.reporting_basis}` | {sr.net_revenue_usd or 'n/a'} | {sr.revenue_share_pct or '-'}% | {sr.ppnr_usd or 'n/a'} | {sr.net_income_usd or 'n/a'} |")
 
     lines.extend(["", "## Verified Evidence Cards & Citations"])
     if view.cards:

@@ -200,9 +200,11 @@ from .research_governance_audit import (
 )
 from .research_peer_compare import (
     PeerAttributionBrief,
+    PeerBankMetrics,
     PeerComparisonMatrix,
     PeerSuggestResponse,
     UserPeerGroup,
+    assemble_bank_peer_matrix,
     assemble_peer_matrix,
     compute_company_metrics_from_snapshot,
     generate_peer_attribution_brief,
@@ -210,6 +212,19 @@ from .research_peer_compare import (
     load_peer_groups_config,
     resolve_ticker_to_cik,
     suggest_peers_for_symbol,
+)
+from .fin_data.adapters.sec_bank_disclosure import (
+    BankDisclosureSnapshot,
+    BankQualificationResult,
+    BankSegmentSnapshot,
+    fetch_bank_disclosure_snapshot,
+    qualify_bank_sector_applicability,
+)
+from .research_bank_diagnostics import (
+    BankDiagnosticsSummary,
+    BankValuationResult,
+    evaluate_bank_diagnostics,
+    evaluate_bank_valuation,
 )
 from .research_earnings_export import ExportUnavailableError, MarkdownReportMode, export_earnings_dossier
 from .research_earnings_routing import (
@@ -4192,6 +4207,7 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
             peer_snapshot_cache=PEER_COMPANY_SNAPSHOTS,
             def14a_snapshot_cache=DEF14A_FACT_SNAPSHOTS,
             guidance_ledger_cache=GUIDANCE_CREDIBILITY_LEDGER,
+            bank_disclosure_cache=BANK_DISCLOSURE_SNAPSHOTS,
             v3a_report_loader=lambda ek, sym, ao: _load_v3a_report_for_tool(
                 account.account_id, entity_key=ek, symbol=sym, as_of=ao or (topic.request.as_of.date() if isinstance(topic.request.as_of, datetime) else topic.request.as_of)
             ))
@@ -4206,7 +4222,7 @@ def _start_research_for_account(topic_id: str, request: ResearchRunRequest, resp
             if name not in (
                 'company_financials', 'filings', 'sec_earnings_release',
                 'sec_filing_tables', 'sec_filing_sections', 'sec_redline_diff', 'sec_fulltext_search',
-                'sec_material_events',
+                'sec_material_events', 'bank_fundamentals_diagnostics', 'bank_valuation_and_peer_compare',
             ):
                 return
             # A-share structured financials come from third-party aggregators (Tushare/BaoStock), not the issuer's
@@ -6547,6 +6563,8 @@ def _resolve_earnings_squad_runtime(
             tushare_owner=tushare_owner or "user_byok",
             fmp_key=fmp_key,
             fmp_owner=fmp_owner or "user_byok",
+            peer_snapshot_cache=PEER_COMPANY_SNAPSHOTS,
+            bank_disclosure_cache=BANK_DISCLOSURE_SNAPSHOTS,
             persist=lambda item, **kwargs: research_sources.create(account.account_id, item, **kwargs),
         )
         sec_adapter = SecEdgarAdapter(user_agent=sec_agent_raw) if sec_ok and sec_agent_raw else None
@@ -6627,6 +6645,8 @@ def _resolve_earnings_squad_runtime(
             external_earnings=ext_service,
             tool_runner=tool_runner,
             market_price_fn=_resolve_live_market_price,
+            peer_snapshot_cache=PEER_COMPANY_SNAPSHOTS,
+            bank_disclosure_cache=BANK_DISCLOSURE_SNAPSHOTS,
             initial_source_texts=init_texts,
             initial_source_permissions=init_perms,
         )
@@ -8673,49 +8693,19 @@ def radar_check_now_endpoint(
             prim = (sub.symbol or (peer_syms[0] if peer_syms else "")).strip().upper()
             if not prim:
                 return None
-            pol = load_fin_data_policy()
-            ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
-            lim = SecPacingLimiter.from_env()
-            _cur, fpi_map = load_peer_groups_config()
             syms = list(dict.fromkeys([prim, *(s.strip().upper() for s in peer_syms if s.strip())]))[:6]
             if len(syms) < 2:
                 sugg = suggest_peers_for_symbol(prim)
                 syms = list(dict.fromkeys([prim, *sugg.recommended_peers]))[:5]
-            rows_out = []
-            for sym_i in syms:
-                try:
-                    snap, _h = load_or_fetch_company_snapshot(
-                        symbol=sym_i,
-                        user_agent=ua,
-                        limiter=lim,
-                        snapshot_cache=PEER_COMPANY_SNAPSHOTS,
-                        policy=pol,
-                    )
-                except Exception:
-                    continue
-                if snap is None:
-                    continue
-                p_dec, p_date, p_src = _resolve_peer_quote_usd(
-                    sym_i,
-                    account_id=account.account_id,
-                    as_of=request.as_of,
-                    cache_only=False,
-                    manual_prices=None,
-                    policy=pol,
-                )
-                rows_out.append(
-                    compute_company_metrics_from_snapshot(
-                        snap,
-                        price_usd=p_dec,
-                        price_as_of_date=p_date,
-                        price_source=p_src,
-                        as_of=request.as_of,
-                        fpi_meta=fpi_map.get(sym_i),
-                    )
-                )
-            if len(rows_out) < 2:
+            if len(syms) < 2:
                 return None
-            return assemble_peer_matrix(primary_symbol=prim, rows=rows_out, as_of=request.as_of)
+            return _run_peer_compare_core(
+                account_id=account.account_id,
+                primary_symbol=prim,
+                symbols=syms,
+                as_of=request.as_of,
+                cache_only=False,
+            )
 
         def _governance_audit_for_sub(sub: FilingWatchSubscription) -> GovernanceAuditReport | None:
             sym_i = (sub.symbol or "").strip().upper()
@@ -8783,6 +8773,12 @@ def radar_check_now_endpoint(
                 run_earnings_delta_review,
             )
             try:
+                bank_obs, bank_filing_txt = _build_bank_delta_inputs(
+                    cik=sub.cik,
+                    symbol=sub.symbol,
+                    as_of=request.as_of,
+                    cache_only=True,
+                )
                 stage0 = build_delta_stage0_package(
                     cik=sub.cik,
                     symbol=sub.symbol,
@@ -8791,12 +8787,12 @@ def radar_check_now_endpoint(
                     period_label=f"SEC {new_accs[0]}",
                     disclosed_at=lifecycle_clock.now().date().isoformat(),
                     prior_dossier=prior_dossier,
-                    ledger=ledger,
-                    new_observed_metrics={},
+                    ledger=led,
+                    new_observed_metrics=bank_obs,
                 )
                 diff = run_earnings_delta_review(
                     stage0=stage0,
-                    filing_text="",
+                    filing_text=bank_filing_txt,
                     source_id=f"sec_{new_accs[0]}",
                     ledger=ledger,
                     runner=model_runner,
@@ -8974,6 +8970,36 @@ class PeerCompareApiRequest(BaseModel):
     exclude_non_comparable_from_median: bool = True
     manual_prices: dict[str, str] | None = None
     fx_rates_to_usd: dict[str, str] | None = None
+    tbvps_basis: Literal["reported_market_convention", "xbrl_standardized"] = "reported_market_convention"
+    bank_coe_pct: str = Field(default="10.0", max_length=16)
+    bank_terminal_g_pct: str = Field(default="3.0", max_length=16)
+
+
+class BankAnalyzeApiRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    symbol: str = Field(min_length=1, max_length=16)
+    cik: str | None = Field(default=None, max_length=20)
+    as_of: date | None = None
+    cache_only: bool = False
+    force_refresh: bool = False
+    tbvps_basis: Literal["reported_market_convention", "xbrl_standardized"] = "reported_market_convention"
+    coe_pct: str = Field(default="10.0", max_length=16)
+    terminal_g_pct: str = Field(default="3.0", max_length=16)
+    manual_price: str | None = Field(default=None, max_length=32)
+
+
+class BankAnalysisResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    symbol: str
+    cik: str
+    qualification: BankQualificationResult
+    disclosure: BankDisclosureSnapshot
+    diagnostics: BankDiagnosticsSummary
+    valuation: BankValuationResult
+    cache_hit: bool = False
+    elapsed_ms: int = 0
 
 
 class PeerCompareBriefApiRequest(BaseModel):
@@ -9180,6 +9206,283 @@ def delete_user_peer_group(
     return {"deleted": True, "group_id": group_id}
 
 
+def _build_bank_delta_inputs(
+    *,
+    cik: str | None,
+    symbol: str | None,
+    as_of: date | None = None,
+    cache_only: bool = False,
+) -> tuple[dict[str, Any], str]:
+    """Populate observed bank metrics & SEC digest for Direction B Delta Review when V4a qualified."""
+    cik_norm = cik10(cik) if (cik and str(cik).strip().isdigit()) else None
+    sym_u = (symbol or "").strip().upper() or None
+    if cik_norm is None and sym_u:
+        sym_ptr = PEER_COMPANY_SNAPSHOTS.get(f"sym:{sym_u}")
+        if isinstance(sym_ptr, Mapping) and sym_ptr.get("cik"):
+            cik_norm = cik10(sym_ptr["cik"])
+    if cik_norm is None:
+        return {}, ""
+    pol = load_fin_data_policy()
+    ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
+    lim = SecPacingLimiter.from_env()
+    try:
+        from .research_peer_compare import PeerCompanySnapshot
+        raw_snap = PEER_COMPANY_SNAPSHOTS.get(f"snap:{cik_norm}")
+        snap_obj: Any = PeerCompanySnapshot.model_validate(raw_snap) if isinstance(raw_snap, Mapping) else None
+        if snap_obj is None and sym_u and not cache_only:
+            snap_obj, _ = load_or_fetch_company_snapshot(
+                symbol=sym_u,
+                cik=cik_norm,
+                user_agent=ua,
+                limiter=lim,
+                snapshot_cache=PEER_COMPANY_SNAPSHOTS,
+                min_projection_version=6,
+                cache_only=False,
+                policy=pol,
+            )
+        if snap_obj is None:
+            return {}, ""
+        qual = qualify_bank_sector_applicability(sic=snap_obj.sic, snap=snap_obj, as_of=as_of)
+        if not qual.is_bank_v4a:
+            return {}, ""
+        disclosure, _ = fetch_bank_disclosure_snapshot(
+            snap=snap_obj,
+            user_agent=ua,
+            limiter=lim,
+            bank_cache=BANK_DISCLOSURE_SNAPSHOTS,
+            as_of=as_of,
+            cache_only=cache_only,
+            policy=pol,
+        )
+        if disclosure is None:
+            return {}, ""
+        diag = evaluate_bank_diagnostics(disclosure, as_of=as_of)
+    except Exception:
+        return {}, ""
+
+    obs: dict[str, Any] = {}
+    for k, v in (
+        ("cet1_standardized_pct", disclosure.cet1_standardized_pct),
+        ("cet1_buffer_bps", diag.cet1_buffer_bps),
+        ("slr_buffer_bps", diag.slr_buffer_bps),
+        ("rotce_q_pct", diag.rotce_q_pct),
+        ("tbvps_reported_usd", disclosure.tbvps_bridge.tbvps_reported_usd),
+        ("tbvps_xbrl_std_usd", disclosure.tbvps_bridge.tbvps_xbrl_std_usd),
+        ("efficiency_ratio_gaap_pct", diag.efficiency_ratio_gaap_pct),
+        ("htm_loss_pct_of_tce", diag.htm_loss_pct_of_tce),
+        ("pro_forma_cet1_ex_htm_pct", diag.pro_forma_cet1_ex_htm_pct),
+        ("deposits_qoq_pct", diag.deposits_qoq_pct),
+        ("provision_to_ppnr_pct", diag.provision_to_ppnr_pct),
+        ("acl_to_loans_pct", diag.acl_to_loans_pct),
+    ):
+        if v is not None:
+            obs[k] = v
+    digest = (
+        f"{disclosure.symbol} ({disclosure.period_end_date}) Bank Disclosure: "
+        f"CET1={disclosure.cet1_standardized_pct}% (buffer={diag.cet1_buffer_bps}bps), "
+        f"ROTCE={diag.rotce_q_pct}%, HTM/TCE={diag.htm_loss_pct_of_tce}% "
+        f"(ProForma CET1 ex-HTM={diag.pro_forma_cet1_ex_htm_pct}%), "
+        f"DepositsQoQ={diag.deposits_qoq_pct}%, Efficiency={diag.efficiency_ratio_gaap_pct}%."
+    )
+    return obs, digest
+
+
+def _run_peer_compare_core(
+    *,
+    account_id: str,
+    primary_symbol: str,
+    symbols: list[str],
+    as_of: date | None = None,
+    cache_only: bool = False,
+    exclude_non_comparable_from_median: bool = True,
+    manual_prices: Mapping[str, str] | None = None,
+    fx_rates_to_usd: Mapping[str, str] | None = None,
+    tbvps_basis: Literal["reported_market_convention", "xbrl_standardized"] = "reported_market_convention",
+    bank_coe_pct: Decimal = Decimal("10.0"),
+    bank_terminal_g_pct: Decimal = Decimal("3.0"),
+    hook_dict: Mapping[str, Any] | None = None,
+) -> PeerComparisonMatrix:
+    t0 = monotonic()
+    hooks = hook_dict or {}
+    policy = hooks.get("policy") or load_fin_data_policy()
+    user_agent = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
+    limiter = hooks.get("limiter") or SecPacingLimiter.from_env()
+    transport = hooks.get("transport")
+    stream_transport = hooks.get("stream_transport")
+    bank_cache = hooks.get("bank_cache") if hooks.get("bank_cache") is not None else BANK_DISCLOSURE_SNAPSHOTS
+    snap_cache = hooks.get("snapshot_cache") if hooks.get("snapshot_cache") is not None else PEER_COMPANY_SNAPSHOTS
+    _curated, fpi_meta_map = load_peer_groups_config()
+
+    cache_hits = 0
+    cache_misses = 0
+    loaded_by_sym: dict[str, tuple[Any, Any, Decimal | None]] = {}
+
+    def _load_one(sym: str) -> tuple[str, Any, Any, Decimal | None, bool]:
+        snap, hit = load_or_fetch_company_snapshot(
+            symbol=sym,
+            user_agent=user_agent,
+            limiter=limiter,
+            snapshot_cache=snap_cache,
+            min_projection_version=6,
+            cache_only=cache_only,
+            transport=transport,
+            stream_transport=stream_transport,
+            policy=policy,
+        )
+        if snap is None:
+            return sym, None, None, None, False
+        if "quote_resolver" in hooks and callable(hooks["quote_resolver"]):
+            p_dec, p_date, p_src = hooks["quote_resolver"](sym, as_of)
+        else:
+            p_dec, p_date, p_src = _resolve_peer_quote_usd(
+                sym,
+                account_id=account_id,
+                as_of=as_of,
+                cache_only=cache_only,
+                manual_prices=manual_prices,
+                policy=policy,
+            )
+        fx_val: Decimal | None = None
+        if fx_rates_to_usd:
+            raw_fx = fx_rates_to_usd.get(snap.currency.upper()) or fx_rates_to_usd.get(sym)
+            if raw_fx is not None:
+                try:
+                    fx_val = Decimal(str(raw_fx).strip())
+                except Exception:
+                    fx_val = None
+        metrics = compute_company_metrics_from_snapshot(
+            snap,
+            price_usd=p_dec,
+            price_as_of_date=p_date,
+            price_source=p_src,
+            as_of=as_of,
+            fpi_meta=fpi_meta_map.get(sym),
+            fx_to_usd=fx_val,
+        )
+        return sym, snap, metrics, p_dec, hit
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=min(4, len(symbols))) as pool:
+        futs = [pool.submit(_load_one, s) for s in symbols]
+        for fut in futs:
+            try:
+                sym_k, snap_obj, m_row, px_val, is_hit = fut.result()
+                if m_row is not None and snap_obj is not None:
+                    loaded_by_sym[sym_k] = (snap_obj, m_row, px_val)
+                    if is_hit:
+                        cache_hits += 1
+                    else:
+                        cache_misses += 1
+            except SecPacingError as err:
+                if err.reason == "ticker_not_found":
+                    continue
+                raise _handle_sec_pacing_error(err) from err
+
+    ordered_snaps = [loaded_by_sym[s][0] for s in symbols if s in loaded_by_sym]
+    ordered_rows = [loaded_by_sym[s][1] for s in symbols if s in loaded_by_sym]
+    ordered_prices = [loaded_by_sym[s][2] for s in symbols if s in loaded_by_sym]
+
+    quals = [qualify_bank_sector_applicability(sic=sn.sic, snap=sn, as_of=as_of) for sn in ordered_snaps]
+    all_bank_v4a = bool(ordered_snaps) and all(q.is_bank_v4a for q in quals)
+
+    if all_bank_v4a:
+        def _load_bank_metric(idx_item: tuple[Any, Decimal | None]) -> PeerBankMetrics | None:
+            sn, px_d = idx_item
+            disc_loader = hooks.get("disclosure_loader")
+            if callable(disc_loader):
+                disc, bhit = disc_loader(sn, as_of=as_of, cache_only=cache_only)
+            else:
+                disc, bhit = fetch_bank_disclosure_snapshot(
+                    snap=sn,
+                    user_agent=user_agent,
+                    limiter=limiter,
+                    bank_cache=bank_cache,
+                    as_of=as_of,
+                    cache_only=cache_only,
+                    policy=policy,
+                    transport=transport,
+                    stream_transport=stream_transport,
+                )
+            if disc is None:
+                return None
+            diag = evaluate_bank_diagnostics(disc, as_of=as_of)
+            val = evaluate_bank_valuation(
+                disc,
+                price_usd=px_d,
+                coe_pct=bank_coe_pct,
+                terminal_g_pct=bank_terminal_g_pct,
+                tbvps_basis=tbvps_basis,
+                as_of=as_of,
+            )
+            return PeerBankMetrics(
+                symbol=disc.symbol,
+                cik=disc.cik,
+                company_name=disc.company_name,
+                sic=disc.sic,
+                bank_subtype=disc.bank_subtype,
+                period_end_date=disc.period_end_date,
+                fiscal_period_label=disc.fiscal_period_label,
+                bank_quality_light=diag.bank_quality_light,
+                price_usd=val.price_usd,
+                market_cap_usd=val.market_cap_usd,
+                tbvps_reported_usd=disc.tbvps_bridge.tbvps_reported_usd,
+                tbvps_xbrl_std_usd=disc.tbvps_bridge.tbvps_xbrl_std_usd,
+                tbvps_primary_usd=(
+                    disc.tbvps_bridge.tbvps_xbrl_std_usd
+                    if val.primary_tbvps_basis in ("xbrl_standardized", "xbrl_std_fallback")
+                    else disc.tbvps_bridge.tbvps_reported_usd
+                ),
+                tbvps_basis=val.primary_tbvps_basis,
+                tbvps_gap_pct=disc.tbvps_bridge.tbvps_gap_pct,
+                p_to_tbv_primary=val.p_to_tbv_primary,
+                p_to_tbv_xbrl_std=val.p_to_tbv_xbrl_std,
+                p_to_bv=val.p_to_bv,
+                p_to_e_ttm=val.p_to_e_ttm,
+                p_to_ppnr_ttm=val.p_to_ppnr_ttm,
+                rotce_q_pct=diag.rotce_q_pct,
+                implied_rotce_pct=val.implied_rotce_pct,
+                rotce_spread_vs_implied_pp=val.rotce_spread_vs_implied_pp,
+                efficiency_ratio_gaap_pct=diag.efficiency_ratio_gaap_pct,
+                ppnr_margin_pct=diag.ppnr_margin_pct,
+                nii_share_pct=diag.nii_share_pct,
+                cet1_standardized_pct=disc.cet1_standardized_pct,
+                cet1_reg_min_pct=disc.cet1_reg_min_pct,
+                cet1_buffer_bps=diag.cet1_buffer_bps,
+                htm_loss_pct_of_tce=diag.htm_loss_pct_of_tce,
+                pro_forma_cet1_ex_htm_pct=diag.pro_forma_cet1_ex_htm_pct,
+                provision_to_ppnr_pct=diag.provision_to_ppnr_pct,
+            )
+
+        with ThreadPoolExecutor(max_workers=min(4, len(ordered_snaps))) as bpool:
+            bank_rows = [r for r in bpool.map(_load_bank_metric, zip(ordered_snaps, ordered_prices)) if r is not None]
+        if len(bank_rows) == len(ordered_snaps):
+            elapsed_ms = int((monotonic() - t0) * 1000)
+            return assemble_bank_peer_matrix(
+                primary_symbol=primary_symbol,
+                rows=ordered_rows,
+                bank_rows=bank_rows,
+                tbvps_display_mode=tbvps_basis,
+                coe_pct=bank_coe_pct,
+                terminal_g_pct=bank_terminal_g_pct,
+                as_of=as_of,
+                exclude_non_comparable_from_median=exclude_non_comparable_from_median,
+                cache_hits=cache_hits,
+                cache_misses=cache_misses,
+                elapsed_ms=elapsed_ms,
+            )
+
+    elapsed_ms = int((monotonic() - t0) * 1000)
+    return assemble_peer_matrix(
+        primary_symbol=primary_symbol,
+        rows=ordered_rows,
+        as_of=as_of,
+        exclude_non_comparable_from_median=exclude_non_comparable_from_median,
+        cache_hits=cache_hits,
+        cache_misses=cache_misses,
+        elapsed_ms=elapsed_ms,
+    )
+
+
 @app.post(
     "/v2/research/peers/compare",
     response_model=PeerComparisonMatrix,
@@ -9192,105 +9495,43 @@ def compare_research_peers(
     http_request: Request,
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> PeerComparisonMatrix:
-    """Layer 1 0-LLM deterministic peer alignment & relative valuation matrix."""
-    t0 = monotonic()
+    """Layer 1 0-LLM deterministic peer alignment & relative valuation matrix (supports V4a US Major Banks)."""
     account = _authenticated_account(authorization)
     prim = request.primary_symbol.strip().upper()
     raw_syms = [s.strip().upper() for s in (request.symbols or []) if s.strip()]
     if not raw_syms:
         sugg = suggest_peers_for_symbol(prim)
-        raw_syms = [prim, *sugg.recommended_peers][:5]
+        raw_syms = [prim, *sugg.recommended_peers][:6]
     if prim not in raw_syms:
         raw_syms = [prim, *raw_syms]
     symbols = list(dict.fromkeys(raw_syms))[:6]
     if len(symbols) < 2:
         raise ApiProblem(422, "invalid_request", "At least 2 unique symbols are required for peer comparison.")
+    try:
+        coe_dec = Decimal(str(request.bank_coe_pct))
+        g_dec = Decimal(str(request.bank_terminal_g_pct))
+    except Exception as err:
+        raise ApiProblem(422, "invalid_request", f"Invalid Gordon assumptions: {err}") from err
+    if coe_dec <= g_dec:
+        raise ApiProblem(422, "invalid_request", "bank_coe_pct must be strictly greater than bank_terminal_g_pct.")
 
     hooks = getattr(http_request.app.state, "peer_compare_hooks", None)
     hook_dict = hooks if isinstance(hooks, Mapping) else {}
-    policy = load_fin_data_policy()
-    user_agent = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
-    limiter = hook_dict.get("limiter") or SecPacingLimiter.from_env()
-    transport = hook_dict.get("transport")
-    stream_transport = hook_dict.get("stream_transport")
-    _curated, fpi_meta_map = load_peer_groups_config()
-
-    cache_hits = 0
-    cache_misses = 0
-    rows_by_sym: dict[str, Any] = {}
-
-    def _load_one(sym: str) -> tuple[str, Any, bool]:
-        snap, hit = load_or_fetch_company_snapshot(
-            symbol=sym,
-            user_agent=user_agent,
-            limiter=limiter,
-            snapshot_cache=PEER_COMPANY_SNAPSHOTS,
-            cache_only=request.cache_only,
-            transport=transport,
-            stream_transport=stream_transport,
-            policy=policy,
-        )
-        if snap is None:
-            return sym, None, False
-        if "quote_resolver" in hook_dict and callable(hook_dict["quote_resolver"]):
-            p_dec, p_date, p_src = hook_dict["quote_resolver"](sym, request.as_of)
-        else:
-            p_dec, p_date, p_src = _resolve_peer_quote_usd(
-                sym,
-                account_id=account.account_id,
-                as_of=request.as_of,
-                cache_only=request.cache_only,
-                manual_prices=request.manual_prices,
-                policy=policy,
-            )
-        fx_val: Decimal | None = None
-        if request.fx_rates_to_usd:
-            raw_fx = request.fx_rates_to_usd.get(snap.currency.upper()) or request.fx_rates_to_usd.get(sym)
-            if raw_fx is not None:
-                try:
-                    fx_val = Decimal(str(raw_fx).strip())
-                except Exception:
-                    fx_val = None
-        metrics = compute_company_metrics_from_snapshot(
-            snap,
-            price_usd=p_dec,
-            price_as_of_date=p_date,
-            price_source=p_src,
-            as_of=request.as_of,
-            fpi_meta=fpi_meta_map.get(sym),
-            fx_to_usd=fx_val,
-        )
-        return sym, metrics, hit
-
-    from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=min(4, len(symbols))) as pool:
-        futs = [pool.submit(_load_one, s) for s in symbols]
-        for fut in futs:
-            try:
-                sym_k, m_row, is_hit = fut.result()
-                if m_row is not None:
-                    rows_by_sym[sym_k] = m_row
-                    if is_hit:
-                        cache_hits += 1
-                    else:
-                        cache_misses += 1
-            except SecPacingError as err:
-                if err.reason == "ticker_not_found":
-                    continue
-                raise _handle_sec_pacing_error(err) from err
-
-    ordered_rows = [rows_by_sym[s] for s in symbols if s in rows_by_sym]
-    elapsed_ms = int((monotonic() - t0) * 1000)
-    matrix = assemble_peer_matrix(
+    matrix = _run_peer_compare_core(
+        account_id=account.account_id,
         primary_symbol=prim,
-        rows=ordered_rows,
+        symbols=symbols,
         as_of=request.as_of,
+        cache_only=request.cache_only,
         exclude_non_comparable_from_median=request.exclude_non_comparable_from_median,
-        cache_hits=cache_hits,
-        cache_misses=cache_misses,
-        elapsed_ms=elapsed_ms,
+        manual_prices=request.manual_prices,
+        fx_rates_to_usd=request.fx_rates_to_usd,
+        tbvps_basis=request.tbvps_basis,
+        bank_coe_pct=coe_dec,
+        bank_terminal_g_pct=g_dec,
+        hook_dict=hook_dict,
     )
-    if ordered_rows:
+    if matrix.companies or matrix.bank_companies:
         PEER_COMPARE_CACHE.put(
             matrix.comparison_id,
             {"account_id": account.account_id, "matrix": matrix.model_dump(mode="json")},
@@ -9361,7 +9602,14 @@ class PeerWatchCreateRequest(BaseModel):
     primary_symbol: str = Field(min_length=1, max_length=16)
     symbols: list[str] = Field(min_length=2, max_length=6)
     topic_id: str | None = None
-    metric_key: Literal["peer_reverse_dcf_spread_bps", "peer_revenue_yoy_rank", "peer_fcf_margin_vs_median_pp"] = "peer_reverse_dcf_spread_bps"
+    metric_key: Literal[
+        "peer_reverse_dcf_spread_bps",
+        "peer_revenue_yoy_rank",
+        "peer_fcf_margin_vs_median_pp",
+        "peer_ptbv_vs_median_x",
+        "peer_rotce_spread_pp",
+        "peer_cet1_buffer_bps",
+    ] = "peer_reverse_dcf_spread_bps"
     operator: Literal["<=", ">=", "<", ">"] = "<="
     threshold_decimal: str = "1500"
     description: str | None = Field(default=None, max_length=300)
@@ -9458,6 +9706,193 @@ def upsert_peer_relative_watch(
     )
     WATCH_SUBSCRIPTIONS.put(sub.subscription_id, sub)
     return sub
+
+
+def _run_bank_analyze_core(
+    *,
+    account_id: str,
+    symbol: str,
+    cik: str | None = None,
+    as_of: date | None = None,
+    cache_only: bool = False,
+    force_refresh: bool = False,
+    tbvps_basis: Literal["reported_market_convention", "xbrl_standardized"] = "reported_market_convention",
+    coe_pct: Decimal = Decimal("10.0"),
+    terminal_g_pct: Decimal = Decimal("3.0"),
+    manual_price: str | None = None,
+    hook_dict: Mapping[str, Any] | None = None,
+) -> BankAnalysisResponse:
+    """Shared deterministic V4a bank disclosure, diagnostics & Gordon valuation pipeline."""
+    t0 = monotonic()
+    sym_u = symbol.strip().upper()
+    hooks = hook_dict or {}
+    policy = hooks.get("policy") or load_fin_data_policy()
+    user_agent = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
+    limiter = hooks.get("limiter") or SecPacingLimiter.from_env()
+    transport = hooks.get("transport")
+    stream_transport = hooks.get("stream_transport")
+    snap_cache = hooks.get("snapshot_cache") if hooks.get("snapshot_cache") is not None else PEER_COMPANY_SNAPSHOTS
+    bank_cache = hooks.get("bank_cache") if hooks.get("bank_cache") is not None else BANK_DISCLOSURE_SNAPSHOTS
+
+    cik_norm = cik10(cik) if (cik and str(cik).strip().isdigit()) else None
+    if callable(hooks.get("snap_loader")):
+        snap = hooks["snap_loader"](cik_norm, sym_u, cache_only=cache_only)
+    else:
+        try:
+            snap, _hit = load_or_fetch_company_snapshot(
+                symbol=sym_u,
+                cik=cik_norm,
+                user_agent=user_agent,
+                limiter=limiter,
+                snapshot_cache=snap_cache,
+                min_projection_version=6,
+                cache_only=cache_only,
+                policy=policy,
+                transport=transport,
+                stream_transport=stream_transport,
+            )
+        except SecPacingError as err:
+            raise _handle_sec_pacing_error(err) from err
+    if snap is None:
+        raise ApiProblem(404, "not_found", f"SEC snapshot unavailable for {sym_u}.")
+
+    qual = qualify_bank_sector_applicability(sic=snap.sic, snap=snap, as_of=as_of)
+    if not qual.is_bank_v4a:
+        raise ApiProblem(
+            422,
+            "invalid_request",
+            f"Issuer {sym_u} is ineligible for V4a US Major Bank Plugin ({qual.reason}).",
+            details=[
+                {
+                    "location": "body/symbol",
+                    "message": f"{qual.reason} (is_bank_v4a=False, sic={qual.sic}, bank_subtype={qual.bank_subtype})",
+                }
+            ],
+        )
+
+    disc_loader = hooks.get("disclosure_loader")
+    if callable(disc_loader):
+        disclosure, hit = disc_loader(snap, as_of=as_of, cache_only=cache_only, force_refresh=force_refresh)
+    else:
+        try:
+            disclosure, hit = fetch_bank_disclosure_snapshot(
+                snap=snap,
+                user_agent=user_agent,
+                limiter=limiter,
+                bank_cache=bank_cache,
+                as_of=as_of,
+                cache_only=cache_only,
+                policy=policy,
+                transport=transport,
+                stream_transport=stream_transport,
+                force_refresh=force_refresh,
+            )
+        except SecPacingError as err:
+            raise _handle_sec_pacing_error(err) from err
+    if disclosure is None:
+        raise ApiProblem(404, "not_found", f"Bank disclosure snapshot unavailable for {sym_u}.")
+
+    manual_map = {sym_u: manual_price} if manual_price else None
+    if callable(hooks.get("quote_resolver")):
+        p_dec, _p_dt, _p_src = hooks["quote_resolver"](sym_u, as_of)
+    else:
+        p_dec, _p_dt, _p_src = _resolve_peer_quote_usd(
+            sym_u,
+            account_id=account_id,
+            as_of=as_of,
+            cache_only=cache_only,
+            manual_prices=manual_map,
+            policy=policy,
+        )
+    diag = evaluate_bank_diagnostics(disclosure, as_of=as_of)
+    val = evaluate_bank_valuation(
+        disclosure,
+        price_usd=p_dec,
+        coe_pct=coe_pct,
+        terminal_g_pct=terminal_g_pct,
+        tbvps_basis=tbvps_basis,
+        as_of=as_of,
+    )
+    return BankAnalysisResponse(
+        symbol=disclosure.symbol,
+        cik=disclosure.cik,
+        qualification=qual,
+        disclosure=disclosure,
+        diagnostics=diag,
+        valuation=val,
+        cache_hit=hit,
+        elapsed_ms=int((monotonic() - t0) * 1000),
+    )
+
+
+@app.post(
+    "/v2/research/banks/analyze",
+    response_model=BankAnalysisResponse,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+    include_in_schema=False,
+)
+def analyze_us_major_bank(
+    request: BankAnalyzeApiRequest,
+    http_request: Request,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> BankAnalysisResponse:
+    """0-LLM V4a US Major Bank 5-pillar diagnostics, segment reconciliation & Gordon P/TBV engine."""
+    account = _authenticated_account(authorization)
+    try:
+        coe_dec = Decimal(str(request.coe_pct))
+        g_dec = Decimal(str(request.terminal_g_pct))
+    except Exception as err:
+        raise ApiProblem(422, "invalid_request", f"Invalid Gordon assumptions: {err}") from err
+    if coe_dec <= g_dec:
+        raise ApiProblem(422, "invalid_request", "coe_pct must be strictly greater than terminal_g_pct.")
+    hooks = getattr(http_request.app.state, "bank_analysis_hooks", None)
+    hook_dict = hooks if isinstance(hooks, Mapping) else {}
+    return _run_bank_analyze_core(
+        account_id=account.account_id,
+        symbol=request.symbol,
+        cik=request.cik,
+        as_of=request.as_of,
+        cache_only=request.cache_only,
+        force_refresh=request.force_refresh,
+        tbvps_basis=request.tbvps_basis,
+        coe_pct=coe_dec,
+        terminal_g_pct=g_dec,
+        manual_price=request.manual_price,
+        hook_dict=hook_dict,
+    )
+
+
+@app.get(
+    "/v2/research/banks/segments",
+    response_model=BankSegmentSnapshot,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+    include_in_schema=False,
+)
+def get_us_major_bank_segments(
+    http_request: Request,
+    symbol: str = Query(min_length=1, max_length=16),
+    cik: str | None = Query(default=None, max_length=20),
+    as_of: date | None = Query(default=None),
+    cache_only: bool = Query(default=False),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> BankSegmentSnapshot:
+    """Return GAAP/FTE reconciled 10-Q/10-K bank segment table for qualified V4a issuers."""
+    account = _authenticated_account(authorization)
+    hooks = getattr(http_request.app.state, "bank_analysis_hooks", None)
+    hook_dict = hooks if isinstance(hooks, Mapping) else {}
+    res = _run_bank_analyze_core(
+        account_id=account.account_id,
+        symbol=symbol,
+        cik=cik,
+        as_of=as_of,
+        cache_only=cache_only,
+        hook_dict=hook_dict,
+    )
+    if res.disclosure.segments is None:
+        raise ApiProblem(404, "not_found", f"Bank segment table unavailable for {res.symbol}.")
+    return res.disclosure.segments
 
 
 # --------------------------------------------------------------------------- V2.5 Governance, Capital Allocation & Credibility API
@@ -10211,6 +10646,41 @@ def _v3a_sec_loaders(
     return _snap_loader, _redline_loader, _cap_alloc_loader, _v25_cred_loader
 
 
+def _v3a_bank_disclosure_loader(
+    *,
+    cache_only: bool,
+    hook_dict: Mapping[str, Any] | None = None,
+) -> Any:
+    """Build V4a BankDisclosureSnapshot loader for V3a Track 1 segment call collision."""
+    hooks = hook_dict or {}
+    if callable(hooks.get("bank_disclosure_loader")):
+        return hooks["bank_disclosure_loader"]
+    pol = load_fin_data_policy()
+    ua = os.getenv("FORESIGHTNINE_SEC_USER_AGENT") or os.getenv("SEC_EDGAR_USER_AGENT") or "ForesightNine/1.0 research@foresightnine.local"
+    lim = hooks.get("limiter") or SecPacingLimiter.from_env()
+    transport = hooks.get("transport")
+    stream_transport = hooks.get("stream_transport")
+
+    def _loader(snap: Any, submissions: Mapping[str, Any] | None, as_of_in: date | None) -> BankDisclosureSnapshot | None:
+        if snap is None:
+            return None
+        disc, _hit = fetch_bank_disclosure_snapshot(
+            snap=snap,
+            user_agent=ua,
+            limiter=lim,
+            bank_cache=BANK_DISCLOSURE_SNAPSHOTS,
+            submissions=submissions,
+            as_of=as_of_in,
+            cache_only=cache_only,
+            policy=pol,
+            transport=transport,
+            stream_transport=stream_transport,
+        )
+        return disc
+
+    return _loader
+
+
 def _extract_reg_g_tables_markdown(raw_html: str, *, max_tables: int = 2, max_chars: int = 1200) -> list[str]:
     """Stdlib HTMLParser extraction of Reg-G GAAP-to-Non-GAAP reconciliation tables (reference only, never auto-red!)."""
     from html.parser import HTMLParser
@@ -10664,6 +11134,7 @@ def _load_v3a_report_for_tool(
         except ValueError:
             pass
     snap_loader, redline_loader, cap_loader, v25_loader = _v3a_sec_loaders(cache_only=True)
+    bank_loader = _v3a_bank_disclosure_loader(cache_only=True)
     report, ledger, _vcl = run_call_verification_pipeline(
         account_id=account_id,
         sources=loaded,
@@ -10677,6 +11148,7 @@ def _load_v3a_report_for_tool(
         redline_loader=redline_loader,
         capital_allocation_loader=cap_loader,
         v25_credibility_loader=v25_loader,
+        bank_disclosure_loader=bank_loader,
         doc_facts_repo=V3A_DOC_PARSED_FACTS,
         l2_mgmt_repo=V3A_CALL_L2_EXTRACTIONS,
         l2_sellside_repo=V3A_SELLSIDE_EXTRACTIONS,
@@ -10932,6 +11404,12 @@ def _run_background_radar_sweep_once(*, max_subs_per_sweep: int = 20) -> int:
                         run_earnings_delta_review,
                     )
                     try:
+                        bank_obs, bank_filing_txt = _build_bank_delta_inputs(
+                            cik=sub.cik,
+                            symbol=sub.symbol,
+                            as_of=None,
+                            cache_only=False,
+                        )
                         stage0 = build_delta_stage0_package(
                             cik=sub.cik,
                             symbol=sub.symbol,
@@ -10941,11 +11419,11 @@ def _run_background_radar_sweep_once(*, max_subs_per_sweep: int = 20) -> int:
                             disclosed_at=lifecycle_clock.now().date().isoformat(),
                             prior_dossier=prior_dossier,
                             ledger=led,
-                            new_observed_metrics={},
+                            new_observed_metrics=bank_obs,
                         )
                         diff = run_earnings_delta_review(
                             stage0=stage0,
-                            filing_text="",
+                            filing_text=bank_filing_txt,
                             source_id=f"sec_{new_accs[0]}",
                             ledger=led,
                             runner=acct_runner,
@@ -11203,6 +11681,7 @@ def run_call_audit_endpoint(
         and warm_l2_complete
     ):
         snap_loader, redline_loader, cap_loader, v25_loader = _v3a_sec_loaders(cache_only=True, hook_dict=hook_dict)
+        bank_loader = _v3a_bank_disclosure_loader(cache_only=True, hook_dict=hook_dict)
         thesis_lg = _latest_confirmed_ledger(account.account_id, request.topic_id) if request.topic_id else None
         pillars = [{"pillar": c.pillar, "keywords": [c.pillar, c.claim_text[:60]]} for c in (thesis_lg.claims if thesis_lg else [])]
         report, ledger, _vcl = run_call_verification_pipeline(
@@ -11220,6 +11699,7 @@ def run_call_audit_endpoint(
             redline_loader=redline_loader,
             capital_allocation_loader=cap_loader,
             v25_credibility_loader=v25_loader,
+            bank_disclosure_loader=bank_loader,
             thesis_pillars=pillars,
             doc_facts_repo=V3A_DOC_PARSED_FACTS,
             l2_mgmt_repo=V3A_CALL_L2_EXTRACTIONS,
@@ -11385,6 +11865,7 @@ def run_call_audit_endpoint(
         try:
             snap_loader, redline_loader, cap_loader, v25_loader = _v3a_sec_loaders(cache_only=False, hook_dict=hook_dict)
             eight_k_loader, footnote_loader = _v3a_aux_loaders(cache_only=False, hook_dict=hook_dict)
+            bank_loader = _v3a_bank_disclosure_loader(cache_only=False, hook_dict=hook_dict)
             report, ledger, _vcl = run_call_verification_pipeline(
                 account_id=account.account_id,
                 sources=loaded,
@@ -11402,6 +11883,7 @@ def run_call_audit_endpoint(
                 redline_loader=redline_loader,
                 capital_allocation_loader=cap_loader,
                 v25_credibility_loader=v25_loader,
+                bank_disclosure_loader=bank_loader,
                 eight_k_loader=eight_k_loader,
                 footnote_fallback_loader=footnote_loader,
                 thesis_pillars=pillars,

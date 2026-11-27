@@ -85,6 +85,8 @@ RetrievalMethod = Literal[
     "peer_relative_valuation",
     "governance_capital_audit",
     "call_qa_verification",
+    "bank_fundamentals_diagnostics",
+    "bank_valuation_and_peer_compare",
     "web_html",
     "web_pdf",
 ]

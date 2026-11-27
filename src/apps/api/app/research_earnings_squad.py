@@ -76,6 +76,17 @@ from .research_earnings_diagnostics import (
     period_financials_from_statement_lines,
     valuation_and_implied_expectations,
 )
+from .fin_data.adapters.sec_bank_disclosure import (
+    BankDisclosureSnapshot,
+    fetch_bank_disclosure_snapshot,
+    qualify_bank_sector_applicability,
+)
+from .research_bank_diagnostics import (
+    BankDiagnosticsSummary,
+    BankValuationResult,
+    evaluate_bank_diagnostics,
+    evaluate_bank_valuation,
+)
 from .research_source_policy import is_fred_source, source_eligibility
 from .research_sources import ResearchSource, SourcePermissions
 from .research_tools_registry import (
@@ -126,6 +137,7 @@ WORKER_ALLOWED_TOOLS: dict[WorkerRole, frozenset[str]] = {
         "sec_earnings_release",
         "sec_filing_sections",
         "guidance_and_nongaap_reconciler",
+        "bank_fundamentals_diagnostics",
         "read_sources",
         "search_source",
         "outline_source",
@@ -146,6 +158,7 @@ WORKER_ALLOWED_TOOLS: dict[WorkerRole, frozenset[str]] = {
         "earnings_transcript",
         "guidance_and_nongaap_reconciler",
         "valuation_and_implied_expectations",
+        "bank_valuation_and_peer_compare",
         "read_sources",
         "search_source",
         "outline_source",
@@ -184,6 +197,8 @@ TOOL_TO_ORG_ACTION: dict[str, OrgActionKind] = {
     "earnings_quality_diagnostics": "INSPECTING",
     "guidance_and_nongaap_reconciler": "INSPECTING",
     "valuation_and_implied_expectations": "INSPECTING",
+    "bank_fundamentals_diagnostics": "INSPECTING",
+    "bank_valuation_and_peer_compare": "INSPECTING",
 }
 
 _NODE_META: dict[str, tuple[str, str, str | None]] = {
@@ -553,6 +568,9 @@ class EarningsPrefetchSnapshot(_FrozenContract):
     valuation: ValuationAndExpectationsResult | None = None
     consensus_summary: ConsensusSnapshotSummary = Field(default_factory=ConsensusSnapshotSummary)
     transcript_index: TranscriptIndexEntry = Field(default_factory=TranscriptIndexEntry)
+    bank_disclosure: BankDisclosureSnapshot | None = None
+    bank_diagnostics: BankDiagnosticsSummary | None = None
+    bank_valuation: BankValuationResult | None = None
     prefetched_sources: list[PrefetchedSourceRef] = Field(default_factory=list)
     open_gaps: list[SquadGap] = Field(default_factory=list)
     snapshot_sha256: str = ""
@@ -1175,10 +1193,12 @@ def _cached_model_json_schema(model_cls: type[BaseModel]) -> dict[str, Any]:
 def _resolve_method_pack_context_cached(
     sic_key: str | None,
     preferred_pack_id: str | None,
+    active_sector_plugin: str | None = None,
 ) -> dict[str, Any]:
-    """Resolve and cache L1 earnings backbone + L2 non-financial industry KPI pack."""
+    """Resolve and cache L1 earnings backbone + L2 industry/sector KPI pack (D2 plugin-aware)."""
     sector = evaluate_sec_sic_gate(sic_key)
-    if sector.is_gated:
+    bank_plugin_active = active_sector_plugin == "us_large_bank_v4a"
+    if sector.is_gated and not bank_plugin_active:
         return {
             "l1_pack_id": "earnings_review",
             "l2_pack_id": None,
@@ -1188,6 +1208,8 @@ def _resolve_method_pack_context_cached(
         }
 
     matched_l2: str | None = preferred_pack_id
+    if bank_plugin_active and not matched_l2:
+        matched_l2 = "kpi_us_large_banks"
     composed: Any = None
     rm_loaded = False
     try:
@@ -1199,27 +1221,34 @@ def _resolve_method_pack_context_cached(
                 matched_l2 = matcher(sic_key)
         composer = getattr(rm, "compose_earnings_method_pack", None)
         if callable(composer):
-            composed = composer(sic=sic_key, industry_pack_id=matched_l2)
+            composed = composer(
+                sic=sic_key,
+                industry_pack_id=matched_l2,
+                active_sector_plugin=active_sector_plugin,
+            )
     except Exception:
         composed = None
 
-    if not rm_loaded and matched_l2 is None and sector.sic_code is not None:
+    if not rm_loaded and matched_l2 is None and sector.sic_code is not None and not sector.is_gated:
         sic_num = int(sector.sic_code)
         for lo, hi, pack_id in _FALLBACK_SIC_RANGES:
             if lo <= sic_num <= hi:
                 matched_l2 = pack_id
                 break
 
-    reason = (
-        f"Matched L2 industry pack {matched_l2} for SIC {sector.sic_code}."
-        if matched_l2
-        else f"No specific L2 KPI pack matched SIC {sector.sic_code or 'unknown'}; using L1 earnings_review backbone."
-    )
+    if bank_plugin_active:
+        reason = f"V4a US Major Bank Plugin activated ({active_sector_plugin}); attached L2 pack {matched_l2}."
+    else:
+        reason = (
+            f"Matched L2 industry pack {matched_l2} for SIC {sector.sic_code}."
+            if matched_l2
+            else f"No specific L2 KPI pack matched SIC {sector.sic_code or 'unknown'}; using L1 earnings_review backbone."
+        )
     return {
         "l1_pack_id": "earnings_review",
         "l2_pack_id": matched_l2,
         "reason": reason,
-        "recommended_alternatives": [],
+        "recommended_alternatives": list(sector.recommended_alternatives) if bank_plugin_active else [],
         "composed_pack": composed,
     }
 
@@ -1228,10 +1257,12 @@ def resolve_method_pack_context(
     sic: str | int | None,
     *,
     preferred_pack_id: str | None = None,
+    active_sector_plugin: str | None = None,
 ) -> dict[str, Any]:
-    """Resolve L1 earnings backbone + L2 non-financial industry KPI pack deterministically."""
+    """Resolve L1 earnings backbone + L2 industry KPI pack deterministically."""
     sic_key = str(sic).strip() if sic is not None else None
-    return dict(_resolve_method_pack_context_cached(sic_key, preferred_pack_id))
+    plugin_key = str(active_sector_plugin).strip() if active_sector_plugin else None
+    return dict(_resolve_method_pack_context_cached(sic_key, preferred_pack_id, plugin_key))
 
 
 # --------------------------------------------------------------------------- Org Graph Emitter
@@ -1604,6 +1635,8 @@ _TOOL_ARGUMENT_HINTS: dict[str, str] = {
     "earnings_quality_diagnostics": "Provide 'current' PeriodFinancials (with 'period_label', 'revenue', etc.), optional 'prior_qoq'/'prior_yoy'/'ttm', 'sic', and 'rationale'.",
     "guidance_and_nongaap_reconciler": "Provide 'period_label', 'guidance_metrics' and/or 'nongaap_bridges', and 'rationale'.",
     "valuation_and_implied_expectations": "Provide 'close_price', 'diluted_shares', TTM metrics ('ttm_revenue', 'ttm_fcf', etc.), 'sic', and 'rationale'.",
+    "bank_fundamentals_diagnostics": "Provide 'symbol' (optional 'cik', 'as_of', 'cache_only') and 'rationale'.",
+    "bank_valuation_and_peer_compare": "Provide 'primary_symbol', optional 'peer_symbols', 'tbvps_basis', 'coe_pct', 'terminal_g_pct', and 'rationale'.",
 }
 
 
@@ -2119,6 +2152,8 @@ class PrefetchDependencies:
     tool_runner: SquadToolRunner | None = None
     market_price_fn: Callable[[str | None, str | None], Decimal | float | str | None] | None = None
     precomputed_snapshot: EarningsPrefetchSnapshot | None = None
+    peer_snapshot_cache: Any = None
+    bank_disclosure_cache: Any = None
     initial_source_texts: dict[str, str] = field(default_factory=dict)
     initial_source_permissions: dict[str, dict[str, bool]] = field(default_factory=dict)
 
@@ -2452,6 +2487,30 @@ def collect_valid_evidence_anchors(
             anchors.add(snapshot.transcript_index.source_id)
     for src in snapshot.prefetched_sources:
         anchors.add(src.source_id)
+    if snapshot.bank_diagnostics is not None:
+        for bf in snapshot.bank_diagnostics.flags:
+            anchors.add(bf.id)
+            anchors.add(f"bank_flag:{bf.id}")
+    if snapshot.bank_valuation is not None:
+        for bk in (
+            "p_to_tbv_primary",
+            "p_to_tbv_xbrl_std",
+            "p_to_bv",
+            "p_to_e_ttm",
+            "p_to_ppnr_ttm",
+            "implied_rotce_pct",
+            "rotce_spread_vs_implied_pp",
+            "justified_p_to_tbv_at_current_rotce",
+        ):
+            if getattr(snapshot.bank_valuation, bk, None) is not None:
+                anchors.add(f"bank_val:{bk}")
+    if snapshot.bank_disclosure is not None and snapshot.bank_disclosure.segments is not None:
+        for brow in (
+            *snapshot.bank_disclosure.segments.operating_segments,
+            *snapshot.bank_disclosure.segments.corporate_or_other,
+            *snapshot.bank_disclosure.segments.reconciling_items,
+        ):
+            anchors.add(f"bank_seg:{brow.segment_key}")
     for card in cards:
         anchors.add(card.card_id)
         for fid in card.supporting_fact_ids:
@@ -2811,6 +2870,22 @@ def _compact_snapshot_for_writer(snapshot: EarningsPrefetchSnapshot | Mapping[st
             "redline_summary": redline_summary,
             "guidance_nongaap": snapshot.guidance_nongaap.model_dump(mode="json") if snapshot.guidance_nongaap else None,
             "valuation": snapshot.valuation.model_dump(mode="json") if snapshot.valuation else None,
+            "bank_disclosure": (
+                {
+                    "bank_subtype": snapshot.bank_disclosure.bank_subtype,
+                    "period_end_date": snapshot.bank_disclosure.period_end_date,
+                    "cet1_standardized_pct": snapshot.bank_disclosure.cet1_standardized_pct,
+                    "cet1_reg_min_pct": snapshot.bank_disclosure.cet1_reg_min_pct,
+                    "slr_pct": snapshot.bank_disclosure.slr_pct,
+                    "htm_net_unrealized_pnl_usd": snapshot.bank_disclosure.htm_net_unrealized_pnl_usd,
+                    "tbvps_bridge": snapshot.bank_disclosure.tbvps_bridge.model_dump(mode="json"),
+                    "segments": snapshot.bank_disclosure.segments.model_dump(mode="json") if snapshot.bank_disclosure.segments else None,
+                }
+                if snapshot.bank_disclosure is not None
+                else None
+            ),
+            "bank_diagnostics": snapshot.bank_diagnostics.model_dump(mode="json") if snapshot.bank_diagnostics is not None else None,
+            "bank_valuation": snapshot.bank_valuation.model_dump(mode="json") if snapshot.bank_valuation is not None else None,
             "consensus_summary": {
                 "status": snapshot.consensus_summary.status,
                 "provider": snapshot.consensus_summary.provider,
@@ -2906,8 +2981,13 @@ def _render_l1_l2_pack_cached(
     sic_key: str | None,
     effective_preferred: str | None,
     is_sector_gated: bool,
+    active_sector_plugin: str | None = None,
 ) -> dict[str, Any]:
-    ctx = resolve_method_pack_context(sic_key, preferred_pack_id=effective_preferred)
+    ctx = resolve_method_pack_context(
+        sic_key,
+        preferred_pack_id=effective_preferred,
+        active_sector_plugin=active_sector_plugin,
+    )
     composed = ctx.get("composed_pack")
     base_pack = getattr(composed, "base_pack", None)
     industry_pack = getattr(composed, "industry_pack", None)
@@ -2989,9 +3069,20 @@ def _render_l1_l2_pack_for_worker(
     worker_role: WorkerRole,
 ) -> dict[str, Any]:
     """Resolve and render L1 (earnings_review) + L2 (kpi_*) checklists & KPIs for Stage 2 workers."""
-    effective_preferred = None if snapshot.sector_applicability.is_gated else l2_pack_id
+    plugin = getattr(snapshot.sector_applicability, "active_sector_plugin", None)
+    bank_plugin_active = plugin == "us_large_bank_v4a"
+    effective_preferred = (
+        (l2_pack_id or "kpi_us_large_banks")
+        if bank_plugin_active
+        else (None if snapshot.sector_applicability.is_gated else l2_pack_id)
+    )
     sic_key = str(snapshot.sic_code).strip() if snapshot.sic_code is not None else None
-    cached = _render_l1_l2_pack_cached(sic_key, effective_preferred, snapshot.sector_applicability.is_gated)
+    cached = _render_l1_l2_pack_cached(
+        sic_key,
+        effective_preferred,
+        snapshot.sector_applicability.is_gated and not bank_plugin_active,
+        plugin,
+    )
     return {**cached, "worker_role": worker_role}
 
 
@@ -3158,6 +3249,25 @@ def _compact_snapshot_for_worker(
         payload["consensus_status"] = snapshot.consensus_summary.status
         payload["consensus_records"] = [r.model_dump(mode="json") for r in snapshot.consensus_summary.records[:6]]
         payload["transcript_index"] = snapshot.transcript_index.model_dump(mode="json")
+    if snapshot.bank_diagnostics is not None:
+        payload["bank_diagnostics_summary"] = {
+            "bank_subtype": snapshot.bank_diagnostics.bank_subtype,
+            "bank_quality_light": snapshot.bank_diagnostics.bank_quality_light,
+            "efficiency_ratio_gaap_pct": snapshot.bank_diagnostics.efficiency_ratio_gaap_pct,
+            "efficiency_ratio_managed_pct": snapshot.bank_diagnostics.efficiency_ratio_managed_pct,
+            "rotce_q_pct": snapshot.bank_diagnostics.rotce_q_pct,
+            "cet1_buffer_bps": snapshot.bank_diagnostics.cet1_buffer_bps,
+            "htm_loss_pct_of_tce": snapshot.bank_diagnostics.htm_loss_pct_of_tce,
+            "pro_forma_cet1_ex_htm_pct": snapshot.bank_diagnostics.pro_forma_cet1_ex_htm_pct,
+            "deposits_qoq_pct": snapshot.bank_diagnostics.deposits_qoq_pct,
+            "flags": [f.model_dump(mode="json") for f in snapshot.bank_diagnostics.flags],
+        }
+    if snapshot.bank_valuation is not None:
+        payload["bank_valuation_summary"] = snapshot.bank_valuation.model_dump(mode="json")
+    if snapshot.bank_disclosure is not None and worker_role in (None, "worker_segments"):
+        if snapshot.bank_disclosure.segments is not None:
+            payload["bank_segments"] = snapshot.bank_disclosure.segments.model_dump(mode="json")
+        payload["bank_tbvps_bridge"] = snapshot.bank_disclosure.tbvps_bridge.model_dump(mode="json")
     return payload
 
 
@@ -3322,6 +3432,8 @@ def build_isolated_bear_prompt(
         "redline_summary": _compact_redline_for_prompt(snapshot.redline_summary),
         "guidance_nongaap": snapshot.guidance_nongaap.model_dump(mode="json") if snapshot.guidance_nongaap else None,
         "valuation": snapshot.valuation.model_dump(mode="json") if snapshot.valuation else None,
+        "bank_diagnostics": snapshot.bank_diagnostics.model_dump(mode="json") if snapshot.bank_diagnostics else None,
+        "bank_valuation": snapshot.bank_valuation.model_dump(mode="json") if snapshot.bank_valuation else None,
         "evidence_cards": [
             {
                 "card_id": c.card_id,
@@ -3841,6 +3953,7 @@ class EarningsSquadOrchestrator:
                 "sec_material_events", "historical_prices", "market_data", "sec_companyfacts",
                 "structured_financials", "fmp_consensus", "fmp_transcript",
                 "peer_relative_valuation", "governance_capital_audit", "call_qa_verification",
+                "bank_fundamentals_diagnostics", "bank_valuation_and_peer_compare",
                 "web_html", "web_pdf",
             ) else "official_html"
             try:
@@ -4891,6 +5004,139 @@ class EarningsSquadOrchestrator:
                 source="valuation_and_implied_expectations",
             ))
 
+        # V4a US Major Bank Plugin (D2 generic SIC + banking-book qualification; zero special cases)
+        bank_disclosure_res: BankDisclosureSnapshot | None = None
+        bank_diag_res: BankDiagnosticsSummary | None = None
+        bank_val_res: BankValuationResult | None = None
+        try:
+            cand_digits = re.sub(r"\D", "", str(sector_app.sic_code or ""))[:4]
+            cand_sic = int(cand_digits) if cand_digits else None
+        except ValueError:
+            cand_sic = None
+        if (
+            cik
+            and cand_sic is not None
+            and ((6020 <= cand_sic <= 6036) or cand_sic == 6211)
+            and (sec is not None or self._prefetch_deps.peer_snapshot_cache is not None)
+        ):
+            try:
+                from .fin_data.adapters.sec_events.pacing import SecPacingLimiter
+                from .research_peer_compare import load_or_fetch_company_snapshot
+
+                ua_b = getattr(sec, "_ua", None) or "ForesightNine/1.0 research@foresightnine.local"
+                lim_b = getattr(self._prefetch_deps, "sec_events_limiter", None) or SecPacingLimiter.from_env()
+                pol_b = getattr(sec, "_policy", None)
+                tr_b = getattr(sec, "_transport", None)
+                str_b = getattr(sec, "_stream", None)
+                peer_snap, _ps_hit = load_or_fetch_company_snapshot(
+                    symbol=symbol or cik,
+                    cik=cik,
+                    user_agent=ua_b,
+                    limiter=lim_b,
+                    snapshot_cache=self._prefetch_deps.peer_snapshot_cache,
+                    min_projection_version=6,
+                    submissions=(raw_sub_doc if hasattr(raw_sub_doc, "rows") else None),
+                    cache_only=(sec is None),
+                    policy=pol_b,
+                    transport=tr_b,
+                    stream_transport=str_b,
+                )
+                if peer_snap is not None:
+                    qual = qualify_bank_sector_applicability(
+                        sic=sector_app.sic_code,
+                        snap=peer_snap,
+                        as_of=as_of_d,
+                    )
+                    if qual.is_bank_v4a:
+                        bank_disclosure_res, _bd_hit = fetch_bank_disclosure_snapshot(
+                            snap=peer_snap,
+                            user_agent=ua_b,
+                            limiter=lim_b,
+                            bank_cache=self._prefetch_deps.bank_disclosure_cache,
+                            submissions=raw_sub_doc,
+                            as_of=as_of_d,
+                            cache_only=(sec is None and self._prefetch_deps.bank_disclosure_cache is not None),
+                            policy=pol_b,
+                            transport=tr_b,
+                            stream_transport=str_b,
+                            preloaded_earnings_release=earnings_release,
+                            preloaded_10q_text=(cur_sections_bundle.clean_text if cur_sections_bundle is not None else None),
+                            preloaded_catalog=table_catalog,
+                        )
+                        if bank_disclosure_res is not None:
+                            bank_diag_res = evaluate_bank_diagnostics(bank_disclosure_res, as_of=as_of_d)
+                            bank_val_res = evaluate_bank_valuation(
+                                bank_disclosure_res,
+                                price_usd=close_price_dec,
+                                as_of=as_of_d,
+                            )
+                            sector_app = sector_app.model_copy(
+                                update={
+                                    "bank_subtype": qual.bank_subtype,
+                                    "active_sector_plugin": "us_large_bank_v4a",
+                                }
+                            )
+                            b_sid = f"src_bank_v4a_{cik}"
+                            b_lines = [
+                                f"# {symbol or cik} V4a Bank Disclosure & Gordon P/TBV Summary ({bank_disclosure_res.period_end_date})",
+                                f"Subtype: {bank_disclosure_res.bank_subtype} | Light: {bank_diag_res.bank_quality_light}",
+                                f"CET1 Std={bank_disclosure_res.cet1_standardized_pct}% | Min={bank_disclosure_res.cet1_reg_min_pct}% | Buffer={bank_diag_res.cet1_buffer_bps}bps | SLR={bank_disclosure_res.slr_pct}%",
+                                f"HTM Loss/TCE={bank_diag_res.htm_loss_pct_of_tce}% | AfterTax Hit={bank_diag_res.htm_after_tax_cet1_hit_bps}bps | ProForma CET1 ex-HTM={bank_diag_res.pro_forma_cet1_ex_htm_pct}%",
+                                f"TBVPS Reported=${bank_disclosure_res.tbvps_bridge.tbvps_reported_usd} | XBRL-Std=${bank_disclosure_res.tbvps_bridge.tbvps_xbrl_std_usd}",
+                                f"ROTCE={bank_diag_res.rotce_q_pct}% | Efficiency(GAAP/Managed)={bank_diag_res.efficiency_ratio_gaap_pct}%/{bank_diag_res.efficiency_ratio_managed_pct}% | DepositsQoQ={bank_diag_res.deposits_qoq_pct}% | ACL/Loans={bank_diag_res.acl_to_loans_pct}%",
+                                f"Px=${bank_val_res.price_usd} | P/TBV={bank_val_res.p_to_tbv_primary}x | ImpliedROTCE={bank_val_res.implied_rotce_pct}% | JustifiedP/TBV={bank_val_res.justified_p_to_tbv_at_current_rotce}x",
+                            ]
+                            if bank_disclosure_res.segments is not None:
+                                for brow in (
+                                    *bank_disclosure_res.segments.operating_segments,
+                                    *bank_disclosure_res.segments.corporate_or_other,
+                                    *bank_disclosure_res.segments.reconciling_items,
+                                )[:14]:
+                                    b_lines.append(
+                                        f"Segment {brow.display_name} [{brow.reporting_basis}]: Rev={brow.net_revenue_usd}, Pretax={brow.pretax_income_usd}, NetInc={brow.net_income_usd}, ROTCE={brow.segment_roe_or_rotce_pct}%"
+                                    )
+                            for bflag in bank_diag_res.flags:
+                                b_lines.append(f"Flag [{bflag.severity}] {bflag.id}: {bflag.detail}")
+                            b_text = "\n".join(b_lines)
+                            b_sha = sha256(b_text.encode("utf-8")).hexdigest()
+                            b_perms = {"store": True, "display": True, "model_input": True, "export": True}
+                            b_url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
+                            source_texts[b_sid] = b_text
+                            source_permissions[b_sid] = b_perms
+                            prefetched_sources.append(PrefetchedSourceRef(
+                                source_id=b_sid,
+                                title=f"{symbol or cik} V4a Bank Disclosure & Diagnostics",
+                                kind="official",
+                                retrieval_method="bank_fundamentals_diagnostics",
+                                content_sha256=b_sha,
+                                url=b_url,
+                                permissions=b_perms,
+                                published_at=as_of_dt,
+                                total_characters=len(b_text),
+                            ))
+                            if isinstance(self._tool_runner, FinToolboxToolRunner):
+                                self._tool_runner.register_source(ResearchSource(
+                                    source_id=b_sid,
+                                    owner_id=request.account_id or "squad_stage0",
+                                    title=f"{symbol or cik} V4a Bank Disclosure & Diagnostics",
+                                    text=b_text,
+                                    url=b_url,
+                                    kind="official",
+                                    is_simulated=False,
+                                    published_at=as_of_dt,
+                                    obtained_at=_utcnow(),
+                                    content_sha256=b_sha,
+                                    retrieval_method="bank_fundamentals_diagnostics",
+                                    permissions=SourcePermissions(**b_perms),
+                                ))
+            except Exception as exc_bank:
+                gaps.append(SquadGap(
+                    stage="stage_0_prefetch",
+                    code="bank_v4a_prefetch_partial",
+                    message=f"Bank V4a disclosure/diagnostics prefetch partial: {str(exc_bank)[:200]}",
+                    source="sec_bank_disclosure",
+                ))
+
         resolved_period = request.period_label or (periods[0].period_label if periods else None)
         snapshot = EarningsPrefetchSnapshot(
             entity_id=entity_id,
@@ -4918,6 +5164,9 @@ class EarningsSquadOrchestrator:
             valuation=valuation_res,
             consensus_summary=consensus_summary,
             transcript_index=transcript_index,
+            bank_disclosure=bank_disclosure_res,
+            bank_diagnostics=bank_diag_res,
+            bank_valuation=bank_val_res,
             prefetched_sources=prefetched_sources,
             open_gaps=gaps,
         )
@@ -5110,7 +5359,10 @@ class EarningsSquadOrchestrator:
         gaps_out: list[SquadGap] | None = None,
     ) -> ResearchDispatchPlan:
         ledger.ensure_running(stage="stage_1_plan")
-        pack_ctx = resolve_method_pack_context(snapshot.sic_code)
+        pack_ctx = resolve_method_pack_context(
+            snapshot.sic_code,
+            active_sector_plugin=getattr(snapshot.sector_applicability, "active_sector_plugin", None),
+        )
 
         emitter.emit(
             stage="stage_1_plan",
@@ -5130,7 +5382,7 @@ class EarningsSquadOrchestrator:
             '["l1_pack_id", "selected_l2_pack_id", "selected_l2_pack_reason", "tasks", "cross_worker_hypotheses", "planning_notes", "instruction_sequence"]\n'
             "- Field types:\n"
             "  * l1_pack_id: string (\"earnings_review\")\n"
-            "  * selected_l2_pack_id: string or null (MUST be null when sector_applicability.is_gated is true)\n"
+            "  * selected_l2_pack_id: string or null (MUST be null when sector_applicability.is_gated is true AND sector_applicability.active_sector_plugin is null; MUST be \"kpi_us_large_banks\" when active_sector_plugin == \"us_large_bank_v4a\")\n"
             "  * selected_l2_pack_reason: string explaining sector KPI pack choice or SIC gate\n"
             "  * tasks: array of 1 to 3 unique WorkerTask objects for worker_segments, worker_forensics, worker_guidance\n"
             "  * cross_worker_hypotheses: array of concise strings\n"
@@ -5221,6 +5473,24 @@ class EarningsSquadOrchestrator:
                         "fcf_yield_pct": str(snapshot.valuation.fcf_yield_pct.value) if snapshot.valuation.fcf_yield_pct.value is not None else None,
                     }
                     if snapshot.valuation is not None
+                    else None
+                ),
+                "bank_plugin_summary": (
+                    {
+                        "bank_subtype": snapshot.bank_diagnostics.bank_subtype,
+                        "bank_quality_light": snapshot.bank_diagnostics.bank_quality_light,
+                        "cet1_buffer_bps": snapshot.bank_diagnostics.cet1_buffer_bps,
+                        "htm_loss_pct_of_tce": snapshot.bank_diagnostics.htm_loss_pct_of_tce,
+                        "rotce_q_pct": snapshot.bank_diagnostics.rotce_q_pct,
+                        "p_to_tbv_primary": snapshot.bank_valuation.p_to_tbv_primary if snapshot.bank_valuation else None,
+                        "implied_rotce_pct": snapshot.bank_valuation.implied_rotce_pct if snapshot.bank_valuation else None,
+                        "segment_count": (
+                            len(snapshot.bank_disclosure.segments.operating_segments)
+                            if (snapshot.bank_disclosure and snapshot.bank_disclosure.segments)
+                            else 0
+                        ),
+                    }
+                    if snapshot.bank_diagnostics is not None
                     else None
                 ),
                 "prefetched_sources": [
@@ -7458,9 +7728,11 @@ def _fallback_dispatch_plan(
         else []
     )
     flag_ids = [f.flag_id for f in snapshot.flags[:6]]
+    if not flag_ids and snapshot.bank_diagnostics is not None:
+        flag_ids = [f.id for f in snapshot.bank_diagnostics.flags[:6]]
     sec_keys = list(snapshot.redline_summary.section_diffs.keys())[:6] if snapshot.redline_summary else []
 
-    has_seg_sources = bool(r_files or snapshot.earnings_release or snapshot.prefetched_sources or snapshot.statements)
+    has_seg_sources = bool(r_files or snapshot.earnings_release or snapshot.prefetched_sources or snapshot.statements or snapshot.bank_disclosure)
     seg_task = WorkerTask(
         worker_role="worker_segments",
         status="planned" if has_seg_sources else "skipped",

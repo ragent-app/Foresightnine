@@ -34,7 +34,7 @@
       "(?:业绩点评|季报点评|财报点评)"
     ],
     "qa_section_headers": [
-      "^\\s*(?:questions?[-\\s]+and[-\\s]+answers?|q\\s*&\\s*a(?:\\s+session)?|question\\s+and\\s+answer\\s+session)\\s*$",
+      "^\\s*(?:questions?[-\\s]+and[-\\s]+answers?(?:\\s+session)?|q\\s*&\\s*a(?:\\s+session)?)\\s*$",
       "^\\s*(?:问答环节|提问环节|分析师提问|Q&A环节)\\s*$"
     ],
     "safe_harbor_patterns": [

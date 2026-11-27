@@ -577,9 +577,15 @@ def _peer_trigger_worsened_enough(
     except (InvalidOperation, ValueError):
         return False
     delta = new_v - old_v
+    if metric_key == "peer_cet1_buffer_bps":
+        return (delta >= Decimal("25")) if operator in ("<=", "<") else (delta <= Decimal("-25"))
     if metric_key.endswith("_bps"):
         # <= ceiling breached when obs > thr -> worsening means delta >= +250 bps; >= floor means delta <= -250 bps
         return (delta >= Decimal("250")) if operator in ("<=", "<") else (delta <= Decimal("-250"))
+    if metric_key.endswith("_x"):
+        return (delta >= Decimal("0.15")) if operator in ("<=", "<") else (delta <= Decimal("-0.15"))
+    if metric_key.endswith("_pp"):
+        return (delta >= Decimal("0.5")) if operator in ("<=", "<") else (delta <= Decimal("-0.5"))
     if metric_key.endswith("_rank"):
         return (delta >= Decimal("1")) if operator in ("<=", "<") else (delta <= Decimal("-1"))
     return abs(delta) >= Decimal("2.0")
@@ -619,13 +625,17 @@ def evaluate_peer_relative_watch(
         return []
 
     matrix = peer_compare_fn(sub, peer_syms)
-    if matrix is None or not getattr(matrix, "companies", None):
+    if matrix is None:
+        return []
+    b_rows = getattr(matrix, "bank_companies", None) or []
+    c_rows = getattr(matrix, "companies", None) or []
+    if not b_rows and not c_rows:
         return []
 
     observed = getattr(matrix, "primary_watch_trigger_metrics", None) or {}
-    period_fp = "|".join(f"{c.symbol}:{c.period_end_date or 'na'}" for c in matrix.companies)
+    period_fp = "|".join(f"{c.symbol}:{c.period_end_date or 'na'}" for c in (b_rows if b_rows else c_rows))
     prim = getattr(matrix, "primary_symbol", sym)
-    peers_only = [c.symbol for c in matrix.companies if c.symbol != prim]
+    peers_only = [c.symbol for c in (b_rows if b_rows else c_rows) if c.symbol != prim]
     compare_url = f"/compare?primary={prim}&peers={','.join(peers_only)}"
     by_thread = {it.event_thread_key: it for it in existing_inbox}
 
