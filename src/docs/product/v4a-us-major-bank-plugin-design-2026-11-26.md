@@ -100,4 +100,43 @@
 2. **Batch 2**：`app/fin_data/adapters/sec_bank_disclosure.py`（3 子类准入、`(Details)` 分部解析 R3–R7、三源融合与流式 10-Q MD&A 扫描）+ `BANK_DISCLOSURE_SNAPSHOTS` 仓储注册。
 3. **Batch 3**：`v4a_bank_rules.json` + `app/research_bank_diagnostics.py`（5 支柱 + HTM 联动升级制 + Gordon 3×3 矩阵）+ `kpi_us_large_banks.json` + `research_methods/__init__.py`（`sector_plugin` + 修复 `GS → BLK` 缓存投毒）。
 4. **Batch 4**：方向 A / V2 / V2.5 / **V3a（D6 0-LLM 银行分部优先 + 按需附注兜底）** / 方向 B（修复 `_earnings_delta_for_sub` 传空字典 + 雷达滞回）/ REST API（`POST /v2/research/banks/analyze`、`GET /v2/research/banks/segments`、`peers/compare` 与 `watch` 扩展）/ Agent 2 工具注册（**严禁改动 `src/apps/web/` 前端代码**）。
-5. **Batch 5**：部署容器镜像 `foresightnine-api:<sha>`，运行 `eval_v4a_banks.py`（14 家实网 SEC 探针）+ **6 大行全量 Live 压测**（`JPM / BAC / WFC / C / GS / MS` 方向 A + V3a 分部核验 + V2 横评 + 方向 B 跨季雷达 + `BLK` 防污染对照 + 4 路并发内存 `< 550 MiB`），临时账号删净（Postgres 残留 `0` 行）。
+5. **Batch 5**：部署容器镜像 `foresightnine-api:a265102`，运行 `src/apps/api/scripts/eval_v4a_banks.py`（14 家实网 SEC 探针 + **6 大行全量 Live 压测** + V2 横评 + V3a 分部核验 + `BLK` SIC `6211` 防污染对照 + 方向 B 跨季雷达 + 4 路并发内存压测），临时账号删净（Postgres 残留 `0` 行）。
+
+---
+
+## 五、Batch 5 全量 Live 验收实测结果（D8 · `ALL_GATES_PASSED`）
+
+- **部署镜像与运行环境**：`foresightnine-api:a265102`（`OOMKilled=false`、`RestartCount=0`、`FORESIGHTNINE_RESEARCH_LLM_MODEL=glm-5.3-flash`、`eval_v4a_banks.py --squad-concurrency 1 --resume`），验收完成时间 `2026-11-27T10:20:27Z`。
+- **Batch 5 线上修复（已并入主线单测 53/53 与 34/34 通过）**：
+  1. `research_earnings_squad.py`：在 `_invoke_and_parse_with_repair` 与 Stage 2 `_run_worker` 为 `provider_output_truncated` 统一接入精简重试与 `fallback_fn` / `partial` 兜底（解决 `BAC` Stage 3A 截断），并为 `OrgEdgeEvent.label` 增加 240 字符 `@field_validator` 截断（解决 `BLK` Stage 1 长 `skip_reason` 校验失败）。
+  2. `sec_bank_disclosure.py` & `research_bank_diagnostics.py`：过滤 `parse_reg_capital_details_table` 中误匹配 `"% of risk-weighted assets"` 的比率行，新增 RWA `< 5% / > 250% Total Assets` 合理性检查及 `cet1_capital / cet1_pct` 推导兜底，修复 `JPM`（`13.10%`）与 `GS`（`12.23%`）的 `pro_forma_cet1_ex_htm_pct` 口径。
+
+### 5.1 Gate 1：14 家发行人 0-LLM 准入与披露探针（14 / 14 PASS）
+
+10 家符合银行准入边界发行人（注：BNY Mellon 在 SEC `company_tickers.json` 的 ticker 为 `BNY`）均返回 `HTTP 200`，4 家负向对照均准确返回 `HTTP 422`：
+
+| Ticker | 子类 (`bank_subtype` / SIC) | 红黄灯 | CET1 Std / Min / Buffer | TBVPS (Rep vs XBRL / Gap) | ROTCE (3Q) | HTM/TCE | ProForma CET1 | P/TBV vs Fair (Implied) | 分部数 / 耗时 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **JPM** | `universal_commercial` (6021) | 🟢 `green` | `14.00% / 11.50% / +250bps` | `\$112.64 / \$112.45 (-0.17%)` | `20.00%` | `8.64%` | `13.10%` | `2.81x vs 2.43x (22.68%)` | `3` / `1.867s` |
+| **BAC** | `universal_commercial` (6021) | 🔴 `red` | `10.90% / 10.00% / +90bps` | `\$29.14 / \$29.03 (-0.39%)` | `12.60%` | `50.47%` | `n/a` | `1.67x vs 1.37x (14.66%)` | `4` / `0.918s` |
+| **WFC** | `universal_commercial` (6021) | 🟡 `yellow` | `10.00% / 8.50% / +150bps` | `\$44.46 / \$44.54 (+0.19%)` | `16.30%` | `32.39%` | `n/a` | `1.82x vs 1.90x (15.74%)` | `4` / `0.524s` |
+| **C** | `universal_commercial` (6021) | 🟢 `green` | `12.80% / 11.60% / +120bps` | `\$101.59 / \$101.05 (-0.53%)` | `11.50%` | `8.55%` | `11.81%` | `1.12x vs 1.21x (10.81%)` | `5` / `3.506s` |
+| **GS** | `investment_bank_bhc` (6211) | 🟢 `green` | `12.40% / 11.40% / +100bps` | `\$341.43 / \$349.71 (+2.42%)` | `20.50%` | `1.82%` | `12.23%` | `2.35x vs 2.50x (19.42%)` | `3` / `0.591s` |
+| **MS** | `investment_bank_bhc` (6211) | 🟢 `green` | `14.90% / 11.80% / +310bps` | `\$53.96 / \$53.96 (+0.01%)` | `22.60%` | `11.30%` | `13.68%` | `3.11x vs 2.80x (24.74%)` | `3` / `0.689s` |
+| **BNY** | `custodian_or_broker_bank` (6022) | 🟡 `yellow` | `10.90% / 8.50% / +240bps` | `\$32.22 / \$35.75 (+10.96%)` | `29.00%` | `n/a` | `n/a` | `4.57x vs 3.71x (34.97%)` | `5` / `0.350s` |
+| **STT** | `custodian_or_broker_bank` (6022) | 🟢 `green` | `11.00% / 8.00% / +300bps` | `\$17.00 / \$72.77 (+328.04%)` | `21.00%` | `n/a` | `n/a` | `9.53x vs 2.57x (69.72%)` | `2` / `0.322s` |
+| **USB** | `universal_commercial` (6021) | 🟡 `yellow` | `10.80% / n/a / n/a` | `\$29.34 / \$26.36 (-10.15%)` | `18.50%` | `29.62%` | `7.35%` | `2.00x vs 2.21x (16.97%)` | `3` / `0.364s` |
+| **PNC** | `universal_commercial` (6021) | 🟢 `green` | `9.80% / n/a / n/a` | `\$107.64 / \$123.44 (+14.68%)` | `18.28%` | `n/a` | `n/a` | `2.05x vs 2.18x (17.33%)` | `4` / `0.347s` |
+
+- **负向对照（`HTTP 422`）**：`BLK`（`sic_6211_without_bhc_banking_book`, `0.312s`）、`AXP`（`sic_6199_outside_bank_v4a_allowlist`, `0.501s`）、`PGR`（`sic_6331_outside_bank_v4a_allowlist`, `0.246s`）、`PLD`（`sic_6798_outside_bank_v4a_allowlist`, `2.446s`）。
+
+### 5.2 Gate 2–6 实测汇总与冻结边界核验
+
+| Gate | 验证项 | 实测关键指标与结果 |
+| :--- | :--- | :--- |
+| **Gate 2** | **V2 六大行横向比较 + 混搭告警 + Live Brief** | `comparison_id=cmp_93436a1d059246`（总耗时 `127.456s`，Brief `118.388s`，命中 `8` 项引用指标）；Peer 中位数：`ROTCE 18.15%`、`PPNR Margin 38.31%`、`CET1 Buffer 135 bps`、`P/TBV 2.09x`、`Efficiency 61.69%`、`HTM/TCE 9.97%`、`Implied ROTCE 17.58%`；`NVDA+JPM` 准确触发 `fiscal_calendar_mismatch` 与 `financial_sic_mixed`。 |
+| **Gate 3** | **6 大行 Live Direction A Squad + V3a 电话会分部核验** | 6 家全部命中 `active_sector_plugin=us_large_bank_v4a`、`selected_l2_pack_id=kpi_us_large_banks`、`is_gated=true`：`JPM`（`1835.756s`, `19` cards / `6` bears / `28` calls / `1,541,997` tok）、`BAC`（`2423.326s`, `5` cards / `4` bears / `25` calls / `957,719` tok）、`WFC`（`1805.591s`, `12` cards / `7` bears / `26` calls / `806,366` tok）、`C`（`1280.854s`, `11` cards / `5` bears / `23` calls / `545,499` tok）、`GS`（`1382.695s`, `10` cards / `7` bears / `27` calls / `894,044` tok）、`MS`（`1573.218s`, `14` cards / `6` bears / `31` calls / `883,026` tok）。V3a `JPM` 电话会分部对撞耗时 `34.992s`，`has_bank_v4a_matched=True`（`Consumer & Community Banking`，`\$21,171,000,000.0`）。 |
+| **Gate 4** | **`BLK` 后置于 `GS` 的同 SIC `6211` 防污染对照** | `/v2/research/banks/analyze -> HTTP 422`；Direction A Squad 耗时 `1202.23s`，返回 `is_gated=true`、`active_sector_plugin=null`（零缓存/Prompt 串线）。 |
+| **Gate 5** | **方向 B 银行相对估值与资本雷达 (`peers/watch`)** | 创建 `subscription_id=sub_03736ac0cc7f4bc1`（`metric_key=peer_cet1_buffer_bps`）成功。 |
+| **Gate 6** | **4 路并发 `/v2/research/banks/analyze` 与容器内存边界** | `WFC (22.122s)`、`JPM (27.479s)`、`BAC (27.978s)`、`C (29.224s)` 全 `HTTP 200`（`wall_s=29.238s`）；cgroup `memory_peak_mib=306.18 MiB`（Gate 3 连续 6 大行期间容器峰值 `376.9 MiB`，均 `< 550 MiB` 门槛），`OOMKilled=false`、`RestartCount=0`。 |
+| **收尾 & D1** | **临时账号清理 + 契约与前端零改动冻结** | `account_b546bfa157744862b8a672a9a5db74e8` 已通过 `DELETE /v1/auth/local/account` 删除（`200 OK`），Postgres `v4a-eval-%` 残留 **`0` 行**；`git diff 732c782..HEAD -- src/apps/web src/packages/contracts/schemas/v1/contracts.schema.json` 为空，`generate.mjs --check` **PASS**。 |
