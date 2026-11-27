@@ -1,6 +1,8 @@
 # Approved interface copy
 
-## Global boundaries
+Product positioning is defined in the [product plan](../product/fusion-finance-ai-macro-plan-2026-11-11.md). The following approved labels describe the research and simulation interface.
+
+## Research and simulation disclosures
 
 - `公开研究模式 · 不连接券商 · 不托管资金`
 - `本产品用于情景研究与教育，不构成投资建议；不连接券商、不下单、不托管资金。`

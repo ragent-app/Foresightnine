@@ -6,7 +6,7 @@ This draft describes the intended privacy boundary for the Phase 8 public-test b
 
 ## Data inventory and purpose
 
-The product is a research-scenario and portfolio-simulation tool. The intended data inventory is:
+This inventory covers the Phase 8 research and simulation build. The [product direction](../product/fusion-finance-ai-macro-plan-2026-11-11.md) also describes future investor profiles and return tracking. Data for those services needs its own purpose and retention assessment before collection.
 
 | Data | Purpose | Default location |
 | --- | --- | --- |

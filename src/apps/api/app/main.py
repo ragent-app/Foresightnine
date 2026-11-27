@@ -579,7 +579,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="ForesightNine API",
     version="1.0.0",
-    description="Contract-first research scenario API. Deterministic mock providers only in Phase 1.",
+    description="Research and simulation API for the ForesightNine personal investment decision agent.",
     lifespan=lifespan,
 )
 clock = FixedClock()

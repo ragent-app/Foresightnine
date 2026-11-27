@@ -68,7 +68,7 @@ export function LoginPage() {
       <main className="login glass">
         <span className="brand-mark lg" aria-hidden="true">F9</span>
         <h1 className="heading">登录 ForesightNine</h1>
-        <p className="lede">把问题变成可回查的研究记录。</p>
+        <p className="lede">比较关注公司的投资价值，跟踪影响判断的新证据。</p>
         {params.get("oauth") === "failed" ? <div className="banner" role="alert">登录没有完成，请重试。</div> : null}
         {providers.isError ? <div className="banner warn" role="status">暂时无法读取登录方式，请稍后刷新。</div> : null}
         {enabled.map((provider, index) => (

@@ -2,7 +2,7 @@
 
 **Status: pending legal, compliance, and product approval. Not a public launch notice.**
 
-ForesightNine is intended to present research scenarios and portfolio simulations for education and exploration. It is not investment advice, a recommendation tailored to a person's circumstances, a prediction, or a promise of returns. Probabilities are model estimates and may be uncalibrated. Historical observations and simulated weak/main/strong paths do not predict future performance.
+This disclosure covers the research scenarios and simulations offered for education and exploration. The [product direction](../product/fusion-finance-ai-macro-plan-2026-11-11.md) also describes personalized allocation and adjustment recommendations. Offering those services requires a separate review for the target region. The scenarios and simulations covered here do not constitute investment advice, a recommendation tailored to a person's circumstances, a prediction, or a promise of returns. Probabilities are model estimates and may be uncalibrated. Historical observations and simulated weak/main/strong paths do not predict future performance.
 
 The FM Raw result is an experimental, client-computed research output. Public Default is a separate, visible safety layer that can alter or remove exposures for long-only, concentration, volatility, liquidity, implementability, data-freshness, proxy, and lot-size reasons. Neither layer is a trade instruction. Amounts are illustrative conversions of user-entered capital using a stated data snapshot, FX snapshot, instrument price, lot size, and method version.
 

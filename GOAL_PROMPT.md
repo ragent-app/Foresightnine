@@ -2,7 +2,7 @@
 
 @sol_advisor_sol_reviewer @sol_advisor_terra_implementer
 
-你们要在 D:\Foresightnine 中完成一个公开可访问的观点到世界线到持仓配置产品，提供 Web 与 Android 两个版本。
+当前产品定位见[个人投资决策 Agent 宏观方案](src/docs/product/fusion-finance-ai-macro-plan-2026-11-11.md)，实施入口见 [plan.md](plan.md)。以下为早期 Web 与 Android 观点、世界线和 FM 组合模拟交付的历史任务说明，其流程及发布目标只适用于该任务。
 
 开始前必须完整阅读：
 
@@ -23,7 +23,7 @@ plan.md 是已批准的执行基线。只有经过验证后客观无法执行时
 - D:\ACFM_WL_paperwriting
 - 相关服务器源目录
 
-产品必须完成以下闭环：
+当时的模拟模块交付流程为：
 
 1. 接收用户观点和资金金额。
 2. 使用 OpenCode DeepSeek Flash 做结构化 challenge。

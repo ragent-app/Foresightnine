@@ -5,7 +5,7 @@
   - **Direction A**（美股买方财报深研引擎）：已于 NVDA / META / JNJ 三行业实测闭环；
   - **V1 事件引擎**（`foresightnine-api:ca29276`，含 v6.1 P0 批量 Skeptic、平台并发闸门 `limit=2` + 429 长退避、6-K 兜底）：已在 15 个真实美股 + FPI 案例上通过平台模型（`glm-5.3-flash`）验收（15/15 通过，0 失败申报，0 限流缺口）。
 - **关联文档**：
-  - 顶层范式：[product-paradigm-a-engine-b-radar-2026-11-24.md](product-paradigm-a-engine-b-radar-2026-11-24.md)
+  - [整体产品定位](fusion-finance-ai-macro-plan-2026-11-11.md)；公司研究与雷达分工见[product-paradigm-a-engine-b-radar-2026-11-24.md](product-paradigm-a-engine-b-radar-2026-11-24.md)
   - 理论蓝图：[direction-b-continuous-thesis-tracking-plan-2026-11-24.md](direction-b-continuous-thesis-tracking-plan-2026-11-24.md)
   - V1 规格与 v6.1 实测：[v1-sec-events-insider-ownership-design-2026-11-24.md](v1-sec-events-insider-ownership-design-2026-11-24.md) · [v1-sec-events-eval-report-2026-11-24.md](v1-sec-events-eval-report-2026-11-24.md)
 - **核心目标**：打通 [AGENTS.md](/home/ubuntu/Foresightnine/AGENTS.md) 首版可试用产品的第二半闭环——把 **V1 重大事件流** 与 **Direction A 深度财报底稿** 通过 **假设台账（Thesis Ledger）+ P1-B 错峰雷达调度 + 统一变化收件箱（Change Inbox）** 连接起来，回答：**“新信息出现后，我原来的判断是否需要修改？”**

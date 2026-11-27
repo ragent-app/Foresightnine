@@ -4,7 +4,7 @@ Status: approved for implementation on 2026-08-10. The user explicitly approved 
 
 ## Product character
 
-ForesightNine is a quiet, evidence-first research tool. The interface uses an editorial document rhythm, warm paper surfaces, precise tables and timelines, and restrained chart colour. It may share Claude.ai's calm interaction qualities, but the brand, wordmark, layout, icons and copy are original. No Anthropic or Claude asset may ship.
+The [personal investment decision agent](../product/fusion-finance-ai-macro-plan-2026-11-11.md) is designed to help investors compare opportunities and revisit portfolio decisions. The following visual guidance and concepts cover the August research and simulation workflow. The interface uses an editorial document rhythm, warm paper surfaces, precise tables and timelines, and restrained chart colour. It may share Claude.ai's calm interaction qualities, but the brand, wordmark, layout, icons and copy are original. No Anthropic or Claude asset may ship.
 
 ## Concept inventory
 

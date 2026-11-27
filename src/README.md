@@ -1,14 +1,14 @@
 # ForesightNine
 
-ForesightNine is a public-facing research-scenario and portfolio-simulation product. It turns a user's thesis into an adversarially reviewed evidence record, probabilistic weak/main/strong worldlines, client-computed FM portfolios, selected-worldline NAV paths, and exportable research snapshots.
+ForesightNine is being developed as a **personal investment decision agent for self-directed investors**. Its purpose is to follow companies and investment products over time, compare opportunities within and across industries, and explain how prices, news and fundamentals change their investment appeal.
 
-The product is intentionally not a broker, order router, custodian, or source of guaranteed investment returns. It does not accept brokerage credentials, place orders, hold money, or redistribute market data unless the deployment has separately completed the required licensing and legal reviews.
+The target experience connects those findings to a user-confirmed investment profile, existing holdings, cash needs and risk limits. It explains relative recommendations, portfolio weight ranges and the case for adding, holding or trimming. Later reviews compare the original expected return with the instrument’s performance, a simulation of the suggested allocation and the user’s actual return from recorded transactions and cash flows.
 
-## Current status
+## Scope and implementation evidence
 
-The current checkout is a runnable local/private QA and release-candidate build. It is not yet a public production deployment. The core user flow is implemented and tested with deterministic mock providers; production exposure is fail-closed until deployment-owned infrastructure, secrets, licensed current data, security evidence, legal/compliance approvals, Android release signing, and a hosting target are supplied.
+Company research, peer comparisons and the change inbox provide the research foundation. Personalized allocation and account-level performance are development goals. Current coverage depends on the data and verified capabilities of each deployment. Initial delivery focuses on research and simulation. Brokerage execution and custody are outside that scope. See the [product positioning and examples](docs/product/fusion-finance-ai-macro-plan-2026-11-11.md), [engineering plan](../plan.md) and [research and radar design](docs/product/product-paradigm-a-engine-b-radar-2026-11-24.md).
 
-The most recent repository evidence is recorded in [`docs/progress.md`](docs/progress.md). The short status is:
+The table and regression figures below describe the earlier v1 research-scenario and FM simulation build. Its evidence is recorded in [the engineering log](docs/progress.md).
 
 | Area | Current state | Evidence / limitation |
 | --- | --- | --- |
@@ -25,11 +25,11 @@ The most recent repository evidence is recorded in [`docs/progress.md`](docs/pro
 
 ### Verified local evidence snapshot
 
-The latest full regression rerun in this checkout contains 205 API tests passed and 1 skipped, 52 Web tests passed, 45 Android tests passed, 20 FM tests passed, 9 domain tests passed, 2 asset-registry tests passed, and 12 API-client tests passed, with the existing Starlette/httpx warning. Typecheck, generated-contract checks, reference-hash checks, 9WL fixture audit, production-preflight unit tests, dependency audit, and the repository secret scan also pass in the recorded environment. Older historical counts remain in `docs/progress.md`; do not mix focused counts into this full-suite snapshot without labelling them.
+The recorded full regression of that build contains 205 API tests passed and 1 skipped, 52 Web tests passed, 45 Android tests passed, 20 FM tests passed, 9 domain tests passed, 2 asset-registry tests passed, and 12 API-client tests passed, with the existing Starlette/httpx warning. Typecheck, generated-contract checks, reference-hash checks, 9WL fixture audit, production-preflight unit tests, dependency audit, and the repository secret scan also pass in the recorded environment. Older historical counts remain in `docs/progress.md`; do not mix focused counts into this full-suite snapshot without labelling them.
 
 The cutoff-safe WL1 audit used 20 assets and 64 dates through `2026-07-15`, explicitly excluded the online segment beginning `2026-07-17`, and matched the independent Python oracle to the TypeScript engine with maximum absolute difference `3.33e-16`. This is reproducible research/QA evidence, not a current investable recommendation or a public backtest claim.
 
-## Architecture
+## V1 architecture
 
 The system is contract-first and provider-neutral. The canonical v1 schemas are the integration boundary shared by the Web client, Android client, API, tests, and exports.
 
@@ -68,7 +68,7 @@ Data/compute boundary:
   API never calculates or replaces the user's final portfolio.
 ```
 
-### End-to-end product flow
+### V1 scenario and FM simulation workflow
 
 1. The user submits a viewpoint, premise, time horizon, triggering event, expected asset impact, and available capital.
 2. The API stores a typed thesis and asks the configured provider to challenge it. The challenge must expose counterexamples, logical jumps, potentially priced-in claims, missing evidence, and a bounded rubric score.

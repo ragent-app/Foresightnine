@@ -1,6 +1,6 @@
 # ForesightNine Android client
 
-This is the Expo SDK 57 Android MVP for the viewpoint → challenge → evidence →
+The [product direction](../../docs/product/fusion-finance-ai-macro-plan-2026-11-11.md) covers ongoing company comparisons and personal portfolio decisions. This Expo SDK 57 Android client implements the earlier simulation workflow from viewpoint → challenge → evidence →
 worldline → local FM → portfolio → privacy-safe archive loop.
 
 The app deliberately keeps provider credentials, market retrieval, broker, ordering,

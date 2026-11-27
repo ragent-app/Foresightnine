@@ -1,5 +1,9 @@
 # Plan deviation log
 
+## 2026-11-27 · 用户调整产品定位
+
+由通用金融研究工作台调整为面向自主投资者的个人投资决策 Agent。多公司研究与雷达支持机会比较，画像及持仓支持个性化配置，事前预期与实际投资记录支持收益复盘。此次修订涉及产品说明、规划入口和展示文案；阶段验收、FM 的实现选择及发布授权继续按各自记录执行。详见[宏观方案](product/fusion-finance-ai-macro-plan-2026-11-11.md)。
+
 ## 2026-08-24 — user-directed parallel hardening while Phase 7 native build is externally blocked
 
 ### Approved baseline
